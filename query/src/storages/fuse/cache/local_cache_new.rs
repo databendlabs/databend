@@ -13,7 +13,6 @@
 //  limitations under the License.
 //
 
-use std::hash::Hash;
 use std::sync::Arc;
 
 use common_base::tokio::sync::RwLock;
@@ -23,67 +22,34 @@ use common_cache::DefaultHashBuilder;
 use common_cache::LruCache;
 use common_exception::Result;
 
-pub struct RawObjectSizeMeter;
-
-type MemCache<K, V> = LruCache<K, V, DefaultHashBuilder, Count>;
-
-pub struct CacheBuilder {
-    capacity: u64,
-}
-
-impl CacheBuilder {
-    fn build<K, V>(self) -> LoadingCache<K, V>
-    where K: Hash + Eq {
-        let cache: MemCache<K, _> = LruCache::with_meter(self.capacity, Count);
-        LoadingCache::new(cache)
-    }
-}
-
-/// Guava Cache ?
-struct LoadingCache<K, V>
-where K: Eq + Hash
-{
-    cache: RwLock<MemCache<K, Arc<V>>>,
-}
-
-impl<K, V> LoadingCache<K, V>
-where K: Eq + Hash
-{
-    fn new(cache: MemCache<K, Arc<V>>) -> Self {
-        Self {
-            cache: RwLock::new(cache),
-        }
-    }
-}
-
-#[async_trait::async_trait]
-pub trait LocalCache<V, R> {
-    //async fn read<R: Loader<V> + Send + Sync>(&self, loader: R, loc: &str) -> Result<Arc<V>>;
-    async fn read(&self, loader: R, loc: &str) -> Result<Arc<V>>;
-}
-
 #[async_trait::async_trait]
 pub trait Loader<T> {
     async fn load(&self, key: &str) -> Result<T>;
 }
 
-//#[async_trait::async_trait]
-//impl<V, R> LocalCache<V, R> for LoadingCache<String, V>
-//where
-//    V: Send + Sync,
-//    R: Loader<V> + Send + Sync,
-//{
-//    //async fn read<R: Loader<V> + Send + Sync>(&self, loader: R, loc: &str) -> Result<Arc<V>> {
-//    async fn read(&self, loader: R, loc: &str) -> Result<Arc<V>> {
-//        let cache = &mut *self.cache.write().await;
-//        match cache.get(loc) {
-//            Some(item) => Ok(item.clone()),
-//            None => {
-//                let val = loader.load(loc).await?;
-//                let item = Arc::new(val);
-//                cache.put(loc.to_owned(), item.clone());
-//                Ok(item)
-//            }
-//        }
-//    }
-//}
+pub type MemCache<K, V> = LruCache<K, V, DefaultHashBuilder, Count>;
+
+pub struct CachedLoader<T, L> {
+    cache: Arc<RwLock<MemCache<String, Arc<T>>>>,
+    loader: L,
+}
+
+impl<T, L> CachedLoader<T, L>
+where L: Loader<T>
+{
+    pub fn new(cache: Arc<RwLock<MemCache<String, Arc<T>>>>, loader: L) -> Self {
+        Self { cache, loader }
+    }
+    pub async fn read(&self, loc: impl AsRef<str>) -> Result<Arc<T>> {
+        let cache = &mut *self.cache.write().await;
+        match cache.get(loc.as_ref()) {
+            Some(item) => Ok(item.clone()),
+            None => {
+                let val = self.loader.load(loc.as_ref()).await?;
+                let item = Arc::new(val);
+                cache.put(loc.as_ref().to_owned(), item.clone());
+                Ok(item)
+            }
+        }
+    }
+}
