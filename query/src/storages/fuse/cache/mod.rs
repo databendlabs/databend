@@ -13,12 +13,10 @@
 // limitations under the License.
 
 mod local_cache;
-mod local_cache_new;
 mod metrics;
-pub use local_cache::LocalCache;
-pub use local_cache::LocalCacheConfig;
-pub use local_cache_new::empty_with_capacity;
-pub use local_cache_new::CachedLoader;
-pub use local_cache_new::Loader;
-pub use local_cache_new::TableInMemCache;
-pub use local_cache_new::TenantAware;
+
+pub use local_cache::empty_with_capacity;
+pub use local_cache::CachedLoader;
+pub use local_cache::HasMetricLabel;
+pub use local_cache::Loader;
+pub use local_cache::MemoryCache;

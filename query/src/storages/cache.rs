@@ -18,7 +18,7 @@ use common_exception::Result;
 
 use crate::configs::QueryConfig;
 use crate::storages::fuse::cache;
-use crate::storages::fuse::cache::TableInMemCache;
+use crate::storages::fuse::cache::MemoryCache;
 use crate::storages::fuse::io::BlockMetaCache;
 use crate::storages::fuse::io::SegmentInfoCache;
 use crate::storages::fuse::io::TableSnapshotCache;
@@ -83,7 +83,7 @@ impl CacheManager {
         self.cluster_id.as_str()
     }
 
-    fn with_capacity<T>(capacity: u64) -> Option<TableInMemCache<T>> {
+    fn with_capacity<T>(capacity: u64) -> Option<MemoryCache<T>> {
         if capacity > 0 {
             Some(cache::empty_with_capacity(capacity))
         } else {

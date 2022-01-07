@@ -26,9 +26,9 @@ use serde::de::DeserializeOwned;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::cache::CachedLoader;
+use crate::storages::fuse::cache::HasMetricLabel;
 use crate::storages::fuse::cache::Loader;
-use crate::storages::fuse::cache::TableInMemCache;
-use crate::storages::fuse::cache::TenantAware;
+use crate::storages::fuse::cache::MemoryCache;
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
@@ -44,7 +44,7 @@ impl InputStreamProvider for &QueryContext {
     }
 }
 
-impl TenantAware for &QueryContext {
+impl HasMetricLabel for &QueryContext {
     fn get_tenant_info(&self) -> (&str, &str) {
         let mgr = self.get_storage_cache_manager();
         (mgr.get_tenant_id(), mgr.get_cluster_id())
@@ -53,12 +53,11 @@ impl TenantAware for &QueryContext {
 
 impl InputStreamProvider for Arc<QueryContext> {
     fn input_stream(&self, path: &str, len: Option<u64>) -> Result<InputStream> {
-        let ctx = self.as_ref();
-        ctx.input_stream(path, len)
+        self.as_ref().input_stream(path, len)
     }
 }
 
-impl TenantAware for Arc<QueryContext> {
+impl HasMetricLabel for Arc<QueryContext> {
     fn get_tenant_info(&self) -> (&str, &str) {
         let mgr = self.get_storage_cache_manager();
         (mgr.get_tenant_id(), mgr.get_cluster_id())
@@ -111,9 +110,9 @@ where T: InputStreamProvider + Sync
     }
 }
 
-pub type SegmentInfoCache = TableInMemCache<SegmentInfo>;
-pub type TableSnapshotCache = TableInMemCache<TableSnapshot>;
-pub type BlockMetaCache = TableInMemCache<BlockMeta>;
+pub type SegmentInfoCache = MemoryCache<SegmentInfo>;
+pub type TableSnapshotCache = MemoryCache<TableSnapshot>;
+pub type BlockMetaCache = MemoryCache<BlockMeta>;
 
 pub type SegmentInfoReader<'a> = CachedLoader<SegmentInfo, &'a QueryContext>;
 pub type TableSnapshotReader<'a> = CachedLoader<TableSnapshot, &'a QueryContext>;
@@ -126,6 +125,7 @@ impl MetaReaders {
         SegmentInfoReader::new(
             ctx.get_storage_cache_manager().get_table_segment_cache(),
             ctx,
+            "SEGMENT_INFO_CACHE".to_owned(),
         )
     }
 
@@ -133,11 +133,16 @@ impl MetaReaders {
         TableSnapshotReader::new(
             ctx.get_storage_cache_manager().get_table_snapshot_cache(),
             ctx,
+            "SNAPSHOT_CACHE".to_owned(),
         )
     }
 
     pub fn block_meta_reader(ctx: Arc<QueryContext>) -> BlockMetaReader {
-        BlockMetaReader::new(ctx.get_storage_cache_manager().get_block_meta_cache(), ctx)
+        BlockMetaReader::new(
+            ctx.get_storage_cache_manager().get_block_meta_cache(),
+            ctx,
+            "BLOCK_META_CACHE".to_owned(),
+        )
     }
 }
 
