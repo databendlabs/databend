@@ -22,7 +22,6 @@ xx_yyyy_[test_name]
 * 10 -- for Describe tests, [example](10_0000_describe_table.sql)
 * 11 -- for Show tables, [example](11_0000_show_tables.sql)
 * 12 -- for Insert into, [example](12_0000_insert_into_select.sql)
-* 13 -- for proxy mode, [example](13_0001_proxy_mode.sql)
 
 Note: If your test is not in the above category, please add it.
 
