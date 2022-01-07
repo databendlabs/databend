@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::datatypes::Field;
 
 use super::data_type::IDataType;
 use super::type_id::TypeID;
+use crate::prelude::*;
 
-pub struct DataTypeDateInterval {
-    inner: DataTypeUInt16,
-}
+#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
+pub struct DataTypeDateInterval {}
 
+#[typetag::serde]
 impl IDataType for DataTypeDateInterval {
     fn type_id(&self) -> TypeID {
         TypeID::Interval
@@ -29,5 +29,15 @@ impl IDataType for DataTypeDateInterval {
 
     fn arrow_type(&self) -> ArrowType {
         ArrowType::Int64
+    }
+
+    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
+        Box::new(DateSerializer::<i64>::default())
+    }
+
+    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+        Box::new(DateDeserializer::<i64> {
+            builder: PrimitiveArrayBuilder::<i64>::with_capacity(capacity),
+        })
     }
 }

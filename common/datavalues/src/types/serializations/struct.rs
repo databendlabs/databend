@@ -23,38 +23,39 @@ pub struct StructSerializer {
 
 impl TypeSerializer for StructSerializer {
     fn serialize_value(&self, value: &DataValue) -> Result<String> {
-        if let DataValue::Struct(vals) = value {
-            let mut res = String::new();
-            res.push('(');
-            let mut first = true;
-            vals.iter()
-                .zip(self.fields.iter())
-                .for_each(|(val, field)| {
-                    if !first {
-                        res.push(',');
-                    }
-                    first = false;
+        todo!()
+        // if let DataValue::Struct(vals) = value {
+        //     let mut res = String::new();
+        //     res.push('(');
+        //     let mut first = true;
+        //     vals.iter()
+        //         .zip(self.fields.iter())
+        //         .for_each(|(val, field)| {
+        //             if !first {
+        //                 res.push(',');
+        //             }
+        //             first = false;
 
-                    let data_type = field.data_type();
-                    let serializer = data_type.create_serializer();
-                    let s = serializer.serialize_value(val).unwrap();
-                    if matches!(
-                        data_type,
-                        DataType::String
-                            | DataType::Date16
-                            | DataType::Date32
-                            | DataType::DateTime32(_)
-                    ) {
-                        res.push_str(&format!("'{}'", s));
-                    } else {
-                        res.push_str(&s);
-                    }
-                });
-            res.push(')');
-            Ok(res)
-        } else {
-            Err(ErrorCode::BadBytes("Incorrect Struct value"))
-        }
+        //             let data_type = field.data_type();
+        //             let serializer = data_type.create_serializer();
+        //             let s = serializer.serialize_value(val).unwrap();
+        //             if matches!(
+        //                 data_type,
+        //                 DataType::String
+        //                     | DataType::Date16
+        //                     | DataType::Date32
+        //                     | DataType::DateTime32(_)
+        //             ) {
+        //                 res.push_str(&format!("'{}'", s));
+        //             } else {
+        //                 res.push_str(&s);
+        //             }
+        //         });
+        //     res.push(')');
+        //     Ok(res)
+        // } else {
+        //     Err(ErrorCode::BadBytes("Incorrect Struct value"))
+        // }
     }
 
     fn serialize_column(&self, _column: &DataColumn) -> Result<Vec<String>> {

@@ -20,7 +20,7 @@ use common_macros::MallocSizeOf;
 
 pub enum TypeID {
     Nothing,
-    Null,
+    Nullable,
     Boolean,
     UInt8,
     UInt16,

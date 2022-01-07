@@ -16,9 +16,12 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 
 use super::data_type::IDataType;
 use super::type_id::TypeID;
+use crate::prelude::*;
 
+#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DataTypeString {}
 
+#[typetag::serde]
 impl IDataType for DataTypeString {
     fn type_id(&self) -> TypeID {
         TypeID::String
@@ -26,5 +29,13 @@ impl IDataType for DataTypeString {
 
     fn arrow_type(&self) -> ArrowType {
         ArrowType::LargeBinary
+    }
+
+    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
+        Box::new(StringSerializer {})
+    }
+
+    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+        Box::new(StringDeserializer::with_capacity(capacity))
     }
 }

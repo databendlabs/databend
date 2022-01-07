@@ -18,23 +18,12 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 
 use super::data_type::IDataType;
 use super::type_id::TypeID;
-use crate::DFDataType;
-use crate::DFPrimitiveType;
+use crate::prelude::*;
 
-pub struct DataTypeNumeric<T> {
+#[derive(Debug, Default, Clone, Copy, serde::Deserialize, serde::Serialize)]
+
+pub struct DataTypeNumeric<T: Default + Clone + Copy + std::fmt::Debug + serde::Serialize> {
     _t: PhantomData<T>,
-}
-
-impl<T> IDataType for DataTypeNumeric<T>
-where T: DFPrimitiveType + DFDataType
-{
-    fn type_id(&self) -> TypeID {
-        TypeID::Int16
-    }
-
-    fn arrow_type(&self) -> ArrowType {
-        ArrowType::Int16
-    }
 }
 
 pub type DataTypeInt8 = DataTypeNumeric<i8>;
@@ -47,3 +36,41 @@ pub type DataTypeUInt32 = DataTypeNumeric<u32>;
 pub type DataTypeUInt64 = DataTypeNumeric<u64>;
 pub type DataTypeFloat32 = DataTypeNumeric<f32>;
 pub type DataTypeFloat64 = DataTypeNumeric<f64>;
+
+macro_rules! impl_numeric {
+    ($ty:ident, $tname:ident) => {
+        #[typetag::serde]
+        impl IDataType for DataTypeNumeric<$ty> {
+            fn type_id(&self) -> TypeID {
+                TypeID::$tname
+            }
+
+            fn arrow_type(&self) -> ArrowType {
+                ArrowType::$tname
+            }
+
+            fn create_serializer(&self) -> Box<dyn TypeSerializer> {
+                Box::new(NumberSerializer::<$ty>::default())
+            }
+
+            fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+                Box::new(NumberDeserializer::<$ty> {
+                    builder: PrimitiveArrayBuilder::<$ty>::with_capacity(capacity),
+                })
+            }
+        }
+    };
+}
+
+impl_numeric!(u8, UInt8);
+impl_numeric!(u16, UInt16);
+impl_numeric!(u32, UInt32);
+impl_numeric!(u64, UInt64);
+
+impl_numeric!(i8, Int8);
+impl_numeric!(i16, Int16);
+impl_numeric!(i32, Int32);
+impl_numeric!(i64, Int64);
+
+impl_numeric!(f32, Float32);
+impl_numeric!(f64, Float64);

@@ -15,13 +15,13 @@
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 
 use super::data_type::IDataType;
-use super::data_type_numeric::DataTypeInt32;
 use super::type_id::TypeID;
+use crate::prelude::*;
 
-pub struct DataTypeDate32 {
-    pub datatype_i32: DataTypeInt32,
-}
+#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
+pub struct DataTypeDate32 {}
 
+#[typetag::serde]
 impl IDataType for DataTypeDate32 {
     fn type_id(&self) -> TypeID {
         TypeID::Int32
@@ -29,5 +29,14 @@ impl IDataType for DataTypeDate32 {
 
     fn arrow_type(&self) -> ArrowType {
         ArrowType::Int32
+    }
+
+    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
+        Box::new(DateSerializer::<i32>::default())
+    }
+    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+        Box::new(DateDeserializer::<i32> {
+            builder: PrimitiveArrayBuilder::<i32>::with_capacity(capacity),
+        })
     }
 }

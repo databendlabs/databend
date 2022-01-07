@@ -14,16 +14,26 @@
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 
+use super::data_type::DataTypePtr;
 use super::data_type::IDataType;
 use super::type_id::TypeID;
+use crate::prelude::*;
 
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DataTypeNullable {
-    inner: Box<dyn IDataType>,
+    inner: DataTypePtr,
 }
 
+impl DataTypeNullable {
+    pub fn create(inner: DataTypePtr) -> Self {
+        DataTypeNullable { inner }
+    }
+}
+
+#[typetag::serde]
 impl IDataType for DataTypeNullable {
     fn type_id(&self) -> TypeID {
-        TypeID::Null
+        TypeID::Nullable
     }
 
     fn is_nullable(&self) -> bool {
@@ -32,5 +42,36 @@ impl IDataType for DataTypeNullable {
 
     fn arrow_type(&self) -> ArrowType {
         self.inner.arrow_type()
+    }
+
+    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
+        todo!()
+    }
+
+    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+        todo!()
+    }
+}
+
+#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
+pub struct DataTypeNothing {}
+
+#[typetag::serde]
+impl IDataType for DataTypeNothing {
+    fn type_id(&self) -> TypeID {
+        TypeID::Nothing
+    }
+
+    // DataTypeNothing must inside nullable
+    fn arrow_type(&self) -> ArrowType {
+        ArrowType::Null
+    }
+
+    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
+        todo!()
+    }
+
+    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+        todo!()
     }
 }

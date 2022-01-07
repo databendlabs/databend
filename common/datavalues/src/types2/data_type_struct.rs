@@ -13,17 +13,26 @@
 // limitations under the License.
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::datatypes::Field;
 
+use super::data_type::DataTypePtr;
 use super::data_type::IDataType;
 use super::type_id::TypeID;
+use crate::prelude::*;
 
-pub struct DataTypeDateStruct {
+#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
+pub struct DataTypeStruct {
     names: Vec<String>,
-    types: Vec<Box<dyn IDataType>>,
+    types: Vec<DataTypePtr>,
 }
 
-impl IDataType for DataTypeDateStruct {
+impl DataTypeStruct {
+    pub fn create(names: Vec<String>, types: Vec<DataTypePtr>) -> Self {
+        DataTypeStruct { names, types }
+    }
+}
+
+#[typetag::serde]
+impl IDataType for DataTypeStruct {
     fn type_id(&self) -> TypeID {
         TypeID::Struct
     }
@@ -37,5 +46,13 @@ impl IDataType for DataTypeDateStruct {
             .collect();
 
         ArrowType::Struct(fields)
+    }
+
+    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
+        todo!()
+    }
+
+    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+        todo!()
     }
 }

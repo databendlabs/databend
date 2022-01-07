@@ -32,6 +32,8 @@ chrono = "0.4.19"
 chrono-tz = "0.6.1"
 regex = "1.5.4"
 simdutf8 = "0.1.3"
+dyn-clone = "1.0.4"
+typetag = "0.1.8"
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"

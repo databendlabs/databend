@@ -16,9 +16,14 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 
 use super::data_type::IDataType;
 use super::type_id::TypeID;
+pub use crate::prelude::*;
+use crate::TypeDeserializer;
+use crate::TypeSerializer;
 
+#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DataTypeBoolean {}
 
+#[typetag::serde]
 impl IDataType for DataTypeBoolean {
     fn type_id(&self) -> TypeID {
         TypeID::Boolean
@@ -26,5 +31,14 @@ impl IDataType for DataTypeBoolean {
 
     fn arrow_type(&self) -> ArrowType {
         ArrowType::Boolean
+    }
+
+    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
+        Box::new(BooleanSerializer {})
+    }
+    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+        Box::new(BooleanDeserializer {
+            builder: BooleanArrayBuilder::with_capacity(capacity),
+        })
     }
 }

@@ -17,69 +17,11 @@ use num::NumCast;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use super::data_type::*;
 use crate::DFTryFrom;
-use crate::DataField;
 use crate::DataValue;
 
-pub trait DFDataType: std::fmt::Debug + Send + 'static + Sync {
-    fn data_type() -> DataType;
-}
-
-macro_rules! impl_df_datatype {
-    ($ca:ident, $variant:ident) => {
-        impl DFDataType for $ca {
-            fn data_type() -> DataType {
-                DataType::$variant
-            }
-        }
-    };
-}
-
-impl_df_datatype!(u8, UInt8);
-impl_df_datatype!(u16, UInt16);
-impl_df_datatype!(u32, UInt32);
-impl_df_datatype!(u64, UInt64);
-
-impl_df_datatype!(i8, Int8);
-impl_df_datatype!(i16, Int16);
-impl_df_datatype!(i32, Int32);
-impl_df_datatype!(i64, Int64);
-impl_df_datatype!(f32, Float32);
-impl_df_datatype!(f64, Float64);
-impl_df_datatype!(bool, Boolean);
-
-#[derive(Debug)]
-pub struct Null;
-impl_df_datatype!(Null, Null);
-
-impl DFDataType for Vec<u8> {
-    fn data_type() -> DataType {
-        DataType::String
-    }
-}
-
-#[derive(Debug)]
-pub struct List;
-impl DFDataType for List {
-    fn data_type() -> DataType {
-        // null as we cannot no anything without self.
-        DataType::List(Box::new(DataField::new("", DataType::Null, true)))
-    }
-}
-
-#[derive(Debug)]
-pub struct Struct;
-impl DFDataType for Struct {
-    fn data_type() -> DataType {
-        // null as we cannot no anything without self.
-        DataType::Struct(vec![DataField::new("", DataType::Null, true)])
-    }
-}
-
 pub trait DFPrimitiveType:
-    DFDataType
-    + NativeArithmetics
+    NativeArithmetics
     + NumCast
     + PartialOrd
     + Into<DataValue>

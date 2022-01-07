@@ -22,6 +22,7 @@ use common_macros::MallocSizeOf;
 use crate::DataField;
 use crate::PhysicalDataType;
 
+// TODO REMOVE THIS
 #[derive(
     serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, MallocSizeOf,
 )]
@@ -59,8 +60,8 @@ pub enum DataType {
 
     Interval(IntervalUnit),
 
-    List(Box<DataField>),
-    Struct(Vec<DataField>),
+    // List(Box<DataField>),
+    // Struct(Vec<DataField>),
     String,
 }
 

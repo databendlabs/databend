@@ -15,21 +15,39 @@
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field;
 
+use super::data_type::DataTypePtr;
 use super::data_type::IDataType;
 use super::type_id::TypeID;
+use crate::prelude::*;
 
-pub struct DataTypeDateList {
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct DataTypeList {
     name: String,
-    inner: Box<dyn IDataType>,
+    inner: DataTypePtr,
 }
 
-impl IDataType for DataTypeDateList {
+impl DataTypeList {
+    pub fn create(name: String, inner: DataTypePtr) -> Self {
+        DataTypeList { name, inner }
+    }
+}
+
+#[typetag::serde]
+impl IDataType for DataTypeList {
     fn type_id(&self) -> TypeID {
         TypeID::List
     }
 
     fn arrow_type(&self) -> ArrowType {
         let field = Field::new(&self.name, self.inner.arrow_type(), false);
-        ArrowType::List(field)
+        ArrowType::List(Box::new(field))
+    }
+
+    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
+        todo!()
+    }
+
+    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+        todo!()
     }
 }

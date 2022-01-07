@@ -12,16 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
+use chrono_tz::Tz;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 
 use super::data_type::IDataType;
-use super::data_type_numeric::DataTypeUInt64;
+use super::data_type::ARROW_EXTENSION_META;
+use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
+use crate::prelude::*;
 
+#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DataTypeDateTime64 {
-    pub datatype_u64: DataTypeUInt64,
+    tz: Option<String>,
 }
 
+#[typetag::serde]
 impl IDataType for DataTypeDateTime64 {
     fn type_id(&self) -> TypeID {
         TypeID::DateTime64
@@ -29,5 +36,26 @@ impl IDataType for DataTypeDateTime64 {
 
     fn arrow_type(&self) -> ArrowType {
         ArrowType::UInt64
+    }
+
+    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
+        let mut mp = BTreeMap::new();
+        mp.insert(ARROW_EXTENSION_NAME.to_string(), "DateTime64".to_string());
+        if let Some(tz) = &self.tz {
+            mp.insert(ARROW_EXTENSION_META.to_string(), tz.to_string());
+        }
+        Some(mp)
+    }
+
+    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
+        Box::new(DateTimeSerializer::<u64>::default())
+    }
+
+    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+        let tz = self.tz.unwrap_or_else(|| "UTC".to_string());
+        Box::new(DateTimeDeserializer::<u64> {
+            builder: PrimitiveArrayBuilder::<u64>::with_capacity(capacity),
+            tz: tz.parse::<Tz>().unwrap(),
+        })
     }
 }

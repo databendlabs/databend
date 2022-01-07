@@ -47,7 +47,7 @@ pub enum DataValue {
     String(Option<Vec<u8>>),
 
     // Container struct.
-    List(Option<Vec<DataValue>>, DataType),
+    List(Option<Vec<DataValue>>),
     Struct(Vec<DataValue>),
 }
 
@@ -74,40 +74,12 @@ impl DataValue {
                 | DataValue::Float64(None)
                 | DataValue::String(None)
                 | DataValue::Null
-                | DataValue::List(None, _)
+                | DataValue::List(None)
         )
     }
 
     pub fn data_type(&self) -> DataType {
-        match self {
-            DataValue::Null => DataType::Null,
-            DataValue::Boolean(_) => DataType::Boolean,
-            DataValue::Int8(_) => DataType::Int8,
-            DataValue::Int16(_) => DataType::Int16,
-            DataValue::Int32(_) => DataType::Int32,
-            DataValue::Int64(_) => DataType::Int64,
-            DataValue::UInt8(_) => DataType::UInt8,
-            DataValue::UInt16(_) => DataType::UInt16,
-            DataValue::UInt32(_) => DataType::UInt32,
-            DataValue::UInt64(_) => DataType::UInt64,
-            DataValue::Float32(_) => DataType::Float32,
-            DataValue::Float64(_) => DataType::Float64,
-            DataValue::List(_, data_type) => {
-                DataType::List(Box::new(DataField::new("item", data_type.clone(), true)))
-            }
-            DataValue::Struct(v) => {
-                let fields = v
-                    .iter()
-                    .enumerate()
-                    .map(|(i, x)| {
-                        let typ = x.data_type();
-                        DataField::new(format!("item_{}", i).as_str(), typ, true)
-                    })
-                    .collect::<Vec<_>>();
-                DataType::Struct(fields)
-            }
-            DataValue::String(_) => DataType::String,
-        }
+        todo!();
     }
 
     #[inline]
@@ -149,96 +121,97 @@ impl DataValue {
     }
 
     pub fn to_series_with_size(&self, size: usize) -> Result<Series> {
-        match self {
-            DataValue::Null => {
-                let array = NullArray::new_null(ArrowType::Null, size);
-                let array: DFNullArray = array.into();
-                Ok(array.into_series())
-            }
-            DataValue::Boolean(values) => Ok(build_constant_series! {DFBooleanArray, values, size}),
-            DataValue::Int8(values) => Ok(build_constant_series! {DFInt8Array, values, size}),
-            DataValue::Int16(values) => Ok(build_constant_series! {DFInt16Array, values, size}),
-            DataValue::Int32(values) => Ok(build_constant_series! {DFInt32Array, values, size}),
-            DataValue::Int64(values) => Ok(build_constant_series! {DFInt64Array, values, size}),
-            DataValue::UInt8(values) => Ok(build_constant_series! {DFUInt8Array, values, size}),
-            DataValue::UInt16(values) => Ok(build_constant_series! {DFUInt16Array, values, size}),
-            DataValue::UInt32(values) => Ok(build_constant_series! {DFUInt32Array, values, size}),
-            DataValue::UInt64(values) => Ok(build_constant_series! {DFUInt64Array, values, size}),
-            DataValue::Float32(values) => Ok(build_constant_series! {DFFloat32Array, values, size}),
-            DataValue::Float64(values) => Ok(build_constant_series! {DFFloat64Array, values, size}),
-            DataValue::String(values) => match values {
-                None => Ok(DFStringArray::full_null(size).into_series()),
-                Some(v) => Ok(DFStringArray::full(v.deref(), size).into_series()),
-            },
-            DataValue::List(values, data_type) => match data_type {
-                DataType::Int8 => build_list_series! {i8, values, size, data_type },
-                DataType::Int16 => build_list_series! {i16, values, size, data_type },
-                DataType::Int32 => build_list_series! {i32, values, size, data_type },
-                DataType::Int64 => build_list_series! {i64, values, size, data_type },
+        todo!()
+        // match self {
+        //     DataValue::Null => {
+        //         let array = NullArray::new_null(ArrowType::Null, size);
+        //         let array: DFNullArray = array.into();
+        //         Ok(array.into_series())
+        //     }
+        //     DataValue::Boolean(values) => Ok(build_constant_series! {DFBooleanArray, values, size}),
+        //     DataValue::Int8(values) => Ok(build_constant_series! {DFInt8Array, values, size}),
+        //     DataValue::Int16(values) => Ok(build_constant_series! {DFInt16Array, values, size}),
+        //     DataValue::Int32(values) => Ok(build_constant_series! {DFInt32Array, values, size}),
+        //     DataValue::Int64(values) => Ok(build_constant_series! {DFInt64Array, values, size}),
+        //     DataValue::UInt8(values) => Ok(build_constant_series! {DFUInt8Array, values, size}),
+        //     DataValue::UInt16(values) => Ok(build_constant_series! {DFUInt16Array, values, size}),
+        //     DataValue::UInt32(values) => Ok(build_constant_series! {DFUInt32Array, values, size}),
+        //     DataValue::UInt64(values) => Ok(build_constant_series! {DFUInt64Array, values, size}),
+        //     DataValue::Float32(values) => Ok(build_constant_series! {DFFloat32Array, values, size}),
+        //     DataValue::Float64(values) => Ok(build_constant_series! {DFFloat64Array, values, size}),
+        //     DataValue::String(values) => match values {
+        //         None => Ok(DFStringArray::full_null(size).into_series()),
+        //         Some(v) => Ok(DFStringArray::full(v.deref(), size).into_series()),
+        //     },
+        //     DataValue::List(values) => match data_type {
+        //         DataType::Int8 => build_list_series! {i8, values, size, data_type },
+        //         DataType::Int16 => build_list_series! {i16, values, size, data_type },
+        //         DataType::Int32 => build_list_series! {i32, values, size, data_type },
+        //         DataType::Int64 => build_list_series! {i64, values, size, data_type },
 
-                DataType::UInt8 => build_list_series! {u8, values, size, data_type },
-                DataType::UInt16 => build_list_series! {u16, values, size, data_type },
-                DataType::UInt32 => build_list_series! {u32, values, size, data_type },
-                DataType::UInt64 => build_list_series! {u64, values, size, data_type },
+        //         DataType::UInt8 => build_list_series! {u8, values, size, data_type },
+        //         DataType::UInt16 => build_list_series! {u16, values, size, data_type },
+        //         DataType::UInt32 => build_list_series! {u32, values, size, data_type },
+        //         DataType::UInt64 => build_list_series! {u64, values, size, data_type },
 
-                DataType::Float32 => build_list_series! {f32, values, size, data_type },
-                DataType::Float64 => build_list_series! {f64, values, size, data_type },
+        //         DataType::Float32 => build_list_series! {f32, values, size, data_type },
+        //         DataType::Float64 => build_list_series! {f64, values, size, data_type },
 
-                DataType::Boolean => {
-                    let mut builder = ListBooleanArrayBuilder::with_capacity(0, size);
-                    match values {
-                        Some(v) => {
-                            let series = DataValue::try_into_data_array(v, data_type)?;
-                            (0..size).for_each(|_| {
-                                builder.append_series(&series);
-                            });
-                        }
-                        None => (0..size).for_each(|_| {
-                            builder.append_null();
-                        }),
-                    }
-                    Ok(builder.finish().into_series())
-                }
-                DataType::String => {
-                    let mut builder = ListStringArrayBuilder::with_capacity(0, size);
-                    match values {
-                        Some(v) => {
-                            let series = DataValue::try_into_data_array(v, data_type)?;
-                            (0..size).for_each(|_| {
-                                builder.append_series(&series);
-                            });
-                        }
-                        None => (0..size).for_each(|_| {
-                            builder.append_null();
-                        }),
-                    }
-                    Ok(builder.finish().into_series())
-                }
-                other => Result::Err(ErrorCode::BadDataValueType(format!(
-                    "Unexpected type:{} for DataValue List",
-                    other
-                ))),
-            },
-            DataValue::Struct(v) => {
-                let mut arrays = vec![];
-                let mut fields = vec![];
-                for (i, x) in v.iter().enumerate() {
-                    let xseries = x.to_series_with_size(size)?;
-                    let val_array = xseries.get_array_ref();
+        //         DataType::Boolean => {
+        //             let mut builder = ListBooleanArrayBuilder::with_capacity(0, size);
+        //             match values {
+        //                 Some(v) => {
+        //                     let series = DataValue::try_into_data_array(v, data_type)?;
+        //                     (0..size).for_each(|_| {
+        //                         builder.append_series(&series);
+        //                     });
+        //                 }
+        //                 None => (0..size).for_each(|_| {
+        //                     builder.append_null();
+        //                 }),
+        //             }
+        //             Ok(builder.finish().into_series())
+        //         }
+        //         DataType::String => {
+        //             let mut builder = ListStringArrayBuilder::with_capacity(0, size);
+        //             match values {
+        //                 Some(v) => {
+        //                     let series = DataValue::try_into_data_array(v, data_type)?;
+        //                     (0..size).for_each(|_| {
+        //                         builder.append_series(&series);
+        //                     });
+        //                 }
+        //                 None => (0..size).for_each(|_| {
+        //                     builder.append_null();
+        //                 }),
+        //             }
+        //             Ok(builder.finish().into_series())
+        //         }
+        //         other => Result::Err(ErrorCode::BadDataValueType(format!(
+        //             "Unexpected type:{} for DataValue List",
+        //             other
+        //         ))),
+        //     },
+        //     DataValue::Struct(v) => {
+        //         let mut arrays = vec![];
+        //         let mut fields = vec![];
+        //         for (i, x) in v.iter().enumerate() {
+        //             let xseries = x.to_series_with_size(size)?;
+        //             let val_array = xseries.get_array_ref();
 
-                    fields.push(ArrowField::new(
-                        format!("item_{}", i).as_str(),
-                        val_array.data_type().clone(),
-                        false,
-                    ));
+        //             fields.push(ArrowField::new(
+        //                 format!("item_{}", i).as_str(),
+        //                 val_array.data_type().clone(),
+        //                 false,
+        //             ));
 
-                    arrays.push(val_array);
-                }
-                let r: DFStructArray =
-                    StructArray::from_data(ArrowType::Struct(fields), arrays, None).into();
-                Ok(r.into_series())
-            }
-        }
+        //             arrays.push(val_array);
+        //         }
+        //         let r: DFStructArray =
+        //             StructArray::from_data(ArrowType::Struct(fields), arrays, None).into();
+        //         Ok(r.into_series())
+        //     }
+        // }
     }
 
     pub fn to_values(&self, size: usize) -> Result<Vec<DataValue>> {
@@ -323,28 +296,29 @@ impl DataValue {
         if nullable {
             return data_type.into();
         }
-        match data_type {
-            DataType::Null => DataValue::Null,
-            DataType::Boolean => DataValue::Boolean(Some(false)),
-            DataType::UInt8 => DataValue::UInt8(Some(0)),
-            DataType::UInt16 => DataValue::UInt16(Some(0)),
-            DataType::UInt32 => DataValue::UInt32(Some(0)),
-            DataType::UInt64 => DataValue::UInt64(Some(0)),
-            DataType::Int8 => DataValue::Int8(Some(0)),
-            DataType::Int16 => DataValue::Int16(Some(0)),
-            DataType::Int32 => DataValue::Int32(Some(0)),
-            DataType::Int64 => DataValue::Int64(Some(0)),
-            DataType::Float32 => DataValue::Float32(Some(0.0)),
-            DataType::Float64 => DataValue::Float64(Some(0.0)),
-            DataType::Date16 => DataValue::UInt16(Some(0)),
-            DataType::Date32 => DataValue::Int32(Some(0)),
-            DataType::DateTime32(_) => DataValue::UInt32(Some(0)),
-            DataType::DateTime64(_, _) => DataValue::UInt64(Some(0)),
-            DataType::Interval(_) => DataValue::Int64(Some(0)),
-            DataType::List(f) => DataValue::List(Some(vec![]), f.data_type().clone()),
-            DataType::Struct(_) => DataValue::Struct(vec![]),
-            DataType::String => DataValue::String(Some(vec![])),
-        }
+        todo!()
+        // match data_type {
+        //     DataType::Null => DataValue::Null,
+        //     DataType::Boolean => DataValue::Boolean(Some(false)),
+        //     DataType::UInt8 => DataValue::UInt8(Some(0)),
+        //     DataType::UInt16 => DataValue::UInt16(Some(0)),
+        //     DataType::UInt32 => DataValue::UInt32(Some(0)),
+        //     DataType::UInt64 => DataValue::UInt64(Some(0)),
+        //     DataType::Int8 => DataValue::Int8(Some(0)),
+        //     DataType::Int16 => DataValue::Int16(Some(0)),
+        //     DataType::Int32 => DataValue::Int32(Some(0)),
+        //     DataType::Int64 => DataValue::Int64(Some(0)),
+        //     DataType::Float32 => DataValue::Float32(Some(0.0)),
+        //     DataType::Float64 => DataValue::Float64(Some(0.0)),
+        //     DataType::Date16 => DataValue::UInt16(Some(0)),
+        //     DataType::Date32 => DataValue::Int32(Some(0)),
+        //     DataType::DateTime32(_) => DataValue::UInt32(Some(0)),
+        //     DataType::DateTime64(_, _) => DataValue::UInt64(Some(0)),
+        //     DataType::Interval(_) => DataValue::Int64(Some(0)),
+        //     DataType::List(f) => DataValue::List(Some(vec![]), f.data_type().clone()),
+        //     DataType::Struct(_) => DataValue::Struct(vec![]),
+        //     DataType::String => DataValue::String(Some(vec![])),
+        // }
     }
     pub fn as_string(&self) -> Result<Vec<u8>> {
         match self {
@@ -454,7 +428,7 @@ impl From<&DataType> for DataValue {
             DataType::Date32 => DataValue::Int32(None),
             DataType::DateTime32(_) => DataValue::UInt32(None),
             DataType::DateTime64(_, _) => DataValue::UInt64(None),
-            DataType::List(f) => DataValue::List(None, f.data_type().clone()),
+            DataType::List(f) => DataValue::List(None),
             DataType::Struct(_) => DataValue::Struct(vec![]),
             DataType::String => DataValue::String(None),
             DataType::Interval(_) => DataValue::Int64(None),
@@ -532,7 +506,7 @@ impl fmt::Debug for DataValue {
             DataValue::Float64(v) => format_data_value_with_option!(f, v),
             DataValue::String(None) => write!(f, "{}", self),
             DataValue::String(Some(_)) => write!(f, "{}", self),
-            DataValue::List(_, _) => write!(f, "[{}]", self),
+            DataValue::List(_) => write!(f, "[{}]", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }
     }

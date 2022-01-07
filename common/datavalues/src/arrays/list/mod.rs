@@ -73,7 +73,7 @@ impl DFListArray {
                 Some(v)
             }
         };
-        Ok(DataValue::List(v, self.sub_data_type().clone()))
+        Ok(DataValue::List(v))
     }
 
     pub fn len(&self) -> usize {
@@ -129,13 +129,6 @@ impl DFListArray {
                 array,
                 self.data_type()
             )))
-        }
-    }
-
-    pub fn sub_data_type(&self) -> &DataType {
-        match self.data_type() {
-            DataType::List(sub_types) => sub_types.data_type(),
-            _ => unreachable!(),
         }
     }
 }
