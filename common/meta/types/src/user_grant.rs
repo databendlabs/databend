@@ -28,6 +28,22 @@ pub enum GrantObject {
 }
 
 impl GrantObject {
+    /// Comparing the grant objects, the Database object contains all the Table objects inside it.
+    /// Global object contains all the Database objects.
+    pub fn contains(&self, object: &GrantObject) -> bool {
+        use GrantObject::*;
+        match (self, object) {
+            (Global, _) => true,
+            (Database(_), Global) => false,
+            (Database(lhs), Database(rhs)) => lhs == rhs,
+            (Database(lhs), Table(rhs, _)) => lhs == rhs,
+            (Table(lhs_db, lhs_table), Table(rhs_db, rhs_table)) => {
+                (lhs_db == rhs_db) && (lhs_table == rhs_table)
+            }
+            (Table(_, _), _) => false,
+        }
+    }
+
     /// Some global privileges can not be granted to a database or table, for example, a KILL
     /// statement is meaningless for a table.
     pub fn allow_privilege(&self, privilege: UserPrivilegeType) -> bool {
