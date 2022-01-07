@@ -48,7 +48,7 @@ pub struct Builder {
     ///
     /// ## TODO
     ///
-    /// It seems sdk doesn't support path style so far.
+    /// It seems sdk doesn't support signature v2 so far.
     enable_signature_v2: bool,
 }
 
@@ -115,7 +115,7 @@ impl Builder {
 
         // strip the prefix of "/" in root only once.
         let root = if let Some(root) = &self.root {
-            root.strip_prefix('/').unwrap_or(&root).to_string()
+            root.strip_prefix('/').unwrap_or(root).to_string()
         } else {
             String::new()
         };
