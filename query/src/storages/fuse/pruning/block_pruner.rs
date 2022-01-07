@@ -22,7 +22,7 @@ use futures::TryStreamExt;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::snapshot_location;
-use crate::storages::fuse::io::Readers;
+use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
@@ -57,7 +57,7 @@ impl BlockPruner {
             _ => Box::new(|_: &BlockStatistics| Ok(true)),
         };
 
-        let reader = Readers::table_snapshot_reader(ctx);
+        let reader = MetaReaders::table_snapshot_reader(ctx);
         let snapshot = reader.read(self.table_snapshot_location.as_str()).await?;
         let segment_num = snapshot.segments.len();
         let segment_locs = snapshot.segments.clone();
@@ -68,7 +68,7 @@ impl BlockPruner {
 
         let res = futures::stream::iter(segment_locs)
             .map(|seg_loc| async {
-                let reader = Readers::segment_info_reader(ctx);
+                let reader = MetaReaders::segment_info_reader(ctx);
                 let segment_info = reader.read(seg_loc).await?;
                 Self::filter_segment(segment_info.as_ref(), &block_pred)
             })

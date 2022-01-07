@@ -31,7 +31,7 @@ use common_tracing::tracing;
 use futures::StreamExt;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io::Readers;
+use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
@@ -140,7 +140,7 @@ impl FuseTable {
         ctx: &QueryContext,
     ) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc() {
-            let reader = Readers::table_snapshot_reader(ctx);
+            let reader = MetaReaders::table_snapshot_reader(ctx);
             Ok(Some(reader.read(&loc).await?))
         } else {
             Ok(None)

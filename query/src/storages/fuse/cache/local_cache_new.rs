@@ -22,34 +22,53 @@ use common_cache::DefaultHashBuilder;
 use common_cache::LruCache;
 use common_exception::Result;
 
+use crate::storages::fuse::cache::metrics::CacheDeferMetrics;
+
 #[async_trait::async_trait]
 pub trait Loader<T> {
     async fn load(&self, key: &str) -> Result<T>;
 }
 
-pub type MemCache<K, V> = LruCache<K, V, DefaultHashBuilder, Count>;
-pub type InMemCache<K, V> = Arc<RwLock<MemCache<K, Arc<V>>>>;
-pub type TableInMemCache<V> = Arc<RwLock<MemCache<String, Arc<V>>>>;
+pub trait TenantAware {
+    fn get_tenant_info(&self) -> (String, String);
+}
+
+type LaCache<K, V> = LruCache<K, V, DefaultHashBuilder, Count>;
+pub type TableInMemCache<V> = Arc<RwLock<LaCache<String, Arc<V>>>>;
+
+pub fn empty_with_capacity<V>(capacity: u64) -> TableInMemCache<V> {
+    Arc::new(RwLock::new(LruCache::new(capacity)))
+}
 
 pub struct CachedLoader<T, L> {
-    cache: Option<InMemCache<String, T>>,
+    cache: Option<TableInMemCache<T>>,
     loader: L,
 }
 
 impl<V, L> CachedLoader<V, L>
-where L: Loader<V>
+where L: Loader<V> + TenantAware
 {
     pub fn new(cache: Option<TableInMemCache<V>>, loader: L) -> Self {
         Self { cache, loader }
     }
     pub async fn read(&self, loc: impl AsRef<str>) -> Result<Arc<V>> {
-        // TODO metrics
         match &self.cache {
             None => self.load(loc.as_ref()).await,
             Some(cache) => {
+                let (tenant_id, cluster_id) = self.loader.get_tenant_info();
+                let mut metrics = CacheDeferMetrics {
+                    tenant_id: tenant_id.as_str(),
+                    cluster_id: cluster_id.as_str(),
+                    cache_hit: false,
+                    read_bytes: 0,
+                };
                 let cache = &mut cache.write().await;
                 match cache.get(loc.as_ref()) {
-                    Some(item) => Ok(item.clone()),
+                    Some(item) => {
+                        metrics.cache_hit = true;
+                        metrics.read_bytes = 0u64;
+                        Ok(item.clone())
+                    }
                     None => {
                         let item = self.load(loc.as_ref()).await?;
                         cache.put(loc.as_ref().to_owned(), item.clone());

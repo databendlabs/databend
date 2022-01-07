@@ -35,7 +35,7 @@ use futures::io::BufReader;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
-use crate::storages::fuse::io::meta_reader_new::BlockMetaReader;
+use crate::storages::fuse::io::meta_readers::BlockMetaReader;
 
 pub struct BlockReader {
     data_accessor: Arc<dyn DataAccessor>,

@@ -34,7 +34,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io::Readers;
+use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::table::is_fuse_table;
 use crate::storages::fuse::table_functions::table_arg_util::parse_func_history_args;
@@ -164,7 +164,7 @@ impl Table for FuseHistoryTable {
 
         let tbl_info = tbl.get_table_info();
         let location = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
-        let reader = Readers::table_snapshot_reader(ctx.as_ref());
+        let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
         let snapshots = reader.read_snapshot_history(location).await?;
         let blocks = vec![self.snapshots_to_block(snapshots)];
         Ok(Box::pin(DataBlockStream::create(

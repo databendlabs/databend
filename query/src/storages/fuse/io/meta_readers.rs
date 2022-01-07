@@ -28,6 +28,7 @@ use crate::sessions::QueryContext;
 use crate::storages::fuse::cache::CachedLoader;
 use crate::storages::fuse::cache::Loader;
 use crate::storages::fuse::cache::TableInMemCache;
+use crate::storages::fuse::cache::TenantAware;
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
@@ -43,10 +44,27 @@ impl InputStreamProvider for &QueryContext {
     }
 }
 
+impl TenantAware for &QueryContext {
+    fn get_tenant_info(&self) -> (String, String) {
+        let mgr = self.get_storage_cache_manager();
+        (
+            mgr.get_tenant_id().to_owned(),
+            mgr.get_cluster_id().to_owned(),
+        )
+    }
+}
+
 impl InputStreamProvider for Arc<QueryContext> {
     fn input_stream(&self, path: &str, len: Option<u64>) -> Result<InputStream> {
         let ctx = self.as_ref();
         ctx.input_stream(path, len)
+    }
+}
+
+impl TenantAware for Arc<QueryContext> {
+    fn get_tenant_info(&self) -> (String, String) {
+        let ctx = self.as_ref();
+        ctx.get_tenant_info()
     }
 }
 
@@ -104,9 +122,9 @@ pub type SegmentInfoReader<'a> = CachedLoader<SegmentInfo, &'a QueryContext>;
 pub type TableSnapshotReader<'a> = CachedLoader<TableSnapshot, &'a QueryContext>;
 pub type BlockMetaReader = CachedLoader<BlockMeta, Arc<QueryContext>>;
 
-pub struct Readers;
+pub struct MetaReaders;
 
-impl Readers {
+impl MetaReaders {
     pub fn segment_info_reader(ctx: &QueryContext) -> SegmentInfoReader {
         SegmentInfoReader::new(
             ctx.get_storage_cache_manager().get_table_segment_cache(),

@@ -21,7 +21,7 @@ use common_exception::Result;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::snapshot_location;
-use crate::storages::fuse::io::Readers;
+use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
@@ -35,7 +35,7 @@ impl FuseTable {
         let da = ctx.get_storage_accessor()?;
         let tbl_info = self.get_table_info();
         let snapshot_loc = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
-        let reader = Readers::table_snapshot_reader(ctx.as_ref());
+        let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
         let mut snapshots = reader.read_snapshot_history(snapshot_loc).await?;
 
         let min_history_len = if !keep_last_snapshot { 0 } else { 1 };
@@ -96,7 +96,7 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
-        let reader = Readers::segment_info_reader(ctx.as_ref());
+        let reader = MetaReaders::segment_info_reader(ctx.as_ref());
         for location in locations {
             let res = reader.read(location).await?;
             for block_meta in &res.blocks {

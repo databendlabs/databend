@@ -31,7 +31,7 @@ use common_planners::lit;
 use common_planners::Extras;
 use databend_query::catalogs::Catalog;
 use databend_query::sessions::QueryContext;
-use databend_query::storages::fuse::io::Readers;
+use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::meta::BlockMeta;
 use databend_query::storages::fuse::meta::TableSnapshot;
 use databend_query::storages::fuse::pruning::BlockPruner;
@@ -114,7 +114,7 @@ async fn test_block_pruner() -> Result<()> {
         .get(TBL_OPT_KEY_SNAPSHOT_LOC)
         .unwrap();
 
-    let reader = Readers::table_snapshot_reader(ctx.as_ref());
+    let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
     let snapshot = reader.read(snapshot_loc.as_str()).await?;
 
     // no pruning

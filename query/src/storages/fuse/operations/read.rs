@@ -26,7 +26,7 @@ use futures::StreamExt;
 use super::part_info::PartInfo;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockReader;
-use crate::storages::fuse::io::Readers;
+use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
@@ -71,7 +71,7 @@ impl FuseTable {
                 let da = da.clone();
                 let table_schema = table_schema.clone();
                 let projection = projection.clone();
-                let reader = Readers::block_meta_reader(ctx.clone());
+                let reader = MetaReaders::block_meta_reader(ctx.clone());
                 async move {
                     let part_info = PartInfo::decode(&part.name)?;
                     let part_location = part_info.location();
