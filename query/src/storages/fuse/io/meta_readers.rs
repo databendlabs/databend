@@ -46,8 +46,7 @@ impl InputStreamProvider for &QueryContext {
 
 impl HasMetricLabel for &QueryContext {
     fn get_tenant_info(&self) -> (&str, &str) {
-        let mgr = self.get_storage_cache_manager();
-        (mgr.get_tenant_id(), mgr.get_cluster_id())
+        get_tenant_info(self)
     }
 }
 
@@ -59,9 +58,13 @@ impl InputStreamProvider for Arc<QueryContext> {
 
 impl HasMetricLabel for Arc<QueryContext> {
     fn get_tenant_info(&self) -> (&str, &str) {
-        let mgr = self.get_storage_cache_manager();
-        (mgr.get_tenant_id(), mgr.get_cluster_id())
+        get_tenant_info(self)
     }
+}
+
+fn get_tenant_info(ctx: &QueryContext) -> (&str, &str) {
+    let mgr = ctx.get_storage_cache_manager();
+    (mgr.get_tenant_id(), mgr.get_cluster_id())
 }
 
 #[async_trait::async_trait]

@@ -16,6 +16,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_cache::Cache;
 use common_dal::DataAccessor;
 use common_exception::Result;
 
@@ -74,17 +75,29 @@ impl FuseTable {
         // 1. remove blocks
         for x in block_delta {
             self.remove_location(da.clone(), x).await?;
+            if let Some(c) = ctx.get_storage_cache_manager().get_block_meta_cache() {
+                let cache = &mut *c.write().await;
+                cache.pop(x.as_str());
+            }
         }
 
         // 2. remove the segments
         for x in seg_delta {
-            self.remove_location(da.clone(), x).await?;
+            self.remove_location(da.clone(), x.as_str()).await?;
+            if let Some(c) = ctx.get_storage_cache_manager().get_table_segment_cache() {
+                let cache = &mut *c.write().await;
+                cache.pop(x.as_str());
+            }
         }
 
         // 3. remove the snapshots
         for x in snapshots.iter().rev() {
             let loc = snapshot_location(&x.snapshot_id);
-            self.remove_location(da.clone(), loc).await?
+            self.remove_location(da.clone(), loc.as_str()).await?;
+            if let Some(c) = ctx.get_storage_cache_manager().get_table_snapshot_cache() {
+                let cache = &mut *c.write().await;
+                cache.pop(loc.as_str());
+            }
         }
 
         Ok(())
