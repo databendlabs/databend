@@ -94,7 +94,7 @@ jobs:
       - uses: ./.github/actions/test_stateful_standalone
 
   test_proxy_mode:
-  runs-on: ${{ matrix.config.os }}
+    runs-on: ${{ matrix.config.os }}
     needs: build
     strategy:
       matrix:
