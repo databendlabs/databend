@@ -96,12 +96,8 @@ impl SessionManager {
         self.catalog.clone()
     }
 
-    //    pub fn get_storage_cache(self: &Arc<Self>) -> Arc<Option<Box<dyn StorageCache>>> {
-    //        self.storage_cache.clone()
-    //    }
-
-    pub fn get_storage_cache_manager(self: &Arc<Self>) -> Arc<CacheManager> {
-        self.storage_cache_manager.clone()
+    pub fn get_storage_cache_manager<'a>(self: &'a Arc<Self>) -> &'a CacheManager {
+        self.storage_cache_manager.as_ref()
     }
 
     pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {

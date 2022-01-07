@@ -283,7 +283,7 @@ impl QueryContext {
     }
 
     /// Get the storage cache manager
-    pub fn get_storage_cache_manager(&self) -> Arc<CacheManager> {
+    pub fn get_storage_cache_manager(&self) -> &CacheManager {
         self.shared.session.sessions.get_storage_cache_manager()
     }
 

@@ -45,12 +45,9 @@ impl InputStreamProvider for &QueryContext {
 }
 
 impl TenantAware for &QueryContext {
-    fn get_tenant_info(&self) -> (String, String) {
+    fn get_tenant_info(&self) -> (&str, &str) {
         let mgr = self.get_storage_cache_manager();
-        (
-            mgr.get_tenant_id().to_owned(),
-            mgr.get_cluster_id().to_owned(),
-        )
+        (mgr.get_tenant_id(), mgr.get_cluster_id())
     }
 }
 
@@ -62,9 +59,9 @@ impl InputStreamProvider for Arc<QueryContext> {
 }
 
 impl TenantAware for Arc<QueryContext> {
-    fn get_tenant_info(&self) -> (String, String) {
-        let ctx = self.as_ref();
-        ctx.get_tenant_info()
+    fn get_tenant_info(&self) -> (&str, &str) {
+        let mgr = self.get_storage_cache_manager();
+        (mgr.get_tenant_id(), mgr.get_cluster_id())
     }
 }
 

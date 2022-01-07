@@ -30,7 +30,7 @@ pub trait Loader<T> {
 }
 
 pub trait TenantAware {
-    fn get_tenant_info(&self) -> (String, String);
+    fn get_tenant_info(&self) -> (&str, &str);
 }
 
 type LaCache<K, V> = LruCache<K, V, DefaultHashBuilder, Count>;
@@ -57,8 +57,8 @@ where L: Loader<V> + TenantAware
             Some(cache) => {
                 let (tenant_id, cluster_id) = self.loader.get_tenant_info();
                 let mut metrics = CacheDeferMetrics {
-                    tenant_id: tenant_id.as_str(),
-                    cluster_id: cluster_id.as_str(),
+                    tenant_id,
+                    cluster_id,
                     cache_hit: false,
                     read_bytes: 0,
                 };
