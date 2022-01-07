@@ -30,6 +30,7 @@ use crate::sessions::Settings;
 pub struct MutableStatus {
     abort: AtomicBool,
     current_database: RwLock<String>,
+    current_tenant: RwLock<String>,
     session_settings: RwLock<Settings>,
     #[ignore_malloc_size_of = "insignificant"]
     current_user: RwLock<Option<UserInfo>>,
@@ -46,6 +47,7 @@ impl MutableStatus {
         Ok(MutableStatus {
             abort: Default::default(),
             current_user: Default::default(),
+            current_tenant: Default::default(),
             client_host: Default::default(),
             current_database: RwLock::new("default".to_string()),
             session_settings: RwLock::new(Settings::try_create()?.as_ref().clone()),
@@ -74,6 +76,18 @@ impl MutableStatus {
     pub fn set_current_database(&self, db: String) {
         let mut lock = self.current_database.write();
         *lock = db
+    }
+
+    // Set current tenant.
+    pub fn set_current_tenant(&self, tenant: String) {
+        let mut lock = self.current_tenant.write();
+        *lock = tenant
+    }
+
+    // Get current database.
+    pub fn get_current_tenant(&self) -> String {
+        let lock = self.current_tenant.read();
+        lock.clone()
     }
 
     // Get current user

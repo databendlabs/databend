@@ -36,7 +36,10 @@ async fn test_show_create_udf_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "CreatUDFInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
-        let udf = ctx.get_user_manager().get_udf(tenant, "isnotempty").await?;
+        let udf = ctx
+            .get_user_manager()
+            .get_udf(&tenant, "isnotempty")
+            .await?;
 
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["p".to_string()]);

@@ -51,7 +51,7 @@ impl Interpreter for CreatStageInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
         let user_stage = plan.user_stage_info;
-        let create_stage = user_mgr.add_stage(tenant, user_stage).await;
+        let create_stage = user_mgr.add_stage(&tenant, user_stage).await;
         if plan.if_not_exists {
             create_stage.or_else(|e| {
                 // StageAlreadyExists(4061)

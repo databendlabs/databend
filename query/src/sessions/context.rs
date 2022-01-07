@@ -216,6 +216,12 @@ impl QueryContext {
         Ok(())
     }
 
+    pub async fn set_current_tenant(&self, tenant: String) -> Result<()> {
+        self.shared.set_current_tenant(tenant);
+
+        Ok(())
+    }
+
     pub fn get_current_user(&self) -> Result<UserInfo> {
         self.shared.get_current_user()
     }
@@ -232,8 +238,12 @@ impl QueryContext {
         self.shared.conf.clone()
     }
 
-    pub fn get_tenant(&self) -> &str {
-        &self.shared.conf.query.tenant_id
+    pub fn get_tenant(&self) -> String {
+        if self.shared.conf.query.proxy_mode {
+            self.shared.get_current_tenant()
+        } else {
+            self.shared.conf.query.tenant_id.clone()
+        }
     }
 
     pub fn get_subquery_name(&self, _query: &PlanNode) -> String {

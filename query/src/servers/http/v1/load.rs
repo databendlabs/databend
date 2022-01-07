@@ -66,7 +66,7 @@ pub async fn streaming_load(
         .await
         .map_err(InternalServerError)?;
     let user_info = user_manager
-        .get_user(ctx.get_tenant(), user_name, "%")
+        .get_user(&ctx.get_tenant(), user_name, "127.0.0.1")
         .await
         .map_err(InternalServerError)?;
     session.set_current_user(user_info);

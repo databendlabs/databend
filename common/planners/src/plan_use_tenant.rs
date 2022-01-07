@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod flight_client;
-#[macro_use]
-mod flight_action;
-mod flight_client_conf;
+use std::sync::Arc;
 
-pub mod impls;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 
-pub use flight_action::*;
-pub use flight_client::MetaFlightClient;
-pub use flight_client_conf::MetaFlightClientConf;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct UseTenantPlan {
+    pub tenant: String,
+}
 
-// ProtoBuf generated files.
-#[allow(clippy::all)]
-pub mod protobuf {
-    tonic::include_proto!("metaflight");
+impl UseTenantPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
 }

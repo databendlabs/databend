@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::GrantObject;
+use common_meta_types::UserPrivilegeType;
 use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -46,6 +48,12 @@ impl Interpreter for TruncateTableInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let db_name = self.plan.db.as_str();
         let tbl_name = self.plan.table.as_str();
+
+        self.ctx.get_current_session().validate_privilege(
+            &GrantObject::Table(db_name.into(), tbl_name.into()),
+            UserPrivilegeType::Delete,
+        )?;
+
         let tbl = self.ctx.get_table(db_name, tbl_name).await?;
         tbl.truncate(self.ctx.clone(), self.plan.clone()).await?;
         Ok(Box::pin(DataBlockStream::create(
