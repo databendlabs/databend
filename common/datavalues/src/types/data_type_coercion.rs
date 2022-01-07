@@ -17,10 +17,10 @@ use std::cmp;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::prelude::DataType;
-use crate::DataField;
+use crate::prelude::*;
 use crate::DataValueBinaryOperator;
 use crate::DataValueUnaryOperator;
+use crate::types2::data_type::DataTypePtr;
 
 fn next_size(size: usize) -> usize {
     if size < 8_usize {
@@ -33,27 +33,27 @@ pub fn construct_numeric_type(
     is_signed: bool,
     is_floating: bool,
     byte_size: usize,
-) -> Result<DataType> {
+) -> Result<DataTypePtr> {
     match (is_signed, is_floating, byte_size) {
-        (false, false, 1) => Ok(DataType::UInt8),
-        (false, false, 2) => Ok(DataType::UInt16),
-        (false, false, 4) => Ok(DataType::UInt32),
-        (false, false, 8) => Ok(DataType::UInt64),
-        (false, true, 4) => Ok(DataType::Float32),
-        (false, true, 8) => Ok(DataType::Float64),
-        (true, false, 1) => Ok(DataType::Int8),
-        (true, false, 2) => Ok(DataType::Int16),
-        (true, false, 4) => Ok(DataType::Int32),
-        (true, false, 8) => Ok(DataType::Int64),
-        (true, true, 1) => Ok(DataType::Float32),
-        (true, true, 2) => Ok(DataType::Float32),
-        (true, true, 4) => Ok(DataType::Float32),
-        (true, true, 8) => Ok(DataType::Float64),
+        (false, false, 1) => Ok(DataTypeUInt8::arc()),
+        (false, false, 2) => Ok(DataTypeUInt16::arc()),
+        (false, false, 4) => Ok(DataTypeUInt32::arc()),
+        (false, false, 8) => Ok(DataTypeUInt64::arc()),
+        (false, true, 4) => Ok(DataTypeFloat32::arc()),
+        (false, true, 8) => Ok(DataTypeFloat64::arc()),
+        (true, false, 1) => Ok(DataTypeInt8::arc()),
+        (true, false, 2) => Ok(DataTypeInt16::arc()),
+        (true, false, 4) => Ok(DataTypeInt32::arc()),
+        (true, false, 8) => Ok(DataTypeInt64::arc()),
+        (true, true, 1) => Ok(DataTypeFloat32::arc()),
+        (true, true, 2) => Ok(DataTypeFloat32::arc()),
+        (true, true, 4) => Ok(DataTypeFloat32::arc()),
+        (true, true, 8) => Ok(DataTypeFloat64::arc()),
 
         // TODO support bigint and decimal types, now we just let's overflow
-        (false, false, d) if d > 8 => Ok(DataType::Int64),
-        (true, false, d) if d > 8 => Ok(DataType::UInt64),
-        (_, true, d) if d > 8 => Ok(DataType::Float64),
+        (false, false, d) if d > 8 => Ok(DataTypeInt64::arc()),
+        (true, false, d) if d > 8 => Ok(DataTypeUInt64::arc()),
+        (_, true, d) if d > 8 => Ok(DataTypeFloat64::arc()),
 
         _ => Result::Err(ErrorCode::BadDataValueType(format!(
             "Can't construct type from is_signed: {}, is_floating: {}, byte_size: {}",
@@ -66,10 +66,11 @@ pub fn construct_numeric_type(
 /// can be casted to for numerical calculation, while maintaining
 /// maximum precision
 pub fn numerical_coercion(
-    lhs_type: &DataType,
-    rhs_type: &DataType,
+    lhs_type: &DataTypePtr,
+    rhs_type: &DataTypePtr,
     allow_overflow: bool,
 ) -> Result<DataType> {
+
     let has_float = lhs_type.is_floating() || rhs_type.is_floating();
     let has_integer = lhs_type.is_integer() || rhs_type.is_integer();
     let has_signed = lhs_type.is_signed_numeric() || rhs_type.is_signed_numeric();
@@ -155,8 +156,8 @@ pub fn numerical_coercion(
 #[inline]
 pub fn numerical_arithmetic_coercion(
     op: &DataValueBinaryOperator,
-    lhs_type: &DataType,
-    rhs_type: &DataType,
+    lhs_type: &DataTypePtr,
+    rhs_type: &DataTypePtr,
 ) -> Result<DataType> {
     // error on any non-numeric type
     if !lhs_type.is_numeric() || !rhs_type.is_numeric() {
@@ -177,7 +178,7 @@ pub fn numerical_arithmetic_coercion(
 
         DataValueBinaryOperator::Modulo => {
             if has_float {
-                return Ok(DataType::Float64);
+                return Ok(DataTypeFloat64::arc());
             }
             // From clickhouse: NumberTraits.h
             // If modulo of division can yield negative number, we need larger type to accommodate it.
@@ -194,7 +195,7 @@ pub fn numerical_arithmetic_coercion(
         DataValueBinaryOperator::Minus => {
             construct_numeric_type(true, has_float, next_size(max_size))
         }
-        DataValueBinaryOperator::Div => Ok(DataType::Float64),
+        DataValueBinaryOperator::Div => Ok(DataTypeFloat64::arc()),
         DataValueBinaryOperator::IntDiv => construct_numeric_type(has_signed, false, max_size),
     }
 }
@@ -202,8 +203,8 @@ pub fn numerical_arithmetic_coercion(
 #[inline]
 pub fn datetime_arithmetic_coercion(
     op: &DataValueBinaryOperator,
-    lhs_type: &DataType,
-    rhs_type: &DataType,
+    lhs_type: &DataTypePtr,
+    rhs_type: &DataTypePtr,
 ) -> Result<DataType> {
     let e = Result::Err(ErrorCode::BadDataValueType(format!(
         "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
@@ -229,7 +230,7 @@ pub fn datetime_arithmetic_coercion(
                 Ok(a)
             } else {
                 // Date minus Date or DateTime minus DateTime
-                Ok(DataType::Int32)
+                Ok(DataTypeInt3::arc()2)
             }
         }
         _ => e,
@@ -239,8 +240,8 @@ pub fn datetime_arithmetic_coercion(
 #[inline]
 pub fn interval_arithmetic_coercion(
     op: &DataValueBinaryOperator,
-    lhs_type: &DataType,
-    rhs_type: &DataType,
+    lhs_type: &DataTypePtr,
+    rhs_type: &DataTypePtr,
 ) -> Result<DataType> {
     let e = Result::Err(ErrorCode::BadDataValueType(format!(
         "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
@@ -269,7 +270,7 @@ pub fn interval_arithmetic_coercion(
 #[inline]
 pub fn numerical_unary_arithmetic_coercion(
     op: &DataValueUnaryOperator,
-    val_type: &DataType,
+    val_type: &DataTypePtr,
 ) -> Result<DataType> {
     // error on any non-numeric type
     if !val_type.is_numeric() {
@@ -295,7 +296,7 @@ pub fn numerical_unary_arithmetic_coercion(
 }
 
 // coercion rules for compare operations. This is a superset of all numerical coercion rules.
-pub fn compare_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
+pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataType) -> Result<DataType> {
     if lhs_type == rhs_type {
         // same type => equality is possible
         return Ok(lhs_type.clone());
@@ -307,30 +308,30 @@ pub fn compare_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Data
 
     //  one of is null
     {
-        if rhs_type == &DataType::Null {
+        if rhs_type == &DataTypeNull::arc() {
             return Ok(lhs_type.clone());
         }
-        if lhs_type == &DataType::Null {
+        if lhs_type == &DataTypeNull::arc() {
             return Ok(rhs_type.clone());
         }
     }
 
     // one of is String and other is number
-    if (lhs_type.is_numeric() && rhs_type == &DataType::String)
-        || (rhs_type.is_numeric() && lhs_type == &DataType::String)
+    if (lhs_type.is_numeric() && rhs_type == &DataTypeStrin::arc()g)
+        || (rhs_type.is_numeric() && lhs_type == &DataTypeStrin::arc()g)
     {
-        return Ok(DataType::Float64);
+        return Ok(DataTypeFloat64::arc());
     }
 
     // one of is datetime and other is number or string
     {
-        if (lhs_type.is_numeric() || lhs_type == &DataType::String)
+        if (lhs_type.is_numeric() || lhs_type == &DataTypeStrin::arc()g)
             && rhs_type.is_date_or_date_time()
         {
             return Ok(rhs_type.clone());
         }
 
-        if (rhs_type.is_numeric() || rhs_type == &DataType::String)
+        if (rhs_type.is_numeric() || rhs_type == &DataTypeStrin::arc()g)
             && lhs_type.is_date_or_date_time()
         {
             return Ok(lhs_type.clone());
@@ -340,13 +341,13 @@ pub fn compare_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Data
     // one of is datetime and other is number or string
     if lhs_type.is_date_or_date_time() || rhs_type.is_date_or_date_time() {
         // one of is datetime
-        if matches!(lhs_type, DataType::DateTime32(_))
-            || matches!(rhs_type, DataType::DateTime32(_))
+        if matches!(lhs_type, DataTypeDateTime32(_::arc()))
+            || matches!(rhs_type, DataTypeDateTime32(_::arc()))
         {
-            return Ok(DataType::DateTime32(None));
+            return Ok(DataTypeDateTime32(None)::arc());
         }
 
-        return Ok(DataType::Date32);
+        return Ok(DataTypeDate32::arc());
     }
 
     Err(ErrorCode::IllegalDataType(format!(
@@ -369,11 +370,11 @@ pub fn aggregate_types(args: &[DataType]) -> Result<DataType> {
     }
 }
 
-pub fn merge_types(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
+pub fn merge_types(lhs_type: &DataTypePtr, rhs_type: &DataType) -> Result<DataType> {
     match (lhs_type, rhs_type) {
-        (DataType::Null, _) => Ok(rhs_type.clone()),
-        (_, DataType::Null) => Ok(lhs_type.clone()),
-        (DataType::List(a), DataType::List(b)) => {
+        (DataTypeNull, _) => Ok(rhs_type.clone()::arc()),
+        (_, DataTypeNull) => Ok(lhs_type.clone()::arc()),
+        (DataTypeList(a), DataTypeList(b)) =>::arc() {
             if a.name() != b.name() {
                 return Result::Err(ErrorCode::BadDataValueType(format!(
                     "Can't merge types from {} and {}",
@@ -381,13 +382,13 @@ pub fn merge_types(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType>
                 )));
             }
             let typ = merge_types(a.data_type(), b.data_type())?;
-            Ok(DataType::List(Box::new(DataField::new(
+            Ok(DataTypeList(Box::new(DataField::ne::arc()w(
                 a.name(),
                 typ,
                 a.is_nullable() || b.is_nullable(),
             ))))
         }
-        (DataType::Struct(a), DataType::Struct(b)) => {
+        (DataTypeStruct(a), DataTypeStruct(b)) =>::arc() {
             if a.len() != b.len() {
                 return Result::Err(ErrorCode::BadDataValueType(format!(
                     "Can't merge types from {} and {}, because they have different sizes",
@@ -412,7 +413,7 @@ pub fn merge_types(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType>
                     ))
                 })
                 .collect::<Result<Vec<_>>>()?;
-            Ok(DataType::Struct(fields))
+            Ok(DataTypeStruct(fields::arc()))
         }
         _ => {
             if lhs_type == rhs_type {

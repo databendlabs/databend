@@ -10,9 +10,7 @@
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
-// limitations under the License.
-
-// TODO REMOVE THIS pub
+// limitations under the License.pub use data_type::*;
 
 pub mod data_type;
 pub mod data_type_boolean;
@@ -27,3 +25,16 @@ pub mod data_type_numeric;
 pub mod data_type_string;
 pub mod data_type_struct;
 pub mod type_id;
+
+pub use data_type_boolean::*;
+pub use data_type_date::*;
+pub use data_type_date32::*;
+pub use data_type_datetime::*;
+pub use data_type_datetime64::*;
+pub use data_type_interval::*;
+pub use data_type_list::*;
+pub use data_type_nullable::*;
+pub use data_type_numeric::*;
+pub use data_type_string::*;
+pub use data_type_struct::*;
+pub use type_id::*;

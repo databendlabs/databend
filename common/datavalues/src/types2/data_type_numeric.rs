@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 
@@ -24,6 +25,14 @@ use crate::prelude::*;
 
 pub struct DataTypeNumeric<T: Default + Clone + Copy + std::fmt::Debug + serde::Serialize> {
     _t: PhantomData<T>,
+}
+
+impl<T> DataTypeNumeric<T>
+where T: Default + Clone + Copy + std::fmt::Debug + serde::Serialize
+{
+    pub fn arc() -> Arc<Self> {
+        Arc::new(Self { _t: PhantomData })
+    }
 }
 
 pub type DataTypeInt8 = DataTypeNumeric<i8>;
