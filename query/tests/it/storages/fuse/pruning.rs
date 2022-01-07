@@ -31,7 +31,7 @@ use common_planners::lit;
 use common_planners::Extras;
 use databend_query::catalogs::Catalog;
 use databend_query::sessions::QueryContext;
-use databend_query::storages::fuse::io::SnapshotReader;
+use databend_query::storages::fuse::io::Readers;
 use databend_query::storages::fuse::meta::BlockMeta;
 use databend_query::storages::fuse::meta::TableSnapshot;
 use databend_query::storages::fuse::pruning::BlockPruner;
@@ -97,7 +97,6 @@ async fn test_block_pruner() -> Result<()> {
         })
         .collect::<Vec<_>>();
 
-    let da = ctx.get_storage_accessor()?;
     let stream = Box::pin(futures::stream::iter(blocks));
     let r = table.append_data(ctx.clone(), stream).await?;
     table
@@ -114,8 +113,9 @@ async fn test_block_pruner() -> Result<()> {
         .options()
         .get(TBL_OPT_KEY_SNAPSHOT_LOC)
         .unwrap();
-    let snapshot =
-        SnapshotReader::read(da.as_ref(), snapshot_loc.clone(), ctx.get_storage_cache()).await?;
+
+    let reader = Readers::table_snapshot_reader(ctx.as_ref());
+    let snapshot = reader.read(snapshot_loc.as_str()).await?;
 
     // no pruning
     let push_downs = None;

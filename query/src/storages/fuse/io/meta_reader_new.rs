@@ -28,6 +28,7 @@ use crate::sessions::QueryContext;
 use crate::storages::fuse::cache::CachedLoader;
 use crate::storages::fuse::cache::Loader;
 use crate::storages::fuse::cache::TableInMemCache;
+use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
 
@@ -107,14 +108,45 @@ pub struct Readers;
 
 impl Readers {
     pub fn segment_info_reader(ctx: &QueryContext) -> SegmentInfoReader {
-        SegmentInfoReader::new(ctx.get_storage_cache_mgr().get_table_segment_cache(), ctx)
+        SegmentInfoReader::new(
+            ctx.get_storage_cache_manager().get_table_segment_cache(),
+            ctx,
+        )
     }
 
     pub fn table_snapshot_reader(ctx: &QueryContext) -> TableSnapshotReader {
-        TableSnapshotReader::new(ctx.get_storage_cache_mgr().get_table_snapshot_cache(), ctx)
+        TableSnapshotReader::new(
+            ctx.get_storage_cache_manager().get_table_snapshot_cache(),
+            ctx,
+        )
     }
 
     pub fn block_meta_reader(ctx: Arc<QueryContext>) -> BlockMetaReader {
-        BlockMetaReader::new(ctx.get_storage_cache_mgr().get_block_meta_cache(), ctx)
+        BlockMetaReader::new(ctx.get_storage_cache_manager().get_block_meta_cache(), ctx)
+    }
+}
+
+impl<'a> TableSnapshotReader<'a> {
+    pub async fn read_snapshot_history(
+        &self,
+        latest_snapshot_location: Option<&String>,
+    ) -> Result<Vec<Arc<TableSnapshot>>> {
+        let mut snapshots = vec![];
+        let mut current_snapshot_location = latest_snapshot_location.cloned();
+        while let Some(loc) = current_snapshot_location {
+            let r = self.read(loc).await;
+            let snapshot = match r {
+                Ok(s) => s,
+                Err(e) if e.code() == ErrorCode::dal_path_not_found_code() => {
+                    // snapshot has been truncated
+                    break;
+                }
+                Err(e) => return Err(e),
+            };
+            let prev = snapshot.prev_snapshot_id;
+            snapshots.push(snapshot);
+            current_snapshot_location = prev.map(|id| snapshot_location(&id));
+        }
+        Ok(snapshots)
     }
 }

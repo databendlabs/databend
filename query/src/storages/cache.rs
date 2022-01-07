@@ -26,20 +26,23 @@ pub trait StorageCache: Send + Sync {
     async fn get(&self, location: &str, da: &dyn DataAccessor) -> Result<Vec<u8>>;
 }
 
-#[async_trait]
-pub trait StorageCacheNew<T>: Send + Sync {
-    async fn get(&self, location: &str, da: &dyn DataAccessor) -> Result<T>;
-}
-
-pub struct CacheMgr {
+pub struct CacheManager {
     table_snapshot_cache: Option<TableSnapshotCache>,
     segment_info_cache: Option<SegmentInfoCache>,
     block_meta_cache: Option<BlockMetaCache>,
 }
 
-impl CacheMgr {
-    fn init_cache(_config: &QueryConfig) -> Result<Self> {
-        todo!()
+impl CacheManager {
+    pub fn init(config: &QueryConfig) -> Result<Self> {
+        if !config.table_cache_enabled {
+            Ok(Self {
+                table_snapshot_cache: None,
+                segment_info_cache: None,
+                block_meta_cache: None,
+            })
+        } else {
+            todo!()
+        }
     }
 
     pub fn get_table_snapshot_cache(&self) -> Option<TableSnapshotCache> {

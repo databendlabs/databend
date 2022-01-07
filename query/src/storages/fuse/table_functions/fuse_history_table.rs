@@ -34,7 +34,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io::SnapshotReader;
+use crate::storages::fuse::io::Readers;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::table::is_fuse_table;
 use crate::storages::fuse::table_functions::table_arg_util::parse_func_history_args;
@@ -91,7 +91,7 @@ impl FuseHistoryTable {
         }))
     }
 
-    fn snapshots_to_block(&self, snapshots: Vec<TableSnapshot>) -> DataBlock {
+    fn snapshots_to_block(&self, snapshots: Vec<Arc<TableSnapshot>>) -> DataBlock {
         let len = snapshots.len();
         let mut snapshot_ids: Vec<Vec<u8>> = Vec::with_capacity(len);
         let mut prev_snapshot_ids: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
@@ -164,10 +164,8 @@ impl Table for FuseHistoryTable {
 
         let tbl_info = tbl.get_table_info();
         let location = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
-        let da = ctx.get_storage_accessor()?;
-        let snapshots =
-            SnapshotReader::read_snapshot_history(da.as_ref(), location, ctx.get_storage_cache())
-                .await?;
+        let reader = Readers::table_snapshot_reader(ctx.as_ref());
+        let snapshots = reader.read_snapshot_history(location).await?;
         let blocks = vec![self.snapshots_to_block(snapshots)];
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),

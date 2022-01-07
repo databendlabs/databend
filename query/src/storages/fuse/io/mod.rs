@@ -16,7 +16,6 @@ mod block_reader;
 mod block_stream_writer;
 mod block_writer;
 mod locations;
-mod meta_reader;
 mod meta_reader_new;
 
 pub use block_reader::BlockReader;
@@ -24,8 +23,6 @@ pub use block_stream_writer::BlockStreamWriter;
 pub use block_stream_writer::SegmentInfoStream;
 pub use locations::gen_segment_info_location;
 pub use locations::snapshot_location;
-pub use meta_reader::SegmentReader;
-pub use meta_reader::SnapshotReader;
 pub use meta_reader_new::BlockMetaCache;
 pub use meta_reader_new::Readers;
 pub use meta_reader_new::SegmentInfoCache;
