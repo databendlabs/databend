@@ -26,7 +26,6 @@ pub use disk_cache::result::Error as DiskCacheError;
 pub use disk_cache::result::Result as DiskCacheResult;
 pub use disk_cache::DiskCache;
 pub use disk_cache::LruDiskCache;
-pub use heapsize_::HeapSizeOf;
 pub use meter::bytes_meter::BytesMeter;
 pub use meter::count_meter::Count;
 pub use meter::count_meter::CountableMeter;

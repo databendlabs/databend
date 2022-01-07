@@ -87,7 +87,7 @@ impl SessionManager {
         self.http_query_manager.clone()
     }
 
-    // Get the user api provider.
+    /// Get the user api provider.
     pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
         self.user.clone()
     }
@@ -96,6 +96,9 @@ impl SessionManager {
         self.catalog.clone()
     }
 
+    /// get storage cache manager
+    //  we need to disable the clippy warning here, eliding lifetime markers leads give us compile errors
+    #[allow(clippy::needless_lifetimes)]
     pub fn get_storage_cache_manager<'a>(self: &'a Arc<Self>) -> &'a CacheManager {
         self.storage_cache_manager.as_ref()
     }
