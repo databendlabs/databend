@@ -31,6 +31,4 @@ async fn builder() {
         .finish()
         .await
         .unwrap();
-
-    ();
 }
