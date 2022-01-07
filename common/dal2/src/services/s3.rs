@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::pin::Pin;
-use std::str::FromStr;
 use std::task::Context;
 use std::task::Poll;
 
@@ -30,16 +29,27 @@ use crate::ops::Reader;
 
 #[derive(Default, Debug, Clone)]
 pub struct Builder {
-    pub root: Option<String>,
+    root: Option<String>,
 
-    pub bucket: String,
-    pub credential: Option<Credential>,
-    pub endpoint: Option<String>,
+    bucket: String,
+    region: String,
+    credential: Option<Credential>,
+    endpoint: Option<String>,
 
     /// disable_ssl controls whether to use SSL when connecting.
-    pub disable_ssl: bool,
+    disable_ssl: bool,
     /// enable_path_style controls whether to use path style or virtual host style.
-    pub enable_path_style: bool,
+    ///
+    /// ## TODO
+    ///
+    /// It seems sdk doesn't support path style so far.
+    enable_path_style: bool,
+    /// enable_signature_v2 whether to use signature v2 or not.
+    ///
+    /// ## TODO
+    ///
+    /// It seems sdk doesn't support path style so far.
+    enable_signature_v2: bool,
 }
 
 impl Builder {
@@ -51,6 +61,12 @@ impl Builder {
 
     pub fn bucket(&mut self, bucket: &str) -> &mut Self {
         self.bucket = bucket.to_string();
+
+        self
+    }
+
+    pub fn region(&mut self, region: &str) -> &mut Self {
+        self.region = region.to_string();
 
         self
     }
@@ -79,8 +95,18 @@ impl Builder {
         self
     }
 
-    pub async fn finish(self) -> Result<Backend> {
-        if self.bucket.is_empty() {
+    pub fn enable_signature_v2(&mut self) -> &mut Self {
+        self.enable_signature_v2 = true;
+
+        self
+    }
+
+    pub async fn finish(&mut self) -> Result<Backend> {
+        use aws_endpoint::partition::endpoint::Metadata;
+        use aws_endpoint::partition::endpoint::Protocol;
+        use aws_endpoint::partition::endpoint::SignatureVersion;
+
+        if self.bucket.is_empty() || self.region.is_empty() {
             return Err(Error::BackendConfigurationInvalid {
                 key: "bucket".to_string(),
                 value: "".to_string(),
@@ -88,7 +114,7 @@ impl Builder {
         }
 
         // strip the prefix of "/" in root only once.
-        let root = if let Some(root) = self.root {
+        let root = if let Some(root) = &self.root {
             root.strip_prefix('/').unwrap_or(&root).to_string()
         } else {
             String::new()
@@ -99,20 +125,60 @@ impl Builder {
 
         let mut cfg = AwsS3::config::Builder::from(&aws_cfg);
 
-        // Load users input first, if user not input, we will fallback to aws
-        // default load logic.
-        if let Some(endpoint) = self.endpoint {
-            cfg = cfg.endpoint_resolver(AwsS3::Endpoint::immutable(
-                http::Uri::from_str(&endpoint).map_err(|_| Error::BackendConfigurationInvalid {
-                    key: "endpoint".to_string(),
-                    value: endpoint.to_string(),
-                })?,
-            ));
+        // ## Safety
+        //
+        // aws s3 sdk requires a static str for region, so we crate a static string here.
+        // This value is scoped under `finish` function only, changed once and used
+        // once while initializing the client, so it must be safe.
+        static mut REGION: String = String::new();
+        unsafe { REGION = self.region.clone() };
+        // TODO: Maybe we can
+        //
+        // - use "default" as the default region.
+        // - use "us-east-1" as the default region.
+        // - detect the region at runtime via `ListBuckets`.
+        cfg = cfg.region(AwsS3::Region::new(unsafe { REGION.as_str() }));
+
+        // ## Safety
+        //
+        // aws s3 sdk requires a static str for uri_template, so we crate a static string here.
+        // This value is scoped under `finish` function only, changed once and used
+        // once while initializing the client, so it must be safe.
+        // The default value for it is "https://s3.{region}.amazonaws.com".
+        static mut URI_TEMPLATE: String = String::new();
+        unsafe {
+            URI_TEMPLATE = match &self.endpoint {
+                Some(v) => v.clone(),
+                None => "https://s3.{region}.amazonaws.com".to_string(),
+            };
         }
+
+        let endpoint_metadata = Metadata {
+            uri_template: unsafe { URI_TEMPLATE.as_str() },
+            protocol: if self.disable_ssl {
+                Protocol::Http
+            } else {
+                Protocol::Https
+            },
+            signature_versions: SignatureVersion::V4,
+            credential_scope: aws_endpoint::CredentialScope::builder().build(),
+        };
+
+        cfg = cfg.endpoint_resolver(aws_endpoint::PartitionResolver::new(
+            aws_endpoint::Partition::builder()
+                // Use the same value from aws sdk.
+                .id("aws")
+                // Capture all valid ascii strings.
+                .region_regex(r#"[\w\d-]+"#)
+                .default_endpoint(endpoint_metadata)
+                .build()
+                .expect("invalid partition"),
+            vec![],
+        ));
 
         // Load users input first, if user not input, we will fallback to aws
         // default load logic.
-        if let Some(cred) = self.credential {
+        if let Some(cred) = &self.credential {
             match cred {
                 Credential::HMAC {
                     access_key_id,
@@ -133,12 +199,10 @@ impl Builder {
             }
         }
 
-        // TODO: support disable_ssl and enable_path_style.
-
         Ok(Backend {
             // Make `/` as the default of root.
             root,
-            bucket: self.bucket,
+            bucket: self.bucket.clone(),
             client: AwsS3::Client::from_conf(cfg.build()),
         })
     }

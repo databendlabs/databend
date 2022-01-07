@@ -7205,6 +7205,7 @@ dependencies = [
  "mio 0.7.14",
  "num_cpus",
  "once_cell",
+ "parking_lot",
  "pin-project-lite 0.2.8",
  "signal-hook-registry",
  "tokio-macros",

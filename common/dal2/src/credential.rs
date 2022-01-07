@@ -32,18 +32,21 @@ pub enum Credential {
 }
 
 impl Credential {
-    pub fn basic(username: String, password: String) -> Credential {
-        Credential::Basic { username, password }
-    }
-
-    pub fn hmac(access_key_id: String, secret_access_key: String) -> Credential {
-        Credential::HMAC {
-            access_key_id,
-            secret_access_key,
+    pub fn basic(username: &str, password: &str) -> Credential {
+        Credential::Basic {
+            username: username.to_string(),
+            password: password.to_string(),
         }
     }
 
-    pub fn token(token: String) -> Credential {
-        Credential::Token(token)
+    pub fn hmac(access_key_id: &str, secret_access_key: &str) -> Credential {
+        Credential::HMAC {
+            access_key_id: access_key_id.to_string(),
+            secret_access_key: secret_access_key.to_string(),
+        }
+    }
+
+    pub fn token(token: &str) -> Credential {
+        Credential::Token(token.to_string())
     }
 }
