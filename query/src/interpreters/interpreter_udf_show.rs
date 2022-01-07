@@ -50,7 +50,7 @@ impl Interpreter for ShowUDFInterpreter {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
-        let udf = user_mgr.get_udf(tenant, &plan.name).await?;
+        let udf = user_mgr.get_udf(&tenant, &plan.name).await?;
 
         let show_fields = vec![
             DataField::new("name", DataType::String, false),

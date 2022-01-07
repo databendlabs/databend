@@ -59,7 +59,7 @@ impl Interpreter for RevokePrivilegeInterpreter {
         let user_mgr = self.ctx.get_user_manager();
         user_mgr
             .revoke_user_privileges(
-                tenant,
+                &tenant,
                 &plan.username,
                 &plan.hostname,
                 plan.on,

@@ -502,7 +502,7 @@ impl UDFFetcher for ExprRPNBuilder {
         let udf = self
             .context
             .get_user_manager()
-            .get_udf(tenant, name)
+            .get_udf(&tenant, name)
             .await?;
         let mut udf_parser = UDFParser::default();
         let definition = udf_parser

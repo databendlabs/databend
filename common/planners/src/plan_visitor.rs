@@ -61,6 +61,7 @@ use crate::SortPlan;
 use crate::StagePlan;
 use crate::TruncateTablePlan;
 use crate::UseDatabasePlan;
+use crate::UseTenantPlan;
 
 /// `PlanVisitor` implements visitor pattern(reference [syn](https://docs.rs/syn/1.0.72/syn/visit/trait.Visit.html)) for `PlanNode`.
 ///
@@ -126,6 +127,7 @@ pub trait PlanVisitor {
             PlanNode::DescribeStage(plan) => self.visit_describe_stage(plan),
             PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
             PlanNode::UseDatabase(plan) => self.visit_use_database(plan),
+            PlanNode::UseTenant(plan) => self.visit_use_tenant(plan),
             PlanNode::SetVariable(plan) => self.visit_set_variable(plan),
             PlanNode::Stage(plan) => self.visit_stage(plan),
             PlanNode::Broadcast(plan) => self.visit_broadcast(plan),
@@ -307,6 +309,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_use_database(&mut self, _: &UseDatabasePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_use_tenant(&mut self, _: &UseTenantPlan) -> Result<()> {
         Ok(())
     }
 

@@ -52,7 +52,7 @@ impl Interpreter for DropUserInterpreter {
         let user_mgr = self.ctx.get_user_manager();
         user_mgr
             .drop_user(
-                tenant,
+                &tenant,
                 plan.name.as_str(),
                 plan.hostname.as_str(),
                 plan.if_exists,

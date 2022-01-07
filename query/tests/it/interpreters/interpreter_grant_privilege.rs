@@ -43,7 +43,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
     );
     assert_eq!(user_info.grants, UserGrantSet::empty());
     let user_mgr = ctx.get_user_manager();
-    user_mgr.add_user(tenant, user_info).await?;
+    user_mgr.add_user(&tenant, user_info).await?;
 
     #[allow(dead_code)]
     struct Test {
@@ -118,7 +118,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
                 assert!(r.is_ok(), "got err on query {}: {:?}", tt.query, r);
             }
             if let Some((name, hostname)) = tt.user_identity {
-                let new_user = user_mgr.get_user(tenant, name, hostname).await?;
+                let new_user = user_mgr.get_user(&tenant, name, hostname).await?;
                 assert_eq!(new_user.grants, tt.expected_grants.unwrap())
             }
         } else {

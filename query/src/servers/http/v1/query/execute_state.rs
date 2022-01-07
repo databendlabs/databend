@@ -165,7 +165,7 @@ impl ExecuteState {
         // TODO: list user's grant list and check client address
         let ctx = session.create_context().await?;
         let user_info = user_manager
-            .get_user(ctx.get_tenant(), user_name, "%")
+            .get_user(&ctx.get_tenant(), user_name, "%")
             .await?;
         session.set_current_user(user_info);
 

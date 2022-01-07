@@ -31,6 +31,7 @@ impl ProxyModeAccess {
 
     // Check what we can do if in proxy mode.
     pub fn check(&self, plan: &PlanNode) -> Result<()> {
+        // Allows for proxy-mode.
         if self.ctx.get_config().query.proxy_mode {
             return match plan {
                 PlanNode::Stage(_)
@@ -54,26 +55,20 @@ impl ProxyModeAccess {
                 | PlanNode::CreateUDF(_)
                 | PlanNode::DropUDF(_)
                 | PlanNode::ShowUDF(_)
+                | PlanNode::UseTenant(_)
                 | PlanNode::AlterUDF(_) => Ok(()),
-                PlanNode::SetVariable(node) => {
-                    for var in &node.vars {
-                        // Only allow setting tenant in proxy-mode.
-                        if var.variable.to_lowercase().as_str() != "tenant" {
-                            return Err(ErrorCode::ProxyModeInvalidOperation(format!(
-                                "Access denied for operation:{:?} in proxy-mode",
-                                var.variable
-                            )));
-                        }
-                    }
-                    Ok(())
-                }
                 _ => Err(ErrorCode::ProxyModeInvalidOperation(format!(
                     "Access denied for operation:{:?} in proxy-mode",
                     plan.name()
                 ))),
             };
+        } else {
+            match plan {
+                PlanNode::UseTenant(_) => Err(ErrorCode::ProxyModeInvalidOperation(
+                    "Access denied:'USE TENANT' only used in proxy-mode",
+                )),
+                _ => Ok(()),
+            }
         }
-
-        Ok(())
     }
 }

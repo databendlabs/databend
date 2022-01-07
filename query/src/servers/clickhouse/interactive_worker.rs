@@ -108,7 +108,7 @@ impl ClickHouseSession for InteractiveWorker {
             // Here we don't handle the create context error.
             let ctx = self.session.create_context().await.unwrap();
             let tenant = ctx.get_tenant();
-            let (authed, user_info) = match user_manager.get_user(tenant, user, "%").await {
+            let (authed, user_info) = match user_manager.get_user(&tenant, user, "%").await {
                 Ok(user_info) => (
                     user_manager.auth_user(user_info.clone(), info).await,
                     Some(user_info),

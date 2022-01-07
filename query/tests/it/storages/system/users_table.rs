@@ -32,7 +32,7 @@ async fn test_users_table() -> Result<()> {
     let tenant = ctx.get_tenant();
     ctx.get_settings().set_max_threads(2)?;
     ctx.get_user_manager()
-        .add_user(tenant, UserInfo {
+        .add_user(&tenant, UserInfo {
             name: "test".to_string(),
             hostname: "localhost".to_string(),
             password: Vec::from(""),
@@ -42,7 +42,7 @@ async fn test_users_table() -> Result<()> {
         })
         .await?;
     ctx.get_user_manager()
-        .add_user(tenant, UserInfo {
+        .add_user(&tenant, UserInfo {
             name: "test1".to_string(),
             hostname: "%".to_string(),
             password: Vec::from("123456789"),

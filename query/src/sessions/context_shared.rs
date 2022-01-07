@@ -119,6 +119,14 @@ impl QueryContextShared {
         self.session.set_current_database(new_database_name);
     }
 
+    pub fn get_current_tenant(&self) -> String {
+        self.session.get_current_tenant()
+    }
+
+    pub fn set_current_tenant(&self, tenant: String) {
+        self.session.set_current_tenant(tenant);
+    }
+
     pub fn get_current_user(&self) -> Result<UserInfo> {
         self.session.get_current_user()
     }
