@@ -15,9 +15,10 @@
 
 use std::sync::Arc;
 
-use azure_core_mirror::HttpClient;
-use azure_storage_mirror::clients::StorageAccountClient;
-use azure_storage_mirror::core::prelude::*;
+use azure_core::HttpClient;
+use azure_storage::clients::StorageAccountClient;
+use azure_storage::prelude::*;
+use azure_storage_blobs::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::Stream;
@@ -46,7 +47,7 @@ impl AzureBlobAccessor {
         }
 
         let master_key = master_key_res.unwrap();
-        let http_client: Arc<Box<dyn HttpClient>> = Arc::new(Box::new(reqwest::Client::new()));
+        let http_client: Arc<dyn HttpClient> = Arc::new(reqwest::Client::new());
         let client = StorageAccountClient::new_access_key(http_client, account, &master_key);
 
         Ok(Self {
@@ -60,7 +61,7 @@ impl AzureBlobAccessor {
         container: impl Into<String>,
         master_key: impl Into<String>,
     ) -> Self {
-        let http_client: Arc<Box<dyn HttpClient>> = Arc::new(Box::new(reqwest::Client::new()));
+        let http_client: Arc<dyn HttpClient> = Arc::new(reqwest::Client::new());
         let client = StorageAccountClient::new_access_key(http_client, account, master_key);
 
         Self {
@@ -114,7 +115,7 @@ impl AzureBlobAccessor {
                     e
                 )));
             }
-            Ok(blob_data) => Ok(blob_data.data),
+            Ok(blob_data) => Ok(blob_data.data.to_vec()),
         }
     }
 }

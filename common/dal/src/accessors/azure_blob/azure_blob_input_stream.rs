@@ -22,10 +22,10 @@ use std::sync::Mutex;
 use std::task::Context;
 use std::task::Poll;
 
-use azure_core_mirror::prelude::*;
-use azure_storage_mirror::blob::blob::responses::GetBlobPropertiesResponse;
-use azure_storage_mirror::blob::blob::responses::GetBlobResponse;
-use azure_storage_mirror::clients::BlobClient;
+use azure_core::prelude::*;
+use azure_storage_blobs::blob::responses::GetBlobPropertiesResponse;
+use azure_storage_blobs::blob::responses::GetBlobResponse;
+use azure_storage_blobs::prelude::BlobClient;
 use common_base::tokio;
 use futures::ready;
 use futures::AsyncSeek;
@@ -134,7 +134,7 @@ impl futures::AsyncRead for AzureBlobInputStream {
                         instance.cursor += len as u64;
 
                         let mut buf_mut = buf;
-                        if let Err(err) = buf_mut.write_all(response.data.as_slice()) {
+                        if let Err(err) = buf_mut.write_all(&response.data.to_vec()) {
                             return Poll::Ready(Err(Error::new(
                                 std::io::ErrorKind::InvalidData,
                                 format!("Failed to write buffer {}", err),

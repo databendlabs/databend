@@ -24,7 +24,6 @@ members = [
     "common/meta/embedded",
     "common/meta/raft-store",
     "common/meta/sled-store",
-    "common/meta/flight",
     "common/meta/types",
     "common/streams",
     "common/codegen",

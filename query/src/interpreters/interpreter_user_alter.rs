@@ -53,7 +53,7 @@ impl Interpreter for AlterUserInterpreter {
         //TODO:alter current user
         user_mgr
             .update_user(
-                tenant,
+                &tenant,
                 plan.name.as_str(),
                 plan.hostname.as_str(),
                 Some(plan.new_password_type),

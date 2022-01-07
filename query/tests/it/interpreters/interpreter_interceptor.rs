@@ -66,8 +66,8 @@ async fn test_interpreter_interceptor() -> Result<()> {
             "+----------+--------------+-----------+--------------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+------------+------------------------------------------------------+----------+---------------------------------------------------------------------------+",
             "| log_type | handler_type | cpu_usage | memory_usage | scan_rows | scan_bytes | scan_partitions | written_rows | written_bytes | result_rows | result_bytes | query_kind | query_text                                           | sql_user | sql_user_privileges                                                       |",
             "+----------+--------------+-----------+--------------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+------------+------------------------------------------------------+----------+---------------------------------------------------------------------------+",
-            "| 1        | TestSession  | 8         | 4065         | 0         | 0          | 0               | 0            | 0             | 0           | 0            | SelectPlan | select number from numbers_mt(100) where number > 90 | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
-            "| 2        | TestSession  | 8         | 4065         | 100       | 800        | 0               | 0            | 0             | 9           | 72           | SelectPlan | select number from numbers_mt(100) where number > 90 | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
+            "| 1        | TestSession  | 8         | 4097         | 0         | 0          | 0               | 0            | 0             | 0           | 0            | SelectPlan | select number from numbers_mt(100) where number > 90 | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
+            "| 2        | TestSession  | 8         | 4097         | 100       | 800        | 0               | 0            | 0             | 9           | 72           | SelectPlan | select number from numbers_mt(100) where number > 90 | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
             "+----------+--------------+-----------+--------------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+------------+------------------------------------------------------+----------+---------------------------------------------------------------------------+",
         ];
 
@@ -94,7 +94,7 @@ async fn test_interpreter_interceptor_for_insert() -> Result<()> {
 
     // Check.
     {
-        let query = "select log_type, handler_type, cpu_usage, memory_usage, scan_rows, scan_bytes, scan_partitions, written_rows, written_bytes, result_rows, result_bytes, query_kind, query_text, sql_user, sql_user_privileges from system.query_log";
+        let query = "select log_type, handler_type, cpu_usage, scan_rows, scan_bytes, scan_partitions, written_rows, written_bytes, result_rows, result_bytes, query_kind, query_text, sql_user, sql_user_privileges from system.query_log";
         let plan = PlanParser::parse(query, ctx.clone()).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
@@ -102,12 +102,12 @@ async fn test_interpreter_interceptor_for_insert() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
 
         let expected = vec![
-            "+----------+--------------+-----------+--------------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+---------------------------------------------------------------------------+",
-            "| log_type | handler_type | cpu_usage | memory_usage | scan_rows | scan_bytes | scan_partitions | written_rows | written_bytes | result_rows | result_bytes | query_kind      | query_text                                         | sql_user | sql_user_privileges                                                       |",
-            "+----------+--------------+-----------+--------------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+---------------------------------------------------------------------------+",
-            "| 1        | TestSession  | 8         | 4065         | 0         | 0          | 0               | 0            | 0             | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
-            "| 2        | TestSession  | 8         | 4065         | 1         | 8          | 0               | 1            | 1121          | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
-            "+----------+--------------+-----------+--------------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+---------------------------------------------------------------------------+",
+            "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+---------------------------------------------------------------------------+",
+            "| log_type | handler_type | cpu_usage | scan_rows | scan_bytes | scan_partitions | written_rows | written_bytes | result_rows | result_bytes | query_kind      | query_text                                         | sql_user | sql_user_privileges                                                       |",
+            "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+---------------------------------------------------------------------------+",
+            "| 1        | TestSession  | 8         | 0         | 0          | 0               | 0            | 0             | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
+            "| 2        | TestSession  | 8         | 1         | 8          | 0               | 1            | 1121          | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
+            "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+---------------------------------------------------------------------------+",
         ];
 
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

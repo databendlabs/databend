@@ -107,9 +107,9 @@ impl ClickHouseSession for InteractiveWorker {
             // Here we don't handle the create context error.
             let ctx = self.session.create_context().await.unwrap();
             let tenant = ctx.get_tenant();
-            let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
+            let client_ip = client_addr.split(':').collect::<Vec<_>>()[0];
             let (authed, user_info) = match user_manager
-                .get_user_with_client_ip(tenant, user, client_ip)
+                .get_user_with_client_ip(&tenant, user, client_ip)
                 .await
             {
                 Ok(user_info) => (

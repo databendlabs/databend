@@ -1,0 +1,15 @@
+# Usage:
+# databend-meta -c databend-meta-node-1.toml
+
+log_dir            = "./_logs1"
+metric_api_address = "0.0.0.0:28100"
+admin_api_address  = "0.0.0.0:28101"
+grpc_api_address   = "0.0.0.0:9191"
+
+[raft_config]
+id            = 1
+raft_dir      = "./_meta1"
+raft_api_port = 28103
+
+# Start up mode: single node cluster
+single        = true

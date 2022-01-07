@@ -38,7 +38,7 @@ async fn test_create_stage_interpreter() -> Result<()> {
         while let Some(_block) = stream.next().await {}
         let stage = ctx
             .get_user_manager()
-            .get_stage(tenant, "test_stage")
+            .get_stage(&tenant, "test_stage")
             .await?;
 
         assert_eq!(stage.file_format, FileFormat {
@@ -58,7 +58,7 @@ async fn test_create_stage_interpreter() -> Result<()> {
         assert!(!is_err);
         let stage = ctx
             .get_user_manager()
-            .get_stage(tenant, "test_stage")
+            .get_stage(&tenant, "test_stage")
             .await?;
 
         assert_eq!(stage.file_format, FileFormat {
@@ -79,7 +79,7 @@ async fn test_create_stage_interpreter() -> Result<()> {
         assert!(is_err);
         let stage = ctx
             .get_user_manager()
-            .get_stage(tenant, "test_stage")
+            .get_stage(&tenant, "test_stage")
             .await?;
 
         assert_eq!(stage.file_format, FileFormat {

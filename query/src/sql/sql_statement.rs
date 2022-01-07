@@ -55,6 +55,7 @@ use crate::sql::statements::DfShowUDF;
 use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
+use crate::sql::statements::DfUseTenant;
 
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]
@@ -69,6 +70,7 @@ pub enum DfStatement {
     CreateDatabase(DfCreateDatabase),
     DropDatabase(DfDropDatabase),
     UseDatabase(DfUseDatabase),
+    UseTenant(DfUseTenant),
 
     // Tables.
     ShowTables(DfShowTables),

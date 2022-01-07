@@ -71,7 +71,7 @@ impl Table for UsersTable {
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let tenant = ctx.get_tenant();
-        let users = ctx.get_user_manager().get_users(tenant).await?;
+        let users = ctx.get_user_manager().get_users(&tenant).await?;
 
         let names: Vec<&str> = users.iter().map(|x| x.name.as_str()).collect();
         let hostnames: Vec<&str> = users.iter().map(|x| x.hostname.as_str()).collect();

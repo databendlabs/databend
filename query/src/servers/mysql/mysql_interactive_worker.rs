@@ -212,7 +212,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
         let ctx = self.session.create_context().await?;
         let user_info = user_manager
-            .get_user_with_client_ip(ctx.get_tenant(), user_name, client_ip)
+            .get_user_with_client_ip(&ctx.get_tenant(), user_name, client_ip)
             .await?;
 
         let input = &info.user_password;

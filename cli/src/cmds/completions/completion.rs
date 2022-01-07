@@ -20,10 +20,10 @@ use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
-use clap_generate::generate;
-use clap_generate::generators::Bash;
-use clap_generate::generators::Zsh;
-use clap_generate::Generator;
+use clap_complete::generate;
+use clap_complete::shells::Bash;
+use clap_complete::shells::Zsh;
+use clap_complete::Generator;
 
 use crate::cmds::command::Command;
 use crate::cmds::Writer;

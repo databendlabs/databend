@@ -63,9 +63,9 @@ async fn test_drop_user_interpreter() -> Result<()> {
             PasswordType::PlainText,
         );
         let user_mgr = ctx.get_user_manager();
-        user_mgr.add_user(tenant, user_info).await?;
+        user_mgr.add_user(&tenant, user_info).await?;
 
-        let old_user = user_mgr.get_user(tenant, name, hostname).await?;
+        let old_user = user_mgr.get_user(&tenant, name, hostname).await?;
         assert_eq!(old_user.password, Vec::from(password));
 
         static TEST_QUERY: &str = "DROP USER 'test'@'localhost'";

@@ -61,7 +61,6 @@ impl Function for BinFunction {
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let mut string_array = StringArrayBuilder::with_capacity(input_rows);
-        println!("bin's data type =>> {:?}", columns[0].data_type());
         match columns[0].data_type() {
             DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
                 for value in columns[0]
