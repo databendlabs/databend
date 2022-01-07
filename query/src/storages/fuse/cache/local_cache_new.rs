@@ -28,28 +28,41 @@ pub trait Loader<T> {
 }
 
 pub type MemCache<K, V> = LruCache<K, V, DefaultHashBuilder, Count>;
+pub type InMemCache<K, V> = Arc<RwLock<MemCache<K, Arc<V>>>>;
+pub type TableInMemCache<V> = Arc<RwLock<MemCache<String, Arc<V>>>>;
 
 pub struct CachedLoader<T, L> {
-    cache: Arc<RwLock<MemCache<String, Arc<T>>>>,
+    cache: Option<InMemCache<String, T>>,
     loader: L,
 }
 
-impl<T, L> CachedLoader<T, L>
-where L: Loader<T>
+impl<V, L> CachedLoader<V, L>
+where L: Loader<V>
 {
-    pub fn new(cache: Arc<RwLock<MemCache<String, Arc<T>>>>, loader: L) -> Self {
+    pub fn new(cache: Option<TableInMemCache<V>>, loader: L) -> Self {
         Self { cache, loader }
     }
-    pub async fn read(&self, loc: impl AsRef<str>) -> Result<Arc<T>> {
-        let cache = &mut *self.cache.write().await;
-        match cache.get(loc.as_ref()) {
-            Some(item) => Ok(item.clone()),
-            None => {
-                let val = self.loader.load(loc.as_ref()).await?;
-                let item = Arc::new(val);
-                cache.put(loc.as_ref().to_owned(), item.clone());
-                Ok(item)
+    pub async fn read(&self, loc: impl AsRef<str>) -> Result<Arc<V>> {
+        // TODO metrics
+        match &self.cache {
+            None => self.load(loc.as_ref()).await,
+            Some(cache) => {
+                let cache = &mut cache.write().await;
+                match cache.get(loc.as_ref()) {
+                    Some(item) => Ok(item.clone()),
+                    None => {
+                        let item = self.load(loc.as_ref()).await?;
+                        cache.put(loc.as_ref().to_owned(), item.clone());
+                        Ok(item)
+                    }
+                }
             }
         }
+    }
+
+    async fn load(&self, loc: &str) -> Result<Arc<V>> {
+        let val = self.loader.load(loc).await?;
+        let item = Arc::new(val);
+        Ok(item)
     }
 }

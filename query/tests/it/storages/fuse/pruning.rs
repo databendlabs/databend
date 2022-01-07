@@ -16,7 +16,6 @@
 use std::sync::Arc;
 
 use common_base::tokio;
-use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
@@ -46,10 +45,9 @@ async fn apply_block_pruning(
     table_snapshot: &TableSnapshot,
     schema: DataSchemaRef,
     push_down: &Option<Extras>,
-    data_accessor: Arc<dyn DataAccessor>,
     ctx: Arc<QueryContext>,
 ) -> Result<Vec<BlockMeta>> {
-    BlockPruner::new(table_snapshot, data_accessor)
+    BlockPruner::new(table_snapshot)
         .apply(schema, push_down, ctx.as_ref())
         .await
 }
@@ -125,7 +123,6 @@ async fn test_block_pruner() -> Result<()> {
         &snapshot,
         table.get_table_info().schema(),
         &push_downs,
-        da.clone(),
         ctx.clone(),
     )
     .await?;
@@ -142,7 +139,6 @@ async fn test_block_pruner() -> Result<()> {
         &snapshot,
         table.get_table_info().schema(),
         &Some(extra),
-        da.clone(),
         ctx.clone(),
     )
     .await?;
@@ -157,7 +153,6 @@ async fn test_block_pruner() -> Result<()> {
         &snapshot,
         table.get_table_info().schema(),
         &Some(extra),
-        da,
         ctx.clone(),
     )
     .await?;

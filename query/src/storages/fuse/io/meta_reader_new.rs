@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::schema::FileMetaData;
-use common_base::tokio::sync::RwLock;
 use common_dal::InputStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -28,7 +27,7 @@ use serde::de::DeserializeOwned;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::cache::CachedLoader;
 use crate::storages::fuse::cache::Loader;
-use crate::storages::fuse::cache::MemCache;
+use crate::storages::fuse::cache::TableInMemCache;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
 
@@ -36,10 +35,17 @@ pub trait InputStreamProvider {
     fn input_stream(&self, path: &str, len: Option<u64>) -> Result<InputStream>;
 }
 
-impl InputStreamProvider for Arc<QueryContext> {
+impl InputStreamProvider for &QueryContext {
     fn input_stream(&self, path: &str, len: Option<u64>) -> Result<InputStream> {
         let accessor = self.get_storage_accessor()?;
         accessor.get_input_stream(path, len)
+    }
+}
+
+impl InputStreamProvider for Arc<QueryContext> {
+    fn input_stream(&self, path: &str, len: Option<u64>) -> Result<InputStream> {
+        let ctx = self.as_ref();
+        ctx.input_stream(path, len)
     }
 }
 
@@ -67,35 +73,48 @@ where
     }
 }
 
-pub struct FileMetaDataW(FileMetaData);
+pub struct BlockMeta(FileMetaData);
+
+impl BlockMeta {
+    pub fn inner(&self) -> &FileMetaData {
+        &self.0
+    }
+}
 
 #[async_trait::async_trait]
-impl<T> Loader<FileMetaDataW> for T
+impl<T> Loader<BlockMeta> for T
 where T: InputStreamProvider + Sync
 {
-    async fn load(&self, key: &str) -> Result<FileMetaDataW> {
+    async fn load(&self, key: &str) -> Result<BlockMeta> {
         let mut reader = self.input_stream(key, None)?; // TODO we know the length of stream
         let meta = read_metadata_async(&mut reader)
             .instrument(debug_span!("parquet_source_read_meta"))
             .await
             .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-        Ok(FileMetaDataW(meta))
+        Ok(BlockMeta(meta))
     }
 }
 
-pub type SegmentInfoReader = CachedLoader<SegmentInfo, Arc<QueryContext>>;
-pub type TableSnapshotReader = CachedLoader<TableSnapshot, Arc<QueryContext>>;
-pub type ParquetMetaReader = CachedLoader<FileMetaDataW, Arc<QueryContext>>;
+pub type SegmentInfoCache = TableInMemCache<SegmentInfo>;
+pub type TableSnapshotCache = TableInMemCache<TableSnapshot>;
+pub type BlockMetaCache = TableInMemCache<BlockMeta>;
 
-impl SegmentInfoReader {
-    fn build(
-        cache: Arc<RwLock<MemCache<String, Arc<SegmentInfo>>>>,
-        loader: Arc<QueryContext>,
-    ) -> SegmentInfoReader {
-        Self::new(cache, loader)
+pub type SegmentInfoReader<'a> = CachedLoader<SegmentInfo, &'a QueryContext>;
+pub type TableSnapshotReader<'a> = CachedLoader<TableSnapshot, &'a QueryContext>;
+pub type BlockMetaReader = CachedLoader<BlockMeta, Arc<QueryContext>>;
+
+pub struct Readers;
+
+impl Readers {
+    pub fn segment_info_reader(ctx: &QueryContext) -> SegmentInfoReader {
+        SegmentInfoReader::new(ctx.get_storage_cache_mgr().get_table_segment_cache(), ctx)
     }
 
-    pub async fn api_test(reader: ParquetMetaReader) -> Result<Arc<FileMetaDataW>> {
-        reader.read("test_loc").await
+    pub fn table_snapshot_reader(ctx: &QueryContext) -> TableSnapshotReader {
+        TableSnapshotReader::new(ctx.get_storage_cache_mgr().get_table_snapshot_cache(), ctx)
+    }
+
+    pub fn block_meta_reader(ctx: Arc<QueryContext>) -> BlockMetaReader {
+        BlockMetaReader::new(ctx.get_storage_cache_mgr().get_block_meta_cache(), ctx)
     }
 }

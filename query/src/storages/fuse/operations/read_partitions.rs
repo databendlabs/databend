@@ -38,9 +38,8 @@ impl FuseTable {
         let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
         match snapshot {
             Some(snapshot) => {
-                let data_accessor = ctx.get_storage_accessor()?;
                 let schema = self.table_info.schema();
-                let block_metas = BlockPruner::new(&snapshot, data_accessor)
+                let block_metas = BlockPruner::new(&snapshot)
                     .apply(schema, &push_downs, ctx.as_ref())
                     .await?;
                 ctx.get_dal_context()
@@ -53,7 +52,7 @@ impl FuseTable {
     }
 
     pub fn to_partitions(
-        blocks_metas: &[BlockMeta],
+        blocks_metas: &[BlockMeta], // TODO is &[&BlockMeta] enough?
         push_downs: Option<Extras>,
     ) -> (Statistics, Partitions) {
         let proj_cols =

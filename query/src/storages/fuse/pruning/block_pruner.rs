@@ -13,9 +13,6 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
-use common_dal::DataAccessor;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::Extras;
@@ -25,8 +22,7 @@ use futures::TryStreamExt;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::snapshot_location;
-use crate::storages::fuse::io::SegmentReader;
-use crate::storages::fuse::io::SnapshotReader;
+use crate::storages::fuse::io::Readers;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
@@ -35,15 +31,13 @@ use crate::storages::index::RangeFilter;
 
 pub struct BlockPruner {
     table_snapshot_location: String,
-    data_accessor: Arc<dyn DataAccessor>,
 }
 
 type Pred = Box<dyn Fn(&BlockStatistics) -> Result<bool> + Send + Sync + Unpin>;
 impl BlockPruner {
-    pub fn new(table_snapshot: &TableSnapshot, data_accessor: Arc<dyn DataAccessor>) -> Self {
+    pub fn new(table_snapshot: &TableSnapshot) -> Self {
         Self {
             table_snapshot_location: snapshot_location(&table_snapshot.snapshot_id),
-            data_accessor,
         }
     }
 
@@ -63,14 +57,10 @@ impl BlockPruner {
             _ => Box::new(|_: &BlockStatistics| Ok(true)),
         };
 
-        let snapshot = SnapshotReader::read(
-            self.data_accessor.as_ref(),
-            self.table_snapshot_location.as_str(),
-            ctx.get_storage_cache(),
-        )
-        .await?;
+        let reader = Readers::table_snapshot_reader(ctx);
+        let snapshot = reader.read(self.table_snapshot_location.as_str()).await?;
         let segment_num = snapshot.segments.len();
-        let segment_locs = snapshot.segments;
+        let segment_locs = snapshot.segments.clone();
 
         if segment_locs.is_empty() {
             return Ok(vec![]);
@@ -78,13 +68,9 @@ impl BlockPruner {
 
         let res = futures::stream::iter(segment_locs)
             .map(|seg_loc| async {
-                let segment_info = SegmentReader::read(
-                    self.data_accessor.as_ref(),
-                    seg_loc,
-                    ctx.get_storage_cache(),
-                )
-                .await?;
-                Self::filter_segment(segment_info, &block_pred)
+                let reader = Readers::segment_info_reader(ctx);
+                let segment_info = reader.read(seg_loc).await?;
+                Self::filter_segment(segment_info.as_ref(), &block_pred)
             })
             // configuration of the max size of buffered futures
             .buffered(std::cmp::min(10, segment_num))
@@ -97,14 +83,14 @@ impl BlockPruner {
     }
 
     #[inline]
-    fn filter_segment(segment_info: SegmentInfo, pred: &Pred) -> Result<Vec<BlockMeta>> {
+    fn filter_segment(segment_info: &SegmentInfo, pred: &Pred) -> Result<Vec<BlockMeta>> {
         if pred(&segment_info.summary.col_stats)? {
             let block_num = segment_info.blocks.len();
-            segment_info.blocks.into_iter().try_fold(
+            segment_info.blocks.iter().try_fold(
                 Vec::with_capacity(block_num),
                 |mut acc, block_meta| {
                     if pred(&block_meta.col_stats)? {
-                        acc.push(block_meta)
+                        acc.push(block_meta.clone())
                     }
                     Ok(acc)
                 },

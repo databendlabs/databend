@@ -12,16 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
-use common_arrow::arrow::io::ipc::read::FileMetadata;
 use common_dal::DataAccessor;
 use common_exception::Result;
 
 use crate::configs::QueryConfig;
-use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::TableSnapshot;
+use crate::storages::fuse::io::BlockMetaCache;
+use crate::storages::fuse::io::SegmentInfoCache;
+use crate::storages::fuse::io::TableSnapshotCache;
 
 #[async_trait]
 pub trait StorageCache: Send + Sync {
@@ -33,22 +31,26 @@ pub trait StorageCacheNew<T>: Send + Sync {
     async fn get(&self, location: &str, da: &dyn DataAccessor) -> Result<T>;
 }
 
-pub struct CacheMgr {}
+pub struct CacheMgr {
+    table_snapshot_cache: Option<TableSnapshotCache>,
+    segment_info_cache: Option<SegmentInfoCache>,
+    block_meta_cache: Option<BlockMetaCache>,
+}
 
 impl CacheMgr {
-    fn init_cache(config: &QueryConfig) -> Result<Self> {
+    fn init_cache(_config: &QueryConfig) -> Result<Self> {
         todo!()
     }
 
-    fn get_table_snapshot_cache() -> Result<Arc<dyn StorageCacheNew<TableSnapshot>>> {
-        todo!()
+    pub fn get_table_snapshot_cache(&self) -> Option<TableSnapshotCache> {
+        self.table_snapshot_cache.clone()
     }
 
-    fn get_table_segment_cache() -> Result<Arc<dyn StorageCacheNew<SegmentInfo>>> {
-        todo!()
+    pub fn get_table_segment_cache(&self) -> Option<SegmentInfoCache> {
+        self.segment_info_cache.clone()
     }
 
-    fn get_block_meata_cache() -> Result<Arc<dyn StorageCacheNew<FileMetadata>>> {
-        todo!()
+    pub fn get_block_meta_cache(&self) -> Option<BlockMetaCache> {
+        self.block_meta_cache.clone()
     }
 }

@@ -18,5 +18,7 @@ mod metrics;
 pub use local_cache::LocalCache;
 pub use local_cache::LocalCacheConfig;
 pub use local_cache_new::CachedLoader;
+pub use local_cache_new::InMemCache;
 pub use local_cache_new::Loader;
-pub use local_cache_new::MemCache;
+//pub use local_cache_new::MemCache;
+pub use local_cache_new::TableInMemCache;

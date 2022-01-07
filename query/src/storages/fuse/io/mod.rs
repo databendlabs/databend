@@ -18,7 +18,6 @@ mod block_writer;
 mod locations;
 mod meta_reader;
 mod meta_reader_new;
-mod wip_cache_readers;
 
 pub use block_reader::BlockReader;
 pub use block_stream_writer::BlockStreamWriter;
@@ -27,5 +26,9 @@ pub use locations::gen_segment_info_location;
 pub use locations::snapshot_location;
 pub use meta_reader::SegmentReader;
 pub use meta_reader::SnapshotReader;
+pub use meta_reader_new::BlockMetaCache;
+pub use meta_reader_new::Readers;
+pub use meta_reader_new::SegmentInfoCache;
 pub use meta_reader_new::SegmentInfoReader;
-pub use wip_cache_readers::api_test;
+pub use meta_reader_new::TableSnapshotCache;
+pub use meta_reader_new::TableSnapshotReader;

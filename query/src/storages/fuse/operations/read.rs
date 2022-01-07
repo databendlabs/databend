@@ -26,6 +26,7 @@ use futures::StreamExt;
 use super::part_info::PartInfo;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockReader;
+use crate::storages::fuse::io::Readers;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
@@ -60,7 +61,7 @@ impl FuseTable {
             .flatten();
         let da = ctx.get_storage_accessor()?;
         let arrow_schema = self.table_info.schema().to_arrow();
-        let table_schema = Arc::new(DataSchema::from(arrow_schema));
+        let table_schema = Arc::new(DataSchema::from(arrow_schema)); // TODO is this self.table_info?
 
         let part_stream = futures::stream::iter(iter);
 
@@ -70,7 +71,7 @@ impl FuseTable {
                 let da = da.clone();
                 let table_schema = table_schema.clone();
                 let projection = projection.clone();
-                let cache = ctx.get_storage_cache();
+                let reader = Readers::block_meta_reader(ctx.clone());
                 async move {
                     let part_info = PartInfo::decode(&part.name)?;
                     let part_location = part_info.location();
@@ -83,9 +84,8 @@ impl FuseTable {
                         projection,
                         part_len,
                         read_buffer_size,
-                        cache,
-                    )
-                    .await?;
+                        reader,
+                    );
                     block_reader.read().await.map_err(|e| {
                         ErrorCode::ParquetError(format!(
                             "fail to read block {}, {}",
