@@ -20,6 +20,77 @@ use common_meta_types::UserPrivilegeType;
 use enumflags2::make_bitflags;
 
 #[test]
+fn test_grant_object_contains() -> Result<()> {
+    struct Test {
+        lhs: GrantObject,
+        rhs: GrantObject,
+        expect: bool,
+    }
+    let tests: Vec<Test> = vec![
+        Test {
+            lhs: GrantObject::Global,
+            rhs: GrantObject::Table("a".into(), "b".into()),
+            expect: true,
+        },
+        Test {
+            lhs: GrantObject::Global,
+            rhs: GrantObject::Global,
+            expect: true,
+        },
+        Test {
+            lhs: GrantObject::Global,
+            rhs: GrantObject::Database("a".into()),
+            expect: true,
+        },
+        Test {
+            lhs: GrantObject::Database("a".into()),
+            rhs: GrantObject::Global,
+            expect: false,
+        },
+        Test {
+            lhs: GrantObject::Database("a".into()),
+            rhs: GrantObject::Database("b".into()),
+            expect: false,
+        },
+        Test {
+            lhs: GrantObject::Database("a".into()),
+            rhs: GrantObject::Table("b".into(), "c".into()),
+            expect: false,
+        },
+        Test {
+            lhs: GrantObject::Database("db1".into()),
+            rhs: GrantObject::Table("db1".into(), "c".into()),
+            expect: true,
+        },
+        Test {
+            lhs: GrantObject::Table("db1".into(), "c".into()),
+            rhs: GrantObject::Table("db1".into(), "c".into()),
+            expect: true,
+        },
+        Test {
+            lhs: GrantObject::Table("db1".into(), "c".into()),
+            rhs: GrantObject::Global,
+            expect: false,
+        },
+        Test {
+            lhs: GrantObject::Table("db1".into(), "c".into()),
+            rhs: GrantObject::Database("db1".into()),
+            expect: false,
+        },
+    ];
+    for t in tests {
+        assert!(
+            t.lhs.contains(&t.rhs) == t.expect,
+            "{} contains {} expect {}",
+            &t.lhs,
+            &t.rhs,
+            &t.expect,
+        )
+    }
+    Ok(())
+}
+
+#[test]
 fn test_user_grant_entry() -> Result<()> {
     let grant = GrantEntry::new(
         "u1".into(),
