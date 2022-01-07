@@ -50,6 +50,31 @@ impl UserApiProvider {
         }
     }
 
+    /// find the matched user with the client ip address, like 'u1'@'127.0.0.1', if the specific
+    /// user@host is not found, try 'u1'@'%'.
+    pub async fn get_user_with_client_ip(
+        &self,
+        tenant: &str,
+        username: &str,
+        client_ip: &str,
+    ) -> Result<UserInfo> {
+        let user = self
+            .get_user(tenant, username, client_ip)
+            .await
+            .map(Some)
+            .or_else(|err| {
+                if err.code() == ErrorCode::unknown_user_code() {
+                    Ok(None)
+                } else {
+                    Err(err)
+                }
+            })?;
+        match user {
+            Some(user) => Ok(user),
+            None => self.get_user(tenant, username, "%").await,
+        }
+    }
+
     // Auth the user and password for different Auth type.
     pub async fn auth_user(&self, user: UserInfo, info: CertifiedInfo) -> Result<bool> {
         match user.password_type {
