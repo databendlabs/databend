@@ -194,6 +194,7 @@ build_exceptions! {
     StrParseError(60),
     IllegalGrant(61),
     ProxyModeInvalidOperation(62),
+    PermissionDenied(63),
 
     SemanticError(100),
 

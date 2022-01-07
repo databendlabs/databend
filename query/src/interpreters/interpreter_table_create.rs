@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
+use common_meta_types::GrantObject;
+use common_meta_types::UserPrivilegeType;
 use common_planners::CreateTablePlan;
 use common_planners::InsertInputSource;
 use common_planners::InsertPlan;
@@ -51,6 +53,11 @@ impl Interpreter for CreateTableInterpreter {
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        self.ctx.get_current_session().validate_privilege(
+            &GrantObject::Database(self.plan.db.clone()),
+            UserPrivilegeType::Create,
+        )?;
+
         match &self.plan.as_select {
             Some(select_plan_node) => {
                 self.create_table_as_select(input_stream, select_plan_node.clone())

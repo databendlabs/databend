@@ -20,7 +20,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_macros::MallocSizeOf;
 use common_mem_allocator::malloc_size;
+use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
+use common_meta_types::UserPrivilegeType;
 use futures::channel::*;
 
 use crate::catalogs::DatabaseCatalog;
@@ -166,6 +168,28 @@ impl Session {
 
     pub fn set_current_user(self: &Arc<Self>, user: UserInfo) {
         self.mutable_state.set_current_user(user)
+    }
+
+    pub fn validate_privilege(
+        self: &Arc<Self>,
+        object: &GrantObject,
+        privilege: UserPrivilegeType,
+    ) -> Result<()> {
+        // TODO: cache the grants info for current user
+        let current_user = self.get_current_user()?;
+        let ok = current_user.grants.verify_privilege(
+            &current_user.name,
+            &current_user.hostname,
+            object,
+            privilege,
+        );
+        if !ok {
+            return Err(ErrorCode::PermissionDenied(format!(
+                "Permission denied, user '{}'@'{}' requires {} privilege on {}",
+                &current_user.name, &current_user.hostname, privilege, object
+            )));
+        }
+        Ok(())
     }
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {

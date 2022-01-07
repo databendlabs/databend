@@ -95,10 +95,35 @@ fn test_user_grant_set() -> Result<()> {
         make_bitflags!(UserPrivilegeType::{Insert}).into(),
     );
     assert_eq!(2, grants.entries().len());
-    assert!(grants.verify_database_privilege("u1", "h1", "db1", UserPrivilegeType::Create));
-    assert!(!grants.verify_database_privilege("u1", "h1", "db1", UserPrivilegeType::Select));
-    assert!(grants.verify_table_privilege("u1", "h1", "db1", "table1", UserPrivilegeType::Create));
-    assert!(!grants.verify_table_privilege("u1", "h2", "db1", "table1", UserPrivilegeType::Insert));
-    assert!(grants.verify_table_privilege("u1", "h3", "db1", "table1", UserPrivilegeType::Select));
+    assert!(grants.verify_privilege(
+        "u1",
+        "h1",
+        &GrantObject::Database("db1".into()),
+        UserPrivilegeType::Create
+    ));
+    assert!(!grants.verify_privilege(
+        "u1",
+        "h1",
+        &GrantObject::Database("db1".into()),
+        UserPrivilegeType::Select
+    ));
+    assert!(grants.verify_privilege(
+        "u1",
+        "h1",
+        &GrantObject::Table("db1".into(), "table1".into()),
+        UserPrivilegeType::Create
+    ));
+    assert!(!grants.verify_privilege(
+        "u1",
+        "h2",
+        &GrantObject::Table("db1".into(), "table1".into()),
+        UserPrivilegeType::Insert
+    ));
+    assert!(grants.verify_privilege(
+        "u1",
+        "h3",
+        &GrantObject::Table("db1".into(), "table1".into()),
+        UserPrivilegeType::Select
+    ));
     Ok(())
 }
