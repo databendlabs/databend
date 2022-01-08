@@ -24,7 +24,7 @@ tokio-console = ["common-tracing/console", "common-base/tracing"]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
 common-base = { path = "../common/base" }
-common-cache = { path = "../common/cache" }
+common-cache = { path = "../common/cache"}
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 common-dal = { path = "../common/dal" }
 common-datablocks = { path = "../common/datablocks" }
@@ -59,7 +59,7 @@ async-compat = "0.2.1"
 async-trait = "0.1.52"
 async-recursion = "1.0.0"
 async-stream = "0.3.2"
-poem = { version = "1.2.25", features = ["rustls", "multipart"] }
+poem = { version = "1.2.27", features = ["rustls", "multipart"] }
 bumpalo = "3.9.0"
 byteorder = "1.4.3"
 bytes = "1.1.0"
