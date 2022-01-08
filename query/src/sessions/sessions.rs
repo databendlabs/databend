@@ -52,7 +52,7 @@ pub struct SessionManager {
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
-        let storage_cache_mgr = CacheManager::init(&conf.query)?;
+        let storage_cache_mgr = CacheManager::init(&conf.query);
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
 
         // Cluster discovery.
@@ -97,7 +97,7 @@ impl SessionManager {
     }
 
     /// get storage cache manager
-    //  we need to disable the clippy warning here, eliding lifetime markers leads give us compile errors
+    //  we need to disable the clippy warning here, lifetime eliding leads to compile errors
     #[allow(clippy::needless_lifetimes)]
     pub fn get_storage_cache_manager<'a>(self: &'a Arc<Self>) -> &'a CacheManager {
         self.storage_cache_manager.as_ref()

@@ -25,72 +25,24 @@ use common_tracing::tracing::Instrument;
 use serde::de::DeserializeOwned;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::cache::CachedLoader;
-use crate::storages::fuse::cache::HasMetricLabel;
+use crate::storages::fuse::cache::CachedReader;
+use crate::storages::fuse::cache::HasTenantLabel;
 use crate::storages::fuse::cache::Loader;
 use crate::storages::fuse::cache::MemoryCache;
+use crate::storages::fuse::cache::TenantLabel;
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
 
+/// Provider of [InputStream]
+///
+/// Mainly used as a auxiliary facility in the implementation of [Loader], such that the acquirement
+/// of an [InputStream] can be deferred.
 pub trait InputStreamProvider {
     fn input_stream(&self, path: &str, len: Option<u64>) -> Result<InputStream>;
 }
 
-impl InputStreamProvider for &QueryContext {
-    fn input_stream(&self, path: &str, len: Option<u64>) -> Result<InputStream> {
-        let accessor = self.get_storage_accessor()?;
-        accessor.get_input_stream(path, len)
-    }
-}
-
-impl HasMetricLabel for &QueryContext {
-    fn get_tenant_info(&self) -> (&str, &str) {
-        get_tenant_info(self)
-    }
-}
-
-impl InputStreamProvider for Arc<QueryContext> {
-    fn input_stream(&self, path: &str, len: Option<u64>) -> Result<InputStream> {
-        self.as_ref().input_stream(path, len)
-    }
-}
-
-impl HasMetricLabel for Arc<QueryContext> {
-    fn get_tenant_info(&self) -> (&str, &str) {
-        get_tenant_info(self)
-    }
-}
-
-fn get_tenant_info(ctx: &QueryContext) -> (&str, &str) {
-    let mgr = ctx.get_storage_cache_manager();
-    (mgr.get_tenant_id(), mgr.get_cluster_id())
-}
-
-#[async_trait::async_trait]
-impl<T, V> Loader<V> for T
-where
-    T: InputStreamProvider + Sync,
-    V: DeserializeOwned,
-{
-    async fn load(&self, key: &str) -> Result<V> {
-        let mut reader = self.input_stream(key, None)?; // TODO we know the length of stream
-        let mut buffer = vec![];
-
-        use futures::AsyncReadExt;
-        reader.read_to_end(&mut buffer).await.map_err(|e| {
-            let msg = e.to_string();
-            if e.kind() == ErrorKind::NotFound {
-                ErrorCode::DalPathNotFound(msg)
-            } else {
-                ErrorCode::DalTransportError(msg)
-            }
-        })?;
-        let r = serde_json::from_slice::<V>(&buffer)?;
-        Ok(r)
-    }
-}
-
+/// A Newtype for [FileMetaData]. To avoid implementation (of trait [Loader]) conflicts
 pub struct BlockMeta(FileMetaData);
 
 impl BlockMeta {
@@ -99,27 +51,13 @@ impl BlockMeta {
     }
 }
 
-#[async_trait::async_trait]
-impl<T> Loader<BlockMeta> for T
-where T: InputStreamProvider + Sync
-{
-    async fn load(&self, key: &str) -> Result<BlockMeta> {
-        let mut reader = self.input_stream(key, None)?; // TODO we know the length of stream
-        let meta = read_metadata_async(&mut reader)
-            .instrument(debug_span!("parquet_source_read_meta"))
-            .await
-            .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-        Ok(BlockMeta(meta))
-    }
-}
-
 pub type SegmentInfoCache = MemoryCache<SegmentInfo>;
 pub type TableSnapshotCache = MemoryCache<TableSnapshot>;
 pub type BlockMetaCache = MemoryCache<BlockMeta>;
 
-pub type SegmentInfoReader<'a> = CachedLoader<SegmentInfo, &'a QueryContext>;
-pub type TableSnapshotReader<'a> = CachedLoader<TableSnapshot, &'a QueryContext>;
-pub type BlockMetaReader = CachedLoader<BlockMeta, Arc<QueryContext>>;
+pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, &'a QueryContext>;
+pub type TableSnapshotReader<'a> = CachedReader<TableSnapshot, &'a QueryContext>;
+pub type BlockMetaReader = CachedReader<BlockMeta, Arc<QueryContext>>;
 
 pub struct MetaReaders;
 
@@ -171,5 +109,76 @@ impl<'a> TableSnapshotReader<'a> {
             current_snapshot_location = prev.map(|id| snapshot_location(&id));
         }
         Ok(snapshots)
+    }
+}
+
+#[async_trait::async_trait]
+impl<T, V> Loader<V> for T
+where
+    T: InputStreamProvider + Sync,
+    V: DeserializeOwned,
+{
+    async fn load(&self, key: &str, length_hint: Option<u64>) -> Result<V> {
+        let mut reader = self.input_stream(key, length_hint)?;
+        let mut buffer = vec![];
+
+        use futures::AsyncReadExt;
+        reader.read_to_end(&mut buffer).await.map_err(|e| {
+            let msg = e.to_string();
+            if e.kind() == ErrorKind::NotFound {
+                ErrorCode::DalPathNotFound(msg)
+            } else {
+                ErrorCode::DalTransportError(msg)
+            }
+        })?;
+        let r = serde_json::from_slice::<V>(&buffer)?;
+        Ok(r)
+    }
+}
+
+#[async_trait::async_trait]
+impl<T> Loader<BlockMeta> for T
+where T: InputStreamProvider + Sync
+{
+    async fn load(&self, key: &str, length_hint: Option<u64>) -> Result<BlockMeta> {
+        let mut reader = self.input_stream(key, length_hint)?;
+        let meta = read_metadata_async(&mut reader)
+            .instrument(debug_span!("parquet_source_read_meta"))
+            .await
+            .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
+        Ok(BlockMeta(meta))
+    }
+}
+
+impl InputStreamProvider for &QueryContext {
+    fn input_stream(&self, path: &str, len: Option<u64>) -> Result<InputStream> {
+        let accessor = self.get_storage_accessor()?;
+        accessor.get_input_stream(path, len)
+    }
+}
+
+impl InputStreamProvider for Arc<QueryContext> {
+    fn input_stream(&self, path: &str, len: Option<u64>) -> Result<InputStream> {
+        self.as_ref().input_stream(path, len)
+    }
+}
+
+impl HasTenantLabel for &QueryContext {
+    fn tenant_label(&self) -> TenantLabel {
+        ctx_tenant_label(self)
+    }
+}
+
+impl HasTenantLabel for Arc<QueryContext> {
+    fn tenant_label(&self) -> TenantLabel {
+        ctx_tenant_label(self)
+    }
+}
+
+fn ctx_tenant_label(ctx: &QueryContext) -> TenantLabel {
+    let mgr = ctx.get_storage_cache_manager();
+    TenantLabel {
+        tenant_id: mgr.get_tenant_id(),
+        cluster_id: mgr.get_cluster_id(),
     }
 }

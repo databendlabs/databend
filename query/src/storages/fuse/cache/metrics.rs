@@ -21,30 +21,37 @@ const CACHE_READ_BYTES_FROM_LOCAL: &str = "cache_read_bytes_from_local";
 const CACHE_ACCESS_COUNT: &str = "cache_access_count";
 const CACHE_ACCESS_HIT_COUNT: &str = "cache_access_hit_count";
 
-pub struct CacheDeferMetrics<'a> {
+pub struct TenantLabel<'a> {
     pub tenant_id: &'a str,
     pub cluster_id: &'a str,
+}
+
+pub struct CacheDeferMetrics<'a> {
+    pub tenant_label: TenantLabel<'a>,
     pub cache_hit: bool,
     pub read_bytes: u64,
 }
 
 impl Drop for CacheDeferMetrics<'_> {
     fn drop(&mut self) {
-        label_counter(CACHE_ACCESS_COUNT, self.tenant_id, self.cluster_id);
+        let label = &self.tenant_label;
+        let tenant_id = label.tenant_id;
+        let cluster_id = label.cluster_id;
+        label_counter(CACHE_ACCESS_COUNT, tenant_id, cluster_id);
         if self.cache_hit {
-            label_counter(CACHE_ACCESS_HIT_COUNT, self.tenant_id, self.cluster_id);
+            label_counter(CACHE_ACCESS_HIT_COUNT, tenant_id, cluster_id);
             label_counter_with_val(
                 CACHE_READ_BYTES_FROM_LOCAL,
                 self.read_bytes,
-                self.tenant_id,
-                self.cluster_id,
+                tenant_id,
+                cluster_id,
             );
         } else {
             label_counter_with_val(
                 CACHE_READ_BYTES_FROM_REMOTE,
                 self.read_bytes,
-                self.tenant_id,
-                self.cluster_id,
+                tenant_id,
+                cluster_id,
             );
         }
     }

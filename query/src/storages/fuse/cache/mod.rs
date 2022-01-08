@@ -15,8 +15,10 @@
 mod local_cache;
 mod metrics;
 
-pub use local_cache::empty_with_capacity;
-pub use local_cache::CachedLoader;
-pub use local_cache::HasMetricLabel;
+pub use local_cache::new_memory_cache;
+pub use local_cache::CachedReader;
+pub use local_cache::HasTenantLabel;
 pub use local_cache::Loader;
 pub use local_cache::MemoryCache;
+
+pub use self::metrics::TenantLabel;

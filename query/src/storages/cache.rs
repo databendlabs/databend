@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_trait::async_trait;
-use common_dal::DataAccessor;
-use common_exception::Result;
-
 use crate::configs::QueryConfig;
 use crate::storages::fuse::cache;
 use crate::storages::fuse::cache::MemoryCache;
@@ -23,11 +19,7 @@ use crate::storages::fuse::io::BlockMetaCache;
 use crate::storages::fuse::io::SegmentInfoCache;
 use crate::storages::fuse::io::TableSnapshotCache;
 
-#[async_trait]
-pub trait StorageCache: Send + Sync {
-    async fn get(&self, location: &str, da: &dyn DataAccessor) -> Result<Vec<u8>>;
-}
-
+/// Where all the caches reside
 pub struct CacheManager {
     table_snapshot_cache: Option<TableSnapshotCache>,
     segment_info_cache: Option<SegmentInfoCache>,
@@ -37,29 +29,29 @@ pub struct CacheManager {
 }
 
 impl CacheManager {
-    pub fn init(config: &QueryConfig) -> Result<Self> {
+    /// Initialize the caches according to the relevant configurations.
+    ///
+    /// A plain [CacheManager] is returned instead of [Result::<CacheManager>]
+    pub fn init(config: &QueryConfig) -> CacheManager {
         if !config.table_cache_enabled {
-            Ok(Self {
+            Self {
                 table_snapshot_cache: None,
                 segment_info_cache: None,
                 block_meta_cache: None,
                 cluster_id: config.cluster_id.clone(),
                 tenant_id: config.tenant_id.clone(),
-            })
+            }
         } else {
-            let table_snapshot_cache: Option<TableSnapshotCache> =
-                Self::with_capacity(config.table_cache_snapshot_count);
-            let segment_info_cache: Option<SegmentInfoCache> =
-                Self::with_capacity(config.table_cache_segment_count);
-            let block_meta_cache: Option<BlockMetaCache> =
-                Self::with_capacity(config.table_cache_block_meta_count);
-            Ok(Self {
+            let table_snapshot_cache = Self::with_capacity(config.table_cache_snapshot_count);
+            let segment_info_cache = Self::with_capacity(config.table_cache_segment_count);
+            let block_meta_cache = Self::with_capacity(config.table_cache_block_meta_count);
+            Self {
                 table_snapshot_cache,
                 segment_info_cache,
                 block_meta_cache,
                 cluster_id: config.cluster_id.clone(),
                 tenant_id: config.tenant_id.clone(),
-            })
+            }
         }
     }
 
@@ -85,7 +77,7 @@ impl CacheManager {
 
     fn with_capacity<T>(capacity: u64) -> Option<MemoryCache<T>> {
         if capacity > 0 {
-            Some(cache::empty_with_capacity(capacity))
+            Some(cache::new_memory_cache(capacity))
         } else {
             None
         }

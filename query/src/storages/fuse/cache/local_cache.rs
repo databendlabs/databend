@@ -23,31 +23,32 @@ use common_cache::LruCache;
 use common_exception::Result;
 
 use crate::storages::fuse::cache::metrics::CacheDeferMetrics;
+use crate::storages::fuse::cache::metrics::TenantLabel;
 
 #[async_trait::async_trait]
 pub trait Loader<T> {
-    async fn load(&self, key: &str) -> Result<T>;
+    async fn load(&self, key: &str, len: Option<u64>) -> Result<T>;
 }
 
-pub trait HasMetricLabel {
-    fn get_tenant_info(&self) -> (&str, &str);
+pub trait HasTenantLabel {
+    fn tenant_label(&self) -> TenantLabel;
 }
 
 type LaCache<K, V> = LruCache<K, V, DefaultHashBuilder, Count>;
 pub type MemoryCache<V> = Arc<RwLock<LaCache<String, Arc<V>>>>;
 
-pub fn empty_with_capacity<V>(capacity: u64) -> MemoryCache<V> {
+pub fn new_memory_cache<V>(capacity: u64) -> MemoryCache<V> {
     Arc::new(RwLock::new(LruCache::new(capacity)))
 }
 
-pub struct CachedLoader<T, L> {
-    cache: Option<MemoryCache<T>>,
+pub struct CachedReader<V, L> {
+    cache: Option<MemoryCache<V>>,
     loader: L,
     _name: String,
 }
 
-impl<V, L> CachedLoader<V, L>
-where L: Loader<V> + HasMetricLabel
+impl<V, L> CachedReader<V, L>
+where L: Loader<V> + HasTenantLabel
 {
     pub fn new(cache: Option<MemoryCache<V>>, loader: L, name: String) -> Self {
         Self {
@@ -60,10 +61,10 @@ where L: Loader<V> + HasMetricLabel
         match &self.cache {
             None => self.load(loc.as_ref()).await,
             Some(cache) => {
-                let (tenant_id, cluster_id) = self.loader.get_tenant_info();
+                let tenant_label = self.loader.tenant_label();
+                // TODO doc the read_bytes
                 let mut metrics = CacheDeferMetrics {
-                    tenant_id,
-                    cluster_id,
+                    tenant_label,
                     cache_hit: false,
                     read_bytes: 0,
                 };
@@ -85,7 +86,7 @@ where L: Loader<V> + HasMetricLabel
     }
 
     async fn load(&self, loc: &str) -> Result<Arc<V>> {
-        let val = self.loader.load(loc).await?;
+        let val = self.loader.load(loc, None).await?;
         let item = Arc::new(val);
         Ok(item)
     }
