@@ -103,6 +103,10 @@ impl UserPrivilegeSet {
         }
     }
 
+    pub fn iter(self) -> impl Iterator<Item = UserPrivilegeType> {
+        BitFlags::from(self).iter()
+    }
+
     /// The all privileges which available to the global grant object. It contains ALL the privileges
     /// on databases and tables, and has some Global only privileges.
     pub fn available_privileges_on_global() -> Self {

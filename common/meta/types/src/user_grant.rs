@@ -14,7 +14,6 @@
 
 use std::fmt;
 
-use common_exception::Result;
 use enumflags2::BitFlags;
 
 use crate::UserPrivilegeSet;

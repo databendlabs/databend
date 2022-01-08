@@ -83,7 +83,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
 /// a KILL statement is meaningless for a table.
 pub fn validate_grant_privileges(object: &GrantObject, privileges: UserPrivilegeSet) -> Result<()> {
     let available_privileges = object.available_privileges();
-    let ok = BitFlags::from(privileges)
+    let ok = privileges
         .iter()
         .all(|p| available_privileges.has_privilege(p));
     if !ok {
