@@ -246,7 +246,7 @@ pub fn to_primitive<T: DFPrimitiveType>(
     values: AlignedVec<T>,
     validity: Option<Bitmap>,
 ) -> DFPrimitiveArray<T> {
-    PrimitiveArray::from_data(T::DATA_TYPE, values.into(), validity).into()
+    PrimitiveArray::from_data(T::data_type().to_arrow(), values.into(), validity).into()
 }
 
 pub type DFUInt8Array = DFPrimitiveArray<u8>;

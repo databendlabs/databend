@@ -137,7 +137,7 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
         S: DFPrimitiveType,
     {
         let values = self.array.values().iter().map(f);
-        let values = AlignedVec::<_>::from_trusted_len_iter(values);
+        let values = values.collect();
         let validity = self.array.validity().cloned();
         to_primitive::<S>(values, validity)
     }
@@ -174,7 +174,7 @@ impl<'a> ArrayApply<'a, &'a [u8], Cow<'a, [u8]>> for DFStringArray {
     {
         let arr = self.inner();
         let values_iter = arr.values_iter().map(f);
-        let av = AlignedVec::<_>::from_trusted_len_iter(values_iter);
+        let av = values_iter.collect();
 
         let validity = self.validity();
         to_primitive::<S>(av, validity.cloned())
@@ -185,7 +185,7 @@ impl<'a> ArrayApply<'a, &'a [u8], Cow<'a, [u8]>> for DFStringArray {
         F: Fn(Option<&'a [u8]>) -> S + Copy,
         S: DFPrimitiveType,
     {
-        let av: AlignedVec<_> = AlignedVec::<_>::from_trusted_len_iter(self.inner().iter().map(f));
+        let av = self.inner().iter().map(f).collect();
         let validity = self.validity();
         to_primitive::<S>(av, validity.cloned())
     }
