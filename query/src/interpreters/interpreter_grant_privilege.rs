@@ -22,7 +22,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::interpreters::interpreter_common::grant_object_exists_or_err;
+use crate::interpreters::interpreter_common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -53,7 +53,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
         let plan = self.plan.clone();
 
         validate_grant_privileges(&plan.on, plan.priv_types)?;
-        grant_object_exists_or_err(&self.ctx, &plan.on).await?;
+        validate_grant_object_exists(&self.ctx, &plan.on).await?;
 
         // TODO: check user existence
         // TODO: check privilege on granting on the grant object
