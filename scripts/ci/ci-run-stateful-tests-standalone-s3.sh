@@ -17,7 +17,7 @@ export S3_STORAGE_SECRET_ACCESS_KEY=minioadmin
 
 echo "calling test suite"
 echo "Starting standalone DatabendQuery(debug)"
-./scripts/deploy/databend-query-standalone.sh
+./scripts/ci/deploy/databend-query-standalone.sh
 
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests" || exit

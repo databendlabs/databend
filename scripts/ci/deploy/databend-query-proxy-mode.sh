@@ -1,9 +1,9 @@
 #!/bin/bash
-# Copyright 2020-2021 The Databend Authors.
+# Copyright 2022 The Databend Authors.
 # SPDX-License-Identifier: Apache-2.0.
 
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
-cd "$SCRIPT_PATH/../.." || exit
+cd "$SCRIPT_PATH/../../.." || exit
 
 killall databend-query
 killall databend-meta
@@ -18,12 +18,12 @@ done
 
 BIN=${1:-debug}
 
-echo 'Start DatabendStore...'
+echo 'Start databend-meta...'
 nohup target/${BIN}/databend-meta --single --log-level=ERROR &
 echo "Waiting on databend-meta 10 seconds..."
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
-echo 'Start DatabendQuery...'
-nohup target/${BIN}/databend-query -c scripts/deploy/config/databend-query-node-1.toml &
+echo 'Start databend-query...'
+nohup target/${BIN}/databend-query -c scripts/ci/deploy/config/databend-query-proxy-mode.toml &
 echo "Waiting on databend-query 10 seconds..."
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307

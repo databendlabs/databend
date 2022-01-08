@@ -40,10 +40,10 @@ miri:
 	MIRIFLAGS="-Zmiri-disable-isolation" cargo miri test
 
 run: build
-	bash ./scripts/deploy/databend-query-standalone.sh release
+	bash ./scripts/ci/deploy/databend-query-standalone.sh release
 
 run-debug: build-debug
-	bash ./scripts/deploy/databend-query-standalone.sh
+	bash ./scripts/ci/deploy/databend-query-standalone.sh
 
 build:
 	bash ./scripts/build/build-release.sh

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0.
 
 echo "Starting Cluster databend-query"
-./scripts/deploy/databend-query-cluster-3-nodes.sh
+./scripts/ci/deploy/databend-query-cluster-3-nodes.sh
 
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests" || exit
