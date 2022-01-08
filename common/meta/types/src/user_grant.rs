@@ -51,20 +51,6 @@ impl GrantObject {
             GrantObject::Table(_, _) => UserPrivilegeSet::available_privileges_on_table(),
         }
     }
-
-    /// Check if there's any privilege which can not be granted to this GrantObject.
-    /// Some global privileges can not be granted to a database or table, for example,
-    /// a KILL statement is meaningless for a table.
-    pub fn validate_available_privileges(&self, privileges: UserPrivilegeSet) -> Result<()> {
-        let available_privileges = self.available_privileges();
-        let ok = BitFlags::from(privileges)
-            .iter()
-            .all(|p| available_privileges.has_privilege(p));
-        if !ok {
-            return Err(common_exception::ErrorCode::IllegalGrant("Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used"));
-        }
-        Ok(())
-    }
 }
 
 impl fmt::Display for GrantObject {

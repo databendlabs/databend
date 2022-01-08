@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::GrantObject;
+use common_meta_types::UserPrivilegeSet;
 use common_planners::GrantPrivilegePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -50,7 +52,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
 
-        plan.on.validate_available_privileges(plan.priv_types)?;
+        validate_grant_privileges(&plan.on, plan.priv_types)?;
         grant_object_exists_or_err(&self.ctx, &plan.on).await?;
 
         // TODO: check user existence
@@ -74,4 +76,18 @@ impl Interpreter for GrantPrivilegeInterpreter {
             vec![],
         )))
     }
+}
+
+/// Check if there's any privilege which can not be granted to this GrantObject.
+/// Some global privileges can not be granted to a database or table, for example,
+/// a KILL statement is meaningless for a table.
+pub fn validate_grant_privileges(object: &GrantObject, privileges: UserPrivilegeSet) -> Result<()> {
+    let available_privileges = object.available_privileges();
+    let ok = BitFlags::from(privileges)
+        .iter()
+        .all(|p| available_privileges.has_privilege(p));
+    if !ok {
+        return Err(common_exception::ErrorCode::IllegalGrant("Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used"));
+    }
+    Ok(())
 }
