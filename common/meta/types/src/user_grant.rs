@@ -31,16 +31,15 @@ impl GrantObject {
     /// Comparing the grant objects, the Database object contains all the Table objects inside it.
     /// Global object contains all the Database objects.
     pub fn contains(&self, object: &GrantObject) -> bool {
-        use GrantObject::*;
         match (self, object) {
-            (Global, _) => true,
-            (Database(_), Global) => false,
-            (Database(lhs), Database(rhs)) => lhs == rhs,
-            (Database(lhs), Table(rhs, _)) => lhs == rhs,
-            (Table(lhs_db, lhs_table), Table(rhs_db, rhs_table)) => {
+            (GrantObject::Global, _) => true,
+            (GrantObject::Database(_), GrantObject::Global) => false,
+            (GrantObject::Database(lhs), GrantObject::Database(rhs)) => lhs == rhs,
+            (GrantObject::Database(lhs), GrantObject::Table(rhs, _)) => lhs == rhs,
+            (GrantObject::Table(lhs_db, lhs_table), GrantObject::Table(rhs_db, rhs_table)) => {
                 (lhs_db == rhs_db) && (lhs_table == rhs_table)
             }
-            (Table(_, _), _) => false,
+            (GrantObject::Table(_, _), _) => false,
         }
     }
 
