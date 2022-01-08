@@ -96,10 +96,7 @@ impl SessionManager {
         self.catalog.clone()
     }
 
-    /// get storage cache manager
-    //  we need to disable the clippy warning here, lifetime eliding leads to compile errors
-    #[allow(clippy::needless_lifetimes)]
-    pub fn get_storage_cache_manager<'a>(self: &'a Arc<Self>) -> &'a CacheManager {
+    pub fn get_storage_cache_manager(&self) -> &CacheManager {
         self.storage_cache_manager.as_ref()
     }
 
