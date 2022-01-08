@@ -31,7 +31,7 @@ pub struct CacheManager {
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.
     ///
-    /// A plain [CacheManager] is returned instead of [Result::<CacheManager>]
+    /// For convenience, ids of cluster and tenant are also kept
     pub fn init(config: &QueryConfig) -> CacheManager {
         if !config.table_cache_enabled {
             Self {

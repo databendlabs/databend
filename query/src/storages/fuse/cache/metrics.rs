@@ -37,6 +37,7 @@ impl Drop for CacheDeferMetrics<'_> {
         let label = &self.tenant_label;
         let tenant_id = label.tenant_id;
         let cluster_id = label.cluster_id;
+
         label_counter(CACHE_ACCESS_COUNT, tenant_id, cluster_id);
         if self.cache_hit {
             label_counter(CACHE_ACCESS_HIT_COUNT, tenant_id, cluster_id);
