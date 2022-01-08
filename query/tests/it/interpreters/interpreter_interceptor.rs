@@ -70,6 +70,8 @@ async fn test_interpreter_interceptor() -> Result<()> {
                 "| 2        | TestSession  | 8         | 100       | 800        | 0               | 0            | 0             | 9           | 72           | SelectPlan | select number from numbers_mt(100) where number > 90 | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
                 "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+------------+------------------------------------------------------+----------+---------------------------------------------------------------------------+",
 
+
+
         ];
 
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
@@ -104,11 +106,14 @@ async fn test_interpreter_interceptor_for_insert() -> Result<()> {
 
         let expected = vec![
             "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+---------------------------------------------------------------------------+",
-            "| log_type | handler_type | cpu_usage | scan_rows | scan_bytes | scan_partitions | written_rows | written_bytes | result_rows | result_bytes | query_kind      | query_text                                         | sql_user | sql_user_privileges                                                       |",
+            "| log_type | handler_type | cpu_usage | scan_rows | scan_bytes | scan_partitions | written_rows | written_bytes | result_rows | result_bytes | query_kind      | query_text                                         | sql_user | sql_user_quota                                                            |",
             "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+---------------------------------------------------------------------------+",
             "| 1        | TestSession  | 8         | 0         | 0          | 0               | 0            | 0             | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
             "| 2        | TestSession  | 8         | 1         | 8          | 0               | 1            | 1121          | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
             "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+---------------------------------------------------------------------------+",
+
+
+
         ];
 
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
