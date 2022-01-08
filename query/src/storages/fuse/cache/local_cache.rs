@@ -1,131 +1,107 @@
-// Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+//
 
-use std::ffi::OsString;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use common_base::tokio::sync::RwLock;
-use common_cache::BytesMeter;
 use common_cache::Cache;
+use common_cache::Count;
 use common_cache::DefaultHashBuilder;
 use common_cache::LruCache;
-use common_cache::LruDiskCache;
-use common_dal::DataAccessor;
 use common_exception::Result;
-use common_metrics::label_counter;
-use common_metrics::label_counter_with_val;
 
-use crate::storages::cache::StorageCache;
+use crate::storages::fuse::cache::metrics::CacheDeferMetrics;
+use crate::storages::fuse::cache::metrics::TenantLabel;
 
-const CACHE_READ_BYTES_FROM_REMOTE: &str = "cache_read_bytes_from_remote";
-const CACHE_READ_BYTES_FROM_LOCAL: &str = "cache_read_bytes_from_local";
-const CACHE_ACCESS_COUNT: &str = "cache_access_count";
-const CACHE_ACCESS_HIT_COUNT: &str = "cache_access_hit_count";
-
-struct CacheDeferMetrics<'a> {
-    tenant_id: &'a str,
-    cluster_id: &'a str,
-    cache_hit: bool,
-    read_bytes: u64,
+/// Loads an object from a source
+#[async_trait::async_trait]
+pub trait Loader<T> {
+    /// Loads object of type T, located at `location`
+    async fn load(&self, location: &str, len_hint: Option<u64>) -> Result<T>;
 }
 
-impl Drop for CacheDeferMetrics<'_> {
-    fn drop(&mut self) {
-        label_counter(CACHE_ACCESS_COUNT, self.tenant_id, self.cluster_id);
-        if self.cache_hit {
-            label_counter(CACHE_ACCESS_HIT_COUNT, self.tenant_id, self.cluster_id);
-            label_counter_with_val(
-                CACHE_READ_BYTES_FROM_LOCAL,
-                self.read_bytes,
-                self.tenant_id,
-                self.cluster_id,
-            );
-        } else {
-            label_counter_with_val(
-                CACHE_READ_BYTES_FROM_REMOTE,
-                self.read_bytes,
-                self.tenant_id,
-                self.cluster_id,
-            );
+pub trait HasTenantLabel {
+    fn tenant_label(&self) -> TenantLabel;
+}
+
+type LaCache<K, V> = LruCache<K, V, DefaultHashBuilder, Count>;
+pub type MemoryCache<V> = Arc<RwLock<LaCache<String, Arc<V>>>>;
+
+pub fn new_memory_cache<V>(capacity: u64) -> MemoryCache<V> {
+    Arc::new(RwLock::new(LruCache::new(capacity)))
+}
+
+/// A "cache-aware" reader
+pub struct CachedReader<V, L> {
+    cache: Option<MemoryCache<V>>,
+    loader: L,
+    name: String,
+}
+
+impl<V, L> CachedReader<V, L>
+where L: Loader<V> + HasTenantLabel
+{
+    pub fn new(cache: Option<MemoryCache<V>>, loader: L, name: impl Into<String>) -> Self {
+        Self {
+            cache,
+            loader,
+            name: name.into(),
         }
     }
-}
 
-pub struct LocalCacheConfig {
-    pub memory_cache_size_mb: u64,
-    pub disk_cache_size_mb: u64,
-    pub disk_cache_root: String,
-    pub tenant_id: String,
-    pub cluster_id: String,
-}
+    /// Load the object at `location`, uses/populates the cache if possible/necessary.
+    pub async fn read(&self, location: impl AsRef<str>) -> Result<Arc<V>> {
+        match &self.cache {
+            None => self.load(location.as_ref()).await,
+            Some(cache) => {
+                let tenant_label = self.loader.tenant_label();
 
-type MemCache = Arc<RwLock<LruCache<OsString, Vec<u8>, DefaultHashBuilder, BytesMeter>>>;
+                // in PR #3798, the cache is degenerated to metered by count of cached item,
+                // later, when the size of BlockMeta could be acquired (needs some enhancements of crate `parquet2`)
+                // 1) the `read_bytes` metric should be re-enabled
+                // 2) the metrics need to be labeled by the name of cache as well
 
-// TODO maybe distinct segments cache and snapshots cache
-#[derive(Clone, Debug)]
-pub struct LocalCache {
-    pub disk_cache: Arc<RwLock<LruDiskCache>>,
-    pub mem_cache: MemCache,
-    tenant_id: String,
-    cluster_id: String,
-}
-
-impl LocalCache {
-    pub fn create(conf: LocalCacheConfig) -> Result<Box<dyn StorageCache>> {
-        let disk_cache = Arc::new(RwLock::new(LruDiskCache::new(
-            conf.disk_cache_root,
-            conf.disk_cache_size_mb * 1024 * 1024,
-        )?));
-        Ok(Box::new(LocalCache {
-            mem_cache: Arc::new(RwLock::new(LruCache::with_meter(
-                conf.memory_cache_size_mb * 1024 * 1024,
-                BytesMeter,
-            ))),
-            disk_cache,
-            tenant_id: conf.tenant_id,
-            cluster_id: conf.cluster_id,
-        }))
-    }
-
-    async fn get_from_mem_cache(&self, location: &str, da: &dyn DataAccessor) -> Result<Vec<u8>> {
-        let loc: OsString = location.to_owned().into();
-        let mut metrics = CacheDeferMetrics {
-            tenant_id: self.tenant_id.as_str(),
-            cluster_id: self.cluster_id.as_str(),
-            cache_hit: false,
-            read_bytes: 0,
-        };
-
-        // get data from memory cache
-        let mut mem_cache = self.mem_cache.write().await;
-        if let Some(data) = mem_cache.get(&loc) {
-            metrics.cache_hit = true;
-            metrics.read_bytes = data.len() as u64;
-
-            return Ok(data.clone());
+                let mut metrics = CacheDeferMetrics {
+                    tenant_label,
+                    cache_hit: false,
+                    read_bytes: 0,
+                };
+                let cache = &mut cache.write().await;
+                match cache.get(location.as_ref()) {
+                    Some(item) => {
+                        metrics.cache_hit = true;
+                        metrics.read_bytes = 0u64;
+                        Ok(item.clone())
+                    }
+                    None => {
+                        let item = self.load(location.as_ref()).await?;
+                        cache.put(location.as_ref().to_owned(), item.clone());
+                        Ok(item)
+                    }
+                }
+            }
         }
-        let data = da.read(location).await?;
-        mem_cache.put(loc, data.clone());
-        metrics.read_bytes = data.len() as u64;
-        Ok(data)
     }
-}
 
-#[async_trait]
-impl StorageCache for LocalCache {
-    async fn get(&self, location: &str, da: &dyn DataAccessor) -> Result<Vec<u8>> {
-        self.get_from_mem_cache(location, da).await
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    async fn load(&self, loc: &str) -> Result<Arc<V>> {
+        let val = self.loader.load(loc, None).await?;
+        let item = Arc::new(val);
+        Ok(item)
     }
 }

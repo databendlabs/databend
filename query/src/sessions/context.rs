@@ -56,7 +56,7 @@ use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionRef;
 use crate::sessions::Settings;
-use crate::storages::cache::StorageCache;
+use crate::storages::cache::CacheManager;
 use crate::storages::Table;
 use crate::users::UserApiProvider;
 
@@ -287,14 +287,14 @@ impl QueryContext {
         self.shared.get_query_str()
     }
 
-    // Get the client socket address.
+    /// Get the client socket address.
     pub fn get_client_address(&self) -> Option<SocketAddr> {
         self.shared.session.mutable_state.get_client_host()
     }
 
-    // Get table cache.
-    pub fn get_storage_cache(&self) -> Arc<Option<Box<dyn StorageCache>>> {
-        self.shared.session.sessions.get_storage_cache()
+    /// Get the storage cache manager
+    pub fn get_storage_cache_manager(&self) -> &CacheManager {
+        self.shared.session.sessions.get_storage_cache_manager()
     }
 
     // Get the storage data accessor by config.

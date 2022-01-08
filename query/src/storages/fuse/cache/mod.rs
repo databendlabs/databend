@@ -13,5 +13,12 @@
 // limitations under the License.
 
 mod local_cache;
-pub use local_cache::LocalCache;
-pub use local_cache::LocalCacheConfig;
+mod metrics;
+
+pub use local_cache::new_memory_cache;
+pub use local_cache::CachedReader;
+pub use local_cache::HasTenantLabel;
+pub use local_cache::Loader;
+pub use local_cache::MemoryCache;
+
+pub use self::metrics::TenantLabel;

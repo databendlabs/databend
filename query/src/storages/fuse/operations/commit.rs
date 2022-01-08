@@ -79,12 +79,13 @@ impl FuseTable {
 
     fn merge_table_operations(
         schema: &DataSchema,
-        previous: Option<TableSnapshot>,
+        previous: Option<Arc<TableSnapshot>>,
         mut new_segments: Vec<String>,
         statistics: Statistics,
     ) -> Result<TableSnapshot> {
         // 1. merge stats with previous snapshot, if any
-        let stats = if let Some(TableSnapshot { summary, .. }) = &previous {
+        let stats = if let Some(snapshot) = &previous {
+            let summary = &snapshot.summary;
             statistics::merge_statistics(schema, &statistics, summary)?
         } else {
             statistics
@@ -92,7 +93,8 @@ impl FuseTable {
         let prev_snapshot_id = previous.as_ref().map(|v| v.snapshot_id);
 
         // 2. merge segment locations with previous snapshot, if any
-        if let Some(TableSnapshot { mut segments, .. }) = previous {
+        if let Some(snapshot) = &previous {
+            let mut segments = snapshot.segments.clone();
             new_segments.append(&mut segments)
         };
 
