@@ -455,6 +455,11 @@ fn use_test() -> Result<()> {
         }),
     )?;
 
+    Ok(())
+}
+
+#[test]
+fn sudo_command_test() -> Result<()> {
     expect_parse_ok(
         "use `tenant`",
         DfStatement::UseDatabase(DfUseDatabase {
@@ -463,10 +468,20 @@ fn use_test() -> Result<()> {
     )?;
 
     expect_parse_ok(
-        "use tenant 'xx'",
+        "sudo use tenant 'xx'",
         DfStatement::UseTenant(DfUseTenant {
             name: ObjectName(vec![Ident::with_quote('\'', "xx")]),
         }),
+    )?;
+
+    expect_parse_err(
+        "sudo yy",
+        String::from("sql parser error: Expected Unsupported sudo command, found: yy"),
+    )?;
+
+    expect_parse_err(
+        "sudo use xx",
+        String::from("sql parser error: Expected Unsupported sudo command, found: xx"),
     )?;
 
     Ok(())
