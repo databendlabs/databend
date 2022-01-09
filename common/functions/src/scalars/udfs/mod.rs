@@ -21,6 +21,7 @@ mod to_type_name;
 mod udf;
 mod udf_example;
 mod version;
+mod in_basic;
 
 pub use crash_me::CrashMeFunction;
 pub use current_user::CurrentUserFunction;
@@ -30,3 +31,4 @@ pub use to_type_name::ToTypeNameFunction;
 pub use udf::UdfFunction;
 pub use udf_example::UdfExampleFunction;
 pub use version::VersionFunction;
+pub use in_basic::InFunction;

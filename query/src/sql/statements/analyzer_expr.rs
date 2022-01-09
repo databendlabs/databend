@@ -66,6 +66,7 @@ impl ExpressionAnalyzer {
                 ExprRPNItem::Subquery(v) => self.analyze_scalar_subquery(v, &mut stack).await?,
                 ExprRPNItem::Cast(v) => self.analyze_cast(v, &mut stack)?,
                 ExprRPNItem::Between(negated) => self.analyze_between(*negated, &mut stack)?,
+                ExprRPNItem::InList(v) => self.analyze_inlist(v, &mut stack)?,
             }
         }
 
@@ -77,8 +78,38 @@ impl ExpressionAnalyzer {
         }
     }
 
+    
     fn analyze_value(value: &Value, args: &mut Vec<Expression>) -> Result<()> {
         args.push(ValueExprAnalyzer::analyze(value)?);
+        Ok(())
+    }
+    
+    fn analyze_inlist(&self, info: &InListInfo, args: &mut Vec<Expression>) -> Result<()> {
+        let mut list = Vec::with_capacity(info.list_size);
+        for _index in 0..info.list_size {
+            match args.pop() {
+                None => {
+                    return Err(ErrorCode::LogicalError("It's a bug."));
+                }
+                Some(arg) => {
+                    list.insert(0, arg);
+                }
+            }
+        }
+
+        let expr = args.pop().ok_or(ErrorCode::LogicalError("It's a bug."))?;
+        list.insert(0, expr);
+
+        let op = if info.negated {
+            "NOT_IN".to_string()
+        }else {
+            "IN".to_string()
+        };
+
+        args.push(Expression::ScalarFunction {
+            op,
+            args: list,
+        });
         Ok(())
     }
 
@@ -334,6 +365,11 @@ struct FunctionExprInfo {
     parameters: Vec<Value>,
 }
 
+struct InListInfo {
+    list_size: usize,
+    negated: bool
+}
+
 enum ExprRPNItem {
     Value(Value),
     Identifier(Ident),
@@ -344,6 +380,7 @@ enum ExprRPNItem {
     Subquery(Box<Query>),
     Cast(common_datavalues::DataType),
     Between(bool),
+    InList(InListInfo)
 }
 
 impl ExprRPNItem {
@@ -487,6 +524,12 @@ impl ExprRPNBuilder {
                     self.rpn
                         .push(ExprRPNItem::function(String::from("tuple"), len));
                 }
+            }
+            Expr::InList { expr, list, negated } => {
+                self.rpn.push(ExprRPNItem::InList(InListInfo {
+                    list_size: list.len(),
+                    negated: *negated,
+                }))
             }
             _ => (),
         }

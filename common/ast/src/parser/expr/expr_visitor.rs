@@ -76,6 +76,7 @@ pub trait ExprVisitor: Sized + Send {
                 high,
             } => self.visit_between(expr, negated, low, high).await,
             Expr::Tuple(exprs) => self.visit_tuple(exprs).await,
+            Expr::InList {expr, list, ..} => self.visit_inlist(expr, list).await,
             other => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
@@ -84,6 +85,14 @@ pub trait ExprVisitor: Sized + Send {
     }
 
     async fn post_visit(&mut self, _expr: &Expr) -> Result<()> {
+        Ok(())
+    }
+
+    async fn visit_inlist(&mut self, expr: &Box<Expr>, list: &Vec<Expr>) -> Result<()> {
+        ExprTraverser::accept(expr, self).await;
+        for expr in list {
+            ExprTraverser::accept(expr, self).await;
+        }
         Ok(())
     }
 
