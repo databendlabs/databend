@@ -50,11 +50,9 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let tenant_id = self.ctx.get_tenant_id();
+        let tenant = self.ctx.get_tenant();
         let calalog = self.ctx.get_catalog();
-        let db = calalog
-            .get_database(tenant_id.as_str(), &self.plan.db)
-            .await?;
+        let db = calalog.get_database(tenant.as_str(), &self.plan.db).await?;
         let name = db.name();
         let mut info = format!("CREATE DATABASE `{}`", name);
         if !db.engine().is_empty() {

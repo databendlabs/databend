@@ -21,7 +21,7 @@ use common_meta_types::DropTableReq;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropTablePlan {
     pub if_exists: bool,
-    pub tenant_id: String,
+    pub tenant: String,
     pub db: String,
     /// The table name
     pub table: String,
@@ -37,7 +37,7 @@ impl From<DropTablePlan> for DropTableReq {
     fn from(p: DropTablePlan) -> Self {
         DropTableReq {
             if_exists: p.if_exists,
-            tenant_id: p.tenant_id,
+            tenant: p.tenant,
             db: p.db,
             table: p.table,
         }

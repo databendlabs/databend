@@ -21,7 +21,7 @@ use common_meta_types::DropDatabaseReq;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropDatabasePlan {
     pub if_exists: bool,
-    pub tenant_id: String,
+    pub tenant: String,
     pub db: String,
 }
 
@@ -35,7 +35,7 @@ impl From<DropDatabasePlan> for DropDatabaseReq {
     fn from(p: DropDatabasePlan) -> Self {
         DropDatabaseReq {
             if_exists: p.if_exists,
-            tenant_id: p.tenant_id,
+            tenant: p.tenant,
             db: p.db,
         }
     }
@@ -45,7 +45,7 @@ impl From<&DropDatabasePlan> for DropDatabaseReq {
     fn from(p: &DropDatabasePlan) -> Self {
         DropDatabaseReq {
             if_exists: p.if_exists,
-            tenant_id: p.tenant_id.clone(),
+            tenant: p.tenant.clone(),
             db: p.db.clone(),
         }
     }

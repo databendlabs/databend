@@ -48,14 +48,14 @@ impl RepoPRsTable {
 
     pub async fn create_table(
         ctx: StorageContext,
-        tenant_id: &str,
+        tenant: &str,
         options: RepoTableOptions,
     ) -> Result<()> {
         let mut options = options;
         options.table_type = GithubTableType::PullRequests.to_string();
         let req = CreateTableReq {
             if_not_exists: false,
-            tenant_id: tenant_id.to_string(),
+            tenant: tenant.to_string(),
             db: options.owner.clone(),
             table: format!("{}_{}", options.repo.clone(), "prs"),
             table_meta: TableMeta {

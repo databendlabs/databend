@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::io;
+use std::io::Read;
 use std::mem::MaybeUninit;
 
 use common_exception::ErrorCode;
@@ -33,7 +34,7 @@ pub trait BinaryRead {
     fn read_string(&mut self) -> Result<String>;
     fn skip_string(&mut self) -> Result<()>;
     fn read_uvarint(&mut self) -> Result<u64>;
-    fn read_tenant_id(&mut self, delimiter: u8) -> Result<String>;
+    fn read_tenant(&mut self, delimiter: u8) -> Result<String>;
 
     // in place read
     fn read_to_scalar<V>(&mut self, v: &mut V) -> Result<()>
@@ -120,7 +121,7 @@ where T: io::Read + io::BufRead
         }
     }
 
-    fn read_tenant_id(&mut self, delimiter: u8) -> Result<String> {
+    fn read_tenant(&mut self, delimiter: u8) -> Result<String> {
         let mut buffer = vec![];
         self.read_until(delimiter, &mut buffer)?;
 

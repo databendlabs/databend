@@ -92,12 +92,12 @@ impl MutableCatalog {
             Arc::new(meta_remote)
         };
 
-        let tenant_id = conf.query.tenant_id.as_str();
+        let tenant = conf.query.tenant.as_str();
 
         // Create default database.
         let req = CreateDatabaseReq {
             if_not_exists: true,
-            tenant_id: tenant_id.to_string(),
+            tenant: tenant.to_string(),
             db: "default".to_string(),
             meta: DatabaseMeta {
                 engine: "".to_string(),
@@ -132,21 +132,21 @@ impl MutableCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for MutableCatalog {
-    async fn get_database(&self, tenant_id: &str, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         let db_info = self
             .ctx
             .meta
-            .get_database(GetDatabaseReq::new(tenant_id, db_name))
+            .get_database(GetDatabaseReq::new(tenant, db_name))
             .await?;
         self.build_db_instance(&db_info)
     }
 
-    async fn list_databases(&self, tenant_id: &str) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
         let dbs = self
             .ctx
             .meta
             .list_databases(ListDatabaseReq {
-                tenant_id: tenant_id.to_string(),
+                tenant: tenant.to_string(),
             })
             .await?;
 
@@ -169,7 +169,7 @@ impl Catalog for MutableCatalog {
             meta: req.meta.clone(),
         });
         let database = self.build_db_instance(&db_info)?;
-        database.init_database(&req.tenant_id).await?;
+        database.init_database(&req.tenant).await?;
         Ok(CreateDatabaseReply {
             database_id: res.database_id,
         })
@@ -198,23 +198,23 @@ impl Catalog for MutableCatalog {
 
     async fn get_table(
         &self,
-        tenant_id: &str,
+        tenant: &str,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         let table_info = self
             .ctx
             .meta
-            .get_table(GetTableReq::new(tenant_id, db_name, table_name))
+            .get_table(GetTableReq::new(tenant, db_name, table_name))
             .await?;
         self.get_table_by_info(table_info.as_ref())
     }
 
-    async fn list_tables(&self, tenant_id: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let table_infos = self
             .ctx
             .meta
-            .list_tables(ListTableReq::new(tenant_id, db_name))
+            .list_tables(ListTableReq::new(tenant, db_name))
             .await?;
 
         table_infos.iter().try_fold(vec![], |mut acc, item| {

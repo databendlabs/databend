@@ -39,17 +39,17 @@ pub enum Cmd {
 
     /// Add a database if absent
     CreateDatabase {
-        tenant_id: String,
+        tenant: String,
         name: String,
         meta: DatabaseMeta,
     },
 
     /// Drop a database if absent
-    DropDatabase { tenant_id: String, name: String },
+    DropDatabase { tenant: String, name: String },
 
     /// Create a table if absent
     CreateTable {
-        tenant_id: String,
+        tenant: String,
         db_name: String,
         table_name: String,
         table_meta: TableMeta,
@@ -57,7 +57,7 @@ pub enum Cmd {
 
     /// Drop a table if absent
     DropTable {
-        tenant_id: String,
+        tenant: String,
         db_name: String,
         table_name: String,
     },
@@ -98,18 +98,14 @@ impl fmt::Display for Cmd {
             Cmd::AddNode { node_id, node } => {
                 write!(f, "add_node:{}={}", node_id, node)
             }
-            Cmd::CreateDatabase {
-                tenant_id,
-                name,
-                meta,
-            } => {
-                write!(f, "create_db:{}-{}={}", tenant_id, name, meta)
+            Cmd::CreateDatabase { tenant, name, meta } => {
+                write!(f, "create_db:{}-{}={}", tenant, name, meta)
             }
-            Cmd::DropDatabase { tenant_id, name } => {
-                write!(f, "drop_db:{}-{}", tenant_id, name)
+            Cmd::DropDatabase { tenant, name } => {
+                write!(f, "drop_db:{}-{}", tenant, name)
             }
             Cmd::CreateTable {
-                tenant_id,
+                tenant,
                 db_name,
                 table_name,
                 table_meta,
@@ -117,15 +113,15 @@ impl fmt::Display for Cmd {
                 write!(
                     f,
                     "create_table:{}-{}-{}={}",
-                    tenant_id, db_name, table_name, table_meta
+                    tenant, db_name, table_name, table_meta
                 )
             }
             Cmd::DropTable {
-                tenant_id,
+                tenant,
                 db_name,
                 table_name,
             } => {
-                write!(f, "delete_table:{}-{}-{}", tenant_id, db_name, table_name)
+                write!(f, "delete_table:{}-{}-{}", tenant, db_name, table_name)
             }
             Cmd::UpsertKV {
                 key,

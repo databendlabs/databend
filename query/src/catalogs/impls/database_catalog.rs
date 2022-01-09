@@ -82,15 +82,12 @@ impl DatabaseCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for DatabaseCatalog {
-    async fn get_database(&self, tenant_id: &str, db_name: &str) -> Result<Arc<dyn Database>> {
-        let r = self
-            .immutable_catalog
-            .get_database(tenant_id, db_name)
-            .await;
+    async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
+        let r = self.immutable_catalog.get_database(tenant, db_name).await;
         match r {
             Err(e) => {
                 if e.code() == ErrorCode::UnknownDatabase("").code() {
-                    self.mutable_catalog.get_database(tenant_id, db_name).await
+                    self.mutable_catalog.get_database(tenant, db_name).await
                 } else {
                     Err(e)
                 }
@@ -99,9 +96,9 @@ impl Catalog for DatabaseCatalog {
         }
     }
 
-    async fn list_databases(&self, tenant_id: &str) -> Result<Vec<Arc<dyn Database>>> {
-        let mut dbs = self.immutable_catalog.list_databases(tenant_id).await?;
-        let mut other = self.mutable_catalog.list_databases(tenant_id).await?;
+    async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+        let mut dbs = self.immutable_catalog.list_databases(tenant).await?;
+        let mut other = self.mutable_catalog.list_databases(tenant).await?;
         dbs.append(&mut other);
         Ok(dbs)
     }
@@ -109,7 +106,7 @@ impl Catalog for DatabaseCatalog {
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         if self
             .immutable_catalog
-            .exists_database(&req.tenant_id, &req.db)
+            .exists_database(&req.tenant, &req.db)
             .await?
         {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
@@ -125,7 +122,7 @@ impl Catalog for DatabaseCatalog {
         // drop db in BOTTOM layer only
         if self
             .immutable_catalog
-            .exists_database(&req.tenant_id, &req.db)
+            .exists_database(&req.tenant, &req.db)
             .await?
         {
             return self.immutable_catalog.drop_database(req).await;
@@ -159,20 +156,20 @@ impl Catalog for DatabaseCatalog {
 
     async fn get_table(
         &self,
-        tenant_id: &str,
+        tenant: &str,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         let res = self
             .immutable_catalog
-            .get_table(tenant_id, db_name, table_name)
+            .get_table(tenant, db_name, table_name)
             .await;
         match res {
             Ok(v) => Ok(v),
             Err(e) => {
                 if e.code() == ErrorCode::UnknownDatabaseCode() {
                     self.mutable_catalog
-                        .get_table(tenant_id, db_name, table_name)
+                        .get_table(tenant, db_name, table_name)
                         .await
                 } else {
                     Err(e)
@@ -181,13 +178,13 @@ impl Catalog for DatabaseCatalog {
         }
     }
 
-    async fn list_tables(&self, tenant_id: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        let r = self.immutable_catalog.list_tables(tenant_id, db_name).await;
+    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        let r = self.immutable_catalog.list_tables(tenant, db_name).await;
         match r {
             Ok(x) => Ok(x),
             Err(e) => {
                 if e.code() == ErrorCode::UnknownDatabaseCode() {
-                    self.mutable_catalog.list_tables(tenant_id, db_name).await
+                    self.mutable_catalog.list_tables(tenant, db_name).await
                 } else {
                     Err(e)
                 }
@@ -198,7 +195,7 @@ impl Catalog for DatabaseCatalog {
     async fn create_table(&self, req: CreateTableReq) -> Result<()> {
         if self
             .immutable_catalog
-            .exists_database(&req.tenant_id, &req.db)
+            .exists_database(&req.tenant, &req.db)
             .await?
         {
             return self.immutable_catalog.create_table(req).await;
@@ -209,7 +206,7 @@ impl Catalog for DatabaseCatalog {
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
         if self
             .immutable_catalog
-            .exists_database(&req.tenant_id, &req.db)
+            .exists_database(&req.tenant, &req.db)
             .await?
         {
             return self.immutable_catalog.drop_table(req).await;

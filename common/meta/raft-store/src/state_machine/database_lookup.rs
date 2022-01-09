@@ -14,15 +14,15 @@ const DB_LOOKUP_KEY_DELIMITER: u8 = '/' as u8;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DatabaseLookupKey {
-    tenant_id: String,
+    tenant: String,
     delimiter: u8,
     database_name: String,
 }
 
 impl DatabaseLookupKey {
-    pub fn new(tenant_id: String, database_name: String) -> Self {
+    pub fn new(tenant: String, database_name: String) -> Self {
         DatabaseLookupKey {
-            tenant_id,
+            tenant,
             delimiter: DB_LOOKUP_KEY_DELIMITER,
             database_name,
         }
@@ -37,7 +37,7 @@ impl SledOrderedSerde for DatabaseLookupKey {
     fn ser(&self) -> Result<IVec, ErrorCode> {
         let mut buf = BytesMut::new();
 
-        if buf.write_string(&self.tenant_id).is_ok()
+        if buf.write_string(&self.tenant).is_ok()
             && buf.write_scalar(&self.delimiter).is_ok()
             && buf.write_string(&self.database_name).is_ok()
         {
@@ -49,13 +49,13 @@ impl SledOrderedSerde for DatabaseLookupKey {
     fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
     where Self: Sized {
         let mut buf_read = Cursor::new(v);
-        let tenant_id = buf_read.read_tenant_id(DB_LOOKUP_KEY_DELIMITER);
-        if let Ok(tenant_id) = tenant_id {
-            // read_tenant_id already put cursor at next byte of delimiter, no need advance cursor here.
+        let tenant = buf_read.read_tenant(DB_LOOKUP_KEY_DELIMITER);
+        if let Ok(tenant) = tenant {
+            // read_tenant already put cursor at next byte of delimiter, no need advance cursor here.
             let database_name_result = buf_read.read_string();
             if let Ok(database_name) = database_name_result {
                 return Ok(DatabaseLookupKey {
-                    tenant_id,
+                    tenant,
                     delimiter: DB_LOOKUP_KEY_DELIMITER,
                     database_name,
                 });
@@ -70,7 +70,7 @@ impl fmt::Display for DatabaseLookupKey {
         write!(
             f,
             "DatabaseLookupKey_{}-{}",
-            self.tenant_id, self.database_name
+            self.tenant, self.database_name
         )
     }
 }

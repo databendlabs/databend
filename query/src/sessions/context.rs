@@ -202,7 +202,7 @@ impl QueryContext {
     }
 
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
-        let tenent_id = self.get_tenant_id();
+        let tenent_id = self.get_tenant();
         let catalog = self.get_catalog();
         match catalog
             .get_database(tenent_id.as_str(), &new_database_name)
@@ -230,10 +230,6 @@ impl QueryContext {
         self.shared.get_current_user()
     }
 
-    pub fn get_tenant_id(&self) -> String {
-        self.shared.conf.query.tenant_id.clone()
-    }
-
     pub fn get_fuse_version(&self) -> String {
         self.version.clone()
     }
@@ -250,7 +246,7 @@ impl QueryContext {
         if self.shared.conf.query.proxy_mode {
             self.shared.get_current_tenant()
         } else {
-            self.shared.conf.query.tenant_id.clone()
+            self.shared.conf.query.tenant.clone()
         }
     }
 

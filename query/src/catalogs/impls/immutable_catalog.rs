@@ -64,7 +64,7 @@ impl ImmutableCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for ImmutableCatalog {
-    async fn get_database(&self, _tenant_id: &str, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         if db_name == "system" {
             return Ok(self.sys_db.clone());
         }
@@ -74,7 +74,7 @@ impl Catalog for ImmutableCatalog {
         )))
     }
 
-    async fn list_databases(&self, _tenant_id: &str) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
         Ok(vec![self.sys_db.clone()])
     }
 
@@ -107,11 +107,11 @@ impl Catalog for ImmutableCatalog {
 
     async fn get_table(
         &self,
-        tenant_id: &str,
+        tenant: &str,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
-        let _db = self.get_database(tenant_id, db_name).await?;
+        let _db = self.get_database(tenant, db_name).await?;
 
         let table = self
             .sys_db_meta
@@ -121,9 +121,9 @@ impl Catalog for ImmutableCatalog {
         Ok(table.clone())
     }
 
-    async fn list_tables(&self, tenant_id: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         // ensure db exists
-        let _db = self.get_database(tenant_id, db_name).await?;
+        let _db = self.get_database(tenant, db_name).await?;
         self.sys_db_meta.get_all_tables()
     }
 

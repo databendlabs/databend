@@ -74,13 +74,13 @@ impl CreateTableInterpreter {
         input_stream: Option<SendableDataBlockStream>,
         select_plan_node: Box<PlanNode>,
     ) -> Result<SendableDataBlockStream> {
-        let tenant_id = self.ctx.get_tenant_id();
+        let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog();
 
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
         catalog.create_table(self.plan.clone().into()).await?;
         let table = catalog
-            .get_table(tenant_id.as_str(), &self.plan.db, &self.plan.table)
+            .get_table(tenant.as_str(), &self.plan.db, &self.plan.table)
             .await?;
 
         // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',

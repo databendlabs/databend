@@ -59,7 +59,7 @@ impl Display for TableIdent {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableNameIndent {
-    pub tenant_id: String,
+    pub tenant: String,
     pub db_name: String,
     pub table_name: String,
 }
@@ -71,7 +71,7 @@ impl TableNameIndent {
         table_name: impl Into<String>,
     ) -> TableNameIndent {
         TableNameIndent {
-            tenant_id: tenant.into(),
+            tenant: tenant.into(),
             db_name: db_name.into(),
             table_name: table_name.into(),
         }
@@ -191,7 +191,7 @@ impl Display for TableInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateTableReq {
     pub if_not_exists: bool,
-    pub tenant_id: String,
+    pub tenant: String,
     pub db: String,
     pub table: String,
     pub table_meta: TableMeta,
@@ -205,7 +205,7 @@ pub struct CreateTableReply {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropTableReq {
     pub if_exists: bool,
-    pub tenant_id: String,
+    pub tenant: String,
     pub db: String,
     pub table: String,
 }
@@ -263,12 +263,12 @@ impl From<(&str, &str, &str)> for GetTableReq {
 
 impl GetTableReq {
     pub fn new(
-        tenant_id: impl Into<String>,
+        tenant: impl Into<String>,
         db_name: impl Into<String>,
         table_name: impl Into<String>,
     ) -> GetTableReq {
         GetTableReq {
-            inner: TableNameIndent::new(tenant_id, db_name, table_name),
+            inner: TableNameIndent::new(tenant, db_name, table_name),
         }
     }
 }
@@ -287,10 +287,10 @@ impl Deref for ListTableReq {
 }
 
 impl ListTableReq {
-    pub fn new(tenant_id: impl Into<String>, db_name: impl Into<String>) -> ListTableReq {
+    pub fn new(tenant: impl Into<String>, db_name: impl Into<String>) -> ListTableReq {
         ListTableReq {
             inner: DatabaseNameIdent {
-                tenant_id: tenant_id.into(),
+                tenant: tenant.into(),
                 db_name: db_name.into(),
             },
         }
