@@ -48,7 +48,7 @@ where T: DFPrimitiveType
     // know we don't have null values.
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let av = iter.into_iter().collect::<Vec<T>>();
-        DFPrimitiveArray::<T>::new_from_aligned_vec(av)
+        DFPrimitiveArray::<T>::new_from_vec(av)
     }
 }
 

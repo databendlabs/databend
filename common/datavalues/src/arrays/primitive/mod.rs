@@ -223,7 +223,7 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
     }
 
     /// Create a new DataArray by taking ownership of the Vec. This operation is zero copy.
-    pub fn new_from_aligned_vec(values: Vec<T>) -> Self {
+    pub fn new_from_vec(values: Vec<T>) -> Self {
         to_primitive::<T>(values, None)
     }
 
