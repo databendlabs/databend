@@ -190,7 +190,7 @@ Open http://127.0.0.1:16686/
 1. Compile with specific `RUSTFLAGS` and features. We can use `--bin` to specify binary.
 
    ```shell
-   RUSTFLAGS="--cfg tokio_unstable" mold --run cargo build --features tokio-console
+   RUSTFLAGS="--cfg tokio_unstable" cargo build --features tokio-console
    ```
 
 2. Run `databend-meta` or/and `databend-query`, remembering to set the log level of the program you need to diagnose to `TRACE`.
@@ -205,13 +205,24 @@ Open http://127.0.0.1:16686/
    databend-meta --single --log-level=TRACE # for meta
    ```
 
-   Note that diagnostics are currently only supported for a single program, so please ensure that **only one** program has a log level of `TRACE`. Otherwise, only the first program to occupy the port will be monitored.
-
 3. Run `tokio-console`.
 
    ```shell
    tokio-console # default connection: http://127.0.0.1:6669
    ```
+
+### Tips
+
+Note that tokio-console only supports diagnostics for a single program at a time, so please ensure that **only one** program has a log level of `TRACE`. Otherwise, only the first program to occupy the port will be monitored.
+
+If you need to diagnose multiple programs at the same time, consider using `TOKIO_CONSOLE_BIND` to assign different binds, for example:
+
+```shell
+TOKIO_CONSOLE_BIND=127.0.0.1:16667 LOG_LEVEL=TRACE target/debug/databend-query
+tokio-console http://127.0.0.1:16667 # for query console, http://127.0.0.1:16667
+databend-meta --single --log-level=TRACE
+tokio-console # for meta console, http://127.0.0.1:6669
+```
 
 ### Examples
 
