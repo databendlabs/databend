@@ -165,13 +165,6 @@ impl ArithmeticMinusFunction {
     }
 
     pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
-        if args.len() != 2 {
-            return Err(ErrorCode::BadArguments(format!(
-                "Invalid argument lengths {} for get_monotonicity",
-                args.len()
-            )));
-        }
-
         // For expression f(x) - g(x), only when both f(x) and g(x) are monotonic and have
         // opposite 'is_positive' can we get a monotonic expression.
         let f_x = &args[0];
