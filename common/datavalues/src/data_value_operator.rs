@@ -117,10 +117,3 @@ impl std::fmt::Display for DataValueLogicOperator {
         write!(f, "{}", display)
     }
 }
-
-pub trait IntDiv<Rhs = Self> {
-    type Output;
-
-    #[must_use]
-    fn int_div(self, rhs: Rhs) -> Self::Output;
-}
