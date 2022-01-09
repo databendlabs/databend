@@ -26,10 +26,12 @@ fn test_write_and_read() -> Result<()> {
     buff.write_scalar(&8u8)?;
     buff.write_scalar(&16u16)?;
     buff.write_scalar(&32u32)?;
+    buff.write_scalar(&'🐳')?;
     buff.write_string("33")?;
     buff.write_opt_scalar(&Some(64i64))?;
     buff.write_opt_scalar::<u8>(&None)?;
     buff.write_uvarint(1024u64)?;
+    buff.write_string("tenant1/system_db")?;
 
     let mut read = Cursor::new(buffer);
     let res: u8 = read.read_scalar().unwrap();
@@ -40,6 +42,9 @@ fn test_write_and_read() -> Result<()> {
 
     let res: u32 = read.read_scalar().unwrap();
     assert_eq!(res, 32);
+
+    let res: char = read.read_scalar().unwrap();
+    assert_eq!(res, '🐳');
 
     let res = read.read_string().unwrap();
     assert_eq!(res, "33");
@@ -52,6 +57,9 @@ fn test_write_and_read() -> Result<()> {
 
     let res: u64 = read.read_uvarint().unwrap();
     assert_eq!(res, 1024);
+
+    let res: String = read.read_tenant(b'/').unwrap();
+    assert_eq!(res, "tenant1");
 
     Ok(())
 }

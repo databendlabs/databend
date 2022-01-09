@@ -34,6 +34,20 @@ async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+async fn test_meta_api_database_create_get_drop_in_diff_tenant() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_meta_ut!();
+    let _ent = ut_span.enter();
+
+    let (_tc, addr) = start_metasrv().await?;
+
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+
+    MetaApiTestSuite {}
+        .database_create_get_drop_in_diff_tenant(&client)
+        .await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_database_list() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();

@@ -121,9 +121,11 @@ where T: io::Read + io::BufRead
     }
 
     fn read_tenant(&mut self, delimiter: u8) -> Result<String> {
+        self.read_uvarint()?;
         let mut buffer = vec![];
-        self.read_until(delimiter, &mut buffer)?;
+        let tenant_len = self.read_until(delimiter, &mut buffer)?;
 
-        Ok(String::from_utf8_lossy(&buffer[..buffer.len() - 1]).to_string())
+        let res = String::from_utf8_lossy(&buffer[0..tenant_len - 1]).to_string();
+        Ok(res)
     }
 }

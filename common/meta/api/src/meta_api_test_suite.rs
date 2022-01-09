@@ -177,6 +177,127 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
+    pub async fn database_create_get_drop_in_diff_tenant<MT: MetaApi>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant1 = "tenant1";
+        let tenant2 = "tenant2";
+        tracing::info!("--- tenant1 create db1");
+        {
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                tenant: tenant1.to_string(),
+                db: "db1".to_string(),
+                meta: DatabaseMeta {
+                    engine: "github".to_string(),
+                    ..Default::default()
+                },
+            };
+
+            let res = mt.create_database(req).await;
+            tracing::info!("create database res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(1, res.database_id, "first database id is 1");
+        }
+
+        tracing::info!("--- tenant1 create db2");
+        {
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                tenant: tenant1.to_string(),
+                db: "db2".to_string(),
+                meta: DatabaseMeta {
+                    engine: "github".to_string(),
+                    ..Default::default()
+                },
+            };
+
+            let res = mt.create_database(req).await;
+            tracing::info!("create database res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(2, res.database_id, "second database id is 2");
+        }
+
+        tracing::info!("--- tenant2 create db1");
+        {
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                tenant: tenant2.to_string(),
+                db: "db1".to_string(),
+                meta: DatabaseMeta {
+                    engine: "github".to_string(),
+                    ..Default::default()
+                },
+            };
+
+            let res = mt.create_database(req).await;
+            tracing::info!("create database res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(3, res.database_id, "third database id is 3");
+        }
+
+        tracing::info!("--- tenant1 get db1");
+        {
+            let res = mt.get_database(GetDatabaseReq::new(tenant1, "db1")).await;
+            tracing::debug!("get present database res: {:?}", res);
+            let res = res?;
+            assert_eq!(1, res.database_id, "db1 id is 1");
+            assert_eq!("db1".to_string(), res.db, "db1.db is db1");
+        }
+
+        tracing::info!("--- tenant1 get absent db");
+        {
+            let res = mt
+                .get_database(GetDatabaseReq::new(tenant1, "absent"))
+                .await;
+            tracing::debug!("=== get absent database res: {:?}", res);
+            assert!(res.is_err());
+            let res = res.unwrap_err();
+            assert_eq!(ErrorCode::UnknownDatabase("").code(), res.code());
+            assert_eq!("absent".to_string(), res.message());
+        }
+
+        tracing::info!("--- tenant2 get tenant1's db2");
+        {
+            let res = mt.get_database(GetDatabaseReq::new(tenant2, "db2")).await;
+            tracing::debug!("=== get other tenant's database res: {:?}", res);
+            assert!(res.is_err());
+            let res = res.unwrap_err();
+            assert_eq!(ErrorCode::UnknownDatabase("").code(), res.code());
+            assert_eq!("db2".to_string(), res.message());
+        }
+
+        tracing::info!("--- drop db2");
+        {
+            mt.drop_database(DropDatabaseReq {
+                if_exists: false,
+                tenant: tenant1.to_string(),
+                db: "db2".to_string(),
+            })
+            .await?;
+        }
+
+        tracing::info!("--- tenant1 get db2 should not found");
+        {
+            let res = mt.get_database(GetDatabaseReq::new(tenant1, "db2")).await;
+            let err = res.unwrap_err();
+            assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
+        }
+
+        tracing::info!("--- tenant1 drop db2 with if_exists=true returns no error");
+        {
+            mt.drop_database(DropDatabaseReq {
+                if_exists: true,
+                tenant: tenant1.to_string(),
+                db: "db2".to_string(),
+            })
+            .await?;
+        }
+
+        Ok(())
+    }
+
     pub async fn database_list<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         tracing::info!("--- prepare db1 and db2");
         let tenant = "tenant1";

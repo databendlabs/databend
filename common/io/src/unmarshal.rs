@@ -113,3 +113,13 @@ impl Unmarshal<bool> for bool {
         scratch[0] != 0
     }
 }
+
+impl Unmarshal<char> for char {
+    fn unmarshal(scratch: &[u8]) -> char {
+        let bits = u32::from(scratch[0])
+            | u32::from(scratch[1]) << 8
+            | u32::from(scratch[2]) << 16
+            | u32::from(scratch[3]) << 24;
+        Self::from_u32(bits).unwrap_or(' ')
+    }
+}
