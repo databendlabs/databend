@@ -56,7 +56,7 @@ where T: DFPrimitiveType
 impl<T> FromTrustedLenIterator<T> for DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
-    // We use AlignedVec because it is way faster than Arrows builder. We can do this because we
+    // We use Vec because it is way faster than Arrows builder. We can do this because we
     // know we don't have null values.
     fn from_iter_trusted_length<I: TrustedLen<Item = T>>(iter: I) -> Self {
         let values = unsafe { Buffer::from_trusted_len_iter_unchecked(iter) };

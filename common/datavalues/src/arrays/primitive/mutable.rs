@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::buffer::MutableBuffer;
 
 use crate::arrays::mutable::MutableArrayBuilder;
 use crate::series::IntoSeries;
@@ -30,7 +29,7 @@ pub struct MutablePrimitiveArrayBuilder<T, const NULLABLE: bool>
 where T: DFPrimitiveType
 {
     data_type: DataType,
-    values: MutableBuffer<T>,
+    values: Vec<T>,
     validity: Option<MutableBitmap>,
 }
 
@@ -107,16 +106,12 @@ where T: DFPrimitiveType
     pub fn with_capacity(capacity: usize) -> Self {
         MutablePrimitiveArrayBuilder {
             data_type: T::data_type(),
-            values: MutableBuffer::<T>::with_capacity(capacity),
+            values: Vec::<T>::with_capacity(capacity),
             validity: None,
         }
     }
 
-    pub fn from_data(
-        data_type: DataType,
-        values: MutableBuffer<T>,
-        validity: Option<MutableBitmap>,
-    ) -> Self {
+    pub fn from_data(data_type: DataType, values: Vec<T>, validity: Option<MutableBitmap>) -> Self {
         Self {
             data_type,
             values,
@@ -124,7 +119,7 @@ where T: DFPrimitiveType
         }
     }
 
-    pub fn values(&self) -> &MutableBuffer<T> {
+    pub fn values(&self) -> &Vec<T> {
         &self.values
     }
 

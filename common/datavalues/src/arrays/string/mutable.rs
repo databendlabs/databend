@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::BinaryArray;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::buffer::MutableBuffer;
 
 use crate::arrays::mutable::MutableArrayBuilder;
 use crate::series::IntoSeries;
@@ -26,8 +25,8 @@ use crate::DataType;
 
 pub struct MutableStringArrayBuilder<const NULLABLE: bool> {
     data_type: DataType,
-    offsets: MutableBuffer<i64>,
-    values: MutableBuffer<u8>,
+    offsets: Vec<i64>,
+    values: Vec<u8>,
     validity: Option<MutableBitmap>,
 }
 
@@ -99,21 +98,17 @@ impl<const NULLABLE: bool> MutableStringArrayBuilder<NULLABLE> {
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
-        let mut offsets = MutableBuffer::<i64>::with_capacity(capacity + 1);
+        let mut offsets = Vec::<i64>::with_capacity(capacity + 1);
         offsets.push(0i64);
         Self {
             data_type: DataType::String,
             offsets,
-            values: MutableBuffer::<u8>::with_capacity(capacity),
+            values: Vec::<u8>::with_capacity(capacity),
             validity: None,
         }
     }
 
-    pub fn from_data(
-        offsets: MutableBuffer<i64>,
-        values: MutableBuffer<u8>,
-        validity: Option<MutableBitmap>,
-    ) -> Self {
+    pub fn from_data(offsets: Vec<i64>, values: Vec<u8>, validity: Option<MutableBitmap>) -> Self {
         Self {
             data_type: DataType::String,
             offsets,
