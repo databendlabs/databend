@@ -10,7 +10,7 @@ use common_meta_sled_store::SledOrderedSerde;
 use serde::Deserialize;
 use serde::Serialize;
 
-const DB_LOOKUP_KEY_DELIMITER: u8 = '/' as u8;
+const DB_LOOKUP_KEY_DELIMITER: u8 = b'/';
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DatabaseLookupKey {
