@@ -14,7 +14,6 @@
 
 use std::fmt;
 
-use common_exception::Result;
 use enumflags2::BitFlags;
 
 use crate::UserPrivilegeSet;
@@ -28,10 +27,19 @@ pub enum GrantObject {
 }
 
 impl GrantObject {
-    /// Some global privileges can not be granted to a database or table, for example, a KILL
-    /// statement is meaningless for a table.
-    pub fn allow_privilege(&self, privilege: UserPrivilegeType) -> bool {
-        self.available_privileges().has_privilege(privilege)
+    /// Comparing the grant objects, the Database object contains all the Table objects inside it.
+    /// Global object contains all the Database objects.
+    pub fn contains(&self, object: &GrantObject) -> bool {
+        match (self, object) {
+            (GrantObject::Global, _) => true,
+            (GrantObject::Database(_), GrantObject::Global) => false,
+            (GrantObject::Database(lhs), GrantObject::Database(rhs)) => lhs == rhs,
+            (GrantObject::Database(lhs), GrantObject::Table(rhs, _)) => lhs == rhs,
+            (GrantObject::Table(lhs_db, lhs_table), GrantObject::Table(rhs_db, rhs_table)) => {
+                (lhs_db == rhs_db) && (lhs_table == rhs_table)
+            }
+            (GrantObject::Table(_, _), _) => false,
+        }
     }
 
     /// Global, database and table has different available privileges
@@ -41,17 +49,6 @@ impl GrantObject {
             GrantObject::Database(_) => UserPrivilegeSet::available_privileges_on_database(),
             GrantObject::Table(_, _) => UserPrivilegeSet::available_privileges_on_table(),
         }
-    }
-
-    /// Check if there's any privilege which can not be granted to this GrantObject
-    pub fn validate_privileges(&self, privileges: UserPrivilegeSet) -> Result<()> {
-        let ok = BitFlags::from(privileges)
-            .iter()
-            .all(|p| self.allow_privilege(p));
-        if !ok {
-            return Err(common_exception::ErrorCode::IllegalGrant("Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used"));
-        }
-        Ok(())
     }
 }
 
@@ -88,64 +85,19 @@ impl GrantEntry {
         }
     }
 
-    pub fn verify_global_privilege(
+    pub fn verify_privilege(
         &self,
         user: &str,
         host: &str,
+        object: &GrantObject,
         privilege: UserPrivilegeType,
     ) -> bool {
         if !self.matches_user_host(user, host) {
             return false;
         }
 
-        if self.object != GrantObject::Global {
-            return false;
-        }
-
-        self.privileges.contains(privilege)
-    }
-
-    pub fn verify_database_privilege(
-        &self,
-        user: &str,
-        host: &str,
-        db: &str,
-        privilege: UserPrivilegeType,
-    ) -> bool {
-        if !self.matches_user_host(user, host) {
-            return false;
-        }
-
-        if !match &self.object {
-            GrantObject::Global => true,
-            GrantObject::Database(ref expected_db) => expected_db == db,
-            _ => false,
-        } {
-            return false;
-        }
-
-        self.privileges.contains(privilege)
-    }
-
-    pub fn verify_table_privilege(
-        &self,
-        user: &str,
-        host: &str,
-        db: &str,
-        table: &str,
-        privilege: UserPrivilegeType,
-    ) -> bool {
-        if !self.matches_user_host(user, host) {
-            return false;
-        }
-
-        if !match &self.object {
-            GrantObject::Global => true,
-            GrantObject::Database(ref expected_db) => expected_db == db,
-            GrantObject::Table(ref expected_db, ref expected_table) => {
-                expected_db == db && expected_table == table
-            }
-        } {
+        // the verified object should be smaller than the object inside my grant entry.
+        if !self.object.contains(object) {
             return false;
         }
 
@@ -212,20 +164,9 @@ impl UserGrantSet {
         object: &GrantObject,
         privilege: UserPrivilegeType,
     ) -> bool {
-        match object {
-            GrantObject::Global => self
-                .grants
-                .iter()
-                .any(|e| e.verify_global_privilege(user, host, privilege)),
-            GrantObject::Table(db, table) => self
-                .grants
-                .iter()
-                .any(|e| e.verify_table_privilege(user, host, db, table, privilege)),
-            GrantObject::Database(db) => self
-                .grants
-                .iter()
-                .any(|e| e.verify_database_privilege(user, host, db, privilege)),
-        }
+        self.grants
+            .iter()
+            .any(|e| e.verify_privilege(user, host, object, privilege))
     }
 
     pub fn grant_privileges(

@@ -20,7 +20,7 @@ use common_meta_types::GrantObject;
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 
-pub async fn grant_object_exists_or_err(
+pub async fn validate_grant_object_exists(
     ctx: &Arc<QueryContext>,
     object: &GrantObject,
 ) -> Result<()> {
