@@ -25,7 +25,6 @@ async fn builder() {
         .region("us-east-1")
         .credential(Credential::hmac("access-key", "secret-key"))
         .endpoint("http://localhost:9000")
-        .disable_ssl()
         .enable_path_style()
         .enable_signature_v2()
         .finish()

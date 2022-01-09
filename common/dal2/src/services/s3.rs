@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::pin::Pin;
+use std::str::FromStr;
 use std::task::Context;
 use std::task::Poll;
 
@@ -34,10 +36,11 @@ pub struct Builder {
     bucket: String,
     region: String,
     credential: Option<Credential>,
+    /// endpoint must be full uri or a uri template, e.g.
+    /// - https://s3.amazonaws.com
+    /// - http://127.0.0.1:3000
     endpoint: Option<String>,
 
-    /// disable_ssl controls whether to use SSL when connecting.
-    disable_ssl: bool,
     /// enable_path_style controls whether to use path style or virtual host style.
     ///
     /// ## TODO
@@ -83,12 +86,6 @@ impl Builder {
         self
     }
 
-    pub fn disable_ssl(&mut self) -> &mut Self {
-        self.disable_ssl = true;
-
-        self
-    }
-
     pub fn enable_path_style(&mut self) -> &mut Self {
         self.enable_path_style = true;
 
@@ -102,10 +99,6 @@ impl Builder {
     }
 
     pub async fn finish(&mut self) -> Result<Backend> {
-        use aws_endpoint::partition::endpoint::Metadata;
-        use aws_endpoint::partition::endpoint::Protocol;
-        use aws_endpoint::partition::endpoint::SignatureVersion;
-
         if self.bucket.is_empty() || self.region.is_empty() {
             return Err(Error::BackendConfigurationInvalid {
                 key: "bucket".to_string(),
@@ -125,56 +118,23 @@ impl Builder {
 
         let mut cfg = AwsS3::config::Builder::from(&aws_cfg);
 
-        // ## Safety
-        //
-        // aws s3 sdk requires a static str for region, so we crate a static string here.
-        // This value is scoped under `finish` function only, changed once and used
-        // once while initializing the client, so it must be safe.
-        static mut REGION: String = String::new();
-        unsafe { REGION = self.region.clone() };
         // TODO: Maybe we can
         //
         // - use "default" as the default region.
         // - use "us-east-1" as the default region.
         // - detect the region at runtime via `ListBuckets`.
-        cfg = cfg.region(AwsS3::Region::new(unsafe { REGION.as_str() }));
+        cfg = cfg.region(AwsS3::Region::new(Cow::from(self.region.clone())));
 
-        // ## Safety
-        //
-        // aws s3 sdk requires a static str for uri_template, so we crate a static string here.
-        // This value is scoped under `finish` function only, changed once and used
-        // once while initializing the client, so it must be safe.
-        // The default value for it is "https://s3.{region}.amazonaws.com".
-        static mut URI_TEMPLATE: String = String::new();
-        unsafe {
-            URI_TEMPLATE = match &self.endpoint {
-                Some(v) => v.clone(),
-                None => "https://s3.{region}.amazonaws.com".to_string(),
-            };
+        // Load users input first, if user not input, we will fallback to aws
+        // default load logic.
+        if let Some(endpoint) = &self.endpoint {
+            cfg = cfg.endpoint_resolver(AwsS3::Endpoint::immutable(
+                http::Uri::from_str(endpoint).map_err(|_| Error::BackendConfigurationInvalid {
+                    key: "endpoint".to_string(),
+                    value: endpoint.clone(),
+                })?,
+            ));
         }
-
-        let endpoint_metadata = Metadata {
-            uri_template: unsafe { URI_TEMPLATE.as_str() },
-            protocol: if self.disable_ssl {
-                Protocol::Http
-            } else {
-                Protocol::Https
-            },
-            signature_versions: SignatureVersion::V4,
-            credential_scope: aws_endpoint::CredentialScope::builder().build(),
-        };
-
-        cfg = cfg.endpoint_resolver(aws_endpoint::PartitionResolver::new(
-            aws_endpoint::Partition::builder()
-                // Use the same value from aws sdk.
-                .id("aws")
-                // Capture all valid ascii strings.
-                .region_regex(r#"[\w\d-]+"#)
-                .default_endpoint(endpoint_metadata)
-                .build()
-                .expect("invalid partition"),
-            vec![],
-        ));
 
         // Load users input first, if user not input, we will fallback to aws
         // default load logic.
