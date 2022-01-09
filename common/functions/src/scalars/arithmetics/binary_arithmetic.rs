@@ -24,7 +24,6 @@ use super::arithmetic::ArithmeticTrait;
 use crate::scalars::ArithmeticDivFunction;
 use crate::scalars::ArithmeticIntDivFunction;
 use crate::scalars::ArithmeticMinusFunction;
-use crate::scalars::ArithmeticModuloFunction;
 use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::Function;
@@ -87,7 +86,7 @@ where T: ArithmeticTrait + Clone + Sync + Send + 'static
             DataValueBinaryOperator::Mul => ArithmeticMulFunction::get_monotonicity(args),
             DataValueBinaryOperator::Div => ArithmeticDivFunction::get_monotonicity(args),
             DataValueBinaryOperator::IntDiv => ArithmeticIntDivFunction::get_monotonicity(args),
-            DataValueBinaryOperator::Modulo => ArithmeticModuloFunction::get_monotonicity(args),
+            DataValueBinaryOperator::Modulo => Ok(Monotonicity::default()),
         }
     }
 }
