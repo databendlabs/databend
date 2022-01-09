@@ -187,7 +187,7 @@ impl IntervalFunctionFactory {
             .into_no_null_iter()
             .zip(rhs.into_no_null_iter())
             .map(|(t, d)| f(t, d))
-            .collect::<Result<AlignedVec<R>>>()?;
+            .collect::<Result<Vec<R>>>()?;
 
         let validity = combine_validities(lhs.inner().validity(), rhs.inner().validity());
         let result = DFPrimitiveArray::<R>::new_from_owned_with_null_bitmap(data, validity);

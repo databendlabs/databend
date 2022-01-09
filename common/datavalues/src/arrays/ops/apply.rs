@@ -147,7 +147,7 @@ impl<'a> ArrayApply<'a, bool, bool> for DFBooleanArray {
         F: Fn(Option<bool>) -> S + Copy,
         S: DFPrimitiveType,
     {
-        let av: AlignedVec<_> = self.into_iter().map(f).collect();
+        let av: Vec<_> = self.into_iter().map(f).collect();
         to_primitive::<S>(av, None)
     }
 
