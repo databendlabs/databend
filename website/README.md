@@ -46,7 +46,7 @@ import TabItem from '@theme/TabItem';
 </Tabs>
 ```
 
-Take [Deploy](../docs/overview/building-and-running.md) for example. Visit [Docusaurus - Tabs](https://docusaurus.io/docs/markdown-features/tabs) for detailed reference.
+Take [Deploy](../docs/user/index.md) for example. Visit [Docusaurus - Tabs](https://docusaurus.io/docs/markdown-features/tabs) for detailed reference.
 
 ### Admonitions
 
@@ -58,4 +58,4 @@ Some **content** with _markdown_ `syntax`.
 :::
 ```
 
-Take [Deploy](../docs/overview/building-and-running.md) for example. Visit [Docusaurus - Admonitions](https://docusaurus.io/docs/markdown-features/admonitions) for detailed reference.
+Take [Deploy](../docs/user/index.md) for example. Visit [Docusaurus - Admonitions](https://docusaurus.io/docs/markdown-features/admonitions) for detailed reference.
