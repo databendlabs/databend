@@ -5,6 +5,7 @@ on:
     branches:
       - main
     paths-ignore:
+      - 'docs/**'
       - 'website/**'
 
 concurrency:
