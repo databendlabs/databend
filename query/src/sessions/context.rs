@@ -246,7 +246,7 @@ impl QueryContext {
         if self.shared.conf.query.proxy_mode {
             self.shared.get_current_tenant()
         } else {
-            self.shared.conf.query.tenant.clone()
+            self.shared.get_tenant()
         }
     }
 

@@ -131,9 +131,8 @@ impl QueryContextShared {
         self.session.get_current_user()
     }
 
-    #[inline]
-    pub fn get_tenant(&self) -> &str {
-        self.conf.query.tenant.as_str()
+    pub fn get_tenant(&self) -> String {
+        self.conf.query.tenant_id.clone()
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
@@ -163,7 +162,7 @@ impl QueryContextShared {
     async fn get_table_to_cache(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
         let tenant = self.get_tenant();
         let catalog = self.get_catalog();
-        let cache_table = catalog.get_table(tenant, database, table).await?;
+        let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
 
         let table_meta_key = (database.to_string(), table.to_string());
         let mut tables_refs = self.tables_refs.lock();

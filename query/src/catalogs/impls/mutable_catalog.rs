@@ -92,12 +92,12 @@ impl MutableCatalog {
             Arc::new(meta_remote)
         };
 
-        let tenant = conf.query.tenant.as_str();
+        let tenant = conf.query.tenant_id.clone();
 
         // Create default database.
         let req = CreateDatabaseReq {
             if_not_exists: true,
-            tenant: tenant.to_string(),
+            tenant,
             db: "default".to_string(),
             meta: DatabaseMeta {
                 engine: "".to_string(),

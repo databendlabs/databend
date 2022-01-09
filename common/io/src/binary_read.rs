@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::io;
-use std::io::Read;
 use std::mem::MaybeUninit;
 
 use common_exception::ErrorCode;
