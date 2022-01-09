@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::task::Context;
@@ -30,16 +31,28 @@ use crate::ops::Reader;
 
 #[derive(Default, Debug, Clone)]
 pub struct Builder {
-    pub root: Option<String>,
+    root: Option<String>,
 
-    pub bucket: String,
-    pub credential: Option<Credential>,
-    pub endpoint: Option<String>,
+    bucket: String,
+    region: String,
+    credential: Option<Credential>,
+    /// endpoint must be full uri or a uri template, e.g.
+    /// - https://s3.amazonaws.com
+    /// - http://127.0.0.1:3000
+    endpoint: Option<String>,
 
-    /// disable_ssl controls whether to use SSL when connecting.
-    pub disable_ssl: bool,
     /// enable_path_style controls whether to use path style or virtual host style.
-    pub enable_path_style: bool,
+    ///
+    /// ## TODO
+    ///
+    /// It seems sdk doesn't support path style so far.
+    enable_path_style: bool,
+    /// enable_signature_v2 whether to use signature v2 or not.
+    ///
+    /// ## TODO
+    ///
+    /// It seems sdk doesn't support signature v2 so far.
+    enable_signature_v2: bool,
 }
 
 impl Builder {
@@ -51,6 +64,12 @@ impl Builder {
 
     pub fn bucket(&mut self, bucket: &str) -> &mut Self {
         self.bucket = bucket.to_string();
+
+        self
+    }
+
+    pub fn region(&mut self, region: &str) -> &mut Self {
+        self.region = region.to_string();
 
         self
     }
@@ -67,20 +86,20 @@ impl Builder {
         self
     }
 
-    pub fn disable_ssl(&mut self) -> &mut Self {
-        self.disable_ssl = true;
-
-        self
-    }
-
     pub fn enable_path_style(&mut self) -> &mut Self {
         self.enable_path_style = true;
 
         self
     }
 
-    pub async fn finish(self) -> Result<Backend> {
-        if self.bucket.is_empty() {
+    pub fn enable_signature_v2(&mut self) -> &mut Self {
+        self.enable_signature_v2 = true;
+
+        self
+    }
+
+    pub async fn finish(&mut self) -> Result<Backend> {
+        if self.bucket.is_empty() || self.region.is_empty() {
             return Err(Error::BackendConfigurationInvalid {
                 key: "bucket".to_string(),
                 value: "".to_string(),
@@ -88,8 +107,8 @@ impl Builder {
         }
 
         // strip the prefix of "/" in root only once.
-        let root = if let Some(root) = self.root {
-            root.strip_prefix('/').unwrap_or(&root).to_string()
+        let root = if let Some(root) = &self.root {
+            root.strip_prefix('/').unwrap_or(root).to_string()
         } else {
             String::new()
         };
@@ -99,20 +118,27 @@ impl Builder {
 
         let mut cfg = AwsS3::config::Builder::from(&aws_cfg);
 
+        // TODO: Maybe we can
+        //
+        // - use "default" as the default region.
+        // - use "us-east-1" as the default region.
+        // - detect the region at runtime via `ListBuckets`.
+        cfg = cfg.region(AwsS3::Region::new(Cow::from(self.region.clone())));
+
         // Load users input first, if user not input, we will fallback to aws
         // default load logic.
-        if let Some(endpoint) = self.endpoint {
+        if let Some(endpoint) = &self.endpoint {
             cfg = cfg.endpoint_resolver(AwsS3::Endpoint::immutable(
-                http::Uri::from_str(&endpoint).map_err(|_| Error::BackendConfigurationInvalid {
+                http::Uri::from_str(endpoint).map_err(|_| Error::BackendConfigurationInvalid {
                     key: "endpoint".to_string(),
-                    value: endpoint.to_string(),
+                    value: endpoint.clone(),
                 })?,
             ));
         }
 
         // Load users input first, if user not input, we will fallback to aws
         // default load logic.
-        if let Some(cred) = self.credential {
+        if let Some(cred) = &self.credential {
             match cred {
                 Credential::HMAC {
                     access_key_id,
@@ -133,12 +159,10 @@ impl Builder {
             }
         }
 
-        // TODO: support disable_ssl and enable_path_style.
-
         Ok(Backend {
             // Make `/` as the default of root.
             root,
-            bucket: self.bucket,
+            bucket: self.bucket.clone(),
             client: AwsS3::Client::from_conf(cfg.build()),
         })
     }
