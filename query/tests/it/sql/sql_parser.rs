@@ -52,6 +52,7 @@ use databend_query::sql::statements::DfShowTables;
 use databend_query::sql::statements::DfShowUDF;
 use databend_query::sql::statements::DfTruncateTable;
 use databend_query::sql::statements::DfUseDatabase;
+use databend_query::sql::statements::DfUseTenant;
 use databend_query::sql::*;
 use sqlparser::ast::*;
 use sqlparser::dialect::GenericDialect;
@@ -439,18 +440,48 @@ fn show_functions_tests() -> Result<()> {
 }
 
 #[test]
-fn use_database_test() -> Result<()> {
+fn use_test() -> Result<()> {
     expect_parse_ok(
         "USe db1",
         DfStatement::UseDatabase(DfUseDatabase {
             name: ObjectName(vec![Ident::new("db1")]),
         }),
     )?;
+
     expect_parse_ok(
         "use db1",
         DfStatement::UseDatabase(DfUseDatabase {
             name: ObjectName(vec![Ident::new("db1")]),
         }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn sudo_command_test() -> Result<()> {
+    expect_parse_ok(
+        "use `tenant`",
+        DfStatement::UseDatabase(DfUseDatabase {
+            name: ObjectName(vec![Ident::with_quote('`', "tenant")]),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "sudo use tenant 'xx'",
+        DfStatement::UseTenant(DfUseTenant {
+            name: ObjectName(vec![Ident::with_quote('\'', "xx")]),
+        }),
+    )?;
+
+    expect_parse_err(
+        "sudo yy",
+        String::from("sql parser error: Expected Unsupported sudo command, found: yy"),
+    )?;
+
+    expect_parse_err(
+        "sudo use xx",
+        String::from("sql parser error: Expected Unsupported sudo command, found: xx"),
     )?;
 
     Ok(())

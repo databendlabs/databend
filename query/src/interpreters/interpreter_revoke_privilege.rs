@@ -20,7 +20,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::interpreters::interpreter_common::grant_object_exists_or_err;
+use crate::interpreters::interpreter_common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -50,7 +50,7 @@ impl Interpreter for RevokePrivilegeInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
 
-        grant_object_exists_or_err(&self.ctx, &plan.on).await?;
+        validate_grant_object_exists(&self.ctx, &plan.on).await?;
 
         // TODO: check user existence
         // TODO: check privilege on granting on the grant object
@@ -59,7 +59,7 @@ impl Interpreter for RevokePrivilegeInterpreter {
         let user_mgr = self.ctx.get_user_manager();
         user_mgr
             .revoke_user_privileges(
-                tenant,
+                &tenant,
                 &plan.username,
                 &plan.hostname,
                 plan.on,

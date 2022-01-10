@@ -12,7 +12,7 @@ tag=$(get_latest_tag "datafuselabs/databend")
 
 BASE_DIR=$(pwd)
 echo "Starting standalone DatabendQuery(release)"
-${BASE_DIR}/scripts/deploy/databend-query-standalone.sh release
+${BASE_DIR}/scripts/ci/deploy/databend-query-standalone.sh release
 
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests/perfs" || exit
@@ -31,7 +31,7 @@ python3 perfs.py --output "${d_pull}" --bin "${BASE_DIR}/target/release/databend
 ## run perf for latest release
 if [ ! -d "${d_release}" ]; then
 	mkdir -p "${d_release}"
-	${BASE_DIR}/scripts/deploy/databend-query-standalone-from-release.sh "${tag}"
+	${BASE_DIR}/scripts/ci/deploy/databend-query-standalone-from-release.sh "${tag}"
 	python3 perfs.py --output "${d_release}" --bin "${BASE_DIR}/target/release/databend-benchmark" --host 127.0.0.1 --port 9001
 fi
 

@@ -51,7 +51,7 @@ impl Interpreter for CreatUDFInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
         let udf = plan.udf;
-        let create_udf = user_mgr.add_udf(tenant, udf).await;
+        let create_udf = user_mgr.add_udf(&tenant, udf).await;
         if plan.if_not_exists {
             create_udf.or_else(|e| {
                 // UDFAlreadyExists(4072)

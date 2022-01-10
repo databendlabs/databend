@@ -4,7 +4,7 @@
  
 <h4 align="center">
   <a href="https://databend.rs">Website</a> |
-  <a href="https://github.com/datafuselabs/databend/issues/746">Roadmap</a> |
+  <a href="https://github.com/datafuselabs/databend/issues/3706">Roadmap</a> |
   <a href="https://databend.rs/user">Documentation</a>
 </h4>
 

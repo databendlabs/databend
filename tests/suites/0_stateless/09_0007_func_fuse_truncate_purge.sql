@@ -12,7 +12,7 @@ insert into t values (7);
 select count(*) from fuse_history('db_09_0007', 't');
 
 -- truncate table will remove all the historical data but the latest snapshot
--- only the latest snapshot will be ketp, no segments or block, but unfortunately, we can not verify it by sql (yet)
+-- only the latest snapshot will be kept, no segments or block, but unfortunately, we can not verify it by sql (yet)
 truncate table 't' purge;
 -- expect 1 snapshot left
 select count(*) from fuse_history('db_09_0007', 't');

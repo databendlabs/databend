@@ -27,7 +27,6 @@ use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function;
-use crate::scalars::Monotonicity;
 use crate::try_binary_arithmetic;
 use crate::with_match_primitive_type;
 
@@ -112,16 +111,7 @@ impl ArithmeticModuloFunction {
     }
 
     pub fn desc() -> ArithmeticDescription {
-        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .monotonicity()
-                .num_arguments(2),
-        )
-    }
-
-    pub fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {
-        //TODO
-        Ok(Monotonicity::default())
+        ArithmeticDescription::creator(Box::new(Self::try_create_func))
+            .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }

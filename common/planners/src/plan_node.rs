@@ -61,6 +61,7 @@ use crate::SortPlan;
 use crate::StagePlan;
 use crate::TruncateTablePlan;
 use crate::UseDatabasePlan;
+use crate::UseTenantPlan;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
@@ -91,6 +92,7 @@ pub enum PlanNode {
     OptimizeTable(OptimizeTablePlan),
     TruncateTable(TruncateTablePlan),
     UseDatabase(UseDatabasePlan),
+    UseTenant(UseTenantPlan),
     SetVariable(SettingPlan),
     Insert(InsertPlan),
     Copy(CopyPlan),
@@ -142,6 +144,7 @@ impl PlanNode {
             PlanNode::SetVariable(v) => v.schema(),
             PlanNode::Sort(v) => v.schema(),
             PlanNode::UseDatabase(v) => v.schema(),
+            PlanNode::UseTenant(v) => v.schema(),
             PlanNode::Insert(v) => v.schema(),
             PlanNode::ShowCreateTable(v) => v.schema(),
             PlanNode::SubQueryExpression(v) => v.schema(),
@@ -192,6 +195,7 @@ impl PlanNode {
             PlanNode::SetVariable(_) => "SetVariablePlan",
             PlanNode::Sort(_) => "SortPlan",
             PlanNode::UseDatabase(_) => "UseDatabasePlan",
+            PlanNode::UseTenant(_) => "UseTenant",
             PlanNode::Insert(_) => "InsertPlan",
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
             PlanNode::SubQueryExpression(_) => "CreateSubQueriesSets",

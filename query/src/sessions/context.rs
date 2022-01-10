@@ -56,7 +56,7 @@ use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionRef;
 use crate::sessions::Settings;
-use crate::storages::cache::StorageCache;
+use crate::storages::cache::CacheManager;
 use crate::storages::Table;
 use crate::users::UserApiProvider;
 
@@ -216,6 +216,12 @@ impl QueryContext {
         Ok(())
     }
 
+    pub async fn set_current_tenant(&self, tenant: String) -> Result<()> {
+        self.shared.set_current_tenant(tenant);
+
+        Ok(())
+    }
+
     pub fn get_current_user(&self) -> Result<UserInfo> {
         self.shared.get_current_user()
     }
@@ -232,8 +238,12 @@ impl QueryContext {
         self.shared.conf.clone()
     }
 
-    pub fn get_tenant(&self) -> &str {
-        &self.shared.conf.query.tenant_id
+    pub fn get_tenant(&self) -> String {
+        if self.shared.conf.query.proxy_mode {
+            self.shared.get_current_tenant()
+        } else {
+            self.shared.conf.query.tenant_id.clone()
+        }
     }
 
     pub fn get_subquery_name(&self, _query: &PlanNode) -> String {
@@ -277,14 +287,14 @@ impl QueryContext {
         self.shared.get_query_str()
     }
 
-    // Get the client socket address.
+    /// Get the client socket address.
     pub fn get_client_address(&self) -> Option<SocketAddr> {
         self.shared.session.mutable_state.get_client_host()
     }
 
-    // Get table cache.
-    pub fn get_storage_cache(&self) -> Arc<Option<Box<dyn StorageCache>>> {
-        self.shared.session.sessions.get_storage_cache()
+    /// Get the storage cache manager
+    pub fn get_storage_cache_manager(&self) -> &CacheManager {
+        self.shared.session.sessions.get_storage_cache_manager()
     }
 
     // Get the storage data accessor by config.

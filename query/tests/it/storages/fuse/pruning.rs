@@ -13,11 +13,14 @@
 //  limitations under the License.
 //
 
+use std::sync::Arc;
+
 use common_base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
 use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
@@ -27,13 +30,27 @@ use common_planners::col;
 use common_planners::lit;
 use common_planners::Extras;
 use databend_query::catalogs::Catalog;
-use databend_query::storages::fuse::io::SnapshotReader;
-use databend_query::storages::fuse::pruning::apply_block_pruning;
+use databend_query::sessions::QueryContext;
+use databend_query::storages::fuse::io::MetaReaders;
+use databend_query::storages::fuse::meta::BlockMeta;
+use databend_query::storages::fuse::meta::TableSnapshot;
+use databend_query::storages::fuse::pruning::BlockPruner;
 use databend_query::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
 use databend_query::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
+
+async fn apply_block_pruning(
+    table_snapshot: &TableSnapshot,
+    schema: DataSchemaRef,
+    push_down: &Option<Extras>,
+    ctx: Arc<QueryContext>,
+) -> Result<Vec<BlockMeta>> {
+    BlockPruner::new(table_snapshot)
+        .apply(schema, push_down, ctx.as_ref())
+        .await
+}
 
 #[tokio::test]
 async fn test_block_pruner() -> Result<()> {
@@ -80,7 +97,6 @@ async fn test_block_pruner() -> Result<()> {
         })
         .collect::<Vec<_>>();
 
-    let da = ctx.get_storage_accessor()?;
     let stream = Box::pin(futures::stream::iter(blocks));
     let r = table.append_data(ctx.clone(), stream).await?;
     table
@@ -97,8 +113,9 @@ async fn test_block_pruner() -> Result<()> {
         .options()
         .get(TBL_OPT_KEY_SNAPSHOT_LOC)
         .unwrap();
-    let snapshot =
-        SnapshotReader::read(da.as_ref(), snapshot_loc.clone(), ctx.get_storage_cache()).await?;
+
+    let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
+    let snapshot = reader.read(snapshot_loc.as_str()).await?;
 
     // no pruning
     let push_downs = None;
@@ -106,7 +123,6 @@ async fn test_block_pruner() -> Result<()> {
         &snapshot,
         table.get_table_info().schema(),
         &push_downs,
-        da.clone(),
         ctx.clone(),
     )
     .await?;
@@ -123,7 +139,6 @@ async fn test_block_pruner() -> Result<()> {
         &snapshot,
         table.get_table_info().schema(),
         &Some(extra),
-        da.clone(),
         ctx.clone(),
     )
     .await?;
@@ -138,7 +153,6 @@ async fn test_block_pruner() -> Result<()> {
         &snapshot,
         table.get_table_info().schema(),
         &Some(extra),
-        da,
         ctx.clone(),
     )
     .await?;

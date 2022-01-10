@@ -25,6 +25,3 @@ pub use recorder::init_default_metrics_recorder;
 pub use recorder::label_counter;
 pub use recorder::label_counter_with_val;
 pub use recorder::try_handle;
-pub use recorder::TenantLabel;
-pub use recorder::LABEL_KEY_CLUSTER;
-pub use recorder::LABEL_KEY_TENANT;

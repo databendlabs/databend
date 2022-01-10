@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod flight_client;
-#[macro_use]
-mod flight_action;
-mod flight_client_conf;
+use common_dal2::credential::Credential;
+use common_dal2::services::s3;
 
-pub mod impls;
+#[tokio::test]
+async fn builder() {
+    let mut builder = s3::Backend::build();
 
-pub use flight_action::*;
-pub use flight_client::MetaFlightClient;
-pub use flight_client_conf::MetaFlightClientConf;
-
-// ProtoBuf generated files.
-#[allow(clippy::all)]
-pub mod protobuf {
-    tonic::include_proto!("metaflight");
+    let _ = builder
+        .root("/path-to-file")
+        .bucket("test-bucket")
+        .region("us-east-1")
+        .credential(Credential::hmac("access-key", "secret-key"))
+        .endpoint("http://localhost:9000")
+        .enable_path_style()
+        .enable_signature_v2()
+        .finish()
+        .await
+        .unwrap();
 }

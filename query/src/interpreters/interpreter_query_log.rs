@@ -110,8 +110,8 @@ impl InterpreterQueryLog {
             Series::new(vec![event.tenant_id.as_str()]),
             Series::new(vec![event.cluster_id.as_str()]),
             Series::new(vec![event.sql_user.as_str()]),
-            Series::new(vec![event.sql_user_privileges.as_str()]),
             Series::new(vec![event.sql_user_quota.as_str()]),
+            Series::new(vec![event.sql_user_privileges.as_str()]),
             // Query.
             Series::new(vec![event.query_id.as_str()]),
             Series::new(vec![event.query_kind.as_str()]),

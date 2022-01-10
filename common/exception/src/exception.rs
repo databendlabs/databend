@@ -193,7 +193,8 @@ build_exceptions! {
     InvalidSourceFormat(59),
     StrParseError(60),
     IllegalGrant(61),
-    ProxyModeInvalidOperation(62),
+    ProxyModePermissionDenied(62),
+    PermissionDenied(63),
 
     SemanticError(100),
 
@@ -209,7 +210,7 @@ build_exceptions! {
     DiskCacheFileNotInCache(1004),
 }
 
-// Store errors
+// Metasvr errors
 build_exceptions! {
     FileMetaNotFound(2001),
     FileDamaged(2002),

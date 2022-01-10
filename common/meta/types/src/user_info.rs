@@ -22,6 +22,7 @@ use serde::Serialize;
 
 use crate::user_grant::UserGrantSet;
 use crate::PasswordType;
+use crate::UserIdentity;
 use crate::UserQuota;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -58,6 +59,13 @@ impl UserInfo {
             password_type,
             grants,
             quota,
+        }
+    }
+
+    pub fn identity(&self) -> UserIdentity {
+        UserIdentity {
+            username: self.name.clone(),
+            hostname: self.hostname.clone(),
         }
     }
 }

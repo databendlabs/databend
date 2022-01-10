@@ -207,13 +207,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         info: CertifiedInfo,
     ) -> Result<bool> {
         let user_name = &info.user_name;
-        let address = &info.user_client_address;
         let user_manager = self.session.get_user_manager();
+        let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
 
-        // TODO: list user's grant list and check client address
         let ctx = self.session.create_context().await?;
         let user_info = user_manager
-            .get_user(ctx.get_tenant(), user_name, "%")
+            .get_user_with_client_ip(&ctx.get_tenant(), user_name, client_ip)
             .await?;
 
         let input = &info.user_password;
@@ -223,7 +222,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let authed = user_manager
             .auth_user(
                 user_info.clone(),
-                CertifiedInfo::create(user_name, encode_password, address),
+                CertifiedInfo::create(user_name, encode_password, client_ip),
             )
             .await?;
         if authed {

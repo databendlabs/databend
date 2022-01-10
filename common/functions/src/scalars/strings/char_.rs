@@ -14,7 +14,6 @@
 
 use std::fmt;
 
-use common_arrow::arrow::buffer::MutableBuffer;
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
@@ -67,10 +66,10 @@ impl Function for CharFunction {
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         let row_count = columns[0].column().len();
         let column_count = columns.len();
-        let mut values: MutableBuffer<u8> = MutableBuffer::with_capacity(row_count * column_count);
+        let mut values: Vec<u8> = Vec::with_capacity(row_count * column_count);
         let values_ptr = values.as_mut_ptr();
 
-        let mut offsets: MutableBuffer<i64> = MutableBuffer::with_capacity(row_count + 1);
+        let mut offsets: Vec<i64> = Vec::with_capacity(row_count + 1);
         offsets.push(0);
 
         for (i, column) in columns.iter().enumerate() {

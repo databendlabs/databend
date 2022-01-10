@@ -211,16 +211,13 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
         Self::new(array)
     }
 
-    /// Create a new DataArray by taking ownership of the AlignedVec. This operation is zero copy.
-    pub fn new_from_aligned_vec(values: AlignedVec<T>) -> Self {
+    /// Create a new DataArray by taking ownership of the Vec. This operation is zero copy.
+    pub fn new_from_vec(values: Vec<T>) -> Self {
         to_primitive::<T>(values, None)
     }
 
     /// Nullify values in slice with an existing null bitmap
-    pub fn new_from_owned_with_null_bitmap(
-        values: AlignedVec<T>,
-        validity: Option<Bitmap>,
-    ) -> Self {
+    pub fn new_from_owned_with_null_bitmap(values: Vec<T>, validity: Option<Bitmap>) -> Self {
         to_primitive::<T>(values, validity)
     }
 
@@ -232,10 +229,10 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
 
 #[inline]
 pub fn to_primitive<T: DFPrimitiveType>(
-    values: AlignedVec<T>,
+    values: Vec<T>,
     validity: Option<Bitmap>,
 ) -> DFPrimitiveArray<T> {
-    PrimitiveArray::from_data(T::DATA_TYPE, values.into(), validity).into()
+    PrimitiveArray::from_data(T::data_type().to_arrow(), values.into(), validity).into()
 }
 
 pub type DFUInt8Array = DFPrimitiveArray<u8>;

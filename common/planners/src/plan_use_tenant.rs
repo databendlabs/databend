@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-syntax = "proto3";
+use std::sync::Arc;
 
-// Flight RPC for DatabendMeta.
-package metaflight;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 
-// Request for flight do_get and do_action.
-message FlightMetaRequest {
-  string body = 1;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct UseTenantPlan {
+    pub tenant: String,
+}
+
+impl UseTenantPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
 }
