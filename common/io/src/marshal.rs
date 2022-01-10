@@ -118,12 +118,12 @@ impl Marshal for bool {
     }
 }
 
-impl Marshal for char {
+impl Marshal for Option<char> {
     fn marshal(&self, scratch: &mut [u8]) {
-        let bits = *self as u32;
-        scratch[0] = bits as u8;
-        scratch[1] = (bits >> 8) as u8;
-        scratch[2] = (bits >> 16) as u8;
-        scratch[3] = (bits >> 24) as u8;
+        let bits = (*self).unwrap() as u32;
+        scratch[3] = bits as u8;
+        scratch[2] = (bits >> 8) as u8;
+        scratch[1] = (bits >> 16) as u8;
+        scratch[0] = (bits >> 24) as u8;
     }
 }

@@ -105,7 +105,7 @@ impl StatBuffer for bool {
     }
 }
 
-impl StatBuffer for char {
+impl StatBuffer for Option<char> {
     type Buffer = [u8; 4];
 
     fn buffer() -> Self::Buffer {
