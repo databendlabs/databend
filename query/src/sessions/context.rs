@@ -202,8 +202,12 @@ impl QueryContext {
     }
 
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
+        let tenent_id = self.get_tenant();
         let catalog = self.get_catalog();
-        match catalog.get_database(&new_database_name).await {
+        match catalog
+            .get_database(tenent_id.as_str(), &new_database_name)
+            .await
+        {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
@@ -242,7 +246,7 @@ impl QueryContext {
         if self.shared.conf.query.proxy_mode {
             self.shared.get_current_tenant()
         } else {
-            self.shared.conf.query.tenant_id.clone()
+            self.shared.get_tenant()
         }
     }
 

@@ -214,6 +214,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
 
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
+    let tenant = "tenant1";
 
     {
         let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_add_database");
@@ -242,6 +243,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
                 .write(LogEntry {
                     txid: None,
                     cmd: Cmd::CreateDatabase {
+                        tenant: tenant.to_string(),
                         name: name.to_string(),
                         meta: DatabaseMeta {
                             engine: "default".to_string(),
@@ -261,7 +263,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
                 let got = mn
                     .get_state_machine()
                     .await
-                    .get_database_id(&name.to_string())?;
+                    .get_database_id(tenant, name.as_ref())?;
 
                 assert_eq!(*want_id, got, "n{} applied AddDatabase", i);
             }

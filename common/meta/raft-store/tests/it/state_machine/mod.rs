@@ -129,6 +129,7 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 
     let tc = new_raft_test_context();
     let m = StateMachine::open(&tc.raft_config, 1).await?;
+    let tenant = "tenant1";
 
     struct T {
         name: &'static str,
@@ -160,6 +161,7 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
         let resp = m.sm_tree.txn(true, |t| {
             Ok(m.apply_cmd(
                 &Cmd::CreateDatabase {
+                    tenant: tenant.to_string(),
                     name: c.name.to_string(),
                     meta: DatabaseMeta {
                         engine: c.engine.to_string(),
@@ -182,7 +184,7 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 
         let want = result.expect("Some(db_id)");
 
-        let got = m.get_database_id(&c.name.to_string())?;
+        let got = m.get_database_id(tenant, c.name)?;
         assert_eq!(want, got);
     }
 
@@ -196,12 +198,14 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
 
     let tc = new_raft_test_context();
     let m = StateMachine::open(&tc.raft_config, 1).await?;
+    let tenant = "tenant1";
 
     tracing::info!("--- prepare a table");
 
     m.sm_tree.txn(true, |t| {
         Ok(m.apply_cmd(
             &Cmd::CreateDatabase {
+                tenant: tenant.to_string(),
                 name: "db1".to_string(),
                 meta: DatabaseMeta {
                     engine: "defeault".to_string(),
@@ -216,6 +220,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
     let resp = m.sm_tree.txn(true, |t| {
         Ok(m.apply_cmd(
             &Cmd::CreateTable {
+                tenant: tenant.to_string(),
                 db_name: "db1".to_string(),
                 table_name: "tb1".to_string(),
                 table_meta: Default::default(),

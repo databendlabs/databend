@@ -51,7 +51,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
         MetaGrpcClient::with_tls_conf(addr.as_str(), "root", "xxx", None, Some(tls_conf)).await?;
 
     let r = client
-        .get_table(("do not care", "do not care").into())
+        .get_table(("do not care", "do not care", "do not care").into())
         .await;
     assert!(r.is_err());
 

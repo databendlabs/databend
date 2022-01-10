@@ -25,6 +25,7 @@ pub type TableOptions = HashMap<String, String>;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateTablePlan {
     pub if_not_exists: bool,
+    pub tenant: String,
     pub db: String,
     /// The table name
     pub table: String,
@@ -38,6 +39,7 @@ impl From<CreateTablePlan> for CreateTableReq {
     fn from(p: CreateTablePlan) -> Self {
         CreateTableReq {
             if_not_exists: p.if_not_exists,
+            tenant: p.tenant,
             db: p.db,
             table: p.table,
             table_meta: p.table_meta,

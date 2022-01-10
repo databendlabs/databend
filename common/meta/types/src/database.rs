@@ -20,6 +20,7 @@ use std::ops::Deref;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseNameIdent {
+    pub tenant: String,
     pub db_name: String,
 }
 
@@ -57,6 +58,7 @@ impl DatabaseInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateDatabaseReq {
     pub if_not_exists: bool,
+    pub tenant: String,
     pub db: String,
     pub meta: DatabaseMeta,
 }
@@ -69,6 +71,7 @@ pub struct CreateDatabaseReply {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropDatabaseReq {
     pub if_exists: bool,
+    pub tenant: String,
     pub db: String,
 }
 
@@ -89,9 +92,10 @@ impl Deref for GetDatabaseReq {
 }
 
 impl GetDatabaseReq {
-    pub fn new(db_name: impl Into<String>) -> GetDatabaseReq {
+    pub fn new(tenant: impl Into<String>, db_name: impl Into<String>) -> GetDatabaseReq {
         GetDatabaseReq {
             inner: DatabaseNameIdent {
+                tenant: tenant.into(),
                 db_name: db_name.into(),
             },
         }
@@ -99,4 +103,6 @@ impl GetDatabaseReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct ListDatabaseReq {}
+pub struct ListDatabaseReq {
+    pub tenant: String,
+}
