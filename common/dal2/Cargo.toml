@@ -23,3 +23,5 @@ aws-sdk-s3 = "0.4.0"
 aws-endpoint = "0.4.0"
 http = "0.2.6"
 aws-smithy-http = "0.34"
+hyper = {version="0.14.16", features=["stream"]}
+pin-project = "1.0.10"

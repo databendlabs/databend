@@ -20,6 +20,8 @@ use std::task::Poll;
 
 use async_trait::async_trait;
 use aws_sdk_s3 as AwsS3;
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::byte_stream::ByteStream;
 use futures::TryStreamExt;
 
 use crate::credential::Credential;
@@ -28,6 +30,9 @@ use crate::error::Result;
 use crate::ops::Read;
 use crate::ops::ReadBuilder;
 use crate::ops::Reader;
+use crate::ops::ReaderStream;
+use crate::ops::Write;
+use crate::ops::WriteBuilder;
 
 #[derive(Default, Debug, Clone)]
 pub struct Builder {
@@ -208,6 +213,28 @@ impl<S: Send + Sync> Read<S> for Backend {
             .unwrap(); // TODO: we need a better way to handle errors here.
 
         Ok(Box::new(S3Stream(resp.body).into_async_read()))
+    }
+}
+
+#[async_trait]
+impl<S: Send + Sync> Write<S> for Backend {
+    async fn write(&self, r: Reader, args: &WriteBuilder<S>) -> Result<usize> {
+        let p = self.get_abs_path(args.path);
+
+        let _ = self
+            .client
+            .put_object()
+            .bucket(&self.bucket.clone())
+            .key(&p)
+            .content_length(args.size as i64)
+            .body(ByteStream::from(SdkBody::from(
+                hyper::body::Body::wrap_stream(ReaderStream::new(r)),
+            )))
+            .send()
+            .await
+            .unwrap(); // TODO: we need a better way to handle errors here.
+
+        Ok(args.size as usize)
     }
 }
 
