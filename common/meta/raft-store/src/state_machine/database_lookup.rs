@@ -51,31 +51,23 @@ impl SledOrderedSerde for DatabaseLookupKey {
     fn ser(&self) -> Result<IVec, ErrorCode> {
         let mut buf = BytesMut::new();
 
-        if buf.write_string(&self.tenant).is_ok()
-            && buf.write_scalar(&self.delimiter).is_ok()
-            && buf.write_string(&self.database_name).is_ok()
-        {
-            return Ok(IVec::from(buf.to_vec()));
-        }
-        Err(ErrorCode::MetaStoreDamaged("invalid key IVec"))
+        buf.write_string(&self.tenant)?;
+        buf.write_scalar(&self.delimiter)?;
+        buf.write_string(&self.database_name)?;
+        Ok(IVec::from(buf.to_vec()))
     }
 
     fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
     where Self: Sized {
         let mut buf_read = Cursor::new(v);
-        let tenant = buf_read.read_tenant();
-        if let Ok(tenant) = tenant {
-            // read_tenant already put cursor at next byte of delimiter, no need advance cursor here.
-            let database_name_result = buf_read.read_string();
-            if let Ok(database_name) = database_name_result {
-                return Ok(DatabaseLookupKey {
-                    tenant,
-                    delimiter: DB_LOOKUP_KEY_DELIMITER,
-                    database_name,
-                });
-            }
-        }
-        Err(ErrorCode::MetaStoreDamaged("invalid key IVec"))
+        let tenant = buf_read.read_tenant()?;
+        // read_tenant already put cursor at next byte of delimiter, no need advance cursor here.
+        let database_name = buf_read.read_string()?;
+        Ok(DatabaseLookupKey {
+            tenant,
+            delimiter: DB_LOOKUP_KEY_DELIMITER,
+            database_name,
+        })
     }
 }
 
@@ -83,8 +75,8 @@ impl fmt::Display for DatabaseLookupKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
-            "DatabaseLookupKey_{}-{}",
-            self.tenant, self.database_name
+            "DatabaseLookupKey_{}{}{}",
+            self.tenant, self.delimiter, self.database_name
         )
     }
 }

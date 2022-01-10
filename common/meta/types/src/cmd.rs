@@ -99,10 +99,10 @@ impl fmt::Display for Cmd {
                 write!(f, "add_node:{}={}", node_id, node)
             }
             Cmd::CreateDatabase { tenant, name, meta } => {
-                write!(f, "create_db:{}-{}={}", tenant, name, meta)
+                write!(f, "create_db:{}/{}={}", tenant, name, meta)
             }
             Cmd::DropDatabase { tenant, name } => {
-                write!(f, "drop_db:{}-{}", tenant, name)
+                write!(f, "drop_db:{}/{}", tenant, name)
             }
             Cmd::CreateTable {
                 tenant,
@@ -112,7 +112,7 @@ impl fmt::Display for Cmd {
             } => {
                 write!(
                     f,
-                    "create_table:{}-{}-{}={}",
+                    "create_table:{}/{}-{}={}",
                     tenant, db_name, table_name, table_meta
                 )
             }
@@ -121,7 +121,7 @@ impl fmt::Display for Cmd {
                 db_name,
                 table_name,
             } => {
-                write!(f, "delete_table:{}-{}-{}", tenant, db_name, table_name)
+                write!(f, "delete_table:{}/{}-{}", tenant, db_name, table_name)
             }
             Cmd::UpsertKV {
                 key,
