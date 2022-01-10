@@ -16,15 +16,23 @@
 use std::sync::Arc;
 
 use common_base::tokio;
+use common_dal::AsyncSeekableReader;
+use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use databend_query::storages::fuse::io::BlockShaper;
 use databend_query::storages::fuse::io::BlockStreamWriter;
 use databend_query::storages::fuse::DEFAULT_CHUNK_BLOCK_NUM;
+use futures::stream::Stream;
 use futures::StreamExt;
+use futures::TryStreamExt;
+use num::Integer;
 use tempfile::TempDir;
 
 #[tokio::test]
@@ -97,70 +105,269 @@ async fn test_fuse_table_block_appender() {
 }
 
 #[test]
-fn test_fuse_table_block_appender_reshape() -> common_exception::Result<()> {
+fn test_block_shaper() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
-    let sample_block = DataBlock::create_by_array(schema, vec![Series::new(vec![1, 2, 3])]);
-    let sample_block_size = sample_block.memory_size();
+    let gen_rows = |n| std::iter::repeat(1i32).take(n).collect::<Vec<_>>();
+    let gen_block = |col| DataBlock::create_by_array(schema.clone(), vec![Series::new(col)]);
 
-    // 1 empty blocks
-    // 1.1 empty block, zero block_size_threshold
-    let blocks = vec![];
-    let r = BlockStreamWriter::reshape_blocks(blocks, 0);
-    assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
-    let r = r.unwrap();
-    assert_eq!(r.len(), 0);
+    let test_case =
+        |rows_per_sample_block, max_row_per_block, num_blocks, case_name| -> Result<()> {
+            // One block, which `row_count` equals `rows_per_sample_block`
+            let sample_block = gen_block(gen_rows(rows_per_sample_block));
 
-    // 1.2 empty block, arbitrary block_size_threshold
-    let blocks = vec![];
-    let r = BlockStreamWriter::reshape_blocks(blocks, 100);
-    assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
-    let r = r.unwrap();
-    assert_eq!(r.len(), 0);
+            let mut shaper = BlockShaper::new(max_row_per_block);
+            let total_rows = rows_per_sample_block * num_blocks;
 
-    // 2. merge
-    // 2.1 several blocks into exactly one block
-    let block_num = 10;
-    let (blocks, block_size_threshold) = gen_blocks(&sample_block, block_num);
-    let r = BlockStreamWriter::reshape_blocks(blocks.collect(), block_size_threshold)?;
-    assert_eq!(r.len(), 1);
-    assert_eq!(r[0].memory_size(), block_size_threshold);
+            let mut generated: Vec<DataBlock> = vec![];
 
-    // 2.1 with remainders
-    // 2.1.1 reminders at tail
-    let block_num = 10;
-    let (blocks, block_size_threshold) = gen_blocks(&sample_block, block_num);
-    // push back an extra block
-    let blocks = blocks.chain(std::iter::once(sample_block.clone()));
-    let r = BlockStreamWriter::reshape_blocks(blocks.collect(), block_size_threshold)?;
-    assert_eq!(r.len(), 2);
-    assert_eq!(r[0].memory_size(), block_size_threshold);
-    assert_eq!(r[1].memory_size(), sample_block_size);
+            // feed blocks into shaper
+            let rounds = num_blocks;
+            for _i in 0..rounds {
+                let blks = shaper.shape(sample_block.clone())?;
+                generated.extend(blks)
+            }
 
-    // 2.1.2 large blocks will not be split
-    let block_num = 10;
-    let (blocks, block_size_threshold) = gen_blocks(&sample_block, block_num);
+            // indicates the shaper that we are done
+            let sealed = shaper.seal()?;
 
-    // generate a large block
-    let (tmp_blocks, tmp_block_size_threshold) = gen_blocks(&sample_block, block_num * 2);
-    assert!(tmp_block_size_threshold > block_size_threshold);
-    let large_block = DataBlock::concat_blocks(&tmp_blocks.collect::<Vec<_>>())?;
-    let large_block_size = large_block.memory_size();
-    // push back the large block
-    let blocks = blocks.chain(std::iter::once(large_block));
+            // Invariants of `generated` Blocks
+            //
+            //  1.) row numbers match
+            //
+            //      generated.iter().map(|b| b.num_rows()).sum() == total_rows
+            //
+            //  2.) well shaped
+            //
+            //      - if `max_row_per_block` divides `total_rows`
+            //
+            //        for all block B in `generated`, B.num_rows() == max_row_per_block,
+            //
+            //      - if `total_rows` % `max_row_per_block` = r and r > 0
+            //
+            //        - there should be exactly one block B in `generated` where B.num_rows() == r
+            //
+            //        - for all block B' in `generated`; B' =/= B implies that B'.row_count() == max_row_per_block,
 
-    let r = BlockStreamWriter::reshape_blocks(blocks.collect(), block_size_threshold)?;
-    assert_eq!(r.len(), 2);
-    // blocks are sorted (DESC by size) during reshape, thus we get the large_block at head
-    assert_eq!(r[0].memory_size(), large_block_size);
-    assert_eq!(r[1].memory_size(), block_size_threshold);
+            let remainder = total_rows % max_row_per_block;
+            if remainder == 0 {
+                assert!(
+                    sealed.is_none(),
+                    "[{}], expects no reminder, but got {}",
+                    case_name,
+                    remainder
+                );
+            } else {
+                assert!(
+                    sealed.is_some(),
+                    "[{}], expects remainder, but got nothing",
+                    case_name
+                );
+                let block = sealed.as_ref().unwrap();
+                assert_eq!(
+                    block.num_rows(),
+                    remainder,
+                    "[{}], num_rows remains ",
+                    case_name
+                );
+            }
+
+            assert!(
+                generated
+                    .iter()
+                    .all(|item| item.num_rows() == max_row_per_block),
+                "[{}], for each block, the num_rows should be exactly max_row_per_block",
+                case_name
+            );
+
+            generated.extend(sealed);
+
+            assert_eq!(
+                total_rows,
+                generated.iter().map(|item| item.num_rows()).sum::<usize>(),
+                "{}, row numbers match",
+                case_name
+            );
+
+            Ok(())
+        };
+
+    let case_name = "small blocks, with remainder";
+    // 3 > 2; 2 * 10 % 3 = 2
+    let max_row_per_block = 3;
+    let rows_per_sample_block = 2;
+    let num_blocks = 10;
+    test_case(
+        rows_per_sample_block,
+        max_row_per_block,
+        num_blocks,
+        case_name,
+    )?;
+
+    let case_name = "small blocks, no remainder";
+    // 4 > 2; 2 * 10 % 4 = 0
+    let max_row_per_block = 4;
+    let rows_per_sample_block = 2;
+    let num_blocks = 10;
+    test_case(
+        rows_per_sample_block,
+        max_row_per_block,
+        num_blocks,
+        case_name,
+    )?;
+
+    let case_name = "large blocks, no remainder";
+    // 15 < 30; 30 * 10 % 15 = 0
+    let max_row_per_block = 15;
+    let rows_per_sample_block = 30;
+    let num_blocks = 10;
+    test_case(
+        rows_per_sample_block,
+        max_row_per_block,
+        num_blocks,
+        case_name,
+    )?;
+
+    let case_name = "large blocks, with remainders";
+    // 7 < 30; 30 * 10 % 7 = 6
+    let max_row_per_block = 7;
+    let rows_per_sample_block = 30;
+    let num_blocks = 10;
+    test_case(
+        rows_per_sample_block,
+        max_row_per_block,
+        num_blocks,
+        case_name,
+    )?;
 
     Ok(())
 }
 
-fn gen_blocks(sample_block: &DataBlock, num: usize) -> (impl Iterator<Item = DataBlock>, usize) {
-    let block_size = sample_block.memory_size();
-    let block = sample_block.clone();
-    let blocks = std::iter::repeat(block).take(num);
-    let ideal_threshold = block_size * num;
-    (blocks, ideal_threshold)
+#[tokio::test]
+async fn test_block_stream_writer() -> common_exception::Result<()> {
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
+    let gen_rows = |n| std::iter::repeat(1i32).take(n).collect::<Vec<_>>();
+    let gen_block = |col| DataBlock::create_by_array(schema.clone(), vec![Series::new(col)]);
+
+    let test_case = |rows_per_sample_block,
+                     max_rows_per_block,
+                     max_blocks_per_segment,
+                     num_blocks,
+                     schema,
+                     case_name: &'static str| async move {
+        let sample_block = gen_block(gen_rows(rows_per_sample_block));
+        let block_stream = futures::stream::iter(std::iter::repeat(sample_block).take(num_blocks));
+        let block_stream = block_stream.map(Ok);
+
+        let data_accessor = Arc::new(MockDataAccessor::new());
+
+        let stream = BlockStreamWriter::write_block_stream(
+            data_accessor.clone(),
+            Box::pin(block_stream),
+            schema,
+            max_rows_per_block,
+            max_blocks_per_segment,
+        )
+        .await;
+        let segs = stream.try_collect::<Vec<_>>().await?;
+
+        // verify the number of blocks
+        let expected_blocks =
+            Integer::div_ceil(&(rows_per_sample_block * num_blocks), &max_rows_per_block);
+        assert_eq!(
+            expected_blocks,
+            data_accessor.put_stream_called(),
+            "case: {}",
+            case_name
+        );
+
+        // verify the number of segment
+        let expected_segments = Integer::div_ceil(&expected_blocks, &max_blocks_per_segment);
+        assert_eq!(expected_segments, segs.len(), "case: {}", case_name);
+        Ok::<_, ErrorCode>(())
+    };
+
+    let rows_perf_sample_block = 10;
+    let rows_per_block = 10;
+    let blocks_per_segment = 10;
+    let number_of_blocks = 100;
+    test_case(
+        rows_perf_sample_block,
+        rows_per_block,
+        blocks_per_segment,
+        number_of_blocks,
+        schema.clone(),
+        "simple regular data",
+    )
+    .await?;
+
+    let rows_perf_sample_block = 10;
+    let rows_per_block = 10;
+    let blocks_per_segment = 3;
+    let number_of_blocks = 100;
+    test_case(
+        rows_perf_sample_block,
+        rows_per_block,
+        blocks_per_segment,
+        number_of_blocks,
+        schema.clone(),
+        "with remainder",
+    )
+    .await?;
+
+    Ok(())
+}
+
+use common_infallible::Mutex;
+struct MockDataAccessor {
+    put_stream_called: Arc<Mutex<usize>>,
+}
+
+impl MockDataAccessor {
+    fn new() -> Self {
+        Self {
+            put_stream_called: Arc::new(Mutex::new(0)),
+        }
+    }
+
+    fn put_stream_called(&self) -> usize {
+        *self.put_stream_called.lock()
+    }
+}
+
+#[async_trait::async_trait]
+impl DataAccessor for MockDataAccessor {
+    fn get_input_stream(
+        &self,
+        _: &str,
+        _: std::option::Option<u64>,
+    ) -> std::result::Result<
+        Box<(dyn AsyncSeekableReader + Unpin + std::marker::Send + 'static)>,
+        ErrorCode,
+    > {
+        todo!()
+    }
+
+    async fn put(&self, _path: &str, _content: Vec<u8>) -> Result<()> {
+        todo!()
+    }
+
+    async fn put_stream(
+        &self,
+        _path: &str,
+        _input_stream: Box<
+            dyn Stream<Item = std::result::Result<bytes::Bytes, std::io::Error>>
+                + Send
+                + Unpin
+                + 'static,
+        >,
+        _stream_len: usize,
+    ) -> Result<()> {
+        let called = &mut *self.put_stream_called.lock();
+        *called += 1;
+        Ok(())
+    }
+
+    async fn remove(&self, _path: &str) -> Result<()> {
+        todo!()
+    }
 }

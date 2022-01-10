@@ -13,12 +13,14 @@
 // limitations under the License.
 
 mod block_reader;
+mod block_shaper;
 mod block_stream_writer;
 mod block_writer;
 mod locations;
 mod meta_readers;
 
 pub use block_reader::BlockReader;
+pub use block_shaper::BlockShaper;
 pub use block_stream_writer::BlockStreamWriter;
 pub use block_stream_writer::SegmentInfoStream;
 pub use locations::gen_segment_info_location;

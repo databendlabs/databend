@@ -12,20 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-use std::cmp::Reverse;
+
 use std::sync::Arc;
 
-use async_stream::stream;
 use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
-use futures::stream::TryChunksError;
+use futures::stream::try_unfold;
+use futures::stream::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
-use super::block_writer;
+use crate::storages::fuse::io::block_shaper::BlockShaper;
+use crate::storages::fuse::io::block_writer;
 use crate::storages::fuse::io::locations::gen_block_location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
@@ -34,103 +36,173 @@ use crate::storages::fuse::statistics::StatisticsAccumulator;
 pub type SegmentInfoStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<SegmentInfo>> + Send>>;
 
-pub struct BlockStreamWriter;
+pub struct BlockStreamWriter {
+    num_block_threshold: usize,
+    data_accessor: Arc<dyn DataAccessor>,
+    data_schema: Arc<DataSchema>,
+    number_of_blocks_accumulated: usize,
+    statistics_accumulator: Option<StatisticsAccumulator>,
+}
 
 impl BlockStreamWriter {
+    pub fn new(
+        num_block_threshold: usize,
+        data_accessor: Arc<dyn DataAccessor>,
+        data_schema: Arc<DataSchema>,
+    ) -> Self {
+        Self {
+            num_block_threshold,
+            data_accessor,
+            data_schema,
+            number_of_blocks_accumulated: 0,
+            statistics_accumulator: None,
+        }
+    }
+
     pub async fn write_block_stream(
         data_accessor: Arc<dyn DataAccessor>,
-        stream: SendableDataBlockStream,
+        block_stream: SendableDataBlockStream,
         data_schema: Arc<DataSchema>,
-        chunk_block_num: usize,
-        block_size_threshold: usize,
+        row_per_block: usize,
+        block_per_segment: usize,
     ) -> SegmentInfoStream {
-        let s = stream! {
-            // filter out empty blocks
-            let stream = stream.try_filter(|block| std::future::ready(block.num_rows() > 0));
+        // filter out empty blocks
+        let block_stream =
+            block_stream.try_filter(|block| std::future::ready(block.num_rows() > 0));
 
-            // chunks by chunk_block_num
-            let mut stream = stream.try_chunks(chunk_block_num);
+        // merge or split the blocks according to configurations
+        let block_stream_shaper = BlockShaper::new(row_per_block);
+        let block_stream = Self::transform(block_stream, block_stream_shaper);
+        // flatten a TryStream of Vec<DataBlock> into a TryStream of DataBlock
+        let block_stream = block_stream
+            .map_ok(|vs| futures::stream::iter(vs.into_iter().map(Ok)))
+            .try_flatten();
 
-            // accumulate the stats and save the blocks
-            while let Some(item) = stream.next().await {
-                match item.map_err(|TryChunksError(_, e)| e) {
-                    Err(e) => yield(Err(e)),
-                    Ok(blocks) => {
-                        let seg = Self::generate_segment(data_accessor.clone(), data_schema.clone(), blocks, block_size_threshold).await;
-                        yield(seg);
+        // Write out the blocks.
+        //
+        // And transform the stream of DataBlocks into Stream of SegmentInfo at the same time.
+        let block_writer = BlockStreamWriter::new(block_per_segment, data_accessor, data_schema);
+        let segments = Self::transform(Box::pin(block_stream), block_writer);
+
+        Box::pin(segments)
+    }
+
+    /// Transforms a stream of S to a stream of T
+    ///
+    /// It's more like [Stream::filter_map] than [Stream::map] in the sense
+    /// that m items of input stream may be mapped to n items, where m <> n (but
+    /// for the convenience of impl, [TryStreamExt::try_unfold] is used).
+    fn transform<R, A, S, T>(inputs: R, mapper: A) -> impl futures::stream::Stream<Item = Result<T>>
+    where
+        R: Stream<Item = Result<S>> + Unpin,
+        A: StreamTransformer<S, T>,
+    {
+        // For the convenience of passing mutable state back and forth, `unfold` is used
+        let init_state = (Some(mapper), inputs);
+        try_unfold(init_state, |(mapper, mut inputs)| async move {
+            if let Some(mut acc) = mapper {
+                while let Some(item) = inputs.next().await {
+                    match acc.take(item?).await? {
+                        Some(item) => return Ok(Some((item, (Some(acc), inputs)))),
+                        None => continue,
                     }
                 }
+                let remains = acc.seal()?;
+                Ok(remains.map(|t| (t, (None, inputs))))
+            } else {
+                Ok::<_, ErrorCode>(None)
             }
-        };
-        Box::pin(s)
+        })
     }
 
-    pub async fn generate_segment(
-        data_accessor: Arc<dyn DataAccessor>,
-        data_schema: Arc<DataSchema>,
-        blocks: Vec<DataBlock>,
-        block_size_threshold: usize,
-    ) -> Result<SegmentInfo> {
-        // re-shape the blocks
-        let blocks = Self::reshape_blocks(blocks, block_size_threshold)?;
-        let mut acc = StatisticsAccumulator::new();
+    pub async fn write_block(&mut self, block: DataBlock) -> Result<Option<SegmentInfo>> {
+        let mut acc = self.statistics_accumulator.take().unwrap_or_default();
+        let partial_acc = acc.begin(&block)?;
+        let schema = block.schema().to_arrow();
+        let location = gen_block_location();
+        let file_size =
+            block_writer::write_block(&schema, block, &self.data_accessor, &location).await?;
+        acc = partial_acc.end(file_size, location);
+        self.number_of_blocks_accumulated += 1;
+        if self.number_of_blocks_accumulated >= self.num_block_threshold {
+            let summary = acc.summary(self.data_schema.as_ref())?;
+            let seg = SegmentInfo {
+                blocks: acc.blocks_metas,
+                summary: Statistics {
+                    row_count: acc.summary_row_count,
+                    block_count: acc.summary_block_count,
+                    uncompressed_byte_size: acc.in_memory_size,
+                    compressed_byte_size: acc.file_size,
+                    col_stats: summary,
+                },
+            };
 
-        for block in blocks.into_iter() {
-            let partial_acc = acc.begin(&block)?;
-            let schema = block.schema().to_arrow();
-            let location = gen_block_location();
-            let file_size =
-                block_writer::write_block(&schema, block, &data_accessor, &location).await?;
-            acc = partial_acc.end(file_size, location);
+            // Reset state
+            self.number_of_blocks_accumulated = 0;
+            self.statistics_accumulator = None;
+
+            Ok(Some(seg))
+        } else {
+            // Stash the state
+            self.statistics_accumulator = Some(acc);
+
+            Ok(None)
         }
+    }
+}
 
-        // summary and generate a segment
-        let summary = acc.summary(data_schema.as_ref())?;
-        let seg = SegmentInfo {
-            blocks: acc.blocks_metas,
-            summary: Statistics {
-                row_count: acc.summary_row_count,
-                block_count: acc.summary_block_count,
-                uncompressed_byte_size: acc.in_memory_size,
-                compressed_byte_size: acc.file_size,
-                col_stats: summary,
-            },
-        };
-        Ok(seg)
+/// Transformer from S to T
+///
+/// It is intended to be used in transforming a Stream of S to a Stream of T,
+#[async_trait::async_trait]
+trait StreamTransformer<S, T> {
+    /// Take an element s of type S, trying to convert it into T
+    ///
+    /// If possible [<Some<T>] should be returned, Otherwise [None].
+    /// Inner state (e.g. accumulators) might be changed while taking in elements.
+    async fn take(&mut self, s: S) -> Result<Option<T>>;
+
+    /// Indicates that there will be no more elements be taken. Spills
+    /// [Some<T>] if there were, otherwise [None]
+    fn seal(self) -> Result<Option<T>>;
+}
+
+#[async_trait::async_trait]
+impl StreamTransformer<DataBlock, Vec<DataBlock>> for BlockShaper {
+    async fn take(&mut self, s: DataBlock) -> Result<Option<Vec<DataBlock>>> {
+        self.shape(s).map(Some)
     }
 
-    // A simple strategy of merging small blocks into larger ones:
-    // for each n successive data blocks in `blocks`, if the sum of their `memory_size` exceeds
-    //   `block_size_threshold`, they will be merged into one larger block.
-    //  NOTE:
-    //    - the max size of merge-block will be 2 * block_size_threshold
-    //    - for block that is larger than `block_size_threshold`, they will NOT be split
-    pub fn reshape_blocks(
-        mut blocks: Vec<DataBlock>,
-        block_size_threshold: usize,
-    ) -> Result<Vec<DataBlock>> {
-        // sort by memory_size DESC
-        blocks.sort_unstable_by_key(|r| Reverse(r.memory_size()));
+    fn seal(self) -> Result<Option<Vec<DataBlock>>> {
+        Ok(self.seal()?.map(|v| vec![v]))
+    }
+}
 
-        let mut result = vec![];
+#[async_trait::async_trait]
+impl StreamTransformer<DataBlock, SegmentInfo> for BlockStreamWriter {
+    async fn take(&mut self, s: DataBlock) -> Result<Option<SegmentInfo>> {
+        self.write_block(s).await
+    }
 
-        let mut block_size_acc = 0;
-        let mut block_acc = vec![];
-
-        for block in blocks {
-            block_size_acc += block.memory_size();
-            block_acc.push(block);
-            if block_size_acc >= block_size_threshold {
-                result.push(DataBlock::concat_blocks(&block_acc)?);
-                block_acc.clear();
-                block_size_acc = 0;
+    fn seal(mut self) -> Result<Option<SegmentInfo>> {
+        let acc = self.statistics_accumulator.take();
+        let data_schema = self.data_schema.as_ref();
+        match acc {
+            None => Ok(None),
+            Some(acc) => {
+                let summary = acc.summary(data_schema)?;
+                let seg = SegmentInfo {
+                    blocks: acc.blocks_metas,
+                    summary: Statistics {
+                        row_count: acc.summary_row_count,
+                        block_count: acc.summary_block_count,
+                        uncompressed_byte_size: acc.in_memory_size,
+                        compressed_byte_size: acc.file_size,
+                        col_stats: summary,
+                    },
+                };
+                Ok(Some(seg))
             }
         }
-
-        if !block_acc.is_empty() {
-            result.push(DataBlock::concat_blocks(&block_acc)?)
-        }
-
-        Ok(result)
     }
 }
