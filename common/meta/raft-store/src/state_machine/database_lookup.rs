@@ -67,7 +67,6 @@ impl SledOrderedSerde for DatabaseLookupKey {
             .split(DB_LOOKUP_KEY_DELIMITER as char)
             .collect();
 
-        // read_tenant already put cursor at next byte of delimiter, no need advance cursor here.
         Ok(DatabaseLookupKey {
             tenant: db_lookup_key[0].to_string(),
             delimiter: DB_LOOKUP_KEY_DELIMITER,
