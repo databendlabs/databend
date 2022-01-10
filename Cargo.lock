@@ -1761,7 +1761,6 @@ dependencies = [
  "common-tracing",
  "futures",
  "maplit",
- "uuid 1.0.0-alpha.1",
 ]
 
 [[package]]
@@ -1907,7 +1906,6 @@ dependencies = [
  "once_cell",
  "pretty_assertions",
  "serde",
- "uuid 1.0.0-alpha.1",
 ]
 
 [[package]]

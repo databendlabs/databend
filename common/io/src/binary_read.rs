@@ -33,7 +33,7 @@ pub trait BinaryRead {
     fn read_string(&mut self) -> Result<String>;
     fn skip_string(&mut self) -> Result<()>;
     fn read_uvarint(&mut self) -> Result<u64>;
-    fn read_tenant(&mut self, delimiter: u8) -> Result<String>;
+    fn read_tenant(&mut self) -> Result<String>;
 
     // in place read
     fn read_to_scalar<V>(&mut self, v: &mut V) -> Result<()>
@@ -120,10 +120,10 @@ where T: io::Read + io::BufRead
         }
     }
 
-    fn read_tenant(&mut self, delimiter: u8) -> Result<String> {
+    fn read_tenant(&mut self) -> Result<String> {
         self.read_uvarint()?;
         let mut buffer = vec![];
-        let tenant_len = self.read_until(delimiter, &mut buffer)?;
+        let tenant_len = self.read_until(b'/', &mut buffer)?;
 
         let res = String::from_utf8_lossy(&buffer[0..tenant_len - 1]).to_string();
         Ok(res)

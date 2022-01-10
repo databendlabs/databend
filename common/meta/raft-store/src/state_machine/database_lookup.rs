@@ -63,7 +63,7 @@ impl SledOrderedSerde for DatabaseLookupKey {
     fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
     where Self: Sized {
         let mut buf_read = Cursor::new(v);
-        let tenant = buf_read.read_tenant(DB_LOOKUP_KEY_DELIMITER);
+        let tenant = buf_read.read_tenant();
         if let Ok(tenant) = tenant {
             // read_tenant already put cursor at next byte of delimiter, no need advance cursor here.
             let database_name_result = buf_read.read_string();

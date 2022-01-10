@@ -58,7 +58,7 @@ fn test_write_and_read() -> Result<()> {
     let res: u64 = read.read_uvarint().unwrap();
     assert_eq!(res, 1024);
 
-    let res: String = read.read_tenant(b'/').unwrap();
+    let res: String = read.read_tenant().unwrap();
     assert_eq!(res, "tenant1");
 
     Ok(())
