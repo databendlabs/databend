@@ -19,6 +19,7 @@ use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::prelude::MutableArrayBuilder;
 use common_datavalues::prelude::MutableBooleanArrayBuilder;
+use common_datavalues::types::merge_types;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValue;
@@ -151,7 +152,13 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
 
         let check_arrays = &columns[1..];
 
-        match input_dt {
+        let mut least_super_dt = input_dt.clone();
+        for array in check_arrays {
+            least_super_dt = merge_types(&least_super_dt, array.data_type())?;
+        }
+        let input_array = input_array.cast_with_type(&least_super_dt)?;
+
+        match least_super_dt {
             DataType::Boolean => {
                 basic_contains!(
                     input_dt,
@@ -163,11 +170,18 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                 );
             }
             DataType::UInt8 => {
-                basic_contains!(input_dt, input_array, check_arrays, NEGATED, builder, UInt8);
+                basic_contains!(
+                    &least_super_dt,
+                    input_array,
+                    check_arrays,
+                    NEGATED,
+                    builder,
+                    UInt8
+                );
             }
             DataType::UInt16 => {
                 basic_contains!(
-                    input_dt,
+                    &least_super_dt,
                     input_array,
                     check_arrays,
                     NEGATED,
@@ -177,7 +191,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             }
             DataType::UInt32 => {
                 basic_contains!(
-                    input_dt,
+                    &least_super_dt,
                     input_array,
                     check_arrays,
                     NEGATED,
@@ -187,7 +201,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             }
             DataType::UInt64 => {
                 basic_contains!(
-                    input_dt,
+                    &least_super_dt,
                     input_array,
                     check_arrays,
                     NEGATED,
@@ -196,20 +210,48 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                 );
             }
             DataType::Int8 => {
-                basic_contains!(input_dt, input_array, check_arrays, NEGATED, builder, Int8);
+                basic_contains!(
+                    &least_super_dt,
+                    input_array,
+                    check_arrays,
+                    NEGATED,
+                    builder,
+                    Int8
+                );
             }
             DataType::Int16 => {
-                basic_contains!(input_dt, input_array, check_arrays, NEGATED, builder, Int16);
+                basic_contains!(
+                    &least_super_dt,
+                    input_array,
+                    check_arrays,
+                    NEGATED,
+                    builder,
+                    Int16
+                );
             }
             DataType::Int32 => {
-                basic_contains!(input_dt, input_array, check_arrays, NEGATED, builder, Int32);
+                basic_contains!(
+                    &least_super_dt,
+                    input_array,
+                    check_arrays,
+                    NEGATED,
+                    builder,
+                    Int32
+                );
             }
             DataType::Int64 => {
-                basic_contains!(input_dt, input_array, check_arrays, NEGATED, builder, Int64);
+                basic_contains!(
+                    &least_super_dt,
+                    input_array,
+                    check_arrays,
+                    NEGATED,
+                    builder,
+                    Int64
+                );
             }
             DataType::Float32 => {
                 float_contains!(
-                    input_dt,
+                    &least_super_dt,
                     input_array,
                     check_arrays,
                     NEGATED,
@@ -219,7 +261,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             }
             DataType::Float64 => {
                 float_contains!(
-                    input_dt,
+                    &least_super_dt,
                     input_array,
                     check_arrays,
                     NEGATED,
@@ -229,7 +271,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             }
             DataType::String => {
                 basic_contains!(
-                    input_dt,
+                    &least_super_dt,
                     input_array,
                     check_arrays,
                     NEGATED,

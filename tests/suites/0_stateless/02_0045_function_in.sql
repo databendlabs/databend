@@ -5,6 +5,8 @@ SELECT NULL IN (1, 2, 3);
 SELECT 1 IN (1, 2, NULL);
 SELECT 1 IN (2, 3, NULL);
 SELECT 1.1 IN (1.10, 2, 3.3, 1.1);
+select 1 in (1.2, 2);
+select 1 in (1.0, 2);
 -- 
 CREATE TABLE IF NOT EXISTS t1(a UInt8, b UInt64) Engine = Memory;
 INSERT INTO t1 (a,b) VALUES (1, NULL), (2, 3);
