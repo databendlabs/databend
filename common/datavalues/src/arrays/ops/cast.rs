@@ -25,7 +25,7 @@ use common_exception::Result;
 use crate::prelude::*;
 
 pub trait ArrayCast: Debug {
-    fn cast_with_type(&self, _data_type: &DataType) -> Result<Series> {
+    fn cast_with_type(&self, _data_type: &DataTypePtr) -> Result<Series> {
         Err(ErrorCode::BadDataValueType(format!(
             "Unsupported cast_with_type operation for {:?}",
             self,
@@ -33,11 +33,11 @@ pub trait ArrayCast: Debug {
     }
 }
 
-fn cast_ca(ca: &dyn Array, data_type: &DataType) -> Result<Series> {
-    let arrow_type = data_type.to_arrow();
-    let arrow_type = get_physical_arrow_type(&arrow_type);
+fn cast_ca(ca: &dyn Array, data_type: &DataTypePtr) -> Result<Series> {
+    // we did not use logical datatype of arrow, so all arrow datatypes are physical
+    let arrow_type = data_type.arrow_type();
     // we enable ignore_overflow by default
-    let array = cast::cast(ca, arrow_type, CastOptions {
+    let array = cast::cast(ca, &arrow_type, CastOptions {
         wrapped: true,
         partial: true,
     })?;
@@ -48,67 +48,11 @@ fn cast_ca(ca: &dyn Array, data_type: &DataType) -> Result<Series> {
 impl<T> ArrayCast for DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
-    fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
+    fn cast_with_type(&self, data_type: &DataTypePtr) -> Result<Series> {
         cast_ca(&self.array, data_type)
     }
 }
 
-impl ArrayCast for DFStringArray {
-    fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
-        // special case for string to float
-        if data_type == &DataType::Float32 {
-            let c = self.apply_cast_numeric(|v| {
-                lexical_core::parse_partial::<f32>(v)
-                    .unwrap_or((0.0f32, 0))
-                    .0
-            });
-
-            Ok(c.into_series())
-        } else if data_type == &DataType::Float64 {
-            let c = self.apply_cast_numeric(|v| {
-                lexical_core::parse_partial::<f64>(v)
-                    .unwrap_or((0.0f64, 0))
-                    .0
-            });
-
-            Ok(c.into_series())
-        } else {
-            cast_ca(&self.array, data_type)
-        }
-    }
-}
-
-impl ArrayCast for DFBooleanArray {
-    fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
-        cast_ca(&self.array, data_type)
-    }
-}
-
-impl ArrayCast for DFNullArray {
-    fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
-        match data_type {
-            DataType::Null => Ok(self.clone().into_series()),
-            DataType::Boolean => Ok(DFBooleanArray::full_null(self.len()).into_series()),
-            DataType::UInt8 => Ok(DFUInt8Array::full_null(self.len()).into_series()),
-            DataType::UInt16 => Ok(DFUInt16Array::full_null(self.len()).into_series()),
-            DataType::UInt32 => Ok(DFUInt32Array::full_null(self.len()).into_series()),
-            DataType::UInt64 => Ok(DFUInt64Array::full_null(self.len()).into_series()),
-            DataType::Int8 => Ok(DFInt8Array::full_null(self.len()).into_series()),
-            DataType::Int16 => Ok(DFInt16Array::full_null(self.len()).into_series()),
-            DataType::Int32 => Ok(DFInt32Array::full_null(self.len()).into_series()),
-            DataType::Int64 => Ok(DFInt64Array::full_null(self.len()).into_series()),
-            DataType::Float32 => Ok(DFFloat32Array::full_null(self.len()).into_series()),
-            DataType::Float64 => Ok(DFFloat64Array::full_null(self.len()).into_series()),
-            DataType::String => Ok(DFStringArray::full_null(self.len()).into_series()),
-            DataType::List(_) => Ok(DFListArray::full_null(self.len()).into_series()),
-
-            _ => Err(ErrorCode::BadDataValueType(format!(
-                "Unsupported cast_with_type from array: {:?} into data_type: {:?}",
-                self, data_type,
-            ))),
-        }
-    }
-}
-
+impl ArrayCast for DFNullArray {}
 impl ArrayCast for DFListArray {}
 impl ArrayCast for DFStructArray {}

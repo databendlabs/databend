@@ -37,7 +37,6 @@ use crate::prelude::*;
 #[derive(Debug, Clone)]
 pub struct DFPrimitiveArray<T: DFPrimitiveType> {
     pub(crate) array: PrimitiveArray<T>,
-    data_type: DataType,
 }
 
 impl<T: DFPrimitiveType> From<PrimitiveArray<T>> for DFPrimitiveArray<T> {
@@ -57,19 +56,18 @@ fn precision(x: &TimeUnit) -> usize {
 
 impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
     pub fn new(array: PrimitiveArray<T>) -> Self {
-        let data_type: DataType = array.data_type().into();
-        let data_type: DataType = data_type_physical(data_type);
-        Self { array, data_type }
+        Self { array }
     }
 
     pub fn from_arrow_array(array: &dyn Array) -> Self {
-        let expected_arrow_type = T::data_type().to_arrow();
-        let arrow_type = get_physical_arrow_type(array.data_type());
+        let expected_type = create_primitive_datatype::<T>();
+        let expected_arrow = expected_type.arrow_type();
         let cast_options = CastOptions {
             wrapped: true,
             partial: true,
         };
-        if &expected_arrow_type != arrow_type {
+
+        if &expected_arrow != array.data_type() {
             match array.data_type() {
                 // u32
                 ArrowDataType::Timestamp(x, _) => {
@@ -79,14 +77,14 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
                         .downcast_ref::<PrimitiveArray<i64>>()
                         .expect("primitive cast should be ok");
 
-                    let array = unary(array, |x| (x as usize / p) as u32, expected_arrow_type);
+                    let array = unary(array, |x| (x as usize / p) as u32, expected_arrow);
 
                     Self::from_arrow_array(&array)
                 }
                 ArrowDataType::Date32 => {
                     let array = cast::cast(array, &ArrowDataType::Int32, cast_options)
                         .expect("primitive cast should be ok");
-                    let array = cast::cast(array.as_ref(), &expected_arrow_type, cast_options)
+                    let array = cast::cast(array.as_ref(), &expected_arrow, cast_options)
                         .expect("primitive cast should be ok");
 
                     Self::from_arrow_array(array.as_ref())
@@ -94,7 +92,7 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
                 ArrowDataType::Date64 => {
                     let array = cast::cast(array, &ArrowDataType::Int64, cast_options)
                         .expect("primitive cast should be ok");
-                    let array = cast::cast(array.as_ref(), &expected_arrow_type, cast_options)
+                    let array = cast::cast(array.as_ref(), &expected_arrow, cast_options)
                         .expect("primitive cast should be ok");
 
                     Self::from_arrow_array(array.as_ref())
@@ -106,7 +104,7 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
                         .downcast_ref::<PrimitiveArray<i32>>()
                         .expect("primitive cast should be ok");
 
-                    let array = unary(array, |x| (x as usize / p) as u32, expected_arrow_type);
+                    let array = unary(array, |x| (x as usize / p) as u32, expected_arrow);
 
                     Self::from_arrow_array(&array)
                 }
@@ -117,7 +115,7 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
                         .downcast_ref::<PrimitiveArray<i64>>()
                         .expect("primitive cast should be ok");
 
-                    let array = unary(array, |x| (x as usize / p) as u32, expected_arrow_type);
+                    let array = unary(array, |x| (x as usize / p) as u32, expected_arrow);
 
                     Self::from_arrow_array(&array)
                 }
@@ -129,8 +127,8 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
         }
     }
 
-    pub fn data_type(&self) -> &DataType {
-        &self.data_type
+    pub fn data_type(&self) -> DataTypePtr {
+        create_primitive_datatype::<T>()
     }
 
     pub fn inner(&self) -> &PrimitiveArray<T> {
@@ -143,24 +141,15 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
         let v = self.array.value_unchecked(index);
 
         if self.array.is_null(index) {
-            return Ok(self.data_type().into());
+            return Ok(DataValue::Null);
         }
 
-        let d = match T::data_type() {
-            DataType::UInt8 => DataValue::UInt8(v.to_u8()),
-            DataType::UInt16 => DataValue::UInt16(v.to_u16()),
-            DataType::UInt32 => DataValue::UInt32(v.to_u32()),
-            DataType::UInt64 => DataValue::UInt64(v.to_u64()),
-            DataType::Int8 => DataValue::Int8(v.to_i8()),
-            DataType::Int16 => DataValue::Int16(v.to_i16()),
-            DataType::Int32 => DataValue::Int32(v.to_i32()),
-            DataType::Int64 => DataValue::Int64(v.to_i64()),
-            DataType::Float32 => DataValue::Float32(v.to_f32()),
-            DataType::Float64 => DataValue::Float64(v.to_f64()),
-            _ => unreachable!(),
-        };
-
-        Ok(d)
+        // it's safe to unwrap here, because we know the type is correct
+        match (T::SIGN, T::FLOATING) {
+            (false, false) => Ok(DataValue::UInt64(v.to_u64().unwrap())),
+            (true, false) => Ok(DataValue::Int64(v.to_i64().unwrap())),
+            (_, true) => Ok(DataValue::Float64(v.to_f64().unwrap())),
+        }
     }
 
     /// Unpack a array to the same physical type.
@@ -171,7 +160,7 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
     /// is assumed to be correct in other unsafe code.
     pub unsafe fn unpack(&self, array: &Series) -> Result<&Self> {
         let array_trait = &**array;
-        if self.data_type() == array.data_type() {
+        if self.data_type().type_id() == array.type_id() {
             let ca = &*(array_trait as *const dyn SeriesTrait as *const Self);
             Ok(ca)
         } else {
@@ -277,7 +266,8 @@ pub unsafe fn take_primitive_iter_unchecked<T: DFPrimitiveType, I: IntoIterator<
                 .map(|idx| *array_values.get_unchecked(idx));
 
             let values = Buffer::from_trusted_len_iter_unchecked(iter);
-            PrimitiveArray::from_data(T::data_type().to_arrow(), values, None)
+            let data_type = create_primitive_datatype::<T>();
+            PrimitiveArray::from_data(data_type.arrow_type(), values, None)
         }
         _ => {
             let array_values = arr.values();

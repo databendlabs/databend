@@ -20,14 +20,14 @@ use common_arrow::arrow::trusted_len::TrustedLen;
 use crate::prelude::*;
 
 pub struct ListIter<'a> {
-    array: &'a LargeListArray,
+    array: &'a FixedSizeListArray,
     current: usize,
     current_end: usize,
 }
 
 impl<'a> ListIter<'a> {
     /// create a new iterator
-    pub fn new(array: &'a LargeListArray) -> Self {
+    pub fn new(array: &'a FixedSizeListArray) -> Self {
         Self {
             array,
             current: 0,
@@ -64,14 +64,14 @@ impl<'a> Iterator for ListIter<'a> {
 }
 
 pub struct ListIterNoNull<'a> {
-    array: &'a LargeListArray,
+    array: &'a FixedSizeListArray,
     current: usize,
     current_end: usize,
 }
 
 impl<'a> ListIterNoNull<'a> {
     /// create a new iterator
-    pub fn new(array: &'a LargeListArray) -> Self {
+    pub fn new(array: &'a FixedSizeListArray) -> Self {
         ListIterNoNull {
             array,
             current: 0,

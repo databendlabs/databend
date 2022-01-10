@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 
 use super::data_type::IDataType;
@@ -21,10 +23,25 @@ use crate::prelude::*;
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DataTypeString {}
 
+impl DataTypeString {
+    pub fn arc() -> DataTypePtr {
+        Arc::new(Self {})
+    }
+}
+
 #[typetag::serde]
 impl IDataType for DataTypeString {
     fn type_id(&self) -> TypeID {
         TypeID::String
+    }
+
+    #[inline]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn default_value(&self) -> DataValue {
+        DataValue::String(vec![])
     }
 
     fn arrow_type(&self) -> ArrowType {

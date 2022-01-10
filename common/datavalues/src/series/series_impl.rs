@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use core::fmt;
-use std::convert::TryFrom;
 use std::ops::Deref;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -46,7 +46,11 @@ pub trait IntoSeries {
 }
 
 pub trait SeriesTrait: Send + Sync + fmt::Debug {
-    fn data_type(&self) -> &DataType;
+    /// Type of data that series/column contains. It's an underlying physical type:
+    /// UInt16 for Date, UInt32 for DateTime, so on.
+    fn type_id(&self) -> TypeID;
+    fn data_type(&self) -> DataTypePtr;
+
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool;
     fn is_null(&self, row: usize) -> bool;
@@ -58,7 +62,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn to_values(&self) -> Result<Vec<DataValue>>;
     fn slice(&self, offset: usize, length: usize) -> Series;
 
-    fn cast_with_type(&self, data_type: &DataType) -> Result<Series>;
+    fn cast_with_type(&self, data_type: &DataTypePtr) -> Result<Series>;
 
     fn if_then_else(&self, rhs: &Series, predicate: &Series) -> Result<Series>;
 
@@ -78,7 +82,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn i8(&self) -> Result<&DFInt8Array> {
         Err(ErrorCode::IllegalDataType(format!(
             "{:?} != i8",
-            self.data_type()
+            self.type_id()
         )))
     }
 
@@ -86,14 +90,14 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn i16(&self) -> Result<&DFInt16Array> {
         Err(ErrorCode::IllegalDataType(format!(
             "{:?} != i16",
-            self.data_type()
+            self.type_id()
         )))
     }
 
     fn i32(&self) -> Result<&DFInt32Array> {
         Err(ErrorCode::IllegalDataType(format!(
             "{:?} != i32",
-            self.data_type()
+            self.type_id()
         )))
     }
 
@@ -101,7 +105,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn i64(&self) -> Result<&DFInt64Array> {
         Err(ErrorCode::IllegalDataType(format!(
             "{:?} != i64",
-            self.data_type()
+            self.type_id()
         )))
     }
 
@@ -109,7 +113,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn f32(&self) -> Result<&DFFloat32Array> {
         Err(ErrorCode::IllegalDataType(format!(
             "{:?} != f32",
-            self.data_type()
+            self.type_id()
         )))
     }
 
@@ -117,7 +121,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn f64(&self) -> Result<&DFFloat64Array> {
         Err(ErrorCode::IllegalDataType(format!(
             "{:?} != f64",
-            self.data_type()
+            self.type_id()
         )))
     }
 
@@ -125,7 +129,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn u8(&self) -> Result<&DFUInt8Array> {
         Err(ErrorCode::IllegalDataType(format!(
             "{:?} != u8",
-            self.data_type()
+            self.type_id()
         )))
     }
 
@@ -133,7 +137,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn u16(&self) -> Result<&DFUInt16Array> {
         Err(ErrorCode::IllegalDataType(format!(
             "{:?} != u16",
-            self.data_type()
+            self.type_id()
         )))
     }
 
@@ -141,7 +145,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn u32(&self) -> Result<&DFUInt32Array> {
         Err(ErrorCode::IllegalDataType(format!(
             "{:?} != u32",
-            self.data_type()
+            self.type_id()
         )))
     }
 
@@ -149,7 +153,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn u64(&self) -> Result<&DFUInt64Array> {
         Err(ErrorCode::IllegalDataType(format!(
             "{:?} != u64",
-            self.data_type()
+            self.type_id()
         )))
     }
 
@@ -157,7 +161,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn bool(&self) -> Result<&DFBooleanArray> {
         Err(ErrorCode::IllegalDataType(format!(
             "{:?} != bool",
-            self.data_type()
+            self.type_id()
         )))
     }
 
@@ -165,7 +169,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn string(&self) -> Result<&DFStringArray> {
         Err(ErrorCode::IllegalDataType(format!(
             "{:?} != string",
-            self.data_type()
+            self.type_id()
         )))
     }
 
@@ -173,7 +177,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn tuple(&self) -> Result<&DFStructArray> {
         Err(ErrorCode::IllegalDataType(format!(
             "{:?} != struct",
-            self.data_type()
+            self.type_id()
         )))
     }
 
@@ -310,11 +314,8 @@ impl Series {
 
 impl IntoSeries for ArrayRef {
     fn into_series(self) -> Series {
-        let data_type = DataType::try_from(self.data_type()).unwrap();
-        let physical_type: PhysicalDataType = data_type.into();
-
-        use PhysicalDataType::*;
-        match physical_type {
+        use ArrowType::*;
+        match self.data_type() {
             Null => DFNullArray::from_arrow_array(self.as_ref()).into_series(),
             Boolean => DFBooleanArray::from_arrow_array(self.as_ref()).into_series(),
             UInt8 => DFUInt8Array::from_arrow_array(self.as_ref()).into_series(),

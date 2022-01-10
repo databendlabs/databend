@@ -36,30 +36,3 @@ pub trait TypeSerializer: Send + Sync {
     fn serialize_value(&self, value: &DataValue) -> Result<String>;
     fn serialize_column(&self, column: &DataColumn) -> Result<Vec<String>>;
 }
-
-impl DataType {
-    pub fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        match self {
-            DataType::Null => Box::new(NullSerializer {}),
-            DataType::Boolean => Box::new(BooleanSerializer {}),
-            DataType::UInt8 => Box::new(NumberSerializer::<u8>::default()),
-            DataType::UInt16 => Box::new(NumberSerializer::<u16>::default()),
-            DataType::UInt32 => Box::new(NumberSerializer::<u32>::default()),
-            DataType::UInt64 => Box::new(NumberSerializer::<u64>::default()),
-            DataType::Int8 => Box::new(NumberSerializer::<i8>::default()),
-            DataType::Int16 => Box::new(NumberSerializer::<i16>::default()),
-            DataType::Int32 => Box::new(NumberSerializer::<i32>::default()),
-            DataType::Int64 => Box::new(NumberSerializer::<i64>::default()),
-            DataType::Float32 => Box::new(NumberSerializer::<f32>::default()),
-            DataType::Float64 => Box::new(NumberSerializer::<f64>::default()),
-            DataType::Date16 => Box::new(DateSerializer::<u16>::default()),
-            DataType::Date32 => Box::new(DateSerializer::<i32>::default()),
-            DataType::DateTime32(_) => Box::new(DateTimeSerializer::<u32>::default()),
-            DataType::String => Box::new(StringSerializer {}),
-            DataType::Struct(fields) => Box::new(StructSerializer {
-                fields: fields.to_vec(),
-            }),
-            _ => todo!(),
-        }
-    }
-}

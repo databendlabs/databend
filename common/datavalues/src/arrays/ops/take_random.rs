@@ -264,7 +264,7 @@ impl<'a> TakeRandom for BoolTakeRandom<'a> {
 }
 
 pub struct ListTakeRandom<'a> {
-    arr: &'a LargeListArray,
+    arr: &'a FixedSizeListArray,
 }
 
 impl<'a> TakeRandom for ListTakeRandom<'a> {

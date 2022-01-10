@@ -16,12 +16,9 @@
 // See notice.md
 
 use std::fmt;
-use std::ops::Deref;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_macros::MallocSizeOf;
@@ -33,91 +30,65 @@ use crate::prelude::*;
 pub enum DataValue {
     /// Base type.
     Null,
-    Boolean(Option<bool>),
-    Int8(Option<i8>),
-    Int16(Option<i16>),
-    Int32(Option<i32>),
-    Int64(Option<i64>),
-    UInt8(Option<u8>),
-    UInt16(Option<u16>),
-    UInt32(Option<u32>),
-    UInt64(Option<u64>),
-    Float32(Option<f32>),
-    Float64(Option<f64>),
-    String(Option<Vec<u8>>),
+    Boolean(bool),
+    Int64(i64),
+    UInt64(u64),
+    Float64(f64),
+    String(Vec<u8>),
 
     // Container struct.
-    List(Option<Vec<DataValue>>),
+    List(Vec<DataValue>),
     Struct(Vec<DataValue>),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, MallocSizeOf)]
+pub enum ValueType {
+    Null,
+    Boolean,
+    UInt64,
+    Int64,
+    Float64,
+    String,
+    List,
+    Struct,
 }
 
 pub type DataValueRef = Arc<DataValue>;
 
 impl DataValue {
     pub fn is_null(&self) -> bool {
-        if let DataValue::Struct(v) = self {
-            return v.iter().all(|v| v.is_null());
-        }
-
-        matches!(
-            self,
-            DataValue::Boolean(None)
-                | DataValue::Int8(None)
-                | DataValue::Int16(None)
-                | DataValue::Int32(None)
-                | DataValue::Int64(None)
-                | DataValue::UInt8(None)
-                | DataValue::UInt16(None)
-                | DataValue::UInt32(None)
-                | DataValue::UInt64(None)
-                | DataValue::Float32(None)
-                | DataValue::Float64(None)
-                | DataValue::String(None)
-                | DataValue::Null
-                | DataValue::List(None)
-        )
+        matches!(self, DataValue::Null)
     }
 
-    pub fn data_type(&self) -> DataType {
-        todo!();
+    pub fn value_type(&self) -> ValueType {
+        match self {
+            DataValue::Null => ValueType::Null,
+            DataValue::Boolean(_) => ValueType::Boolean,
+            DataValue::Int64(_) => ValueType::Int64,
+            DataValue::UInt64(_) => ValueType::UInt64,
+            DataValue::Float64(_) => ValueType::Float64,
+            DataValue::String(_) => ValueType::String,
+            DataValue::List(_) => ValueType::List,
+            DataValue::Struct(_) => ValueType::Struct,
+        }
     }
 
     #[inline]
     pub fn is_integer(&self) -> bool {
-        matches!(
-            self,
-            DataValue::Int8(_)
-                | DataValue::Int16(_)
-                | DataValue::Int32(_)
-                | DataValue::Int64(_)
-                | DataValue::UInt8(_)
-                | DataValue::UInt16(_)
-                | DataValue::UInt32(_)
-                | DataValue::UInt64(_)
-        )
+        matches!(self, |DataValue::Int64(_)| DataValue::UInt64(_))
     }
 
     #[inline]
     pub fn is_signed_integer(&self) -> bool {
-        matches!(
-            self,
-            DataValue::Int8(_) | DataValue::Int16(_) | DataValue::Int32(_) | DataValue::Int64(_)
-        )
+        matches!(self, DataValue::Int64(_))
     }
 
     #[inline]
     pub fn is_unsigned_integer(&self) -> bool {
         matches!(
             self,
-            DataValue::UInt8(_)
-                | DataValue::UInt16(_)
-                | DataValue::UInt32(_)
                 | DataValue::UInt64(_)
         )
-    }
-
-    pub fn to_array(&self) -> Result<Series> {
-        self.to_series_with_size(1)
     }
 
     pub fn to_series_with_size(&self, size: usize) -> Result<Series> {
@@ -141,7 +112,7 @@ impl DataValue {
         //     DataValue::Float64(values) => Ok(build_constant_series! {DFFloat64Array, values, size}),
         //     DataValue::String(values) => match values {
         //         None => Ok(DFStringArray::full_null(size).into_series()),
-        //         Some(v) => Ok(DFStringArray::full(v.deref(), size).into_series()),
+        //         v => Ok(DFStringArray::full(v.deref(), size).into_series()),
         //     },
         //     DataValue::List(values) => match data_type {
         //         DataType::Int8 => build_list_series! {i8, values, size, data_type },
@@ -160,7 +131,7 @@ impl DataValue {
         //         DataType::Boolean => {
         //             let mut builder = ListBooleanArrayBuilder::with_capacity(0, size);
         //             match values {
-        //                 Some(v) => {
+        //                 v => {
         //                     let series = DataValue::try_into_data_array(v, data_type)?;
         //                     (0..size).for_each(|_| {
         //                         builder.append_series(&series);
@@ -175,7 +146,7 @@ impl DataValue {
         //         DataType::String => {
         //             let mut builder = ListStringArrayBuilder::with_capacity(0, size);
         //             match values {
-        //                 Some(v) => {
+        //                 v => {
         //                     let series = DataValue::try_into_data_array(v, data_type)?;
         //                     (0..size).for_each(|_| {
         //                         builder.append_series(&series);
@@ -220,122 +191,57 @@ impl DataValue {
 
     pub fn as_u64(&self) -> Result<u64> {
         match self {
-            DataValue::Int8(Some(v)) => Ok(*v as u64),
-            DataValue::Int16(Some(v)) => Ok(*v as u64),
-            DataValue::Int32(Some(v)) => Ok(*v as u64),
-            DataValue::Int64(Some(v)) => Ok(*v as u64),
-            DataValue::UInt8(Some(v)) => Ok(*v as u64),
-            DataValue::UInt16(Some(v)) => Ok(*v as u64),
-            DataValue::UInt32(Some(v)) => Ok(*v as u64),
-            DataValue::UInt64(Some(v)) => Ok(*v),
+            DataValue::Int64(v) if *v >= 0 => Ok(*v as u64),
+            DataValue::UInt64(v) => Ok(*v),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unexpected type:{:?} to get u64 number",
-                other.data_type()
+                other.value_type()
             ))),
         }
     }
 
     pub fn as_i64(&self) -> Result<i64> {
         match self {
-            DataValue::Int8(Some(v)) => Ok(*v as i64),
-            DataValue::Int16(Some(v)) => Ok(*v as i64),
-            DataValue::Int32(Some(v)) => Ok(*v as i64),
-            DataValue::Int64(Some(v)) => Ok(*v),
-            DataValue::UInt8(Some(v)) => Ok(*v as i64),
-            DataValue::UInt16(Some(v)) => Ok(*v as i64),
-            DataValue::UInt32(Some(v)) => Ok(*v as i64),
-            DataValue::UInt64(Some(v)) => Ok(*v as i64),
+            DataValue::Int64(v) => Ok(*v),
+            DataValue::UInt64(v) => Ok(*v as i64),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unexpected type:{:?} to get i64 number",
-                other.data_type()
+                other.value_type()
             ))),
         }
     }
 
     pub fn as_bool(&self) -> Result<bool> {
         match self {
-            DataValue::Null => Ok(false),
-            DataValue::Boolean(v) => Ok(v.map_or(false, |v| v)),
-            DataValue::Int8(v) => Ok(v.map_or(false, |v| v != 0)),
-            DataValue::Int16(v) => Ok(v.map_or(false, |v| v != 0)),
-            DataValue::Int32(v) => Ok(v.map_or(false, |v| v != 0)),
-            DataValue::Int64(v) => Ok(v.map_or(false, |v| v != 0)),
-            DataValue::UInt8(v) => Ok(v.map_or(false, |v| v != 0)),
-            DataValue::UInt16(v) => Ok(v.map_or(false, |v| v != 0)),
-            DataValue::UInt32(v) => Ok(v.map_or(false, |v| v != 0)),
-            DataValue::UInt64(v) => Ok(v.map_or(false, |v| v != 0)),
-            DataValue::Float32(v) => Ok(v.map_or(false, |v| v != 0f32)),
-            DataValue::Float64(v) => Ok(v.map_or(false, |v| v != 0f64)),
+            DataValue::Boolean(v) => Ok(*v),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unexpected type:{:?} to get boolean",
-                other.data_type()
+                other.value_type()
             ))),
         }
     }
 
     pub fn as_f64(&self) -> Result<f64> {
         match self {
-            DataValue::Int8(Some(v)) => Ok(*v as f64),
-            DataValue::Int16(Some(v)) => Ok(*v as f64),
-            DataValue::Int32(Some(v)) => Ok(*v as f64),
-            DataValue::Int64(Some(v)) => Ok(*v as f64),
-            DataValue::UInt8(Some(v)) => Ok(*v as f64),
-            DataValue::UInt16(Some(v)) => Ok(*v as f64),
-            DataValue::UInt32(Some(v)) => Ok(*v as f64),
-            DataValue::UInt64(Some(v)) => Ok(*v as f64),
-            DataValue::Float32(Some(v)) => Ok(*v as f64),
-            DataValue::Float64(Some(v)) => Ok(*v),
+            DataValue::Int64(v) => Ok(*v as f64),
+            DataValue::UInt64(v) => Ok(*v as f64),
+            DataValue::Float64(v) => Ok(*v),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unexpected type:{:?} to get f64 number",
-                other.data_type()
+                other.value_type()
             ))),
         }
     }
 
-    pub fn new_from_data_type(data_type: &DataType, nullable: bool) -> Self {
-        if nullable {
-            return data_type.into();
-        }
-        todo!()
-        // match data_type {
-        //     DataType::Null => DataValue::Null,
-        //     DataType::Boolean => DataValue::Boolean(Some(false)),
-        //     DataType::UInt8 => DataValue::UInt8(Some(0)),
-        //     DataType::UInt16 => DataValue::UInt16(Some(0)),
-        //     DataType::UInt32 => DataValue::UInt32(Some(0)),
-        //     DataType::UInt64 => DataValue::UInt64(Some(0)),
-        //     DataType::Int8 => DataValue::Int8(Some(0)),
-        //     DataType::Int16 => DataValue::Int16(Some(0)),
-        //     DataType::Int32 => DataValue::Int32(Some(0)),
-        //     DataType::Int64 => DataValue::Int64(Some(0)),
-        //     DataType::Float32 => DataValue::Float32(Some(0.0)),
-        //     DataType::Float64 => DataValue::Float64(Some(0.0)),
-        //     DataType::Date16 => DataValue::UInt16(Some(0)),
-        //     DataType::Date32 => DataValue::Int32(Some(0)),
-        //     DataType::DateTime32(_) => DataValue::UInt32(Some(0)),
-        //     DataType::DateTime64(_, _) => DataValue::UInt64(Some(0)),
-        //     DataType::Interval(_) => DataValue::Int64(Some(0)),
-        //     DataType::List(f) => DataValue::List(Some(vec![]), f.data_type().clone()),
-        //     DataType::Struct(_) => DataValue::Struct(vec![]),
-        //     DataType::String => DataValue::String(Some(vec![])),
-        // }
-    }
     pub fn as_string(&self) -> Result<Vec<u8>> {
         match self {
-            DataValue::Int8(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
-            DataValue::Int16(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
-            DataValue::Int32(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
-            DataValue::Int64(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
-            DataValue::UInt8(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
-            DataValue::UInt16(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
-            DataValue::UInt32(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
-            DataValue::UInt64(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
-            DataValue::Float32(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
-            DataValue::Float64(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
-            DataValue::String(Some(v)) => Ok(v.to_owned()),
+            DataValue::Int64(v) => Ok(Vec::<u8>::from((*v).to_string())),
+            DataValue::UInt64(v) => Ok(Vec::<u8>::from((*v).to_string())),
+            DataValue::Float64(v) => Ok(Vec::<u8>::from((*v).to_string())),
+            DataValue::String(v) => Ok(v.to_owned()),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unexpected type:{:?} to get string",
-                other.data_type()
+                other.value_type()
             ))),
         }
     }
@@ -347,22 +253,10 @@ pub trait DFTryFrom<T>: Sized {
     fn try_from(value: T) -> Result<Self>;
 }
 
-typed_cast_from_data_value_to_std!(Int8, i8);
-typed_cast_from_data_value_to_std!(Int16, i16);
-typed_cast_from_data_value_to_std!(Int32, i32);
-typed_cast_from_data_value_to_std!(Int64, i64);
-typed_cast_from_data_value_to_std!(UInt8, u8);
-typed_cast_from_data_value_to_std!(UInt16, u16);
-typed_cast_from_data_value_to_std!(UInt32, u32);
-typed_cast_from_data_value_to_std!(UInt64, u64);
-typed_cast_from_data_value_to_std!(Float32, f32);
-typed_cast_from_data_value_to_std!(Float64, f64);
-typed_cast_from_data_value_to_std!(Boolean, bool);
-
 impl DFTryFrom<DataValue> for Vec<u8> {
     fn try_from(value: DataValue) -> Result<Self> {
         match value {
-            DataValue::String(Some(inner_value)) => Ok(inner_value),
+            DataValue::String(value) => Ok(value),
             _ => Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error:  Cannot convert {:?} to {}",
                 value,
@@ -372,21 +266,21 @@ impl DFTryFrom<DataValue> for Vec<u8> {
     }
 }
 
-std_to_data_value!(Int8, i8);
-std_to_data_value!(Int16, i16);
-std_to_data_value!(Int32, i32);
+std_to_data_value!(Int64, i8);
+std_to_data_value!(Int64, i16);
+std_to_data_value!(Int64, i32);
 std_to_data_value!(Int64, i64);
-std_to_data_value!(UInt8, u8);
-std_to_data_value!(UInt16, u16);
-std_to_data_value!(UInt32, u32);
+std_to_data_value!(UInt64, u8);
+std_to_data_value!(UInt64, u16);
+std_to_data_value!(UInt64, u32);
 std_to_data_value!(UInt64, u64);
-std_to_data_value!(Float32, f32);
+std_to_data_value!(Float64, f32);
 std_to_data_value!(Float64, f64);
 std_to_data_value!(Boolean, bool);
 
 impl From<&[u8]> for DataValue {
     fn from(x: &[u8]) -> Self {
-        DataValue::String(Some(x.to_vec()))
+        DataValue::String(x.to_vec())
     }
 }
 
@@ -399,46 +293,16 @@ impl From<Option<&[u8]>> for DataValue {
 
 impl From<Vec<u8>> for DataValue {
     fn from(x: Vec<u8>) -> Self {
-        DataValue::String(Some(x))
+        DataValue::String(x)
     }
 }
 
 impl From<Option<Vec<u8>>> for DataValue {
     fn from(x: Option<Vec<u8>>) -> Self {
-        DataValue::String(x)
-    }
-}
-
-impl From<&DataType> for DataValue {
-    fn from(data_type: &DataType) -> Self {
-        match data_type {
-            DataType::Null => DataValue::Null,
-            DataType::Boolean => DataValue::Boolean(None),
-            DataType::Int8 => DataValue::Int8(None),
-            DataType::Int16 => DataValue::Int16(None),
-            DataType::Int32 => DataValue::Int32(None),
-            DataType::Int64 => DataValue::Int64(None),
-            DataType::UInt8 => DataValue::UInt8(None),
-            DataType::UInt16 => DataValue::UInt16(None),
-            DataType::UInt32 => DataValue::UInt32(None),
-            DataType::UInt64 => DataValue::UInt64(None),
-            DataType::Float32 => DataValue::Float32(None),
-            DataType::Float64 => DataValue::Float64(None),
-            DataType::Date16 => DataValue::UInt16(None),
-            DataType::Date32 => DataValue::Int32(None),
-            DataType::DateTime32(_) => DataValue::UInt32(None),
-            DataType::DateTime64(_, _) => DataValue::UInt64(None),
-            DataType::List(f) => DataValue::List(None),
-            DataType::Struct(_) => DataValue::Struct(vec![]),
-            DataType::String => DataValue::String(None),
-            DataType::Interval(_) => DataValue::Int64(None),
+        match x {
+            Some(v) => DataValue::String(v),
+            None => DataValue::Null,
         }
-    }
-}
-
-impl From<DataType> for DataValue {
-    fn from(data_type: DataType) -> Self {
-        DataValue::from(&data_type)
     }
 }
 
@@ -449,19 +313,11 @@ impl fmt::Display for DataValue {
         }
         match self {
             DataValue::Null => write!(f, "NULL"),
-            DataValue::Boolean(v) => format_data_value_with_option!(f, v),
-            DataValue::Float32(v) => format_data_value_with_option!(f, v),
-            DataValue::Float64(v) => format_data_value_with_option!(f, v),
-            DataValue::Int8(v) => format_data_value_with_option!(f, v),
-            DataValue::Int16(v) => format_data_value_with_option!(f, v),
-            DataValue::Int32(v) => format_data_value_with_option!(f, v),
-            DataValue::Int64(v) => format_data_value_with_option!(f, v),
-            DataValue::UInt8(v) => format_data_value_with_option!(f, v),
-            DataValue::UInt16(v) => format_data_value_with_option!(f, v),
-            DataValue::UInt32(v) => format_data_value_with_option!(f, v),
-            DataValue::UInt64(v) => format_data_value_with_option!(f, v),
-            DataValue::String(None) => write!(f, "NULL"),
-            DataValue::String(Some(v)) => match std::str::from_utf8(v) {
+            DataValue::Boolean(v) => write!(f, "{}", v),
+            DataValue::Float64(v) => write!(f, "{}", v),
+            DataValue::Int64(v) => write!(f, "{}", v),
+            DataValue::UInt64(v) => write!(f, "{}", v),
+            DataValue::String(v) => match std::str::from_utf8(v) {
                 Ok(v) => write!(f, "{}", v),
                 Err(_e) => {
                     for c in v {
@@ -470,8 +326,7 @@ impl fmt::Display for DataValue {
                     Ok(())
                 }
             },
-            DataValue::List(None, ..) => write!(f, "NULL"),
-            DataValue::List(Some(v), ..) => {
+            DataValue::List(v, ..) => {
                 write!(
                     f,
                     "[{}]",
@@ -493,19 +348,11 @@ impl fmt::Debug for DataValue {
         }
         match self {
             DataValue::Null => write!(f, "NULL"),
-            DataValue::Boolean(v) => format_data_value_with_option!(f, v),
-            DataValue::Int8(v) => format_data_value_with_option!(f, v),
-            DataValue::Int16(v) => format_data_value_with_option!(f, v),
-            DataValue::Int32(v) => format_data_value_with_option!(f, v),
-            DataValue::Int64(v) => format_data_value_with_option!(f, v),
-            DataValue::UInt8(v) => format_data_value_with_option!(f, v),
-            DataValue::UInt16(v) => format_data_value_with_option!(f, v),
-            DataValue::UInt32(v) => format_data_value_with_option!(f, v),
-            DataValue::UInt64(v) => format_data_value_with_option!(f, v),
-            DataValue::Float32(v) => format_data_value_with_option!(f, v),
-            DataValue::Float64(v) => format_data_value_with_option!(f, v),
-            DataValue::String(None) => write!(f, "{}", self),
-            DataValue::String(Some(_)) => write!(f, "{}", self),
+            DataValue::Boolean(v) => write!(f, "{}", v),
+            DataValue::Int64(v) => write!(f, "{}", v),
+            DataValue::UInt64(v) => write!(f, "{}", v),
+            DataValue::Float64(v) => write!(f, "{}", v),
+            DataValue::String(_) => write!(f, "{}", self),
             DataValue::List(_) => write!(f, "[{}]", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }

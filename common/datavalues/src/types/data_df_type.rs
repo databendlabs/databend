@@ -21,14 +21,7 @@ use crate::DFTryFrom;
 use crate::DataValue;
 
 pub trait DFPrimitiveType:
-    NativeArithmetics
-    + NumCast
-    + PartialOrd
-    + Into<DataValue>
-    + Default
-    + Serialize
-    + DeserializeOwned
-    + DFTryFrom<DataValue>
+    NativeArithmetics + NumCast + PartialOrd + Into<DataValue> + Default + Serialize + DeserializeOwned
 {
     type LargestType: DFPrimitiveType;
     const SIGN: bool;

@@ -48,8 +48,7 @@ impl DFStringArray {
     }
 
     pub fn from_arrow_array(array: &dyn Array) -> Self {
-        let arrow_type = get_physical_arrow_type(array.data_type());
-
+        let arrow_type = array.data_type();
         if arrow_type == &ArrowDataType::Binary {
             let arr = array.as_any().downcast_ref::<BinaryArray<i32>>().unwrap();
             let arr = binary_to_large_binary(arr, ArrowDataType::LargeBinary);
@@ -105,8 +104,8 @@ impl DFStringArray {
         &self.array
     }
 
-    pub fn data_type(&self) -> &DataType {
-        &DataType::String
+    pub fn data_type(&self) -> DataTypePtr {
+        DataTypeString::arc()
     }
 
     /// # Safety

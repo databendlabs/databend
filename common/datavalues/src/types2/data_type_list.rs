@@ -23,12 +23,25 @@ use crate::prelude::*;
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DataTypeList {
     name: String,
+    size: usize,
     inner: DataTypePtr,
 }
 
 impl DataTypeList {
-    pub fn create(name: String, inner: DataTypePtr) -> Self {
-        DataTypeList { name, inner }
+    pub fn create(name: String, size: usize, inner: DataTypePtr) -> Self {
+        DataTypeList { name, size, inner }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn len(&self) -> usize {
+        self.size
+    }
+
+    pub fn inner_type(&self) -> &DataTypePtr {
+        &self.inner
     }
 }
 
@@ -36,6 +49,16 @@ impl DataTypeList {
 impl IDataType for DataTypeList {
     fn type_id(&self) -> TypeID {
         TypeID::List
+    }
+
+    #[inline]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn default_value(&self) -> DataValue {
+        let c: Vec<DataValue> = (0..self.size).map(|_| self.inner.default_value()).collect();
+        DataValue::List(c)
     }
 
     fn arrow_type(&self) -> ArrowType {

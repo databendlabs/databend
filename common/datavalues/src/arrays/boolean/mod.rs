@@ -60,14 +60,14 @@ impl DFBooleanArray {
 
     pub fn from_arrow_data(values: Bitmap, validity: Option<Bitmap>) -> Self {
         Self::from_arrow_array(&BooleanArray::from_data(
-            DataType::Boolean.to_arrow(),
+            ArrowType::Boolean,
             values,
             validity,
         ))
     }
 
-    pub fn data_type(&self) -> &DataType {
-        &DataType::Boolean
+    pub fn data_type(&self) -> DataTypePtr {
+        DataTypeBoolean::arc()
     }
 
     pub fn inner(&self) -> &BooleanArray {
@@ -128,7 +128,7 @@ impl DFBooleanArray {
     /// is assumed to be correct in other unsafe code.
     pub unsafe fn unpack(&self, array: &Series) -> Result<&Self> {
         let array_trait = &**array;
-        if self.data_type() == array.data_type() {
+        if self.data_type().type_id() == array.type_id() {
             let ca = &*(array_trait as *const dyn SeriesTrait as *const Self);
             Ok(ca)
         } else {

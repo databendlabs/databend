@@ -12,10 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_macros::MallocSizeOf;
 
 #[derive(
-    serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, MallocSizeOf,
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    MallocSizeOf,
 )]
 
 pub enum TypeID {
@@ -58,4 +69,109 @@ pub enum TypeID {
 
     List,
     Struct,
+}
+
+impl TypeID {
+    #[inline]
+    pub fn is_null(&self) -> bool {
+        matches!(self, TypeID::Nullable)
+    }
+
+    #[inline]
+    pub fn is_string(&self) -> bool {
+        matches!(self, TypeID::String)
+    }
+
+    #[inline]
+    pub fn is_integer(&self) -> bool {
+        matches!(
+            self,
+            TypeID::Int8
+                | TypeID::Int16
+                | TypeID::Int32
+                | TypeID::Int64
+                | TypeID::UInt8
+                | TypeID::UInt16
+                | TypeID::UInt32
+                | TypeID::UInt64
+        )
+    }
+
+    #[inline]
+    pub fn is_signed_integer(&self) -> bool {
+        matches!(
+            self,
+            TypeID::Int8 | TypeID::Int16 | TypeID::Int32 | TypeID::Int64
+        )
+    }
+
+    #[inline]
+    pub fn is_unsigned_integer(&self) -> bool {
+        matches!(
+            self,
+            TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64
+        )
+    }
+
+    #[inline]
+    pub fn is_floating(&self) -> bool {
+        matches!(self, TypeID::Float32 | TypeID::Float64)
+    }
+
+    #[inline]
+    pub fn is_date_or_date_time(&self) -> bool {
+        matches!(
+            self,
+            TypeID::Date16 | TypeID::Date32 | TypeID::DateTime32 | TypeID::DateTime64,
+        )
+    }
+
+    /// Determine if a TypeID is signed numeric or not
+    #[inline]
+    pub fn is_signed_numeric(&self) -> bool {
+        matches!(
+            self,
+            TypeID::Int8
+                | TypeID::Int16
+                | TypeID::Int32
+                | TypeID::Int64
+                | TypeID::Float32
+                | TypeID::Float64
+        )
+    }
+
+    /// Determine if a TypeID is numeric or not
+    #[inline]
+    pub fn is_numeric(&self) -> bool {
+        self.is_signed_numeric()
+            || matches!(
+                self,
+                TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64
+            )
+    }
+
+    #[inline]
+    pub fn is_interval(&self) -> bool {
+        matches!(self, TypeID::Interval)
+    }
+
+    #[inline]
+    pub fn numeric_byte_size(&self) -> Result<usize> {
+        match self {
+            TypeID::Int8 | TypeID::UInt8 => Ok(1),
+            TypeID::Int16 | TypeID::UInt16 => Ok(2),
+            TypeID::Int32 | TypeID::UInt32 | TypeID::Float32 => Ok(4),
+            TypeID::Int64 | TypeID::UInt64 | TypeID::Float64 => Ok(8),
+            _ => Result::Err(ErrorCode::BadArguments(format!(
+                "Function number_byte_size argument must be numeric types, but got {:?}",
+                self
+            ))),
+        }
+    }
+}
+
+impl std::fmt::Display for TypeID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }

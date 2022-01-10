@@ -27,6 +27,15 @@ impl IDataType for DataTypeDateInterval {
         TypeID::Interval
     }
 
+    #[inline]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn default_value(&self) -> DataValue {
+        DataValue::Int64(0)
+    }
+
     fn arrow_type(&self) -> ArrowType {
         ArrowType::Int64
     }

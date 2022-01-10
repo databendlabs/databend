@@ -26,6 +26,7 @@ pub mod data_type_string;
 pub mod data_type_struct;
 pub mod type_id;
 
+pub use data_type::*;
 pub use data_type_boolean::*;
 pub use data_type_date::*;
 pub use data_type_date32::*;

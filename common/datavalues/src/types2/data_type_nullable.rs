@@ -36,8 +36,17 @@ impl IDataType for DataTypeNullable {
         TypeID::Nullable
     }
 
+    #[inline]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn is_nullable(&self) -> bool {
         true
+    }
+
+    fn default_value(&self) -> DataValue {
+        DataValue::Null
     }
 
     fn arrow_type(&self) -> ArrowType {
@@ -62,9 +71,19 @@ impl IDataType for DataTypeNothing {
         TypeID::Nothing
     }
 
+    #[inline]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    // it's nothing, so we can't create any default value
+    fn default_value(&self) -> DataValue {
+        unreachable!()
+    }
+
     // DataTypeNothing must inside nullable
     fn arrow_type(&self) -> ArrowType {
-        ArrowType::Null
+        unreachable!()
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {

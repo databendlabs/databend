@@ -13,14 +13,16 @@
 // limitations under the License.
 
 use std::cmp;
+use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::prelude::TypeID::*;
 use crate::prelude::*;
+use crate::types2::data_type::DataTypePtr;
 use crate::DataValueBinaryOperator;
 use crate::DataValueUnaryOperator;
-use crate::types2::data_type::DataTypePtr;
 
 fn next_size(size: usize) -> usize {
     if size < 8_usize {
@@ -69,22 +71,24 @@ pub fn numerical_coercion(
     lhs_type: &DataTypePtr,
     rhs_type: &DataTypePtr,
     allow_overflow: bool,
-) -> Result<DataType> {
+) -> Result<DataTypePtr> {
+    let lhs_id = lhs_type.type_id();
+    let rhs_id = rhs_type.type_id();
 
-    let has_float = lhs_type.is_floating() || rhs_type.is_floating();
-    let has_integer = lhs_type.is_integer() || rhs_type.is_integer();
-    let has_signed = lhs_type.is_signed_numeric() || rhs_type.is_signed_numeric();
+    let has_float = lhs_id.is_floating() || rhs_id.is_floating();
+    let has_integer = lhs_id.is_integer() || rhs_id.is_integer();
+    let has_signed = lhs_id.is_signed_numeric() || rhs_id.is_signed_numeric();
 
-    let size_of_lhs = lhs_type.numeric_byte_size()?;
-    let size_of_rhs = rhs_type.numeric_byte_size()?;
+    let size_of_lhs = lhs_id.numeric_byte_size()?;
+    let size_of_rhs = rhs_id.numeric_byte_size()?;
 
     let max_size_of_unsigned_integer = cmp::max(
-        if lhs_type.is_signed_numeric() {
+        if lhs_id.is_signed_numeric() {
             0
         } else {
             size_of_lhs
         },
-        if rhs_type.is_signed_numeric() {
+        if rhs_id.is_signed_numeric() {
             0
         } else {
             size_of_rhs
@@ -92,12 +96,12 @@ pub fn numerical_coercion(
     );
 
     let max_size_of_signed_integer = cmp::max(
-        if !lhs_type.is_signed_numeric() {
+        if !lhs_id.is_signed_numeric() {
             0
         } else {
             size_of_lhs
         },
-        if !rhs_type.is_signed_numeric() {
+        if !rhs_id.is_signed_numeric() {
             0
         } else {
             size_of_rhs
@@ -105,25 +109,17 @@ pub fn numerical_coercion(
     );
 
     let max_size_of_integer = cmp::max(
-        if !lhs_type.is_integer() {
-            0
-        } else {
-            size_of_lhs
-        },
-        if !rhs_type.is_integer() {
-            0
-        } else {
-            size_of_rhs
-        },
+        if !lhs_id.is_integer() { 0 } else { size_of_lhs },
+        if !rhs_id.is_integer() { 0 } else { size_of_rhs },
     );
 
     let max_size_of_float = cmp::max(
-        if !lhs_type.is_floating() {
+        if !lhs_id.is_floating() {
             0
         } else {
             size_of_lhs
         },
-        if !rhs_type.is_floating() {
+        if !rhs_id.is_floating() {
             0
         } else {
             size_of_rhs
@@ -144,7 +140,7 @@ pub fn numerical_coercion(
             max_size = 8
         } else {
             return Result::Err(ErrorCode::BadDataValueType(format!(
-                "Can't construct type from {} and {}",
+                "Can't construct type from {:?} and {:?}",
                 lhs_type, rhs_type
             )));
         }
@@ -158,18 +154,21 @@ pub fn numerical_arithmetic_coercion(
     op: &DataValueBinaryOperator,
     lhs_type: &DataTypePtr,
     rhs_type: &DataTypePtr,
-) -> Result<DataType> {
+) -> Result<DataTypePtr> {
+    let lhs_id = lhs_type.type_id();
+    let rhs_id = rhs_type.type_id();
+
     // error on any non-numeric type
-    if !lhs_type.is_numeric() || !rhs_type.is_numeric() {
+    if !lhs_id.is_numeric() || !rhs_id.is_numeric() {
         return Result::Err(ErrorCode::BadDataValueType(format!(
             "DataValue Error: Unsupported ({:?}) {} ({:?})",
             lhs_type, op, rhs_type
         )));
     };
 
-    let has_signed = lhs_type.is_signed_numeric() || rhs_type.is_signed_numeric();
-    let has_float = lhs_type.is_floating() || rhs_type.is_floating();
-    let max_size = cmp::max(lhs_type.numeric_byte_size()?, rhs_type.numeric_byte_size()?);
+    let has_signed = lhs_id.is_signed_numeric() || rhs_id.is_signed_numeric();
+    let has_float = lhs_id.is_floating() || rhs_id.is_floating();
+    let max_size = cmp::max(lhs_id.numeric_byte_size()?, rhs_id.numeric_byte_size()?);
 
     match op {
         DataValueBinaryOperator::Plus | DataValueBinaryOperator::Mul => {
@@ -183,8 +182,8 @@ pub fn numerical_arithmetic_coercion(
             // From clickhouse: NumberTraits.h
             // If modulo of division can yield negative number, we need larger type to accommodate it.
             // Example: toInt32(-199) % toUInt8(200) will return -199 that does not fit in Int8, only in Int16.
-            let result_is_signed = lhs_type.is_signed_numeric();
-            let right_size = rhs_type.numeric_byte_size()?;
+            let result_is_signed = lhs_id.is_signed_numeric();
+            let right_size = rhs_id.numeric_byte_size()?;
             let size_of_result = if result_is_signed {
                 next_size(right_size)
             } else {
@@ -205,19 +204,24 @@ pub fn datetime_arithmetic_coercion(
     op: &DataValueBinaryOperator,
     lhs_type: &DataTypePtr,
     rhs_type: &DataTypePtr,
-) -> Result<DataType> {
-    let e = Result::Err(ErrorCode::BadDataValueType(format!(
-        "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
-        lhs_type, op, rhs_type
-    )));
+) -> Result<DataTypePtr> {
+    let e = || {
+        Result::Err(ErrorCode::BadDataValueType(format!(
+            "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
+            lhs_type, op, rhs_type
+        )))
+    };
 
-    if !lhs_type.is_date_or_date_time() && !rhs_type.is_date_or_date_time() {
-        return e;
+    let lhs_id = lhs_type.type_id();
+    let rhs_id = rhs_type.type_id();
+
+    if !lhs_id.is_date_or_date_time() && !rhs_id.is_date_or_date_time() {
+        return e();
     }
 
     let mut a = lhs_type.clone();
     let mut b = rhs_type.clone();
-    if !a.is_date_or_date_time() {
+    if !a.type_id().is_date_or_date_time() {
         a = rhs_type.clone();
         b = lhs_type.clone();
     }
@@ -226,14 +230,14 @@ pub fn datetime_arithmetic_coercion(
         DataValueBinaryOperator::Plus => Ok(a),
 
         DataValueBinaryOperator::Minus => {
-            if b.is_numeric() || b.is_interval() {
+            if b.type_id().is_numeric() || b.type_id().is_interval() {
                 Ok(a)
             } else {
                 // Date minus Date or DateTime minus DateTime
-                Ok(DataTypeInt3::arc()2)
+                Ok(DataTypeInt32::arc())
             }
         }
-        _ => e,
+        _ => e(),
     }
 }
 
@@ -242,28 +246,33 @@ pub fn interval_arithmetic_coercion(
     op: &DataValueBinaryOperator,
     lhs_type: &DataTypePtr,
     rhs_type: &DataTypePtr,
-) -> Result<DataType> {
-    let e = Result::Err(ErrorCode::BadDataValueType(format!(
-        "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
-        lhs_type, op, rhs_type
-    )));
+) -> Result<DataTypePtr> {
+    let e = || {
+        Result::Err(ErrorCode::BadDataValueType(format!(
+            "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
+            lhs_type, op, rhs_type
+        )))
+    };
+
+    let lhs_id = lhs_type.type_id();
+    let rhs_id = rhs_type.type_id();
 
     // only allow date/datetime [+/-] interval
-    if !(lhs_type.is_date_or_date_time() && rhs_type.is_interval()
-        || rhs_type.is_date_or_date_time() && lhs_type.is_interval())
+    if !(lhs_id.is_date_or_date_time() && rhs_id.is_interval()
+        || rhs_id.is_date_or_date_time() && lhs_id.is_interval())
     {
-        return e;
+        return e();
     }
 
     match op {
         DataValueBinaryOperator::Plus | DataValueBinaryOperator::Minus => {
-            if lhs_type.is_date_or_date_time() {
+            if lhs_id.is_date_or_date_time() {
                 Ok(lhs_type.clone())
             } else {
                 Ok(rhs_type.clone())
             }
         }
-        _ => e,
+        _ => e(),
     }
 }
 
@@ -271,20 +280,21 @@ pub fn interval_arithmetic_coercion(
 pub fn numerical_unary_arithmetic_coercion(
     op: &DataValueUnaryOperator,
     val_type: &DataTypePtr,
-) -> Result<DataType> {
+) -> Result<DataTypePtr> {
+    let type_id = val_type.type_id();
     // error on any non-numeric type
-    if !val_type.is_numeric() {
+    if !type_id.is_numeric() {
         return Result::Err(ErrorCode::BadDataValueType(format!(
             "DataValue Error: Unsupported ({:?})",
-            val_type
+            type_id
         )));
     };
 
     match op {
         DataValueUnaryOperator::Negate => {
-            let has_float = val_type.is_floating();
-            let has_signed = val_type.is_signed_numeric();
-            let numeric_size = val_type.numeric_byte_size()?;
+            let has_float = type_id.is_floating();
+            let has_signed = type_id.is_signed_numeric();
+            let numeric_size = type_id.numeric_byte_size()?;
             let max_size = if has_signed {
                 numeric_size
             } else {
@@ -296,69 +306,65 @@ pub fn numerical_unary_arithmetic_coercion(
 }
 
 // coercion rules for compare operations. This is a superset of all numerical coercion rules.
-pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataType) -> Result<DataType> {
-    if lhs_type == rhs_type {
+pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Result<DataTypePtr> {
+    let lhs_id = lhs_type.type_id();
+    let rhs_id = rhs_type.type_id();
+
+    if lhs_id == rhs_id {
         // same type => equality is possible
         return Ok(lhs_type.clone());
     }
 
-    if lhs_type.is_numeric() && rhs_type.is_numeric() {
+    if lhs_id.is_numeric() && rhs_id.is_numeric() {
         return numerical_coercion(lhs_type, rhs_type, true);
     }
 
-    //  one of is null
+    //  one of is nothing
     {
-        if rhs_type == &DataTypeNull::arc() {
-            return Ok(lhs_type.clone());
-        }
-        if lhs_type == &DataTypeNull::arc() {
+        if lhs_id == TypeID::Nothing {
             return Ok(rhs_type.clone());
+        }
+
+        if rhs_id == TypeID::Nothing {
+            return Ok(lhs_type.clone());
         }
     }
 
     // one of is String and other is number
-    if (lhs_type.is_numeric() && rhs_type == &DataTypeStrin::arc()g)
-        || (rhs_type.is_numeric() && lhs_type == &DataTypeStrin::arc()g)
-    {
+    if (lhs_id.is_numeric() && rhs_id.is_string()) || (rhs_id.is_numeric() && rhs_id.is_string()) {
         return Ok(DataTypeFloat64::arc());
     }
 
     // one of is datetime and other is number or string
     {
-        if (lhs_type.is_numeric() || lhs_type == &DataTypeStrin::arc()g)
-            && rhs_type.is_date_or_date_time()
-        {
+        if (lhs_id.is_numeric() || lhs_id.is_string()) && rhs_id.is_date_or_date_time() {
             return Ok(rhs_type.clone());
         }
 
-        if (rhs_type.is_numeric() || rhs_type == &DataTypeStrin::arc()g)
-            && lhs_type.is_date_or_date_time()
-        {
+        if (rhs_id.is_numeric() || rhs_id.is_string()) && lhs_id.is_date_or_date_time() {
             return Ok(lhs_type.clone());
         }
     }
 
     // one of is datetime and other is number or string
-    if lhs_type.is_date_or_date_time() || rhs_type.is_date_or_date_time() {
+    if lhs_id.is_date_or_date_time() || rhs_id.is_date_or_date_time() {
         // one of is datetime
-        if matches!(lhs_type, DataTypeDateTime32(_::arc()))
-            || matches!(rhs_type, DataTypeDateTime32(_::arc()))
-        {
-            return Ok(DataTypeDateTime32(None)::arc());
+        // TODO datetime64
+        if matches!(lhs_id, TypeID::DateTime32) || matches!(rhs_id, TypeID::DateTime32) {
+            return Ok(DataTypeDateTime::arc(None));
         }
-
         return Ok(DataTypeDate32::arc());
     }
 
     Err(ErrorCode::IllegalDataType(format!(
-        "Can not compare {} with {}",
+        "Can not compare {:?} with {:?}",
         lhs_type, rhs_type
     )))
 }
 
 // aggregate_types aggregates data types for a multi-argument function.
 #[inline]
-pub fn aggregate_types(args: &[DataType]) -> Result<DataType> {
+pub fn aggregate_types(args: &[DataTypePtr]) -> Result<DataTypePtr> {
     match args.len() {
         0 => Result::Err(ErrorCode::BadArguments("Can't aggregate empty args")),
         1 => Ok(args[0].clone()),
@@ -370,60 +376,46 @@ pub fn aggregate_types(args: &[DataType]) -> Result<DataType> {
     }
 }
 
-pub fn merge_types(lhs_type: &DataTypePtr, rhs_type: &DataType) -> Result<DataType> {
-    match (lhs_type, rhs_type) {
-        (DataTypeNull, _) => Ok(rhs_type.clone()::arc()),
-        (_, DataTypeNull) => Ok(lhs_type.clone()::arc()),
-        (DataTypeList(a), DataTypeList(b)) =>::arc() {
-            if a.name() != b.name() {
-                return Result::Err(ErrorCode::BadDataValueType(format!(
-                    "Can't merge types from {} and {}",
-                    lhs_type, rhs_type
+pub fn merge_types(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Result<DataTypePtr> {
+    let lhs_id = lhs_type.type_id();
+    let rhs_id = rhs_type.type_id();
+
+    match (lhs_id, rhs_id) {
+        (Nothing, _) => Ok(rhs_type.clone()),
+        (_, Nothing) => Ok(lhs_type.clone()),
+        (List, List) => {
+            let a = lhs_type.as_any().downcast_ref::<DataTypeList>().unwrap();
+            let b = rhs_type.as_any().downcast_ref::<DataTypeList>().unwrap();
+
+            if a.name() != b.name() || a.len() != b.len() {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Can't merge list types with diff name/size {:?}/{} and {:?}/{}",
+                    a.name(),
+                    a.len(),
+                    b.name(),
+                    b.len(),
                 )));
             }
-            let typ = merge_types(a.data_type(), b.data_type())?;
-            Ok(DataTypeList(Box::new(DataField::ne::arc()w(
-                a.name(),
+
+            let typ = merge_types(a.inner_type(), b.inner_type())?;
+            Ok(Arc::new(DataTypeList::create(
+                a.name().to_string(),
+                a.len(),
                 typ,
-                a.is_nullable() || b.is_nullable(),
-            ))))
+            )))
         }
-        (DataTypeStruct(a), DataTypeStruct(b)) =>::arc() {
-            if a.len() != b.len() {
-                return Result::Err(ErrorCode::BadDataValueType(format!(
-                    "Can't merge types from {} and {}, because they have different sizes",
-                    lhs_type, rhs_type
-                )));
-            }
-            let fields = a
-                .iter()
-                .zip(b.iter())
-                .map(|(a, b)| {
-                    if a.name() != b.name() {
-                        return Result::Err(ErrorCode::BadDataValueType(format!(
-                            "Can't merge types from {} and {}",
-                            lhs_type, rhs_type
-                        )));
-                    }
-                    let typ = merge_types(a.data_type(), b.data_type())?;
-                    Ok(DataField::new(
-                        a.name(),
-                        typ,
-                        a.is_nullable() || b.is_nullable(),
-                    ))
-                })
-                .collect::<Result<Vec<_>>>()?;
-            Ok(DataTypeStruct(fields::arc()))
+        (Struct, Struct) => {
+            todo!()
         }
         _ => {
-            if lhs_type == rhs_type {
+            if lhs_id == rhs_id {
                 return Ok(lhs_type.clone());
             }
-            if lhs_type.is_numeric() && rhs_type.is_numeric() {
+            if lhs_id.is_numeric() && rhs_id.is_numeric() {
                 numerical_coercion(lhs_type, rhs_type, false)
             } else {
                 Result::Err(ErrorCode::BadDataValueType(format!(
-                    "Can't merge types from {} and {}",
+                    "Can't merge types from {:?} and {:?}",
                     lhs_type, rhs_type
                 )))
             }

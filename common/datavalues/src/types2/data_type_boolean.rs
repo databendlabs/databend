@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 
 use super::data_type::IDataType;
@@ -23,10 +25,25 @@ use crate::TypeSerializer;
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DataTypeBoolean {}
 
+impl DataTypeBoolean {
+    pub fn arc() -> DataTypePtr {
+        Arc::new(Self {})
+    }
+}
+
 #[typetag::serde]
 impl IDataType for DataTypeBoolean {
     fn type_id(&self) -> TypeID {
         TypeID::Boolean
+    }
+
+    #[inline]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn default_value(&self) -> DataValue {
+        DataValue::Boolean(false)
     }
 
     fn arrow_type(&self) -> ArrowType {

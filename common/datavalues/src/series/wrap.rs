@@ -46,14 +46,18 @@ macro_rules! impl_dyn_array {
                 write!(
                     f,
                     "Column: data_type: {:?}, size: {:?}",
-                    self.data_type(),
+                    self.type_id(),
                     self.len()
                 )
             }
         }
 
         impl SeriesTrait for SeriesWrap<$da> {
-            fn data_type(&self) -> &DataType {
+            fn type_id(&self) -> TypeID {
+                self.data_type().type_id()
+            }
+
+            fn data_type(&self) -> DataTypePtr {
                 self.0.data_type()
             }
 
@@ -93,22 +97,22 @@ macro_rules! impl_dyn_array {
                 self.0.slice(offset, length).into_series()
             }
 
-            fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
+            fn cast_with_type(&self, data_type: &DataTypePtr) -> Result<Series> {
                 ArrayCast::cast_with_type(&self.0, data_type)
             }
 
             fn if_then_else(&self, rhs: &Series, predicate: &Series) -> Result<Series> {
-                if predicate.data_type() != &DataType::Boolean {
+                if predicate.type_id() != TypeID::Boolean {
                     return Err(ErrorCode::BadDataValueType(
                         "If function requires the first argument type must be Boolean",
                     ));
                 }
 
-                if self.data_type() != rhs.data_type() {
+                if self.type_id() != rhs.type_id() {
                     return Err(ErrorCode::BadArguments(format!(
                         "If then else requires the arguments to have the same datatypes ({} != {})",
-                        self.data_type(),
-                        rhs.data_type()
+                        self.type_id(),
+                        rhs.type_id()
                     )));
                 }
 
@@ -155,7 +159,7 @@ macro_rules! impl_dyn_array {
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series of type {:?} into i8",
-                        self.data_type(),
+                        self.type_id(),
                     )))
                 }
             }
@@ -167,7 +171,7 @@ macro_rules! impl_dyn_array {
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series of type {:?} into i16",
-                        self.data_type(),
+                        self.type_id(),
                     )))
                 }
             }
@@ -178,7 +182,7 @@ macro_rules! impl_dyn_array {
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series of type {:?} into i32",
-                        self.data_type(),
+                        self.type_id(),
                     )))
                 }
             }
@@ -189,7 +193,7 @@ macro_rules! impl_dyn_array {
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series of type {:?} into i64",
-                        self.data_type(),
+                        self.type_id(),
                     )))
                 }
             }
@@ -200,7 +204,7 @@ macro_rules! impl_dyn_array {
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series of type {:?} into f32",
-                        self.data_type(),
+                        self.type_id(),
                     )))
                 }
             }
@@ -211,7 +215,7 @@ macro_rules! impl_dyn_array {
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series of type {:?} into f64",
-                        self.data_type(),
+                        self.type_id(),
                     )))
                 }
             }
@@ -222,7 +226,7 @@ macro_rules! impl_dyn_array {
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series of type {:?} into u8",
-                        self.data_type(),
+                        self.type_id(),
                     )))
                 }
             }
@@ -233,7 +237,7 @@ macro_rules! impl_dyn_array {
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series of type {:?} into u16",
-                        self.data_type(),
+                        self.type_id(),
                     )))
                 }
             }
@@ -244,7 +248,7 @@ macro_rules! impl_dyn_array {
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series of type {:?} into u32",
-                        self.data_type(),
+                        self.type_id(),
                     )))
                 }
             }
@@ -255,7 +259,7 @@ macro_rules! impl_dyn_array {
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series of type {:?} into u64",
-                        self.data_type(),
+                        self.type_id(),
                     )))
                 }
             }
@@ -266,7 +270,7 @@ macro_rules! impl_dyn_array {
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series of type {:?} into bool",
-                        self.data_type(),
+                        self.type_id(),
                     )))
                 }
             }
@@ -278,19 +282,19 @@ macro_rules! impl_dyn_array {
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series of type {:?} into string",
-                        self.data_type(),
+                        self.type_id(),
                     )))
                 }
             }
 
             /// Unpack to DFArray of data_type struct
             fn tuple(&self) -> Result<&DFStructArray> {
-                if matches!(self.0.data_type(), &DataType::Struct(_)) {
+                if matches!(self.type_id(), TypeID::Struct) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFStructArray)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
                         "cannot unpack Series of type {:?} into struct",
-                        self.data_type(),
+                        self.type_id(),
                     )))
                 }
             }

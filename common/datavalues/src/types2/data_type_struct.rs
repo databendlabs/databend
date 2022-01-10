@@ -37,6 +37,16 @@ impl IDataType for DataTypeStruct {
         TypeID::Struct
     }
 
+    #[inline]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn default_value(&self) -> DataValue {
+        let c: Vec<DataValue> = self.types.iter().map(|t| t.default_value()).collect();
+        DataValue::Struct(c)
+    }
+
     fn arrow_type(&self) -> ArrowType {
         let fields = self
             .names

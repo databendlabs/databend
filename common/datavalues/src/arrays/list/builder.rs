@@ -24,14 +24,14 @@ pub trait ListBuilderTrait {
     fn finish(&mut self) -> DFListArray;
 }
 
-type LargeListPrimitiveBuilder<T> = MutableListArray<i64, MutablePrimitiveArray<T>>;
-type LargeListBinaryBuilder = MutableListArray<i64, MutableBinaryArray<i64>>;
-type LargeListBooleanBuilder = MutableListArray<i64, MutableBooleanArray>;
+type ListPrimitiveBuilder<T> = MutableFixedSizeListArray<MutablePrimitiveArray<T>>;
+type ListBinaryBuilder = MutableFixedSizeListArray<MutableLargeBinaryArray>;
+type ListBooleanBuilder = MutableFixedSizeListArray<MutableBooleanArray>;
 
 pub struct ListPrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {
-    pub builder: LargeListPrimitiveBuilder<T>,
+    pub builder: ListPrimitiveBuilder<T>,
 }
 
 macro_rules! finish_list_builder {
@@ -46,7 +46,7 @@ where T: DFPrimitiveType
 {
     pub fn with_capacity(values_capacity: usize, capacity: usize) -> Self {
         let values = MutablePrimitiveArray::<T>::with_capacity(values_capacity);
-        let builder = LargeListPrimitiveBuilder::<T>::new_with_capacity(values, capacity);
+        let builder = ListPrimitiveBuilder::<T>::new_with_capacity(values, capacity);
 
         ListPrimitiveArrayBuilder { builder }
     }
@@ -103,14 +103,15 @@ where
 }
 
 pub struct ListStringArrayBuilder {
-    builder: LargeListBinaryBuilder,
+    builder: ListBinaryBuilder,
 }
 
-type LargeMutableBinaryArray = MutableBinaryArray<i64>;
+type MutableLargeBinaryArray = MutableBinaryArray<i64>;
+
 impl ListStringArrayBuilder {
     pub fn with_capacity(values_capacity: usize, capacity: usize) -> Self {
-        let values = LargeMutableBinaryArray::with_capacity(values_capacity);
-        let builder = LargeListBinaryBuilder::new_with_capacity(values, capacity);
+        let values = MutableBinaryArray::with_capacity(values_capacity);
+        let builder = ListBinaryBuilder::new_with_capacity(values, capacity);
 
         ListStringArrayBuilder { builder }
     }
@@ -145,13 +146,13 @@ impl ListBuilderTrait for ListStringArrayBuilder {
 }
 
 pub struct ListBooleanArrayBuilder {
-    builder: LargeListBooleanBuilder,
+    builder: ListBooleanBuilder,
 }
 
 impl ListBooleanArrayBuilder {
     pub fn with_capacity(values_capacity: usize, capacity: usize) -> Self {
         let values = MutableBooleanArray::with_capacity(values_capacity);
-        let builder = LargeListBooleanBuilder::new_with_capacity(values, capacity);
+        let builder = ListBooleanBuilder::new_with_capacity(values, capacity);
         Self { builder }
     }
 }
@@ -208,7 +209,7 @@ pub fn get_list_builder(
             Box::new(builder)
         }};
     }
-    match_data_type_apply_macro!(
+    match_type_id_apply_macro!(
         dt,
         get_primitive_builder,
         get_string_builder,

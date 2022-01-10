@@ -28,22 +28,20 @@ use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct DFListArray {
-    pub(crate) array: LargeListArray,
-    pub data_type: DataType,
+    pub(crate) array: FixedSizeListArray,
 }
 
 impl DFListArray {
-    pub fn new(array: LargeListArray) -> Self {
+    pub fn new(array: FixedSizeListArray) -> Self {
         let data_type = array.data_type().into();
-        let data_type: DataType = data_type_physical(data_type);
-        Self { array, data_type }
+        Self { array }
     }
 
     pub fn from_arrow_array(array: &dyn Array) -> Self {
         Self::new(
             array
                 .as_any()
-                .downcast_ref::<LargeListArray>()
+                .downcast_ref::<FixedSizeListArray>()
                 .unwrap()
                 .clone(),
         )
@@ -53,7 +51,7 @@ impl DFListArray {
         &self.data_type
     }
 
-    pub fn inner(&self) -> &LargeListArray {
+    pub fn inner(&self) -> &FixedSizeListArray {
         &self.array
     }
 

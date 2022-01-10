@@ -23,15 +23,29 @@ use crate::prelude::*;
 
 #[derive(Debug, Default, Clone, Copy, serde::Deserialize, serde::Serialize)]
 
-pub struct DataTypeNumeric<T: Default + Clone + Copy + std::fmt::Debug + serde::Serialize> {
+pub struct DataTypeNumeric<
+    T: DFPrimitiveType + Clone + Copy + std::fmt::Debug + Into<DataValue> + serde::Serialize,
+> {
     _t: PhantomData<T>,
 }
 
-impl<T> DataTypeNumeric<T>
-where T: Default + Clone + Copy + std::fmt::Debug + serde::Serialize
-{
-    pub fn arc() -> Arc<Self> {
-        Arc::new(Self { _t: PhantomData })
+// typetag did not support generic impls, so we have to do this
+pub fn create_primitive_datatype<T: DFPrimitiveType>() -> Arc<dyn IDataType> {
+    match (T::SIGN, T::FLOATING, T::SIZE) {
+        (false, false, 8) => Arc::new(DataTypeUInt8 { _t: PhantomData }),
+        (false, false, 16) => Arc::new(DataTypeUInt16 { _t: PhantomData }),
+        (false, false, 32) => Arc::new(DataTypeUInt32 { _t: PhantomData }),
+        (false, false, 64) => Arc::new(DataTypeUInt64 { _t: PhantomData }),
+
+        (false, false, 8) => Arc::new(DataTypeInt8 { _t: PhantomData }),
+        (false, false, 16) => Arc::new(DataTypeInt16 { _t: PhantomData }),
+        (false, false, 32) => Arc::new(DataTypeInt32 { _t: PhantomData }),
+        (false, false, 64) => Arc::new(DataTypeInt64 { _t: PhantomData }),
+
+        (true, true, 32) => Arc::new(DataTypeFloat32 { _t: PhantomData }),
+        (true, true, 64) => Arc::new(DataTypeFloat64 { _t: PhantomData }),
+
+        _ => unimplemented!(),
     }
 }
 
@@ -48,10 +62,25 @@ pub type DataTypeFloat64 = DataTypeNumeric<f64>;
 
 macro_rules! impl_numeric {
     ($ty:ident, $tname:ident) => {
+        impl DataTypeNumeric<$ty> {
+            pub fn arc() -> DataTypePtr {
+                Arc::new(Self { _t: PhantomData })
+            }
+        }
+
         #[typetag::serde]
         impl IDataType for DataTypeNumeric<$ty> {
             fn type_id(&self) -> TypeID {
                 TypeID::$tname
+            }
+
+            #[inline]
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+
+            fn default_value(&self) -> DataValue {
+                $ty::default().into()
             }
 
             fn arrow_type(&self) -> ArrowType {

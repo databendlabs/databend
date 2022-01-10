@@ -27,6 +27,15 @@ impl IDataType for DataTypeDate {
         TypeID::Date16
     }
 
+    #[inline]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn default_value(&self) -> DataValue {
+        DataValue::UInt64(0)
+    }
+
     fn arrow_type(&self) -> ArrowType {
         ArrowType::UInt16
     }

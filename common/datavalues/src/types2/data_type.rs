@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -40,6 +41,7 @@ use super::data_type_numeric::DataTypeUInt8;
 use super::data_type_string::DataTypeString;
 use super::data_type_struct::DataTypeStruct;
 use super::type_id::TypeID;
+use crate::DataValue;
 use crate::TypeDeserializer;
 use crate::TypeSerializer;
 
@@ -55,6 +57,10 @@ pub trait IDataType: std::fmt::Debug + Sync + Send + DynClone {
     fn is_nullable(&self) -> bool {
         false
     }
+
+    fn as_any(&self) -> &dyn Any;
+
+    fn default_value(&self) -> DataValue;
 
     /// arrow_type did not have nullable sign, it's nullable sign is in the field
     fn arrow_type(&self) -> ArrowType;
@@ -76,21 +82,7 @@ pub trait IDataType: std::fmt::Debug + Sync + Send + DynClone {
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer>;
 }
 
-pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
-    if let Some(m) = f.metadata() {
-        if let Some(custom_name) = m.get("ARROW:extension:databend_name") {
-            let metatada = m.get("ARROW:extension:databend_metadata");
-            match custom_name.as_str() {
-                "Date" | "Date16" => return Arc::new(DataTypeDate::default()),
-                "Date32" => return Arc::new(DataTypeDate32::default()),
-                "DateTime" | "DateTime32" => return Arc::new(DataTypeDateTime::default()),
-                "DateTime64" => return Arc::new(DataTypeDateTime64::default()),
-                _ => {}
-            }
-        }
-    }
-
-    let dt = f.data_type();
+pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
     match dt {
         ArrowType::Null => Arc::new(DataTypeNullable::create(Arc::new(DataTypeNothing {}))),
         ArrowType::UInt8 => Arc::new(DataTypeUInt8::default()),
@@ -105,10 +97,10 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
         ArrowType::Float32 => Arc::new(DataTypeFloat32::default()),
         ArrowType::Float64 => Arc::new(DataTypeFloat64::default()),
 
-        ArrowType::List(f) | ArrowType::LargeList(f) => {
+        ArrowType::FixedSizeList(f, size) => {
             let inner = from_arrow_field(f);
             let name = f.name();
-            Arc::new(DataTypeList::create(name.clone(), inner))
+            Arc::new(DataTypeList::create(name.clone(), *size, inner))
         }
         ArrowType::Binary | ArrowType::LargeBinary | ArrowType::Utf8 | ArrowType::LargeUtf8 => {
             Arc::new(DataTypeString::default())
@@ -130,4 +122,22 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
             unimplemented!("data_type: {}", dt)
         }
     }
+}
+
+pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
+    if let Some(m) = f.metadata() {
+        if let Some(custom_name) = m.get("ARROW:extension:databend_name") {
+            let metatada = m.get("ARROW:extension:databend_metadata");
+            match custom_name.as_str() {
+                "Date" | "Date16" => return Arc::new(DataTypeDate::default()),
+                "Date32" => return Arc::new(DataTypeDate32::default()),
+                "DateTime" | "DateTime32" => return Arc::new(DataTypeDateTime::default()),
+                "DateTime64" => return Arc::new(DataTypeDateTime64::default()),
+                _ => {}
+            }
+        }
+    }
+
+    let dt = f.data_type();
+    from_arrow_type(dt)
 }

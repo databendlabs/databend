@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use chrono_tz::Tz;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -32,12 +33,24 @@ impl DataTypeDateTime {
     pub fn create(tz: Option<String>) -> Self {
         DataTypeDateTime { tz }
     }
+    pub fn arc(tz: Option<String>) -> DataTypePtr {
+        Arc::new(DataTypeDateTime { tz })
+    }
 }
 
 #[typetag::serde]
 impl IDataType for DataTypeDateTime {
     fn type_id(&self) -> TypeID {
         TypeID::DateTime32
+    }
+
+    #[inline]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn default_value(&self) -> DataValue {
+        DataValue::UInt64(0)
     }
 
     fn arrow_type(&self) -> ArrowType {

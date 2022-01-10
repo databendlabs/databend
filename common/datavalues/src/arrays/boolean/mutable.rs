@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
 
 use crate::arrays::mutable::MutableArrayBuilder;
 use crate::series::IntoSeries;
@@ -44,7 +45,7 @@ impl<const NULLABLE: bool> MutableArrayBuilder for MutableBooleanArrayBuilder<NU
 
     fn as_series(&mut self) -> Series {
         let array: Arc<dyn Array> = Arc::new(BooleanArray::from_data(
-            self.data_type.to_arrow(),
+            ArrowType::Boolean,
             std::mem::take(&mut self.values).into(),
             std::mem::take(&mut self.validity).map(|x| x.into()),
         ));
