@@ -33,7 +33,6 @@ pub trait BinaryRead {
     fn read_string(&mut self) -> Result<String>;
     fn skip_string(&mut self) -> Result<()>;
     fn read_uvarint(&mut self) -> Result<u64>;
-    fn read_tenant(&mut self) -> Result<String>;
 
     // in place read
     fn read_to_scalar<V>(&mut self, v: &mut V) -> Result<()>
@@ -53,13 +52,19 @@ pub trait BinaryRead {
 }
 
 impl<T> BinaryRead for T
-where T: io::Read + io::BufRead
+where T: io::Read
 {
     fn read_scalar<V>(&mut self) -> Result<V>
     where V: Unmarshal<V> + StatBuffer {
         let mut buffer = V::buffer();
         self.read_exact(buffer.as_mut())?;
-        Ok(V::unmarshal(buffer.as_ref()))
+        match V::try_unmarshal(buffer.as_ref()) {
+            Some(r) => Ok(r),
+            None => Err(ErrorCode::UnmarshalError(format!(
+                "unmarshal error: {:?}",
+                buffer
+            ))),
+        }
     }
 
     fn read_opt_scalar<V>(&mut self) -> Result<Option<V>>
@@ -118,14 +123,5 @@ where T: io::Read + io::BufRead
 
             i += 1;
         }
-    }
-
-    fn read_tenant(&mut self) -> Result<String> {
-        self.read_uvarint()?;
-        let mut buffer = vec![];
-        let tenant_len = self.read_until(b'/', &mut buffer)?;
-
-        let res = String::from_utf8_lossy(&buffer[0..tenant_len - 1]).to_string();
-        Ok(res)
     }
 }

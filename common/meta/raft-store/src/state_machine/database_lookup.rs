@@ -24,12 +24,12 @@ use common_meta_sled_store::SledOrderedSerde;
 use serde::Deserialize;
 use serde::Serialize;
 
-const DB_LOOKUP_KEY_DELIMITER: u8 = b'/';
+const DB_LOOKUP_KEY_DELIMITER: char = '/';
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DatabaseLookupKey {
     tenant: String,
-    delimiter: u8,
+    delimiter: char,
     database_name: String,
 }
 
@@ -51,22 +51,27 @@ impl SledOrderedSerde for DatabaseLookupKey {
     fn ser(&self) -> Result<IVec, ErrorCode> {
         let mut buf = BytesMut::new();
 
-        buf.write_string(&self.tenant)?;
-        buf.write_scalar(&self.delimiter)?;
-        buf.write_string(&self.database_name)?;
+        buf.write_string(format!(
+            "{}{}{}",
+            self.tenant, self.delimiter, self.database_name
+        ))?;
         Ok(IVec::from(buf.to_vec()))
     }
 
     fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
     where Self: Sized {
         let mut buf_read = Cursor::new(v);
-        let tenant = buf_read.read_tenant()?;
+        let db_lookup_key = buf_read.read_string()?;
+
+        let db_lookup_key: Vec<&str> = db_lookup_key
+            .split(DB_LOOKUP_KEY_DELIMITER as char)
+            .collect();
+
         // read_tenant already put cursor at next byte of delimiter, no need advance cursor here.
-        let database_name = buf_read.read_string()?;
         Ok(DatabaseLookupKey {
-            tenant,
+            tenant: db_lookup_key[0].to_string(),
             delimiter: DB_LOOKUP_KEY_DELIMITER,
-            database_name,
+            database_name: db_lookup_key[1].to_string(),
         })
     }
 }
@@ -87,5 +92,20 @@ pub struct DatabaseLookupValue(pub u64);
 impl fmt::Display for DatabaseLookupValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common_meta_sled_store::SledOrderedSerde;
+
+    use crate::state_machine::DatabaseLookupKey;
+
+    #[test]
+    fn test_db_lookup_key_serde() {
+        let k = DatabaseLookupKey::new("tenant1".to_string(), "db1".to_string());
+        let ser_k = k.ser().unwrap();
+        let de_k = DatabaseLookupKey::de(ser_k).unwrap();
+        assert_eq!(k, de_k);
     }
 }

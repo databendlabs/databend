@@ -14,6 +14,9 @@
 
 pub trait Unmarshal<T> {
     fn unmarshal(scratch: &[u8]) -> T;
+    fn try_unmarshal(scratch: &[u8]) -> Option<T> {
+        Some(Self::unmarshal(scratch))
+    }
 }
 
 impl Unmarshal<u8> for u8 {
@@ -114,8 +117,12 @@ impl Unmarshal<bool> for bool {
     }
 }
 
-impl Unmarshal<Option<char>> for Option<char> {
-    fn unmarshal(scratch: &[u8]) -> Option<char> {
+impl Unmarshal<char> for char {
+    fn unmarshal(_: &[u8]) -> char {
+        unimplemented!()
+    }
+
+    fn try_unmarshal(scratch: &[u8]) -> Option<char> {
         let bits = u32::from(scratch[3])
             | u32::from(scratch[2]) << 8
             | u32::from(scratch[1]) << 16
