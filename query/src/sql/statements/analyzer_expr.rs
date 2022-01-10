@@ -78,12 +78,11 @@ impl ExpressionAnalyzer {
         }
     }
 
-    
     fn analyze_value(value: &Value, args: &mut Vec<Expression>) -> Result<()> {
         args.push(ValueExprAnalyzer::analyze(value)?);
         Ok(())
     }
-    
+
     fn analyze_inlist(&self, info: &InListInfo, args: &mut Vec<Expression>) -> Result<()> {
         let mut list = Vec::with_capacity(info.list_size);
         for _index in 0..info.list_size {
@@ -97,19 +96,18 @@ impl ExpressionAnalyzer {
             }
         }
 
-        let expr = args.pop().ok_or(ErrorCode::LogicalError("It's a bug."))?;
+        let expr = args
+            .pop()
+            .ok_or_else(|| ErrorCode::LogicalError("It's a bug."))?;
         list.insert(0, expr);
 
         let op = if info.negated {
             "NOT_IN".to_string()
-        }else {
+        } else {
             "IN".to_string()
         };
 
-        args.push(Expression::ScalarFunction {
-            op,
-            args: list,
-        });
+        args.push(Expression::ScalarFunction { op, args: list });
         Ok(())
     }
 
@@ -367,7 +365,7 @@ struct FunctionExprInfo {
 
 struct InListInfo {
     list_size: usize,
-    negated: bool
+    negated: bool,
 }
 
 enum ExprRPNItem {
@@ -380,7 +378,7 @@ enum ExprRPNItem {
     Subquery(Box<Query>),
     Cast(common_datavalues::DataType),
     Between(bool),
-    InList(InListInfo)
+    InList(InListInfo),
 }
 
 impl ExprRPNItem {
@@ -525,12 +523,14 @@ impl ExprRPNBuilder {
                         .push(ExprRPNItem::function(String::from("tuple"), len));
                 }
             }
-            Expr::InList { expr, list, negated } => {
-                self.rpn.push(ExprRPNItem::InList(InListInfo {
-                    list_size: list.len(),
-                    negated: *negated,
-                }))
-            }
+            Expr::InList {
+                expr: _,
+                list,
+                negated,
+            } => self.rpn.push(ExprRPNItem::InList(InListInfo {
+                list_size: list.len(),
+                negated: *negated,
+            })),
             _ => (),
         }
 

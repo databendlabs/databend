@@ -12,17 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
 use std::collections::HashSet;
+use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
+use common_datavalues::prelude::MutableArrayBuilder;
+use common_datavalues::prelude::MutableBooleanArrayBuilder;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_datavalues::prelude::Series;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
@@ -37,9 +38,82 @@ impl<const NEGATED: bool> InFunction<NEGATED> {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().bool_function().variadic_arguments(2, usize::MAX))
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .bool_function()
+                .variadic_arguments(2, usize::MAX),
+        )
     }
+}
+
+macro_rules! basic_contains {
+    ($INPUT_DT: expr, $INPUT_ARRAY: expr, $CHECK_ARRAY: expr, $NEGATED: expr, $BUILDER: expr, $CAST_TYPE: ident) => {
+        let mut vals_set = HashSet::new();
+        for array in $CHECK_ARRAY {
+            let array = array.column().cast_with_type($INPUT_DT)?;
+            let val = array.try_get(0)?;
+            match val {
+                DataValue::$CAST_TYPE(Some(val)) => {
+                    vals_set.insert(val);
+                }
+                _ => {}
+            }
+        }
+        for idx in 0..$INPUT_ARRAY.len() {
+            let val = $INPUT_ARRAY.try_get(idx)?;
+            match val {
+                DataValue::$CAST_TYPE(Some(val)) => {
+                    let v = match vals_set.contains(&val) {
+                        true => !$NEGATED,
+                        false => $NEGATED,
+                    };
+                    $BUILDER.push(v);
+                }
+                DataValue::$CAST_TYPE(None) => {
+                    $BUILDER.push(false);
+                }
+                _ => {
+                    return Err(ErrorCode::LogicalError("it's a bug"));
+                }
+            }
+        }
+    };
+}
+
+// float type can not impl Hash and Eq trait, so it can not use HashSet
+// maybe we can find some more efficient way to make it.
+macro_rules! float_contains {
+    ($INPUT_DT: expr, $INPUT_ARRAY: expr, $CHECK_ARRAY: expr, $NEGATED: expr, $BUILDER: expr, $CAST_TYPE: ident) => {
+        let mut vals_set = Vec::new();
+        for array in $CHECK_ARRAY {
+            let array = array.column().cast_with_type($INPUT_DT)?;
+            let val = array.try_get(0)?;
+            match val {
+                DataValue::$CAST_TYPE(Some(val)) => {
+                    vals_set.push(val);
+                }
+                _ => {}
+            }
+        }
+        for idx in 0..$INPUT_ARRAY.len() {
+            let val = $INPUT_ARRAY.try_get(idx)?;
+            match val {
+                DataValue::$CAST_TYPE(Some(val)) => {
+                    let v = match vals_set.contains(&val) {
+                        true => !$NEGATED,
+                        false => $NEGATED,
+                    };
+                    $BUILDER.push(v);
+                }
+                DataValue::$CAST_TYPE(None) => {
+                    $BUILDER.push(false);
+                }
+                _ => {
+                    return Err(ErrorCode::LogicalError("it's a bug"));
+                }
+            }
+        }
+    };
 }
 
 impl<const NEGATED: bool> Function for InFunction<NEGATED> {
@@ -47,38 +121,129 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         "InFunction"
     }
 
-    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let input_dt = args[0].data_type();
+        if input_dt == &DataType::Null {
+            return Ok(DataTypeAndNullable::create(input_dt, false));
+        }
+
         let dt = DataType::Boolean;
         Ok(DataTypeAndNullable::create(&dt, false))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         let input_column = columns[0].column();
+
         let input_array = match input_column {
             DataColumn::Array(array) => array.to_owned(),
             DataColumn::Constant(scalar, _) => scalar.to_array()?,
         };
 
         let input_dt = input_array.data_type();
-        common_tracing::tracing::debug!("input_dt: {:#?}", input_dt);
-        let check_arrays = &columns[1..];
-        let mut check_column_set = Vec::new();
-        for column in check_arrays {
-            let array = column.column();
-            let array = match array {
-                DataColumn::Array(_) => {
-                    return Err(ErrorCode::UnexpectedError("logical bug"));
-                },
-                DataColumn::Constant(scalar, _) => {
-                    // cast to DataType::Struct(for tuple struct) will fail, maybe we can consider get into seperate ColumnSet to compare
-                    common_tracing::tracing::debug!("input_dt: {:#?}", scalar.data_type());
-                    scalar.to_array()?.cast_with_type(input_dt)?
-                }
-            };
-            check_column_set.push(ColumnSet::new(&array)?);
+        if input_dt == &DataType::Null {
+            let mut array = MutableBooleanArrayBuilder::<false>::with_capacity(input_array.len());
+            for _ in 0..input_array.len() {
+                array.push_null();
+            }
+            return Ok(DataColumn::Array(array.as_series()));
         }
-        
-        unimplemented!()
+        let mut builder = MutableBooleanArrayBuilder::<false>::with_capacity(input_column.len());
+
+        let check_arrays = &columns[1..];
+
+        match input_dt {
+            DataType::Boolean => {
+                basic_contains!(
+                    input_dt,
+                    input_array,
+                    check_arrays,
+                    NEGATED,
+                    builder,
+                    Boolean
+                );
+            }
+            DataType::UInt8 => {
+                basic_contains!(input_dt, input_array, check_arrays, NEGATED, builder, UInt8);
+            }
+            DataType::UInt16 => {
+                basic_contains!(
+                    input_dt,
+                    input_array,
+                    check_arrays,
+                    NEGATED,
+                    builder,
+                    UInt16
+                );
+            }
+            DataType::UInt32 => {
+                basic_contains!(
+                    input_dt,
+                    input_array,
+                    check_arrays,
+                    NEGATED,
+                    builder,
+                    UInt32
+                );
+            }
+            DataType::UInt64 => {
+                basic_contains!(
+                    input_dt,
+                    input_array,
+                    check_arrays,
+                    NEGATED,
+                    builder,
+                    UInt64
+                );
+            }
+            DataType::Int8 => {
+                basic_contains!(input_dt, input_array, check_arrays, NEGATED, builder, Int8);
+            }
+            DataType::Int16 => {
+                basic_contains!(input_dt, input_array, check_arrays, NEGATED, builder, Int16);
+            }
+            DataType::Int32 => {
+                basic_contains!(input_dt, input_array, check_arrays, NEGATED, builder, Int32);
+            }
+            DataType::Int64 => {
+                basic_contains!(input_dt, input_array, check_arrays, NEGATED, builder, Int64);
+            }
+            DataType::Float32 => {
+                float_contains!(
+                    input_dt,
+                    input_array,
+                    check_arrays,
+                    NEGATED,
+                    builder,
+                    Float32
+                );
+            }
+            DataType::Float64 => {
+                float_contains!(
+                    input_dt,
+                    input_array,
+                    check_arrays,
+                    NEGATED,
+                    builder,
+                    Float64
+                );
+            }
+            DataType::String => {
+                basic_contains!(
+                    input_dt,
+                    input_array,
+                    check_arrays,
+                    NEGATED,
+                    builder,
+                    String
+                );
+            }
+            DataType::Struct(_) => {}
+            _ => {
+                unimplemented!()
+            }
+        }
+
+        Ok(DataColumn::Array(builder.as_series()))
     }
 }
 
@@ -86,26 +251,8 @@ impl<const NEGATED: bool> fmt::Display for InFunction<NEGATED> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if NEGATED {
             write!(f, "NOT IN")
-        }else {
+        } else {
             write!(f, "IN")
         }
-    }
-}
-
-struct ColumnSet {
-    inner: HashSet<DataValue>,
-}
-
-impl ColumnSet {
-    fn new(array: &Series) -> Result<Self> {
-        let mut inner = HashSet::new();
-        for idx in 0..array.len() {
-            let val = array.try_get(idx)?;
-            // f32 and f32 can not impl `Eq` and `Hash`
-            // inner.insert(val);
-        }
-        Ok(Self {
-            inner
-        })
     }
 }
