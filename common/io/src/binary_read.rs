@@ -58,13 +58,7 @@ where T: io::Read
     where V: Unmarshal<V> + StatBuffer {
         let mut buffer = V::buffer();
         self.read_exact(buffer.as_mut())?;
-        match V::try_unmarshal(buffer.as_ref()) {
-            Some(r) => Ok(r),
-            None => Err(ErrorCode::UnmarshalError(format!(
-                "unmarshal error: {:?}",
-                buffer
-            ))),
-        }
+        V::try_unmarshal(buffer.as_ref())
     }
 
     fn read_opt_scalar<V>(&mut self) -> Result<Option<V>>

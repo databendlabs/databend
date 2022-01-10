@@ -11,11 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use common_exception::ErrorCode;
+use common_exception::Result;
 
 pub trait Unmarshal<T> {
     fn unmarshal(scratch: &[u8]) -> T;
-    fn try_unmarshal(scratch: &[u8]) -> Option<T> {
-        Some(Self::unmarshal(scratch))
+    fn try_unmarshal(scratch: &[u8]) -> Result<T> {
+        Ok(Self::unmarshal(scratch))
     }
 }
 
@@ -122,11 +124,17 @@ impl Unmarshal<char> for char {
         unimplemented!()
     }
 
-    fn try_unmarshal(scratch: &[u8]) -> Option<char> {
+    fn try_unmarshal(scratch: &[u8]) -> Result<char> {
         let bits = u32::from(scratch[3])
             | u32::from(scratch[2]) << 8
             | u32::from(scratch[1]) << 16
             | u32::from(scratch[0]) << 24;
-        char::from_u32(bits)
+        match char::from_u32(bits) {
+            Some(c) => Ok(c),
+            None => Err(ErrorCode::UnmarshalError(format!(
+                "try unmarshal u32 to char failed: {}",
+                bits
+            ))),
+        }
     }
 }
