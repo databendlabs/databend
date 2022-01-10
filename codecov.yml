@@ -1,6 +1,13 @@
 ---
 ignore:
+  - .cargo/*
+  - .github/*
+  - docker/*
+  - docs/*
+  - scripts/*
   - tests/*
+  - tools/*
+  - website/*
 
 coverage:
   precision: 0
