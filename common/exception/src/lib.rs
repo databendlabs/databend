@@ -13,15 +13,12 @@
 // limitations under the License.
 
 pub mod exception;
+mod exception_code;
+mod exception_into;
 
 pub use exception::ErrorCode;
 pub use exception::Result;
-pub use exception::SerializedError;
 pub use exception::ToErrorCode;
-
-pub mod prelude {
-    pub use crate::exception::ErrorCode;
-    pub use crate::exception::Result;
-    pub use crate::exception::SerializedError;
-    pub use crate::exception::ToErrorCode;
-}
+pub use exception_code::ABORT_QUERY;
+pub use exception_code::ABORT_SESSION;
+pub use exception_into::SerializedError;

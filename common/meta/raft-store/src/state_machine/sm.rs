@@ -21,7 +21,7 @@ use std::time::UNIX_EPOCH;
 use async_raft::raft::Entry;
 use async_raft::raft::EntryPayload;
 use async_raft::raft::MembershipConfig;
-use common_exception::prelude::ErrorCode;
+use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::sled;

@@ -16,10 +16,10 @@ use std::net::Shutdown;
 
 use common_base::tokio::net::TcpStream;
 use common_base::Thread;
-use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_exception::ABORT_SESSION;
 use common_tracing::tracing;
 use msql_srv::MysqlIntermediary;
 
