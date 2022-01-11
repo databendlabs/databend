@@ -49,7 +49,7 @@ impl Database for GithubDatabase {
         &self.db_info
     }
 
-    async fn init_database(&self) -> Result<()> {
+    async fn init_database(&self, tenant: &str) -> Result<()> {
         let token = self
             .get_db_info()
             .meta
@@ -85,13 +85,13 @@ impl Database for GithubDatabase {
 
             tracing::error!("creating {} related repo", &repo.name);
             // Create default db
-            RepoInfoTable::create_table(storage_ctx.clone(), options.clone()).await?;
+            RepoInfoTable::create_table(storage_ctx.clone(), tenant, options.clone()).await?;
 
-            RepoIssuesTable::create_table(storage_ctx.clone(), options.clone()).await?;
+            RepoIssuesTable::create_table(storage_ctx.clone(), tenant, options.clone()).await?;
 
-            RepoPRsTable::create_table(storage_ctx.clone(), options.clone()).await?;
+            RepoPRsTable::create_table(storage_ctx.clone(), tenant, options.clone()).await?;
 
-            RepoCommentsTable::create_table(storage_ctx.clone(), options.clone()).await?;
+            RepoCommentsTable::create_table(storage_ctx.clone(), tenant, options.clone()).await?;
         }
 
         Ok(())

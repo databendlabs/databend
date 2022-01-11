@@ -34,27 +34,20 @@ pub struct TableLookupKey {
 impl SledOrderedSerde for TableLookupKey {
     fn ser(&self) -> Result<IVec, ErrorCode> {
         let mut buf = BytesMut::new();
-        if buf.write_uvarint(self.database_id).is_ok() && buf.write_string(&self.table_name).is_ok()
-        {
-            return Ok(IVec::from(buf.to_vec()));
-        }
-        Err(ErrorCode::MetaStoreDamaged("invalid key IVec"))
+        buf.write_uvarint(self.database_id)?;
+        buf.write_string(&self.table_name)?;
+        Ok(IVec::from(buf.to_vec()))
     }
 
     fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
     where Self: Sized {
         let mut buf_read = Cursor::new(v);
-        let database_id = buf_read.read_uvarint();
-        if let Ok(database_id) = database_id {
-            let table_name_result = buf_read.read_string();
-            if let Ok(table_name) = table_name_result {
-                return Ok(TableLookupKey {
-                    database_id,
-                    table_name,
-                });
-            }
-        }
-        Err(ErrorCode::MetaStoreDamaged("invalid key IVec"))
+        let database_id = buf_read.read_uvarint()?;
+        let table_name = buf_read.read_string()?;
+        Ok(TableLookupKey {
+            database_id,
+            table_name,
+        })
     }
 }
 

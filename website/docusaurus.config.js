@@ -22,9 +22,9 @@ const config = {
             /** @type {import('@docusaurus/preset-classic').Options} */
             ({
                 docs: {
-                    path: 'docs/overview',
+                    path: '../docs/overview',
                     routeBasePath: 'overview',
-                    sidebarPath: require.resolve('./docs/overview/sidebars.js'),
+                    sidebarPath: require.resolve('../docs/overview/sidebars.js'),
                     editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
                 },
                 blog: {
@@ -55,9 +55,9 @@ const config = {
             /** @type {import('@docusaurus/plugin-content-docs').Options} */
             {
                 id: 'user',
-                path: 'docs/user',
+                path: '../docs/user',
                 routeBasePath: 'user',
-                sidebarPath: require.resolve('./docs/user/sidebars.js'),
+                sidebarPath: require.resolve('../docs/user/sidebars.js'),
                 editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
             },
         ],
@@ -66,9 +66,9 @@ const config = {
             /** @type {import('@docusaurus/plugin-content-docs').Options} */
             {
                 id: 'dev',
-                path: 'docs/dev',
+                path: '../docs/dev',
                 routeBasePath: 'dev',
-                sidebarPath: require.resolve('./docs/dev/sidebars.js'),
+                sidebarPath: require.resolve('../docs/dev/sidebars.js'),
                 editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
             },
         ],

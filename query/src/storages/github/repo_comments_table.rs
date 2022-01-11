@@ -39,11 +39,16 @@ impl RepoCommentsTable {
         Box::new(RepoCommentsTable { options })
     }
 
-    pub async fn create_table(ctx: StorageContext, options: RepoTableOptions) -> Result<()> {
+    pub async fn create_table(
+        ctx: StorageContext,
+        tenant: &str,
+        options: RepoTableOptions,
+    ) -> Result<()> {
         let mut options = options;
         options.table_type = GithubTableType::Comments.to_string();
         let req = CreateTableReq {
             if_not_exists: false,
+            tenant: tenant.to_string(),
             db: options.owner.clone(),
             table: format!("{}_{}", options.repo.clone(), "comments"),
             table_meta: TableMeta {

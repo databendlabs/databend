@@ -33,7 +33,9 @@ async fn test_grpc_client_action_timeout() {
         .await
         .unwrap();
 
-    let res = client.get_database(GetDatabaseReq::new("xx")).await;
+    let res = client
+        .get_database(GetDatabaseReq::new("tenant1", "xx"))
+        .await;
     let actual = res.unwrap_err().message();
     let expect = "status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} }";
     assert_eq!(actual, expect);

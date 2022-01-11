@@ -195,6 +195,7 @@ build_exceptions! {
     IllegalGrant(61),
     ProxyModePermissionDenied(62),
     PermissionDenied(63),
+    UnmarshalError(64),
 
     SemanticError(100),
 

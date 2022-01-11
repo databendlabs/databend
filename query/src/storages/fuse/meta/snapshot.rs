@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 
-use common_base::uuid;
 use common_datavalues::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;

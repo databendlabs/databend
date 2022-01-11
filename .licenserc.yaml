@@ -6,6 +6,7 @@ header:
     - "target"
     - "scripts"
     - "docker"
+    - "docs"
     - "deploy"
     - "website"
     - "tests"
