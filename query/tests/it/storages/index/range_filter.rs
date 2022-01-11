@@ -152,30 +152,23 @@ fn test_range_filter() -> Result<()> {
             expr: Expression::create_binary_expression("-", vec![col("a"), col("b")])
                 .lt_eq(lit(-10)),
             expect: true,
-            error: "Code: 1000, displayText = Function '-' is not monotonic in the variables range.",
+            error:
+                "Code: 1000, displayText = Function '-' is not monotonic in the variables range.",
         },
         Test {
             name: "a < b",
             expr: col("a").lt(col("b")),
             expect: true,
-            error: "Code: 1000, displayText = Function '-' is not monotonic in the variables range.",
+            error: "",
         },
     ];
 
     for test in tests {
-        let prune = match RangeFilter::try_create(&test.expr, schema.clone()){
-            Ok(prune) => prune,
-            Err(e) => {
-                assert_eq!(test.error, e.to_string(), "{}", test.name);
-                continue;
-            }
-        };
+        let prune = RangeFilter::try_create(&test.expr, schema.clone())?;
 
         match prune.eval(&stats) {
             Ok(actual) => assert_eq!(test.expect, actual, "{:#?}", test.name),
-            Err(e) => {
-                assert_eq!(test.error, e.to_string(), "{}", test.name);
-            }
+            Err(e) => assert_eq!(test.error, e.to_string(), "{}", test.name),
         }
     }
 
