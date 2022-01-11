@@ -27,6 +27,7 @@ use futures::TryStreamExt;
 use crate::credential::Credential;
 use crate::error::Error;
 use crate::error::Result;
+use crate::ops::Delete;
 use crate::ops::Object;
 use crate::ops::Read;
 use crate::ops::ReadBuilder;
@@ -259,6 +260,24 @@ impl<S: Send + Sync> Stat<S> for Backend {
         };
 
         Ok(o)
+    }
+}
+
+#[async_trait]
+impl<S: Send + Sync> Delete<S> for Backend {
+    async fn delete(&self, path: &str) -> Result<()> {
+        let p = self.get_abs_path(path);
+
+        let _ = self
+            .client
+            .delete_object()
+            .bucket(&self.bucket.clone())
+            .key(&p)
+            .send()
+            .await
+            .unwrap(); // TODO: we need a better way to handle errors here.
+
+        Ok(())
     }
 }
 

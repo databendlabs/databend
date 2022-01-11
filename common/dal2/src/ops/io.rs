@@ -58,7 +58,7 @@ impl futures::Stream for ReaderStream {
         };
 
         // We will always use the same underlying buffer, the allocation happens only once.
-        if this.buf.len() == 0 {
+        if this.buf.is_empty() {
             this.buf.resize(CAPACITY, 0);
         }
 
