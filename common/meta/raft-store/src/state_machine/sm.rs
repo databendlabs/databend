@@ -308,7 +308,7 @@ impl StateMachine {
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_incr_seq_cmd(
         &self,
-        key: &String,
+        key: &str,
         cmd: &Cmd,
         txn_tree: &TransactionSledTree,
     ) -> common_exception::Result<AppliedState> {
@@ -350,8 +350,8 @@ impl StateMachine {
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_create_database_cmd(
         &self,
-        tenant: &String,
-        name: &String,
+        tenant: &str,
+        name: &str,
         meta: &DatabaseMeta,
         cmd: &Cmd,
         txn_tree: &TransactionSledTree,
@@ -440,8 +440,8 @@ impl StateMachine {
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_drop_database_cmd(
         &self,
-        tenant: &String,
-        name: &String,
+        tenant: &str,
+        name: &str,
         cmd: &Cmd,
         txn_tree: &TransactionSledTree,
     ) -> common_exception::Result<AppliedState> {
@@ -502,9 +502,9 @@ impl StateMachine {
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_create_table_cmd(
         &self,
-        tenant: &String,
-        db_name: &String,
-        table_name: &String,
+        tenant: &str,
+        db_name: &str,
+        table_name: &str,
         table_meta: &TableMeta,
         cmd: &Cmd,
         txn_tree: &TransactionSledTree,
@@ -592,9 +592,9 @@ impl StateMachine {
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_drop_table_cmd(
         &self,
-        tenant: &String,
-        db_name: &String,
-        table_name: &String,
+        tenant: &str,
+        db_name: &str,
+        table_name: &str,
         cmd: &Cmd,
         txn_tree: &TransactionSledTree,
     ) -> common_exception::Result<AppliedState> {
@@ -655,7 +655,7 @@ impl StateMachine {
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_update_kv_cmd(
         &self,
-        key: &String,
+        key: &str,
         seq: &MatchSeq,
         value_op: &Operation<Vec<u8>>,
         value_meta: &Option<KVMeta>,
@@ -664,7 +664,13 @@ impl StateMachine {
     ) -> common_exception::Result<AppliedState> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
         let (prev, result) = self
-            .sub_txn_tree_upsert(&sub_tree, key, seq, value_op.clone(), value_meta.clone())
+            .sub_txn_tree_upsert(
+                &sub_tree,
+                &key.to_string(),
+                seq,
+                value_op.clone(),
+                value_meta.clone(),
+            )
             .map_err(|e| {
                 let e: ConflictableTransactionError<Infallible> = e.into();
                 ErrorCode::from(e)
@@ -745,31 +751,23 @@ impl StateMachine {
         txn_tree: &TransactionSledTree,
     ) -> common_exception::Result<AppliedState> {
         match cmd {
-            Cmd::IncrSeq { ref key } => {
-                return self.apply_incr_seq_cmd(key, cmd, txn_tree);
-            }
+            Cmd::IncrSeq { ref key } => self.apply_incr_seq_cmd(key, cmd, txn_tree),
 
             Cmd::AddNode {
                 ref node_id,
                 ref node,
-            } => {
-                return self.apply_add_node_cmd(node_id, node, cmd, txn_tree);
-            }
+            } => self.apply_add_node_cmd(node_id, node, cmd, txn_tree),
 
             Cmd::CreateDatabase {
                 ref tenant,
                 ref name,
                 ref meta,
-            } => {
-                return self.apply_create_database_cmd(tenant, name, meta, cmd, txn_tree);
-            }
+            } => self.apply_create_database_cmd(tenant, name, meta, cmd, txn_tree),
 
             Cmd::DropDatabase {
                 ref tenant,
                 ref name,
-            } => {
-                return self.apply_drop_database_cmd(tenant, name, cmd, txn_tree);
-            }
+            } => self.apply_drop_database_cmd(tenant, name, cmd, txn_tree),
 
             Cmd::CreateTable {
                 ref tenant,
@@ -777,30 +775,24 @@ impl StateMachine {
                 ref table_name,
                 ref table_meta,
             } => {
-                return self.apply_create_table_cmd(
-                    tenant, db_name, table_name, table_meta, cmd, txn_tree,
-                );
+                self.apply_create_table_cmd(tenant, db_name, table_name, table_meta, cmd, txn_tree)
             }
 
             Cmd::DropTable {
                 tenant,
                 ref db_name,
                 ref table_name,
-            } => {
-                return self.apply_drop_table_cmd(tenant, db_name, table_name, cmd, txn_tree);
-            }
+            } => self.apply_drop_table_cmd(tenant, db_name, table_name, cmd, txn_tree),
 
             Cmd::UpsertKV {
                 key,
                 seq,
                 value: value_op,
                 value_meta,
-            } => {
-                return self.apply_update_kv_cmd(key, seq, value_op, value_meta, cmd, txn_tree);
-            }
+            } => self.apply_update_kv_cmd(key, seq, value_op, value_meta, cmd, txn_tree),
 
             Cmd::UpsertTableOptions(ref req) => {
-                return self.apply_upsert_table_options_cmd(req, cmd, txn_tree);
+                self.apply_upsert_table_options_cmd(req, cmd, txn_tree)
             }
         }
     }
