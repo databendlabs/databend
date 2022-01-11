@@ -27,10 +27,12 @@ use futures::TryStreamExt;
 use crate::credential::Credential;
 use crate::error::Error;
 use crate::error::Result;
+use crate::ops::Object;
 use crate::ops::Read;
 use crate::ops::ReadBuilder;
 use crate::ops::Reader;
 use crate::ops::ReaderStream;
+use crate::ops::Stat;
 use crate::ops::Write;
 use crate::ops::WriteBuilder;
 
@@ -235,6 +237,28 @@ impl<S: Send + Sync> Write<S> for Backend {
             .unwrap(); // TODO: we need a better way to handle errors here.
 
         Ok(args.size as usize)
+    }
+}
+
+#[async_trait]
+impl<S: Send + Sync> Stat<S> for Backend {
+    async fn stat(&self, path: &str) -> Result<Object> {
+        let p = self.get_abs_path(path);
+
+        let meta = self
+            .client
+            .head_object()
+            .bucket(&self.bucket.clone())
+            .key(&p)
+            .send()
+            .await
+            .unwrap(); // TODO: we need a better way to handle errors here.
+        let o = Object {
+            path: path.to_string(),
+            size: meta.content_length as u64,
+        };
+
+        Ok(o)
     }
 }
 
