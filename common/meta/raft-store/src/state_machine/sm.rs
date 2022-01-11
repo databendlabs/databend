@@ -305,6 +305,440 @@ impl StateMachine {
         Ok(result)
     }
 
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn apply_incr_seq_cmd(
+        &self,
+        key: &str,
+        cmd: &Cmd,
+        txn_tree: &TransactionSledTree,
+    ) -> common_exception::Result<AppliedState> {
+        let r = self.txn_incr_seq(key, txn_tree).map_err(|e| {
+            let e: ConflictableTransactionError<Infallible> = e.into();
+            ErrorCode::from(e)
+        })?;
+
+        Ok(r.into())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn apply_add_node_cmd(
+        &self,
+        node_id: &u64,
+        node: &Node,
+        cmd: &Cmd,
+        txn_tree: &TransactionSledTree,
+    ) -> common_exception::Result<AppliedState> {
+        let sm_nodes = txn_tree.key_space::<Nodes>();
+
+        let prev = sm_nodes.get(node_id).map_err(|e| {
+            let e: ConflictableTransactionError<Infallible> = e.into();
+            ErrorCode::from(e)
+        })?;
+
+        if prev.is_some() {
+            Ok((prev, None).into())
+        } else {
+            sm_nodes.insert(node_id, node).map_err(|e| {
+                let e: ConflictableTransactionError<Infallible> = e.into();
+                ErrorCode::from(e)
+            })?;
+            tracing::info!("applied AddNode: {}={:?}", node_id, node);
+            Ok((prev, Some(node.clone())).into())
+        }
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn apply_create_database_cmd(
+        &self,
+        tenant: &str,
+        name: &str,
+        meta: &DatabaseMeta,
+        cmd: &Cmd,
+        txn_tree: &TransactionSledTree,
+    ) -> common_exception::Result<AppliedState> {
+        let db_id = self.txn_incr_seq(SEQ_DATABASE_ID, txn_tree).map_err(|e| {
+            let e: ConflictableTransactionError<Infallible> = e.into();
+            ErrorCode::from(e)
+        })?;
+
+        let db_lookup_tree = txn_tree.key_space::<DatabaseLookup>();
+
+        let (prev, result) = self
+            .sub_txn_tree_upsert(
+                &db_lookup_tree,
+                &DatabaseLookupKey::new(tenant.to_string(), name.to_string()),
+                &MatchSeq::Exact(0),
+                Operation::Update(db_id),
+                None,
+            )
+            .map_err(|e| {
+                let e: ConflictableTransactionError<Infallible> = e.into();
+                ErrorCode::from(e)
+            })?;
+
+        // if it is just created
+        if prev.is_none() && result.is_some() {
+            // TODO(xp): reconsider this impl. it may not be required.
+            self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)
+                .map_err(|e| {
+                    let e: ConflictableTransactionError<Infallible> = e.into();
+                    ErrorCode::from(e)
+                })?;
+        } else {
+            // exist
+            let db_id = prev.unwrap().data;
+            let prev = self
+                .txn_get_database_meta_by_id(&db_id, txn_tree)
+                .map_err(|e| {
+                    let e: ConflictableTransactionError<Infallible> = e.into();
+                    ErrorCode::from(e)
+                })?;
+            if let Some(prev) = prev {
+                return Ok(AppliedState::DatabaseMeta(Change::nochange_with_id(
+                    db_id,
+                    Some(prev),
+                )));
+            }
+        }
+
+        let dbs = txn_tree.key_space::<Databases>();
+        let (prev_meta, result_meta) = self
+            .sub_txn_tree_upsert(
+                &dbs,
+                &db_id,
+                &MatchSeq::Exact(0),
+                Operation::Update(meta.clone()),
+                None,
+            )
+            .map_err(|e| {
+                let e: ConflictableTransactionError<Infallible> = e.into();
+                ErrorCode::from(e)
+            })?;
+
+        if prev_meta.is_none() && result_meta.is_some() {
+            self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)
+                .map_err(|e| {
+                    let e: ConflictableTransactionError<Infallible> = e.into();
+                    ErrorCode::from(e)
+                })?;
+        }
+
+        tracing::debug!(
+            "applied create Database: {}, db_id: {}, meta: {:?}",
+            name,
+            db_id,
+            result
+        );
+
+        Ok(AppliedState::DatabaseMeta(Change::new_with_id(
+            db_id,
+            prev_meta,
+            result_meta,
+        )))
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn apply_drop_database_cmd(
+        &self,
+        tenant: &str,
+        name: &str,
+        cmd: &Cmd,
+        txn_tree: &TransactionSledTree,
+    ) -> common_exception::Result<AppliedState> {
+        let dbs = txn_tree.key_space::<DatabaseLookup>();
+
+        let (prev, result) = self
+            .sub_txn_tree_upsert(
+                &dbs,
+                &DatabaseLookupKey::new(tenant.to_string(), name.to_string()),
+                &MatchSeq::Any,
+                Operation::Delete,
+                None,
+            )
+            .map_err(|e| {
+                let e: ConflictableTransactionError<Infallible> = e.into();
+                ErrorCode::from(e)
+            })?;
+
+        assert!(
+            result.is_none(),
+            "delete with MatchSeq::Any always succeeds"
+        );
+
+        // if it is just deleted
+        if let Some(seq_db_id) = prev {
+            // TODO(xp): reconsider this impl. it may not be required.
+            self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)
+                .map_err(|e| {
+                    let e: ConflictableTransactionError<Infallible> = e.into();
+                    ErrorCode::from(e)
+                })?;
+
+            let db_id = seq_db_id.data;
+
+            let dbs = txn_tree.key_space::<Databases>();
+            let (prev_meta, result_meta) = self
+                .sub_txn_tree_upsert(&dbs, &db_id, &MatchSeq::Any, Operation::Delete, None)
+                .map_err(|e| {
+                    let e: ConflictableTransactionError<Infallible> = e.into();
+                    ErrorCode::from(e)
+                })?;
+
+            tracing::debug!("applied drop Database: {} {:?}", name, result);
+
+            return Ok(AppliedState::DatabaseMeta(Change::new_with_id(
+                db_id,
+                prev_meta,
+                result_meta,
+            )));
+        }
+
+        // not exist
+
+        tracing::debug!("applied drop Database: {} {:?}", name, result);
+        Ok(AppliedState::DatabaseMeta(Change::new(None, None)))
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn apply_create_table_cmd(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        table_name: &str,
+        table_meta: &TableMeta,
+        cmd: &Cmd,
+        txn_tree: &TransactionSledTree,
+    ) -> common_exception::Result<AppliedState> {
+        let db_id = self
+            .txn_get_database_id(tenant, db_name, txn_tree)
+            .map_err(|e| {
+                let e: ConflictableTransactionError<Infallible> = e.into();
+                ErrorCode::from(e)
+            })?;
+
+        let lookup_key = TableLookupKey {
+            database_id: db_id.unwrap(),
+            table_name: table_name.to_string(),
+        };
+
+        let table_lookup_tree = txn_tree.key_space::<TableLookup>();
+        let seq_table_id = table_lookup_tree.get(&lookup_key).map_err(|e| {
+            let e: ConflictableTransactionError<Infallible> = e.into();
+            ErrorCode::from(e)
+        })?;
+
+        if let Some(u) = seq_table_id {
+            let table_id = u.data.0;
+
+            let prev = self
+                .txn_get_table_meta_by_id(&table_id, txn_tree)
+                .map_err(|e| {
+                    let e: ConflictableTransactionError<Infallible> = e.into();
+                    ErrorCode::from(e)
+                })?;
+
+            return Ok(AppliedState::TableMeta(Change::nochange_with_id(
+                table_id, prev,
+            )));
+        }
+
+        let table_meta = table_meta.clone();
+        let table_id = self.txn_incr_seq(SEQ_TABLE_ID, txn_tree).map_err(|e| {
+            let e: ConflictableTransactionError<Infallible> = e.into();
+            ErrorCode::from(e)
+        })?;
+
+        self.sub_txn_tree_upsert(
+            &table_lookup_tree,
+            &lookup_key,
+            &MatchSeq::Exact(0),
+            Operation::Update(TableLookupValue(table_id)),
+            None,
+        )
+        .map_err(|e| {
+            let e: ConflictableTransactionError<Infallible> = e.into();
+            ErrorCode::from(e)
+        })?;
+
+        let table_tree = txn_tree.key_space::<Tables>();
+        let (prev, result) = self
+            .sub_txn_tree_upsert(
+                &table_tree,
+                &table_id,
+                &MatchSeq::Exact(0),
+                Operation::Update(table_meta),
+                None,
+            )
+            .map_err(|e| {
+                let e: ConflictableTransactionError<Infallible> = e.into();
+                ErrorCode::from(e)
+            })?;
+
+        tracing::debug!("applied create Table: {}={:?}", table_name, result);
+
+        if prev.is_none() && result.is_some() {
+            self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)
+                .map_err(|e| {
+                    let e: ConflictableTransactionError<Infallible> = e.into();
+                    ErrorCode::from(e)
+                })?;
+        }
+
+        Ok(AppliedState::TableMeta(Change::new_with_id(
+            table_id, prev, result,
+        )))
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn apply_drop_table_cmd(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        table_name: &str,
+        cmd: &Cmd,
+        txn_tree: &TransactionSledTree,
+    ) -> common_exception::Result<AppliedState> {
+        let db_id = self
+            .txn_get_database_id(tenant, db_name, txn_tree)
+            .map_err(|e| {
+                let e: ConflictableTransactionError<Infallible> = e.into();
+                ErrorCode::from(e)
+            })?;
+
+        let lookup_key = TableLookupKey {
+            database_id: db_id.unwrap(),
+            table_name: table_name.to_string(),
+        };
+
+        let table_lookup_tree = txn_tree.key_space::<TableLookup>();
+        let seq_table_id = table_lookup_tree.get(&lookup_key).map_err(|e| {
+            let e: ConflictableTransactionError<Infallible> = e.into();
+            ErrorCode::from(e)
+        })?;
+
+        if seq_table_id.is_none() {
+            return Ok(Change::<TableMeta>::new(None, None).into());
+        }
+
+        let table_id = seq_table_id.unwrap().data.0;
+
+        self.sub_txn_tree_upsert(
+            &table_lookup_tree,
+            &lookup_key,
+            &MatchSeq::Any,
+            Operation::Delete,
+            None,
+        )
+        .map_err(|e| {
+            let e: ConflictableTransactionError<Infallible> = e.into();
+            ErrorCode::from(e)
+        })?;
+
+        let tables = txn_tree.key_space::<Tables>();
+        let (prev, result) = self
+            .sub_txn_tree_upsert(&tables, &table_id, &MatchSeq::Any, Operation::Delete, None)
+            .map_err(|e| {
+                let e: ConflictableTransactionError<Infallible> = e.into();
+                ErrorCode::from(e)
+            })?;
+        if prev.is_some() && result.is_none() {
+            self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)
+                .map_err(|e| {
+                    let e: ConflictableTransactionError<Infallible> = e.into();
+                    ErrorCode::from(e)
+                })?;
+        }
+        tracing::debug!("applied drop Table: {} {:?}", table_name, result);
+        Ok(Change::new_with_id(table_id, prev, result).into())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn apply_update_kv_cmd(
+        &self,
+        key: &str,
+        seq: &MatchSeq,
+        value_op: &Operation<Vec<u8>>,
+        value_meta: &Option<KVMeta>,
+        cmd: &Cmd,
+        txn_tree: &TransactionSledTree,
+    ) -> common_exception::Result<AppliedState> {
+        let sub_tree = txn_tree.key_space::<GenericKV>();
+        let (prev, result) = self
+            .sub_txn_tree_upsert(
+                &sub_tree,
+                &key.to_string(),
+                seq,
+                value_op.clone(),
+                value_meta.clone(),
+            )
+            .map_err(|e| {
+                let e: ConflictableTransactionError<Infallible> = e.into();
+                ErrorCode::from(e)
+            })?;
+
+        tracing::debug!("applied UpsertKV: {} {:?}", key, result);
+        Ok(Change::new(prev, result).into())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    fn apply_upsert_table_options_cmd(
+        &self,
+        req: &common_meta_types::UpsertTableOptionReq,
+        cmd: &Cmd,
+        txn_tree: &TransactionSledTree,
+    ) -> common_exception::Result<AppliedState> {
+        let table_tree = txn_tree.key_space::<Tables>();
+        let prev = table_tree.get(&req.table_id).map_err(|e| {
+            let e: ConflictableTransactionError<Infallible> = e.into();
+            ErrorCode::from(e)
+        })?;
+
+        // Unlike other Cmd, prev to be None is not allowed for upsert-options.
+        let prev =
+            prev.ok_or_else(|| ErrorCode::UnknownTableId(format!("table_id:{}", req.table_id)))?;
+
+        if req.seq.match_seq(&prev).is_err() {
+            let res = AppliedState::TableMeta(Change::new(Some(prev.clone()), Some(prev)));
+            return Ok(res);
+        }
+
+        let meta = prev.meta.clone();
+        let mut table_meta = prev.data.clone();
+        let opts = &mut table_meta.options;
+
+        for (k, opt_v) in &req.options {
+            match opt_v {
+                None => {
+                    opts.remove(k);
+                }
+                Some(v) => {
+                    opts.insert(k.to_string(), v.to_string());
+                }
+            }
+        }
+
+        let new_seq = self.txn_incr_seq(Tables::NAME, txn_tree).map_err(|e| {
+            let e: ConflictableTransactionError<Infallible> = e.into();
+            ErrorCode::from(e)
+        })?;
+        let sv = SeqV {
+            seq: new_seq,
+            meta,
+            data: table_meta,
+        };
+
+        table_tree.insert(&req.table_id, &sv).map_err(|e| {
+            let e: ConflictableTransactionError<Infallible> = e.into();
+            ErrorCode::from(e)
+        })?;
+
+        Ok(AppliedState::TableMeta(Change::new_with_id(
+            req.table_id,
+            Some(prev),
+            Some(sv),
+        )))
+    }
+
     /// Apply a `Cmd` to state machine.
     ///
     /// Already applied log should be filtered out before passing into this function.
@@ -317,181 +751,23 @@ impl StateMachine {
         txn_tree: &TransactionSledTree,
     ) -> common_exception::Result<AppliedState> {
         match cmd {
-            Cmd::IncrSeq { ref key } => {
-                let r = self.txn_incr_seq(key, txn_tree).map_err(|e| {
-                    let e: ConflictableTransactionError<Infallible> = e.into();
-                    ErrorCode::from(e)
-                })?;
-
-                Ok(r.into())
-            }
+            Cmd::IncrSeq { ref key } => self.apply_incr_seq_cmd(key, cmd, txn_tree),
 
             Cmd::AddNode {
                 ref node_id,
                 ref node,
-            } => {
-                let sm_nodes = txn_tree.key_space::<Nodes>();
-
-                let prev = sm_nodes.get(node_id).map_err(|e| {
-                    let e: ConflictableTransactionError<Infallible> = e.into();
-                    ErrorCode::from(e)
-                })?;
-
-                if prev.is_some() {
-                    Ok((prev, None).into())
-                } else {
-                    sm_nodes.insert(node_id, node).map_err(|e| {
-                        let e: ConflictableTransactionError<Infallible> = e.into();
-                        ErrorCode::from(e)
-                    })?;
-                    tracing::info!("applied AddNode: {}={:?}", node_id, node);
-                    Ok((prev, Some(node.clone())).into())
-                }
-            }
+            } => self.apply_add_node_cmd(node_id, node, cmd, txn_tree),
 
             Cmd::CreateDatabase {
                 ref tenant,
                 ref name,
                 ref meta,
-            } => {
-                let db_id = self.txn_incr_seq(SEQ_DATABASE_ID, txn_tree).map_err(|e| {
-                    let e: ConflictableTransactionError<Infallible> = e.into();
-                    ErrorCode::from(e)
-                })?;
-
-                let db_lookup_tree = txn_tree.key_space::<DatabaseLookup>();
-
-                let (prev, result) = self
-                    .sub_txn_tree_upsert(
-                        &db_lookup_tree,
-                        &DatabaseLookupKey::new(tenant.to_string(), name.to_string()),
-                        &MatchSeq::Exact(0),
-                        Operation::Update(db_id),
-                        None,
-                    )
-                    .map_err(|e| {
-                        let e: ConflictableTransactionError<Infallible> = e.into();
-                        ErrorCode::from(e)
-                    })?;
-
-                // if it is just created
-                if prev.is_none() && result.is_some() {
-                    // TODO(xp): reconsider this impl. it may not be required.
-                    self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)
-                        .map_err(|e| {
-                            let e: ConflictableTransactionError<Infallible> = e.into();
-                            ErrorCode::from(e)
-                        })?;
-                } else {
-                    // exist
-                    let db_id = prev.unwrap().data;
-                    let prev = self
-                        .txn_get_database_meta_by_id(&db_id, txn_tree)
-                        .map_err(|e| {
-                            let e: ConflictableTransactionError<Infallible> = e.into();
-                            ErrorCode::from(e)
-                        })?;
-                    if let Some(prev) = prev {
-                        return Ok(AppliedState::DatabaseMeta(Change::nochange_with_id(
-                            db_id,
-                            Some(prev),
-                        )));
-                    }
-                }
-
-                let dbs = txn_tree.key_space::<Databases>();
-                let (prev_meta, result_meta) = self
-                    .sub_txn_tree_upsert(
-                        &dbs,
-                        &db_id,
-                        &MatchSeq::Exact(0),
-                        Operation::Update(meta.clone()),
-                        None,
-                    )
-                    .map_err(|e| {
-                        let e: ConflictableTransactionError<Infallible> = e.into();
-                        ErrorCode::from(e)
-                    })?;
-
-                if prev_meta.is_none() && result_meta.is_some() {
-                    self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)
-                        .map_err(|e| {
-                            let e: ConflictableTransactionError<Infallible> = e.into();
-                            ErrorCode::from(e)
-                        })?;
-                }
-
-                tracing::debug!(
-                    "applied create Database: {}, db_id: {}, meta: {:?}",
-                    name,
-                    db_id,
-                    result
-                );
-
-                Ok(AppliedState::DatabaseMeta(Change::new_with_id(
-                    db_id,
-                    prev_meta,
-                    result_meta,
-                )))
-            }
+            } => self.apply_create_database_cmd(tenant, name, meta, cmd, txn_tree),
 
             Cmd::DropDatabase {
                 ref tenant,
                 ref name,
-            } => {
-                let dbs = txn_tree.key_space::<DatabaseLookup>();
-
-                let (prev, result) = self
-                    .sub_txn_tree_upsert(
-                        &dbs,
-                        &DatabaseLookupKey::new(tenant.to_string(), name.to_string()),
-                        &MatchSeq::Any,
-                        Operation::Delete,
-                        None,
-                    )
-                    .map_err(|e| {
-                        let e: ConflictableTransactionError<Infallible> = e.into();
-                        ErrorCode::from(e)
-                    })?;
-
-                assert!(
-                    result.is_none(),
-                    "delete with MatchSeq::Any always succeeds"
-                );
-
-                // if it is just deleted
-                if let Some(seq_db_id) = prev {
-                    // TODO(xp): reconsider this impl. it may not be required.
-                    self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)
-                        .map_err(|e| {
-                            let e: ConflictableTransactionError<Infallible> = e.into();
-                            ErrorCode::from(e)
-                        })?;
-
-                    let db_id = seq_db_id.data;
-
-                    let dbs = txn_tree.key_space::<Databases>();
-                    let (prev_meta, result_meta) = self
-                        .sub_txn_tree_upsert(&dbs, &db_id, &MatchSeq::Any, Operation::Delete, None)
-                        .map_err(|e| {
-                            let e: ConflictableTransactionError<Infallible> = e.into();
-                            ErrorCode::from(e)
-                        })?;
-
-                    tracing::debug!("applied drop Database: {} {:?}", name, result);
-
-                    return Ok(AppliedState::DatabaseMeta(Change::new_with_id(
-                        db_id,
-                        prev_meta,
-                        result_meta,
-                    )));
-                }
-
-                // not exist
-
-                tracing::debug!("applied drop Database: {} {:?}", name, result);
-                Ok(AppliedState::DatabaseMeta(Change::new(None, None)))
-            }
+            } => self.apply_drop_database_cmd(tenant, name, cmd, txn_tree),
 
             Cmd::CreateTable {
                 ref tenant,
@@ -499,221 +775,24 @@ impl StateMachine {
                 ref table_name,
                 ref table_meta,
             } => {
-                let db_id = self
-                    .txn_get_database_id(tenant, db_name, txn_tree)
-                    .map_err(|e| {
-                        let e: ConflictableTransactionError<Infallible> = e.into();
-                        ErrorCode::from(e)
-                    })?;
-
-                let lookup_key = TableLookupKey {
-                    database_id: db_id.unwrap(),
-                    table_name: table_name.to_string(),
-                };
-
-                let table_lookup_tree = txn_tree.key_space::<TableLookup>();
-                let seq_table_id = table_lookup_tree.get(&lookup_key).map_err(|e| {
-                    let e: ConflictableTransactionError<Infallible> = e.into();
-                    ErrorCode::from(e)
-                })?;
-
-                if let Some(u) = seq_table_id {
-                    let table_id = u.data.0;
-
-                    let prev = self
-                        .txn_get_table_meta_by_id(&table_id, txn_tree)
-                        .map_err(|e| {
-                            let e: ConflictableTransactionError<Infallible> = e.into();
-                            ErrorCode::from(e)
-                        })?;
-
-                    return Ok(AppliedState::TableMeta(Change::nochange_with_id(
-                        table_id, prev,
-                    )));
-                }
-
-                let table_meta = table_meta.clone();
-                let table_id = self.txn_incr_seq(SEQ_TABLE_ID, txn_tree).map_err(|e| {
-                    let e: ConflictableTransactionError<Infallible> = e.into();
-                    ErrorCode::from(e)
-                })?;
-
-                self.sub_txn_tree_upsert(
-                    &table_lookup_tree,
-                    &lookup_key,
-                    &MatchSeq::Exact(0),
-                    Operation::Update(TableLookupValue(table_id)),
-                    None,
-                )
-                .map_err(|e| {
-                    let e: ConflictableTransactionError<Infallible> = e.into();
-                    ErrorCode::from(e)
-                })?;
-
-                let table_tree = txn_tree.key_space::<Tables>();
-                let (prev, result) = self
-                    .sub_txn_tree_upsert(
-                        &table_tree,
-                        &table_id,
-                        &MatchSeq::Exact(0),
-                        Operation::Update(table_meta),
-                        None,
-                    )
-                    .map_err(|e| {
-                        let e: ConflictableTransactionError<Infallible> = e.into();
-                        ErrorCode::from(e)
-                    })?;
-
-                tracing::debug!("applied create Table: {}={:?}", table_name, result);
-
-                if prev.is_none() && result.is_some() {
-                    self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)
-                        .map_err(|e| {
-                            let e: ConflictableTransactionError<Infallible> = e.into();
-                            ErrorCode::from(e)
-                        })?;
-                }
-
-                Ok(AppliedState::TableMeta(Change::new_with_id(
-                    table_id, prev, result,
-                )))
+                self.apply_create_table_cmd(tenant, db_name, table_name, table_meta, cmd, txn_tree)
             }
 
             Cmd::DropTable {
                 tenant,
                 ref db_name,
                 ref table_name,
-            } => {
-                let db_id = self
-                    .txn_get_database_id(tenant, db_name, txn_tree)
-                    .map_err(|e| {
-                        let e: ConflictableTransactionError<Infallible> = e.into();
-                        ErrorCode::from(e)
-                    })?;
-
-                let lookup_key = TableLookupKey {
-                    database_id: db_id.unwrap(),
-                    table_name: table_name.to_string(),
-                };
-
-                let table_lookup_tree = txn_tree.key_space::<TableLookup>();
-                let seq_table_id = table_lookup_tree.get(&lookup_key).map_err(|e| {
-                    let e: ConflictableTransactionError<Infallible> = e.into();
-                    ErrorCode::from(e)
-                })?;
-
-                if seq_table_id.is_none() {
-                    return Ok(Change::<TableMeta>::new(None, None).into());
-                }
-
-                let table_id = seq_table_id.unwrap().data.0;
-
-                self.sub_txn_tree_upsert(
-                    &table_lookup_tree,
-                    &lookup_key,
-                    &MatchSeq::Any,
-                    Operation::Delete,
-                    None,
-                )
-                .map_err(|e| {
-                    let e: ConflictableTransactionError<Infallible> = e.into();
-                    ErrorCode::from(e)
-                })?;
-
-                let tables = txn_tree.key_space::<Tables>();
-                let (prev, result) = self
-                    .sub_txn_tree_upsert(
-                        &tables,
-                        &table_id,
-                        &MatchSeq::Any,
-                        Operation::Delete,
-                        None,
-                    )
-                    .map_err(|e| {
-                        let e: ConflictableTransactionError<Infallible> = e.into();
-                        ErrorCode::from(e)
-                    })?;
-                if prev.is_some() && result.is_none() {
-                    self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)
-                        .map_err(|e| {
-                            let e: ConflictableTransactionError<Infallible> = e.into();
-                            ErrorCode::from(e)
-                        })?;
-                }
-                tracing::debug!("applied drop Table: {} {:?}", table_name, result);
-                Ok(Change::new_with_id(table_id, prev, result).into())
-            }
+            } => self.apply_drop_table_cmd(tenant, db_name, table_name, cmd, txn_tree),
 
             Cmd::UpsertKV {
                 key,
                 seq,
                 value: value_op,
                 value_meta,
-            } => {
-                let sub_tree = txn_tree.key_space::<GenericKV>();
-                let (prev, result) = self
-                    .sub_txn_tree_upsert(&sub_tree, key, seq, value_op.clone(), value_meta.clone())
-                    .map_err(|e| {
-                        let e: ConflictableTransactionError<Infallible> = e.into();
-                        ErrorCode::from(e)
-                    })?;
-
-                tracing::debug!("applied UpsertKV: {} {:?}", key, result);
-                Ok(Change::new(prev, result).into())
-            }
+            } => self.apply_update_kv_cmd(key, seq, value_op, value_meta, cmd, txn_tree),
 
             Cmd::UpsertTableOptions(ref req) => {
-                let table_tree = txn_tree.key_space::<Tables>();
-                let prev = table_tree.get(&req.table_id).map_err(|e| {
-                    let e: ConflictableTransactionError<Infallible> = e.into();
-                    ErrorCode::from(e)
-                })?;
-
-                // Unlike other Cmd, prev to be None is not allowed for upsert-options.
-                let prev = prev.ok_or_else(|| {
-                    ErrorCode::UnknownTableId(format!("table_id:{}", req.table_id))
-                })?;
-
-                if req.seq.match_seq(&prev).is_err() {
-                    let res = AppliedState::TableMeta(Change::new(Some(prev.clone()), Some(prev)));
-                    return Ok(res);
-                }
-
-                let meta = prev.meta.clone();
-                let mut table_meta = prev.data.clone();
-                let opts = &mut table_meta.options;
-
-                for (k, opt_v) in &req.options {
-                    match opt_v {
-                        None => {
-                            opts.remove(k);
-                        }
-                        Some(v) => {
-                            opts.insert(k.to_string(), v.to_string());
-                        }
-                    }
-                }
-
-                let new_seq = self.txn_incr_seq(Tables::NAME, txn_tree).map_err(|e| {
-                    let e: ConflictableTransactionError<Infallible> = e.into();
-                    ErrorCode::from(e)
-                })?;
-                let sv = SeqV {
-                    seq: new_seq,
-                    meta,
-                    data: table_meta,
-                };
-
-                table_tree.insert(&req.table_id, &sv).map_err(|e| {
-                    let e: ConflictableTransactionError<Infallible> = e.into();
-                    ErrorCode::from(e)
-                })?;
-
-                Ok(AppliedState::TableMeta(Change::new_with_id(
-                    req.table_id,
-                    Some(prev),
-                    Some(sv),
-                )))
+                self.apply_upsert_table_options_cmd(req, cmd, txn_tree)
             }
         }
     }
