@@ -9,7 +9,7 @@ TRUNCATE TABLE t;
 SELECT * FROM t;
 
 DROP TABLE t;
-TRUNCATE TABLE t; -- {ErrorCode 25}
+TRUNCATE TABLE t; -- {ErrorCode 1025}
 
 DROP DATABASE db1;
-TRUNCATE TABLE db1.t; -- {ErrorCode 3}
+TRUNCATE TABLE db1.t; -- {ErrorCode 1003}

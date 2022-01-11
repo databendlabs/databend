@@ -6,8 +6,8 @@ USE db_09_004;
 CREATE TABLE IF NOT EXISTS t1(a UInt8, b UInt64, c Int8, d Int64, e Date16, f Date32, g DateTime32, h String) Engine = Memory;
 CREATE TABLE IF NOT EXISTS t3(a String, b String, c String, d String) Engine = Fuse;
 
-INSERT INTO t1 (a,b,c,d,e) select * from t3; -- {ErrorCode 6}
-INSERT INTO t1 (a,b,c,d,e) select a,b,c from t3; -- {ErrorCode 6}
+INSERT INTO t1 (a,b,c,d,e) select * from t3; -- {ErrorCode 1006}
+INSERT INTO t1 (a,b,c,d,e) select a,b,c from t3; -- {ErrorCode 1006}
 
 -- extras
 create table n1(a uint64);
