@@ -41,7 +41,7 @@ impl ReaderStream {
     pub fn new(r: Reader) -> Self {
         ReaderStream {
             reader: Some(r),
-            buf: bytes::BytesMut::with_capacity(CAPACITY),
+            buf: bytes::BytesMut::new(),
         }
     }
 }
@@ -57,6 +57,11 @@ impl futures::Stream for ReaderStream {
             None => return Poll::Ready(None),
         };
 
+        // We will always use the same underlying buffer, the allocation happens only once.
+        if this.buf.len() == 0 {
+            this.buf.resize(CAPACITY, 0);
+        }
+
         match ready!(reader.as_mut().poll_read(cx, this.buf)) {
             Err(err) => {
                 self.project().reader.set(None);
@@ -66,8 +71,8 @@ impl futures::Stream for ReaderStream {
                 self.project().reader.set(None);
                 Poll::Ready(None)
             }
-            Ok(_) => {
-                let chunk = this.buf.split();
+            Ok(n) => {
+                let chunk = this.buf.split_to(n);
                 Poll::Ready(Some(Ok(chunk.freeze())))
             }
         }
