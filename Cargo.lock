@@ -1572,6 +1572,8 @@ dependencies = [
  "bytes 1.1.0",
  "futures",
  "http",
+ "hyper",
+ "pin-project",
  "thiserror",
  "tokio",
 ]

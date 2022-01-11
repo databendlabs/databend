@@ -12,10 +12,72 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
 use std::pin::Pin;
+use std::task::Context;
 use std::task::Poll;
 
-pub type Reader = Box<dyn futures::io::AsyncRead + Unpin + Send>;
+use bytes;
+use futures;
+use futures::ready;
+use futures::AsyncRead;
+use pin_project::pin_project;
+
+pub type Reader = Box<dyn AsyncRead + Unpin + Send>;
+
+const CAPACITY: usize = 4096;
+
+/// ReaderStream is used to convert a `futures::io::AsyncRead` into a `futures::Stream`.
+///
+/// Most code inspired by `tokio_util::io::ReaderStream`.
+#[pin_project]
+pub struct ReaderStream {
+    #[pin]
+    reader: Option<Reader>,
+    buf: bytes::BytesMut,
+}
+
+impl ReaderStream {
+    pub fn new(r: Reader) -> Self {
+        ReaderStream {
+            reader: Some(r),
+            buf: bytes::BytesMut::new(),
+        }
+    }
+}
+
+impl futures::Stream for ReaderStream {
+    type Item = Result<bytes::Bytes, io::Error>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.as_mut().project();
+
+        let reader = match this.reader.as_pin_mut() {
+            Some(r) => r,
+            None => return Poll::Ready(None),
+        };
+
+        // We will always use the same underlying buffer, the allocation happens only once.
+        if this.buf.is_empty() {
+            this.buf.resize(CAPACITY, 0);
+        }
+
+        match ready!(reader.poll_read(cx, this.buf)) {
+            Err(err) => {
+                self.project().reader.set(None);
+                Poll::Ready(Some(Err(err)))
+            }
+            Ok(0) => {
+                self.project().reader.set(None);
+                Poll::Ready(None)
+            }
+            Ok(n) => {
+                let chunk = this.buf.split_to(n);
+                Poll::Ready(Some(Ok(chunk.freeze())))
+            }
+        }
+    }
+}
 
 pub struct CallbackReader {
     inner: Reader,
@@ -35,5 +97,26 @@ impl futures::AsyncRead for CallbackReader {
         };
 
         r
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use futures::io::Cursor;
+    use futures::StreamExt;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn reader_stream() {
+        let reader = Box::new(Cursor::new("Hello, world!"));
+        let mut s = ReaderStream::new(reader);
+
+        let mut bs = Vec::new();
+        while let Some(chunk) = s.next().await {
+            bs.extend_from_slice(&chunk.unwrap());
+        }
+
+        assert_eq!(&bs[..], "Hello, world!".as_bytes());
     }
 }
