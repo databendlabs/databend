@@ -54,6 +54,7 @@ pub struct Builder {
     /// ## TODO
     ///
     /// It seems sdk doesn't support path style so far.
+    /// waiting for https://github.com/awslabs/aws-sdk-rust/issues/390
     enable_path_style: bool,
     /// enable_signature_v2 whether to use signature v2 or not.
     ///
@@ -94,13 +95,14 @@ impl Builder {
         self
     }
 
-    pub fn enable_path_style(&mut self) -> &mut Self {
+    /// TODO: waiting for https://github.com/awslabs/aws-sdk-rust/issues/390
+    fn enable_path_style(&mut self) -> &mut Self {
         self.enable_path_style = true;
 
         self
     }
 
-    pub fn enable_signature_v2(&mut self) -> &mut Self {
+    fn enable_signature_v2(&mut self) -> &mut Self {
         self.enable_signature_v2 = true;
 
         self
