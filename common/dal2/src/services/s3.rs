@@ -37,6 +37,11 @@ use crate::ops::Stat;
 use crate::ops::Write;
 use crate::ops::WriteBuilder;
 
+/// # TODO
+///
+/// enable_path_style and enable_signature_v2 need sdk support.
+///
+/// ref: https://github.com/awslabs/aws-sdk-rust/issues/390
 #[derive(Default, Debug, Clone)]
 pub struct Builder {
     root: Option<String>,
@@ -48,20 +53,6 @@ pub struct Builder {
     /// - https://s3.amazonaws.com
     /// - http://127.0.0.1:3000
     endpoint: Option<String>,
-
-    /// enable_path_style controls whether to use path style or virtual host style.
-    ///
-    /// ## TODO
-    ///
-    /// It seems sdk doesn't support path style so far.
-    /// waiting for https://github.com/awslabs/aws-sdk-rust/issues/390
-    enable_path_style: bool,
-    /// enable_signature_v2 whether to use signature v2 or not.
-    ///
-    /// ## TODO
-    ///
-    /// It seems sdk doesn't support signature v2 so far.
-    enable_signature_v2: bool,
 }
 
 impl Builder {
@@ -91,19 +82,6 @@ impl Builder {
 
     pub fn endpoint(&mut self, endpoint: &str) -> &mut Self {
         self.endpoint = Some(endpoint.to_string());
-
-        self
-    }
-
-    /// TODO: waiting for https://github.com/awslabs/aws-sdk-rust/issues/390
-    fn enable_path_style(&mut self) -> &mut Self {
-        self.enable_path_style = true;
-
-        self
-    }
-
-    fn enable_signature_v2(&mut self) -> &mut Self {
-        self.enable_signature_v2 = true;
 
         self
     }
