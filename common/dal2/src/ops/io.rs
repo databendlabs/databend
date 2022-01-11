@@ -52,7 +52,7 @@ impl futures::Stream for ReaderStream {
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.as_mut().project();
 
-        let mut reader = match this.reader.as_pin_mut() {
+        let reader = match this.reader.as_pin_mut() {
             Some(r) => r,
             None => return Poll::Ready(None),
         };
@@ -62,7 +62,7 @@ impl futures::Stream for ReaderStream {
             this.buf.resize(CAPACITY, 0);
         }
 
-        match ready!(reader.as_mut().poll_read(cx, this.buf)) {
+        match ready!(reader.poll_read(cx, this.buf)) {
             Err(err) => {
                 self.project().reader.set(None);
                 Poll::Ready(Some(Err(err)))
