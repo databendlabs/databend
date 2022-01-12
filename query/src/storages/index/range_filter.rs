@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 use std::collections::HashMap;
 use std::fmt;
@@ -80,15 +79,7 @@ impl RangeFilter {
         let columns = self
             .stat_columns
             .iter()
-            .map(|c| {
-                let stat = stats.get(&c.column_id).ok_or_else(|| {
-                    ErrorCode::UnknownException(format!(
-                        "Unable to get the colStats by ColumnId: {}",
-                        c.column_id
-                    ))
-                })?;
-                c.apply_stat_value(stat, self.origin.clone())?.to_array()
-            })
+            .map(|c| c.apply_stat_value(stats, self.origin.clone())?.to_array())
             .collect::<Result<Vec<_>>>()?;
         let data_block = DataBlock::create_by_array(self.schema.clone(), columns);
         let executed_data_block = self.executor.execute(&data_block)?;
@@ -165,8 +156,7 @@ impl fmt::Display for StatType {
 
 #[derive(Debug, Clone)]
 pub struct StatColumn {
-    column_id: u32,
-    column_field: DataField,
+    column_fields: HashMap<u32, DataField>,
     stat_type: StatType,
     stat_field: DataField,
     expr: Expression,
@@ -174,8 +164,7 @@ pub struct StatColumn {
 
 impl StatColumn {
     fn create(
-        column_id: u32,
-        column_field: DataField,
+        column_fields: HashMap<u32, DataField>,
         stat_type: StatType,
         field: &DataField,
         expr: Expression,
@@ -189,8 +178,7 @@ impl StatColumn {
         let stat_field = DataField::new(column_new.as_str(), data_type, field.is_nullable());
 
         Self {
-            column_id,
-            column_field,
+            column_fields,
             stat_type,
             stat_field,
             expr,
@@ -199,31 +187,45 @@ impl StatColumn {
 
     fn apply_stat_value(
         &self,
-        column_stats: &ColumnStatistics,
+        stats: &BlockStatistics,
         schema: DataSchemaRef,
     ) -> Result<DataValue> {
         if self.stat_type == StatType::Nulls {
-            return Ok(DataValue::UInt64(Some(column_stats.null_count)));
+            // The len of column_fields is 1.
+            let (k, _) = self.column_fields.iter().next().unwrap();
+            let stat = stats.get(k).ok_or_else(|| {
+                ErrorCode::UnknownException(format!(
+                    "Unable to get the colStats by ColumnId: {}",
+                    k
+                ))
+            })?;
+            return Ok(DataValue::UInt64(Some(stat.null_count)));
         }
 
-        let mut single_point = false;
-        if !column_stats.min.is_null() && (column_stats.min == column_stats.max) {
-            single_point = true;
-        }
+        let mut single_point = true;
+        let mut variables = HashMap::with_capacity(self.column_fields.len());
+        for (k, v) in &self.column_fields {
+            let stat = stats.get(k).ok_or_else(|| {
+                ErrorCode::UnknownException(format!(
+                    "Unable to get the colStats by ColumnId: {}",
+                    k
+                ))
+            })?;
 
-        let mut variables = HashMap::new();
-        let variable_left = Some(DataColumnWithField::new(
-            DataColumn::Constant(column_stats.min.clone(), 1),
-            self.column_field.clone(),
-        ));
-        let variable_right = Some(DataColumnWithField::new(
-            DataColumn::Constant(column_stats.max.clone(), 1),
-            self.column_field.clone(),
-        ));
-        variables.insert(
-            self.column_field.name().clone(),
-            (variable_left, variable_right),
-        );
+            if single_point && stat.min != stat.max {
+                single_point = false;
+            }
+
+            let variable_left = Some(DataColumnWithField::new(
+                DataColumn::Constant(stat.min.clone(), 1),
+                v.clone(),
+            ));
+            let variable_right = Some(DataColumnWithField::new(
+                DataColumn::Constant(stat.max.clone(), 1),
+                v.clone(),
+            ));
+            variables.insert(v.name().clone(), (variable_left, variable_right));
+        }
 
         let monotonicity = ExpressionMonotonicityVisitor::check_expression(
             schema,
@@ -232,10 +234,9 @@ impl StatColumn {
             single_point,
         )?;
         if !monotonicity.is_monotonic {
-            return Err(ErrorCode::UnknownException(format!(
-                "Expression in range:[{:?}, {:?}] is not monotonic",
-                column_stats.min, column_stats.max
-            )));
+            return Err(ErrorCode::UnknownException(
+                "Expression is not monotonic in the block",
+            ));
         }
 
         let column_with_field_opt = match self.stat_type {
@@ -272,8 +273,7 @@ pub type StatColumns = Vec<StatColumn>;
 struct VerifiableExprBuilder<'a> {
     op: &'a str,
     args: Expressions,
-    column_id: u32,
-    column_field: &'a DataField,
+    column_fields: HashMap<u32, DataField>,
     field: DataField,
     stat_columns: &'a mut StatColumns,
 }
@@ -301,8 +301,8 @@ impl<'a> VerifiableExprBuilder<'a> {
                 let lhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[0])?;
                 let rhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[1])?;
                 match (lhs_cols.len(), rhs_cols.len()) {
-                    (1, 0) => (vec![exprs[0].clone(), exprs[1].clone()], lhs_cols, op),
-                    (0, 1) => {
+                    (a, 0) if a > 0 => (vec![exprs[0].clone(), exprs[1].clone()], lhs_cols, op),
+                    (0, a) if a > 0 => {
                         let op = inverse_operator(op)?;
                         (vec![exprs[1].clone(), exprs[0].clone()], rhs_cols, op)
                     }
@@ -326,19 +326,20 @@ impl<'a> VerifiableExprBuilder<'a> {
             ));
         }
 
-        let column_name = cols.iter().next().unwrap().clone();
-        let (index, column_field) = schema
-            .column_with_name(column_name.as_str())
-            .ok_or_else(|| ErrorCode::UnknownException("Unable to find the column name"))?;
-        let column_id = index as u32;
+        let mut column_fields = HashMap::with_capacity(cols.len());
+        for col in cols {
+            let (index, column_field) = schema
+                .column_with_name(col.as_str())
+                .ok_or_else(|| ErrorCode::UnknownException("Unable to find the column name"))?;
+            column_fields.insert(index as u32, column_field.clone());
+        }
 
         let field = args[0].to_data_field(schema)?;
 
         Ok(Self {
             op,
             args,
-            column_id,
-            column_field,
+            column_fields,
             field,
             stat_columns,
         })
@@ -460,17 +461,16 @@ impl<'a> VerifiableExprBuilder<'a> {
 
     fn stat_column_expr(&mut self, stat_type: StatType) -> Result<Expression> {
         let stat_col = StatColumn::create(
-            self.column_id,
-            self.column_field.clone(),
+            self.column_fields.clone(),
             stat_type,
             &self.field,
             self.args[0].clone(),
         );
-        if !self.stat_columns.iter().any(|c| {
-            c.column_id == self.column_id
-                && c.stat_type == stat_type
-                && c.stat_field.name() == self.field.name()
-        }) {
+        if !self
+            .stat_columns
+            .iter()
+            .any(|c| c.stat_type == stat_type && c.stat_field.name() == self.field.name())
+        {
             self.stat_columns.push(stat_col.clone());
         }
         Ok(Expression::Column(stat_col.stat_field.name().to_owned()))
