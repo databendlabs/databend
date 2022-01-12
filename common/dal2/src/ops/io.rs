@@ -86,6 +86,14 @@ pub struct CallbackReader<F: FnMut(usize)> {
     f: F,
 }
 
+impl<F> CallbackReader<F>
+where F: FnMut(usize)
+{
+    pub fn new(r: Reader, f: F) -> Self {
+        CallbackReader { inner: r, f }
+    }
+}
+
 impl<F> futures::AsyncRead for CallbackReader<F>
 where F: FnMut(usize)
 {
@@ -103,43 +111,5 @@ where F: FnMut(usize)
         };
 
         r
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use futures::io::copy;
-    use futures::io::Cursor;
-    use futures::StreamExt;
-
-    use super::*;
-
-    #[tokio::test]
-    async fn reader_stream() {
-        let reader = Box::new(Cursor::new("Hello, world!"));
-        let mut s = ReaderStream::new(reader);
-
-        let mut bs = Vec::new();
-        while let Some(chunk) = s.next().await {
-            bs.extend_from_slice(&chunk.unwrap());
-        }
-
-        assert_eq!(&bs[..], "Hello, world!".as_bytes());
-    }
-
-    #[tokio::test]
-    async fn callback_reader() {
-        let mut size = 0;
-
-        let reader = CallbackReader {
-            inner: Box::new(Cursor::new("Hello, world!")),
-            f: |n| size += n,
-        };
-
-        let mut bs = Vec::new();
-        let n = copy(reader, &mut bs).await.unwrap();
-
-        assert_eq!(size, 13);
-        assert_eq!(n, 13);
     }
 }
