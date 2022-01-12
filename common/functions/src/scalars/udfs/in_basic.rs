@@ -48,35 +48,49 @@ impl<const NEGATED: bool> InFunction<NEGATED> {
 }
 
 macro_rules! basic_contains {
-    ($INPUT_DT: expr, $INPUT_ARRAY: expr, $CHECK_ARRAY: expr, $NEGATED: expr, $BUILDER: expr, $CAST_TYPE: ident) => {
+    // bool no_null_iter returns bool not &bool, other types no_null_iter return &T
+    ($INPUT_DT: expr, $INPUT_ARRAY: expr, $CHECK_ARRAY: expr, $NEGATED: expr, $BUILDER: expr, $CAST_TYPE: ident, bool) => {
         let mut vals_set = HashSet::new();
         for array in $CHECK_ARRAY {
             let array = array.column().cast_with_type($INPUT_DT)?;
-            let val = array.try_get(0)?;
-            match val {
-                DataValue::$CAST_TYPE(Some(val)) => {
+            match array {
+                DataColumn::Constant(DataValue::$CAST_TYPE(Some(val)), _) => {
                     vals_set.insert(val);
                 }
-                _ => {}
-            }
-        }
-        for idx in 0..$INPUT_ARRAY.len() {
-            let val = $INPUT_ARRAY.try_get(idx)?;
-            match val {
-                DataValue::$CAST_TYPE(Some(val)) => {
-                    let v = match vals_set.contains(&val) {
-                        true => !$NEGATED,
-                        false => $NEGATED,
-                    };
-                    $BUILDER.push(v);
-                }
-                DataValue::$CAST_TYPE(None) => {
-                    $BUILDER.push(false);
+                DataColumn::Constant(DataValue::$CAST_TYPE(None), _) => {
+                    continue;
                 }
                 _ => {
                     return Err(ErrorCode::LogicalError("it's a bug"));
                 }
             }
+        }
+        let arr = $INPUT_ARRAY.bool()?;
+        for val in arr.into_no_null_iter() {
+            let contains = vals_set.contains(&val);
+            $BUILDER.push((contains && !NEGATED) || (!contains && NEGATED));
+        }
+    };
+    ($INPUT_DT: expr, $INPUT_ARRAY: expr, $CHECK_ARRAY: expr, $NEGATED: expr, $BUILDER: expr, $CAST_TYPE: ident, $PRIMITIVE_TYPE: ident) => {
+        let mut vals_set = HashSet::new();
+        for array in $CHECK_ARRAY {
+            let array = array.column().cast_with_type($INPUT_DT)?;
+            match array {
+                DataColumn::Constant(DataValue::$CAST_TYPE(Some(val)), _) => {
+                    vals_set.insert(val);
+                }
+                DataColumn::Constant(DataValue::$CAST_TYPE(None), _) => {
+                    continue;
+                }
+                _ => {
+                    return Err(ErrorCode::LogicalError("it's a bug"));
+                }
+            }
+        }
+        let arr = $INPUT_ARRAY.$PRIMITIVE_TYPE()?;
+        for val in arr.into_no_null_iter() {
+            let contains = vals_set.contains(val);
+            $BUILDER.push((contains && !NEGATED) || (!contains && NEGATED));
         }
     };
 }
@@ -84,35 +98,26 @@ macro_rules! basic_contains {
 // float type can not impl Hash and Eq trait, so it can not use HashSet
 // maybe we can find some more efficient way to make it.
 macro_rules! float_contains {
-    ($INPUT_DT: expr, $INPUT_ARRAY: expr, $CHECK_ARRAY: expr, $NEGATED: expr, $BUILDER: expr, $CAST_TYPE: ident) => {
+    ($INPUT_DT: expr, $INPUT_ARRAY: expr, $CHECK_ARRAY: expr, $NEGATED: expr, $BUILDER: expr, $CAST_TYPE: ident, $PRIMITIVE_TYPE: ident) => {
         let mut vals_set = Vec::new();
         for array in $CHECK_ARRAY {
             let array = array.column().cast_with_type($INPUT_DT)?;
-            let val = array.try_get(0)?;
-            match val {
-                DataValue::$CAST_TYPE(Some(val)) => {
+            match array {
+                DataColumn::Constant(DataValue::$CAST_TYPE(Some(val)), _) => {
                     vals_set.push(val);
                 }
-                _ => {}
-            }
-        }
-        for idx in 0..$INPUT_ARRAY.len() {
-            let val = $INPUT_ARRAY.try_get(idx)?;
-            match val {
-                DataValue::$CAST_TYPE(Some(val)) => {
-                    let v = match vals_set.contains(&val) {
-                        true => !$NEGATED,
-                        false => $NEGATED,
-                    };
-                    $BUILDER.push(v);
-                }
-                DataValue::$CAST_TYPE(None) => {
-                    $BUILDER.push(false);
+                DataColumn::Constant(DataValue::$CAST_TYPE(None), _) => {
+                    continue;
                 }
                 _ => {
                     return Err(ErrorCode::LogicalError("it's a bug"));
                 }
             }
+        }
+        let arr = $INPUT_ARRAY.$PRIMITIVE_TYPE()?;
+        for val in arr.into_no_null_iter() {
+            let contains = vals_set.contains(val);
+            $BUILDER.push((contains && !NEGATED) || (!contains && NEGATED));
         }
     };
 }
@@ -161,12 +166,13 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         match least_super_dt {
             DataType::Boolean => {
                 basic_contains!(
-                    input_dt,
+                    &least_super_dt,
                     input_array,
                     check_arrays,
                     NEGATED,
                     builder,
-                    Boolean
+                    Boolean,
+                    bool
                 );
             }
             DataType::UInt8 => {
@@ -176,7 +182,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     check_arrays,
                     NEGATED,
                     builder,
-                    UInt8
+                    UInt8,
+                    u8
                 );
             }
             DataType::UInt16 => {
@@ -186,7 +193,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     check_arrays,
                     NEGATED,
                     builder,
-                    UInt16
+                    UInt16,
+                    u16
                 );
             }
             DataType::UInt32 => {
@@ -196,7 +204,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     check_arrays,
                     NEGATED,
                     builder,
-                    UInt32
+                    UInt32,
+                    u32
                 );
             }
             DataType::UInt64 => {
@@ -206,7 +215,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     check_arrays,
                     NEGATED,
                     builder,
-                    UInt64
+                    UInt64,
+                    u64
                 );
             }
             DataType::Int8 => {
@@ -216,7 +226,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     check_arrays,
                     NEGATED,
                     builder,
-                    Int8
+                    Int8,
+                    i8
                 );
             }
             DataType::Int16 => {
@@ -226,7 +237,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     check_arrays,
                     NEGATED,
                     builder,
-                    Int16
+                    Int16,
+                    i16
                 );
             }
             DataType::Int32 => {
@@ -236,7 +248,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     check_arrays,
                     NEGATED,
                     builder,
-                    Int32
+                    Int32,
+                    i32
                 );
             }
             DataType::Int64 => {
@@ -246,7 +259,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     check_arrays,
                     NEGATED,
                     builder,
-                    Int64
+                    Int64,
+                    i64
                 );
             }
             DataType::Float32 => {
@@ -256,7 +270,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     check_arrays,
                     NEGATED,
                     builder,
-                    Float32
+                    Float32,
+                    f32
                 );
             }
             DataType::Float64 => {
@@ -266,7 +281,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     check_arrays,
                     NEGATED,
                     builder,
-                    Float64
+                    Float64,
+                    f64
                 );
             }
             DataType::String => {
@@ -276,7 +292,8 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                     check_arrays,
                     NEGATED,
                     builder,
-                    String
+                    String,
+                    string
                 );
             }
             DataType::Struct(_) => {}
