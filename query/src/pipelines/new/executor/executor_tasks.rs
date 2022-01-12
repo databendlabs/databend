@@ -38,11 +38,6 @@ impl ExecutorTasksQueue {
                 let task = workers_tasks.pop_task(context.get_worker_num());
                 context.set_task(task);
 
-                // TODO:
-                // if thread.task.is_some() && !workers_tasks.is_empty() {
-                //     // TODO:
-                // }
-
                 return;
             }
         }

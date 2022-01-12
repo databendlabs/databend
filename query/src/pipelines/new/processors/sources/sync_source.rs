@@ -7,7 +7,7 @@ use common_exception::Result;
 
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::Event;
+use crate::pipelines::new::processors::processor::{Event};
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
 
@@ -36,7 +36,7 @@ impl<T: 'static + SyncSource> SyncSourceProcessorWrap<T> {
                 outputs.remove(0),
                 inner,
             )),
-            _ => Ok(Arc::new(UnsafeCell::new(Self {
+            _ => Ok(ProcessorPtr::create(Box::new(Self {
                 inner,
                 outputs,
                 is_finish: false,
@@ -131,7 +131,7 @@ struct SingleOutputSyncSourceProcessorWrap<T: 'static + SyncSource> {
 
 impl<T: 'static + SyncSource> SingleOutputSyncSourceProcessorWrap<T> {
     pub fn create(output: Arc<OutputPort>, inner: T) -> ProcessorPtr {
-        Arc::new(UnsafeCell::new(Self {
+        ProcessorPtr::create(Box::new(Self {
             inner,
             output,
             is_finish: false,

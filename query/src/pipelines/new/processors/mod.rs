@@ -6,8 +6,8 @@ mod transforms;
 mod port_trigger;
 
 pub use port::connect;
-pub use port::PortReactor;
 pub use processor::Processor;
+pub use processor::ActivePort;
 pub use processor::Processors;
 pub use sources::TableSource;
 pub use port_trigger::UpdateList;

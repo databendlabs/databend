@@ -1,41 +1,62 @@
 use std::cell::UnsafeCell;
 use std::sync::Arc;
+use petgraph::prelude::EdgeIndex;
 
+#[derive(Clone)]
 pub struct UpdateList {
-    update_list: UnsafeCell<Vec<usize>>,
+    pub inner: Arc<UnsafeCell<UpdateListMutable>>,
 }
 
 unsafe impl Send for UpdateList {}
 
+struct UpdateListMutable {
+    list: Vec<EdgeIndex>,
+    version: usize,
+}
+
 impl UpdateList {
-    pub fn create() -> Arc<UpdateList> {
-        Arc::new(UpdateList { update_list: UnsafeCell::new(vec![]) })
+    pub fn create() -> UpdateList {
+        UpdateList {
+            inner: Arc::new(UnsafeCell::new(UpdateListMutable {
+                list: vec![],
+                version: 0,
+            }))
+        }
     }
 
     #[inline(always)]
-    pub fn update(&self, pid: usize) {
+    pub fn update(&self, index: EdgeIndex) {
         unsafe {
             // TODO: version?
-            (&mut *self.update_list.get()).push(pid)
+            (&mut *self.inner.get()).push(index)
         }
+    }
+
+    pub unsafe fn clear(&self) {
+        (&mut *self.inner.get()).clear()
     }
 }
 
+
 pub struct PortTrigger {
     pid: usize,
-    update_list: Arc<UpdateList>,
+    update_list: Option<Arc<UpdateList>>,
 }
 
 unsafe impl Send for PortTrigger {}
 
 impl PortTrigger {
-    pub fn create(pid: usize, update_list: Arc<UpdateList>) -> Arc<PortTrigger> {
-        Arc::new(PortTrigger { pid, update_list })
+    pub fn create() -> PortTrigger {
+        PortTrigger {
+            pid: 0,
+            update_list: None,
+        }
     }
 
     #[inline(always)]
-    pub fn trigger(&self) {
-        self.update_list.update(self.pid)
+    pub fn update(&self) {
+        // self.update_list
+        // self.update_list.update(self.pid)
     }
 }
 

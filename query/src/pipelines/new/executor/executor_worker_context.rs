@@ -47,7 +47,7 @@ impl ExecutorWorkerContext {
         self.task = task
     }
 
-    pub fn execute_task(&mut self, queue: &ExecutorTasksQueue) -> Result<usize> {
+    pub unsafe fn execute_task(&mut self, queue: &ExecutorTasksQueue) -> Result<usize> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::LogicalError("Execute none task.")),
             ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
@@ -56,22 +56,18 @@ impl ExecutorWorkerContext {
         }
     }
 
-    fn execute_sync_task(&mut self, processor: ProcessorPtr) -> Result<usize> {
-        unsafe {
-            (&mut *processor.get()).process()?;
-            unimplemented!()
-        }
+    unsafe fn execute_sync_task(&mut self, processor: ProcessorPtr) -> Result<usize> {
+        processor.process()?;
+        Ok(0)
     }
 
-    fn execute_async_task(&mut self, processor: ProcessorPtr, queue: &ExecutorTasksQueue) -> Result<usize> {
-        unsafe {
-            let finished = Arc::new(AtomicBool::new(false));
-            let mut future = (&mut *processor.get()).async_process().boxed();
-            self.schedule_async_task(ExecutingAsyncTask { finished, future }, queue)
-        }
+    unsafe fn execute_async_task(&mut self, processor: ProcessorPtr, queue: &ExecutorTasksQueue) -> Result<usize> {
+        let finished = Arc::new(AtomicBool::new(false));
+        let mut future = processor.async_process();
+        self.schedule_async_task(ExecutingAsyncTask { finished, future }, queue)
     }
 
-    fn schedule_async_task(&mut self, mut task: ExecutingAsyncTask, queue: &ExecutorTasksQueue) -> Result<usize> {
+    unsafe fn schedule_async_task(&mut self, mut task: ExecutingAsyncTask, queue: &ExecutorTasksQueue) -> Result<usize> {
         task.finished.store(false, Ordering::Relaxed);
 
         loop {
@@ -81,11 +77,11 @@ impl ExecutorWorkerContext {
             let mut cx = Context::from_waker(&waker);
 
             match task.future.as_mut().poll(&mut cx) {
-                Poll::Ready(Ok(res)) => { return unimplemented!(); }
+                Poll::Ready(Ok(res)) => { return Ok(0); }
                 Poll::Ready(Err(cause)) => { return Err(cause); }
                 Poll::Pending => {
                     match queue.push_executing_async_task(self.worker_num, task) {
-                        None => { return unimplemented!(); }
+                        None => { return Ok(0); }
                         Some(t) => { task = t; }
                     };
                 }

@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use petgraph::graph::node_index;
 use petgraph::prelude::{NodeIndex, StableGraph};
 use poem::http::uri::Port;
 use common_planners::{AggregatorFinalPlan, AggregatorPartialPlan, AlterUDFPlan, AlterUserPlan, BroadcastPlan, CopyPlan, CreateDatabasePlan, CreateTablePlan, CreateUDFPlan, CreateUserPlan, CreateUserStagePlan, DescribeStagePlan, DescribeTablePlan, DropDatabasePlan, DropTablePlan, DropUDFPlan, DropUserPlan, DropUserStagePlan, EmptyPlan, ExplainPlan, Expression, ExpressionPlan, FilterPlan, GrantPrivilegePlan, HavingPlan, InsertPlan, KillPlan, LimitByPlan, LimitPlan, OptimizeTablePlan, PlanNode, PlanVisitor, ProjectionPlan, ReadDataSourcePlan, RemotePlan, RevokePrivilegePlan, SelectPlan, SettingPlan, ShowCreateDatabasePlan, ShowCreateTablePlan, ShowGrantsPlan, ShowUDFPlan, SinkPlan, SortPlan, StagePlan, SubQueriesSetPlan, TruncateTablePlan, UseDatabasePlan};
@@ -11,14 +12,12 @@ use crate::sessions::QueryContext;
 
 struct PipelineBuilder {
     ctx: Arc<QueryContext>,
-
-    pipes: Vec<NodeIndex>,
-    graph: StableGraph<ProcessorPtr, Edge>,
+    pipeline: NewPipeline,
 }
 
 impl PipelineBuilder {
     pub fn finalize(mut self) -> Result<NewPipeline> {
-        Ok(NewPipeline::create(self.graph))
+        Ok(self.pipeline)
     }
 }
 
@@ -36,20 +35,15 @@ impl PlanVisitor for PipelineBuilder {
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         let max_threads = std::cmp::min(max_threads, plan.parts.len());
 
-        if !self.pipes.is_empty() {
-            return Err(ErrorCode::LogicalError(
-                "Logical error: index not empty(while add source).",
-            ));
-        }
-
-        for _source_index in 0..std::cmp::max(max_threads, 1) {
-            let source_plan = plan.clone();
-            let source_ctx = self.ctx.clone();
-            let output_port = OutputPort::create();
-            let table_source = TableSource::try_create(output_port, source_ctx, source_plan)?;
-            self.pipes.push(self.graph.add_node(table_source));
-        }
-
-        Ok(())
+        let source_plan = plan.clone();
+        let source_context = self.ctx.clone();
+        self.pipeline.add_source(
+            std::cmp::max(max_threads, 1),
+            move |index, output_port| TableSource::try_create(
+                Arc::new(output_port),
+                source_context.clone(),
+                source_plan.clone(),
+            ),
+        )
     }
 }

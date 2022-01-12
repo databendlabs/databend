@@ -9,8 +9,7 @@ use common_exception::Result;
 use common_infallible::Mutex;
 use futures::future::Shared;
 
-use crate::pipelines::new::executor::RunningProcessor;
-use crate::pipelines::new::processors::PortTrigger;
+use crate::pipelines::new::processors::{PortTrigger, UpdateList};
 
 const HAS_DATA: usize = 1;
 
@@ -83,14 +82,9 @@ impl SharedStatus {
     }
 }
 
-pub trait PortReactor<Data> {
-    fn on_push(&self, push_to: Data);
-
-    fn on_pull(&self, pull_from: Data);
-}
-
 pub struct InputPort {
     shared: SharedStatus,
+    trigger: PortTrigger,
 }
 
 unsafe impl Send for InputPort {}
@@ -100,21 +94,24 @@ unsafe impl Sync for InputPort {}
 impl InputPort {
     pub fn create() -> Arc<InputPort> {
         Arc::new(InputPort {
-            shared: SharedStatus::create()
+            shared: SharedStatus::create(),
+            trigger: PortTrigger::create(),
         })
     }
 
-    pub fn set_trigger(&self, trigger: Arc<PortTrigger>) {
-        unimplemented!()
+    pub fn pull_data(&self) -> Option<Result<DataBlock>> {
+        self.trigger.update();
+        self.shared.swap(None, 0)
     }
 
-    pub fn pull_data(&self) -> Option<Result<DataBlock>> {
-        self.shared.swap(None, 0)
+    pub fn get_trigger(&self) -> &PortTrigger {
+        &self.trigger
     }
 }
 
 pub struct OutputPort {
     shared: SharedStatus,
+    trigger: PortTrigger,
 }
 
 /// Safely:
@@ -123,22 +120,23 @@ unsafe impl Send for OutputPort {}
 unsafe impl Sync for OutputPort {}
 
 impl OutputPort {
-    pub fn create() -> Arc<OutputPort> {
-        Arc::new(OutputPort {
-            shared: SharedStatus::create()
-        })
-    }
-
-    pub fn set_trigger(&self, trigger: Arc<PortTrigger>) {
-        unimplemented!()
+    pub fn create(updated_output_list: UpdateList) -> OutputPort {
+        OutputPort {
+            shared: SharedStatus::create(),
+            trigger: PortTrigger::create(),
+        }
     }
 
     pub fn push_data(&self, data: Result<DataBlock>) {
-        // self.reactor.on_push(self.reactor_data);
+        self.trigger.update();
         if let Some(value) = self.shared.swap(Some(data), HAS_DATA) {
             // It shouldn't have happened
             unreachable!("Cannot push data to port which already has data. old value {:?}", value);
         }
+    }
+
+    pub fn get_trigger(&self) -> &PortTrigger {
+        &self.trigger
     }
 
     pub fn finish(&self) {

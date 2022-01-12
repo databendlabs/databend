@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use common_exception::{ErrorCode, Result};
 
 use crate::pipelines::new::executor::executor_graph::RunningGraph;
@@ -11,19 +12,14 @@ pub struct PipelineExecutor {
 }
 
 impl PipelineExecutor {
-    pub fn create(pipeline: NewPipeline, workers: usize) -> Result<PipelineExecutor> {
-        Ok(PipelineExecutor {
+    pub fn create(pipeline: NewPipeline, workers: usize) -> Result<Arc<PipelineExecutor>> {
+        Ok(Arc::new(PipelineExecutor {
             graph: RunningGraph::create(pipeline)?,
             global_tasks_queue: ExecutorTasksQueue::create(workers),
-        })
+        }))
     }
 
-    pub fn initialize_executor(&self, workers: usize) -> Result<()> {
-        self.graph.initialize_executor()?;
-        Ok(())
-    }
-
-    pub fn execute_with_single_worker(&self, worker_num: usize) -> Result<()> {
+    pub unsafe fn execute_with_single_worker(&self, worker_num: usize) -> Result<()> {
         let mut context = ExecutorWorkerContext::create(worker_num);
 
         while !self.global_tasks_queue.is_finished() {
@@ -36,7 +32,7 @@ impl PipelineExecutor {
                 let executed_pid = context.execute_task(&self.global_tasks_queue)?;
 
                 // We immediately schedule the processor again.
-                let schedule_queue = self.graph.schedule_next(executed_pid)?;
+                let schedule_queue = self.graph.schedule_queue(executed_pid)?;
                 schedule_queue.schedule(&self.global_tasks_queue, &mut context);
             }
         }

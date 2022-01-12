@@ -5,31 +5,47 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::pipelines::new::executor::pipeline_executor::PipelineExecutor;
+use crate::pipelines::new::pipeline::NewPipeline;
 
 pub struct PipelineThreadsExecutor {
-    base: Arc<PipelineExecutor>,
-    is_started: bool,
+    base: Option<Arc<PipelineExecutor>>,
+
+    pipeline: Option<NewPipeline>,
 }
 
 impl PipelineThreadsExecutor {
+    pub fn create(pipeline: NewPipeline) -> Result<PipelineThreadsExecutor> {
+        Ok(PipelineThreadsExecutor {
+            base: None,
+            pipeline: Some(pipeline),
+        })
+    }
+
     pub fn start(&mut self, workers: usize) -> Result<()> {
-        if self.is_started {
-            return Err(ErrorCode::PipelineAreadlyStarted(
-                "PipelineThreadsExecutor already started.",
-            ));
+        if self.base.is_some() {
+            return Err(ErrorCode::AlreadyStarted("PipelineThreadsExecutor is already started."));
         }
 
-        self.is_started = true;
-        self.base.initialize_executor(workers)?;
+        match self.pipeline.take() {
+            None => Err(ErrorCode::LogicalError("Logical error: it's a bug.")),
+            Some(pipeline) => self.start_workers(workers, pipeline),
+        }
+    }
+
+    fn start_workers(&mut self, workers: usize, pipeline: NewPipeline) -> Result<()> {
+        let executor = PipelineExecutor::create(pipeline, workers)?;
+
+        self.base = Some(executor.clone());
         for worker_num in 0..workers {
-            let worker_executor = self.base.clone();
-            Thread::spawn(move || {
-                if let Err(cause) = worker_executor.execute_with_single_worker(worker_num) {
+            let worker = executor.clone();
+            Thread::spawn(move || unsafe {
+                if let Err(cause) = worker.execute_with_single_worker(worker_num) {
                     // TODO:
                     println!("Executor error : {:?}", cause);
                 }
             });
         }
+
         Ok(())
     }
 }
