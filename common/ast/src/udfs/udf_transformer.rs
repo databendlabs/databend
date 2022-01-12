@@ -19,6 +19,7 @@ use common_exception::Result;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Function;
 use sqlparser::ast::FunctionArg;
+use sqlparser::ast::FunctionArgExpr;
 use sqlparser::ast::Ident;
 
 use super::UDFFetcher;
@@ -57,7 +58,7 @@ impl UDFTransformer {
         Self::clone_expr_with_replacement(&expr, &|nest_expr| {
             if let Expr::Identifier(Ident { value, .. }) = nest_expr {
                 if let Some(arg) = args_map.get(value) {
-                    return Ok(Some(arg.clone()));
+                    return Ok(Some(function_arg_as_expr(arg)?));
                 }
             }
 
@@ -227,8 +228,13 @@ impl UDFTransformer {
                         .map(|f_arg| match f_arg {
                             FunctionArg::Named { name, arg } => FunctionArg::Named {
                                 name: name.clone(),
-                                arg: Self::clone_expr_with_replacement(arg, replacement_fn)
+                                arg: FunctionArgExpr::Expr(
+                                    Self::clone_expr_with_replacement(
+                                        &function_arg_as_expr(arg).unwrap(),
+                                        replacement_fn,
+                                    )
                                     .unwrap(),
+                                ),
                             },
                             FunctionArg::Unnamed(expr) => FunctionArg::Unnamed(
                                 Self::clone_expr_with_replacement(expr, replacement_fn).unwrap(),
@@ -277,4 +283,8 @@ impl UDFTransformer {
             },
         }
     }
+}
+
+fn function_arg_as_expr(arg: &FunctionArgExpr) -> Result<Expr> {
+    todo!()
 }
