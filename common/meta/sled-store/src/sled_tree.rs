@@ -97,7 +97,6 @@ impl SledTree {
     ) -> common_exception::Result<T> {
         let sync = sync && self.sync;
 
-        // use map_err_to_code
         let result: TransactionResult<T, ErrorCode> = (&self.tree).transaction(move |tree| {
             let txn_sled_tree = TransactionSledTree { txn_tree: tree };
             let r = f(txn_sled_tree.clone());
