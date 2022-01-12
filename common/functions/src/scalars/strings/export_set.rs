@@ -15,7 +15,6 @@
 use std::fmt;
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::buffer::MutableBuffer;
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
@@ -135,10 +134,10 @@ impl Function for ExportSetFunction {
                     let n = std::cmp::min(n, 64) as usize;
                     let e = e.string()?;
                     let validity = e.inner().validity().cloned();
-                    let mut values: MutableBuffer<u8> = MutableBuffer::with_capacity(
+                    let mut values: Vec<u8> = Vec::with_capacity(
                         (std::cmp::max(e.inner().values().len(), r * d.len()) + s.len() * r) * n,
                     );
-                    let mut offsets: MutableBuffer<i64> = MutableBuffer::with_capacity(r + 1);
+                    let mut offsets: Vec<i64> = Vec::with_capacity(r + 1);
                     offsets.push(0);
                     let mut offset: usize = 0;
                     unsafe {
@@ -175,10 +174,10 @@ impl Function for ExportSetFunction {
                     let n = std::cmp::min(n, 64) as usize;
                     let d = d.string()?;
                     let validity = d.inner().validity().cloned();
-                    let mut values: MutableBuffer<u8> = MutableBuffer::with_capacity(
+                    let mut values: Vec<u8> = Vec::with_capacity(
                         (std::cmp::max(e.len() * r, d.inner().values().len()) + s.len() * r) * n,
                     );
-                    let mut offsets: MutableBuffer<i64> = MutableBuffer::with_capacity(r + 1);
+                    let mut offsets: Vec<i64> = Vec::with_capacity(r + 1);
                     offsets.push(0);
                     let mut offset: usize = 0;
                     unsafe {
@@ -216,12 +215,12 @@ impl Function for ExportSetFunction {
                     let e = e.string()?;
                     let d = d.string()?;
                     let validity = combine_validities(e.inner().validity(), d.inner().validity());
-                    let mut values: MutableBuffer<u8> = MutableBuffer::with_capacity(
+                    let mut values: Vec<u8> = Vec::with_capacity(
                         (std::cmp::max(e.inner().values().len(), d.inner().values().len())
                             + s.len() * r)
                             * n,
                     );
-                    let mut offsets: MutableBuffer<i64> = MutableBuffer::with_capacity(r + 1);
+                    let mut offsets: Vec<i64> = Vec::with_capacity(r + 1);
                     offsets.push(0);
                     let mut offset: usize = 0;
                     unsafe {

@@ -42,18 +42,18 @@ pub trait Catalog: DynClone + Send + Sync {
     ///
 
     // Get the database by name.
-    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
+    async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>>;
 
     // Get all the databases.
-    async fn list_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
+    async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>>;
 
     // Operation with database.
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()>;
 
-    async fn exists_database(&self, db_name: &str) -> Result<bool> {
-        match self.get_database(db_name).await {
+    async fn exists_database(&self, tenant: &str, db_name: &str) -> Result<bool> {
+        match self.get_database(tenant, db_name).await {
             Ok(_) => Ok(true),
             Err(err) => {
                 if err.code() == ErrorCode::UnknownDatabaseCode() {
@@ -76,17 +76,22 @@ pub trait Catalog: DynClone + Send + Sync {
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
 
     // Get one table by db and table name.
-    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>>;
+    async fn get_table(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>>;
 
-    async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
+    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()>;
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply>;
 
     // Check a db.table is exists or not.
-    async fn exists_table(&self, db_name: &str, table_name: &str) -> Result<bool> {
-        match self.get_table(db_name, table_name).await {
+    async fn exists_table(&self, tenant: &str, db_name: &str, table_name: &str) -> Result<bool> {
+        match self.get_table(tenant, db_name, table_name).await {
             Ok(_) => Ok(true),
             Err(err) => {
                 if err.code() == ErrorCode::UnknownTableCode() {

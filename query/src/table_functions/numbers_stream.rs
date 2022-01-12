@@ -139,19 +139,9 @@ impl NumbersStream {
         Ok(if current.begin == current.end {
             None
         } else {
-            let size = (current.end - current.begin) as usize;
-            let mut av = AlignedVec::with_capacity(size);
+            let av = (current.begin..current.end).collect();
 
-            unsafe { av.set_len(size) };
-
-            av.as_mut_slice()
-                .iter_mut()
-                .enumerate()
-                .for_each(|(idx, num)| {
-                    *num = current.begin + idx as u64;
-                });
-
-            let series = DFUInt64Array::new_from_aligned_vec(av).into_series();
+            let series = DFUInt64Array::new_from_vec(av).into_series();
             let block = DataBlock::create_by_array(self.schema.clone(), vec![series]);
             Some(block)
         })

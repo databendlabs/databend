@@ -131,6 +131,10 @@ impl QueryContextShared {
         self.session.get_current_user()
     }
 
+    pub fn get_tenant(&self) -> String {
+        self.conf.query.tenant_id.clone()
+    }
+
     pub fn get_settings(&self) -> Arc<Settings> {
         self.session.get_settings()
     }
@@ -144,7 +148,6 @@ impl QueryContextShared {
         let table_meta_key = (database.to_string(), table.to_string());
 
         let already_in_cache = { self.tables_refs.lock().contains_key(&table_meta_key) };
-
         match already_in_cache {
             false => self.get_table_to_cache(database, table).await,
             true => Ok(self
@@ -157,8 +160,9 @@ impl QueryContextShared {
     }
 
     async fn get_table_to_cache(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+        let tenant = self.get_tenant();
         let catalog = self.get_catalog();
-        let cache_table = catalog.get_table(database, table).await?;
+        let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
 
         let table_meta_key = (database.to_string(), table.to_string());
         let mut tables_refs = self.tables_refs.lock();

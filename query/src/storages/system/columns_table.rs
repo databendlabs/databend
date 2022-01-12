@@ -65,12 +65,16 @@ impl ColumnsTable {
         &self,
         ctx: Arc<QueryContext>,
     ) -> Result<Vec<(String, String, DataField)>> {
+        let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog();
-        let databases = catalog.list_databases().await?;
+        let databases = catalog.list_databases(tenant.as_str()).await?;
 
         let mut rows: Vec<(String, String, DataField)> = vec![];
         for database in databases {
-            for table in catalog.list_tables(database.name()).await? {
+            for table in catalog
+                .list_tables(tenant.as_str(), database.name())
+                .await?
+            {
                 for field in table.schema().fields() {
                     rows.push((database.name().into(), table.name().into(), field.clone()))
                 }

@@ -33,13 +33,18 @@ pub struct DfDropDatabase {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfDropDatabase {
-    #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
-    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let db = self.database_name()?;
         let if_exists = self.if_exists;
+        let tenant = ctx.get_tenant();
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::DropDatabase(DropDatabasePlan { db, if_exists }),
+            PlanNode::DropDatabase(DropDatabasePlan {
+                tenant,
+                db,
+                if_exists,
+            }),
         )))
     }
 }

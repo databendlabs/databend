@@ -1,10 +1,10 @@
 <div align="center">
-<p align="center"><img alt="Databend Logo" src="website/databend/static/img/favicon.png" width="20%"/></p>
+<p align="center"><img alt="Databend Logo" src="website/static/img/favicon.png" width="20%"/></p>
 <p align="center">The Open Source Serverless Data Warehouse for Everyone</p>
  
 <h4 align="center">
   <a href="https://databend.rs">Website</a> |
-  <a href="https://github.com/datafuselabs/databend/issues/746">Roadmap</a> |
+  <a href="https://github.com/datafuselabs/databend/issues/3706">Roadmap</a> |
   <a href="https://databend.rs/user">Documentation</a>
 </h4>
 

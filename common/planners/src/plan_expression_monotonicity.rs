@@ -49,7 +49,6 @@ use crate::Recursion;
 // Simple depth first search visit the expression tree and gete monotonicity from
 // every function. Each function is responsible to implement its own monotonicity
 // function.
-// Notice!! the mechanism doesn't solve multiple variables case.
 #[derive(Clone)]
 pub struct ExpressionMonotonicityVisitor {
     input_schema: DataSchemaRef,
@@ -185,6 +184,8 @@ impl ExpressionMonotonicityVisitor {
     pub fn extract_sort_column(
         schema: DataSchemaRef,
         sort_expr: &Expression,
+        left: Option<DataColumnWithField>,
+        right: Option<DataColumnWithField>,
         column_name: &str,
     ) -> Result<Expression> {
         if let Expression::Sort {
@@ -195,7 +196,7 @@ impl ExpressionMonotonicityVisitor {
         } = sort_expr
         {
             let mut variables = HashMap::new();
-            variables.insert(column_name.to_owned(), (None, None));
+            variables.insert(column_name.to_owned(), (left, right));
             let mono = Self::check_expression(schema, origin_expr, variables, false)
                 .unwrap_or_else(|_| Monotonicity::default());
             if !mono.is_monotonic {

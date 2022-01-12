@@ -8,18 +8,19 @@ edition = "2021"
 
 [lib]
 doctest = false
-test = false
 
 [dependencies]
 async-compat = "0.2.1"
 async-trait = "0.1.52"
 bytes = "1.1.0"
 futures = "0.3.19"
-tokio = { version = "1.15.0", features = ["fs"] }
+tokio = { version = "1.15.0", features = ["full"] }
 thiserror = "1.0.30"
-aws-config = "0.3.0"
-aws-types = { version = "0.3.0", features = ["hardcoded-credentials"] }
-aws-sdk-s3 = "0.3.0"
-aws-endpoint = "0.3.0"
+aws-config = "0.4.0"
+aws-types = { version = "0.4.0", features = ["hardcoded-credentials"] }
+aws-sdk-s3 = "0.4.0"
+aws-endpoint = "0.4.0"
 http = "0.2.6"
-aws-smithy-http = "0.33.1"
+aws-smithy-http = "0.34"
+hyper = {version="0.14.16", features=["stream"]}
+pin-project = "1.0.10"

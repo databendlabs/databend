@@ -17,6 +17,7 @@ use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::arithmetic::ArithmeticTrait;
@@ -63,6 +64,13 @@ where T: ArithmeticTrait + Clone + Sync + Send + 'static
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+        if args.len() != 1 {
+            return Err(ErrorCode::BadArguments(format!(
+                "Invalid argument lengths {} for get_monotonicity",
+                args.len()
+            )));
+        }
+
         match self.op {
             DataValueUnaryOperator::Negate => ArithmeticNegateFunction::get_monotonicity(args),
         }

@@ -38,14 +38,16 @@ pub struct DfCreateDatabase {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCreateDatabase {
-    #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
-    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+        let tenant = ctx.get_tenant();
         let db = self.database_name()?;
         let if_not_exists = self.if_not_exists;
         let meta = self.database_meta()?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::CreateDatabase(CreateDatabasePlan {
+                tenant,
                 if_not_exists,
                 db,
                 meta,

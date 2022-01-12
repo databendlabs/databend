@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::task::Context;
@@ -19,27 +20,39 @@ use std::task::Poll;
 
 use async_trait::async_trait;
 use aws_sdk_s3 as AwsS3;
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::byte_stream::ByteStream;
 use futures::TryStreamExt;
 
 use crate::credential::Credential;
 use crate::error::Error;
 use crate::error::Result;
+use crate::ops::Delete;
+use crate::ops::Object;
 use crate::ops::Read;
 use crate::ops::ReadBuilder;
 use crate::ops::Reader;
+use crate::ops::ReaderStream;
+use crate::ops::Stat;
+use crate::ops::Write;
+use crate::ops::WriteBuilder;
 
+/// # TODO
+///
+/// enable_path_style and enable_signature_v2 need sdk support.
+///
+/// ref: https://github.com/awslabs/aws-sdk-rust/issues/390
 #[derive(Default, Debug, Clone)]
 pub struct Builder {
-    pub root: Option<String>,
+    root: Option<String>,
 
-    pub bucket: String,
-    pub credential: Option<Credential>,
-    pub endpoint: Option<String>,
-
-    /// disable_ssl controls whether to use SSL when connecting.
-    pub disable_ssl: bool,
-    /// enable_path_style controls whether to use path style or virtual host style.
-    pub enable_path_style: bool,
+    bucket: String,
+    region: String,
+    credential: Option<Credential>,
+    /// endpoint must be full uri or a uri template, e.g.
+    /// - https://s3.amazonaws.com
+    /// - http://127.0.0.1:3000
+    endpoint: Option<String>,
 }
 
 impl Builder {
@@ -51,6 +64,12 @@ impl Builder {
 
     pub fn bucket(&mut self, bucket: &str) -> &mut Self {
         self.bucket = bucket.to_string();
+
+        self
+    }
+
+    pub fn region(&mut self, region: &str) -> &mut Self {
+        self.region = region.to_string();
 
         self
     }
@@ -67,20 +86,8 @@ impl Builder {
         self
     }
 
-    pub fn disable_ssl(&mut self) -> &mut Self {
-        self.disable_ssl = true;
-
-        self
-    }
-
-    pub fn enable_path_style(&mut self) -> &mut Self {
-        self.enable_path_style = true;
-
-        self
-    }
-
-    pub async fn finish(self) -> Result<Backend> {
-        if self.bucket.is_empty() {
+    pub async fn finish(&mut self) -> Result<Backend> {
+        if self.bucket.is_empty() || self.region.is_empty() {
             return Err(Error::BackendConfigurationInvalid {
                 key: "bucket".to_string(),
                 value: "".to_string(),
@@ -88,8 +95,8 @@ impl Builder {
         }
 
         // strip the prefix of "/" in root only once.
-        let root = if let Some(root) = self.root {
-            root.strip_prefix('/').unwrap_or(&root).to_string()
+        let root = if let Some(root) = &self.root {
+            root.strip_prefix('/').unwrap_or(root).to_string()
         } else {
             String::new()
         };
@@ -99,20 +106,27 @@ impl Builder {
 
         let mut cfg = AwsS3::config::Builder::from(&aws_cfg);
 
+        // TODO: Maybe we can
+        //
+        // - use "default" as the default region.
+        // - use "us-east-1" as the default region.
+        // - detect the region at runtime via `ListBuckets`.
+        cfg = cfg.region(AwsS3::Region::new(Cow::from(self.region.clone())));
+
         // Load users input first, if user not input, we will fallback to aws
         // default load logic.
-        if let Some(endpoint) = self.endpoint {
+        if let Some(endpoint) = &self.endpoint {
             cfg = cfg.endpoint_resolver(AwsS3::Endpoint::immutable(
-                http::Uri::from_str(&endpoint).map_err(|_| Error::BackendConfigurationInvalid {
+                http::Uri::from_str(endpoint).map_err(|_| Error::BackendConfigurationInvalid {
                     key: "endpoint".to_string(),
-                    value: endpoint.to_string(),
+                    value: endpoint.clone(),
                 })?,
             ));
         }
 
         // Load users input first, if user not input, we will fallback to aws
         // default load logic.
-        if let Some(cred) = self.credential {
+        if let Some(cred) = &self.credential {
             match cred {
                 Credential::HMAC {
                     access_key_id,
@@ -133,12 +147,10 @@ impl Builder {
             }
         }
 
-        // TODO: support disable_ssl and enable_path_style.
-
         Ok(Backend {
             // Make `/` as the default of root.
             root,
-            bucket: self.bucket,
+            bucket: self.bucket.clone(),
             client: AwsS3::Client::from_conf(cfg.build()),
         })
     }
@@ -184,6 +196,68 @@ impl<S: Send + Sync> Read<S> for Backend {
             .unwrap(); // TODO: we need a better way to handle errors here.
 
         Ok(Box::new(S3Stream(resp.body).into_async_read()))
+    }
+}
+
+#[async_trait]
+impl<S: Send + Sync> Write<S> for Backend {
+    async fn write(&self, r: Reader, args: &WriteBuilder<S>) -> Result<usize> {
+        let p = self.get_abs_path(args.path);
+
+        let _ = self
+            .client
+            .put_object()
+            .bucket(&self.bucket.clone())
+            .key(&p)
+            .content_length(args.size as i64)
+            .body(ByteStream::from(SdkBody::from(
+                hyper::body::Body::wrap_stream(ReaderStream::new(r)),
+            )))
+            .send()
+            .await
+            .unwrap(); // TODO: we need a better way to handle errors here.
+
+        Ok(args.size as usize)
+    }
+}
+
+#[async_trait]
+impl<S: Send + Sync> Stat<S> for Backend {
+    async fn stat(&self, path: &str) -> Result<Object> {
+        let p = self.get_abs_path(path);
+
+        let meta = self
+            .client
+            .head_object()
+            .bucket(&self.bucket.clone())
+            .key(&p)
+            .send()
+            .await
+            .unwrap(); // TODO: we need a better way to handle errors here.
+        let o = Object {
+            path: path.to_string(),
+            size: meta.content_length as u64,
+        };
+
+        Ok(o)
+    }
+}
+
+#[async_trait]
+impl<S: Send + Sync> Delete<S> for Backend {
+    async fn delete(&self, path: &str) -> Result<()> {
+        let p = self.get_abs_path(path);
+
+        let _ = self
+            .client
+            .delete_object()
+            .bucket(&self.bucket.clone())
+            .key(&p)
+            .send()
+            .await
+            .unwrap(); // TODO: we need a better way to handle errors here.
+
+        Ok(())
     }
 }
 

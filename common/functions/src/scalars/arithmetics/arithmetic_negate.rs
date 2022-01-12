@@ -96,13 +96,6 @@ impl ArithmeticNegateFunction {
     }
 
     pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
-        if args.len() != 1 {
-            return Err(ErrorCode::BadArguments(format!(
-                "Invalid argument lengths {} for get_monotonicity",
-                args.len()
-            )));
-        }
-
         // unary operation like '-f(x)', just flip the is_positive.
         // also pass the is_constant, in case the input is a constant value.
         Ok(Monotonicity::create(
