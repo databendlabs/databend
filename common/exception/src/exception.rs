@@ -163,7 +163,7 @@ impl ErrorCode {
 ///     x.map_err_to_code(ErrorCode::UnknownException, || 123);
 ///
 /// assert_eq!(
-///     "Code: 1000, displayText = 123, cause: an error occurred when formatting an argument.",
+///     "Code: 1067, displayText = 123, cause: an error occurred when formatting an argument.",
 ///     format!("{}", y.unwrap_err())
 /// );
 /// ```

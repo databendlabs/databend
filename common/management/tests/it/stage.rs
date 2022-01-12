@@ -57,7 +57,7 @@ async fn test_already_exists_add_stage() -> Result<()> {
 
     match stage_api.add_stage(stage_info.clone()).await {
         Ok(_) => panic!("Already exists add stage must be return Err."),
-        Err(cause) => assert_eq!(cause.code(), 4061),
+        Err(cause) => assert_eq!(cause.code(), 2502),
     }
 
     Ok(())
@@ -101,7 +101,7 @@ async fn test_unknown_stage_drop_stage() -> Result<()> {
 
     match stage_api.drop_stage("UNKNOWN_ID", None).await {
         Ok(_) => panic!("Unknown stage drop stage must be return Err."),
-        Err(cause) => assert_eq!(cause.code(), 4060),
+        Err(cause) => assert_eq!(cause.code(), 2501),
     }
 
     Ok(())

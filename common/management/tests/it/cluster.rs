@@ -60,7 +60,7 @@ async fn test_already_exists_add_node() -> Result<()> {
 
     match cluster_api.add_node(node_info.clone()).await {
         Ok(_) => panic!("Already exists add node must be return Err."),
-        Err(cause) => assert_eq!(cause.code(), 4059),
+        Err(cause) => assert_eq!(cause.code(), 2402),
     }
 
     Ok(())
@@ -107,7 +107,7 @@ async fn test_unknown_node_drop_node() -> Result<()> {
         .await
     {
         Ok(_) => panic!("Unknown node drop node must be return Err."),
-        Err(cause) => assert_eq!(cause.code(), 4058),
+        Err(cause) => assert_eq!(cause.code(), 2401),
     }
 
     Ok(())

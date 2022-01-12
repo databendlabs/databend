@@ -176,7 +176,7 @@ build_exceptions! {
     // user defined function error.
     IllegalUDFFormat(2601),
     UnknownUDF(2602),
-    UDFAlreadyExists(2603),
+    UdfAlreadyExists(2603),
 
 
     // database error.

@@ -194,7 +194,7 @@ async fn test_user_manager() -> Result<()> {
             )
             .await;
         // ErrorCode::UnknownUser
-        assert_eq!(not_exist.err().unwrap().code(), 3000)
+        assert_eq!(not_exist.err().unwrap().code(), 2201)
     }
     Ok(())
 }

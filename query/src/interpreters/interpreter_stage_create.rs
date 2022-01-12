@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::CreateUserStagePlan;
 use common_streams::DataBlockStream;
@@ -52,18 +53,13 @@ impl Interpreter for CreatStageInterpreter {
         let user_mgr = self.ctx.get_user_manager();
         let user_stage = plan.user_stage_info;
         let create_stage = user_mgr.add_stage(&tenant, user_stage).await;
-        if plan.if_not_exists {
-            create_stage.or_else(|e| {
-                // StageAlreadyExists(4061)
-                if e.code() == 4061 {
-                    Ok(u64::MIN)
-                } else {
-                    Err(e)
-                }
-            })?;
-        } else {
-            create_stage?;
-        }
+        let _ = create_stage.or_else(|e| {
+            if plan.if_not_exists && e.code() == ErrorCode::stage_already_exists_code() {
+                Ok(u64::MIN)
+            } else {
+                Err(e)
+            }
+        })?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

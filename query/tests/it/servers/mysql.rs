@@ -61,8 +61,8 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
         match create_connection(listening.port()).await {
             Ok(_) => panic!("Expected rejected connection"),
             Err(error) => {
-                assert_eq!(error.code(), 1000);
-                assert_eq!(error.message(), "Reject connection, cause: Server error: `ERROR 42000 (1203): The current accept connection has exceeded mysql_handler_thread_num config'");
+                assert_eq!(error.code(), 1067);
+                assert_eq!(error.message(), "Reject connection, cause: Server error: `ERROR HY000 (1815): The current accept connection has exceeded mysql_handler_thread_num config'");
             }
         };
 
@@ -98,8 +98,8 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
                 }
                 Err(error) => {
                     destroy_barrier.wait().await;
-                    assert_eq!(error.code(), 1000);
-                    assert_eq!(error.message(), "Reject connection, cause: Server error: `ERROR 42000 (1203): The current accept connection has exceeded mysql_handler_thread_num config'");
+                    assert_eq!(error.code(), 1067);
+                    assert_eq!(error.message(), "Reject connection, cause: Server error: `ERROR HY000 (1815): The current accept connection has exceeded mysql_handler_thread_num config'");
                     CreateServerResult::Rejected
                 }
             }
