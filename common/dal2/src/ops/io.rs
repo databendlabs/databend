@@ -89,6 +89,10 @@ pub struct CallbackReader<F: FnMut(usize)> {
 impl<F> CallbackReader<F>
 where F: FnMut(usize)
 {
+    /// # TODO
+    ///
+    /// Mark as dead_code for now, we will use it sooner while implement streams support.
+    #[allow(dead_code)]
     pub fn new(r: Reader, f: F) -> Self {
         CallbackReader { inner: r, f }
     }
