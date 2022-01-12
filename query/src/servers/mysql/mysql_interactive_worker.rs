@@ -31,6 +31,7 @@ use msql_srv::ParamParser;
 use msql_srv::QueryResultWriter;
 use msql_srv::StatementMetaWriter;
 use rand::RngCore;
+use regex::RegexSet;
 use tokio_stream::StreamExt;
 
 use crate::interpreters::InterpreterFactory;
@@ -283,38 +284,55 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     fn do_close(&mut self, _: u32) {}
 
+    fn is_federated_server_setup_set_command(&mut self, query: &str) -> bool {
+        let expr = RegexSet::new(&[
+            "(?i)^(SET NAMES(.*))",
+            "(?i)^(SET character_set_results(.*))",
+            "(?i)^(SET FOREIGN_KEY_CHECKS(.*))",
+            "(?i)^(SET AUTOCOMMIT(.*))",
+            "(?i)^(SET sql_mode(.*))",
+            "(?i)^(SET @@(.*))",
+            "(?i)^(SET SESSION TRANSACTION ISOLATION LEVEL(.*))",
+        ])
+        .unwrap();
+        expr.is_match(query)
+    }
+
     #[tracing::instrument(level = "debug", skip(self))]
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
         tracing::debug!("{}", query);
 
-        let context = self.session.create_context().await?;
-        context.attach_query_str(query);
+        if self.is_federated_server_setup_set_command(query) {
+            Ok((vec![DataBlock::empty()], String::from("")))
+        } else {
+            let context = self.session.create_context().await?;
+            context.attach_query_str(query);
+            let (plan, hints) = PlanParser::parse_with_hint(query, context.clone()).await;
 
-        let (plan, hints) = PlanParser::parse_with_hint(query, context.clone()).await;
-
-        match hints
-            .iter()
-            .find(|v| v.error_code.is_some())
-            .and_then(|x| x.error_code)
-        {
-            None => Self::exec_query(plan, &context).await,
-            Some(hint_error_code) => match Self::exec_query(plan, &context).await {
-                Ok(_) => Err(ErrorCode::UnexpectedError(format!(
-                    "Expected server error code: {} but got: Ok.",
-                    hint_error_code
-                ))),
-                Err(error_code) => {
-                    if hint_error_code == error_code.code() {
-                        Ok((vec![DataBlock::empty()], String::from("")))
-                    } else {
-                        let actual_code = error_code.code();
-                        Err(error_code.add_message(format!(
-                            "Expected server error code: {} but got: {}.",
-                            hint_error_code, actual_code
-                        )))
+            match hints
+                .iter()
+                .find(|v| v.error_code.is_some())
+                .and_then(|x| x.error_code)
+            {
+                None => Self::exec_query(plan, &context).await,
+                Some(hint_error_code) => match Self::exec_query(plan, &context).await {
+                    Ok(_) => Err(ErrorCode::UnexpectedError(format!(
+                        "Expected server error code: {} but got: Ok.",
+                        hint_error_code
+                    ))),
+                    Err(error_code) => {
+                        if hint_error_code == error_code.code() {
+                            Ok((vec![DataBlock::empty()], String::from("")))
+                        } else {
+                            let actual_code = error_code.code();
+                            Err(error_code.add_message(format!(
+                                "Expected server error code: {} but got: {}.",
+                                hint_error_code, actual_code
+                            )))
+                        }
                     }
-                }
-            },
+                },
+            }
         }
     }
 
@@ -403,7 +421,7 @@ impl<W: std::io::Write> InteractiveWorker<W> {
             },
             salt: scramble,
             // TODO: version
-            version: crate::configs::DATABEND_COMMIT_VERSION.to_string(),
+            version: format!("{}-{}", "8.0.26", *crate::configs::DATABEND_COMMIT_VERSION),
             client_addr,
         }
     }
