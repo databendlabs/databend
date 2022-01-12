@@ -36,7 +36,7 @@ runs:
     - name: Install python dependences
       shell: bash
       run: |
-        pip3 install --user boto3 "moto[all]" yapf shfmt-py
+        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector
 
     - name: Set up file as executable
       shell: bash
