@@ -6697,8 +6697,8 @@ dependencies = [
 
 [[package]]
 name = "sqlparser"
-version = "0.11.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=b42ff01#b42ff010752d5fc4bce12f0b29d077d7e2fee023"
+version = "0.13.1-alpha.0"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=c33837e#c33837ec4f7146acf5b00ec4739f2f031fc1ff1e"
 dependencies = [
  "log",
 ]
