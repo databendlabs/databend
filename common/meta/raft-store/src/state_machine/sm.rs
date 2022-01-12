@@ -86,13 +86,6 @@ const TREE_STATE_MACHINE: &str = "state_machine";
 /// `last_applied_logs` and `client_serial_responses` to achieve idempotence.
 #[derive(Debug)]
 pub struct StateMachine {
-    // TODO(xp): config is not required. Remove it after snapshot is done.
-    _config: RaftConfig,
-
-    /// The dedicated sled db to store everything about a state machine.
-    /// A state machine has several trees opened on this db.
-    _db: sled::Db,
-
     /// The internal sled::Tree to store everything about a state machine:
     /// - Store initialization state and last applied in keyspace `StateMachineMeta`.
     /// - Every other state is store in its own keyspace such as `Nodes`.
@@ -147,12 +140,7 @@ impl StateMachine {
 
         let sm_tree = SledTree::open(&db, &tree_name, config.is_sync())?;
 
-        let sm = StateMachine {
-            _config: config.clone(),
-            _db: db,
-
-            sm_tree,
-        };
+        let sm = StateMachine { sm_tree };
 
         let inited = {
             let sm_meta = sm.sm_meta();
