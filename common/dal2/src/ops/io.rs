@@ -133,9 +133,7 @@ mod test {
 
         let reader = CallbackReader {
             inner: Box::new(Cursor::new("Hello, world!")),
-            f: |n| {
-                size += n;
-            },
+            f: |n| size += n,
         };
 
         let mut bs = Vec::new();
