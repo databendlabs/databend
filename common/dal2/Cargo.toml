@@ -6,6 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lib]
+doctest = false
+
 [dependencies]
 async-compat = "0.2.1"
 async-trait = "0.1.52"

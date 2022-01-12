@@ -79,44 +79,41 @@ impl futures::Stream for ReaderStream {
     }
 }
 
-pub struct CallbackReader {
+#[pin_project]
+pub struct CallbackReader<F: FnMut(usize)> {
+    #[pin]
     inner: Reader,
-    f: Box<dyn Fn(usize)>,
+    f: F,
 }
 
-impl futures::AsyncRead for CallbackReader {
+impl<F> CallbackReader<F>
+where F: FnMut(usize)
+{
+    /// # TODO
+    ///
+    /// Mark as dead_code for now, we will use it sooner while implement streams support.
+    #[allow(dead_code)]
+    pub fn new(r: Reader, f: F) -> Self {
+        CallbackReader { inner: r, f }
+    }
+}
+
+impl<F> futures::AsyncRead for CallbackReader<F>
+where F: FnMut(usize)
+{
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut [u8],
     ) -> Poll<std::io::Result<usize>> {
-        let r = Pin::new(&mut self.inner).poll_read(cx, buf);
+        let this = self.as_mut().project();
+
+        let r = this.inner.poll_read(cx, buf);
 
         if let Poll::Ready(Ok(len)) = r {
             (self.f)(len);
         };
 
         r
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use futures::io::Cursor;
-    use futures::StreamExt;
-
-    use super::*;
-
-    #[tokio::test]
-    async fn reader_stream() {
-        let reader = Box::new(Cursor::new("Hello, world!"));
-        let mut s = ReaderStream::new(reader);
-
-        let mut bs = Vec::new();
-        while let Some(chunk) = s.next().await {
-            bs.extend_from_slice(&chunk.unwrap());
-        }
-
-        assert_eq!(&bs[..], "Hello, world!".as_bytes());
     }
 }
