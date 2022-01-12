@@ -79,18 +79,24 @@ impl futures::Stream for ReaderStream {
     }
 }
 
-pub struct CallbackReader {
+#[pin_project]
+pub struct CallbackReader<F: FnMut(usize)> {
+    #[pin]
     inner: Reader,
-    f: Box<dyn Fn(usize)>,
+    f: F,
 }
 
-impl futures::AsyncRead for CallbackReader {
+impl<F> futures::AsyncRead for CallbackReader<F>
+where F: FnMut(usize)
+{
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut [u8],
     ) -> Poll<std::io::Result<usize>> {
-        let r = Pin::new(&mut self.inner).poll_read(cx, buf);
+        let this = self.as_mut().project();
+
+        let r = this.inner.poll_read(cx, buf);
 
         if let Poll::Ready(Ok(len)) = r {
             (self.f)(len);
@@ -102,6 +108,7 @@ impl futures::AsyncRead for CallbackReader {
 
 #[cfg(test)]
 mod test {
+    use futures::io::copy;
     use futures::io::Cursor;
     use futures::StreamExt;
 
@@ -118,5 +125,23 @@ mod test {
         }
 
         assert_eq!(&bs[..], "Hello, world!".as_bytes());
+    }
+
+    #[tokio::test]
+    async fn callback_reader() {
+        let mut size = 0;
+
+        let reader = CallbackReader {
+            inner: Box::new(Cursor::new("Hello, world!")),
+            f: |n| {
+                size += n;
+            },
+        };
+
+        let mut bs = Vec::new();
+        let n = copy(reader, &mut bs).await.unwrap();
+
+        assert_eq!(size, 13);
+        assert_eq!(n, 13);
     }
 }
