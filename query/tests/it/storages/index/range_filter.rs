@@ -161,6 +161,12 @@ fn test_range_filter() -> Result<()> {
             expect: true,
             error: "",
         },
+        Test {
+            name: "a + 9 < b",
+            expr: add(col("a"), lit(9)).lt(col("b")),
+            expect: false,
+            error: "",
+        },
     ];
 
     for test in tests {
