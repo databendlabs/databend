@@ -21,9 +21,10 @@ use std::ops::RangeBounds;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use common_tracing::tracing;
+use sled::transaction::abort;
+use sled::transaction::ConflictableTransactionError;
 use sled::transaction::TransactionResult;
 use sled::transaction::TransactionalTree;
-use sled::transaction::UnabortableTransactionError;
 
 use crate::store::Store;
 use crate::SledKeySpace;
@@ -92,20 +93,26 @@ impl SledTree {
     pub fn txn<T>(
         &self,
         sync: bool,
-        f: impl Fn(TransactionSledTree<'_>) -> Result<T, UnabortableTransactionError>,
-    ) -> Result<T, ErrorCode> {
+        f: impl Fn(TransactionSledTree<'_>) -> common_exception::Result<T>,
+    ) -> common_exception::Result<T> {
         let sync = sync && self.sync;
 
-        // use map_err_to_code
-        let result: TransactionResult<T, UnabortableTransactionError> =
-            (&self.tree).transaction(move |tree| {
-                let txn_sled_tree = TransactionSledTree { txn_tree: tree };
-                let r = f(txn_sled_tree.clone())?;
-                if sync {
-                    txn_sled_tree.txn_tree.flush();
+        let result: TransactionResult<T, ErrorCode> = (&self.tree).transaction(move |tree| {
+            let txn_sled_tree = TransactionSledTree { txn_tree: tree };
+            let r = f(txn_sled_tree.clone());
+            match r {
+                Ok(r) => {
+                    if sync {
+                        txn_sled_tree.txn_tree.flush();
+                    }
+                    Ok(r)
                 }
-                Ok(r)
-            });
+                Err(e) => {
+                    tracing::warn!("txn abort: {}", e);
+                    abort(e)?
+                }
+            }
+        });
         result.map_err(ErrorCode::from)
     }
 
@@ -137,10 +144,16 @@ impl SledTree {
         let res = self
             .tree
             .update_and_fetch(k, move |old| {
-                let old = old.map(|o| KV::deserialize_value(o).unwrap());
+                let old = match old {
+                    Some(o) => Some(KV::deserialize_value(o).ok()?),
+                    None => None,
+                };
 
                 let new_val = f(old);
-                new_val.map(|new_val| KV::serialize_value(&new_val).unwrap())
+                match new_val {
+                    Some(new_val) => Some(KV::serialize_value(&new_val).ok()?),
+                    None => None,
+                }
             })
             .map_err_to_code(ErrorCode::MetaStoreDamaged, mes)?;
 
@@ -516,49 +529,76 @@ pub struct AsTxnKeySpace<'a, KV: SledKeySpace> {
 }
 
 impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
-    type Error = UnabortableTransactionError;
+    type Error = ErrorCode;
 
     fn insert(&self, key: &KV::K, value: &KV::V) -> Result<Option<KV::V>, Self::Error> {
-        let k = KV::serialize_key(key).unwrap();
-        let v = KV::serialize_value(value).unwrap();
+        let k = KV::serialize_key(key)?;
+        let v = KV::serialize_value(value)?;
 
-        let prev = self.txn_tree.insert(k, v)?;
-        let prev = prev.map(|x| KV::deserialize_value(x).unwrap());
-
-        Ok(prev)
+        let prev = self.txn_tree.insert(k, v).map_err(|e| {
+            let e: ConflictableTransactionError = e.into();
+            ErrorCode::from(e)
+        })?;
+        match prev {
+            Some(v) => Ok(Some(KV::deserialize_value(v)?)),
+            None => Ok(None),
+        }
     }
 
     fn get(&self, key: &KV::K) -> Result<Option<KV::V>, Self::Error> {
-        let k = KV::serialize_key(key).unwrap();
-        let got = self.txn_tree.get(k)?;
+        let k = KV::serialize_key(key)?;
+        let got = self.txn_tree.get(k).map_err(|e| {
+            let e: ConflictableTransactionError = e.into();
+            ErrorCode::from(e)
+        })?;
 
-        let v = got.map(|v| KV::deserialize_value(v).unwrap());
-
-        Ok(v)
+        match got {
+            Some(v) => Ok(Some(KV::deserialize_value(v)?)),
+            None => Ok(None),
+        }
     }
 
     fn remove(&self, key: &KV::K) -> Result<Option<KV::V>, Self::Error> {
-        let k = KV::serialize_key(key).unwrap();
-        let removed = self.txn_tree.remove(k)?;
+        let k = KV::serialize_key(key)?;
+        let removed = self.txn_tree.remove(k).map_err(|e| {
+            let e: ConflictableTransactionError = e.into();
+            ErrorCode::from(e)
+        })?;
 
-        let removed = removed.map(|x| KV::deserialize_value(x).unwrap());
-
-        Ok(removed)
+        match removed {
+            Some(v) => Ok(Some(KV::deserialize_value(v)?)),
+            None => Ok(None),
+        }
     }
 
     fn update_and_fetch<F>(&self, key: &KV::K, mut f: F) -> Result<Option<KV::V>, Self::Error>
     where F: FnMut(Option<KV::V>) -> Option<KV::V> {
-        let key_ivec = KV::serialize_key(key).unwrap();
+        let key_ivec = KV::serialize_key(key)?;
 
-        let old_val_ivec = self.txn_tree.get(&key_ivec)?;
-        let old_val = old_val_ivec.map(|o| KV::deserialize_value(o).unwrap());
+        let old_val_ivec = self.txn_tree.get(&key_ivec).map_err(|e| {
+            let e: ConflictableTransactionError = e.into();
+            ErrorCode::from(e)
+        })?;
+        let old_val: Result<Option<KV::V>, ErrorCode> = match old_val_ivec {
+            Some(v) => Ok(Some(KV::deserialize_value(v)?)),
+            None => Ok(None),
+        };
+
+        let old_val = old_val?;
 
         let new_val = f(old_val);
         let _ = match new_val {
             Some(ref v) => self
                 .txn_tree
-                .insert(key_ivec, KV::serialize_value(v).unwrap())?,
-            None => self.txn_tree.remove(key_ivec)?,
+                .insert(key_ivec, KV::serialize_value(v)?)
+                .map_err(|e| {
+                    let e: ConflictableTransactionError = e.into();
+                    ErrorCode::from(e)
+                })?,
+            None => self.txn_tree.remove(key_ivec).map_err(|e| {
+                let e: ConflictableTransactionError = e.into();
+                ErrorCode::from(e)
+            })?,
         };
 
         Ok(new_val)
