@@ -865,19 +865,19 @@ impl PlanScheduler {
         // We always put adjacent partitions in the same node
         let nodes = self.cluster_nodes.clone();
         let cluster_parts = &cluster_source.parts;
-        let parts_pre_node = cluster_parts.len() / nodes.len();
+        let parts_per_node = cluster_parts.len() / nodes.len();
 
         let mut nodes_parts = Vec::with_capacity(nodes.len());
         for index in 0..nodes.len() {
-            let begin = parts_pre_node * index;
-            let end = parts_pre_node * (index + 1);
+            let begin = parts_per_node * index;
+            let end = parts_per_node * (index + 1);
             let node_parts = cluster_parts[begin..end].to_vec();
 
             nodes_parts.push(node_parts);
         }
 
         // For some irregular partitions, we assign them to the head nodes
-        let begin = parts_pre_node * nodes.len();
+        let begin = parts_per_node * nodes.len();
         let remain_cluster_parts = &cluster_parts[begin..];
         for index in 0..remain_cluster_parts.len() {
             nodes_parts[index].push(remain_cluster_parts[index].clone());
