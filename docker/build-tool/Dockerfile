@@ -46,5 +46,5 @@ RUN curl https://sh.rustup.rs -sSf -sSf |\
 RUN mkdir -p /home/rust/libs /home/rust/src /home/rust/.cargo && \
     ln -s /opt/rust/cargo/config /home/rust/.cargo/config
 
-
+RUN export DEBIAN_FRONTEND=noninteractive && apt-get update -y && apt-get install  -yq apt-utils &&  export DEBIAN_FRONTEND=noninteractive && apt-get install -yq psmisc  && python3 -m pip install boto3 "moto[all]" yapf shfmt-py
 

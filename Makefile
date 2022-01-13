@@ -155,7 +155,9 @@ run-codegen:
 
 perf-tool: build-perf-tool
 	docker buildx build . -f ./docker/perf-tool/Dockerfile  --platform linux/amd64 --allow network.host --builder host -t ${HUB}/perf-tool:${TAG} --push
-
+# used for the build of dev container
+dev-docker:
+	docker build ./docker/build-tool -t ${HUB}/build-tool:${TAG} -f ./docker/build-tool/Dockerfile
 profile:
 	bash ./scripts/ci/ci-run-profile.sh
 
