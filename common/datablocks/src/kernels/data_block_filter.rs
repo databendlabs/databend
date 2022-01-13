@@ -29,14 +29,15 @@ impl DataBlock {
             return Ok(block.clone());
         }
 
-        let predicate = predicate.cast_with_type(&DataType::Boolean)?;
         if predicate.len() != block.num_rows() {
             return Err(ErrorCode::BadPredicateRows(format!(
-                "DataBlock rows({}) must be equals predicate rows({})",
+                "DataBlock rows({}) must be equal to predicate rows({})",
                 block.num_rows(),
                 predicate.len()
             )));
         }
+
+        let predicate = predicate.cast_with_type(&DataType::Boolean)?;
 
         // faster path for constant filter
         if let DataColumn::Constant(DataValue::Boolean(v), _) = predicate {
