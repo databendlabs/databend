@@ -109,7 +109,10 @@ impl ClickHouseSession for InteractiveWorker {
                 .get_user_with_client_ip(&tenant, user, client_ip)
                 .await
             {
-                Ok(user_info) => (user_info.auth_info.auth(password), Some(user_info)),
+                Ok(user_info) => (
+                    user_info.auth_info.auth_password_plaintext(password),
+                    Some(user_info),
+                ),
                 Err(err) => (Err(err), None),
             };
             match authed {

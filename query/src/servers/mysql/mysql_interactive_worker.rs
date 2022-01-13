@@ -21,7 +21,6 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
-use common_meta_types::AuthInfo;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use metrics::histogram;
@@ -81,7 +80,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
 
     fn authenticate(
         &self,
-        auth_plugin: &str,
+        _auth_plugin: &str,
         username: &[u8],
         salt: &[u8],
         auth_data: &[u8],
@@ -89,7 +88,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         let username = String::from_utf8_lossy(username);
         let info = CertifiedInfo::create(&username, auth_data, &self.client_addr);
 
-        let authenticate = self.base.authenticate(auth_plugin, salt, info);
+        let authenticate = self.base.authenticate(salt, info);
         futures::executor::block_on(async move {
             match authenticate.await {
                 Ok(res) => res,
@@ -202,12 +201,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
 }
 
 impl<W: std::io::Write> InteractiveWorkerBase<W> {
-    async fn authenticate(
-        &self,
-        auth_plugin: &str,
-        salt: &[u8],
-        info: CertifiedInfo,
-    ) -> Result<bool> {
+    async fn authenticate(&self, salt: &[u8], info: CertifiedInfo) -> Result<bool> {
         let user_name = &info.user_name;
         let user_manager = self.session.get_user_manager();
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
@@ -217,50 +211,11 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             .get_user_with_client_ip(&ctx.get_tenant(), user_name, client_ip)
             .await?;
 
-        let password_input = &info.user_password;
-        let authed = match &user_info.auth_info {
-            AuthInfo::None => true,
-            AuthInfo::Password {
-                password_type: t,
-                password: password_stored,
-            } => {
-                let encode_password =
-                    Self::encoding_password(auth_plugin, salt, password_input, password_stored)?;
-                AuthInfo::check_password(t, password_stored, &encode_password)?;
-            }
-        };
+        let authed = user_info.auth_info.auth_mysql(&info.user_password, salt)?;
         if authed {
             self.session.set_current_user(user_info);
         }
         Ok(authed)
-    }
-
-    fn encoding_password(
-        auth_plugin: &str,
-        salt: &[u8],
-        input: &[u8],
-        user_password: &[u8],
-    ) -> Result<Vec<u8>> {
-        match auth_plugin {
-            "mysql_native_password" if input.is_empty() => Ok(vec![]),
-            "mysql_native_password" => {
-                // SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1( password ) ) )
-                let mut m = sha1::Sha1::new();
-                m.update(salt);
-                m.update(user_password);
-
-                let result = m.digest().bytes();
-                if input.len() != result.len() {
-                    return Err(ErrorCode::SHA1CheckFailed("SHA1 check failed"));
-                }
-                let mut s = Vec::with_capacity(result.len());
-                for i in 0..result.len() {
-                    s.push(input[i] ^ result[i]);
-                }
-                Ok(s)
-            }
-            _ => Ok(input.to_vec()),
-        }
     }
 
     fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {

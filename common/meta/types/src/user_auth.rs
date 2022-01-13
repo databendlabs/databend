@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use common_exception::ErrorCode;
-use sha2::Digest;
 
 const NO_PASSWORD_STR: &str = "no_password";
 const PLAINTEXT_PASSWORD_STR: &str = "plaintext_password";
@@ -83,6 +82,16 @@ pub enum AuthInfo {
     },
 }
 
+fn calc_sha1(v: &[u8]) -> [u8; 20] {
+    let mut m = ::sha1::Sha1::new();
+    m.update(v);
+    m.digest().bytes()
+}
+
+fn double_sha1(v: &[u8]) -> [u8; 20] {
+    calc_sha1(&calc_sha1(v)[..])
+}
+
 impl AuthInfo {
     pub fn get_type(&self) -> AuthType {
         match self {
@@ -118,38 +127,62 @@ impl AuthInfo {
         }
     }
 
-    pub fn check_password(
-        password_type: &PasswordType,
-        password_saved: &[u8],
-        password_to_check: &[u8],
-    ) -> Result<bool, ErrorCode> {
-        match password_type {
-            PasswordType::PlainText => Ok(password_saved == password_to_check),
-            // MySQL already did x = sha1(x)
-            // so we just check double sha1(x)
-            PasswordType::DoubleSha1 => {
-                let mut m = ::sha1::Sha1::new();
-                m.update(password_to_check);
+    fn decode_double_sha1(
+        salt: &[u8],
+        input: &[u8],
+        user_password: &[u8],
+    ) -> Result<Vec<u8>, ErrorCode> {
+        let double_sha1 = calc_sha1(&calc_sha1(user_password)[..]);
+        // SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1( password ) ) )
+        let mut m = sha1::Sha1::new();
+        m.update(salt);
+        m.update(&double_sha1[..]);
 
-                let bs = m.digest().bytes();
-                let mut m = sha1::Sha1::new();
-                m.update(&bs[..]);
-
-                Ok(password_saved == m.digest().bytes().to_vec())
-            }
-            PasswordType::Sha256 => {
-                let result = ::sha2::Sha256::digest(password_saved);
-                Ok(password_saved == result.to_vec())
-            }
+        let result = m.digest().bytes();
+        if input.len() != result.len() {
+            return Err(ErrorCode::SHA1CheckFailed("SHA1 check failed"));
         }
+        let mut s = Vec::with_capacity(result.len());
+        for i in 0..result.len() {
+            s.push(input[i] ^ result[i]);
+        }
+        Ok(s)
     }
-    pub fn auth(&self, password_to_check: &[u8]) -> Result<bool, ErrorCode> {
+
+    pub fn auth_mysql(&self, password_input: &[u8], salt: &[u8]) -> Result<bool, ErrorCode> {
         match self {
             AuthInfo::None => Ok(true),
             AuthInfo::Password {
                 password: p,
                 password_type: t,
-            } => AuthInfo::check_password(t, p, password_to_check),
+            } => {
+                match t {
+                    PasswordType::PlainText => Ok(p == password_input),
+                    PasswordType::DoubleSha1 => {
+                        let password_sha1 = AuthInfo::decode_double_sha1(salt, password_input, p)?;
+                        // TODO(youngsofun): we should store double_sha1(password) later
+                        Ok(double_sha1(p) == calc_sha1(&password_sha1))
+                    }
+                    PasswordType::Sha256 => Err(ErrorCode::AuthenticateFailure(
+                        "login with sha256_password user for mysql protocol not supported yet.",
+                    )),
+                }
+            }
+        }
+    }
+
+    // for clickhouse and http basic
+    pub fn auth_password_plaintext(
+        &self,
+        password_input_plaintext: &[u8],
+    ) -> Result<bool, ErrorCode> {
+        match self {
+            AuthInfo::None => Ok(true),
+            AuthInfo::Password {
+                password: p,
+                password_type: _t,
+                // TODO(youngsofun): we should store password hash later
+            } => Ok(p == password_input_plaintext),
         }
     }
 }
