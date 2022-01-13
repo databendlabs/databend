@@ -176,7 +176,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
                 left: None,
                 right: None,
             },
-            error: "Code: 6, displayText = Cannot find the column name '\"y\"'.",
+            error: "Code: 1006, displayText = Cannot find the column name '\"y\"'.",
         },
         Test {
             name: "f(x) = (-x + 12) - x + (1 - x)",
@@ -201,7 +201,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
             right: None,
             expect_mono: Monotonicity::default(),
             error:
-                "Code: 1000, displayText = Function '-' is not monotonic in the variables range.",
+                "Code: 1067, displayText = Function '-' is not monotonic in the variables range.",
         },
     ];
 
@@ -270,7 +270,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             right: create_f64(1000.0),
             expect_mono: Monotonicity::default(),
             error:
-                "Code: 1000, displayText = Function '*' is not monotonic in the variables range.",
+                "Code: 1067, displayText = Function '*' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = x * (x-12) where x in [12, 100]",
@@ -322,7 +322,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             right: create_f64(10.0),
             expect_mono: Monotonicity::default(),
             error:
-                "Code: 1000, displayText = Function '/' is not monotonic in the variables range.",
+                "Code: 1067, displayText = Function '/' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = -x/(2/(x-2)) where  x in [4-10]",
@@ -364,7 +364,7 @@ fn test_abs_function() -> Result<()> {
             right: None,
             expect_mono: Monotonicity::default(),
             error:
-                "Code: 1000, displayText = Function 'abs' is not monotonic in the variables range.",
+                "Code: 1067, displayText = Function 'abs' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = abs(x) where  0 <= x <= 10",
@@ -404,7 +404,7 @@ fn test_abs_function() -> Result<()> {
             right: create_f64(5.0),
             expect_mono: Monotonicity::default(),
             error:
-                "Code: 1000, displayText = Function 'abs' is not monotonic in the variables range.",
+                "Code: 1067, displayText = Function 'abs' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = abs(x + 12) where -12 <= x <= 1000",
@@ -429,7 +429,7 @@ fn test_abs_function() -> Result<()> {
             right: create_f64(20.0),
             expect_mono: Monotonicity::default(),
             error:
-                "Code: 1000, displayText = Function 'abs' is not monotonic in the variables range.",
+                "Code: 1067, displayText = Function 'abs' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = abs( (x - 7) + (x - 3) ) where 5 <= x <= 100",
@@ -517,7 +517,7 @@ fn test_dates_function() -> Result<()> {
             left: None,
             right: None,
             expect_mono: Monotonicity::default(),
-            error: "Code: 1000, displayText = Function 'toSecond' is not monotonic in the variables range.",
+            error: "Code: 1067, displayText = Function 'toSecond' is not monotonic in the variables range.",
         },
         Test {
             name: "f(z) = toSecond(z)",
@@ -541,7 +541,7 @@ fn test_dates_function() -> Result<()> {
             left: create_datetime(1606752119),
             right: create_datetime(1638288059),
             expect_mono: Monotonicity::default(),
-            error: "Code: 1000, displayText = Function 'toDayOfYear' is not monotonic in the variables range.",
+            error: "Code: 1067, displayText = Function 'toDayOfYear' is not monotonic in the variables range.",
         },
         Test {
             name: "f(z) = toStartOfHour(z)",
@@ -577,7 +577,7 @@ fn test_single_point() -> Result<()> {
             right: create_f64(1.0),
             expect_mono: Monotonicity::default(),
             error:
-                "Code: 1000, displayText = Function 'rand' is not monotonic in the variables range.",
+                "Code: 1067, displayText = Function 'rand' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = x * (12 - x)",

@@ -52,7 +52,7 @@ fn test_rewrite_projection_alias_plan() -> Result<()> {
                 .alias("z"),
             ],
             expect_str: "",
-            error_msg: "Code: 5, displayText = Planner Error: Cyclic aliases: x.",
+            error_msg: "Code: 1005, displayText = Planner Error: Cyclic aliases: x.",
         },
         RewriteTest {
             name: "Duplicate aliases",
@@ -70,7 +70,7 @@ fn test_rewrite_projection_alias_plan() -> Result<()> {
             ],
             expect_str: "",
             error_msg:
-                "Code: 5, displayText = Planner Error: Different expressions with the same alias x.",
+                "Code: 1005, displayText = Planner Error: Different expressions with the same alias x.",
         },
         RewriteTest {
             name: "normal",

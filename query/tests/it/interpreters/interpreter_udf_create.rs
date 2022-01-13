@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_base::tokio;
+use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
 use futures::stream::StreamExt;
@@ -29,8 +29,10 @@ async fn test_create_udf_interpreter() -> Result<()> {
 
     static TEST_QUERY: &str =
         "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(isnull(p)) DESC = 'This is a description'";
-    if let PlanNode::CreateUDF(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
-        let executor = CreatUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
+
+    {
+        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatUDFInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
@@ -43,15 +45,14 @@ async fn test_create_udf_interpreter() -> Result<()> {
         assert_eq!(udf.parameters, vec!["p".to_string()]);
         assert_eq!(udf.definition, "not(isnull(p))");
         assert_eq!(udf.description, "This is a description")
-    } else {
-        panic!()
     }
 
-    if let PlanNode::CreateUDF(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
-        let executor = CreatUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CreatUDFInterpreter");
-        let is_err = executor.execute(None).await.is_err();
-        assert!(!is_err);
+    {
+        // IF NOT EXISTS.
+        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        executor.execute(None).await?;
+
         let udf = ctx
             .get_user_manager()
             .get_udf(&tenant, "isnotempty")
@@ -61,17 +62,19 @@ async fn test_create_udf_interpreter() -> Result<()> {
         assert_eq!(udf.parameters, vec!["p".to_string()]);
         assert_eq!(udf.definition, "not(isnull(p))");
         assert_eq!(udf.description, "This is a description")
-    } else {
-        panic!()
     }
 
     static TEST_QUERY1: &str =
         "CREATE FUNCTION isnotempty AS (p) -> not(isnull(p)) DESC = 'This is a description'";
-    if let PlanNode::CreateUDF(plan) = PlanParser::parse(TEST_QUERY1, ctx.clone()).await? {
-        let executor = CreatUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CreatUDFInterpreter");
-        let is_err = executor.execute(None).await.is_err();
-        assert!(is_err);
+
+    {
+        let plan = PlanParser::parse(TEST_QUERY1, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let r = executor.execute(None).await;
+        assert!(r.is_err());
+        let e = r.err();
+        assert_eq!(e.unwrap().code(), ErrorCode::udf_already_exists_code());
+
         let udf = ctx
             .get_user_manager()
             .get_udf(&tenant, "isnotempty")
@@ -81,8 +84,6 @@ async fn test_create_udf_interpreter() -> Result<()> {
         assert_eq!(udf.parameters, vec!["p".to_string()]);
         assert_eq!(udf.definition, "not(isnull(p))");
         assert_eq!(udf.description, "This is a description")
-    } else {
-        panic!()
     }
     Ok(())
 }

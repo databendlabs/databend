@@ -76,7 +76,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
             query: format!("GRANT CREATE USER ON * TO '{}'@'{}'", name, hostname),
             user_identity: None,
             expected_grants: None,
-            expected_err: Some("Code: 61, displayText = Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used."),
+            expected_err: Some("Code: 1061, displayText = Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used."),
         },
         Test {
             name: "grant all on global",

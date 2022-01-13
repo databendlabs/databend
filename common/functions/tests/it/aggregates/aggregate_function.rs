@@ -179,7 +179,7 @@ fn test_aggregate_function() -> Result<()> {
             display: "argmin",
             func_name: "argmin",
             arrays: arrays.clone(),
-            error: "Code: 28, displayText = argmin expect to have two arguments, but got 1.",
+            error: "Code: 1028, displayText = argmin expect to have two arguments, but got 1.",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::from_data(
                 DataType::Int64,

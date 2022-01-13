@@ -45,7 +45,7 @@ async fn test_setting_interpreter_error() -> Result<()> {
     if let PlanNode::SetVariable(plan) = parse_query("SET xx = 1", &ctx)? {
         let executor = SettingInterpreter::try_create(ctx, plan)?;
         if let Err(e) = executor.execute(None).await {
-            let expect = "Code: 20, displayText = Unknown variable: \"xx\".";
+            let expect = "Code: 1020, displayText = Unknown variable: \"xx\".";
             assert_eq!(expect, format!("{}", e));
         } else {
             panic!();

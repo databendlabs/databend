@@ -48,7 +48,8 @@ async fn test_use_tenant_interpreter_error() -> Result<()> {
     let interpreter = InterpreterFactory::get(ctx, plan)?;
 
     if let Err(e) = interpreter.execute(None).await {
-        let expect = "Code: 62, displayText = Access denied:'USE TENANT' only used in proxy-mode.";
+        let expect =
+            "Code: 1062, displayText = Access denied:'USE TENANT' only used in proxy-mode.";
         assert_eq!(expect, format!("{}", e));
     } else {
         panic!();

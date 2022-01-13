@@ -128,7 +128,7 @@ fn test_plan_parser() -> Result<()> {
             sql: "select number + 1, number + 3 from numbers(10) group by number + 2, number + 1",
             expect: "",
             // TODO: better message
-            error: "Code: 6, displayText = Unable to get field named \"number\". Valid fields: [\"(number + 2)\", \"(number + 1)\"] (while in select before projection).",
+            error: "Code: 1006, displayText = Unable to get field named \"number\". Valid fields: [\"(number + 2)\", \"(number + 1)\"] (while in select before projection).",
             // error: "Code: 26, displayText = Column `number` is not under aggregate function and not in GROUP BY: While processing [(number + 1), (number + 3)].",
         },
         Test {
@@ -141,7 +141,7 @@ fn test_plan_parser() -> Result<()> {
             name: "unsupported-function",
             sql: "select unsupported()",
             expect: "",
-            error: "Code: 4071, displayText = Unknown UDF unsupported (while in analyze select projection).",
+            error: "Code: 2602, displayText = Unknown UDF unsupported (while in analyze select projection).",
         },
         Test {
             name: "interval-passed",
@@ -165,19 +165,19 @@ fn test_plan_parser() -> Result<()> {
             name: "insert-simple",
             sql: "insert into t(col1, col2) values(1,2), (3,4)",
             expect: "",
-            error: "Code: 25, displayText = Unknown table: 't'.",
+            error: "Code: 1025, displayText = Unknown table: 't'.",
         },
         Test {
             name: "insert-value-other-than-simple-expression",
             sql: "insert into t(col1, col2) values(1 + 0, 1 + 1), (3,4)",
             expect: "",
-            error: "Code: 25, displayText = Unknown table: 't'.",
+            error: "Code: 1025, displayText = Unknown table: 't'.",
         },
         Test {
             name: "insert-subquery-not-supported",
             sql: "insert into t select * from t",
             expect: "",
-            error: "Code: 25, displayText = Unknown table: 't'.",
+            error: "Code: 1025, displayText = Unknown table: 't'.",
         },
         Test {
             name: "select-full",
@@ -199,7 +199,7 @@ fn test_plan_parser() -> Result<()> {
             name: "unimplemented-cte",
             sql: "with t as ( select sum(number) n from numbers_mt(1000) )select * from t",
             expect: "",
-            error: "Code: 5, displayText = sql parser error: CTE is not yet implement.",
+            error: "Code: 1005, displayText = sql parser error: CTE is not yet implement.",
         },
         Test {
             name: "kleene-logic-null",

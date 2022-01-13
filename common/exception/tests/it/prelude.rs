@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::prelude::*;
+use common_exception::*;
 
 #[test]
 fn test_prelude() -> anyhow::Result<()> {
@@ -20,7 +20,7 @@ fn test_prelude() -> anyhow::Result<()> {
     let y: common_exception::Result<()> = x.map_err_to_code(ErrorCode::UnknownException, || 123);
 
     assert_eq!(
-        "Code: 1000, displayText = 123, cause: an error occurred when formatting an argument.",
+        "Code: 1067, displayText = 123, cause: an error occurred when formatting an argument.",
         format!("{}", y.unwrap_err())
     );
     Ok(())

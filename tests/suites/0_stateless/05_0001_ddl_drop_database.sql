@@ -5,4 +5,4 @@ DROP DATABASE db;
 
 DROP DATABASE IF EXISTS db;
 
-DROP DATABASE db; -- {ErrorCode 3}
+DROP DATABASE db; -- {ErrorCode 1003}
