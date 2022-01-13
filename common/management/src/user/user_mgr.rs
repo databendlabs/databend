@@ -18,13 +18,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_meta_api::KVApi;
+use common_meta_types::AuthInfoRaw;
 use common_meta_types::GrantObject;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
-use common_meta_types::PasswordType;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UserInfo;
@@ -150,22 +150,20 @@ impl UserMgrApi for UserMgr {
         &self,
         username: String,
         hostname: String,
-        new_password: Option<Vec<u8>>,
-        new_password_type: Option<PasswordType>,
+        auth_info_raw: AuthInfoRaw,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
-        if new_password.is_none() && new_password_type.is_none() {
-            return Ok(seq);
-        }
         let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
         let user_info = user_val_seq.await?.data;
 
-        let mut new_user_info = UserInfo::new(
-            username.clone(),
-            hostname.clone(),
-            new_password.map_or(user_info.password.clone(), |v| v.to_vec()),
-            new_password_type.unwrap_or(user_info.password_type),
-        );
+        let new_auth_info = auth_info_raw
+            .alter_auth_info(&user_info.auth_info)
+            .map_err(ErrorCode::AuthenticateFailure)?;
+
+        if new_auth_info == user_info.auth_info {
+            return Ok(seq);
+        }
+        let mut new_user_info = UserInfo::new(username.clone(), hostname.clone(), new_auth_info);
         new_user_info.grants = user_info.grants;
 
         let user_key = format_user_key(&new_user_info.name, &new_user_info.hostname);

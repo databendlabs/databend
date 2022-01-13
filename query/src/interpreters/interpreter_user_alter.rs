@@ -51,15 +51,16 @@ impl Interpreter for AlterUserInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
         //TODO:alter current user
-        user_mgr
-            .update_user(
-                &tenant,
-                plan.name.as_str(),
-                plan.hostname.as_str(),
-                Some(plan.new_password_type),
-                Some(plan.new_password),
-            )
-            .await?;
+        if let Some(auth_info_raw) = plan.auth_info_raw {
+            user_mgr
+                .update_user(
+                    &tenant,
+                    plan.name.as_str(),
+                    plan.hostname.as_str(),
+                    auth_info_raw.clone(),
+                )
+                .await?;
+        }
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

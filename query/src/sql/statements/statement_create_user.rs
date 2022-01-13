@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::PasswordType;
+use common_meta_types::AuthInfo;
 use common_planners::CreateUserPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -30,8 +30,7 @@ pub struct DfCreateUser {
     /// User name
     pub name: String,
     pub hostname: String,
-    pub password_type: PasswordType,
-    pub password: String,
+    pub auth_info: AuthInfo,
 }
 
 #[async_trait::async_trait]
@@ -41,9 +40,8 @@ impl AnalyzableStatement for DfCreateUser {
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::CreateUser(
             CreateUserPlan {
                 name: self.name.clone(),
-                password: Vec::from(self.password.clone()),
                 hostname: self.hostname.clone(),
-                password_type: self.password_type.clone(),
+                auth_info: self.auth_info.clone(),
             },
         ))))
     }

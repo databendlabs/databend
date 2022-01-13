@@ -15,6 +15,9 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
+use common_meta_types::AuthInfo;
+use common_meta_types::AuthInfoRaw;
+use common_meta_types::AuthType;
 use common_meta_types::Compression;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
@@ -678,82 +681,53 @@ fn show_create_test() -> Result<()> {
     Ok(())
 }
 
+fn test_diff_password_type(password_type_str: &str, password_type: PasswordType) -> Result<()> {
+    expect_parse_ok(
+        &format!(
+            "CREATE USER 'test'@'localhost' IDENTIFIED WITH {} BY 'password'",
+            password_type_str
+        ),
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            auth_info: AuthInfo::Password {
+                password: Vec::from("password"),
+                password_type,
+            },
+        }),
+    )
+}
+
 #[test]
 fn create_user_test() -> Result<()> {
+    // normal
+    test_diff_password_type("plaintext_password", PasswordType::PlainText)?;
+    test_diff_password_type("sha256_password", PasswordType::Sha256)?;
+    test_diff_password_type("double_sha1_password", PasswordType::DoubleSha1)?;
+
+    // no with
     expect_parse_ok(
         "CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'",
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            password_type: PasswordType::Sha256,
-            password: String::from("password"),
+            auth_info: AuthInfo::Password {
+                password: Vec::from("password"),
+                password_type: PasswordType::Sha256,
+            },
         }),
     )?;
 
-    expect_parse_ok(
-        "CREATE USER 'test'@'localhost' IDENTIFIED WITH plaintext_password BY 'password'",
-        DfStatement::CreateUser(DfCreateUser {
-            if_not_exists: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            password_type: PasswordType::PlainText,
-            password: String::from("password"),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "CREATE USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY 'password'",
-        DfStatement::CreateUser(DfCreateUser {
-            if_not_exists: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            password_type: PasswordType::Sha256,
-            password: String::from("password"),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "CREATE USER 'test'@'localhost' IDENTIFIED WITH double_sha1_password BY 'password'",
-        DfStatement::CreateUser(DfCreateUser {
-            if_not_exists: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            password_type: PasswordType::DoubleSha1,
-            password: String::from("password"),
-        }),
-    )?;
-
+    // no password, 3 ways
     expect_parse_ok(
         "CREATE USER 'test'@'localhost' IDENTIFIED WITH no_password",
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            password_type: PasswordType::None,
-            password: String::from(""),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "CREATE USER IF NOT EXISTS 'test'@'localhost' IDENTIFIED WITH sha256_password BY 'password'",
-        DfStatement::CreateUser(DfCreateUser {
-            if_not_exists: true,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            password_type: PasswordType::Sha256,
-            password: String::from("password"),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "CREATE USER 'test@localhost' IDENTIFIED WITH sha256_password BY 'password'",
-        DfStatement::CreateUser(DfCreateUser {
-            if_not_exists: false,
-            name: String::from("test@localhost"),
-            hostname: String::from("%"),
-            password_type: PasswordType::Sha256,
-            password: String::from("password"),
+            auth_info: AuthInfo::None,
         }),
     )?;
 
@@ -763,8 +737,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            password_type: PasswordType::None,
-            password: String::from(""),
+            auth_info: AuthInfo::None,
         }),
     )?;
 
@@ -774,11 +747,22 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            password_type: PasswordType::None,
-            password: String::from(""),
+            auth_info: AuthInfo::None,
         }),
     )?;
 
+    // username contains '@'
+    expect_parse_ok(
+        "CREATE USER 'test@localhost'",
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: false,
+            name: String::from("test@localhost"),
+            hostname: String::from("%"),
+            auth_info: AuthInfo::None,
+        }),
+    )?;
+
+    // errors
     expect_parse_err(
         "CREATE USER 'test'@'localhost' IDENTIFIED WITH no_password BY 'password'",
         String::from("sql parser error: Expected end of statement, found: BY"),
@@ -801,6 +785,23 @@ fn create_user_test() -> Result<()> {
     Ok(())
 }
 
+fn test_diff_auth_type(with_clause: &str, auth_type: Option<AuthType>) -> Result<()> {
+    expect_parse_ok(
+        &format!(
+            "ALTER USER 'test'@'localhost' IDENTIFIED {} BY 'password'",
+            with_clause
+        ),
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            auth_info_raw: Some(AuthInfoRaw {
+                arg_with: auth_type,
+                arg_by: Some("password".to_string()),
+            }),
+        }),
+    )
+}
 #[test]
 fn alter_user_test() -> Result<()> {
     expect_parse_ok(
@@ -809,8 +810,10 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_password_type: PasswordType::Sha256,
-            new_password: String::from("password"),
+            auth_info_raw: Some(AuthInfoRaw {
+                arg_with: None,
+                arg_by: Some("password".to_string()),
+            }),
         }),
     )?;
 
@@ -820,42 +823,18 @@ fn alter_user_test() -> Result<()> {
             if_current_user: true,
             name: String::from(""),
             hostname: String::from(""),
-            new_password_type: PasswordType::Sha256,
-            new_password: String::from("password"),
+            auth_info_raw: Some(AuthInfoRaw {
+                arg_with: None,
+                arg_by: Some("password".to_string()),
+            }),
         }),
     )?;
 
-    expect_parse_ok(
-        "ALTER USER 'test'@'localhost' IDENTIFIED WITH plaintext_password BY 'password'",
-        DfStatement::AlterUser(DfAlterUser {
-            if_current_user: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            new_password_type: PasswordType::PlainText,
-            new_password: String::from("password"),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "ALTER USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY 'password'",
-        DfStatement::AlterUser(DfAlterUser {
-            if_current_user: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            new_password_type: PasswordType::Sha256,
-            new_password: String::from("password"),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "ALTER USER 'test'@'localhost' IDENTIFIED WITH double_sha1_password BY 'password'",
-        DfStatement::AlterUser(DfAlterUser {
-            if_current_user: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            new_password_type: PasswordType::DoubleSha1,
-            new_password: String::from("password"),
-        }),
+    test_diff_auth_type("WITH plaintext_password", Some(AuthType::PlaintextPassword))?;
+    test_diff_auth_type("WITH sha256_password", Some(AuthType::Sha256Password))?;
+    test_diff_auth_type(
+        "WITH double_sha1_password",
+        Some(AuthType::DoubleShaPassword),
     )?;
 
     expect_parse_ok(
@@ -864,8 +843,10 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_password_type: PasswordType::None,
-            new_password: String::from(""),
+            auth_info_raw: Some(AuthInfoRaw {
+                arg_with: Some(AuthType::NoPassword),
+                arg_by: None,
+            }),
         }),
     )?;
 
@@ -875,8 +856,10 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test@localhost"),
             hostname: String::from("%"),
-            new_password_type: PasswordType::Sha256,
-            new_password: String::from("password"),
+            auth_info_raw: Some(AuthInfoRaw {
+                arg_with: Some(AuthType::Sha256Password),
+                arg_by: Some("password".to_string()),
+            }),
         }),
     )?;
 
@@ -886,8 +869,10 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_password_type: PasswordType::None,
-            new_password: String::from(""),
+            auth_info_raw: Some(AuthInfoRaw {
+                arg_with: Some(AuthType::NoPassword),
+                arg_by: None,
+            }),
         }),
     )?;
 
@@ -897,8 +882,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_password_type: PasswordType::None,
-            new_password: String::from(""),
+            auth_info_raw: None,
         }),
     )?;
 

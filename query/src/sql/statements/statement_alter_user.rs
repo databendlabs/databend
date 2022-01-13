@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::PasswordType;
+use common_meta_types::AuthInfoRaw;
 use common_planners::AlterUserPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -30,8 +30,8 @@ pub struct DfAlterUser {
     /// User name
     pub name: String,
     pub hostname: String,
-    pub new_password_type: PasswordType,
-    pub new_password: String,
+    // None means no change to make
+    pub auth_info_raw: Option<AuthInfoRaw>,
 }
 
 #[async_trait::async_trait]
@@ -42,9 +42,8 @@ impl AnalyzableStatement for DfAlterUser {
             AlterUserPlan {
                 if_current_user: self.if_current_user,
                 name: self.name.clone(),
-                new_password: Vec::from(self.new_password.clone()),
                 hostname: self.hostname.clone(),
-                new_password_type: self.new_password_type.clone(),
+                auth_info_raw: self.auth_info_raw.clone(),
             },
         ))))
     }

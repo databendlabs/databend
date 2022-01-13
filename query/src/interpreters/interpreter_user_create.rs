@@ -54,10 +54,9 @@ impl Interpreter for CreateUserInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
         let user_info = UserInfo {
+            auth_info: plan.auth_info.clone(),
             name: plan.name,
             hostname: plan.hostname,
-            password: plan.password,
-            password_type: plan.password_type,
             grants: UserGrantSet::empty(),
             quota: UserQuota::no_limit(),
         };

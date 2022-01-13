@@ -14,6 +14,7 @@
 
 use common_base::tokio;
 use common_exception::Result;
+use common_meta_types::AuthInfo;
 use common_meta_types::PasswordType;
 use common_meta_types::UserInfo;
 use databend_query::interpreters::*;
@@ -49,17 +50,20 @@ async fn test_drop_user_interpreter() -> Result<()> {
         let name = "test";
         let hostname = "localhost";
         let password = "test";
-        let user_info = UserInfo::new(
-            name.to_string(),
-            hostname.to_string(),
-            Vec::from(password),
-            PasswordType::PlainText,
-        );
+        let auth_info = AuthInfo::Password {
+            password: Vec::from(password),
+            password_type: PasswordType::PlainText,
+        };
+
+        let user_info = UserInfo::new(name.to_string(), hostname.to_string(), auth_info);
         let user_mgr = ctx.get_user_manager();
         user_mgr.add_user(&tenant, user_info).await?;
 
         let old_user = user_mgr.get_user(&tenant, name, hostname).await?;
-        assert_eq!(old_user.password, Vec::from(password));
+        assert_eq!(
+            old_user.auth_info.get_password().unwrap(),
+            Vec::from(password)
+        );
 
         static TEST_QUERY: &str = "DROP USER 'test'@'localhost'";
         let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;

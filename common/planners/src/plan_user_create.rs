@@ -16,14 +16,13 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_meta_types::PasswordType;
+use common_meta_types::AuthInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateUserPlan {
     pub name: String,
-    pub password: Vec<u8>,
     pub hostname: String,
-    pub password_type: PasswordType,
+    pub auth_info: AuthInfo,
 }
 
 impl CreateUserPlan {

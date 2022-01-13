@@ -14,13 +14,12 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::AuthInfo;
+use common_meta_types::AuthInfoRaw;
 use common_meta_types::GrantObject;
-use common_meta_types::PasswordType;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
-use sha2::Digest;
 
-use crate::users::CertifiedInfo;
 use crate::users::User;
 use crate::users::UserApiProvider;
 
@@ -30,8 +29,7 @@ impl UserApiProvider {
         match username {
             // TODO(BohuTANG): Mock, need removed.
             "default" | "" | "root" => {
-                let mut user_info: UserInfo =
-                    User::new(username, hostname, "", PasswordType::None).into();
+                let mut user_info: UserInfo = User::new(username, hostname, AuthInfo::None).into();
                 if hostname == "127.0.0.1" || &hostname.to_lowercase() == "localhost" {
                     user_info.grants.grant_privileges(
                         username,
@@ -72,30 +70,6 @@ impl UserApiProvider {
         match user {
             Some(user) => Ok(user),
             None => self.get_user(tenant, username, "%").await,
-        }
-    }
-
-    // Auth the user and password for different Auth type.
-    pub async fn auth_user(&self, user: UserInfo, info: CertifiedInfo) -> Result<bool> {
-        match user.password_type {
-            PasswordType::None => Ok(true),
-            PasswordType::PlainText => Ok(user.password == info.user_password),
-            // MySQL already did x = sha1(x)
-            // so we just check double sha1(x)
-            PasswordType::DoubleSha1 => {
-                let mut m = sha1::Sha1::new();
-                m.update(&info.user_password);
-
-                let bs = m.digest().bytes();
-                let mut m = sha1::Sha1::new();
-                m.update(&bs[..]);
-
-                Ok(user.password == m.digest().bytes().to_vec())
-            }
-            PasswordType::Sha256 => {
-                let result = sha2::Sha256::digest(&info.user_password);
-                Ok(user.password == result.to_vec())
-            }
         }
     }
 
@@ -196,15 +170,13 @@ impl UserApiProvider {
         tenant: &str,
         username: &str,
         hostname: &str,
-        new_password_type: Option<PasswordType>,
-        new_password: Option<Vec<u8>>,
+        auth_info_raw: AuthInfoRaw,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant);
         let update_user = client.update_user(
             username.to_string(),
             hostname.to_string(),
-            new_password,
-            new_password_type,
+            auth_info_raw,
             None,
         );
         match update_user.await {
