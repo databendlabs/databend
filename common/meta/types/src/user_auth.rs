@@ -26,25 +26,23 @@ pub enum AuthType {
     DoubleShaPassword,
 }
 
-use AuthType::*;
-
 impl AuthType {
     pub fn parse_str(s: &str) -> Result<AuthType, String> {
         match s {
-            PLAINTEXT_PASSWORD_STR => Ok(PlaintextPassword),
-            SHA256_PASSWORD_STR => Ok(Sha256Password),
-            DOUBLE_SHA1_PASSWORD_STR => Ok(DoubleShaPassword),
-            NO_PASSWORD_STR => Ok(NoPassword),
+            PLAINTEXT_PASSWORD_STR => Ok(AuthType::PlaintextPassword),
+            SHA256_PASSWORD_STR => Ok(AuthType::Sha256Password),
+            DOUBLE_SHA1_PASSWORD_STR => Ok(AuthType::DoubleShaPassword),
+            NO_PASSWORD_STR => Ok(AuthType::NoPassword),
             _ => Err(AuthType::bad_auth_types(s)),
         }
     }
 
     pub fn to_str(&self) -> &str {
         match self {
-            NoPassword => NO_PASSWORD_STR,
-            PlaintextPassword => PLAINTEXT_PASSWORD_STR,
-            Sha256Password => SHA256_PASSWORD_STR,
-            DoubleShaPassword => DOUBLE_SHA1_PASSWORD_STR,
+            AuthType::NoPassword => NO_PASSWORD_STR,
+            AuthType::PlaintextPassword => PLAINTEXT_PASSWORD_STR,
+            AuthType::Sha256Password => SHA256_PASSWORD_STR,
+            AuthType::DoubleShaPassword => DOUBLE_SHA1_PASSWORD_STR,
         }
     }
 
@@ -65,9 +63,9 @@ impl AuthType {
 
     fn get_password_type(self) -> Option<PasswordType> {
         match self {
-            PlaintextPassword => Some(PasswordType::PlainText),
-            Sha256Password => Some(PasswordType::Sha256),
-            DoubleShaPassword => Some(PasswordType::DoubleSha1),
+            AuthType::PlaintextPassword => Some(PasswordType::PlainText),
+            AuthType::Sha256Password => Some(PasswordType::Sha256),
+            AuthType::DoubleShaPassword => Some(PasswordType::DoubleSha1),
             _ => None,
         }
     }
@@ -95,14 +93,14 @@ fn double_sha1(v: &[u8]) -> [u8; 20] {
 impl AuthInfo {
     pub fn get_type(&self) -> AuthType {
         match self {
-            AuthInfo::None => NoPassword,
+            AuthInfo::None => AuthType::NoPassword,
             AuthInfo::Password {
                 password: _,
                 password_type: t,
             } => match t {
-                PasswordType::PlainText => PlaintextPassword,
-                PasswordType::Sha256 => Sha256Password,
-                PasswordType::DoubleSha1 => DoubleShaPassword,
+                PasswordType::PlainText => AuthType::PlaintextPassword,
+                PasswordType::Sha256 => AuthType::Sha256Password,
+                PasswordType::DoubleSha1 => AuthType::DoubleShaPassword,
             },
         }
     }
@@ -196,11 +194,13 @@ pub struct AuthInfoArgs {
 impl AuthInfoArgs {
     pub fn create_auth_info(&self) -> Result<AuthInfo, String> {
         // 'by' without 'with' means default auth_type
-        let default = Sha256Password;
+        let default = AuthType::Sha256Password;
         let auth_type = self.arg_with.clone().unwrap_or(default);
         match auth_type {
-            NoPassword => Ok(AuthInfo::None),
-            PlaintextPassword | Sha256Password | DoubleShaPassword => {
+            AuthType::NoPassword => Ok(AuthInfo::None),
+            AuthType::PlaintextPassword
+            | AuthType::Sha256Password
+            | AuthType::DoubleShaPassword => {
                 match &self.arg_by {
                     Some(p) => Ok(AuthInfo::Password {
                         password: Vec::from(p.to_string()),
