@@ -149,8 +149,7 @@ fn test_range_filter() -> Result<()> {
         },
         Test {
             name: "a - b <= -10",
-            expr: Expression::create_binary_expression("-", vec![col("a"), col("b")])
-                .lt_eq(lit(-10)),
+            expr: sub(col("a"), col("b")).lt_eq(lit(-10)),
             expect: true,
             error:
                 "Code: 1000, displayText = Function '-' is not monotonic in the variables range.",
@@ -294,6 +293,22 @@ fn test_build_verifiable_function() -> Result<()> {
                 lit(vec![255u8, 255, 255, 37]),
             ]),
             expect: "(min_c < ffffff)",
+        },
+        Test {
+            name: "abs(a) = b - 3",
+            expr: Expression::create_scalar_function("abs", vec![col("a")])
+                .eq(add(col("b"), lit(3))),
+            expect: "((min_abs(a) <= max_(b + 3)) and (max_abs(a) >= min_(b + 3)))",
+        },
+        Test {
+            name: "a + b <= 3",
+            expr: add(col("a"), col("b")).lt_eq(lit(3)),
+            expect: "(min_(a + b) <= 3)",
+        },
+        Test {
+            name: "a + b <= 10 - a",
+            expr: add(col("a"), col("b")).lt_eq(sub(lit(10), col("a"))),
+            expect: "true",
         },
     ];
 
