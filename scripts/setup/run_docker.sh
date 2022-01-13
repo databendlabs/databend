@@ -7,6 +7,8 @@ DOCKER_OPTIONS+=(-v /var/run/docker.sock:/var/run/docker.sock)
 DOCKER_OPTIONS+=(--cap-add SYS_PTRACE --cap-add NET_RAW --cap-add NET_ADMIN)
 DOCKER_OPTIONS+=("-it")
 SOURCE_DIR="${PWD}"
+HUB="${HUB:-datafuselabs}"
+TAG="${TAG:-latest}"
 SOURCE_DIR_MOUNT_DEST=/source
 # how does it work?
 # 1. docker build under root user with cargo installed on /opt/rust/cargo/bin
@@ -33,5 +35,5 @@ docker run --rm \
        -v "${SOURCE_DIR}":"${SOURCE_DIR_MOUNT_DEST}" \
        -v "${CARGO_GIT_DIR}":"/opt/rust/cargo/git" \
        -v "${CARGO_REGISTRY_DIR}":"/opt/rust/cargo/registry" \
-       zhihanz/build-tool:rc1 \
+       "${HUB}"/dev-container:"${TAG}" \
        "${START_COMMAND[@]}"
