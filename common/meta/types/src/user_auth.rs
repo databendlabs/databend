@@ -188,12 +188,12 @@ impl AuthInfo {
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq)]
-pub struct AuthInfoRaw {
+pub struct AuthInfoArgs {
     pub arg_with: Option<AuthType>,
     pub arg_by: Option<String>,
 }
 
-impl AuthInfoRaw {
+impl AuthInfoArgs {
     pub fn create_auth_info(&self) -> Result<AuthInfo, String> {
         // 'by' without 'with' means default auth_type
         let default = Sha256Password;
@@ -217,7 +217,7 @@ impl AuthInfoRaw {
         // 'by' without 'with' means old auth_type
         let old_auth_type = auth_info.clone().get_type();
         let new_auth_type = self.arg_with.clone().unwrap_or(old_auth_type);
-        AuthInfoRaw {
+        AuthInfoArgs {
             arg_with: Some(new_auth_type),
             arg_by: self.arg_by,
         }

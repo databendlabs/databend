@@ -22,7 +22,7 @@ use std::time::Instant;
 use common_exception::ErrorCode;
 use common_io::prelude::OptionsDeserializer;
 use common_meta_types::AuthInfo;
-use common_meta_types::AuthInfoRaw;
+use common_meta_types::AuthInfoArgs;
 use common_meta_types::AuthType;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
@@ -757,7 +757,7 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::DropUser(drop))
     }
 
-    fn get_auth_option_raw(&mut self) -> Result<Option<AuthInfoRaw>, ParserError> {
+    fn get_auth_option_raw(&mut self) -> Result<Option<AuthInfoArgs>, ParserError> {
         let exist_not_identified = self.parser.parse_keyword(Keyword::NOT);
         let exist_identified = self.consume_token("IDENTIFIED");
 
@@ -765,7 +765,7 @@ impl<'a> DfParser<'a> {
             if !exist_identified {
                 parser_err!("expect IDENTIFIED after NOT")
             } else {
-                Ok(Some(AuthInfoRaw {
+                Ok(Some(AuthInfoArgs {
                     arg_with: Some(AuthType::NoPassword),
                     arg_by: None,
                 }))
@@ -783,7 +783,7 @@ impl<'a> DfParser<'a> {
             };
 
             match arg_with {
-                Some(AuthType::NoPassword) => Ok(Some(AuthInfoRaw {
+                Some(AuthType::NoPassword) => Ok(Some(AuthInfoArgs {
                     arg_with: Some(AuthType::NoPassword),
                     arg_by: None,
                 })),
@@ -793,7 +793,7 @@ impl<'a> DfParser<'a> {
                         if arg_by.is_empty() {
                             parser_err!("Missing password")
                         } else {
-                            Ok(Some(AuthInfoRaw {
+                            Ok(Some(AuthInfoArgs {
                                 arg_with,
                                 arg_by: Some(arg_by),
                             }))

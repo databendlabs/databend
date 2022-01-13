@@ -15,7 +15,7 @@
 use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
-use common_meta_types::AuthInfoRaw;
+use common_meta_types::AuthInfoArgs;
 use common_meta_types::AuthType;
 use common_meta_types::GrantObject;
 use common_meta_types::PasswordType;
@@ -171,7 +171,7 @@ async fn test_user_manager() -> Result<()> {
 
         let new_pwd = "test1";
         user_mgr
-            .update_user(tenant, user, hostname, AuthInfoRaw {
+            .update_user(tenant, user, hostname, AuthInfoArgs {
                 arg_with: Some(AuthType::Sha256Password),
                 arg_by: Some(new_pwd.to_string()),
             })
@@ -188,7 +188,7 @@ async fn test_user_manager() -> Result<()> {
 
         let new_new_pwd = "test2";
         user_mgr
-            .update_user(tenant, user, hostname, AuthInfoRaw {
+            .update_user(tenant, user, hostname, AuthInfoArgs {
                 arg_with: Some(AuthType::Sha256Password),
                 arg_by: Some(new_new_pwd.to_string()),
             })
@@ -200,7 +200,7 @@ async fn test_user_manager() -> Result<()> {
         );
 
         let not_exist = user_mgr
-            .update_user(tenant, "user", hostname, AuthInfoRaw {
+            .update_user(tenant, "user", hostname, AuthInfoArgs {
                 arg_with: Some(AuthType::Sha256Password),
                 arg_by: Some(new_new_pwd.to_string()),
             })

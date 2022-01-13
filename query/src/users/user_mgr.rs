@@ -15,7 +15,7 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
-use common_meta_types::AuthInfoRaw;
+use common_meta_types::AuthInfoArgs;
 use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
@@ -170,7 +170,7 @@ impl UserApiProvider {
         tenant: &str,
         username: &str,
         hostname: &str,
-        auth_info_raw: AuthInfoRaw,
+        auth_info_raw: AuthInfoArgs,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant);
         let update_user = client.update_user(

@@ -472,7 +472,7 @@ mod drop {
 
 mod update {
     use common_meta_types::AuthInfo;
-    use common_meta_types::AuthInfoRaw;
+    use common_meta_types::AuthInfoArgs;
     use common_meta_types::AuthType;
     use common_meta_types::UserInfo;
 
@@ -489,14 +489,14 @@ mod update {
         }
     }
 
-    fn new_test_auth_info_raw(full: bool) -> AuthInfoRaw {
+    fn new_test_auth_info_raw(full: bool) -> AuthInfoArgs {
         let arg_with = if full {
             Some(AuthType::Sha256Password)
         } else {
             Some(AuthType::DoubleShaPassword)
         };
 
-        AuthInfoRaw {
+        AuthInfoArgs {
             arg_with,
             arg_by: Some("test_password_new".to_string()),
         }

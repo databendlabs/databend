@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_meta_types::AuthInfoRaw;
+use common_meta_types::AuthInfoArgs;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct AlterUserPlan {
@@ -24,7 +24,7 @@ pub struct AlterUserPlan {
     pub name: String,
     pub hostname: String,
     // None means no change to make
-    pub auth_info_raw: Option<AuthInfoRaw>,
+    pub auth_info_raw: Option<AuthInfoArgs>,
 }
 
 impl AlterUserPlan {

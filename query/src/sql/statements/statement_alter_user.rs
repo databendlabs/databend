@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::AuthInfoRaw;
+use common_meta_types::AuthInfoArgs;
 use common_planners::AlterUserPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -31,7 +31,7 @@ pub struct DfAlterUser {
     pub name: String,
     pub hostname: String,
     // None means no change to make
-    pub auth_info_raw: Option<AuthInfoRaw>,
+    pub auth_info_raw: Option<AuthInfoArgs>,
 }
 
 #[async_trait::async_trait]

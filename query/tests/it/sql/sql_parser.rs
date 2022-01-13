@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use common_exception::Result;
 use common_meta_types::AuthInfo;
-use common_meta_types::AuthInfoRaw;
+use common_meta_types::AuthInfoArgs;
 use common_meta_types::AuthType;
 use common_meta_types::Compression;
 use common_meta_types::Credentials;
@@ -795,7 +795,7 @@ fn test_diff_auth_type(with_clause: &str, auth_type: Option<AuthType>) -> Result
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_info_raw: Some(AuthInfoRaw {
+            auth_info_raw: Some(AuthInfoArgs {
                 arg_with: auth_type,
                 arg_by: Some("password".to_string()),
             }),
@@ -810,7 +810,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_info_raw: Some(AuthInfoRaw {
+            auth_info_raw: Some(AuthInfoArgs {
                 arg_with: None,
                 arg_by: Some("password".to_string()),
             }),
@@ -823,7 +823,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: true,
             name: String::from(""),
             hostname: String::from(""),
-            auth_info_raw: Some(AuthInfoRaw {
+            auth_info_raw: Some(AuthInfoArgs {
                 arg_with: None,
                 arg_by: Some("password".to_string()),
             }),
@@ -843,7 +843,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_info_raw: Some(AuthInfoRaw {
+            auth_info_raw: Some(AuthInfoArgs {
                 arg_with: Some(AuthType::NoPassword),
                 arg_by: None,
             }),
@@ -856,7 +856,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test@localhost"),
             hostname: String::from("%"),
-            auth_info_raw: Some(AuthInfoRaw {
+            auth_info_raw: Some(AuthInfoArgs {
                 arg_with: Some(AuthType::Sha256Password),
                 arg_by: Some("password".to_string()),
             }),
@@ -869,7 +869,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_info_raw: Some(AuthInfoRaw {
+            auth_info_raw: Some(AuthInfoArgs {
                 arg_with: Some(AuthType::NoPassword),
                 arg_by: None,
             }),
