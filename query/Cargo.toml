@@ -92,9 +92,10 @@ tokio-rustls = "0.23.2"
 tokio-stream = { version = "0.1.8", features = ["net"] }
 toml = "0.5.8"
 tonic = "0.6.2"
-uuid = { version = "0.8.2", features = ["serde", "v4"] }
+uuid = { version = "1.0.0-alpha.1", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 parquet-format-async-temp = "0.2.0"
+regex = "1.5.4"
 
 [dev-dependencies]
 clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "6e0ecb2" }

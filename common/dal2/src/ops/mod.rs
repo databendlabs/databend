@@ -13,14 +13,16 @@
 // limitations under the License.
 
 mod delete;
-mod io;
 mod object;
 mod read;
 mod stat;
 mod write;
 
+pub mod io;
+
 pub use delete::Delete;
 pub use io::Reader;
+pub use io::ReaderStream;
 pub use object::Object;
 pub use read::Read;
 pub use read::ReadBuilder;

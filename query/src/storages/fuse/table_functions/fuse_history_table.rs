@@ -101,10 +101,10 @@ impl FuseHistoryTable {
         let mut compressed: Vec<u64> = Vec::with_capacity(len);
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
         for s in snapshots {
-            snapshot_ids.push(s.snapshot_id.to_simple().to_string().into_bytes());
+            snapshot_ids.push(s.snapshot_id.simple().to_string().into_bytes());
             prev_snapshot_ids.push(
                 s.prev_snapshot_id
-                    .map(|v| v.to_simple().to_string().into_bytes()),
+                    .map(|v| v.simple().to_string().into_bytes()),
             );
             segment_count.push(s.segments.len() as u64);
             block_count.push(s.summary.block_count);
@@ -147,9 +147,11 @@ impl Table for FuseHistoryTable {
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
+        let tenant_id = ctx.get_tenant();
         let tbl = ctx
             .get_catalog()
             .get_table(
+                tenant_id.as_str(),
                 self.arg_database_name.as_str(),
                 self.arg_table_name.as_str(),
             )

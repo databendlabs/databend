@@ -73,13 +73,14 @@ impl Table for TablesTable {
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
+        let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog();
-        let databases = catalog.list_databases().await?;
+        let databases = catalog.list_databases(tenant.as_str()).await?;
 
         let mut database_tables = vec![];
         for database in databases {
             let name = database.name();
-            for table in catalog.list_tables(name).await? {
+            for table in catalog.list_tables(tenant.as_str(), name).await? {
                 database_tables.push((name.to_string(), table));
             }
         }

@@ -43,11 +43,16 @@ impl RepoInfoTable {
         Box::new(RepoInfoTable { options })
     }
 
-    pub async fn create_table(ctx: StorageContext, options: RepoTableOptions) -> Result<()> {
+    pub async fn create_table(
+        ctx: StorageContext,
+        tenant: &str,
+        options: RepoTableOptions,
+    ) -> Result<()> {
         let mut options = options;
         options.table_type = GithubTableType::Info.to_string();
         let req = CreateTableReq {
             if_not_exists: false,
+            tenant: tenant.to_string(),
             db: options.owner.clone(),
             table: options.repo.clone(),
             table_meta: TableMeta {

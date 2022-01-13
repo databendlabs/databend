@@ -131,10 +131,11 @@ fn verify_test(t: Test) -> Result<()> {
 
 #[test]
 fn test_arithmetic_plus_minus() -> Result<()> {
-    let test_suite = vec![
+    let test_suite =
+        vec![
         Test {
             name: "f(x) = x + 12",
-            expr: Expression::create_binary_expression("+", vec![col("x"), lit(12i32)]),
+            expr: add(col("x"), lit(12i32)),
             column: "x",
             left: None,
             right: None,
@@ -149,10 +150,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
         },
         Test {
             name: "f(x) = -x + 12",
-            expr: Expression::create_binary_expression("+", vec![
-                Expression::create_unary_expression("negate", vec![col("x")]),
-                lit(12i32),
-            ]),
+            expr: add(neg(col("x")), lit(12)),
             column: "x",
             left: None,
             right: None,
@@ -167,7 +165,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
         },
         Test {
             name: "f(x,y) = x + y",
-            expr: Expression::create_binary_expression("+", vec![col("x"), col("y")]),
+            expr: add(col("x"), col("y")),
             column: "x",
             left: None,
             right: None,
@@ -182,18 +180,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
         },
         Test {
             name: "f(x) = (-x + 12) - x + (1 - x)",
-            expr: Expression::create_binary_expression("+", vec![
-                Expression::create_binary_expression("-", vec![
-                    // -x + 12
-                    Expression::create_binary_expression("+", vec![
-                        Expression::create_unary_expression("negate", vec![col("x")]),
-                        lit(12i32),
-                    ]),
-                    col("x"),
-                ]),
-                // 1 - x
-                Expression::create_unary_expression("negate", vec![lit(1i64), col("x")]),
-            ]),
+            expr: add(sub(add(neg(col("x")), lit(12)), col("x")), sub(lit(1), col("x"))),
             column: "x",
             left: None,
             right: None,
@@ -208,15 +195,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
         },
         Test {
             name: "f(x) = (x + 12) - x + (1 - x)",
-            expr: Expression::create_binary_expression("+", vec![
-                Expression::create_binary_expression("-", vec![
-                    // x + 12
-                    Expression::create_binary_expression("+", vec![col("x"), lit(12i32)]),
-                    col("x"),
-                ]),
-                // 1 - x
-                Expression::create_unary_expression("negate", vec![lit(1i64), col("x")]),
-            ]),
+            expr: add(sub(add(col("x"), lit(12)), col("x")), sub(lit(1), col("x"))),
             column: "x",
             left: None,
             right: None,
@@ -284,7 +263,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             name: "f(x) = x * (x-12) where x in [10-1000]",
             expr: Expression::create_binary_expression("*", vec![
                 col("x"),
-                Expression::create_binary_expression("-", vec![col("x"), lit(12_i64)]),
+                sub(col("x"), lit(12_i64)),
             ]),
             column: "x",
             left: create_f64(10.0),
@@ -297,7 +276,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             name: "f(x) = x * (x-12) where x in [12, 100]",
             expr: Expression::create_binary_expression("*", vec![
                 col("x"),
-                Expression::create_binary_expression("-", vec![col("x"), lit(12_i64)]),
+                sub(col("x"), lit(12_i64)),
             ]),
             column: "x",
             left: create_f64(12.0),
@@ -332,10 +311,10 @@ fn test_arithmetic_mul_div() -> Result<()> {
         Test {
             name: "f(x) = -x/(2/(x-2)) where  x in [0-10]",
             expr: Expression::create_binary_expression("/", vec![
-                Expression::create_unary_expression("negate", vec![col("x")]),
+                neg(col("x")),
                 Expression::create_binary_expression("/", vec![
                     lit(2_i8),
-                    Expression::create_binary_expression("-", vec![col("x"), lit(2_i8)]),
+                    sub(col("x"), lit(2_i8)),
                 ]),
             ]),
             column: "x",
@@ -348,10 +327,10 @@ fn test_arithmetic_mul_div() -> Result<()> {
         Test {
             name: "f(x) = -x/(2/(x-2)) where  x in [4-10]",
             expr: Expression::create_binary_expression("/", vec![
-                Expression::create_unary_expression("negate", vec![col("x")]),
+                neg(col("x")),
                 Expression::create_binary_expression("/", vec![
                     lit(2_i8),
-                    Expression::create_binary_expression("-", vec![col("x"), lit(2_i8)]),
+                    sub(col("x"), lit(2_i8)),
                 ]),
             ]),
             column: "x",
@@ -379,9 +358,7 @@ fn test_abs_function() -> Result<()> {
     let test_suite = vec![
         Test {
             name: "f(x) = abs(x + 12)",
-            expr: Expression::create_scalar_function("abs", vec![
-                Expression::create_binary_expression("+", vec![col("x"), lit(12i32)]),
-            ]),
+            expr: Expression::create_scalar_function("abs", vec![add(col("x"), lit(12i32))]),
             column: "x",
             left: None,
             right: None,
@@ -431,9 +408,7 @@ fn test_abs_function() -> Result<()> {
         },
         Test {
             name: "f(x) = abs(x + 12) where -12 <= x <= 1000",
-            expr: Expression::create_scalar_function("abs", vec![
-                Expression::create_binary_expression("+", vec![col("x"), lit(12i32)]),
-            ]),
+            expr: Expression::create_scalar_function("abs", vec![add(col("x"), lit(12i32))]),
             column: "x",
             left: create_f64(-12.0),
             right: create_f64(1000.0),
@@ -448,9 +423,7 @@ fn test_abs_function() -> Result<()> {
         },
         Test {
             name: "f(x) = abs(x + 12) where -14 <=  x <= 20", // should NOT be monotonic
-            expr: Expression::create_scalar_function("abs", vec![
-                Expression::create_binary_expression("+", vec![col("x"), lit(12i32)]),
-            ]),
+            expr: Expression::create_scalar_function("abs", vec![add(col("x"), lit(12i32))]),
             column: "x",
             left: create_f64(-14.0),
             right: create_f64(20.0),
@@ -460,12 +433,10 @@ fn test_abs_function() -> Result<()> {
         },
         Test {
             name: "f(x) = abs( (x - 7) + (x - 3) ) where 5 <= x <= 100",
-            expr: Expression::create_scalar_function("abs", vec![
-                Expression::create_binary_expression("+", vec![
-                    Expression::create_binary_expression("-", vec![col("x"), lit(7_i32)]),
-                    Expression::create_binary_expression("-", vec![col("x"), lit(3_i32)]),
-                ]),
-            ]),
+            expr: Expression::create_scalar_function("abs", vec![add(
+                sub(col("x"), lit(7_i32)),
+                sub(col("x"), lit(3_i32)),
+            )]),
             column: "x",
             left: create_f64(5.0),
             right: create_f64(100.0),
@@ -480,15 +451,10 @@ fn test_abs_function() -> Result<()> {
         },
         Test {
             name: "f(x) = abs( (-x + 8) - x) where -100 <= x <= 4",
-            expr: Expression::create_scalar_function("abs", vec![
-                Expression::create_binary_expression("-", vec![
-                    Expression::create_binary_expression("+", vec![
-                        Expression::create_unary_expression("negate", vec![col("x")]),
-                        lit(8_i64),
-                    ]),
-                    col("x"),
-                ]),
-            ]),
+            expr: Expression::create_scalar_function("abs", vec![sub(
+                add(neg(col("x")), lit(8)),
+                col("x"),
+            )]),
             column: "x",
             left: create_f64(-100.0),
             right: create_f64(4.0),
@@ -515,7 +481,7 @@ fn test_dates_function() -> Result<()> {
         Test {
             name: "f(x) = toStartOfWeek(x+12)",
             expr: Expression::create_scalar_function("toStartOfWeek", vec![
-                Expression::create_binary_expression("+", vec![col("x"), lit(12i32)]),
+                add(col("x"), lit(12i32)),
             ]),
             column: "x",
             left: None,
@@ -604,11 +570,8 @@ fn test_dates_function() -> Result<()> {
 fn test_single_point() -> Result<()> {
     let test_suite = vec![
         Test {
-            name: "f(x) = rand() + x",
-            expr: Expression::create_binary_expression("+", vec![
-                col("x"),
-                Expression::create_scalar_function("rand", vec![]),
-            ]),
+            name: "f(x) = x + rand()",
+            expr: add(col("x"), Expression::create_scalar_function("rand", vec![])),
             column: "x",
             left: create_f64(1.0),
             right: create_f64(1.0),
@@ -617,10 +580,10 @@ fn test_single_point() -> Result<()> {
                 "Code: 1000, displayText = Function 'rand' is not monotonic in the variables range.",
         },
         Test {
-            name: "f(x) = x * (12-x)",
+            name: "f(x) = x * (12 - x)",
             expr: Expression::create_binary_expression("*", vec![
                 col("x"),
-                Expression::create_binary_expression("-", vec![lit(12_i64), col("x")]),
+                sub(lit(12_i64), col("x")),
             ]),
             column: "x",
             left: create_f64(1.0),

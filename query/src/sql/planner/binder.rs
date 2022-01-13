@@ -110,10 +110,12 @@ impl Binder {
                 let table = table.name.clone();
                 // TODO: simply normalize table name to lower case, maybe use a more reasonable way
                 let table = table.to_lowercase();
+                let tenant = self.context.get_tenant();
 
                 // Resolve table with catalog
                 let table_meta: Arc<dyn Table> = Self::resolve_data_source(
                     self.catalog.as_ref(),
+                    tenant.as_str(),
                     database.as_str(),
                     table.as_str(),
                 )
@@ -258,11 +260,12 @@ impl Binder {
 
     pub async fn resolve_data_source(
         catalog: &dyn Catalog,
+        tenant: &str,
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with catalog
-        let table_meta = catalog.get_table(database, table).await?;
+        let table_meta = catalog.get_table(tenant, database, table).await?;
         Ok(table_meta)
     }
 }

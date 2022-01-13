@@ -27,6 +27,7 @@ use crate::state::RaftStateKey;
 use crate::state::RaftStateValue;
 use crate::state_machine::table_lookup::TableLookupValue;
 use crate::state_machine::ClientLastRespValue;
+use crate::state_machine::DatabaseLookupKey;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaValue;
 use crate::state_machine::TableLookupKey;
@@ -104,7 +105,7 @@ pub struct DatabaseLookup {}
 impl SledKeySpace for DatabaseLookup {
     const PREFIX: u8 = 12;
     const NAME: &'static str = "database-lookup";
-    type K = String;
+    type K = DatabaseLookupKey;
     type V = SeqV<u64>;
 }
 

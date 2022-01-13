@@ -25,6 +25,7 @@ pub type DatabaseOptions = HashMap<String, String>;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateDatabasePlan {
     pub if_not_exists: bool,
+    pub tenant: String,
     pub db: String,
     pub meta: DatabaseMeta,
 }
@@ -33,7 +34,8 @@ impl From<CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
             if_not_exists: p.if_not_exists,
-            db: p.db.clone(),
+            tenant: p.tenant,
+            db: p.db,
             meta: p.meta,
         }
     }
@@ -43,6 +45,7 @@ impl From<&CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: &CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
             if_not_exists: p.if_not_exists,
+            tenant: p.tenant.clone(),
             db: p.db.clone(),
             meta: p.meta.clone(),
         }

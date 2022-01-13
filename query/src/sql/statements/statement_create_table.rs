@@ -59,6 +59,7 @@ impl AnalyzableStatement for DfCreateTable {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let mut table_meta = self.table_meta(ctx.clone()).await?;
         let if_not_exists = self.if_not_exists;
+        let tenant = ctx.get_tenant();
         let (db, table) = Self::resolve_table(ctx.clone(), &self.name)?;
 
         let as_select_plan_node = match &self.query {
@@ -88,6 +89,7 @@ impl AnalyzableStatement for DfCreateTable {
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::CreateTable(CreateTablePlan {
                 if_not_exists,
+                tenant,
                 db,
                 table,
                 table_meta,

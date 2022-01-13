@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 use std::collections::HashMap;
 
@@ -58,6 +57,7 @@ fn test_range_filter() -> Result<()> {
         name: &'static str,
         expr: Expression,
         expect: bool,
+        error: &'static str,
     }
 
     let tests: Vec<Test> = vec![
@@ -65,31 +65,37 @@ fn test_range_filter() -> Result<()> {
             name: "a < 1 and b > 3",
             expr: col("a").lt(lit(1)).and(col("b").gt(lit(3))),
             expect: false,
+            error: "",
         },
         Test {
             name: "1 > -a or 3 >= b",
             expr: lit(1).gt(neg(col("a"))).or(lit(3).gt_eq(col("b"))),
             expect: true,
+            error: "",
         },
         Test {
             name: "a = 1 and b != 3",
             expr: col("a").eq(lit(1)).and(col("b").not_eq(lit(3))),
             expect: true,
+            error: "",
         },
         Test {
             name: "a is null",
             expr: Expression::create_scalar_function("isNull", vec![col("a")]),
             expect: true,
+            error: "",
         },
         Test {
             name: "a is not null",
             expr: Expression::create_scalar_function("isNotNull", vec![col("a")]),
             expect: true,
+            error: "",
         },
         Test {
             name: "null",
             expr: Expression::create_literal(DataValue::Null),
             expect: false,
+            error: "",
         },
         Test {
             name: "b >= 0 and c like '%sys%'",
@@ -100,6 +106,7 @@ fn test_range_filter() -> Result<()> {
                     lit("%sys%".as_bytes()),
                 ])),
             expect: true,
+            error: "",
         },
         Test {
             name: "c like 'ab_'",
@@ -108,6 +115,7 @@ fn test_range_filter() -> Result<()> {
                 lit("ab_".as_bytes()),
             ]),
             expect: true,
+            error: "",
         },
         Test {
             name: "c like 'bcdf'",
@@ -116,6 +124,7 @@ fn test_range_filter() -> Result<()> {
                 lit("bcdf".as_bytes()),
             ]),
             expect: false,
+            error: "",
         },
         Test {
             name: "c not like 'ac%'",
@@ -124,13 +133,48 @@ fn test_range_filter() -> Result<()> {
                 lit("ac%".as_bytes()),
             ]),
             expect: true,
+            error: "",
+        },
+        Test {
+            name: "a + b > 30",
+            expr: add(col("a"), col("b")).gt(lit(30)),
+            expect: false,
+            error: "",
+        },
+        Test {
+            name: "a + b < 10",
+            expr: add(col("a"), col("b")).lt(lit(10)),
+            expect: true,
+            error: "",
+        },
+        Test {
+            name: "a - b <= -10",
+            expr: sub(col("a"), col("b")).lt_eq(lit(-10)),
+            expect: true,
+            error:
+                "Code: 1000, displayText = Function '-' is not monotonic in the variables range.",
+        },
+        Test {
+            name: "a < b",
+            expr: col("a").lt(col("b")),
+            expect: true,
+            error: "",
+        },
+        Test {
+            name: "a + 9 < b",
+            expr: add(col("a"), lit(9)).lt(col("b")),
+            expect: false,
+            error: "",
         },
     ];
 
     for test in tests {
         let prune = RangeFilter::try_create(&test.expr, schema.clone())?;
-        let actual = prune.eval(&stats)?;
-        assert_eq!(test.expect, actual, "{:#?}", test.name);
+
+        match prune.eval(&stats) {
+            Ok(actual) => assert_eq!(test.expect, actual, "{:#?}", test.name),
+            Err(e) => assert_eq!(test.error, e.to_string(), "{}", test.name),
+        }
     }
 
     Ok(())
@@ -249,6 +293,30 @@ fn test_build_verifiable_function() -> Result<()> {
                 lit(vec![255u8, 255, 255, 37]),
             ]),
             expect: "(min_c < ffffff)",
+        },
+        Test {
+            name: "abs(a) = b - 3",
+            expr: Expression::create_scalar_function("abs", vec![col("a")])
+                .eq(add(col("b"), lit(3))),
+            expect: "((min_abs(a) <= max_(b + 3)) and (max_abs(a) >= min_(b + 3)))",
+        },
+        Test {
+            name: "a + b <= 3",
+            expr: add(col("a"), col("b")).lt_eq(lit(3)),
+            expect: "(min_(a + b) <= 3)",
+        },
+        Test {
+            name: "a + b <= 10 - a",
+            expr: add(col("a"), col("b")).lt_eq(sub(lit(10), col("a"))),
+            expect: "true",
+        },
+        Test {
+            name: "a <= b + rand()",
+            expr: add(
+                col("a"),
+                add(col("b"), Expression::create_scalar_function("rand", vec![])),
+            ),
+            expect: "true",
         },
     ];
 

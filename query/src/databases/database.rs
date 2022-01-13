@@ -38,7 +38,7 @@ pub trait Database: DynClone + Sync + Send {
     fn get_db_info(&self) -> &DatabaseInfo;
 
     // Initial a database.
-    async fn init_database(&self) -> Result<()> {
+    async fn init_database(&self, _tenant: &str) -> Result<()> {
         Ok(())
     }
 }
