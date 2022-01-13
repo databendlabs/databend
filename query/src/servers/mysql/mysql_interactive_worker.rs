@@ -284,7 +284,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     fn do_close(&mut self, _: u32) {}
 
-    fn is_federated_server_setup_set_command(&mut self, query: &str) -> bool {
+    fn federated_server_setup_set_or_jdbc_command(&mut self, query: &str) -> bool {
         let expr = RegexSet::new(&[
             "(?i)^(SET NAMES(.*))",
             "(?i)^(SET character_set_results(.*))",
@@ -293,6 +293,8 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             "(?i)^(SET sql_mode(.*))",
             "(?i)^(SET @@(.*))",
             "(?i)^(SET SESSION TRANSACTION ISOLATION LEVEL(.*))",
+            // Just compatibility for jdbc
+            "(?i)^(/\\* mysql-connector-java(.*))",
         ])
         .unwrap();
         expr.is_match(query)
@@ -302,7 +304,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
         tracing::debug!("{}", query);
 
-        if self.is_federated_server_setup_set_command(query) {
+        if self.federated_server_setup_set_or_jdbc_command(query) {
             Ok((vec![DataBlock::empty()], String::from("")))
         } else {
             let context = self.session.create_context().await?;
