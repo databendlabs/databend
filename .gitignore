@@ -4,6 +4,8 @@
 # visual studio code files
 .vscode
 .dir-locals.el
+.bash_history
+.mysql_history
 
 # Rust
 target/

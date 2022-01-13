@@ -65,7 +65,6 @@ def run_single_test(args, ext, client_options, case_file, stdout_file,
         pattern = "sed '/^\s*--/d' {test} | {client} {options} > {stdout} 2>&1"
 
     command = pattern.format(**params)
-
     proc = Popen(command, shell=True, env=os.environ)
     start_time = datetime.now()
     while (datetime.now() -
@@ -546,7 +545,7 @@ if __name__ == '__main__':
         help='Path to databend-query binary or name of binary in PATH')
     parser.add_argument('-c',
                         '--client',
-                        default='mysql',
+                        default='stdbuf -i0 -o0 -e0 mysql',
                         help='Client program')
     parser.add_argument('-opt',
                         '--options',
