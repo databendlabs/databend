@@ -33,8 +33,7 @@ pub enum RunningState {
 struct Node {
     state: RunningState,
     processor: ProcessorPtr,
-    wakeup_inputs_list: UpdateList,
-    wakeup_outputs_list: UpdateList,
+    ctx: UpdateList,
 }
 
 unsafe impl Send for Node {}
@@ -57,25 +56,32 @@ struct ExecutingGraph {
 }
 
 impl ExecutingGraph {
-    pub fn create(mut graph: NewPipeline) -> Result<ExecutingGraph> {
-        let mut executing_graph = StableGraph::with_capacity(graph.node_count(), graph.edge_count());
+    pub fn create(mut pipeline: NewPipeline) -> Result<ExecutingGraph> {
+        let mut graph = StableGraph::new();
 
-        let mut node_map = HashMap::with_capacity(graph.node_count());
-        for node_index in graph.node_indices() {
-            let processor = &graph[node_index];
-            let new_node_index = executing_graph.add_node(Node::new(processor));
-            node_map.insert(node_index, new_node_index);
+        let mut top_pipes = Vec::new();
+        for pipes in pipeline.pipes {
+            for pipe in pipes {
+                let processor = pipe.processor.clone();
+                Node::new(&processor);
+            }
         }
+        // let mut node_map = HashMap::with_capacity(pipeline.node_count());
+        // for node_index in pipeline.node_indices() {
+        //     let processor = &pipeline[node_index];
+        //     let new_node_index = graph.add_node(Node::new(processor));
+        //     node_map.insert(node_index, new_node_index);
+        // }
+        //
+        // for edge_index in pipeline.edge_indices() {
+        //     let (source, target) = pipeline.edge_endpoints(edge_index).unwrap();
+        //
+        //     let new_source = &node_map[&source];
+        //     let new_target = &node_map[&target];
+        //     graph.add_edge(new_source.clone(), new_target.clone(), ());
+        // }
 
-        for edge_index in graph.edge_indices() {
-            let (source, target) = graph.edge_endpoints(edge_index).unwrap();
-
-            let new_source = &node_map[&source];
-            let new_target = &node_map[&target];
-            executing_graph.add_edge(new_source.clone(), new_target.clone(), ());
-        }
-
-        Ok(ExecutingGraph { graph: executing_graph })
+        Ok(ExecutingGraph { graph })
     }
 
     pub unsafe fn schedule_queue(&self, index: NodeIndex) -> Result<ScheduleQueue> {
@@ -87,15 +93,14 @@ impl ExecutingGraph {
             if let Some(schedule_index) = need_schedule_node.pop() {
                 let mut node = self.graph[schedule_index].lock();
 
-                node.state = match node.processor.event()? {
+                node.state = match node.processor.event(&mut node.ctx)? {
                     Event::Finished => RunningState::Finished,
                     Event::NeedData | Event::NeedConsume => RunningState::Idle,
                     Event::Sync => schedule_queue.push_sync(node.processor.clone()),
                     Event::Async => schedule_queue.push_async(node.processor.clone()),
                 };
 
-                // node.updated_inputs_list
-                // node.updated_outputs_list
+                // node.ctx.trigger();
             }
         }
 

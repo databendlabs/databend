@@ -11,6 +11,7 @@ use crate::pipelines::new::pipeline::NewPipeline;
 
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::UpdateList;
 
 pub enum Event {
     NeedData,
@@ -20,19 +21,10 @@ pub enum Event {
     Finished,
 }
 
-pub enum ActivePort<'a> {
-    Input(&'a mut InputPort),
-    Output(&'a mut OutputPort),
-    Inactive {
-        inputs: Vec<&'a mut InputPort>,
-        outputs: Vec<&'a mut OutputPort>,
-    },
-}
-
 // The design is inspired by ClickHouse processors
 #[async_trait::async_trait]
 pub trait Processor: Send {
-    fn event(&mut self) -> Result<Event>;
+    fn event(&mut self, ctx: &mut UpdateList) -> Result<Event>;
 
     // Synchronous work.
     fn process(&mut self) -> Result<()> {
@@ -43,9 +35,6 @@ pub trait Processor: Send {
     async fn async_process(&mut self) -> Result<()> {
         Err(ErrorCode::UnImplement("Unimplemented async_process."))
     }
-
-    fn get_inputs_port(&self) -> &[InputPort];
-    fn get_outputs_port(&self) -> &[InputPort];
 }
 
 #[derive(Clone)]
@@ -60,8 +49,8 @@ impl ProcessorPtr {
         }
     }
 
-    pub unsafe fn event(&self) -> Result<Event> {
-        (&mut *self.inner.get()).event()
+    pub unsafe fn event(&self, ctx: &mut UpdateList) -> Result<Event> {
+        (&mut *self.inner.get()).event(ctx)
     }
 
     pub unsafe fn process(&self) -> Result<()> {

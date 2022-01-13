@@ -11,4 +11,4 @@ pub use processor::ActivePort;
 pub use processor::Processors;
 pub use sources::TableSource;
 pub use port_trigger::UpdateList;
-pub use port_trigger::PortTrigger;
+pub use port_trigger::UpdateTrigger;

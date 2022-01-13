@@ -38,25 +38,27 @@ impl UpdateList {
 }
 
 
-pub struct PortTrigger {
+pub struct UpdateTrigger {
     pid: usize,
     update_list: Option<Arc<UpdateList>>,
 }
 
-unsafe impl Send for PortTrigger {}
+unsafe impl Send for UpdateTrigger {}
 
-impl PortTrigger {
-    pub fn create() -> PortTrigger {
-        PortTrigger {
+impl UpdateTrigger {
+    pub fn create() -> UpdateTrigger {
+        UpdateTrigger {
             pid: 0,
             update_list: None,
         }
     }
 
     #[inline(always)]
-    pub fn update(&self) {
-        // self.update_list
-        // self.update_list.update(self.pid)
+    pub fn update(self_: *mut UpdateTrigger, ctx: &mut UpdateList) {
+        unsafe {
+            // self.update_list
+            // self.update_list.update(self.pid)
+        }
     }
 }
 
