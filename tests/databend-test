@@ -545,7 +545,7 @@ if __name__ == '__main__':
         help='Path to databend-query binary or name of binary in PATH')
     parser.add_argument('-c',
                         '--client',
-                        default='stdbuf -i0 -o0 -e0 mysql',
+                        default='mysql',
                         help='Client program')
     parser.add_argument('-opt',
                         '--options',
@@ -618,7 +618,8 @@ if __name__ == '__main__':
     )
 
     args = parser.parse_args()
-
+    if os.getenv("DATABEND_DEV_CONTAINER") is not None:
+        args.client = 'stdbuf -i0 -o0 -e0 {}'.format(args.client)
     if args.suites is None and os.path.isdir('suites'):
         args.suites = 'suites'
     if args.suites is None:
