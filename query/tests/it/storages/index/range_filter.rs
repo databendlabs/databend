@@ -312,7 +312,10 @@ fn test_build_verifiable_function() -> Result<()> {
         },
         Test {
             name: "a <= b + rand()",
-            expr: add(col("a"), add(col("b"), Expression::create_scalar_function("rand", vec![]))),
+            expr: add(
+                col("a"),
+                add(col("b"), Expression::create_scalar_function("rand", vec![])),
+            ),
             expect: "true",
         },
     ];
