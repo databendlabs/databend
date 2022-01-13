@@ -570,7 +570,7 @@ fn test_dates_function() -> Result<()> {
 fn test_single_point() -> Result<()> {
     let test_suite = vec![
         Test {
-            name: "f(x) = rand() + x",
+            name: "f(x) = x + rand()",
             expr: add(col("x"), Expression::create_scalar_function("rand", vec![])),
             column: "x",
             left: create_f64(1.0),
@@ -580,7 +580,7 @@ fn test_single_point() -> Result<()> {
                 "Code: 1000, displayText = Function 'rand' is not monotonic in the variables range.",
         },
         Test {
-            name: "f(x) = x * (12-x)",
+            name: "f(x) = x * (12 - x)",
             expr: Expression::create_binary_expression("*", vec![
                 col("x"),
                 sub(lit(12_i64), col("x")),
