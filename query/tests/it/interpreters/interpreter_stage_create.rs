@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use common_base::tokio;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_meta_types::Compression;
 use common_meta_types::FileFormat;
 use common_meta_types::Format;
