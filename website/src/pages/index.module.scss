@@ -8,8 +8,9 @@
   position: relative;
   overflow: hidden;
   background: url('@site/static/img/home/banner.jpeg') no-repeat;
-  background-attachment: fixed;
   background-size: cover;
+  background-position-x: center;
+  background-position-y: 40%;
   height: 100vh;
   background-color: #161d20;
   .container{
@@ -30,7 +31,7 @@
       }
       @include media{
         margin-top: mpx(10);
-        margin-right: 0;
+        margin-right: mpx(2);
       }
     }
     .arrow{
