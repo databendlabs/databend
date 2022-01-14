@@ -26,8 +26,9 @@ pub enum AuthType {
     DoubleShaPassword,
 }
 
-impl AuthType {
-    pub fn parse_str(s: &str) -> Result<AuthType, String> {
+impl std::str::FromStr for AuthType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, String> {
         match s {
             PLAINTEXT_PASSWORD_STR => Ok(AuthType::PlaintextPassword),
             SHA256_PASSWORD_STR => Ok(AuthType::Sha256Password),
@@ -36,7 +37,9 @@ impl AuthType {
             _ => Err(AuthType::bad_auth_types(s)),
         }
     }
+}
 
+impl AuthType {
     pub fn to_str(&self) -> &str {
         match self {
             AuthType::NoPassword => NO_PASSWORD_STR,

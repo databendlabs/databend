@@ -17,6 +17,7 @@
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::str::FromStr;
 use std::time::Instant;
 
 use common_exception::ErrorCode;
@@ -775,7 +776,7 @@ impl<'a> DfParser<'a> {
         } else {
             let arg_with = if self.consume_token("WITH") {
                 Some(
-                    AuthType::parse_str(&self.parser.parse_literal_string()?)
+                    AuthType::from_str(&self.parser.parse_literal_string()?)
                         .map_err(ParserError::ParserError)?,
                 )
             } else {
