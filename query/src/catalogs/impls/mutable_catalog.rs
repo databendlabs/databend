@@ -38,7 +38,7 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
-use crate::catalogs::backends::MetaRemote;
+use crate::catalogs::backends::MetaBackend;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::CatalogContext;
 use crate::common::MetaClientProvider;
@@ -88,13 +88,16 @@ impl MutableCatalog {
 
             let meta_client_provider =
                 Arc::new(MetaClientProvider::new(conf.meta.to_grpc_client_config()));
-            let meta_remote = MetaRemote::create(meta_client_provider);
-            Arc::new(meta_remote)
+            let meta_backend = MetaBackend::create(meta_client_provider);
+            Arc::new(meta_backend)
         };
+
+        let tenant = conf.query.tenant_id.clone();
 
         // Create default database.
         let req = CreateDatabaseReq {
             if_not_exists: true,
+            tenant,
             db: "default".to_string(),
             meta: DatabaseMeta {
                 engine: "".to_string(),
@@ -129,17 +132,23 @@ impl MutableCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for MutableCatalog {
-    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         let db_info = self
             .ctx
             .meta
-            .get_database(GetDatabaseReq::new(db_name))
+            .get_database(GetDatabaseReq::new(tenant, db_name))
             .await?;
         self.build_db_instance(&db_info)
     }
 
-    async fn list_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let dbs = self.ctx.meta.list_databases(ListDatabaseReq {}).await?;
+    async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+        let dbs = self
+            .ctx
+            .meta
+            .list_databases(ListDatabaseReq {
+                tenant: tenant.to_string(),
+            })
+            .await?;
 
         dbs.iter().try_fold(vec![], |mut acc, item| {
             let db = self.build_db_instance(item)?;
@@ -160,7 +169,7 @@ impl Catalog for MutableCatalog {
             meta: req.meta.clone(),
         });
         let database = self.build_db_instance(&db_info)?;
-        database.init_database().await?;
+        database.init_database(&req.tenant).await?;
         Ok(CreateDatabaseReply {
             database_id: res.database_id,
         })
@@ -187,20 +196,25 @@ impl Catalog for MutableCatalog {
         self.ctx.meta.get_table_by_id(table_id).await
     }
 
-    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
+    async fn get_table(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
         let table_info = self
             .ctx
             .meta
-            .get_table(GetTableReq::new(db_name, table_name))
+            .get_table(GetTableReq::new(tenant, db_name, table_name))
             .await?;
         self.get_table_by_info(table_info.as_ref())
     }
 
-    async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let table_infos = self
             .ctx
             .meta
-            .list_tables(ListTableReq::new(db_name))
+            .list_tables(ListTableReq::new(tenant, db_name))
             .await?;
 
         table_infos.iter().try_fold(vec![], |mut acc, item| {

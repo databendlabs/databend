@@ -14,6 +14,7 @@
 
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::udfs::exists::ExistsFunction;
+use crate::scalars::udfs::in_basic::InFunction;
 use crate::scalars::CrashMeFunction;
 use crate::scalars::CurrentUserFunction;
 use crate::scalars::DatabaseFunction;
@@ -35,5 +36,7 @@ impl UdfFunction {
         factory.register("sleep", SleepFunction::desc());
         factory.register("crashme", CrashMeFunction::desc());
         factory.register("exists", ExistsFunction::desc());
+        factory.register("in", InFunction::<false>::desc());
+        factory.register("not_in", InFunction::<true>::desc());
     }
 }

@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 use std::sync::Arc;
 
@@ -52,7 +51,7 @@ impl UdfMgr {
 impl UdfMgrApi for UdfMgr {
     async fn add_udf(&self, info: UserDefinedFunction) -> Result<u64> {
         if is_builtin_function(info.name.as_str()) {
-            return Err(ErrorCode::UDFAlreadyExists(format!(
+            return Err(ErrorCode::UdfAlreadyExists(format!(
                 "It's a builtin function: {}",
                 info.name.as_str()
             )));
@@ -74,7 +73,7 @@ impl UdfMgrApi for UdfMgr {
 
         match res.res {
             OkOrExist::Ok(v) => Ok(v.seq),
-            OkOrExist::Exists(v) => Err(ErrorCode::UDFAlreadyExists(format!(
+            OkOrExist::Exists(v) => Err(ErrorCode::UdfAlreadyExists(format!(
                 "UDF already exists, seq [{}]",
                 v.seq
             ))),
@@ -83,8 +82,8 @@ impl UdfMgrApi for UdfMgr {
 
     async fn update_udf(&self, info: UserDefinedFunction, seq: Option<u64>) -> Result<u64> {
         if is_builtin_function(info.name.as_str()) {
-            return Err(ErrorCode::UDFAlreadyExists(format!(
-                "Builtin function can not be udpated: {}",
+            return Err(ErrorCode::UdfAlreadyExists(format!(
+                "Builtin function can not be updated: {}",
                 info.name.as_str()
             )));
         }

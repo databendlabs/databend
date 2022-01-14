@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS t2(a String, b String, c String, d String, e String, 
 CREATE TABLE IF NOT EXISTS t3(a String, b String, c String, d String) Engine = Memory;
 
 
-INSERT INTO t1 (a,b,c,d,e) select * from t3; -- {ErrorCode 6}
-INSERT INTO t1 (a,b,c,d,e) select a,b,c from t3; -- {ErrorCode 6}
+INSERT INTO t1 (a,b,c,d,e) select * from t3; -- {ErrorCode 1006}
+INSERT INTO t1 (a,b,c,d,e) select a,b,c from t3; -- {ErrorCode 1006}
 
 INSERT INTO t2 (a,b,c,d,e,f,g,h) VALUES('1','2','3','4','2021-08-15', '2021-09-15', '2021-08-15 10:00:00', 'string1234'),
                                        ('5','6','7','8','2021-10-15', '2021-11-15', '2021-11-15 10:00:00', 'string5678');

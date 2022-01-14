@@ -58,6 +58,7 @@ impl DNSResolver {
             Err(error) => Err(ErrorCode::create(
                 error.code(),
                 error.message(),
+                None,
                 error.backtrace(),
             )),
         }

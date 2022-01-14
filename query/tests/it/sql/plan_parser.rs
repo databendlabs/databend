@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::Result;
+use databend_query::sql::PlanParser;
 use pretty_assertions::assert_eq;
 
-use crate::tests::parse_query;
-
-#[test]
-fn test_plan_parser() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_plan_parser() -> Result<()> {
     struct Test {
         name: &'static str,
         sql: &'static str,
@@ -128,7 +128,7 @@ fn test_plan_parser() -> Result<()> {
             sql: "select number + 1, number + 3 from numbers(10) group by number + 2, number + 1",
             expect: "",
             // TODO: better message
-            error: "Code: 6, displayText = Unable to get field named \"number\". Valid fields: [\"(number + 2)\", \"(number + 1)\"] (while in select before projection).",
+            error: "Code: 1006, displayText = Unable to get field named \"number\". Valid fields: [\"(number + 2)\", \"(number + 1)\"] (while in select before projection).",
             // error: "Code: 26, displayText = Column `number` is not under aggregate function and not in GROUP BY: While processing [(number + 1), (number + 3)].",
         },
         Test {
@@ -141,7 +141,7 @@ fn test_plan_parser() -> Result<()> {
             name: "unsupported-function",
             sql: "select unsupported()",
             expect: "",
-            error: "Code: 4071, displayText = Unknown UDF unsupported (while in analyze select projection).",
+            error: "Code: 2602, displayText = Unknown UDF unsupported (while in analyze select projection).",
         },
         Test {
             name: "interval-passed",
@@ -165,19 +165,19 @@ fn test_plan_parser() -> Result<()> {
             name: "insert-simple",
             sql: "insert into t(col1, col2) values(1,2), (3,4)",
             expect: "",
-            error: "Code: 25, displayText = Unknown table: 't'.",
+            error: "Code: 1025, displayText = Unknown table: 't'.",
         },
         Test {
             name: "insert-value-other-than-simple-expression",
             sql: "insert into t(col1, col2) values(1 + 0, 1 + 1), (3,4)",
             expect: "",
-            error: "Code: 25, displayText = Unknown table: 't'.",
+            error: "Code: 1025, displayText = Unknown table: 't'.",
         },
         Test {
             name: "insert-subquery-not-supported",
             sql: "insert into t select * from t",
             expect: "",
-            error: "Code: 25, displayText = Unknown table: 't'.",
+            error: "Code: 1025, displayText = Unknown table: 't'.",
         },
         Test {
             name: "select-full",
@@ -199,7 +199,7 @@ fn test_plan_parser() -> Result<()> {
             name: "unimplemented-cte",
             sql: "with t as ( select sum(number) n from numbers_mt(1000) )select * from t",
             expect: "",
-            error: "Code: 5, displayText = sql parser error: CTE is not yet implement.",
+            error: "Code: 1005, displayText = sql parser error: CTE is not yet implement.",
         },
         Test {
             name: "kleene-logic-null",
@@ -239,7 +239,7 @@ fn test_plan_parser() -> Result<()> {
 
     let ctx = crate::tests::create_query_context()?;
     for t in tests {
-        match parse_query(t.sql, &ctx) {
+        match PlanParser::parse(t.sql, ctx.clone()).await {
             Ok(v) => {
                 assert_eq!(t.expect, format!("{:?}", v), "{}", t.name);
             }

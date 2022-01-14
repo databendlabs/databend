@@ -16,7 +16,6 @@ use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::PasswordType;
 use common_meta_types::UserInfo;
-use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
 use futures::stream::StreamExt;
@@ -50,16 +49,13 @@ async fn test_alter_user_interpreter() -> Result<()> {
         name, hostname, new_password
     );
 
-    if let PlanNode::AlterUser(plan) = PlanParser::parse(&test_query, ctx.clone()).await? {
-        let executor = AlterUserInterpreter::try_create(ctx, plan.clone())?;
-        assert_eq!(executor.name(), "AlterUserInterpreter");
-        let mut stream = executor.execute(None).await?;
-        while let Some(_block) = stream.next().await {}
-        let new_user = user_mgr.get_user(&tenant, name, hostname).await?;
-        assert_eq!(new_user.password, Vec::from(new_password))
-    } else {
-        panic!()
-    }
+    let plan = PlanParser::parse(&test_query, ctx.clone()).await?;
+    let executor = InterpreterFactory::get(ctx, plan.clone())?;
+    assert_eq!(executor.name(), "AlterUserInterpreter");
+    let mut stream = executor.execute(None).await?;
+    while let Some(_block) = stream.next().await {}
+    let new_user = user_mgr.get_user(&tenant, name, hostname).await?;
+    assert_eq!(new_user.password, Vec::from(new_password));
 
     Ok(())
 }

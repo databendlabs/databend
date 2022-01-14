@@ -13,6 +13,8 @@
 // limitations under the License.
 
 pub use client_last_resp::ClientLastRespValue;
+pub use database_lookup::DatabaseLookupKey;
+pub use database_lookup::DatabaseLookupValue;
 pub use sm::SerializableSnapshot;
 pub use sm::SnapshotKeyValue;
 pub use sm::StateMachine;
@@ -23,6 +25,7 @@ pub use table_lookup::TableLookupKey;
 pub use table_lookup::TableLookupValue;
 
 pub mod client_last_resp;
+pub mod database_lookup;
 pub mod placement;
 pub mod sm;
 mod sm_kv_api_impl;

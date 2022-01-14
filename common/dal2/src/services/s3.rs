@@ -20,15 +20,28 @@ use std::task::Poll;
 
 use async_trait::async_trait;
 use aws_sdk_s3 as AwsS3;
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_http::byte_stream::ByteStream;
 use futures::TryStreamExt;
 
 use crate::credential::Credential;
 use crate::error::Error;
 use crate::error::Result;
+use crate::ops::Delete;
+use crate::ops::Object;
 use crate::ops::Read;
 use crate::ops::ReadBuilder;
 use crate::ops::Reader;
+use crate::ops::ReaderStream;
+use crate::ops::Stat;
+use crate::ops::Write;
+use crate::ops::WriteBuilder;
 
+/// # TODO
+///
+/// enable_path_style and enable_signature_v2 need sdk support.
+///
+/// ref: https://github.com/awslabs/aws-sdk-rust/issues/390
 #[derive(Default, Debug, Clone)]
 pub struct Builder {
     root: Option<String>,
@@ -40,19 +53,6 @@ pub struct Builder {
     /// - https://s3.amazonaws.com
     /// - http://127.0.0.1:3000
     endpoint: Option<String>,
-
-    /// enable_path_style controls whether to use path style or virtual host style.
-    ///
-    /// ## TODO
-    ///
-    /// It seems sdk doesn't support path style so far.
-    enable_path_style: bool,
-    /// enable_signature_v2 whether to use signature v2 or not.
-    ///
-    /// ## TODO
-    ///
-    /// It seems sdk doesn't support signature v2 so far.
-    enable_signature_v2: bool,
 }
 
 impl Builder {
@@ -82,18 +82,6 @@ impl Builder {
 
     pub fn endpoint(&mut self, endpoint: &str) -> &mut Self {
         self.endpoint = Some(endpoint.to_string());
-
-        self
-    }
-
-    pub fn enable_path_style(&mut self) -> &mut Self {
-        self.enable_path_style = true;
-
-        self
-    }
-
-    pub fn enable_signature_v2(&mut self) -> &mut Self {
-        self.enable_signature_v2 = true;
 
         self
     }
@@ -208,6 +196,68 @@ impl<S: Send + Sync> Read<S> for Backend {
             .unwrap(); // TODO: we need a better way to handle errors here.
 
         Ok(Box::new(S3Stream(resp.body).into_async_read()))
+    }
+}
+
+#[async_trait]
+impl<S: Send + Sync> Write<S> for Backend {
+    async fn write(&self, r: Reader, args: &WriteBuilder<S>) -> Result<usize> {
+        let p = self.get_abs_path(args.path);
+
+        let _ = self
+            .client
+            .put_object()
+            .bucket(&self.bucket.clone())
+            .key(&p)
+            .content_length(args.size as i64)
+            .body(ByteStream::from(SdkBody::from(
+                hyper::body::Body::wrap_stream(ReaderStream::new(r)),
+            )))
+            .send()
+            .await
+            .unwrap(); // TODO: we need a better way to handle errors here.
+
+        Ok(args.size as usize)
+    }
+}
+
+#[async_trait]
+impl<S: Send + Sync> Stat<S> for Backend {
+    async fn stat(&self, path: &str) -> Result<Object> {
+        let p = self.get_abs_path(path);
+
+        let meta = self
+            .client
+            .head_object()
+            .bucket(&self.bucket.clone())
+            .key(&p)
+            .send()
+            .await
+            .unwrap(); // TODO: we need a better way to handle errors here.
+        let o = Object {
+            path: path.to_string(),
+            size: meta.content_length as u64,
+        };
+
+        Ok(o)
+    }
+}
+
+#[async_trait]
+impl<S: Send + Sync> Delete<S> for Backend {
+    async fn delete(&self, path: &str) -> Result<()> {
+        let p = self.get_abs_path(path);
+
+        let _ = self
+            .client
+            .delete_object()
+            .bucket(&self.bucket.clone())
+            .key(&p)
+            .send()
+            .await
+            .unwrap(); // TODO: we need a better way to handle errors here.
+
+        Ok(())
     }
 }
 

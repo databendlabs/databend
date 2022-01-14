@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 use std::sync::Arc;
 
@@ -54,7 +53,7 @@ async fn test_already_exists_add_udf() -> Result<()> {
 
     match udf_api.add_udf(udf.clone()).await {
         Ok(_) => panic!("Already exists add udf must be return Err."),
-        Err(cause) => assert_eq!(cause.code(), 4072),
+        Err(cause) => assert_eq!(cause.code(), 2603),
     }
 
     Ok(())
@@ -98,7 +97,7 @@ async fn test_unknown_udf_drop_udf() -> Result<()> {
 
     match udf_api.drop_udf("UNKNOWN_NAME", None).await {
         Ok(_) => panic!("Unknown UDF drop must be return Err."),
-        Err(cause) => assert_eq!(cause.code(), 4071),
+        Err(cause) => assert_eq!(cause.code(), 2602),
     }
 
     Ok(())

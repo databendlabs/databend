@@ -28,6 +28,11 @@ pub fn add(left: Expression, right: Expression) -> Expression {
     binary_expr(left, "+", right)
 }
 
+/// Sub binary function.
+pub fn sub(left: Expression, right: Expression) -> Expression {
+    binary_expr(left, "-", right)
+}
+
 /// Not.
 pub fn not(other: Expression) -> Expression {
     Expression::UnaryExpression {

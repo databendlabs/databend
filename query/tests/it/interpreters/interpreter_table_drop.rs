@@ -14,12 +14,10 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
+use databend_query::sql::PlanParser;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::tests::parse_query;
 
 #[tokio::test]
 async fn test_drop_table_interpreter() -> Result<()> {
@@ -33,24 +31,20 @@ async fn test_drop_table_interpreter() -> Result<()> {
             ) Engine = Null\
         ";
 
-        if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY, &ctx)? {
-            let executor = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let _ = executor.execute(None).await?;
-        }
+        let plan = PlanParser::parse(TEST_CREATE_QUERY, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let _ = executor.execute(None).await?;
     }
 
     // Drop table.
     {
-        if let PlanNode::DropTable(plan) = parse_query("DROP TABLE a", &ctx)? {
-            let executor = DropTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            assert_eq!(executor.name(), "DropTableInterpreter");
-            let stream = executor.execute(None).await?;
-            let result = stream.try_collect::<Vec<_>>().await?;
-            let expected = vec!["++", "++"];
-            common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-        } else {
-            panic!()
-        }
+        let plan = PlanParser::parse("DROP TABLE a", ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "DropTableInterpreter");
+        let stream = executor.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec!["++", "++"];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 
     Ok(())

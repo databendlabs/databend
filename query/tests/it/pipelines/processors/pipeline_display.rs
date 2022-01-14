@@ -15,9 +15,8 @@
 use common_base::tokio;
 use common_exception::Result;
 use databend_query::pipelines::processors::*;
+use databend_query::sql::PlanParser;
 use pretty_assertions::assert_eq;
-
-use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_pipeline_display() -> Result<()> {
@@ -30,7 +29,7 @@ async fn test_pipeline_display() -> Result<()> {
         WHERE (number + 1) = 4 limit 1\
     ";
 
-    let plan = parse_query(TEST_EXPLAIN_QUERY, &ctx)?;
+    let plan = PlanParser::parse(TEST_EXPLAIN_QUERY, ctx.clone()).await?;
     let pipeline_builder = PipelineBuilder::create(ctx);
     let pipeline = pipeline_builder.build(plan.input(0).as_ref())?;
     let expect = "LimitTransform × 1 processor\

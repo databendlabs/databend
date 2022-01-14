@@ -14,12 +14,10 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
+use databend_query::sql::PlanParser;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::tests::parse_query;
 
 #[tokio::test]
 async fn test_truncate_table_interpreter() -> Result<()> {
@@ -33,69 +31,58 @@ async fn test_truncate_table_interpreter() -> Result<()> {
             ) Engine = Memory\
         ";
 
-        if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY, &ctx)? {
-            let interpreter = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let _ = interpreter.execute(None).await?;
-        }
+        let plan = PlanParser::parse(TEST_CREATE_QUERY, ctx.clone()).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let _ = interpreter.execute(None).await?;
     }
 
     // Insert into.
     {
         static TEST_INSERT_QUERY: &str = "INSERT INTO default.a VALUES('1,1', '2,2')";
-        if let PlanNode::Insert(plan) = parse_query(TEST_INSERT_QUERY, &ctx)? {
-            let executor = InsertInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let _ = executor.execute(None).await?;
-        }
+        let plan = PlanParser::parse(TEST_INSERT_QUERY, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let _ = executor.execute(None).await?;
     }
 
     // select.
     {
         static TEST_SELECT_QUERY: &str = "SELECT * FROM default.a";
-        if let PlanNode::Select(plan) = parse_query(TEST_SELECT_QUERY, &ctx)? {
-            let interpreter = SelectInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let stream = interpreter.execute(None).await?;
-            let result = stream.try_collect::<Vec<_>>().await?;
-            let expected = vec![
-                "+-----+-----+",
-                "| a   | b   |",
-                "+-----+-----+",
-                "| 1,1 | 2,2 |",
-                "+-----+-----+",
-            ];
-            common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-        } else {
-            panic!()
-        }
+        let plan = PlanParser::parse(TEST_SELECT_QUERY, ctx.clone()).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let stream = interpreter.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec![
+            "+-----+-----+",
+            "| a   | b   |",
+            "+-----+-----+",
+            "| 1,1 | 2,2 |",
+            "+-----+-----+",
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 
     // truncate table.
     {
         static TEST_TRUNCATE_QUERY: &str = "TRUNCATE TABLE default.a";
-        if let PlanNode::TruncateTable(plan) = parse_query(TEST_TRUNCATE_QUERY, &ctx)? {
-            let interpreter = TruncateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            assert_eq!(interpreter.name(), "TruncateTableInterpreter");
+        let plan = PlanParser::parse(TEST_TRUNCATE_QUERY, ctx.clone()).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(interpreter.name(), "TruncateTableInterpreter");
 
-            let stream = interpreter.execute(None).await?;
-            let result = stream.try_collect::<Vec<_>>().await?;
-            let expected = vec!["++", "++"];
-            common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-        } else {
-            panic!()
-        }
+        let stream = interpreter.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec!["++", "++"];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 
     // select.
     {
         static TEST_SELECT_QUERY: &str = "SELECT * FROM default.a";
-        if let PlanNode::Select(plan) = parse_query(TEST_SELECT_QUERY, &ctx)? {
-            let executor = SelectInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let stream = executor.execute(None).await?;
-            let result = stream.try_collect::<Vec<_>>().await?;
-            let expected = vec!["++", "++"];
-            common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-        } else {
-            panic!()
-        }
+        let plan = PlanParser::parse(TEST_SELECT_QUERY, ctx.clone()).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let stream = interpreter.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec!["++", "++"];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 
     Ok(())

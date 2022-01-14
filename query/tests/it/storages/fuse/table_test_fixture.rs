@@ -67,10 +67,12 @@ impl TestFixture {
         config.storage.disk.temp_data_path = tmp_dir.path().to_str().unwrap().to_string();
         let ctx = crate::tests::create_query_context_with_config(config).unwrap();
 
-        let random_prefix: String = Uuid::new_v4().to_simple().to_string();
+        let tenant = ctx.get_tenant();
+        let random_prefix: String = Uuid::new_v4().simple().to_string();
         // prepare a randomly named default database
         let db_name = gen_db_name(&random_prefix);
         let plan = CreateDatabasePlan {
+            tenant,
             if_not_exists: false,
             db: db_name,
             meta: DatabaseMeta {
@@ -94,6 +96,10 @@ impl TestFixture {
         self.ctx.clone()
     }
 
+    pub fn default_tenant(&self) -> String {
+        self.ctx().get_tenant()
+    }
+
     pub fn default_db_name(&self) -> String {
         gen_db_name(&self.prefix)
     }
@@ -109,6 +115,7 @@ impl TestFixture {
     pub fn default_crate_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
             if_not_exists: false,
+            tenant: self.default_tenant(),
             db: self.default_db_name(),
             table: self.default_table_name(),
             table_meta: TableMeta {
@@ -152,6 +159,7 @@ impl TestFixture {
         self.ctx
             .get_catalog()
             .get_table(
+                self.default_tenant().as_str(),
                 self.default_db_name().as_str(),
                 self.default_table_name().as_str(),
             )
