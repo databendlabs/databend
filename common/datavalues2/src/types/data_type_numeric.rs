@@ -16,7 +16,6 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_exception::Result;
 
 use super::data_type::IDataType;
 use super::type_id::TypeID;

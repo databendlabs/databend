@@ -23,7 +23,7 @@ pub struct MutableStringColumn {
 }
 
 impl MutableStringColumn {
-    pub fn with_capacity(capacity: usize, offset_capacity: usize) ->Self {
+    pub fn with_capacity(capacity: usize, offset_capacity: usize) -> Self {
         let mut offsets = Vec::with_capacity(offset_capacity + 1);
         offsets.push(0);
 
@@ -37,7 +37,7 @@ impl MutableStringColumn {
     pub fn append_value(&mut self, v: impl AsRef<[u8]>) {
         let bytes = v.as_ref();
         self.last_size += bytes.len();
-        self.offsets.push(  self.last_size as i64);
+        self.offsets.push(self.last_size as i64);
         self.values.extend_from_slice(bytes);
     }
 
@@ -46,7 +46,7 @@ impl MutableStringColumn {
         unsafe {
             StringColumn::from_data_unchecked(
                 std::mem::take(&mut self.offsets).into(),
-                std::mem::take(&mut self.values).into()
+                std::mem::take(&mut self.values).into(),
             )
         }
     }
@@ -58,7 +58,7 @@ impl MutableColumn for MutableStringColumn {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        todo!()
+        self
     }
 
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {

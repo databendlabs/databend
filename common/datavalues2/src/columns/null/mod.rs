@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
 
 use crate::prelude::*;
 
@@ -50,7 +51,7 @@ impl NullColumn {
 
 impl Column for NullColumn {
     fn as_any(&self) -> &dyn std::any::Any {
-        todo!()
+        self
     }
 
     fn data_type(&self) -> DataTypePtr {
@@ -78,7 +79,7 @@ impl Column for NullColumn {
     }
 
     fn as_arrow_array(&self) -> ArrayRef {
-        todo!()
+        Arc::new(NullArray::new_null(ArrowType::Null, self.length))
     }
 
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {

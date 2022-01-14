@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
 
 use crate::prelude::*;
@@ -89,7 +88,7 @@ pub trait IntoColumn {
 impl IntoColumn for ArrayRef {
     fn into_column(self) -> ColumnRef {
         use TypeID::*;
-        let data_type : DataTypePtr = from_arrow_type(self.data_type());
+        let data_type: DataTypePtr = from_arrow_type(self.data_type());
         match data_type.data_type_id() {
             Nullable | Null => Arc::new(NullColumn::from_arrow_array(self.as_ref())),
             Boolean => Arc::new(BooleanColumn::from_arrow_array(self.as_ref())),

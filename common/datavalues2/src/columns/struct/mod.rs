@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 
 use crate::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct StructColumn {
-    values: Vec<ArrayRef>,
+    values: Vec<ColumnRef>,
     data_type: DataTypePtr,
 }
 
@@ -32,10 +34,12 @@ impl From<StructArray> for StructColumn {
 impl StructColumn {
     pub fn new(array: StructArray) -> Self {
         let data_type = from_arrow_type(array.data_type());
-        Self {
-            values: array.values().to_vec(),
-            data_type,
-        }
+        let values = array
+            .values()
+            .iter()
+            .map(|v| v.clone().into_column())
+            .collect();
+        Self { values, data_type }
     }
 
     pub fn from_arrow_array(array: &dyn Array) -> Self {
@@ -55,7 +59,7 @@ impl StructColumn {
 
 impl Column for StructColumn {
     fn as_any(&self) -> &dyn std::any::Any {
-        todo!()
+        self
     }
 
     fn data_type(&self) -> DataTypePtr {
@@ -83,7 +87,9 @@ impl Column for StructColumn {
     }
 
     fn as_arrow_array(&self) -> ArrayRef {
-        todo!()
+        let arrow_type = self.data_type().arrow_type();
+        let arrays = self.values.iter().map(|v| v.as_arrow_array()).collect();
+        Arc::new(StructArray::from_data(arrow_type, arrays, None))
     }
 
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {

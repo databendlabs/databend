@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::{Bitmap, MutableBitmap};
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 
 mod mutable;
 use std::sync::Arc;
@@ -65,7 +66,8 @@ impl Column for NullableColumn {
     }
 
     fn as_arrow_array(&self) -> ArrayRef {
-        self.column.as_arrow_array()
+        let result = self.column.as_arrow_array();
+        Arc::from(result.with_validity(Some(self.validity.clone())))
     }
 
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
@@ -103,4 +105,3 @@ impl Column for NullableColumn {
         self.column.get_unchecked(0)
     }
 }
-

@@ -52,7 +52,7 @@ impl ArrayColumn {
 
 impl Column for ArrayColumn {
     fn as_any(&self) -> &dyn std::any::Any {
-        todo!()
+        self
     }
 
     fn data_type(&self) -> DataTypePtr {
@@ -80,7 +80,14 @@ impl Column for ArrayColumn {
     }
 
     fn as_arrow_array(&self) -> ArrayRef {
-        todo!()
+        let arrow_type = self.data_type().arrow_type();
+        let array = self.values.as_arrow_array();
+        Arc::new(LargeListArray::from_data(
+            arrow_type,
+            self.offsets.clone(),
+            array,
+            None,
+        ))
     }
 
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {

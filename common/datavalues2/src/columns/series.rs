@@ -23,7 +23,6 @@ use crate::Column;
 use crate::ColumnRef;
 use crate::ConstColumn;
 use crate::NewColumn;
-use crate::NullColumn;
 use crate::NullableColumn;
 use crate::StringColumn;
 

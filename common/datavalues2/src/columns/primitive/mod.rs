@@ -18,7 +18,6 @@ mod mutable;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::array::MutablePrimitiveArray;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
@@ -171,7 +170,12 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
     }
 
     fn as_arrow_array(&self) -> common_arrow::arrow::array::ArrayRef {
-        todo!()
+        let data_type = self.data_type().arrow_type();
+        Arc::new(PrimitiveArray::<T>::from_data(
+            data_type,
+            self.values.clone(),
+            None,
+        ))
     }
 
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {

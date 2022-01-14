@@ -15,11 +15,12 @@
 mod iterator;
 mod mutable;
 
+use std::sync::Arc;
+
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::cast::binary_to_large_binary;
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::types::Index;
 pub use iterator::*;
@@ -53,19 +54,19 @@ impl StringColumn {
 
     pub fn from_arrow_array(array: &dyn Array) -> Self {
         let arrow_type = array.data_type();
-        if arrow_type == &ArrowDataType::Binary {
+        if arrow_type == &ArrowType::Binary {
             let arr = array.as_any().downcast_ref::<BinaryArray<i32>>().unwrap();
-            let arr = binary_to_large_binary(arr, ArrowDataType::LargeBinary);
+            let arr = binary_to_large_binary(arr, ArrowType::LargeBinary);
             return Self::new(arr);
         }
 
-        if arrow_type == &ArrowDataType::Utf8 {
+        if arrow_type == &ArrowType::Utf8 {
             let arr = array.as_any().downcast_ref::<Utf8Array<i32>>().unwrap();
             let iter = arr.values_iter();
             return Self::new_from_iter(iter);
         }
 
-        if arrow_type == &ArrowDataType::LargeUtf8 {
+        if arrow_type == &ArrowType::LargeUtf8 {
             let arr = array.as_any().downcast_ref::<Utf8Array<i64>>().unwrap();
             let iter = arr.values_iter();
             return Self::new_from_iter(iter);
@@ -118,7 +119,7 @@ impl StringColumn {
 
 impl Column for StringColumn {
     fn as_any(&self) -> &dyn std::any::Any {
-        todo!()
+        self
     }
 
     fn data_type(&self) -> DataTypePtr {
@@ -146,7 +147,12 @@ impl Column for StringColumn {
     }
 
     fn as_arrow_array(&self) -> ArrayRef {
-        todo!()
+        Arc::new(LargeBinaryArray::from_data(
+            ArrowType::LargeBinary,
+            self.offsets.clone(),
+            self.values.clone(),
+            None,
+        ))
     }
 
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {

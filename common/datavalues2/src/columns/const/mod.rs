@@ -72,7 +72,8 @@ impl Column for ConstColumn {
     }
 
     fn as_arrow_array(&self) -> ArrayRef {
-        todo!()
+        let column = self.column.replicate(&[self.length]);
+        column.as_arrow_array()
     }
 
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
