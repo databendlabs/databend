@@ -58,7 +58,9 @@ impl UDFTransformer {
         Self::clone_expr_with_replacement(&expr, &|nest_expr| {
             if let Expr::Identifier(Ident { value, .. }) = nest_expr {
                 if let Some(arg) = args_map.get(value) {
-                    return Ok(Some(function_arg_as_expr(arg)?));
+                    if let Ok(expr) = function_arg_as_expr(arg) {
+                        return Ok(Some(expr));
+                    }
                 }
             }
 
@@ -236,9 +238,15 @@ impl UDFTransformer {
                                     .unwrap(),
                                 ),
                             },
-                            FunctionArg::Unnamed(expr) => FunctionArg::Unnamed(
-                                Self::clone_expr_with_replacement(expr, replacement_fn).unwrap(),
-                            ),
+                            FunctionArg::Unnamed(arg) => {
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                                    Self::clone_expr_with_replacement(
+                                        &function_arg_as_expr(arg).unwrap(),
+                                        replacement_fn,
+                                    )
+                                    .unwrap(),
+                                ))
+                            }
                         })
                         .collect::<Vec<FunctionArg>>(),
                     over: over.clone(),
@@ -285,6 +293,11 @@ impl UDFTransformer {
     }
 }
 
-fn function_arg_as_expr(arg: &FunctionArgExpr) -> Result<Expr> {
-    todo!()
+fn function_arg_as_expr(arg_expr: &FunctionArgExpr) -> Result<Expr> {
+    match arg_expr {
+        FunctionArgExpr::Expr(expr) => Ok(expr.clone()),
+        FunctionArgExpr::Wildcard | FunctionArgExpr::QualifiedWildcard(_) => Err(
+            ErrorCode::SyntaxException(std::format!("Unsupported arg statement: {}", arg_expr)),
+        ),
+    }
 }

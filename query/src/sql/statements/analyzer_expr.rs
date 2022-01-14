@@ -28,6 +28,7 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
 use common_planners::Expression;
 use sqlparser::ast::Expr;
+use sqlparser::ast::FunctionArgExpr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::Query;
 use sqlparser::ast::UnaryOperator;
@@ -61,7 +62,7 @@ impl ExpressionAnalyzer {
                 ExprRPNItem::Identifier(v) => self.analyze_identifier(v, &mut stack)?,
                 ExprRPNItem::QualifiedIdentifier(v) => self.analyze_identifiers(v, &mut stack)?,
                 ExprRPNItem::Function(v) => self.analyze_function(v, &mut stack)?,
-                ExprRPNItem::Wildcard => self.analyze_wildcard(&mut stack)?,
+                // ExprRPNItem::Wildcard => self.analyze_wildcard(&mut stack)?,
                 ExprRPNItem::Exists(v) => self.analyze_exists(v, &mut stack).await?,
                 ExprRPNItem::Subquery(v) => self.analyze_scalar_subquery(v, &mut stack).await?,
                 ExprRPNItem::Cast(v) => self.analyze_cast(v, &mut stack)?,
@@ -75,6 +76,17 @@ impl ExpressionAnalyzer {
             _ => Err(ErrorCode::LogicalError(
                 "Logical error: this is expr rpn bug.",
             )),
+        }
+    }
+
+    pub async fn analyze_function_arg(&self, arg_expr: &FunctionArgExpr) -> Result<Expression> {
+        match arg_expr {
+            FunctionArgExpr::Expr(expr) => self.analyze(expr).await,
+            FunctionArgExpr::Wildcard => Ok(Expression::Wildcard),
+            FunctionArgExpr::QualifiedWildcard(_) => Err(ErrorCode::SyntaxException(std::format!(
+                "Unsupported arg statement: {}",
+                arg_expr
+            ))),
         }
     }
 
@@ -297,10 +309,10 @@ impl ExpressionAnalyzer {
         )))
     }
 
-    fn analyze_wildcard(&self, arguments: &mut Vec<Expression>) -> Result<()> {
-        arguments.push(Expression::Wildcard);
-        Ok(())
-    }
+    // fn analyze_wildcard(&self, arguments: &mut Vec<Expression>) -> Result<()> {
+    //     arguments.push(Expression::Wildcard);
+    //     Ok(())
+    // }
 
     fn analyze_cast(
         &self,
@@ -373,7 +385,7 @@ enum ExprRPNItem {
     Identifier(Ident),
     QualifiedIdentifier(Vec<Ident>),
     Function(FunctionExprInfo),
-    Wildcard,
+    // Wildcard,
     Exists(Box<Query>),
     Subquery(Box<Query>),
     Cast(common_datavalues::DataType),
@@ -461,9 +473,9 @@ impl ExprRPNBuilder {
             Expr::BinaryOp { op, .. } => {
                 self.rpn.push(ExprRPNItem::binary_operator(op.to_string()));
             }
-            Expr::Wildcard => {
-                self.rpn.push(ExprRPNItem::Wildcard);
-            }
+            // Expr::Wildcard => {
+            //     self.rpn.push(ExprRPNItem::Wildcard);
+            // }
             Expr::Exists(subquery) => {
                 self.rpn.push(ExprRPNItem::Exists(subquery.clone()));
             }
