@@ -15,10 +15,9 @@
 use common_base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
+use databend_query::sql::PlanParser;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_explain_interpreter() -> Result<()> {
@@ -29,7 +28,7 @@ async fn test_explain_interpreter() -> Result<()> {
         WHERE (number + 1) = 4 HAVING (number + 1) = 4\
     ";
 
-    let plan = parse_query(TEST_QUERY, &ctx)?;
+    let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
     let executor = InterpreterFactory::get(ctx, plan)?;
     assert_eq!(executor.name(), "ExplainInterpreter");
 

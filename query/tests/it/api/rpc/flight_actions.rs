@@ -21,9 +21,9 @@ use common_exception::Result;
 use common_planners::Expression;
 use databend_query::api::FlightAction;
 use databend_query::api::ShuffleAction;
+use databend_query::sql::PlanParser;
 
 use crate::tests::create_query_context;
-use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_shuffle_action_try_into() -> Result<()> {
@@ -32,7 +32,7 @@ async fn test_shuffle_action_try_into() -> Result<()> {
     let shuffle_action = ShuffleAction {
         query_id: String::from("query_id"),
         stage_id: String::from("stage_id"),
-        plan: parse_query("SELECT number FROM numbers(5)", &ctx)?,
+        plan: PlanParser::parse("SELECT number FROM numbers(5)", ctx.clone()).await?,
         sinks: vec![String::from("stream_id")],
         scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
     };
@@ -48,7 +48,7 @@ async fn test_shuffle_action_try_into() -> Result<()> {
             assert_eq!(action.stage_id, "stage_id");
             assert_eq!(
                 action.plan,
-                parse_query("SELECT number FROM numbers(5)", &ctx)?
+                PlanParser::parse("SELECT number FROM numbers(5)", ctx.clone()).await?
             );
             assert_eq!(action.sinks, vec![String::from("stream_id")]);
             assert_eq!(

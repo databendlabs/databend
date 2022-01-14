@@ -15,10 +15,9 @@
 use common_base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
+use databend_query::sql::PlanParser;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_show_create_database_interpreter() -> Result<()> {
@@ -26,7 +25,7 @@ async fn test_show_create_database_interpreter() -> Result<()> {
 
     // show create database default
     {
-        let plan = parse_query("show create database default", &ctx)?;
+        let plan = PlanParser::parse("show create database default", ctx.clone()).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowCreateDatabaseInterpreter");
         let stream = executor.execute(None).await?;
@@ -43,7 +42,7 @@ async fn test_show_create_database_interpreter() -> Result<()> {
 
     // show create database system
     {
-        let plan = parse_query("show create database system", &ctx)?;
+        let plan = PlanParser::parse("show create database system", ctx.clone()).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowCreateDatabaseInterpreter");
         let stream = executor.execute(None).await?;

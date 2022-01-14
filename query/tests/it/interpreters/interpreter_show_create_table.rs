@@ -15,10 +15,9 @@
 use common_base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
+use databend_query::sql::PlanParser;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::tests::parse_query;
 
 #[tokio::test]
 async fn interpreter_show_create_table_test() -> Result<()> {
@@ -32,14 +31,14 @@ async fn interpreter_show_create_table_test() -> Result<()> {
             ) Engine = Null COMMENT = 'test create'\
         ";
 
-        let plan = parse_query(TEST_CREATE_QUERY, &ctx)?;
+        let plan = PlanParser::parse(TEST_CREATE_QUERY, ctx.clone()).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = executor.execute(None).await?;
     }
 
     // Show create table.
     {
-        let plan = parse_query("SHOW CREATE TABLE a", &ctx)?;
+        let plan = PlanParser::parse("SHOW CREATE TABLE a", ctx.clone()).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowCreateTableInterpreter");
         let stream = executor.execute(None).await?;

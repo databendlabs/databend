@@ -15,9 +15,8 @@
 use common_base::tokio;
 use common_exception::Result;
 use databend_query::interpreters::*;
+use databend_query::sql::PlanParser;
 use futures::stream::StreamExt;
-
-use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_table_interpreter() -> Result<()> {
@@ -30,7 +29,7 @@ async fn test_create_table_interpreter() -> Result<()> {
         ) Engine = Null\
     ";
 
-        let plan = parse_query(TEST_CREATE_QUERY, &ctx)?;
+        let plan = PlanParser::parse(TEST_CREATE_QUERY, ctx.clone()).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let mut stream = interpreter.execute(None).await?;
         while let Some(_block) = stream.next().await {}
@@ -57,7 +56,7 @@ async fn test_create_table_interpreter() -> Result<()> {
             ) Engine = Null\
         ";
 
-        let plan = parse_query(TEST_CREATE_QUERY, &ctx)?;
+        let plan = PlanParser::parse(TEST_CREATE_QUERY, ctx.clone()).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = executor.execute(None).await?;
     }
@@ -66,7 +65,7 @@ async fn test_create_table_interpreter() -> Result<()> {
         static TEST_CREATE_QUERY_SELECT: &str =
             "CREATE TABLE default.test_b(a varchar, x int) select b, a from default.test_a";
 
-        let plan = parse_query(TEST_CREATE_QUERY_SELECT, &ctx)?;
+        let plan = PlanParser::parse(TEST_CREATE_QUERY_SELECT, ctx.clone()).await?;
         let interpreter = InterpreterFactory::get(ctx, plan.clone())?;
         let mut stream = interpreter.execute(None).await?;
         while let Some(_block) = stream.next().await {}

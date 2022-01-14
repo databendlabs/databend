@@ -40,15 +40,17 @@ pub fn generate_partitions(workers: u64, total: u64) -> Partitions {
     partitions
 }
 
+use common_base::tokio;
 use common_exception::Result;
 use databend_query::optimizers::Optimizers;
+use databend_query::sql::PlanParser;
 
-#[test]
-fn test_literal_false_filter() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_literal_false_filter() -> Result<()> {
     let query = "select * from numbers_mt(10) where 1 + 2 = 2";
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = crate::tests::parse_query(query, &ctx)?;
+    let plan = PlanParser::parse(query, ctx.clone()).await?;
     let mut optimizer = Optimizers::without_scatters(ctx);
     let optimized = optimizer.optimize(&plan)?;
     let actual = format!("{:?}", optimized);
@@ -62,8 +64,8 @@ fn test_literal_false_filter() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_skip_read_data_source() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_skip_read_data_source() -> Result<()> {
     struct Test {
         name: &'static str,
         query: &'static str,
@@ -103,7 +105,7 @@ fn test_skip_read_data_source() -> Result<()> {
 
     for test in tests {
         let ctx = crate::tests::create_query_context()?;
-        let plan = crate::tests::parse_query(test.query, &ctx)?;
+        let plan = PlanParser::parse(test.query, ctx.clone()).await?;
         let mut optimizer = Optimizers::without_scatters(ctx);
 
         let optimized_plan = optimizer.optimize(&plan)?;

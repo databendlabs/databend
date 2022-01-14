@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::Result;
+use databend_query::sql::PlanParser;
 use pretty_assertions::assert_eq;
 
-use crate::tests::parse_query;
-
-#[test]
-fn test_plan_parser() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_plan_parser() -> Result<()> {
     struct Test {
         name: &'static str,
         sql: &'static str,
@@ -239,7 +239,7 @@ fn test_plan_parser() -> Result<()> {
 
     let ctx = crate::tests::create_query_context()?;
     for t in tests {
-        match parse_query(t.sql, &ctx) {
+        match PlanParser::parse(t.sql, ctx.clone()).await {
             Ok(v) => {
                 assert_eq!(t.expect, format!("{:?}", v), "{}", t.name);
             }
