@@ -84,27 +84,30 @@ pub trait IntoColumn {
     fn into_column(self) -> ColumnRef;
 }
 
+// No nullable
+// We should wrap the nullable by ourselves
 impl IntoColumn for ArrayRef {
     fn into_column(self) -> ColumnRef {
-        use ArrowType::*;
-        match self.data_type() {
-            Null => Arc::new(NullColumn::from_arrow_array(self.as_ref())),
+        use TypeID::*;
+        let data_type : DataTypePtr = from_arrow_type(self.data_type());
+        match data_type.data_type_id() {
+            Nullable | Null => Arc::new(NullColumn::from_arrow_array(self.as_ref())),
             Boolean => Arc::new(BooleanColumn::from_arrow_array(self.as_ref())),
             UInt8 => Arc::new(UInt8Column::from_arrow_array(self.as_ref())),
-            UInt16 => Arc::new(UInt16Column::from_arrow_array(self.as_ref())),
-            UInt32 => Arc::new(UInt32Column::from_arrow_array(self.as_ref())),
-            UInt64 => Arc::new(UInt64Column::from_arrow_array(self.as_ref())),
+            UInt16 | Date16 => Arc::new(UInt16Column::from_arrow_array(self.as_ref())),
+            UInt32 | DateTime32 => Arc::new(UInt32Column::from_arrow_array(self.as_ref())),
+            UInt64 | DateTime64 => Arc::new(UInt64Column::from_arrow_array(self.as_ref())),
 
             Int8 => Arc::new(Int8Column::from_arrow_array(self.as_ref())),
             Int16 => Arc::new(Int16Column::from_arrow_array(self.as_ref())),
-            Int32 => Arc::new(Int32Column::from_arrow_array(self.as_ref())),
-            Int64 => Arc::new(Int64Column::from_arrow_array(self.as_ref())),
+            Int32 | Date32 => Arc::new(Int32Column::from_arrow_array(self.as_ref())),
+            Int64 | Interval => Arc::new(Int64Column::from_arrow_array(self.as_ref())),
 
             Float32 => Arc::new(Float32Column::from_arrow_array(self.as_ref())),
             Float64 => Arc::new(Float64Column::from_arrow_array(self.as_ref())),
 
-            List(_) => Arc::new(ArrayColumn::from_arrow_array(self.as_ref())),
-            Struct(_) => Arc::new(StructColumn::from_arrow_array(self.as_ref())),
+            List => Arc::new(ArrayColumn::from_arrow_array(self.as_ref())),
+            Struct => Arc::new(StructColumn::from_arrow_array(self.as_ref())),
             String => Arc::new(StringColumn::from_arrow_array(self.as_ref())),
         }
     }

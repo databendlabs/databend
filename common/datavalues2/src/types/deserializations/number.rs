@@ -45,10 +45,12 @@ where
 
     // TODO introduce strick mod
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        let value =  lexical_core::parse_partial::<T>(reader).unwrap_or((T::default(), 0) ).0;
-        self.builder.append_value(v);
+        let value = lexical_core::parse_partial::<T>(reader)
+            .unwrap_or((T::default(), 0))
+            .0;
+        self.builder.append_value(value);
         Ok(())
-        }
+    }
 
     fn de_null(&mut self) -> bool {
         todo!()

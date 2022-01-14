@@ -27,7 +27,6 @@ use super::data_type_date32::DataTypeDate32;
 use super::data_type_datetime::DataTypeDateTime;
 use super::data_type_datetime64::DataTypeDateTime64;
 use super::data_type_list::DataTypeList;
-use super::data_type_nullable::DataTypeNothing;
 use super::data_type_nullable::DataTypeNullable;
 use super::data_type_numeric::DataTypeFloat32;
 use super::data_type_numeric::DataTypeFloat64;
@@ -86,7 +85,7 @@ pub trait IDataType: std::fmt::Debug + Sync + Send + DynClone {
 
 pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
     match dt {
-        ArrowType::Null => Arc::new(DataTypeNullable::create(Arc::new(DataTypeNothing {}))),
+        ArrowType::Null => Arc::new(DataTypeNullable::create(Arc::new(DataTypeNull {}))),
         ArrowType::UInt8 => Arc::new(DataTypeUInt8::default()),
         ArrowType::UInt16 => Arc::new(DataTypeUInt16::default()),
         ArrowType::UInt32 => Arc::new(DataTypeUInt32::default()),
@@ -141,5 +140,12 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
     }
 
     let dt = f.data_type();
-    from_arrow_type(dt)
+    let ty = from_arrow_type(dt);
+
+    let is_nullable = f.is_nullable();
+    if is_nullable {
+        Arc::new(DataTypeNullable::create(ty))
+    } else {
+        ty
+    }
 }

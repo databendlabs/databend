@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::{Bitmap, MutableBitmap};
 
 mod mutable;
 use std::sync::Arc;
@@ -23,48 +23,41 @@ pub use mutable::*;
 use crate::prelude::*;
 
 #[derive(Clone)]
-pub struct ConstColumn {
-    length: usize,
+pub struct NullableColumn {
+    validity: Bitmap,
     column: ColumnRef,
 }
 
-impl ConstColumn {
-    pub fn new(column: ColumnRef, length: usize) -> Self {
-        Self { column, length }
-    }
-
-    pub fn convert_full_column(&self) -> ColumnRef {
-        self.column.replicate(&[self.length])
+impl NullableColumn {
+    pub fn new(column: ColumnRef, validity: Bitmap) -> Self {
+        Self { column, validity }
     }
 }
 
-impl Column for ConstColumn {
+impl Column for NullableColumn {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
     fn data_type(&self) -> DataTypePtr {
-        self.column.data_type()
+        let nest = self.column.data_type();
+        Arc::new(DataTypeNullable::create(nest))
     }
 
     fn is_nullable(&self) -> bool {
-        self.column.is_nullable()
+        true
     }
 
     fn len(&self) -> usize {
-        self.length
+        self.column.len()
     }
 
-    fn null_at(&self, _row: usize) -> bool {
-        self.column.null_at(0)
+    fn null_at(&self, row: usize) -> bool {
+        !self.validity.get_bit(row)
     }
 
     fn validity(&self) -> (bool, Option<&Bitmap>) {
-        if self.column.null_at(0) {
-            (true, None)
-        } else {
-            (false, None)
-        }
+        (false, Some(&self.validity))
     }
 
     fn memory_size(&self) -> usize {
@@ -72,13 +65,13 @@ impl Column for ConstColumn {
     }
 
     fn as_arrow_array(&self) -> ArrayRef {
-        todo!()
+        self.column.as_arrow_array()
     }
 
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
         Arc::new(Self {
-            column: self.column.clone(),
-            length,
+            column: self.column.slice(offset, length),
+            validity: self.validity.clone().slice(offset, length),
         })
     }
 
@@ -88,10 +81,26 @@ impl Column for ConstColumn {
             "Size of offsets must match size of column"
         );
 
-        Arc::new(Self::new(self.column.clone(), *offsets.last().unwrap()))
+        let column = self.column.replicate(offsets);
+
+        let capacity = *offsets.last().unwrap();
+        let mut bitmap = MutableBitmap::with_capacity(capacity);
+        let mut previous_offset: usize = 0;
+        for i in 0..self.len() {
+            let offset: usize = offsets[i];
+            let bit = self.validity.get_bit(i);
+            bitmap.extend_constant(offset - previous_offset, bit);
+            previous_offset = offset;
+        }
+
+        Arc::new(Self {
+            validity: bitmap.into(),
+            column,
+        })
     }
 
-    unsafe fn get_unchecked(&self, index: usize) -> DataValue {
+    unsafe fn get_unchecked(&self, _index: usize) -> DataValue {
         self.column.get_unchecked(0)
     }
 }
+

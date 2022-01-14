@@ -12,12 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::prelude::*;
 use crate::Column;
 use crate::ColumnRef;
 use crate::ConstColumn;
+use crate::NewColumn;
+use crate::NullColumn;
+use crate::NullableColumn;
+use crate::StringColumn;
 
 // Series is a util struct to work with Column
 pub struct Series;
@@ -49,3 +57,95 @@ impl Series {
         }
     }
 }
+
+pub trait SeriesFrom<T, Phantom: ?Sized> {
+    /// Initialize by name and values.
+    fn new(_: T) -> ColumnRef;
+}
+
+macro_rules! impl_from {
+    ($type:ty, $array:ident) => {
+        impl<T: AsRef<$type>> SeriesFrom<T, $type> for Series {
+            fn new(v: T) -> ColumnRef {
+                Arc::new($array::new_from_slice(v.as_ref()))
+            }
+        }
+    };
+}
+
+macro_rules! impl_from_option {
+    ($type:ty, $array:ident, $default:expr) => {
+        impl<T: AsRef<$type>> SeriesFrom<T, $type> for Series {
+            fn new(v: T) -> ColumnRef {
+                let iter = v.as_ref().iter().map(|v| v.is_some());
+                let bitmap = MutableBitmap::from_iter(iter);
+
+                let iter = v.as_ref().iter().map(|v| v.unwrap_or($default));
+                let column = $array::new_from_iter(iter);
+
+                Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
+            }
+        }
+    };
+}
+
+impl<'a, T: AsRef<[&'a str]>> SeriesFrom<T, [&'a str]> for Series {
+    fn new(v: T) -> ColumnRef {
+        Arc::new(StringColumn::new_from_slice(v))
+    }
+}
+
+impl<'a, T: AsRef<[Option<&'a str>]>> SeriesFrom<T, [Option<&'a str>]> for Series {
+    fn new(v: T) -> ColumnRef {
+        let iter = v.as_ref().iter().map(|v| v.is_some());
+        let bitmap = MutableBitmap::from_iter(iter);
+
+        let iter = v.as_ref().iter().map(|v| v.unwrap_or(""));
+        let column = StringColumn::new_from_iter(iter);
+        Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
+    }
+}
+
+impl<'a, T: AsRef<[&'a [u8]]>> SeriesFrom<T, [&'a [u8]]> for Series {
+    fn new(v: T) -> ColumnRef {
+        let column = StringColumn::new_from_iter(v.as_ref().iter());
+        Arc::new(column)
+    }
+}
+
+impl<'a, T: AsRef<[Option<&'a [u8]>]>> SeriesFrom<T, [Option<&'a [u8]>]> for Series {
+    fn new(v: T) -> ColumnRef {
+        let iter = v.as_ref().iter().map(|v| v.is_some());
+        let bitmap = MutableBitmap::from_iter(iter);
+
+        let iter = v.as_ref().iter().map(|v| v.unwrap_or(&[]));
+        let column = StringColumn::new_from_iter(iter);
+        Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
+    }
+}
+
+impl_from!([bool], BooleanColumn);
+impl_from!([u8], UInt8Column);
+impl_from!([u16], UInt16Column);
+impl_from!([u32], UInt32Column);
+impl_from!([u64], UInt64Column);
+impl_from!([i8], Int8Column);
+impl_from!([i16], Int16Column);
+impl_from!([i32], Int32Column);
+impl_from!([i64], Int64Column);
+impl_from!([f32], Float32Column);
+impl_from!([f64], Float64Column);
+impl_from!([Vec<u8>], StringColumn);
+impl_from!([String], StringColumn);
+
+impl_from_option!([Option<bool>], BooleanColumn, false);
+impl_from_option!([Option<u8>], UInt8Column, 0);
+impl_from_option!([Option<u16>], UInt16Column, 0);
+impl_from_option!([Option<u32>], UInt32Column, 0);
+impl_from_option!([Option<u64>], UInt64Column, 0);
+impl_from_option!([Option<i8>], Int8Column, 0);
+impl_from_option!([Option<i16>], Int16Column, 0);
+impl_from_option!([Option<i32>], Int32Column, 0);
+impl_from_option!([Option<i64>], Int64Column, 0);
+impl_from_option!([Option<f32>], Float32Column, 0f32);
+impl_from_option!([Option<f64>], Float64Column, 0f64);

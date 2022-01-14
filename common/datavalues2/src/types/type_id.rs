@@ -20,6 +20,7 @@ use common_macros::MallocSizeOf;
     serde::Serialize,
     serde::Deserialize,
     Debug,
+    Copy,
     Clone,
     PartialEq,
     Eq,
@@ -30,7 +31,7 @@ use common_macros::MallocSizeOf;
 )]
 
 pub enum TypeID {
-    Nothing,
+    Null,
     Nullable,
     Boolean,
     UInt8,

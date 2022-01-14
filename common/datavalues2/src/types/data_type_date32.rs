@@ -49,11 +49,9 @@ impl IDataType for DataTypeDate32 {
         data: &DataValue,
         size: usize,
     ) -> common_exception::Result<ColumnRef> {
-        let value = data.as_i64();
-        match value {
-            Ok(value) => Ok(Int32Column::full(value as i32, size).into_column()),
-            _ => Ok(Int32Column::full_null(size).into_column()),
-        }
+        let value = data.as_i64()?;
+        let column = Series::new(&[value]);
+        Ok(Arc::new(ConstColumn::new(column, size)))
     }
 
     fn arrow_type(&self) -> ArrowType {

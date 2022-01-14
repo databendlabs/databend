@@ -33,7 +33,7 @@ impl DataTypeNullable {
     }
 
     pub fn create_null() -> Self {
-        let inner = Arc::new(DataTypeNothing {});
+        let inner = Arc::new(DataTypeNull {});
         DataTypeNullable { inner }
     }
 
@@ -78,11 +78,11 @@ impl IDataType for DataTypeNullable {
         data: &DataValue,
         size: usize,
     ) -> common_exception::Result<ColumnRef> {
-        if self.inner.data_type_id() == TypeID::Nothing {
+        if self.inner.data_type_id() == TypeID::Null {
             return Ok(Arc::new(NullColumn::new(size)) );
         }
 
-        if self.inner.data_type_id() == TypeID::Nullable {
+        if self.inner.data_type_id() == TypeID::Null {
             return Result::Err(ErrorCode::BadDataValueType(format!(
                 "Nullable type can't be inside nullable type",
             )));
@@ -92,12 +92,12 @@ impl IDataType for DataTypeNullable {
 }
 
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DataTypeNothing {}
+pub struct DataTypeNull {}
 
 #[typetag::serde]
-impl IDataType for DataTypeNothing {
+impl IDataType for DataTypeNull {
     fn data_type_id(&self) -> TypeID {
-        TypeID::Nothing
+        TypeID::Null
     }
 
     #[inline]
@@ -107,20 +107,18 @@ impl IDataType for DataTypeNothing {
 
     // it's nothing, so we can't create any default value
     fn default_value(&self) -> DataValue {
-        unreachable!()
+        DataValue::Null
     }
 
     fn create_constant_column(
         &self,
-        data: &DataValue,
+        _data: &DataValue,
         size: usize,
     ) -> common_exception::Result<ColumnRef> {
-        return Result::Err(ErrorCode::BadDataValueType(format!(
-            "DataTypeNothing can't generate column",
-        )));
+        Ok(Arc::new(NullColumn::new(size)))
     }
 
-    // DataTypeNothing must inside nullable
+    // DataTypeNull must inside nullable
     fn arrow_type(&self) -> ArrowType {
         unreachable!()
     }

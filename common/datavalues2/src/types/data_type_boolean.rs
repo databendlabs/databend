@@ -51,11 +51,9 @@ impl IDataType for DataTypeBoolean {
         data: &DataValue,
         size: usize,
     ) -> common_exception::Result<ColumnRef> {
-        let value = data.as_bool();
-        match value {
-            Ok(value) => Ok(BooleanColumn::full(value, size).into_column()),
-            _ => Ok(BooleanColumn::full_null(size).into_column()),
-        }
+        let value = data.as_bool()?;
+        let column = Series::new(&[value]);
+        Ok(Arc::new(ConstColumn::new(column, size)))
     }
 
     fn arrow_type(&self) -> ArrowType {

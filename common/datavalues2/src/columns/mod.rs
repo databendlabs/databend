@@ -25,6 +25,7 @@ pub mod series;
 mod string;
 mod r#struct;
 mod r#const;
+mod nullable;
 
 pub use array::*;
 pub use r#const::*;
@@ -33,6 +34,7 @@ pub use builder::*;
 pub use column::*;
 pub use mutable::*;
 pub use null::*;
+pub use nullable::*;
 pub use primitive::*;
 pub use r#struct::*;
 pub use series::*;

@@ -34,7 +34,7 @@ where
 {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;
-        self.builder.push(value);
+        self.builder.append_value(value);
         Ok(())
     }
 
@@ -42,7 +42,7 @@ where
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: T = reader.read_scalar()?;
-            self.builder.push(value);
+            self.builder.append_value(value);
         }
         Ok(())
     }
@@ -55,7 +55,7 @@ where
 
         match lexical_core::parse::<T>(reader) {
             Ok(v) => {
-                self.builder.push(v);
+                self.builder.append_value(v);
                 Ok(())
             }
             Err(_) => {
@@ -66,7 +66,7 @@ where
                     .map_err_to_code(ErrorCode::BadBytes, || "Cannot parse value to Date type")?;
                 let epoch = NaiveDate::from_ymd(1970, 1, 1);
                 let duration = res.sub(epoch);
-                self.builder.push(duration.num_days().as_());
+                self.builder.append_value(duration.num_days().as_());
                 Ok(())
             }
         }

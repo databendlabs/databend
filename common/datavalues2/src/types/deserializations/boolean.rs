@@ -25,7 +25,7 @@ pub struct BooleanDeserializer {
 impl TypeDeserializer for BooleanDeserializer {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: bool = reader.read_scalar()?;
-        self.builder.push(value);
+        self.builder.append_value(value);
         Ok(())
     }
 
@@ -33,23 +33,22 @@ impl TypeDeserializer for BooleanDeserializer {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: bool = reader.read_scalar()?;
-            self.builder.push(value);
+            self.builder.append_value(value);
         }
 
         Ok(())
     }
 
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        let v = if reader.eq_ignore_ascii_case(b"false") {
-            Some(false)
-        } else if reader.eq_ignore_ascii_case(b"true") {
-            Some(true)
-        } else if reader.eq_ignore_ascii_case(b"null") {
-            None
+        let v = if reader.eq_ignore_ascii_case(b"true") {
+            Ok(true)
+        } else if reader.eq_ignore_ascii_case(b"false") {
+            Ok(false)
         } else {
-            return Err(ErrorCode::BadBytes("Incorrect boolean value"));
-        };
-        self.builder.append_option(v);
+            Err(ErrorCode::BadBytes("Incorrect boolean value"))
+        }?;
+
+        self.builder.append_value(v);
         Ok(())
     }
 

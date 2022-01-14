@@ -49,12 +49,10 @@ impl IDataType for DataTypeString {
         data: &DataValue,
         size: usize,
     ) -> common_exception::Result<ColumnRef> {
-        let value = data.as_string();
+        let value = data.as_string()?;
 
-        match value {
-            Ok(value) => Ok(StringColumn::full(value.as_slice(), size).into_column()),
-            _ => Ok(StringColumn::full_null(size).into_column()),
-        }
+        let column = Series::new(&[value]);
+        Ok(Arc::new(ConstColumn::new(column, size)))
     }
 
     fn arrow_type(&self) -> ArrowType {

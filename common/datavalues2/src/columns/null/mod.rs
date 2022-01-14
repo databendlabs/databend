@@ -44,7 +44,7 @@ impl NullColumn {
         }
     }
     pub fn data_type(&self) -> DataTypePtr {
-        Arc::new(DataTypeNullable::create(Arc::new(DataTypeNothing {})))
+        Arc::new(DataTypeNullable::create(Arc::new(DataTypeNull {})))
     }
 }
 

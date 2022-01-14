@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 
 use super::data_type::IDataType;
@@ -55,12 +57,10 @@ impl IDataType for DataTypeDate {
         data: &DataValue,
         size: usize,
     ) -> common_exception::Result<ColumnRef> {
-        let value = data.as_u64();
+        let value = data.as_u64()?;
 
-        match value {
-            Ok(value) => Ok(UInt16Column::full(value as u16, size).into_column()),
-            _ => Ok(UInt16Column::full_null(size).into_column()),
-        }
+        let column = Series::new(&[value]);
+        Ok(Arc::new(ConstColumn::new(column, size)))
     }
 
     fn arrow_type(&self) -> ArrowType {

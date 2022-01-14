@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use chrono_tz::Tz;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -48,12 +49,9 @@ impl IDataType for DataTypeDateTime64 {
         data: &DataValue,
         size: usize,
     ) -> common_exception::Result<ColumnRef> {
-        let value = data.as_u64();
-
-        match value {
-            Ok(value) => Ok(UInt64Column::full(value as u64, size).into_column()),
-            _ => Ok(UInt64Column::full_null(size).into_column()),
-        }
+        let value = data.as_u64()?;
+        let column = Series::new(&[value]);
+        Ok(Arc::new(ConstColumn::new(column, size)))
     }
 
     fn arrow_type(&self) -> ArrowType {
@@ -74,7 +72,7 @@ impl IDataType for DataTypeDateTime64 {
     }
 
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        let tz = self.tz.unwrap_or_else(|| "UTC".to_string());
+        let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
         Box::new(DateTimeDeserializer::<u64> {
             builder: MutablePrimitiveColumn::<u64>::with_capacity(capacity),
             tz: tz.parse::<Tz>().unwrap(),

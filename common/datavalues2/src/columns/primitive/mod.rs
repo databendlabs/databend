@@ -175,7 +175,7 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
     }
 
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
-        let values = self.values.slice(offset, length);
+        let values = self.values.clone().slice(offset, length);
         Arc::new(Self { values })
     }
 

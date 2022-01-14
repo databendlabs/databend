@@ -19,8 +19,8 @@ use common_io::prelude::*;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
 
-use crate::prelude::*;
 use crate::columns::MutableColumn;
+use crate::prelude::*;
 
 pub struct DateTimeDeserializer<T: PrimitiveType> {
     pub builder: MutablePrimitiveColumn<T>,
@@ -49,16 +49,16 @@ where
     }
 
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        let value =  lexical_core::parse_partial::<T>(reader).unwrap_or((T::default(), 0) ).0;
-
+        let v = std::str::from_utf8(reader)
+            .map_err_to_code(ErrorCode::BadBytes, || "Cannot convert value to utf8")?;
         let res = self
             .tz
-            .datetime_from_str(value, "%Y-%m-%d %H:%M:%S%.f")
+            .datetime_from_str(v, "%Y-%m-%d %H:%M:%S%.f")
             .map_err_to_code(ErrorCode::BadBytes, || {
                 "Cannot parse value to DateTime type"
             })?;
-                self.builder.append_value(res.timestamp().as_());
-                Ok(())
+        self.builder.append_value(res.timestamp().as_());
+        Ok(())
     }
 
     fn finish_to_column(&mut self) -> ColumnRef {

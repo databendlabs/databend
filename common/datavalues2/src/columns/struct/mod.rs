@@ -20,7 +20,7 @@ use crate::prelude::*;
 #[derive(Debug, Clone)]
 pub struct StructColumn {
     values: Vec<ArrayRef>,
-     data_type: DataTypePtr,
+    data_type: DataTypePtr,
 }
 
 impl From<StructArray> for StructColumn {
@@ -32,7 +32,10 @@ impl From<StructArray> for StructColumn {
 impl StructColumn {
     pub fn new(array: StructArray) -> Self {
         let data_type = from_arrow_type(array.data_type());
-        Self { values: array.values().to_vec(), data_type }
+        Self {
+            values: array.values().to_vec(),
+            data_type,
+        }
     }
 
     pub fn from_arrow_array(array: &dyn Array) -> Self {
@@ -88,6 +91,10 @@ impl Column for StructColumn {
     }
 
     unsafe fn get_unchecked(&self, index: usize) -> DataValue {
+        todo!()
+    }
+
+    fn replicate(&self, offsets: &[usize]) -> ColumnRef {
         todo!()
     }
 }

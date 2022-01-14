@@ -58,11 +58,10 @@ impl IDataType for DataTypeDateTime {
         data: &DataValue,
         size: usize,
     ) -> common_exception::Result<ColumnRef> {
-        let value = data.as_u64();
-        match value {
-            Ok(value) => Ok(UInt32Column::full(value as u32, size).into_column()),
-            _ => Ok(UInt32Column::full_null(size).into_column()),
-        }
+        let value = data.as_u64()?;
+
+        let column = Series::new(&[value as u32]);
+        Ok(Arc::new(ConstColumn::new(column, size)))
     }
 
     fn arrow_type(&self) -> ArrowType {
@@ -83,7 +82,7 @@ impl IDataType for DataTypeDateTime {
     }
 
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        let tz = self.tz.unwrap_or_else(|| "UTC".to_string());
+        let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
         Box::new(DateTimeDeserializer::<u32> {
             builder: MutablePrimitiveColumn::<u32>::with_capacity(capacity),
             tz: tz.parse::<Tz>().unwrap(),

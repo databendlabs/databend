@@ -35,7 +35,7 @@ impl ArrayColumn {
     pub fn new(array: LargeListArray) -> Self {
         Self {
             offsets: array.offsets().clone(),
-            values: array.values().into_column(),
+            values: array.values().clone().into_column(),
         }
     }
 

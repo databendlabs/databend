@@ -104,7 +104,7 @@ impl DataValue {
             DataValue::String(_) => DataTypeString::arc(),
             DataValue::List(x) => {
                 let inner_type = if x.is_empty() {
-                    Arc::new(DataTypeNothing {})
+                    DataTypeUInt8::arc()
                 } else {
                     x[0].data_type()
                 };
@@ -116,7 +116,7 @@ impl DataValue {
             }
             DataValue::Struct(x) => {
                 let inner_type = if x.is_empty() {
-                    Arc::new(DataTypeNothing {})
+                    DataTypeUInt8::arc()
                 } else {
                     x[0].data_type()
                 };

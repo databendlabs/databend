@@ -321,11 +321,11 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
 
     //  one of is nothing
     {
-        if lhs_id == TypeID::Nothing {
+        if lhs_id == TypeID::Null {
             return Ok(rhs_type.clone());
         }
 
-        if rhs_id == TypeID::Nothing {
+        if rhs_id == TypeID::Null {
             return Ok(lhs_type.clone());
         }
     }
@@ -381,8 +381,8 @@ pub fn merge_types(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Result<Dat
     let rhs_id = rhs_type.data_type_id();
 
     match (lhs_id, rhs_id) {
-        (Nothing, _) => Ok(rhs_type.clone()),
-        (_, Nothing) => Ok(lhs_type.clone()),
+        (Null, _) => Ok(rhs_type.clone()),
+        (_, Null) => Ok(lhs_type.clone()),
         (List, List) => {
             let a = lhs_type.as_any().downcast_ref::<DataTypeList>().unwrap();
             let b = rhs_type.as_any().downcast_ref::<DataTypeList>().unwrap();

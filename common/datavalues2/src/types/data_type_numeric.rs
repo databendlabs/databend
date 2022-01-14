@@ -89,11 +89,9 @@ macro_rules! impl_numeric {
                 data: &DataValue,
                 size: usize,
             ) -> common_exception::Result<ColumnRef> {
-                let v: Result<$ty> = DFTryFrom::try_from(data);
-                match v {
-                    Ok(v) => Ok(PrimitiveColumn::<$ty>::full(v, size).into_column()),
-                    _ => Ok(PrimitiveColumn::<$ty>::full_null(size).into_column()),
-                }
+                let value: $ty = DFTryFrom::try_from(data)?;
+                let column = Series::new(&[value]);
+                Ok(Arc::new(ConstColumn::new(column, size)))
             }
 
             fn arrow_type(&self) -> ArrowType {

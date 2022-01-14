@@ -49,10 +49,10 @@ pub fn equal(lhs: &dyn IDataType, rhs: &dyn IDataType) -> bool {
 
     use crate::prelude::TypeID::*;
     match lhs.data_type_id() {
-        Nothing | Boolean | UInt8 | UInt16 | UInt32 | UInt64 | Int8 | Int16 | Int32 | Int64
+        Boolean | UInt8 | UInt16 | UInt32 | UInt64 | Int8 | Int16 | Int32 | Int64
         | Float32 | Float64 | String | Date16 | Date32 | Interval => true,
 
-        Nullable => {
+        Null | Nullable => {
             let lhs: &DataTypeNullable = lhs.as_any().downcast_ref().unwrap();
             let rhs: &DataTypeNullable = rhs.as_any().downcast_ref().unwrap();
 

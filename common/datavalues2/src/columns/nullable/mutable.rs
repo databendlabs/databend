@@ -13,16 +13,17 @@
 // limitations under the License.
 
 use std::any::Any;
-use crate::{ColumnRef, DataTypePtr, MutableColumn};
+use std::sync::Arc;
+use common_arrow::arrow::bitmap::MutableBitmap;
+use crate::{ColumnRef, DataTypePtr, MutableColumn, NullableColumn};
 
-pub struct MutableArrayColumn<M: MutableColumn> {
-    last_offset: usize,
-    offsets: Vec<i64>,
+pub struct MutableNullableColumn<M: MutableColumn> {
+    bitmap: MutableBitmap,
     values: M,
     data_type: DataTypePtr,
 }
 
-impl<M: MutableColumn + 'static> MutableColumn for MutableArrayColumn<M> where M:  MutableColumn {
+impl<M: MutableColumn + 'static> MutableColumn for MutableNullableColumn<M> where M:  MutableColumn {
     fn data_type(&self) -> DataTypePtr {
         self.data_type.clone()
     }
@@ -36,17 +37,24 @@ impl<M: MutableColumn + 'static> MutableColumn for MutableArrayColumn<M> where M
     }
 
     fn as_column(&mut self) -> ColumnRef {
-        todo!()
+        let column = self.values.as_column();
+        let bitmap =   std::mem::take(&mut self.bitmap);
+        Arc::new(NullableColumn::new(column, bitmap.into()))
     }
 
     fn append_default(&mut self) {
-        self.last_offset += 1;
-        self.offsets.push(self.last_offset as i64);
-        self.values.append_default();
+        todo!()
+    }
+
+    fn append_null(&mut self) -> bool {
+        todo!()
+    }
+
+    fn validity(&self) -> Option<&MutableBitmap> {
+        todo!()
     }
 
     fn shrink_to_fit(&mut self) {
-        self.offsets.shrink_to_fit();
-        self.values.shrink_to_fit();
+        todo!()
     }
 }

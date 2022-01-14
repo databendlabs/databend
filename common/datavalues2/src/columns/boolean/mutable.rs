@@ -46,6 +46,10 @@ impl MutableColumn for MutableBooleanColumn {
     fn shrink_to_fit(&mut self) {
         self.values.shrink_to_fit()
     }
+
+    fn append_default(&mut self) {
+        self.append_value(false);
+    }
 }
 
 impl Default for MutableBooleanColumn {
@@ -66,7 +70,7 @@ impl MutableBooleanColumn {
         }
     }
 
-    pub fn from_data(values: MutableBitmap, validity: Option<MutableBitmap>) -> Self {
+    pub fn from_data(values: MutableBitmap) -> Self {
         Self {
             values,
             data_type: DataTypeBoolean::arc(),
