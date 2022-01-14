@@ -50,7 +50,6 @@ async fn test_create_stage_interpreter() -> Result<()> {
 
     // IF NOT EXISTS.
     {
-        // TODO(bohu): this is a bug, IF NOT EXISTS should not return error.
         let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatStageInterpreter");

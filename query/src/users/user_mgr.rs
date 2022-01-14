@@ -62,11 +62,11 @@ impl UserApiProvider {
             .get_user(tenant, username, client_ip)
             .await
             .map(Some)
-            .or_else(|err| {
-                if err.code() == ErrorCode::unknown_user_code() {
+            .or_else(|e| {
+                if e.code() == ErrorCode::unknown_user_code() {
                     Ok(None)
                 } else {
-                    Err(err)
+                    Err(e)
                 }
             })?;
         match user {
@@ -106,7 +106,7 @@ impl UserApiProvider {
 
         let mut res = vec![];
         match get_users.await {
-            Err(failure) => Err(failure.add_message_back("(while get users).")),
+            Err(e) => Err(e.add_message_back("(while get users).")),
             Ok(seq_users_info) => {
                 for seq_user_info in seq_users_info {
                     res.push(seq_user_info.data);
@@ -123,7 +123,7 @@ impl UserApiProvider {
         let add_user = client.add_user(user_info);
         match add_user.await {
             Ok(res) => Ok(res),
-            Err(failure) => Err(failure.add_message_back("(while add user).")),
+            Err(e) => Err(e.add_message_back("(while add user).")),
         }
     }
     pub async fn grant_user_privileges(
@@ -144,7 +144,7 @@ impl UserApiProvider {
                 None,
             )
             .await
-            .map_err(|failure| failure.add_message_back("(while set user privileges)"))
+            .map_err(|e| e.add_message_back("(while set user privileges)"))
     }
 
     pub async fn revoke_user_privileges(
@@ -165,7 +165,7 @@ impl UserApiProvider {
                 None,
             )
             .await
-            .map_err(|failure| failure.add_message_back("(while revoke user privileges)"))
+            .map_err(|e| e.add_message_back("(while revoke user privileges)"))
     }
 
     // Drop a user by name and hostname.
@@ -174,17 +174,17 @@ impl UserApiProvider {
         tenant: &str,
         username: &str,
         hostname: &str,
-        if_exist: bool,
+        if_exists: bool,
     ) -> Result<()> {
         let client = self.get_user_api_client(tenant);
         let drop_user = client.drop_user(username.to_string(), hostname.to_string(), None);
         match drop_user.await {
             Ok(res) => Ok(res),
-            Err(failure) => {
-                if if_exist && failure.code() == ErrorCode::UnknownUserCode() {
+            Err(e) => {
+                if if_exists && e.code() == ErrorCode::unknown_user_code() {
                     Ok(())
                 } else {
-                    Err(failure.add_message_back("(while set drop user)"))
+                    Err(e.add_message_back("(while set drop user)"))
                 }
             }
         }
@@ -209,7 +209,7 @@ impl UserApiProvider {
         );
         match update_user.await {
             Ok(res) => Ok(res),
-            Err(failure) => Err(failure.add_message_back("(while alter user).")),
+            Err(e) => Err(e.add_message_back("(while alter user).")),
         }
     }
 }
