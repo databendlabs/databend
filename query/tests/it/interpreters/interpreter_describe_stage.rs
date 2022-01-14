@@ -14,7 +14,6 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
 use futures::TryStreamExt;
@@ -29,42 +28,35 @@ async fn test_desc_stageinterpreter() -> Result<()> {
     // create stage
     {
         static TEST_QUERY: &str = "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP  record_delimiter='|') comments='test'";
-        if let PlanNode::CreateUserStage(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
-            let executor = CreatStageInterpreter::try_create(ctx.clone(), plan.clone())?;
-            assert_eq!(executor.name(), "CreatStageInterpreter");
-            let _ = executor.execute(None).await?;
-        }
+        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "CreatStageInterpreter");
+        let _ = executor.execute(None).await?;
     }
 
     // desc stage
-
     {
-        if let PlanNode::DescribeStage(plan) =
-            PlanParser::parse("desc stage test_stage", ctx.clone()).await?
-        {
-            let executor = DescribeStageInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let stream = executor.execute(None).await?;
-            let result = stream.try_collect::<Vec<_>>().await?;
-            let expected = vec![
-
-                "+-------------------+-------------------+----------------+------------------+-------------------+------------------+",
-                "| parent_properties | properties        | property_types | property_values  | property_defaults | property_changed |",
-                "+-------------------+-------------------+----------------+------------------+-------------------+------------------+",
-                "| stage_params      | url               | String         | s3://load/files/ |                   | true             |",
-                "| credentials       | access_key_id     | String         | 1a2b3c           |                   | true             |",
-                "| credentials       | secret_access_key | String         | 4x5y6z           |                   | true             |",
-                "| file_format       | format            | String         | Csv              | Csv               | false            |",
-                "| file_format       | record_delimiter  | String         | |                |                   | true             |",
-                // default record_delimiter is \n, so it breaks with an empty line
-                "|                   |                   |                |                  |                   |                  |",
-                "| file_format       | field_delimiter   | String         | ,                | ,                 | false            |",
-                "| file_format       | csv_header        | Boolean        | false            | false             | false            |",
-                "| file_format       | compression       | String         | Gzip             | None              | true             |",
-                "+-------------------+-------------------+----------------+------------------+-------------------+------------------+",
-
-            ];
-            common_datablocks::assert_blocks_eq(expected, result.as_slice());
-        }
+        let plan = PlanParser::parse("desc stage test_stage", ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let stream = executor.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec![
+            "+-------------------+-------------------+----------------+------------------+-------------------+------------------+",
+            "| parent_properties | properties        | property_types | property_values  | property_defaults | property_changed |",
+            "+-------------------+-------------------+----------------+------------------+-------------------+------------------+",
+            "| stage_params      | url               | String         | s3://load/files/ |                   | true             |",
+            "| credentials       | access_key_id     | String         | 1a2b3c           |                   | true             |",
+            "| credentials       | secret_access_key | String         | 4x5y6z           |                   | true             |",
+            "| file_format       | format            | String         | Csv              | Csv               | false            |",
+            "| file_format       | record_delimiter  | String         | |                |                   | true             |",
+            // default record_delimiter is \n, so it breaks with an empty line
+            "|                   |                   |                |                  |                   |                  |",
+            "| file_format       | field_delimiter   | String         | ,                | ,                 | false            |",
+            "| file_format       | csv_header        | Boolean        | false            | false             | false            |",
+            "| file_format       | compression       | String         | Gzip             | None              | true             |",
+            "+-------------------+-------------------+----------------+------------------+-------------------+------------------+",
+        ];
+        common_datablocks::assert_blocks_eq(expected, result.as_slice());
     }
 
     Ok(())

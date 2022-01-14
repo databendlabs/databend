@@ -21,11 +21,11 @@ use databend_query::api::DatabendQueryFlightDispatcher;
 use databend_query::api::FlightAction;
 use databend_query::api::ShuffleAction;
 use databend_query::api::StreamTicket;
+use databend_query::sql::PlanParser;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 use crate::tests::create_query_context;
-use crate::tests::parse_query;
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -38,7 +38,7 @@ async fn test_get_stream_with_non_exists_stream() -> Result<()> {
     match get_stream {
         Ok(_) => panic!("Return Ok in test_get_stream_with_non_exists_stream."),
         Err(error) => {
-            assert_eq!(error.code(), 29);
+            assert_eq!(error.code(), 1029);
             assert_eq!(error.message(), "Stream is not found");
         }
     }
@@ -61,7 +61,7 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
                 FlightAction::PrepareShuffleAction(ShuffleAction {
                     query_id: query_id.clone(),
                     stage_id: stage_id.clone(),
-                    plan: parse_query("SELECT number FROM numbers(5)", &ctx)?,
+                    plan: PlanParser::parse("SELECT number FROM numbers(5)", ctx.clone()).await?,
                     sinks: vec![stream_id.clone()],
                     scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
                 }),
@@ -106,7 +106,7 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
                 FlightAction::PrepareShuffleAction(ShuffleAction {
                     query_id: query_id.clone(),
                     stage_id: stage_id.clone(),
-                    plan: parse_query("SELECT number FROM numbers(5)", &ctx)?,
+                    plan: PlanParser::parse("SELECT number FROM numbers(5)", ctx.clone()).await?,
                     sinks: vec!["stream_1".to_string(), "stream_2".to_string()],
                     scatters_expression: Expression::Column("number".to_string()),
                 }),

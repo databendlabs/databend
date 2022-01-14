@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::Result;
 use databend_query::optimizers::*;
+use databend_query::sql::PlanParser;
 
-#[test]
-fn test_simple() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_simple() -> Result<()> {
     let query = "select number from numbers(1000) order by number limit 10;";
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = crate::tests::parse_query(query, &ctx)?;
+    let plan = PlanParser::parse(query, ctx.clone()).await?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -36,12 +38,12 @@ fn test_simple() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_simple_with_offset() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_simple_with_offset() -> Result<()> {
     let query = "select number from numbers(1000) order by number limit 10 offset 5;";
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = crate::tests::parse_query(query, &ctx)?;
+    let plan = PlanParser::parse(query, ctx.clone()).await?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -57,13 +59,13 @@ fn test_simple_with_offset() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_nested_projection() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_nested_projection() -> Result<()> {
     let query =
         "select number from (select * from numbers(1000) order by number limit 11) limit 10;";
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = crate::tests::parse_query(query, &ctx)?;
+    let plan = PlanParser::parse(query, ctx.clone()).await?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -81,13 +83,13 @@ fn test_nested_projection() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_aggregate() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_aggregate() -> Result<()> {
     let query =
         "select sum(number) FROM numbers(1000) group by number % 10 order by sum(number) limit 5;";
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = crate::tests::parse_query(query, &ctx)?;
+    let plan = PlanParser::parse(query, ctx.clone()).await?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -106,8 +108,8 @@ fn test_aggregate() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_monotonic_function() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_monotonic_function() -> Result<()> {
     struct Test {
         name: &'static str,
         query: &'static str,
@@ -140,7 +142,7 @@ fn test_monotonic_function() -> Result<()> {
 
     for test in tests {
         let ctx = crate::tests::create_query_context()?;
-        let plan = crate::tests::parse_query(test.query, &ctx)?;
+        let plan = PlanParser::parse(test.query, ctx.clone()).await?;
         let mut optimizer = Optimizers::without_scatters(ctx);
 
         let optimized_plan = optimizer.optimize(&plan)?;

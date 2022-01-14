@@ -51,19 +51,9 @@ impl Interpreter for CreatStageInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
         let user_stage = plan.user_stage_info;
-        let create_stage = user_mgr.add_stage(&tenant, user_stage).await;
-        if plan.if_not_exists {
-            create_stage.or_else(|e| {
-                // StageAlreadyExists(4061)
-                if e.code() == 4061 {
-                    Ok(u64::MIN)
-                } else {
-                    Err(e)
-                }
-            })?;
-        } else {
-            create_stage?;
-        }
+        let _ = user_mgr
+            .add_stage(&tenant, user_stage, plan.if_not_exists)
+            .await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

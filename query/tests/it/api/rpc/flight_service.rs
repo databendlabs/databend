@@ -20,9 +20,9 @@ use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
 use common_base::tokio;
 use common_datavalues::DataValue;
-use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::ABORT_SESSION;
 use common_planners::Expression;
 use databend_query::api::DatabendQueryFlightDispatcher;
 use databend_query::api::DatabendQueryFlightService;
@@ -30,10 +30,10 @@ use databend_query::api::FlightAction;
 use databend_query::api::FlightTicket;
 use databend_query::api::ShuffleAction;
 use databend_query::api::StreamTicket;
+use databend_query::sql::PlanParser;
 use tonic::Request;
 
 use crate::tests::create_query_context;
-use crate::tests::parse_query;
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -45,7 +45,7 @@ async fn test_do_flight_action_with_shared_session() -> Result<()> {
     for index in 0..2 {
         let query_id = "query_id";
         let stage_id = format!("stage_id_{}", index);
-        let request = do_action_request(query_id, &stage_id);
+        let request = do_action_request(query_id, &stage_id).await;
         service.do_action(request?).await?;
     }
 
@@ -68,7 +68,7 @@ async fn test_do_flight_action_with_different_session() -> Result<()> {
     for index in 0..2 {
         let query_id = format!("query_id_{}", index);
         let stage_id = format!("stage_id_{}", index);
-        let request = do_action_request(&query_id, &stage_id);
+        let request = do_action_request(&query_id, &stage_id).await;
         service.do_action(request?).await?;
     }
 
@@ -91,7 +91,7 @@ async fn test_do_flight_action_with_abort_session() -> Result<()> {
     for index in 0..2 {
         let query_id = "query_id_1";
         let stage_id = format!("stage_id_{}", index);
-        let request = do_action_request(query_id, &stage_id);
+        let request = do_action_request(query_id, &stage_id).await;
         service.do_action(request?).await?;
     }
 
@@ -100,7 +100,7 @@ async fn test_do_flight_action_with_abort_session() -> Result<()> {
     for index in 2..4 {
         let query_id = "query_id_1";
         let stage_id = format!("stage_id_{}", index);
-        let request = do_action_request(query_id, &stage_id);
+        let request = do_action_request(query_id, &stage_id).await;
         service.do_action(request?).await?;
     }
 
@@ -123,7 +123,7 @@ async fn test_do_flight_action_with_abort_and_new_session() -> Result<()> {
     for index in 0..2 {
         let query_id = "query_id_1";
         let stage_id = format!("stage_id_{}", index);
-        let request = do_action_request(query_id, &stage_id);
+        let request = do_action_request(query_id, &stage_id).await;
         service.do_action(request?).await?;
     }
 
@@ -131,7 +131,7 @@ async fn test_do_flight_action_with_abort_and_new_session() -> Result<()> {
 
     let query_id = "query_id_2";
     let stage_id = "stage_id_1";
-    let request = do_action_request(query_id, stage_id);
+    let request = do_action_request(query_id, stage_id).await;
     match service.do_action(request?).await {
         Ok(_) => panic!("Aborted rpc service must be cannot create new session"),
         Err(error) => {
@@ -161,12 +161,12 @@ fn do_get_request(query_id: &str, stage_id: &str) -> Result<Request<Ticket>> {
     Ok(Request::new(stream_ticket.try_into()?))
 }
 
-fn do_action_request(query_id: &str, stage_id: &str) -> Result<Request<Action>> {
+async fn do_action_request(query_id: &str, stage_id: &str) -> Result<Request<Action>> {
     let ctx = create_query_context()?;
     let flight_action = FlightAction::PrepareShuffleAction(ShuffleAction {
         query_id: String::from(query_id),
         stage_id: String::from(stage_id),
-        plan: parse_query("SELECT number FROM numbers(5)", &ctx)?,
+        plan: PlanParser::parse("SELECT number FROM numbers(5)", ctx.clone()).await?,
         sinks: vec![String::from("stream_id")],
         scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
     });

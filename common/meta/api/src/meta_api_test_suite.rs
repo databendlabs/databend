@@ -143,7 +143,7 @@ impl MetaApiTestSuite {
             tracing::debug!("=== get absent database res: {:?}", res);
             assert!(res.is_err());
             let res = res.unwrap_err();
-            assert_eq!(3, res.code());
+            assert_eq!(1003, res.code());
             assert_eq!("absent".to_string(), res.message());
         }
 
@@ -426,7 +426,7 @@ impl MetaApiTestSuite {
 
                 let status = res.err().unwrap();
                 assert_eq!(
-                    format!("Code: 4003, displayText = table exists: {}.", tbl_name),
+                    format!("Code: 2302, displayText = table exists: {}.", tbl_name),
                     status.to_string()
                 );
 
@@ -500,7 +500,7 @@ impl MetaApiTestSuite {
                     let res = mt.get_table((tenant, db_name, tbl_name).into()).await;
                     let status = res.err().unwrap();
                     assert_eq!(
-                        format!("Code: 25, displayText = Unknown table: '{:}'.", tbl_name),
+                        format!("Code: 1025, displayText = Unknown table: '{:}'.", tbl_name),
                         status.to_string(),
                         "get dropped table {}",
                         tbl_name
@@ -669,7 +669,7 @@ impl MetaApiTestSuite {
             let err = res.unwrap_err();
             assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
             assert_eq!("nonexistent", err.message());
-            assert_eq!("Code: 3, displayText = nonexistent.", format!("{}", err));
+            assert_eq!("Code: 1003, displayText = nonexistent.", format!("{}", err));
         }
 
         Ok(())

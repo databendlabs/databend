@@ -16,6 +16,7 @@ use common_base::tokio;
 use common_exception::Result;
 use databend_query::configs::Config;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::sql::PlanParser;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_proxy_mode_access() -> Result<()> {
@@ -109,7 +110,7 @@ async fn test_proxy_mode_access() -> Result<()> {
     for group in groups {
         let ctx = crate::tests::create_query_context_with_config(config.clone())?;
         for test in group.tests {
-            let plan = crate::tests::parse_query(test.query, &ctx)?;
+            let plan = PlanParser::parse(test.query, ctx.clone()).await?;
             let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
             let res = interpreter.execute(None).await;
             assert_eq!(

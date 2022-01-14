@@ -14,26 +14,21 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
+use databend_query::sql::PlanParser;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_setting_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
-    if let PlanNode::SetVariable(plan) = parse_query("SET max_block_size=1", &ctx)? {
-        let executor = SettingInterpreter::try_create(ctx, plan)?;
-        assert_eq!(executor.name(), "SettingInterpreter");
+    let plan = PlanParser::parse("SET max_block_size=1", ctx.clone()).await?;
+    let executor = InterpreterFactory::get(ctx.clone(), plan)?;
+    assert_eq!(executor.name(), "SettingInterpreter");
 
-        let mut stream = executor.execute(None).await?;
-        while let Some(_block) = stream.next().await {}
-    } else {
-        panic!()
-    }
+    let mut stream = executor.execute(None).await?;
+    while let Some(_block) = stream.next().await {}
 
     Ok(())
 }
@@ -42,14 +37,11 @@ async fn test_setting_interpreter() -> Result<()> {
 async fn test_setting_interpreter_error() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
-    if let PlanNode::SetVariable(plan) = parse_query("SET xx = 1", &ctx)? {
-        let executor = SettingInterpreter::try_create(ctx, plan)?;
-        if let Err(e) = executor.execute(None).await {
-            let expect = "Code: 20, displayText = Unknown variable: \"xx\".";
-            assert_eq!(expect, format!("{}", e));
-        } else {
-            panic!();
-        }
+    let plan = PlanParser::parse("SET max_block_size=1", ctx.clone()).await?;
+    let executor = InterpreterFactory::get(ctx.clone(), plan)?;
+    if let Err(e) = executor.execute(None).await {
+        let expect = "Code: 1020, displayText = Unknown variable: \"xx\".";
+        assert_eq!(expect, format!("{}", e));
     }
 
     Ok(())

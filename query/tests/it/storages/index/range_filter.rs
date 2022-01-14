@@ -152,7 +152,7 @@ fn test_range_filter() -> Result<()> {
             expr: sub(col("a"), col("b")).lt_eq(lit(-10)),
             expect: true,
             error:
-                "Code: 1000, displayText = Function '-' is not monotonic in the variables range.",
+                "Code: 1067, displayText = Function '-' is not monotonic in the variables range.",
         },
         Test {
             name: "a < b",

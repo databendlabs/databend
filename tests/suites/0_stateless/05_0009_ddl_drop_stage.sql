@@ -5,4 +5,4 @@ DROP STAGE test_stage;
 
 DROP STAGE IF EXISTS test_stage;
 
-DROP STAGE test_stage; -- {ErrorCode 4060}
+DROP STAGE test_stage; -- {ErrorCode 2501}
