@@ -21,12 +21,23 @@ use crate::users::UserApiProvider;
 /// user stage operations.
 impl UserApiProvider {
     // Add a new stage.
-    pub async fn add_stage(&self, tenant: &str, info: UserStageInfo) -> Result<u64> {
+    pub async fn add_stage(
+        &self,
+        tenant: &str,
+        info: UserStageInfo,
+        if_not_exists: bool,
+    ) -> Result<u64> {
         let stage_api_provider = self.get_stage_api_client(tenant);
         let add_stage = stage_api_provider.add_stage(info);
         match add_stage.await {
             Ok(res) => Ok(res),
-            Err(failure) => Err(failure.add_message_back("(while add stage).")),
+            Err(e) => {
+                if if_not_exists && e.code() == ErrorCode::stage_already_exists_code() {
+                    Ok(u64::MIN)
+                } else {
+                    Err(e)
+                }
+            }
         }
     }
 
@@ -43,22 +54,22 @@ impl UserApiProvider {
         let get_stages = stage_api_provider.get_stages();
 
         match get_stages.await {
-            Err(failure) => Err(failure.add_message_back("(while get stages).")),
+            Err(e) => Err(e.add_message_back("(while get stages).")),
             Ok(seq_stages_info) => Ok(seq_stages_info),
         }
     }
 
     // Drop a stage by name.
-    pub async fn drop_stage(&self, tenant: &str, name: &str, if_exist: bool) -> Result<()> {
+    pub async fn drop_stage(&self, tenant: &str, name: &str, if_exists: bool) -> Result<()> {
         let stage_api_provider = self.get_stage_api_client(tenant);
         let drop_stage = stage_api_provider.drop_stage(name, None);
         match drop_stage.await {
             Ok(res) => Ok(res),
-            Err(failure) => {
-                if if_exist && failure.code() == ErrorCode::UnknownStageCode() {
+            Err(e) => {
+                if if_exists && e.code() == ErrorCode::unknown_stage_code() {
                     Ok(())
                 } else {
-                    Err(failure.add_message_back("(while drop stage)"))
+                    Err(e.add_message_back("(while drop stage)"))
                 }
             }
         }

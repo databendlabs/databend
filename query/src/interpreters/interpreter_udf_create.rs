@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::CreateUDFPlan;
 use common_streams::DataBlockStream;
@@ -52,14 +51,7 @@ impl Interpreter for CreatUDFInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
         let udf = plan.udf;
-        let create_udf = user_mgr.add_udf(&tenant, udf).await;
-        let _ = create_udf.or_else(|e| {
-            if plan.if_not_exists && e.code() == ErrorCode::udf_already_exists_code() {
-                Ok(u64::MIN)
-            } else {
-                Err(e)
-            }
-        })?;
+        let _ = user_mgr.add_udf(&tenant, udf, plan.if_not_exists).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
