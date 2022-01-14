@@ -694,7 +694,7 @@ impl<'a> DfParser<'a> {
             String::from("%")
         };
 
-        let auth_info_args = self.get_auth_option_raw()?;
+        let auth_info_args = self.get_auth_info_args()?;
 
         let auth_info = match auth_info_args {
             None => AuthInfo::None,
@@ -729,7 +729,7 @@ impl<'a> DfParser<'a> {
         } else {
             String::from("")
         };
-        let auth_info_args_opt = self.get_auth_option_raw()?;
+        let auth_info_args_opt = self.get_auth_info_args()?;
 
         let alter = DfAlterUser {
             if_current_user,
@@ -757,7 +757,7 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::DropUser(drop))
     }
 
-    fn get_auth_option_raw(&mut self) -> Result<Option<AuthInfoArgs>, ParserError> {
+    fn get_auth_info_args(&mut self) -> Result<Option<AuthInfoArgs>, ParserError> {
         let exist_not_identified = self.parser.parse_keyword(Keyword::NOT);
         let exist_identified = self.consume_token("IDENTIFIED");
 
