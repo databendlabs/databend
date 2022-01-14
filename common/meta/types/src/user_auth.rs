@@ -128,7 +128,7 @@ impl AuthInfo {
         }
     }
 
-    fn decode_double_sha1(
+    fn restore_sha1_mysql(
         salt: &[u8],
         input: &[u8],
         user_password: &[u8],
@@ -160,7 +160,7 @@ impl AuthInfo {
                 match t {
                     PasswordType::PlainText => Ok(p == password_input),
                     PasswordType::DoubleSha1 => {
-                        let password_sha1 = AuthInfo::decode_double_sha1(salt, password_input, p)?;
+                        let password_sha1 = AuthInfo::restore_sha1_mysql(salt, password_input, p)?;
                         // TODO(youngsofun): we should store double_sha1(password) later
                         Ok(double_sha1(p) == calc_sha1(&password_sha1))
                     }
