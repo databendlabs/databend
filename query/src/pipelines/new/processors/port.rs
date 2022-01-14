@@ -1,17 +1,16 @@
 use std::cell::UnsafeCell;
-use std::intrinsics::unreachable;
 use std::sync::atomic::AtomicPtr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_infallible::Mutex;
-use futures::future::Shared;
 
-use crate::pipelines::new::processors::{UpdateTrigger, UpdateList};
+use crate::pipelines::new::processors::{UpdateTrigger};
 
-const HAS_DATA: usize = 1;
+const HAS_DATA: usize = 0b1;
+const NEED_DATA: usize = 0b10;
+const IS_FINISHED: usize = 0b100;
 
 const FLAGS_MASK: usize = 0b111;
 const UNSET_FLAGS_MASK: usize = !FLAGS_MASK;
@@ -20,39 +19,23 @@ const UNSET_FLAGS_MASK: usize = !FLAGS_MASK;
 pub struct SharedData(pub Result<DataBlock>);
 
 pub struct SharedStatus {
-    data: UnsafeCell<Arc<AtomicPtr<SharedData>>>,
+    data: AtomicPtr<SharedData>,
 }
 
 unsafe impl Send for SharedStatus {}
 
 impl SharedStatus {
-    pub fn create() -> SharedStatus {
-        SharedStatus {
-            data: UnsafeCell::new(Arc::new(AtomicPtr::new(std::ptr::null_mut()))),
-        }
+    pub fn create() -> Arc<SharedStatus> {
+        Arc::new(SharedStatus { data: AtomicPtr::new(std::ptr::null_mut()) })
     }
 
-    pub unsafe fn set_data_ptr(&self, data: &Arc<AtomicPtr<SharedData>>) {
-        (*self.data.get()) = data.clone()
-    }
-
-    pub unsafe fn get_data_ptr(&self) -> &Arc<AtomicPtr<SharedData>> {
-        &(*self.data.get())
-    }
-
-    pub fn swap(&self, data: Option<Result<DataBlock>>, flags: usize) -> Option<Result<DataBlock>> {
+    pub fn swap(&self, data: *mut SharedData, set_flags: usize, unset_flags: usize) -> *mut SharedData {
         let mut expected = std::ptr::null_mut();
-        let desired = match data {
-            None => std::ptr::null_mut(),
-            Some(data) => {
-                let new_data = Box::into_raw(Box::new(SharedData(data)));
-                (new_data as usize | flags) as *mut SharedData
-            }
-        };
+        let mut desired = (data as usize | set_flags) as *mut SharedData;
 
         loop {
             unsafe {
-                match self.get_data_ptr().compare_exchange_weak(
+                match self.data.compare_exchange_weak(
                     expected,
                     desired,
                     Ordering::SeqCst,
@@ -60,31 +43,86 @@ impl SharedStatus {
                 ) {
                     Err(new_expected) => {
                         expected = new_expected;
+                        let address = expected as usize;
+                        let desired_data = desired as usize & UNSET_FLAGS_MASK;
+                        let desired_flags = (address & FLAGS_MASK & !unset_flags) | set_flags;
+                        desired = (desired_data | desired_flags) as *mut SharedData;
                     }
                     Ok(old_value) => {
                         let old_value_ptr = old_value as usize;
-
-                        return match old_value_ptr & FLAGS_MASK {
-                            HAS_DATA => {
-                                let raw_ptr = (old_value_ptr & UNSET_FLAGS_MASK) as *mut SharedData;
-                                Some((*Box::from_raw(raw_ptr)).0)
-                            }
-                            _ => None,
-                        };
+                        return (old_value_ptr & UNSET_FLAGS_MASK) as *mut SharedData;
                     }
                 }
             }
         }
     }
 
-    pub fn set_flags(&self, flags: usize) {
-        // let mut expected = std::ptr::null_mut();
+    pub fn set_flags(&self, set_flags: usize, unset_flags: usize) {
+        let mut expected = std::ptr::null_mut();
+        let mut desired = set_flags as *mut SharedData;
+
+        unsafe {
+            while let Err(new_expected) = self.data.compare_exchange_weak(
+                expected,
+                desired,
+                Ordering::SeqCst,
+                Ordering::Relaxed,
+            ) {
+                expected = new_expected;
+                let address = desired as usize;
+                let desired_data = address & UNSET_FLAGS_MASK;
+                let desired_flags = (address & FLAGS_MASK & !unset_flags) | set_flags;
+                desired = (desired_data | desired_flags) as *mut SharedData;
+            }
+        }
+    }
+
+    pub fn get_flags(&self) -> usize {
+        self.data.load(Ordering::Relaxed) as usize & FLAGS_MASK
+    }
+}
+
+struct InputPortShared {
+    pub base: Arc<SharedStatus>,
+    pub update_trigger: *mut UpdateTrigger,
+}
+
+impl InputPortShared {
+    pub fn create() -> InputPortShared {
+        InputPortShared {
+            base: SharedStatus::create(),
+            update_trigger: std::ptr::null_mut(),
+        }
+    }
+
+    pub fn get_flags(&self) -> usize {
+        self.base.get_flags()
+    }
+
+    pub fn pull_data(&self) -> Option<Result<DataBlock>> {
+        unsafe {
+            UpdateTrigger::update(self.update_trigger);
+            let unset_flags = HAS_DATA | NEED_DATA;
+            match (&*self.base).swap(std::ptr::null_mut(), 0, unset_flags) {
+                address if address.is_null() => None,
+                address => Some((*Box::from_raw(address)).0),
+            }
+        }
+    }
+}
+
+impl Drop for InputPortShared {
+    fn drop(&mut self) {
+        unsafe {
+            if !self.update_trigger.is_null() {
+                Box::from_raw(self.update_trigger);
+            }
+        }
     }
 }
 
 pub struct InputPort {
-    shared: SharedStatus,
-    update_trigger: *mut UpdateTrigger,
+    shared: Arc<UnsafeCell<InputPortShared>>,
 }
 
 unsafe impl Send for InputPort {}
@@ -92,61 +130,88 @@ unsafe impl Send for InputPort {}
 unsafe impl Sync for InputPort {}
 
 impl InputPort {
-    pub fn create() -> Arc<InputPort> {
-        Arc::new(InputPort {
-            shared: SharedStatus::create(),
+    pub fn create() -> InputPort {
+        InputPort {
+            shared: Arc::new(UnsafeCell::new(InputPortShared::create())),
+        }
+    }
+
+    pub fn has_data(&self) -> bool {
+        (self.get_shared().get_flags() & HAS_DATA) != 0
+    }
+
+    pub fn pull_data(&self) -> Option<Result<DataBlock>> {
+        self.get_shared().pull_data()
+    }
+
+    pub unsafe fn set_shared(&self, shared: Arc<SharedStatus>) {
+        self.get_mut_shared().base = shared
+    }
+
+    pub unsafe fn set_trigger(&self, update_trigger: *mut UpdateTrigger) {
+        unimplemented!()
+    }
+
+    fn get_shared(&self) -> &InputPortShared {
+        unsafe { &*self.shared.get() }
+    }
+
+    fn get_mut_shared(&self) -> &mut InputPortShared {
+        unsafe { &mut *self.shared.get() }
+    }
+}
+
+struct OutputPortShared {
+    pub base: Arc<SharedStatus>,
+    pub update_trigger: *mut UpdateTrigger,
+}
+
+impl OutputPortShared {
+    pub fn create() -> OutputPortShared {
+        OutputPortShared {
+            base: SharedStatus::create(),
             update_trigger: std::ptr::null_mut(),
-        })
+        }
     }
 
-    pub fn pull_data(&self, ctx: &mut UpdateList) -> Option<Result<DataBlock>> {
-        UpdateTrigger::update(self.update_trigger, ctx);
-        self.shared.swap(None, 0)
+    pub fn push_data(&self, data: Result<DataBlock>) {
+        UpdateTrigger::update(self.update_trigger);
+
+        let data = Box::into_raw(Box::new(SharedData(data)));
+        self.base.swap(data, HAS_DATA, HAS_DATA);
     }
 
-    pub fn get_trigger(&self) -> &UpdateTrigger {
-        &self.update_trigger
+    pub fn get_flags(&self) -> usize {
+        self.base.get_flags()
+    }
+}
+
+impl Drop for OutputPortShared {
+    fn drop(&mut self) {
+        unsafe {
+            if !self.update_trigger.is_null() {
+                Box::from_raw(self.update_trigger);
+            }
+        }
     }
 }
 
 #[derive(Clone)]
 pub struct OutputPort {
-    shared: SharedStatus,
-    update_trigger: *mut UpdateTrigger,
+    shared: Arc<UnsafeCell<OutputPortShared>>,
 }
 
-/// Safely:
 unsafe impl Send for OutputPort {}
 
 unsafe impl Sync for OutputPort {}
 
-impl Drop for OutputPort {
-    fn drop(&mut self) {
-        unsafe {
-            // Drop trigger.
-            Box::from_raw(self.update_trigger);
-        }
-    }
-}
-
 impl OutputPort {
-    pub fn create(updated_output_list: UpdateList) -> OutputPort {
-        OutputPort {
-            shared: SharedStatus::create(),
-            update_trigger: std::ptr::null_mut(),
-        }
+    pub fn create() -> OutputPort {
+        OutputPort { shared: Arc::new(UnsafeCell::new(OutputPortShared::create())) }
     }
 
-    pub fn push_data(&self, data: Result<DataBlock>, ctx: &mut UpdateList) {
-        UpdateTrigger::update(self.update_trigger, ctx);
-        if let Some(value) = self.shared.swap(Some(data), HAS_DATA) {
-            // It shouldn't have happened
-            unreachable!("Cannot push data to port which already has data. old value {:?}", value);
-        }
-    }
-
-    pub fn set_update_trigger(&self, update_trigger: *mut UpdateTrigger) {
-        self.update_trigger = update_trigger;
+    pub fn push_data(&self, data: Result<DataBlock>) {
+        self.get_shared().push_data(data);
     }
 
     pub fn finish(&self) {
@@ -154,14 +219,34 @@ impl OutputPort {
     }
 
     pub fn is_finished(&self) -> bool {
-        unimplemented!()
+        (self.get_shared().get_flags() & IS_FINISHED) != 0
     }
 
     pub fn can_push(&self) -> bool {
+        let flags = self.get_shared().get_flags();
+        ((flags & NEED_DATA) != 1) && ((flags & HAS_DATA) == 0)
+    }
+
+    pub unsafe fn set_shared(&self, shared: Arc<SharedStatus>) {
+        self.get_mut_shared().base = shared;
+    }
+
+    pub unsafe fn set_trigger(&self, update_trigger: *mut UpdateTrigger) {
         unimplemented!()
+    }
+
+    fn get_shared(&self) -> &OutputPortShared {
+        unsafe { &*self.shared.get() }
+    }
+
+    fn get_mut_shared(&self) -> &mut OutputPortShared {
+        unsafe { &mut *self.shared.get() }
     }
 }
 
-pub unsafe fn connect(input: Arc<InputPort>, output: Arc<OutputPort>) {
-    output.shared.set_data_ptr(input.shared.get_data_ptr());
+pub unsafe fn connect(input: &InputPort, output: &OutputPort) {
+    let shared_status = SharedStatus::create();
+
+    input.set_shared(shared_status.clone());
+    output.set_shared(shared_status);
 }

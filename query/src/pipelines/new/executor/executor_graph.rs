@@ -1,13 +1,8 @@
 // running graph
-use std::cell::UnsafeCell;
-use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::ops::Index;
 use std::sync::Arc;
-use petgraph::Direction;
-use petgraph::prelude::{EdgeRef, NodeIndex, StableGraph};
+use petgraph::prelude::{NodeIndex, StableGraph};
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_infallible::RwLock;
@@ -15,13 +10,12 @@ use common_infallible::RwLockUpgradableReadGuard;
 
 use crate::pipelines::new::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::new::executor::executor_worker_context::{ExecutorTask, ExecutorWorkerContext};
+use crate::pipelines::new::pipe::NewPipe;
 use crate::pipelines::new::pipeline::NewPipeline;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::{ActivePort, UpdateList};
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
-use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::processors::Processors;
+use crate::pipelines::new::processors::{connect, UpdateList, UpdateTrigger};
+use crate::pipelines::new::processors::port::{OutputPort};
 
 pub enum RunningState {
     Idle,
@@ -33,74 +27,106 @@ pub enum RunningState {
 struct Node {
     state: RunningState,
     processor: ProcessorPtr,
-    ctx: UpdateList,
+    inputs_update_list: UpdateList,
+    outputs_update_list: UpdateList,
 }
 
 unsafe impl Send for Node {}
 
 impl Node {
-    pub fn new(processor: &ProcessorPtr) -> Node {}
-
-    // pub fn create(processor: &ProcessorPtr, inputs: &Arc<UpdateList>, outputs: &Arc<UpdateList>) -> Arc<Mutex<Node>> {
-    //     Arc::new(Mutex::new(Node {
-    //         state: RunningState::Idle,
-    //         processor: processor.clone(),
-    //         inputs: inputs.clone(),
-    //         outputs: outputs.clone(),
-    //     }))
-    // }
+    pub fn new(processor: &ProcessorPtr, updated_inputs_list: UpdateList, updated_outputs_list: UpdateList) -> Arc<Mutex<Node>> {
+        // Arc::new()
+        unimplemented!()
+    }
 }
 
 struct ExecutingGraph {
     graph: StableGraph<Arc<Mutex<Node>>, ()>,
 }
 
+type StateLockGuard<'a> = RwLockUpgradableReadGuard<'a, ExecutingGraph>;
+
 impl ExecutingGraph {
     pub fn create(mut pipeline: NewPipeline) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
 
-        let mut top_pipes = Vec::new();
-        for pipes in pipeline.pipes {
-            for pipe in pipes {
-                let processor = pipe.processor.clone();
-                Node::new(&processor);
-            }
-        }
-        // let mut node_map = HashMap::with_capacity(pipeline.node_count());
-        // for node_index in pipeline.node_indices() {
-        //     let processor = &pipeline[node_index];
-        //     let new_node_index = graph.add_node(Node::new(processor));
-        //     node_map.insert(node_index, new_node_index);
-        // }
-        //
-        // for edge_index in pipeline.edge_indices() {
-        //     let (source, target) = pipeline.edge_endpoints(edge_index).unwrap();
-        //
-        //     let new_source = &node_map[&source];
-        //     let new_target = &node_map[&target];
-        //     graph.add_edge(new_source.clone(), new_target.clone(), ());
-        // }
+        let mut top_nodes_index: Vec<(NodeIndex, OutputPort, UpdateList)> = Vec::new();
+        for pipes in &pipeline.pipes {
+            match pipes {
+                NewPipe::ResizePipe { process: processor, inputs_port, outputs_port } => unsafe {
+                    let updated_inputs_list = UpdateList::create();
+                    let updated_outputs_list = UpdateList::create();
+                    let node_index = graph.add_node(Node::new(&processor, updated_inputs_list.clone(), updated_outputs_list.clone()));
 
+                    assert_eq!(top_nodes_index.len(), inputs_port.len());
+                    for (i, (source_index, source_port, source_update_list)) in top_nodes_index.iter().enumerate() {
+                        let edge_index = graph.add_edge(*source_index, node_index, ());
+
+                        inputs_port[i].set_trigger(UpdateTrigger::create(edge_index, updated_inputs_list.clone()));
+                        source_port.set_trigger(UpdateTrigger::create(edge_index, source_update_list.clone()));
+                        connect(&inputs_port[i], source_port);
+                    }
+
+                    top_nodes_index.clear();
+                    for output_port in outputs_port {
+                        top_nodes_index.push((node_index, output_port.clone(), updated_outputs_list.clone()));
+                    }
+                }
+                NewPipe::SimplePipe { processors, inputs_port, outputs_port } => unsafe {
+                    assert_eq!(top_nodes_index.len(), inputs_port.len());
+                    assert!(inputs_port.is_empty() || inputs_port.len() == processors.len());
+                    assert!(outputs_port.is_empty() || outputs_port.len() == processors.len());
+
+                    let mut new_top_nodes_index = Vec::with_capacity(outputs_port.len());
+                    for (index, processor) in processors.iter().enumerate() {
+                        let updated_inputs_list = UpdateList::create();
+                        let updated_outputs_list = UpdateList::create();
+                        let node_index = graph.add_node(Node::new(processor, updated_inputs_list.clone(), updated_outputs_list.clone()));
+
+                        if !top_nodes_index.is_empty() {
+                            let source_index = top_nodes_index[index].0;
+                            let source_port = &top_nodes_index[index].1;
+                            let source_update_list = top_nodes_index[index].2.clone();
+                            let edge_index = graph.add_edge(source_index, node_index, ());
+
+                            source_port.set_trigger(UpdateTrigger::create(edge_index, source_update_list));
+                            inputs_port[index].set_trigger(UpdateTrigger::create(edge_index, updated_inputs_list.clone()));
+                            connect(&inputs_port[index], source_port);
+                        }
+
+                        if !outputs_port.is_empty() {
+                            new_top_nodes_index.push((node_index, outputs_port[index].clone(), updated_outputs_list.clone()));
+                        }
+                    }
+
+                    top_nodes_index = new_top_nodes_index;
+                }
+            };
+        }
+
+        // Assert no output.
+        assert_eq!(top_nodes_index.len(), 0);
         Ok(ExecutingGraph { graph })
     }
 
-    pub unsafe fn schedule_queue(&self, index: NodeIndex) -> Result<ScheduleQueue> {
+    pub unsafe fn schedule_queue(locker: &StateLockGuard, index: NodeIndex) -> Result<ScheduleQueue> {
         let mut need_schedule_node = vec![index];
-        let mut need_schedule_edges = vec![];
+        let mut need_schedule_edges = VecDeque::new();
         let mut schedule_queue = ScheduleQueue::create();
 
         while !need_schedule_node.is_empty() || !need_schedule_edges.is_empty() {
             if let Some(schedule_index) = need_schedule_node.pop() {
-                let mut node = self.graph[schedule_index].lock();
+                let mut node = locker.graph[schedule_index].lock();
 
-                node.state = match node.processor.event(&mut node.ctx)? {
+                node.state = match node.processor.event()? {
                     Event::Finished => RunningState::Finished,
                     Event::NeedData | Event::NeedConsume => RunningState::Idle,
                     Event::Sync => schedule_queue.push_sync(node.processor.clone()),
                     Event::Async => schedule_queue.push_async(node.processor.clone()),
                 };
 
-                // node.ctx.trigger();
+                node.inputs_update_list.trigger(&mut need_schedule_edges);
+                node.outputs_update_list.trigger(&mut need_schedule_edges);
             }
         }
 
@@ -112,8 +138,6 @@ struct RunningGraphState {
     nodes: Vec<Arc<Mutex<Node>>>,
     graph: NewPipeline,
 }
-
-type StateLockGuard<'a> = RwLockUpgradableReadGuard<'a, RunningGraphState>;
 
 // impl RunningGraphState {
 //     pub fn create(mut graph: NewPipeline) -> Result<RunningGraphState> {
@@ -239,18 +263,18 @@ impl ScheduleQueue {
     }
 }
 
-pub struct RunningGraph(RwLock<RunningGraphState>);
+pub struct RunningGraph(RwLock<ExecutingGraph>);
 
 impl RunningGraph {
     pub fn create(pipeline: NewPipeline) -> Result<RunningGraph> {
-        let mut graph_state = RunningGraphState::create(pipeline)?;
-        graph_state.initialize_tasks()?;
+        let mut graph_state = ExecutingGraph::create(pipeline)?;
+        // graph_state.initialize_tasks()?;
         Ok(RunningGraph(RwLock::new(graph_state)))
     }
 }
 
 impl RunningGraph {
-    pub unsafe fn schedule_queue(&self, pid: usize) -> Result<ScheduleQueue> {
-        RunningGraphState::schedule_queue(&self.0.upgradable_read(), pid)
+    pub unsafe fn schedule_queue(&self, node_index: NodeIndex) -> Result<ScheduleQueue> {
+        ExecutingGraph::schedule_queue(&self.0.upgradable_read(), node_index)
     }
 }

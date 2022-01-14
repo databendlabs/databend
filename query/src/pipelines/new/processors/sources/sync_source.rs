@@ -1,11 +1,9 @@
-use std::cell::UnsafeCell;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::{Event};
 use crate::pipelines::new::processors::processor::ProcessorPtr;

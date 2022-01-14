@@ -1,41 +1,46 @@
-// use std::sync::Arc;
-//
-// use common_base::tokio;
-// use common_exception::ErrorCode;
-// use common_exception::Result;
-// use common_infallible::Mutex;
-// use databend_query::pipelines::new::processors::port::ReactiveInputPort;
-// use databend_query::pipelines::new::processors::port::ReactiveOutputPort;
-// use databend_query::pipelines::new::processors::port::SharedStatus;
-// use databend_query::pipelines::new::processors::PortReactor;
-//
-// #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-// async fn test_input_and_output_port() -> Result<()> {
-//     struct TestPortReactor;
-//
-//     impl PortReactor<usize> for TestPortReactor {
-//         fn on_push(&self, push_to: usize) {
-//             assert_eq!(push_to, 2);
-//         }
-//
-//         fn on_pull(&self, pull_from: usize) {
-//             assert_eq!(pull_from, 1);
-//         }
-//     }
-//
-//     let reactor = Arc::new(TestPortReactor {});
-//     let shared_status = SharedStatus::create();
-//     let input = ReactiveInputPort::<usize, TestPortReactor>::create(
-//         shared_status.clone(),
-//         reactor.clone(),
-//         1,
-//     );
-//     let output = ReactiveOutputPort::<usize, TestPortReactor>::create(shared_status, reactor, 2);
-//     assert!(input.pull_data().is_none());
-//     output.push_data(Err(ErrorCode::LogicalError("Logical error")));
-//     let data = input.pull_data();
-//     assert!(data.is_some());
-//     assert_eq!(data.unwrap().unwrap_err().message(), "Logical error");
-//
-//     Ok(())
-// }
+use std::sync::{Arc, Barrier};
+
+use common_base::tokio;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use databend_query::pipelines::new::processors::port::{InputPort, OutputPort};
+use databend_query::pipelines::new::processors::{connect};
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_input_and_output_port() -> Result<()> {
+    fn input_port(input: InputPort, barrier: Arc<Barrier>) -> impl Fn() + Send {
+        move || {
+            barrier.wait();
+            for index in 0..100 {
+                while !input.has_data() {}
+                let data = input.pull_data().unwrap();
+                assert_eq!(data.unwrap_err().message(), format!("{}", index));
+            }
+        }
+    }
+
+    fn output_port(output: OutputPort, barrier: Arc<Barrier>) -> impl Fn() + Send {
+        move || {
+            barrier.wait();
+            for index in 0..100 {
+                while !output.can_push() {}
+                output.push_data(Err(ErrorCode::Ok(format!("{}", index))));
+            }
+        }
+    }
+
+    unsafe {
+        let input = InputPort::create();
+        let output = OutputPort::create();
+        let barrier = Arc::new(Barrier::new(2));
+
+        connect(&input, &output);
+        let thread_1 = std::thread::spawn(input_port(input, barrier.clone()));
+        let thread_2 = std::thread::spawn(output_port(output, barrier.clone()));
+
+        thread_1.join().unwrap();
+        thread_2.join().unwrap();
+        Ok(())
+    }
+}
+

@@ -4,9 +4,6 @@ use common_base::Runtime;
 use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use futures::future::BoxFuture;
-use futures::future::JoinAll;
-use futures::FutureExt;
 
 use crate::pipelines::new::executor::pipeline_executor::PipelineExecutor;
 use crate::pipelines::new::pipeline::NewPipeline;

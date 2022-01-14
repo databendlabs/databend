@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use common_exception::{ErrorCode, Result};
+use common_exception::{Result};
 
 use crate::pipelines::new::executor::executor_graph::RunningGraph;
 use crate::pipelines::new::executor::executor_tasks::ExecutorTasksQueue;

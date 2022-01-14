@@ -1,17 +1,13 @@
-use std::collections::VecDeque;
-use std::future::Future;
-use std::mem::ManuallyDrop;
+
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
-use futures::{FutureExt, pin_mut};
-use futures::future::BoxFuture;
-use futures::task::{ArcWake, WakerRef};
+use std::task::{Context, Poll};
+use futures::task::{ArcWake};
+use petgraph::prelude::NodeIndex;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::pipelines::new::executor::executor_graph::RunningGraph;
 use crate::pipelines::new::executor::executor_tasks::{ExecutingAsyncTask, ExecutorTasksQueue};
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 
@@ -47,7 +43,7 @@ impl ExecutorWorkerContext {
         self.task = task
     }
 
-    pub unsafe fn execute_task(&mut self, queue: &ExecutorTasksQueue) -> Result<usize> {
+    pub unsafe fn execute_task(&mut self, queue: &ExecutorTasksQueue) -> Result<NodeIndex> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::LogicalError("Execute none task.")),
             ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
@@ -56,18 +52,18 @@ impl ExecutorWorkerContext {
         }
     }
 
-    unsafe fn execute_sync_task(&mut self, processor: ProcessorPtr) -> Result<usize> {
+    unsafe fn execute_sync_task(&mut self, processor: ProcessorPtr) -> Result<NodeIndex> {
         processor.process()?;
-        Ok(0)
+        unimplemented!()
     }
 
-    unsafe fn execute_async_task(&mut self, processor: ProcessorPtr, queue: &ExecutorTasksQueue) -> Result<usize> {
+    unsafe fn execute_async_task(&mut self, processor: ProcessorPtr, queue: &ExecutorTasksQueue) -> Result<NodeIndex> {
         let finished = Arc::new(AtomicBool::new(false));
         let mut future = processor.async_process();
         self.schedule_async_task(ExecutingAsyncTask { finished, future }, queue)
     }
 
-    unsafe fn schedule_async_task(&mut self, mut task: ExecutingAsyncTask, queue: &ExecutorTasksQueue) -> Result<usize> {
+    unsafe fn schedule_async_task(&mut self, mut task: ExecutingAsyncTask, queue: &ExecutorTasksQueue) -> Result<NodeIndex> {
         task.finished.store(false, Ordering::Relaxed);
 
         loop {
@@ -77,11 +73,11 @@ impl ExecutorWorkerContext {
             let mut cx = Context::from_waker(&waker);
 
             match task.future.as_mut().poll(&mut cx) {
-                Poll::Ready(Ok(res)) => { return Ok(0); }
+                Poll::Ready(Ok(res)) => { unimplemented!(); }
                 Poll::Ready(Err(cause)) => { return Err(cause); }
                 Poll::Pending => {
                     match queue.push_executing_async_task(self.worker_num, task) {
-                        None => { return Ok(0); }
+                        None => { unimplemented!() }
                         Some(t) => { task = t; }
                     };
                 }

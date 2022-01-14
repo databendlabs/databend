@@ -1,10 +1,11 @@
 use std::cell::UnsafeCell;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use petgraph::prelude::EdgeIndex;
 
 #[derive(Clone)]
 pub struct UpdateList {
-    pub inner: Arc<UnsafeCell<UpdateListMutable>>,
+    inner: Arc<UnsafeCell<UpdateListMutable>>,
 }
 
 unsafe impl Send for UpdateList {}
@@ -25,39 +26,42 @@ impl UpdateList {
     }
 
     #[inline(always)]
-    pub fn update(&self, index: EdgeIndex) {
-        unsafe {
-            // TODO: version?
-            (&mut *self.inner.get()).push(index)
-        }
+    pub unsafe fn update(&self, index: EdgeIndex) {
+        let inner = &mut *self.inner.get();
+        // TODO: version
+        inner.list.push(index);
     }
 
-    pub unsafe fn clear(&self) {
-        (&mut *self.inner.get()).clear()
+    pub unsafe fn trigger(&self, queue: &mut VecDeque<EdgeIndex>) {
+        let inner = &mut *self.inner.get();
+
+        inner.version += 1;
+        while let Some(index) = inner.list.pop() {
+            queue.push_front(index);
+        }
     }
 }
 
 
 pub struct UpdateTrigger {
-    pid: usize,
-    update_list: Option<Arc<UpdateList>>,
+    index: EdgeIndex,
+    update_list: UpdateList,
 }
 
 unsafe impl Send for UpdateTrigger {}
 
 impl UpdateTrigger {
-    pub fn create() -> UpdateTrigger {
-        UpdateTrigger {
-            pid: 0,
-            update_list: None,
-        }
+    pub fn create(index: EdgeIndex, update_list: UpdateList) -> *mut UpdateTrigger {
+        Box::into_raw(Box::new(UpdateTrigger { index, update_list }))
     }
 
     #[inline(always)]
-    pub fn update(self_: *mut UpdateTrigger, ctx: &mut UpdateList) {
+    pub fn update(self_: *mut UpdateTrigger) {
         unsafe {
-            // self.update_list
-            // self.update_list.update(self.pid)
+            if !self_.is_null() {
+                let self_ = &mut *self_;
+                self_.update_list.update(self_.index);
+            }
         }
     }
 }

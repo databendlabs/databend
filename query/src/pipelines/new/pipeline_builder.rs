@@ -1,14 +1,10 @@
 use std::sync::Arc;
-use petgraph::graph::node_index;
-use petgraph::prelude::{NodeIndex, StableGraph};
-use poem::http::uri::Port;
 use common_exception::{ErrorCode, Result};
 use common_planners::{FilterPlan, PlanNode, PlanVisitor, ReadDataSourcePlan};
-use crate::pipelines::new::pipeline::{Edge, NewPipe, NewPipeline};
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::{TableSource, UpdateList};
-use crate::pipelines::processors::Processor;
+use crate::pipelines::new::pipe::SourcePipeBuilder;
+use crate::pipelines::new::pipeline::NewPipeline;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::{TableSource};
 use crate::sessions::QueryContext;
 
 struct QueryPipelineBuilder {
@@ -17,6 +13,13 @@ struct QueryPipelineBuilder {
 }
 
 impl QueryPipelineBuilder {
+    pub fn create(ctx: Arc<QueryContext>) -> QueryPipelineBuilder {
+        QueryPipelineBuilder {
+            ctx,
+            pipeline: NewPipeline::create(),
+        }
+    }
+
     pub fn finalize(mut self) -> Result<NewPipeline> {
         Ok(self.pipeline)
     }
@@ -54,19 +57,20 @@ impl PlanVisitor for QueryPipelineBuilder {
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         let max_threads = std::cmp::min(max_threads, plan.parts.len());
 
+        let mut source_builder = SourcePipeBuilder::create();
         for _index in 0..std::cmp::max(max_threads, 1) {
             let source_plan = plan.clone();
             let source_ctx = self.ctx.clone();
 
-            let update_list = UpdateList::create();
-            let source_output_port = OutputPort::create(update_list.clone());
+            let source_output_port = OutputPort::create();
 
-            let scan_table_source = TableSource::try_create(Arc::new(source_output_port.clone()), source_ctx, source_plan)?;
-            Ok(NewPipe::create_source(scan_table_source, source_output_port))
+            source_builder.add_source(
+                TableSource::try_create(Arc::new(source_output_port.clone()), source_ctx, source_plan)?,
+                source_output_port,
+            );
         }
 
-        self.pipes_creator.push(pipe_creators);
-
+        self.pipeline.add_pipe(source_builder.finalize());
         Ok(())
     }
 }

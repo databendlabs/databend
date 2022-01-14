@@ -1,15 +1,12 @@
 use std::collections::VecDeque;
-use std::intrinsics::unreachable;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Condvar};
+use std::sync::{Arc};
 use futures::future::BoxFuture;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
 
-use crate::pipelines::new::executor::executor_graph::RunningGraph;
 use crate::pipelines::new::executor::executor_worker_context::{ExecutorWorkerContext, ExecutorTask};
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 
