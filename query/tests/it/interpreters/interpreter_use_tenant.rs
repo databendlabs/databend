@@ -16,10 +16,9 @@ use common_base::tokio;
 use common_exception::Result;
 use databend_query::configs::Config;
 use databend_query::interpreters::*;
+use databend_query::sql::PlanParser;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::tests::parse_query;
 
 #[tokio::test]
 async fn test_use_tenant_interpreter() -> Result<()> {
@@ -27,7 +26,7 @@ async fn test_use_tenant_interpreter() -> Result<()> {
     config.query.proxy_mode = true;
     let ctx = crate::tests::create_query_context_with_config(config.clone())?;
 
-    let plan = parse_query("SUDO USE TENANT 't1'", &ctx)?;
+    let plan = PlanParser::parse("SUDO USE TENANT 't1'", ctx.clone()).await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
     assert_eq!(interpreter.name(), "UseTenantInterpreter");
@@ -44,7 +43,7 @@ async fn test_use_tenant_interpreter() -> Result<()> {
 async fn test_use_tenant_interpreter_error() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = parse_query("SUDO USE TENANT 't1'", &ctx)?;
+    let plan = PlanParser::parse("SUDO USE TENANT 't1'", ctx.clone()).await?;
     let interpreter = InterpreterFactory::get(ctx, plan)?;
 
     if let Err(e) = interpreter.execute(None).await {

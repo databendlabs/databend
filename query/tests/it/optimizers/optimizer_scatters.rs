@@ -16,9 +16,9 @@ use common_base::tokio;
 use common_exception::Result;
 use databend_query::optimizers::Optimizer;
 use databend_query::optimizers::ScattersOptimizer;
+use databend_query::sql::PlanParser;
 
 use crate::tests::create_query_context_with_cluster;
-use crate::tests::parse_query;
 use crate::tests::ClusterDescriptor;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -210,7 +210,7 @@ async fn test_scatter_optimizer() -> Result<()> {
                 .with_local_id("dummy_local"),
         )?;
 
-        let plan = parse_query(test.query, &ctx)?;
+        let plan = PlanParser::parse(test.query, ctx.clone()).await?;
         let mut optimizer = ScattersOptimizer::create(ctx);
         let optimized = optimizer.optimize(&plan)?;
         let actual = format!("{:?}", optimized);

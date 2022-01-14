@@ -19,7 +19,6 @@ use common_meta_types::PasswordType;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
-use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
 use futures::stream::StreamExt;
@@ -97,32 +96,29 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
     ];
 
     for tt in tests {
-        if let PlanNode::GrantPrivilege(plan) = PlanParser::parse(&tt.query, ctx.clone()).await? {
-            let executor = GrantPrivilegeInterpreter::try_create(ctx.clone(), plan.clone())?;
-            assert_eq!(executor.name(), "GrantPrivilegeInterpreter");
-            let r = match executor.execute(None).await {
-                Err(err) => Err(err),
-                Ok(mut stream) => {
-                    while let Some(_block) = stream.next().await {}
-                    Ok(())
-                }
-            };
-            if tt.expected_err.is_some() {
-                assert_eq!(
-                    tt.expected_err.unwrap(),
-                    r.unwrap_err().to_string(),
-                    "expected_err eq failed on query: {}",
-                    tt.query
-                );
-            } else {
-                assert!(r.is_ok(), "got err on query {}: {:?}", tt.query, r);
+        let plan = PlanParser::parse(&tt.query, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "GrantPrivilegeInterpreter");
+        let r = match executor.execute(None).await {
+            Err(err) => Err(err),
+            Ok(mut stream) => {
+                while let Some(_block) = stream.next().await {}
+                Ok(())
             }
-            if let Some((name, hostname)) = tt.user_identity {
-                let new_user = user_mgr.get_user(&tenant, name, hostname).await?;
-                assert_eq!(new_user.grants, tt.expected_grants.unwrap())
-            }
+        };
+        if tt.expected_err.is_some() {
+            assert_eq!(
+                tt.expected_err.unwrap(),
+                r.unwrap_err().to_string(),
+                "expected_err eq failed on query: {}",
+                tt.query
+            );
         } else {
-            panic!()
+            assert!(r.is_ok(), "got err on query {}: {:?}", tt.query, r);
+        }
+        if let Some((name, hostname)) = tt.user_identity {
+            let new_user = user_mgr.get_user(&tenant, name, hostname).await?;
+            assert_eq!(new_user.grants, tt.expected_grants.unwrap())
         }
     }
 
