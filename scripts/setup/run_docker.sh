@@ -30,9 +30,9 @@ CARGO_GIT_DIR=/tmp/dev/.cargo/git
 CARGO_REGISTRY_DIR=/tmp/dev/.cargo/registry
 
 docker run --rm \
-       "${DOCKER_OPTIONS[@]}" \
-       -v "${SOURCE_DIR}":"${SOURCE_DIR_MOUNT_DEST}" \
-       -v "${CARGO_GIT_DIR}":"/opt/rust/cargo/git" \
-       -v "${CARGO_REGISTRY_DIR}":"/opt/rust/cargo/registry" \
-       "${HUB}"/dev-container:"${TAG}" \
-       "${START_COMMAND[@]}"
+	"${DOCKER_OPTIONS[@]}" \
+	-v "${SOURCE_DIR}":"${SOURCE_DIR_MOUNT_DEST}" \
+	-v "${CARGO_GIT_DIR}":"/opt/rust/cargo/git" \
+	-v "${CARGO_REGISTRY_DIR}":"/opt/rust/cargo/registry" \
+	"${HUB}"/dev-container:"${TAG}" \
+	"${START_COMMAND[@]}"
