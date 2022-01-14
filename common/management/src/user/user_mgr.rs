@@ -150,13 +150,13 @@ impl UserMgrApi for UserMgr {
         &self,
         username: String,
         hostname: String,
-        auth_info_raw: AuthInfoArgs,
+        auth_info_args: AuthInfoArgs,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
         let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
         let user_info = user_val_seq.await?.data;
 
-        let new_auth_info = auth_info_raw
+        let new_auth_info = auth_info_args
             .alter_auth_info(&user_info.auth_info)
             .map_err(ErrorCode::AuthenticateFailure)?;
 

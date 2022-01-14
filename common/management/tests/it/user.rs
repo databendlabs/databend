@@ -489,7 +489,7 @@ mod update {
         }
     }
 
-    fn new_test_auth_info_raw(full: bool) -> AuthInfoArgs {
+    fn new_test_auth_info_args(full: bool) -> AuthInfoArgs {
         let arg_with = if full {
             Some(AuthType::Sha256Password)
         } else {
@@ -561,7 +561,7 @@ mod update {
         let res = user_mgr.update_user(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            new_test_auth_info_raw(full),
+            new_test_auth_info_args(full),
             test_seq,
         );
 
@@ -593,7 +593,7 @@ mod update {
         let res = user_mgr.update_user(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            new_test_auth_info_raw(false),
+            new_test_auth_info_args(false),
             test_seq,
         );
         assert_eq!(
@@ -644,7 +644,7 @@ mod update {
         let res = user_mgr.update_user(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            new_test_auth_info_raw(true),
+            new_test_auth_info_args(true),
             test_seq,
         );
         assert_eq!(

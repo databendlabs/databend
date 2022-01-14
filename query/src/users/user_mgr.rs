@@ -170,13 +170,13 @@ impl UserApiProvider {
         tenant: &str,
         username: &str,
         hostname: &str,
-        auth_info_raw: AuthInfoArgs,
+        auth_info_args: AuthInfoArgs,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant);
         let update_user = client.update_user(
             username.to_string(),
             hostname.to_string(),
-            auth_info_raw,
+            auth_info_args,
             None,
         );
         match update_user.await {

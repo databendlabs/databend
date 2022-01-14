@@ -24,7 +24,7 @@ pub struct AlterUserPlan {
     pub name: String,
     pub hostname: String,
     // None means no change to make
-    pub auth_info_raw: Option<AuthInfoArgs>,
+    pub auth_info_args: Option<AuthInfoArgs>,
 }
 
 impl AlterUserPlan {

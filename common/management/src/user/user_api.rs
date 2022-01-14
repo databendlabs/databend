@@ -36,7 +36,7 @@ pub trait UserMgrApi: Sync + Send {
         &self,
         username: String,
         hostname: String,
-        auth_info_raw: AuthInfoArgs,
+        auth_info_args: AuthInfoArgs,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 

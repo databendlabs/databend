@@ -694,9 +694,9 @@ impl<'a> DfParser<'a> {
             String::from("%")
         };
 
-        let auth_info_raw = self.get_auth_option_raw()?;
+        let auth_info_args = self.get_auth_option_raw()?;
 
-        let auth_info = match auth_info_raw {
+        let auth_info = match auth_info_args {
             None => AuthInfo::None,
             Some(a) => a.create_auth_info().map_err(ParserError::ParserError)?,
         };
@@ -729,13 +729,13 @@ impl<'a> DfParser<'a> {
         } else {
             String::from("")
         };
-        let auth_info_raw_opt = self.get_auth_option_raw()?;
+        let auth_info_args_opt = self.get_auth_option_raw()?;
 
         let alter = DfAlterUser {
             if_current_user,
             name,
             hostname,
-            auth_info_raw: auth_info_raw_opt,
+            auth_info_args: auth_info_args_opt,
         };
 
         Ok(DfStatement::AlterUser(alter))

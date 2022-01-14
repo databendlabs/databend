@@ -31,7 +31,7 @@ pub struct DfAlterUser {
     pub name: String,
     pub hostname: String,
     // None means no change to make
-    pub auth_info_raw: Option<AuthInfoArgs>,
+    pub auth_info_args: Option<AuthInfoArgs>,
 }
 
 #[async_trait::async_trait]
@@ -43,7 +43,7 @@ impl AnalyzableStatement for DfAlterUser {
                 if_current_user: self.if_current_user,
                 name: self.name.clone(),
                 hostname: self.hostname.clone(),
-                auth_info_raw: self.auth_info_raw.clone(),
+                auth_info_args: self.auth_info_args.clone(),
             },
         ))))
     }
