@@ -1600,7 +1600,7 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "chrono",
- "chrono-tz 0.6.1",
+ "chrono-tz",
  "common-arrow",
  "common-exception",
  "common-io",

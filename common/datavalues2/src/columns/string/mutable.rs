@@ -52,6 +52,12 @@ impl MutableStringColumn {
     }
 }
 
+impl Default for MutableStringColumn {
+    fn default() -> Self {
+        Self::with_capacity(0, 0)
+    }
+}
+
 impl MutableColumn for MutableStringColumn {
     fn data_type(&self) -> DataTypePtr {
         DataTypeString::arc()
@@ -62,12 +68,11 @@ impl MutableColumn for MutableStringColumn {
     }
 
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        todo!()
+        self
     }
 
     fn as_column(&mut self) -> ColumnRef {
-        let column = self.finish();
-        Arc::new(column)
+        Arc::new(self.finish())
     }
 
     fn append_default(&mut self) {
@@ -75,11 +80,12 @@ impl MutableColumn for MutableStringColumn {
     }
 
     fn validity(&self) -> Option<&common_arrow::arrow::bitmap::MutableBitmap> {
-        todo!()
+        None
     }
 
     fn shrink_to_fit(&mut self) {
-        todo!()
+        self.offsets.shrink_to_fit();
+        self.values.shrink_to_fit();
     }
 }
 

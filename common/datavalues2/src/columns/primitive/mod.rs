@@ -149,16 +149,8 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         create_primitive_datatype::<T>()
     }
 
-    fn is_nullable(&self) -> bool {
-        todo!()
-    }
-
     fn len(&self) -> usize {
-        todo!()
-    }
-
-    fn null_at(&self, row: usize) -> bool {
-        false
+        self.values.len()
     }
 
     fn validity(&self) -> (bool, Option<&Bitmap>) {

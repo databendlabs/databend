@@ -79,7 +79,7 @@ impl IDataType for DataTypeNullable {
         size: usize,
     ) -> common_exception::Result<ColumnRef> {
         if self.inner.data_type_id() == TypeID::Null {
-            return Ok(Arc::new(NullColumn::new(size)) );
+            return Ok(Arc::new(NullColumn::new(size)));
         }
 
         if self.inner.data_type_id() == TypeID::Null {
@@ -88,46 +88,5 @@ impl IDataType for DataTypeNullable {
             )));
         }
         self.inner.create_constant_column(data, size)
-    }
-}
-
-#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DataTypeNull {}
-
-#[typetag::serde]
-impl IDataType for DataTypeNull {
-    fn data_type_id(&self) -> TypeID {
-        TypeID::Null
-    }
-
-    #[inline]
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    // it's nothing, so we can't create any default value
-    fn default_value(&self) -> DataValue {
-        DataValue::Null
-    }
-
-    fn create_constant_column(
-        &self,
-        _data: &DataValue,
-        size: usize,
-    ) -> common_exception::Result<ColumnRef> {
-        Ok(Arc::new(NullColumn::new(size)))
-    }
-
-    // DataTypeNull must inside nullable
-    fn arrow_type(&self) -> ArrowType {
-        unreachable!()
-    }
-
-    fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        todo!()
-    }
-
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        todo!()
     }
 }

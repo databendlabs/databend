@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
+use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+
 use crate::columns::mutable::MutableColumn;
 use crate::prelude::DataTypePtr;
 use crate::types::create_primitive_datatype;
-use crate::{ColumnRef, NewColumn, PrimitiveColumn};
+use crate::ColumnRef;
+use crate::NewColumn;
+use crate::PrimitiveColumn;
 use crate::PrimitiveType;
 
 #[derive(Debug)]
@@ -27,6 +30,17 @@ where T: PrimitiveType
 {
     data_type: DataTypePtr,
     values: Vec<T>,
+}
+
+impl<T> MutablePrimitiveColumn<T>
+where T: PrimitiveType
+{
+    pub fn finish(&mut self) -> PrimitiveColumn<T> {
+        self.shrink_to_fit();
+        PrimitiveColumn::<T> {
+            values: std::mem::take(&mut self.values).into(),
+        }
+    }
 }
 
 impl<T> MutableColumn for MutablePrimitiveColumn<T>
@@ -45,7 +59,7 @@ where T: PrimitiveType
     }
 
     fn as_column(&mut self) -> ColumnRef {
-        todo!()
+        Arc::new(self.finish())
     }
 
     fn append_default(&mut self) {
@@ -69,7 +83,6 @@ where T: PrimitiveType
     }
 }
 
-
 // for nullable values
 
 impl<T> MutablePrimitiveColumn<T>
@@ -87,14 +100,8 @@ where T: PrimitiveType
         }
     }
 
-    pub fn from_data(
-        data_type: DataTypePtr,
-        values: Vec<T>,
-    ) -> Self {
-        Self {
-            data_type,
-            values,
-        }
+    pub fn from_data(data_type: DataTypePtr, values: Vec<T>) -> Self {
+        Self { data_type, values }
     }
 
     pub fn append_value(&mut self, val: T) {
@@ -110,14 +117,19 @@ where T: PrimitiveType
     }
 }
 
-
-impl<T> NewColumn<T> for PrimitiveColumn<T>  where T: PrimitiveType{
+impl<T> NewColumn<T> for PrimitiveColumn<T>
+where T: PrimitiveType
+{
     fn new_from_slice<P: AsRef<[T]>>(slice: P) -> Self {
         let values = Vec::<T>::from(slice.as_ref());
-        PrimitiveColumn {values: values.into()}
+        PrimitiveColumn {
+            values: values.into(),
+        }
     }
-    fn new_from_iter(it: impl Iterator<Item=T>) -> Self {
+    fn new_from_iter(it: impl Iterator<Item = T>) -> Self {
         let values: Vec<T> = it.collect();
-        PrimitiveColumn {values: values.into()}
+        PrimitiveColumn {
+            values: values.into(),
+        }
     }
 }

@@ -49,10 +49,17 @@ pub trait Column: Send + Sync {
     fn null_at(&self, _row: usize) -> bool {
         false
     }
+
+    /// If the only value column can contain is NULL.
+    fn only_null(&self) -> bool {
+        false
+    }
+
     /// Returns (is_all_null,  Option bitmap)
     fn validity(&self) -> (bool, Option<&Bitmap>) {
         (false, None)
     }
+
     fn memory_size(&self) -> usize;
     fn as_arrow_array(&self) -> ArrayRef;
     fn slice(&self, offset: usize, length: usize) -> ColumnRef;

@@ -21,11 +21,13 @@ pub mod data_type_datetime;
 pub mod data_type_datetime64;
 pub mod data_type_interval;
 pub mod data_type_list;
+pub mod data_type_null;
 pub mod data_type_nullable;
 pub mod data_type_numeric;
 pub mod data_type_string;
 pub mod data_type_struct;
 pub mod data_type_traits;
+
 pub mod eq;
 pub mod type_id;
 
@@ -40,6 +42,7 @@ pub use data_type_datetime::*;
 pub use data_type_datetime64::*;
 pub use data_type_interval::*;
 pub use data_type_list::*;
+pub use data_type_null::*;
 pub use data_type_nullable::*;
 pub use data_type_numeric::*;
 pub use data_type_string::*;

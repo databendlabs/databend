@@ -20,10 +20,10 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 
 use crate::prelude::*;
 
-mod iterator;
-pub use iterator::*;
+mod mutable;
 
-#[derive(Debug, Clone)]
+pub use mutable::*;
+#[derive(Debug, Clone, Default)]
 pub struct NullColumn {
     length: usize,
 }
@@ -44,9 +44,6 @@ impl NullColumn {
             length: array.len(),
         }
     }
-    pub fn data_type(&self) -> DataTypePtr {
-        Arc::new(DataTypeNullable::create(Arc::new(DataTypeNull {})))
-    }
 }
 
 impl Column for NullColumn {
@@ -55,19 +52,23 @@ impl Column for NullColumn {
     }
 
     fn data_type(&self) -> DataTypePtr {
-        todo!()
+        Arc::new(DataTypeNull {})
     }
 
     fn is_nullable(&self) -> bool {
-        todo!()
+        true
     }
 
     fn len(&self) -> usize {
-        todo!()
+        self.length
     }
 
-    fn null_at(&self, row: usize) -> bool {
-        todo!()
+    fn null_at(&self, _row: usize) -> bool {
+        true
+    }
+
+    fn only_null(&self) -> bool {
+        true
     }
 
     fn validity(&self) -> (bool, Option<&Bitmap>) {
@@ -75,7 +76,7 @@ impl Column for NullColumn {
     }
 
     fn memory_size(&self) -> usize {
-        todo!()
+        std::mem::size_of::<usize>()
     }
 
     fn as_arrow_array(&self) -> ArrayRef {
@@ -83,7 +84,7 @@ impl Column for NullColumn {
     }
 
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
-        todo!()
+        Arc::new(Self { length})
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
@@ -98,6 +99,6 @@ impl Column for NullColumn {
     }
 
     unsafe fn get_unchecked(&self, index: usize) -> DataValue {
-        todo!()
+        DataValue::Null
     }
 }

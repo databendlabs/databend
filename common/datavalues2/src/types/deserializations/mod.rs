@@ -19,12 +19,14 @@ use crate::prelude::*;
 mod boolean;
 mod date;
 mod date_time;
+mod nulls;
 mod number;
 mod string;
 
 pub use boolean::*;
 pub use date::*;
 pub use date_time::*;
+pub use nulls::*;
 pub use number::*;
 pub use string::*;
 

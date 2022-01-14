@@ -15,8 +15,10 @@
 use common_exception::Result;
 
 use crate::prelude::DataValue;
-use crate::{ColumnRef, TypeSerializer};
+use crate::ColumnRef;
+use crate::TypeSerializer;
 
+#[derive(Clone, Debug, Default)]
 pub struct NullSerializer {}
 
 impl TypeSerializer for NullSerializer {

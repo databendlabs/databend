@@ -63,22 +63,10 @@ impl Column for StructColumn {
     }
 
     fn data_type(&self) -> DataTypePtr {
-        todo!()
-    }
-
-    fn is_nullable(&self) -> bool {
-        todo!()
+        self.data_type.clone()
     }
 
     fn len(&self) -> usize {
-        todo!()
-    }
-
-    fn null_at(&self, row: usize) -> bool {
-        todo!()
-    }
-
-    fn validity(&self) -> (bool, Option<&Bitmap>) {
         todo!()
     }
 

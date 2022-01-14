@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
+use crate::ArrayColumn;
 use crate::ColumnRef;
 use crate::DataTypePtr;
 use crate::MutableColumn;
@@ -23,6 +25,18 @@ pub struct MutableArrayColumn<M: MutableColumn> {
     offsets: Vec<i64>,
     values: M,
     data_type: DataTypePtr,
+}
+
+impl<M: MutableColumn + 'static> MutableArrayColumn<M> {
+    pub fn finish(&mut self) -> ArrayColumn {
+        self.shrink_to_fit();
+        self.last_offset = 0;
+        let values = self.values.as_column();
+        ArrayColumn {
+            offsets: std::mem::take(&mut self.offsets).into(),
+            values,
+        }
+    }
 }
 
 impl<M: MutableColumn + 'static> MutableColumn for MutableArrayColumn<M>
@@ -41,7 +55,7 @@ where M: MutableColumn
     }
 
     fn as_column(&mut self) -> ColumnRef {
-        todo!()
+        Arc::new(self.finish())
     }
 
     fn append_default(&mut self) {

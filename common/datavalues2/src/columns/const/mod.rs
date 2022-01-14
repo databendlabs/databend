@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::Bitmap;
-
-mod mutable;
 use std::sync::Arc;
 
-pub use mutable::*;
+use common_arrow::arrow::array::*;
+use common_arrow::arrow::bitmap::Bitmap;
 
 use crate::prelude::*;
 
@@ -59,6 +56,10 @@ impl Column for ConstColumn {
         self.column.null_at(0)
     }
 
+    fn only_null(&self) -> bool {
+        self.column.null_at(0)
+    }
+
     fn validity(&self) -> (bool, Option<&Bitmap>) {
         if self.column.null_at(0) {
             (true, None)
@@ -76,7 +77,7 @@ impl Column for ConstColumn {
         column.as_arrow_array()
     }
 
-    fn slice(&self, offset: usize, length: usize) -> ColumnRef {
+    fn slice(&self, _offset: usize, length: usize) -> ColumnRef {
         Arc::new(Self {
             column: self.column.clone(),
             length,

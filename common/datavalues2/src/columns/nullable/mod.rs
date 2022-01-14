@@ -57,6 +57,10 @@ impl Column for NullableColumn {
         !self.validity.get_bit(row)
     }
 
+    fn only_null(&self) -> bool {
+        self.validity.null_count() == self.validity.len()
+    }
+
     fn validity(&self) -> (bool, Option<&Bitmap>) {
         (false, Some(&self.validity))
     }

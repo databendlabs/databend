@@ -85,6 +85,13 @@ impl MutableBooleanColumn {
     fn len(&self) -> usize {
         self.values.len()
     }
+
+    pub fn finish(&mut self) -> BooleanColumn {
+        self.shrink_to_fit();
+        BooleanColumn {
+            values: std::mem::take(&mut self.values).into(),
+        }
+    }
 }
 
 impl NewColumn<bool> for BooleanColumn {

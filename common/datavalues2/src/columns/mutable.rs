@@ -16,6 +16,7 @@ use std::any::Any;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 
+use crate::prelude::*;
 use crate::types::DataTypePtr;
 use crate::ColumnRef;
 
@@ -36,23 +37,29 @@ pub trait MutableColumn {
     fn shrink_to_fit(&mut self);
 }
 
-pub fn create_mutable_array(datatype: &DataTypePtr) -> Box<dyn MutableColumn> {
-    match datatype {
-        // TODO
-        // DataType::Boolean => Box::new(MutableBooleanColumn::<true>::default()),
-        // DataType::UInt8 => Box::new(MutablePrimitiveColumn::<u8, true>::default()),
-        // DataType::UInt16 => Box::new(MutablePrimitiveColumn::<u16, true>::default()),
-        // DataType::UInt32 => Box::new(MutablePrimitiveColumn::<u32, true>::default()),
-        // DataType::UInt64 => Box::new(MutablePrimitiveColumn::<u64, true>::default()),
-        // DataType::Int8 => Box::new(MutablePrimitiveColumn::<i8, true>::default()),
-        // DataType::Int16 => Box::new(MutablePrimitiveColumn::<i16, true>::default()),
-        // DataType::Int32 => Box::new(MutablePrimitiveColumn::<i32, true>::default()),
-        // DataType::Int64 => Box::new(MutablePrimitiveColumn::<i64, true>::default()),
-        // DataType::Float32 => Box::new(MutablePrimitiveColumn::<f32, true>::default()),
-        // DataType::Float64 => Box::new(MutablePrimitiveColumn::<f64, true>::default()),
-        // DataType::String => Box::new(MutableStringColumn::<true>::default()),
-        _ => {
-            todo!()
-        }
-    }
-}
+// pub fn create_mutable_array(datatype: &DataTypePtr) -> Box<dyn MutableColumn> {
+//     match datatype.data_type_id() {
+//         // TODO
+//         TypeID::Boolean => Box::new(MutableBooleanColumn::default()),
+//         TypeID::UInt8 => Box::new(MutablePrimitiveColumn::<u8>::default()),
+//         TypeID::UInt16 => Box::new(MutablePrimitiveColumn::<u16>::default()),
+//         TypeID::UInt32 => Box::new(MutablePrimitiveColumn::<u32>::default()),
+//         TypeID::UInt64 => Box::new(MutablePrimitiveColumn::<u64>::default()),
+//         TypeID::Int8 => Box::new(MutablePrimitiveColumn::<i8>::default()),
+//         TypeID::Int16 => Box::new(MutablePrimitiveColumn::<i16>::default()),
+//         TypeID::Int32 => Box::new(MutablePrimitiveColumn::<i32>::default()),
+//         TypeID::Int64 => Box::new(MutablePrimitiveColumn::<i64>::default()),
+//         TypeID::Float32 => Box::new(MutablePrimitiveColumn::<f32>::default()),
+//         TypeID::Float64 => Box::new(MutablePrimitiveColumn::<f64>::default()),
+//         TypeID::String => Box::new(MutableStringColumn::default()),
+//         TypeID::Null => Box::new(MutableNullColumn::default()),
+//         TypeID::Nullable => {
+//             let ty: &DataTypeNullable = datatype.as_any().downcast_ref().unwrap();
+//             let mutable_inner = create_mutable_array(ty.inner_type());
+//             Box::new(MutableNullableColumn::new(mutable_inner))
+//         }
+//         _ => {
+//             todo!()
+//         }
+//     }
+// }
