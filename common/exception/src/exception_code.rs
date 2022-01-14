@@ -190,6 +190,7 @@ build_exceptions! {
     SecretKeyNotSet(3002),
     DalTransportError(3003),
     DalPathNotFound(3004),
+    SerdeError(3005),
 }
 
 // Cache errors [4001, 5000].

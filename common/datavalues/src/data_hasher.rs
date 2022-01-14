@@ -18,6 +18,8 @@ use std::hash::Hasher;
 
 use ahash::AHasher;
 use ahash::RandomState as AhashRandomState;
+use fasthash::city::Hasher64 as City64;
+use fasthash::FastHasher;
 
 /// TODO:
 /// This is very slow because it involves lots of copy to keep the origin state
@@ -26,6 +28,7 @@ use ahash::RandomState as AhashRandomState;
 pub enum DFHasher {
     SipHasher(DefaultHasher),
     AhashHasher(AHasher),
+    CityHasher64(City64, u64),
 }
 
 macro_rules! apply_fn {
@@ -33,6 +36,7 @@ macro_rules! apply_fn {
         match $self {
             DFHasher::SipHasher(v) => v.$func(),
             DFHasher::AhashHasher(v) => v.$func(),
+            DFHasher::CityHasher64(v, _) => v.$func(),
         }
     }};
 
@@ -40,6 +44,7 @@ macro_rules! apply_fn {
         match $self {
             DFHasher::SipHasher(v) => v.$func($arg),
             DFHasher::AhashHasher(v) => v.$func($arg),
+            DFHasher::CityHasher64(v, _) => v.$func($arg),
         }
     }};
 }
@@ -52,6 +57,9 @@ impl DFHasher {
             DFHasher::AhashHasher(_) => {
                 let state = AhashRandomState::new();
                 DFHasher::AhashHasher(state.build_hasher())
+            }
+            DFHasher::CityHasher64(_, seed) => {
+                DFHasher::CityHasher64(City64::with_seed(*seed), *seed)
             }
         }
     }

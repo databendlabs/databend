@@ -52,4 +52,5 @@ pub use data_value::DFTryFrom;
 pub use data_value::DataValue;
 pub use data_value::DataValueRef;
 pub use data_value_operator::*;
+pub use fasthash;
 pub use types::*;
