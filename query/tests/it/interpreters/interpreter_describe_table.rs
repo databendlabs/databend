@@ -14,7 +14,6 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
@@ -33,35 +32,31 @@ async fn interpreter_describe_table_test() -> Result<()> {
             ) Engine = Null\
         ";
 
-        if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY, &ctx)? {
-            let interpreter = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let _ = interpreter.execute(None).await?;
-        }
+        let plan = parse_query(TEST_CREATE_QUERY, &ctx)?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let _ = interpreter.execute(None).await?;
     }
 
     // describe table.
     {
-        if let PlanNode::DescribeTable(plan) = parse_query("DESCRIBE a", &ctx)? {
-            let executor = DescribeTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            assert_eq!(executor.name(), "DescribeTableInterpreter");
+        let plan = parse_query("DESCRIBE a", &ctx)?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "DescribeTableInterpreter");
 
-            let stream = executor.execute(None).await?;
-            let result = stream.try_collect::<Vec<_>>().await?;
-            let expected = vec![
-                "+-------+--------+------+",
-                "| Field | Type   | Null |",
-                "+-------+--------+------+",
-                "| a     | Int64  | YES  |",
-                "| b     | Int32  | YES  |",
-                "| c     | String | YES  |",
-                "| d     | Int16  | YES  |",
-                "| e     | Date16 | YES  |",
-                "+-------+--------+------+",
-            ];
-            common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-        } else {
-            panic!()
-        }
+        let stream = executor.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec![
+            "+-------+--------+------+",
+            "| Field | Type   | Null |",
+            "+-------+--------+------+",
+            "| a     | Int64  | YES  |",
+            "| b     | Int32  | YES  |",
+            "| c     | String | YES  |",
+            "| d     | Int16  | YES  |",
+            "| e     | Date16 | YES  |",
+            "+-------+--------+------+",
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 
     Ok(())

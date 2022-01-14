@@ -14,7 +14,6 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
 use futures::TryStreamExt;
@@ -25,9 +24,10 @@ async fn test_select_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
     let ctx = crate::tests::create_query_context()?;
 
-    static TEST_QUERY_1: &str = "select number from numbers_mt(10)";
-    if let PlanNode::Select(plan) = PlanParser::parse(TEST_QUERY_1, ctx.clone()).await? {
-        let executor = SelectInterpreter::try_create(ctx.clone(), plan)?;
+    {
+        static TEST_QUERY_1: &str = "select number from numbers_mt(10)";
+        let plan = PlanParser::parse(TEST_QUERY_1, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan)?;
         assert_eq!(executor.name(), "SelectInterpreter");
 
         let stream = executor.execute(None).await?;
@@ -52,13 +52,12 @@ async fn test_select_interpreter() -> Result<()> {
             "+--------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-    } else {
-        panic!()
     }
 
-    static TEST_QUERY_2: &str = "select 1 + 1, 2 + 2, 3 * 3, 4 * 4";
-    if let PlanNode::Select(plan) = PlanParser::parse(TEST_QUERY_2, ctx.clone()).await? {
-        let executor = SelectInterpreter::try_create(ctx.clone(), plan)?;
+    {
+        static TEST_QUERY_2: &str = "select 1 + 1, 2 + 2, 3 * 3, 4 * 4";
+        let plan = PlanParser::parse(TEST_QUERY_2, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan)?;
         assert_eq!(executor.name(), "SelectInterpreter");
 
         let stream = executor.execute(None).await?;

@@ -16,7 +16,6 @@ use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::PasswordType;
 use common_meta_types::UserInfo;
-use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
 use pretty_assertions::assert_eq;
@@ -30,26 +29,20 @@ async fn test_drop_user_interpreter() -> Result<()> {
 
     {
         static TEST_QUERY: &str = "DROP USER 'test'@'localhost'";
-        if let PlanNode::DropUser(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
-            let executor = DropUserInterpreter::try_create(ctx.clone(), plan.clone())?;
-            assert_eq!(executor.name(), "DropUserInterpreter");
-            let ret = executor.execute(None).await;
-            assert!(ret.is_err())
-        } else {
-            panic!()
-        }
+        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "DropUserInterpreter");
+        let ret = executor.execute(None).await;
+        assert!(ret.is_err())
     }
 
     {
         static TEST_QUERY: &str = "DROP USER IF EXISTS 'test'@'localhost'";
-        if let PlanNode::DropUser(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
-            let executor = DropUserInterpreter::try_create(ctx.clone(), plan.clone())?;
-            assert_eq!(executor.name(), "DropUserInterpreter");
-            let ret = executor.execute(None).await;
-            assert!(ret.is_ok())
-        } else {
-            panic!()
-        }
+        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "DropUserInterpreter");
+        let ret = executor.execute(None).await;
+        assert!(ret.is_ok())
     }
 
     {
@@ -69,13 +62,10 @@ async fn test_drop_user_interpreter() -> Result<()> {
         assert_eq!(old_user.password, Vec::from(password));
 
         static TEST_QUERY: &str = "DROP USER 'test'@'localhost'";
-        if let PlanNode::DropUser(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
-            let executor = DropUserInterpreter::try_create(ctx, plan.clone())?;
-            assert_eq!(executor.name(), "DropUserInterpreter");
-            executor.execute(None).await?;
-        } else {
-            panic!()
-        }
+        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx, plan.clone())?;
+        assert_eq!(executor.name(), "DropUserInterpreter");
+        executor.execute(None).await?;
     }
 
     Ok(())

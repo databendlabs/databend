@@ -14,7 +14,6 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
@@ -27,46 +26,36 @@ async fn test_show_create_database_interpreter() -> Result<()> {
 
     // show create database default
     {
-        if let PlanNode::ShowCreateDatabase(plan) =
-            parse_query("show create database default", &ctx)?
-        {
-            let executor = ShowCreateDatabaseInterpreter::try_create(ctx.clone(), plan.clone())?;
-            assert_eq!(executor.name(), "ShowCreateDatabaseInterpreter");
-            let stream = executor.execute(None).await?;
-            let result = stream.try_collect::<Vec<_>>().await?;
-            let expected = vec![
-                "+----------+---------------------------+",
-                "| Database | Create Database           |",
-                "+----------+---------------------------+",
-                "| default  | CREATE DATABASE `default` |",
-                "+----------+---------------------------+",
-            ];
-            common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-        } else {
-            panic!();
-        }
+        let plan = parse_query("show create database default", &ctx)?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "ShowCreateDatabaseInterpreter");
+        let stream = executor.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec![
+            "+----------+---------------------------+",
+            "| Database | Create Database           |",
+            "+----------+---------------------------+",
+            "| default  | CREATE DATABASE `default` |",
+            "+----------+---------------------------+",
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 
     // show create database system
     {
-        if let PlanNode::ShowCreateDatabase(plan) =
-            parse_query("show create database system", &ctx)?
-        {
-            let executor = ShowCreateDatabaseInterpreter::try_create(ctx.clone(), plan.clone())?;
-            assert_eq!(executor.name(), "ShowCreateDatabaseInterpreter");
-            let stream = executor.execute(None).await?;
-            let result = stream.try_collect::<Vec<_>>().await?;
-            let expected = vec![
-                "+----------+----------------------------------------+",
-                "| Database | Create Database                        |",
-                "+----------+----------------------------------------+",
-                "| system   | CREATE DATABASE `system` ENGINE=SYSTEM |",
-                "+----------+----------------------------------------+",
-            ];
-            common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-        } else {
-            panic!();
-        }
+        let plan = parse_query("show create database system", &ctx)?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "ShowCreateDatabaseInterpreter");
+        let stream = executor.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expected = vec![
+            "+----------+----------------------------------------+",
+            "| Database | Create Database                        |",
+            "+----------+----------------------------------------+",
+            "| system   | CREATE DATABASE `system` ENGINE=SYSTEM |",
+            "+----------+----------------------------------------+",
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 
     Ok(())
