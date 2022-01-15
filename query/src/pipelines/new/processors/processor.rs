@@ -35,6 +35,10 @@ pub struct ProcessorPtr {
     inner: Arc<UnsafeCell<Box<dyn Processor>>>,
 }
 
+unsafe impl Send for ProcessorPtr {}
+
+unsafe impl Sync for ProcessorPtr {}
+
 impl ProcessorPtr {
     pub fn create(inner: Box<dyn Processor>) -> ProcessorPtr {
         ProcessorPtr {

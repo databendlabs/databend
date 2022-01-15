@@ -8,7 +8,7 @@ use databend_query::pipelines::new::processors::{connect};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_input_and_output_port() -> Result<()> {
-    fn input_port(input: InputPort, barrier: Arc<Barrier>) -> impl Fn() + Send {
+    fn input_port(input: Arc<InputPort>, barrier: Arc<Barrier>) -> impl Fn() + Send {
         move || {
             barrier.wait();
             for index in 0..100 {
@@ -19,7 +19,7 @@ async fn test_input_and_output_port() -> Result<()> {
         }
     }
 
-    fn output_port(output: OutputPort, barrier: Arc<Barrier>) -> impl Fn() + Send {
+    fn output_port(output: Arc<OutputPort>, barrier: Arc<Barrier>) -> impl Fn() + Send {
         move || {
             barrier.wait();
             for index in 0..100 {

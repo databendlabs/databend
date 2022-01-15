@@ -65,7 +65,7 @@ impl PlanVisitor for QueryPipelineBuilder {
             let source_output_port = OutputPort::create();
 
             source_builder.add_source(
-                TableSource::try_create(Arc::new(source_output_port.clone()), source_ctx, source_plan)?,
+                TableSource::try_create(source_output_port.clone(), source_ctx, source_plan)?,
                 source_output_port,
             );
         }

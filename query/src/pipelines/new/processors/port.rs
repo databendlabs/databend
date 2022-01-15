@@ -1,4 +1,3 @@
-use std::cell::UnsafeCell;
 use std::sync::atomic::AtomicPtr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -6,7 +5,8 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 
-use crate::pipelines::new::processors::{UpdateTrigger};
+use crate::pipelines::new::processors::UpdateTrigger;
+use crate::pipelines::new::unsafe_cell_wrap::UnSafeCellWrap;
 
 const HAS_DATA: usize = 0b1;
 const NEED_DATA: usize = 0b10;
@@ -82,165 +82,96 @@ impl SharedStatus {
     }
 }
 
-struct InputPortShared {
-    pub base: Arc<SharedStatus>,
-    pub update_trigger: *mut UpdateTrigger,
+pub struct InputPort {
+    shared: UnSafeCellWrap<Arc<SharedStatus>>,
+    update_trigger: UnSafeCellWrap<*mut UpdateTrigger>,
 }
 
-impl InputPortShared {
-    pub fn create() -> InputPortShared {
-        InputPortShared {
-            base: SharedStatus::create(),
-            update_trigger: std::ptr::null_mut(),
+impl InputPort {
+    pub fn create() -> Arc<InputPort> {
+        Arc::new(InputPort {
+            shared: UnSafeCellWrap::create(SharedStatus::create()),
+            update_trigger: UnSafeCellWrap::create(std::ptr::null_mut()),
+        })
+    }
+
+    pub fn finish(&self) {
+        unsafe {
+            UpdateTrigger::update_input(&self.update_trigger);
+
+            self.shared.set_flags(IS_FINISHED, IS_FINISHED);
         }
     }
 
-    pub fn get_flags(&self) -> usize {
-        self.base.get_flags()
+    pub fn has_data(&self) -> bool {
+        (self.shared.get_flags() & HAS_DATA) != 0
     }
 
     pub fn pull_data(&self) -> Option<Result<DataBlock>> {
         unsafe {
-            UpdateTrigger::update(self.update_trigger);
+            UpdateTrigger::update_input(&self.update_trigger);
             let unset_flags = HAS_DATA | NEED_DATA;
-            match (&*self.base).swap(std::ptr::null_mut(), 0, unset_flags) {
+            match self.shared.swap(std::ptr::null_mut(), 0, unset_flags) {
                 address if address.is_null() => None,
                 address => Some((*Box::from_raw(address)).0),
             }
         }
     }
-}
-
-impl Drop for InputPortShared {
-    fn drop(&mut self) {
-        unsafe {
-            if !self.update_trigger.is_null() {
-                Box::from_raw(self.update_trigger);
-            }
-        }
-    }
-}
-
-pub struct InputPort {
-    shared: Arc<UnsafeCell<InputPortShared>>,
-}
-
-unsafe impl Send for InputPort {}
-
-unsafe impl Sync for InputPort {}
-
-impl InputPort {
-    pub fn create() -> InputPort {
-        InputPort {
-            shared: Arc::new(UnsafeCell::new(InputPortShared::create())),
-        }
-    }
-
-    pub fn has_data(&self) -> bool {
-        (self.get_shared().get_flags() & HAS_DATA) != 0
-    }
-
-    pub fn pull_data(&self) -> Option<Result<DataBlock>> {
-        self.get_shared().pull_data()
-    }
 
     pub unsafe fn set_shared(&self, shared: Arc<SharedStatus>) {
-        self.get_mut_shared().base = shared
+        self.shared.set_value(shared);
     }
 
     pub unsafe fn set_trigger(&self, update_trigger: *mut UpdateTrigger) {
-        unimplemented!()
-    }
-
-    fn get_shared(&self) -> &InputPortShared {
-        unsafe { &*self.shared.get() }
-    }
-
-    fn get_mut_shared(&self) -> &mut InputPortShared {
-        unsafe { &mut *self.shared.get() }
+        self.update_trigger.set_value(update_trigger)
     }
 }
 
-struct OutputPortShared {
-    pub base: Arc<SharedStatus>,
-    pub update_trigger: *mut UpdateTrigger,
-}
-
-impl OutputPortShared {
-    pub fn create() -> OutputPortShared {
-        OutputPortShared {
-            base: SharedStatus::create(),
-            update_trigger: std::ptr::null_mut(),
-        }
-    }
-
-    pub fn push_data(&self, data: Result<DataBlock>) {
-        UpdateTrigger::update(self.update_trigger);
-
-        let data = Box::into_raw(Box::new(SharedData(data)));
-        self.base.swap(data, HAS_DATA, HAS_DATA);
-    }
-
-    pub fn get_flags(&self) -> usize {
-        self.base.get_flags()
-    }
-}
-
-impl Drop for OutputPortShared {
-    fn drop(&mut self) {
-        unsafe {
-            if !self.update_trigger.is_null() {
-                Box::from_raw(self.update_trigger);
-            }
-        }
-    }
-}
-
-#[derive(Clone)]
 pub struct OutputPort {
-    shared: Arc<UnsafeCell<OutputPortShared>>,
+    shared: UnSafeCellWrap<Arc<SharedStatus>>,
+    update_trigger: UnSafeCellWrap<*mut UpdateTrigger>,
 }
-
-unsafe impl Send for OutputPort {}
-
-unsafe impl Sync for OutputPort {}
 
 impl OutputPort {
-    pub fn create() -> OutputPort {
-        OutputPort { shared: Arc::new(UnsafeCell::new(OutputPortShared::create())) }
+    pub fn create() -> Arc<OutputPort> {
+        Arc::new(OutputPort {
+            shared: UnSafeCellWrap::create(SharedStatus::create()),
+            update_trigger: UnSafeCellWrap::create(std::ptr::null_mut()),
+        })
     }
 
     pub fn push_data(&self, data: Result<DataBlock>) {
-        self.get_shared().push_data(data);
+        unsafe {
+            UpdateTrigger::update_output(&self.update_trigger);
+
+            let data = Box::into_raw(Box::new(SharedData(data)));
+            self.shared.swap(data, HAS_DATA, HAS_DATA);
+        }
     }
 
     pub fn finish(&self) {
-        unimplemented!()
+        unsafe {
+            UpdateTrigger::update_output(&self.update_trigger);
+
+            self.shared.set_flags(IS_FINISHED, IS_FINISHED);
+        }
     }
 
     pub fn is_finished(&self) -> bool {
-        (self.get_shared().get_flags() & IS_FINISHED) != 0
+        (self.shared.get_flags() & IS_FINISHED) != 0
     }
 
     pub fn can_push(&self) -> bool {
-        let flags = self.get_shared().get_flags();
+        let flags = self.shared.get_flags();
         ((flags & NEED_DATA) != 1) && ((flags & HAS_DATA) == 0)
     }
 
     pub unsafe fn set_shared(&self, shared: Arc<SharedStatus>) {
-        self.get_mut_shared().base = shared;
+        self.shared.set_value(shared);
     }
 
     pub unsafe fn set_trigger(&self, update_trigger: *mut UpdateTrigger) {
-        unimplemented!()
-    }
-
-    fn get_shared(&self) -> &OutputPortShared {
-        unsafe { &*self.shared.get() }
-    }
-
-    fn get_mut_shared(&self) -> &mut OutputPortShared {
-        unsafe { &mut *self.shared.get() }
+        self.update_trigger.set_value(update_trigger)
     }
 }
 

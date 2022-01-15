@@ -1,22 +1,32 @@
+use std::sync::Arc;
 use crate::pipelines::new::processors::port::{InputPort, OutputPort};
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 
 pub enum NewPipe {
     SimplePipe {
         processors: Vec<ProcessorPtr>,
-        inputs_port: Vec<InputPort>,
-        outputs_port: Vec<OutputPort>,
+        inputs_port: Vec<Arc<InputPort>>,
+        outputs_port: Vec<Arc<OutputPort>>,
     },
     ResizePipe {
-        process: ProcessorPtr,
-        inputs_port: Vec<InputPort>,
-        outputs_port: Vec<OutputPort>,
+        processor: ProcessorPtr,
+        inputs_port: Vec<Arc<InputPort>>,
+        outputs_port: Vec<Arc<OutputPort>>,
     },
+}
+
+impl NewPipe {
+    pub fn size(&self) -> usize {
+        match self {
+            NewPipe::SimplePipe { outputs_port, .. } => outputs_port.len(),
+            NewPipe::ResizePipe { outputs_port, .. } => outputs_port.len()
+        }
+    }
 }
 
 pub struct SourcePipeBuilder {
     processors: Vec<ProcessorPtr>,
-    outputs_port: Vec<OutputPort>,
+    outputs_port: Vec<Arc<OutputPort>>,
 }
 
 impl SourcePipeBuilder {
@@ -36,7 +46,7 @@ impl SourcePipeBuilder {
         }
     }
 
-    pub fn add_source(&mut self, source: ProcessorPtr, output_port: OutputPort) {
+    pub fn add_source(&mut self, source: ProcessorPtr, output_port: Arc<OutputPort>) {
         self.processors.push(source);
         self.outputs_port.push(output_port);
     }
