@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_exception::Result;
 
 use super::data_type::IDataType;
 use super::type_id::TypeID;
@@ -22,20 +23,6 @@ use crate::prelude::*;
 
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DataTypeDate {}
-
-// struct ColumnView<T: RuntimeType> ;
-
-// pub fn values() -> &[T::NativeType];
-
-// trait RuntimeType {
-//   type NativeType;
-//   type ColumnType;
-// }
-
-// impl RuntimeType for DataTypeDate {
-//     type NativeType = u16;
-//     type ColumnType = PrimitiveColumn<u16>;
-// }
 
 #[typetag::serde]
 impl IDataType for DataTypeDate {
@@ -52,15 +39,20 @@ impl IDataType for DataTypeDate {
         DataValue::UInt64(0)
     }
 
-    fn create_constant_column(
-        &self,
-        data: &DataValue,
-        size: usize,
-    ) -> common_exception::Result<ColumnRef> {
+    fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
         let value = data.as_u64()?;
 
         let column = Series::new(&[value]);
         Ok(Arc::new(ConstColumn::new(column, size)))
+    }
+
+    fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {
+        let value = data
+            .iter()
+            .map(|v| v.as_u64())
+            .collect::<Result<Vec<_>>>()?;
+        let value = value.iter().map(|v| *v as u16).collect::<Vec<_>>();
+        Ok(Series::new(value))
     }
 
     fn arrow_type(&self) -> ArrowType {

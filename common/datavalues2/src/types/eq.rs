@@ -14,15 +14,12 @@
 
 use std::sync::Arc;
 
-use super::data_type_list::DataTypeList;
+use super::data_type_array::DataTypeArray;
 use super::data_type_nullable::DataTypeNullable;
 use super::data_type_struct::DataTypeStruct;
 use super::IDataType;
 
-
-impl Eq for dyn IDataType + '_ {
-}
-
+impl Eq for dyn IDataType + '_ {}
 
 impl PartialEq for dyn IDataType + '_ {
     fn eq(&self, that: &dyn IDataType) -> bool {
@@ -49,8 +46,8 @@ pub fn equal(lhs: &dyn IDataType, rhs: &dyn IDataType) -> bool {
 
     use crate::prelude::TypeID::*;
     match lhs.data_type_id() {
-        Boolean | UInt8 | UInt16 | UInt32 | UInt64 | Int8 | Int16 | Int32 | Int64
-        | Float32 | Float64 | String | Date16 | Date32 | Interval => true,
+        Boolean | UInt8 | UInt16 | UInt32 | UInt64 | Int8 | Int16 | Int32 | Int64 | Float32
+        | Float64 | String | Date16 | Date32 | Interval | DateTime32 | DateTime64 => true,
 
         Null | Nullable => {
             let lhs: &DataTypeNullable = lhs.as_any().downcast_ref().unwrap();
@@ -59,12 +56,9 @@ pub fn equal(lhs: &dyn IDataType, rhs: &dyn IDataType) -> bool {
             *lhs.inner_type() == *rhs.inner_type()
         }
 
-        DateTime32 => todo!(),
-        DateTime64 => todo!(),
-
         List => {
-            let lhs: &DataTypeList = lhs.as_any().downcast_ref().unwrap();
-            let rhs: &DataTypeList = rhs.as_any().downcast_ref().unwrap();
+            let lhs: &DataTypeArray = lhs.as_any().downcast_ref().unwrap();
+            let rhs: &DataTypeArray = rhs.as_any().downcast_ref().unwrap();
 
             *lhs.inner_type() == *rhs.inner_type()
         }

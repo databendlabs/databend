@@ -61,7 +61,7 @@ impl MutableColumn for MutableNullableColumn {
 
     #[inline]
     fn append_default(&mut self) {
-        self.bitmap.push(true);
+        self.bitmap.push(false);
         self.values.append_default();
     }
 
@@ -77,5 +77,6 @@ impl MutableColumn for MutableNullableColumn {
 
     fn shrink_to_fit(&mut self) {
         self.bitmap.shrink_to_fit();
+        self.values.shrink_to_fit();
     }
 }

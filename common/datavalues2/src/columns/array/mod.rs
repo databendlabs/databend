@@ -15,10 +15,12 @@
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::types::Index;
 
 mod mutable;
 use std::sync::Arc;
 
+use common_arrow::arrow::datatypes::DataType as ArrowType;
 pub use mutable::*;
 
 use crate::prelude::*;
@@ -27,13 +29,24 @@ type LargeListArray = ListArray<i64>;
 
 #[derive(Clone)]
 pub struct ArrayColumn {
+    data_type: DataTypePtr,
     offsets: Buffer<i64>,
     values: ColumnRef,
 }
 
 impl ArrayColumn {
     pub fn new(array: LargeListArray) -> Self {
+        let ty = array.data_type();
+
+        let data_type = if let ArrowType::List(f) = ty {
+            let ty = from_arrow_field(f);
+            Arc::new(DataTypeArray::create(ty))
+        } else {
+            unreachable!()
+        };
+
         Self {
+            data_type,
             offsets: array.offsets().clone(),
             values: array.values().clone().into_column(),
         }
@@ -48,6 +61,21 @@ impl ArrayColumn {
                 .clone(),
         )
     }
+
+    pub fn from_data(data_type: DataTypePtr, offsets: Buffer<i64>, values: ColumnRef) -> Self {
+        Self {
+            data_type,
+            offsets,
+            values,
+        }
+    }
+
+    #[inline]
+    pub fn size_at_index(&self, i: usize) -> usize {
+        let offset = self.offsets[i];
+        let offset_1 = self.offsets[i + 1];
+        (offset_1 - offset).to_usize()
+    }
 }
 
 impl Column for ArrayColumn {
@@ -56,27 +84,15 @@ impl Column for ArrayColumn {
     }
 
     fn data_type(&self) -> DataTypePtr {
-        todo!()
-    }
-
-    fn is_nullable(&self) -> bool {
-        todo!()
+        self.data_type.clone()
     }
 
     fn len(&self) -> usize {
-        todo!()
-    }
-
-    fn null_at(&self, row: usize) -> bool {
-        todo!()
-    }
-
-    fn validity(&self) -> (bool, Option<&Bitmap>) {
-        todo!()
+        self.offsets.len() - 1
     }
 
     fn memory_size(&self) -> usize {
-        todo!()
+        self.values.memory_size() + self.offsets.len() * std::mem::size_of::<i64>()
     }
 
     fn as_arrow_array(&self) -> ArrayRef {
@@ -94,6 +110,7 @@ impl Column for ArrayColumn {
         unsafe {
             let offsets = self.offsets.clone().slice_unchecked(offset, length + 1);
             Arc::new(Self {
+                data_type: self.data_type.clone(),
                 offsets,
                 values: self.values.clone(),
             })
@@ -112,6 +129,11 @@ impl Column for ArrayColumn {
     }
 
     unsafe fn get_unchecked(&self, index: usize) -> DataValue {
-        todo!()
+        let offset = self.offsets[index] as usize;
+        let length = self.size_at_index(index);
+        let values = (offset..offset + length)
+            .map(|i| self.values.get_unchecked(i))
+            .collect();
+        DataValue::Array(values)
     }
 }

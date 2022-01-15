@@ -31,6 +31,10 @@ impl TypeDeserializer for NullDeserializer {
         Ok(())
     }
 
+    fn de_default(&mut self) {
+        self.builder.append_null();
+    }
+
     fn de_batch(&mut self, _reader: &[u8], _step: usize, rows: usize) -> Result<()> {
         for _ in 0..rows {
             self.builder.append_null();

@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use chrono_tz::Tz;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_exception::Result;
 
 use super::data_type::IDataType;
 use super::data_type::ARROW_EXTENSION_META;
@@ -44,14 +45,19 @@ impl IDataType for DataTypeDateTime64 {
         DataValue::UInt64(0)
     }
 
-    fn create_constant_column(
-        &self,
-        data: &DataValue,
-        size: usize,
-    ) -> common_exception::Result<ColumnRef> {
+    fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
         let value = data.as_u64()?;
         let column = Series::new(&[value]);
         Ok(Arc::new(ConstColumn::new(column, size)))
+    }
+
+    fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {
+        let value = data
+            .iter()
+            .map(|v| v.as_u64())
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(Series::new(&value))
     }
 
     fn arrow_type(&self) -> ArrowType {

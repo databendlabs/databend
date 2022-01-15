@@ -88,26 +88,3 @@ impl MutableColumn for MutableStringColumn {
         self.values.shrink_to_fit();
     }
 }
-
-impl<S> NewColumn<S> for StringColumn
-where S: AsRef<[u8]>
-{
-    fn new_from_slice<P: AsRef<[S]>>(slice: P) -> Self {
-        let slice = slice.as_ref();
-        let values_size = slice.iter().fold(0, |acc, s| acc + s.as_ref().len());
-        let mut builder = MutableStringColumn::with_capacity(values_size, slice.len());
-
-        slice.iter().for_each(|val| {
-            builder.append_value(val.as_ref());
-        });
-        builder.finish()
-    }
-
-    /// Create a new DataArray from an iterator.
-    fn new_from_iter(it: impl Iterator<Item = S>) -> Self {
-        let cap = get_iter_capacity(&it);
-        let mut builder = MutableStringColumn::with_capacity(cap * 5, cap);
-        it.for_each(|v| builder.append_value(v));
-        builder.finish()
-    }
-}

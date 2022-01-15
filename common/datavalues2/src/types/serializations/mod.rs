@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+
 use common_exception::Result;
 
 use crate::prelude::*;
@@ -19,7 +21,8 @@ use crate::prelude::*;
 mod boolean;
 mod date;
 mod date_time;
-mod nulls;
+mod null;
+mod nullable;
 mod number;
 mod string;
 mod r#struct;
@@ -27,8 +30,9 @@ mod r#struct;
 pub use boolean::*;
 pub use date::*;
 pub use date_time::*;
-pub use nulls::*;
+pub use null::*;
 pub use number::*;
+pub use r#nullable::*;
 pub use r#struct::*;
 pub use string::*;
 

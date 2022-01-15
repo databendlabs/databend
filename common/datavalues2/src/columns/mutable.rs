@@ -16,7 +16,6 @@ use std::any::Any;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 
-use crate::prelude::*;
 use crate::types::DataTypePtr;
 use crate::ColumnRef;
 
@@ -59,7 +58,6 @@ pub trait MutableColumn {
 //             Box::new(MutableNullableColumn::new(mutable_inner))
 //         }
 //         _ => {
-//             todo!()
 //         }
 //     }
 // }

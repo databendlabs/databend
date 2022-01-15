@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use crate::ArrayColumn;
 use crate::ColumnRef;
+use crate::DataTypeArray;
 use crate::DataTypePtr;
 use crate::MutableColumn;
 
@@ -24,7 +25,7 @@ pub struct MutableArrayColumn<M: MutableColumn> {
     last_offset: usize,
     offsets: Vec<i64>,
     values: M,
-    data_type: DataTypePtr,
+    data_type: DataTypeArray,
 }
 
 impl<M: MutableColumn + 'static> MutableArrayColumn<M> {
@@ -33,6 +34,7 @@ impl<M: MutableColumn + 'static> MutableArrayColumn<M> {
         self.last_offset = 0;
         let values = self.values.as_column();
         ArrayColumn {
+            data_type: Arc::new(self.data_type.clone()),
             offsets: std::mem::take(&mut self.offsets).into(),
             values,
         }
@@ -43,7 +45,7 @@ impl<M: MutableColumn + 'static> MutableColumn for MutableArrayColumn<M>
 where M: MutableColumn
 {
     fn data_type(&self) -> DataTypePtr {
-        self.data_type.clone()
+        Arc::new(self.data_type.clone())
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -65,6 +67,7 @@ where M: MutableColumn
     }
 
     fn shrink_to_fit(&mut self) {
-        todo!()
+        self.offsets.shrink_to_fit();
+        self.values.shrink_to_fit();
     }
 }

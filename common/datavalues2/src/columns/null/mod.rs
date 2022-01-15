@@ -83,8 +83,8 @@ impl Column for NullColumn {
         Arc::new(NullArray::new_null(ArrowType::Null, self.length))
     }
 
-    fn slice(&self, offset: usize, length: usize) -> ColumnRef {
-        Arc::new(Self { length})
+    fn slice(&self, _offset: usize, length: usize) -> ColumnRef {
+        Arc::new(Self { length })
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
@@ -98,7 +98,7 @@ impl Column for NullColumn {
         })
     }
 
-    unsafe fn get_unchecked(&self, index: usize) -> DataValue {
+    unsafe fn get_unchecked(&self, _index: usize) -> DataValue {
         DataValue::Null
     }
 }

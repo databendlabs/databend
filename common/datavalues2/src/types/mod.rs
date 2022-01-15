@@ -13,6 +13,7 @@
 // limitations under the License.pub use data_type::*;
 
 pub mod data_type;
+pub mod data_type_array;
 pub mod data_type_boolean;
 pub mod data_type_coercion;
 pub mod data_type_date;
@@ -20,7 +21,6 @@ pub mod data_type_date32;
 pub mod data_type_datetime;
 pub mod data_type_datetime64;
 pub mod data_type_interval;
-pub mod data_type_list;
 pub mod data_type_null;
 pub mod data_type_nullable;
 pub mod data_type_numeric;
@@ -35,13 +35,13 @@ pub mod deserializations;
 pub mod serializations;
 
 pub use data_type::*;
+pub use data_type_array::*;
 pub use data_type_boolean::*;
 pub use data_type_date::*;
 pub use data_type_date32::*;
 pub use data_type_datetime::*;
 pub use data_type_datetime64::*;
 pub use data_type_interval::*;
-pub use data_type_list::*;
 pub use data_type_null::*;
 pub use data_type_nullable::*;
 pub use data_type_numeric::*;

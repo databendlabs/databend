@@ -128,6 +128,6 @@ impl Column for BooleanColumn {
     }
 
     unsafe fn get_unchecked(&self, index: usize) -> DataValue {
-        todo!()
+        DataValue::Boolean(self.values.get_bit(index))
     }
 }

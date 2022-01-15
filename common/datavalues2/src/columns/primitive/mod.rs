@@ -158,7 +158,7 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
     }
 
     fn memory_size(&self) -> usize {
-        todo!()
+        self.values.len() * std::mem::size_of::<T>()
     }
 
     fn as_arrow_array(&self) -> common_arrow::arrow::array::ArrayRef {

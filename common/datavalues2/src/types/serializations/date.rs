@@ -42,7 +42,7 @@ impl<T: PrimitiveType> TypeSerializer for DateSerializer<T> {
     }
 
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
-        let column: &PrimitiveColumn<T> = unsafe { Series::static_cast(column) };
+        let column: &PrimitiveColumn<T> =  Series::check_get(column)?;
 
         let result: Vec<String> = column
             .iter()

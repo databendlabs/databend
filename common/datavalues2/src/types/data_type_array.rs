@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field;
 use common_exception::ErrorCode;
+use common_exception::Result;
 
 use super::data_type::DataTypePtr;
 use super::data_type::IDataType;
@@ -22,23 +25,13 @@ use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DataTypeList {
-    name: String,
-    size: usize,
+pub struct DataTypeArray {
     inner: DataTypePtr,
 }
 
-impl DataTypeList {
-    pub fn create(name: String, size: usize, inner: DataTypePtr) -> Self {
-        DataTypeList { name, size, inner }
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn len(&self) -> usize {
-        self.size
+impl DataTypeArray {
+    pub fn create(inner: DataTypePtr) -> Self {
+        DataTypeArray { inner }
     }
 
     pub fn inner_type(&self) -> &DataTypePtr {
@@ -47,7 +40,7 @@ impl DataTypeList {
 }
 
 #[typetag::serde]
-impl IDataType for DataTypeList {
+impl IDataType for DataTypeArray {
     fn data_type_id(&self) -> TypeID {
         TypeID::List
     }
@@ -58,26 +51,49 @@ impl IDataType for DataTypeList {
     }
 
     fn default_value(&self) -> DataValue {
-        let c: Vec<DataValue> = (0..self.size).map(|_| self.inner.default_value()).collect();
-        DataValue::List(c)
+        DataValue::Array(vec![])
     }
 
-    fn create_constant_column(
-        &self,
-        data: &DataValue,
-        size: usize,
-    ) -> common_exception::Result<ColumnRef> {
-        if let DataValue::List(value) = data {
-            todo!()
+    fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
+        if let DataValue::Array(value) = data {
+            let inner_column = self.inner.create_column(value)?;
+            let offsets = vec![0, value.len() as i64];
+            let column = Arc::new(ArrayColumn::from_data(
+                Arc::new(self.clone()),
+                offsets.into(),
+                inner_column,
+            ));
+
+            return Ok(Arc::new(ConstColumn::new(column, size)));
         }
+
         return Result::Err(ErrorCode::BadDataValueType(format!(
             "Unexpected type:{:?} to generate list column",
             data.value_type()
         )));
     }
 
+    fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {
+        let mut values: Vec<DataValue> = vec![];
+        let mut offsets: Vec<i64> = vec![0];
+        for v in data.iter() {
+            if let DataValue::Array(value) = v {
+                offsets.push(offsets.last().unwrap() + value.len() as i64);
+                values.extend_from_slice(value);
+            }
+        }
+
+        let inner_column = self.inner.create_column(&values)?;
+
+        Ok(Arc::new(ArrayColumn::from_data(
+            Arc::new(self.clone()),
+            offsets.into(),
+            inner_column,
+        )))
+    }
+
     fn arrow_type(&self) -> ArrowType {
-        let field = Field::new(&self.name, self.inner.arrow_type(), false);
+        let field = Field::new("list".to_string(), self.inner.arrow_type(), false);
         ArrowType::List(Box::new(field))
     }
 

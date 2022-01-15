@@ -12,33 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::prelude::*;
+use crate::prelude::DataValue;
+use crate::Column;
+use crate::ColumnRef;
+use crate::MutableNullableColumn;
+use crate::NullableColumn;
+use crate::Series;
+use crate::TypeSerializer;
 
-pub struct BooleanSerializer {}
+pub struct NullableSerializer {
+    pub inner: Box<dyn TypeSerializer>,
+}
 
-impl TypeSerializer for BooleanSerializer {
+impl TypeSerializer for NullableSerializer {
     fn serialize_value(&self, value: &DataValue) -> Result<String> {
-        if let DataValue::Boolean(x) = value {
-            if *x {
-                Ok("true".to_owned())
-            } else {
-                Ok("false".to_owned())
-            }
+        if value.is_null() {
+            Ok("NULL".to_owned())
         } else {
-            Err(ErrorCode::BadBytes("Incorrect boolean value"))
+            self.inner.serialize_value(value)
         }
     }
 
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
-        let array: &BooleanColumn =  Series::check_get(column)?;
+        let column: &NullableColumn = Series::check_get(column)?;
+        let rows = column.len();
+        let mut res = self.inner.serialize_column(&column.inner())?;
 
-        let result: Vec<String> = array
-            .iter()
-            .map(|v| if v { "1".to_owned() } else { "0".to_owned() })
-            .collect();
-        Ok(result)
+        for row in 0..rows {
+            if column.null_at(row) {
+                res[row] = "NULL".to_owned();
+            }
+        }
+        Ok(res)
     }
 }

@@ -33,6 +33,10 @@ impl NullableColumn {
     pub fn new(column: ColumnRef, validity: Bitmap) -> Self {
         Self { column, validity }
     }
+
+    pub fn inner(&self) -> ColumnRef {
+        self.column.clone()
+    }
 }
 
 impl Column for NullableColumn {

@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::ErrorCode;
+use common_exception::Result;
 
 use super::data_type::DataTypePtr;
 use super::data_type::IDataType;
@@ -28,6 +31,7 @@ pub struct DataTypeStruct {
 
 impl DataTypeStruct {
     pub fn create(names: Vec<String>, types: Vec<DataTypePtr>) -> Self {
+        debug_assert!(names.len() == types.len());
         DataTypeStruct { names, types }
     }
 
@@ -56,13 +60,17 @@ impl IDataType for DataTypeStruct {
         DataValue::Struct(c)
     }
 
-    fn create_constant_column(
-        &self,
-        data: &DataValue,
-        size: usize,
-    ) -> common_exception::Result<ColumnRef> {
+    fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
         if let DataValue::Struct(value) = data {
-            todo!()
+            debug_assert!(value.len() == self.types.len());
+
+            let cols = value
+                .iter()
+                .zip(self.types.iter())
+                .map(|(v, typ)| typ.create_constant_column(v, size))
+                .collect::<Result<Vec<_>>>()?;
+            let struct_column = StructColumn::from_data(cols, Arc::new(self.clone()));
+            return Ok(Arc::new(ConstColumn::new(Arc::new(struct_column), size)));
         }
         return Result::Err(ErrorCode::BadDataValueType(format!(
             "Unexpected type:{:?} to generate list column",
@@ -86,6 +94,10 @@ impl IDataType for DataTypeStruct {
     }
 
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+        todo!()
+    }
+
+    fn create_column(&self, data: &[DataValue]) -> common_exception::Result<ColumnRef> {
         todo!()
     }
 }

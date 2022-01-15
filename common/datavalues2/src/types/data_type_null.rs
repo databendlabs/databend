@@ -60,4 +60,8 @@ impl IDataType for DataTypeNull {
             builder: MutableNullColumn::default(),
         })
     }
+
+    fn create_column(&self, data: &[DataValue]) -> common_exception::Result<ColumnRef> {
+        Ok(Arc::new(NullColumn::new(data.len())))
+    }
 }

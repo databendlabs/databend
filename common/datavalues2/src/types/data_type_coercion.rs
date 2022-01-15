@@ -384,28 +384,29 @@ pub fn merge_types(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Result<Dat
         (Null, _) => Ok(rhs_type.clone()),
         (_, Null) => Ok(lhs_type.clone()),
         (List, List) => {
-            let a = lhs_type.as_any().downcast_ref::<DataTypeList>().unwrap();
-            let b = rhs_type.as_any().downcast_ref::<DataTypeList>().unwrap();
-
-            if a.name() != b.name() || a.len() != b.len() {
-                return Err(ErrorCode::BadArguments(format!(
-                    "Can't merge list types with diff name/size {:?}/{} and {:?}/{}",
-                    a.name(),
-                    a.len(),
-                    b.name(),
-                    b.len(),
-                )));
-            }
+            let a = lhs_type.as_any().downcast_ref::<DataTypeArray>().unwrap();
+            let b = rhs_type.as_any().downcast_ref::<DataTypeArray>().unwrap();
 
             let typ = merge_types(a.inner_type(), b.inner_type())?;
-            Ok(Arc::new(DataTypeList::create(
-                a.name().to_string(),
-                a.len(),
-                typ,
-            )))
+            Ok(Arc::new(DataTypeArray::create(typ)))
         }
         (Struct, Struct) => {
-            todo!()
+            let a = lhs_type.as_any().downcast_ref::<DataTypeStruct>().unwrap();
+            let b = rhs_type.as_any().downcast_ref::<DataTypeStruct>().unwrap();
+            if a.names() != b.names() {
+                return Err(ErrorCode::BadArguments(
+                    "Can't merge structs with different names or sizes".to_string(),
+                ));
+            }
+
+            let types = a
+                .types()
+                .iter()
+                .zip(b.types().iter())
+                .map(|(a, b)| merge_types(a, b))
+                .collect::<Result<Vec<_>>>()?;
+
+            Ok(Arc::new(DataTypeStruct::create(a.names().clone(), types)))
         }
         _ => {
             if lhs_id == rhs_id {

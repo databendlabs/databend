@@ -29,6 +29,10 @@ impl TypeDeserializer for BooleanDeserializer {
         Ok(())
     }
 
+    fn de_default(&mut self) {
+        self.builder.append_value(false);
+    }
+
     fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];

@@ -115,6 +115,13 @@ impl StringColumn {
             )
         }
     }
+
+    #[inline]
+    pub fn size_at_index(&self, i: usize) -> usize {
+        let offset = self.offsets[i];
+        let offset_1 = self.offsets[i + 1];
+        (offset_1 - offset).to_usize()
+    }
 }
 
 impl Column for StringColumn {
@@ -123,27 +130,15 @@ impl Column for StringColumn {
     }
 
     fn data_type(&self) -> DataTypePtr {
-        todo!()
-    }
-
-    fn is_nullable(&self) -> bool {
-        todo!()
+        DataTypeString::arc()
     }
 
     fn len(&self) -> usize {
-        todo!()
-    }
-
-    fn null_at(&self, row: usize) -> bool {
-        todo!()
-    }
-
-    fn validity(&self) -> (bool, Option<&Bitmap>) {
-        todo!()
+        self.offsets.len() - 1
     }
 
     fn memory_size(&self) -> usize {
-        todo!()
+        self.values.len() + self.offsets.len() * std::mem::size_of::<i64>()
     }
 
     fn as_arrow_array(&self) -> ArrayRef {
@@ -156,7 +151,12 @@ impl Column for StringColumn {
     }
 
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
-        todo!()
+        let offsets = unsafe { self.offsets.clone().slice_unchecked(offset, length + 1) };
+
+        Arc::new(Self {
+            offsets,
+            values: self.values.clone(),
+        })
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
@@ -185,6 +185,11 @@ impl Column for StringColumn {
     }
 
     unsafe fn get_unchecked(&self, index: usize) -> DataValue {
-        todo!()
+        let start = self.offsets[index].to_usize();
+        let end = self.offsets[index + 1].to_usize();
+
+        // soundness: the invariant of the struct
+        let str = self.values.get_unchecked(start..end);
+        DataValue::String(str.to_vec())
     }
 }

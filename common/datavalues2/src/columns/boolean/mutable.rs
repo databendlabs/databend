@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::bitmap::MutableBitmap;
 
 use crate::columns::mutable::MutableColumn;
@@ -19,7 +21,6 @@ use crate::types::DataTypeBoolean;
 use crate::types::DataTypePtr;
 use crate::BooleanColumn;
 use crate::ColumnRef;
-use crate::NewColumn;
 
 pub struct MutableBooleanColumn {
     values: MutableBitmap,
@@ -36,7 +37,7 @@ impl MutableColumn for MutableBooleanColumn {
     }
 
     fn as_column(&mut self) -> ColumnRef {
-        todo!()
+        Arc::new(self.finish())
     }
 
     fn data_type(&self) -> DataTypePtr {
@@ -90,22 +91,6 @@ impl MutableBooleanColumn {
         self.shrink_to_fit();
         BooleanColumn {
             values: std::mem::take(&mut self.values).into(),
-        }
-    }
-}
-
-impl NewColumn<bool> for BooleanColumn {
-    fn new_from_slice<P: AsRef<[bool]>>(slice: P) -> Self {
-        let bitmap = MutableBitmap::from_iter(slice.as_ref().iter().cloned());
-        BooleanColumn {
-            values: bitmap.into(),
-        }
-    }
-
-    fn new_from_iter(it: impl Iterator<Item = bool>) -> Self {
-        let bitmap = MutableBitmap::from_iter(it);
-        BooleanColumn {
-            values: bitmap.into(),
         }
     }
 }

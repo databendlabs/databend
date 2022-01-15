@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
+use serde::de::value;
 
 use crate::prelude::*;
 
@@ -34,11 +35,13 @@ impl From<StructArray> for StructColumn {
 impl StructColumn {
     pub fn new(array: StructArray) -> Self {
         let data_type = from_arrow_type(array.data_type());
-        let values = array
+        let values: Vec<ColumnRef> = array
             .values()
             .iter()
             .map(|v| v.clone().into_column())
             .collect();
+
+        debug_assert!(!values.is_empty());
         Self { values, data_type }
     }
 
@@ -55,6 +58,10 @@ impl StructColumn {
     pub fn data_type(&self) -> DataTypePtr {
         self.data_type.clone()
     }
+
+    pub fn from_data(values: Vec<ColumnRef>, data_type: DataTypePtr) -> Self {
+        Self { values, data_type }
+    }
 }
 
 impl Column for StructColumn {
@@ -67,11 +74,11 @@ impl Column for StructColumn {
     }
 
     fn len(&self) -> usize {
-        todo!()
+        self.values[0].len()
     }
 
     fn memory_size(&self) -> usize {
-        todo!()
+        self.values.iter().map(|v| v.memory_size()).sum()
     }
 
     fn as_arrow_array(&self) -> ArrayRef {
@@ -81,14 +88,29 @@ impl Column for StructColumn {
     }
 
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
-        todo!()
+        let values = self
+            .values
+            .iter()
+            .map(|v| v.slice(offset, length))
+            .collect();
+
+        Arc::new(Self {
+            values,
+            data_type: self.data_type.clone(),
+        })
     }
 
     unsafe fn get_unchecked(&self, index: usize) -> DataValue {
-        todo!()
+        let values = self.values.iter().map(|v| v.get_unchecked(index)).collect();
+        DataValue::Struct(values)
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
-        todo!()
+        let values = self.values.iter().map(|v| v.replicate(offsets)).collect();
+
+        Arc::new(Self {
+            values,
+            data_type: self.data_type.clone(),
+        })
     }
 }

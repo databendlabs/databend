@@ -22,3 +22,20 @@ impl<'a, T: PrimitiveType> PrimitiveColumn<T> {
         self.values.iter()
     }
 }
+
+impl<T> NewColumn<T> for PrimitiveColumn<T>
+    where T: PrimitiveType
+{
+    fn new_from_slice<P: AsRef<[T]>>(slice: P) -> Self {
+        let values = Vec::<T>::from(slice.as_ref());
+        PrimitiveColumn {
+            values: values.into(),
+        }
+    }
+    fn new_from_iter(it: impl Iterator<Item = T>) -> Self {
+        let values: Vec<T> = it.collect();
+        PrimitiveColumn {
+            values: values.into(),
+        }
+    }
+}

@@ -66,4 +66,21 @@ impl IDataType for DataTypeString {
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
         Box::new(StringDeserializer::with_capacity(capacity))
     }
+
+    fn create_column(&self, data: &[DataValue]) -> common_exception::Result<ColumnRef> {
+        let mut values: Vec<u8> = vec![];
+        let mut offsets: Vec<i64> = vec![0];
+        for v in data.iter() {
+            let value = v.as_string()?;
+            offsets.push(offsets.last().unwrap() + value.len() as i64);
+            values.extend_from_slice(&value);
+        }
+
+        unsafe {
+            Ok(Arc::new(StringColumn::from_data_unchecked(
+                offsets.into(),
+                values.into(),
+            )))
+        }
+    }
 }

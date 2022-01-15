@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 
 use crate::prelude::*;
@@ -88,6 +89,7 @@ pub trait Column: Send + Sync {
 
 pub trait IntoColumn {
     fn into_column(self) -> ColumnRef;
+    fn into_nullable_column(self) -> ColumnRef;
 }
 
 // No nullable
@@ -116,5 +118,19 @@ impl IntoColumn for ArrayRef {
             Struct => Arc::new(StructColumn::from_arrow_array(self.as_ref())),
             String => Arc::new(StringColumn::from_arrow_array(self.as_ref())),
         }
+    }
+
+    fn into_nullable_column(self) -> ColumnRef {
+        let size = self.len();
+        let validity = self.validity().cloned();
+        let column = self.into_column();
+        Arc::new(NullableColumn::new(
+            column,
+            validity.unwrap_or_else(|| {
+                let mut bm = MutableBitmap::with_capacity(size);
+                bm.extend_constant(size, false);
+                Bitmap::from(bm)
+            }),
+        ))
     }
 }

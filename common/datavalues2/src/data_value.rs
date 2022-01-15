@@ -36,7 +36,7 @@ pub enum DataValue {
     String(Vec<u8>),
 
     // Container struct.
-    List(Vec<DataValue>),
+    Array(Vec<DataValue>),
     Struct(Vec<DataValue>),
 }
 
@@ -48,14 +48,14 @@ pub enum ValueType {
     Int64,
     Float64,
     String,
-    List,
+    Array,
     Struct,
 }
 
 pub type DataValueRef = Arc<DataValue>;
 
 impl DataValue {
-    pub fn null_at(&self) -> bool {
+    pub fn is_null(&self) -> bool {
         matches!(self, DataValue::Null)
     }
 
@@ -67,7 +67,7 @@ impl DataValue {
             DataValue::UInt64(_) => ValueType::UInt64,
             DataValue::Float64(_) => ValueType::Float64,
             DataValue::String(_) => ValueType::String,
-            DataValue::List(_) => ValueType::List,
+            DataValue::Array(_) => ValueType::Array,
             DataValue::Struct(_) => ValueType::Struct,
         }
     }
@@ -102,17 +102,13 @@ impl DataValue {
             }
             DataValue::Float64(_) => DataTypeFloat64::arc(),
             DataValue::String(_) => DataTypeString::arc(),
-            DataValue::List(x) => {
+            DataValue::Array(x) => {
                 let inner_type = if x.is_empty() {
                     DataTypeUInt8::arc()
                 } else {
                     x[0].data_type()
                 };
-                Arc::new(DataTypeList::create(
-                    "list".to_string(),
-                    x.len(),
-                    inner_type,
-                ))
+                Arc::new(DataTypeArray::create(inner_type))
             }
             DataValue::Struct(x) => {
                 let inner_type = if x.is_empty() {
@@ -296,7 +292,7 @@ impl fmt::Display for DataValue {
                     Ok(())
                 }
             },
-            DataValue::List(v, ..) => {
+            DataValue::Array(v, ..) => {
                 write!(
                     f,
                     "[{}]",
@@ -320,7 +316,7 @@ impl fmt::Debug for DataValue {
             DataValue::UInt64(v) => write!(f, "{}", v),
             DataValue::Float64(v) => write!(f, "{}", v),
             DataValue::String(_) => write!(f, "{}", self),
-            DataValue::List(_) => write!(f, "[{}]", self),
+            DataValue::Array(_) => write!(f, "[{}]", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }
     }

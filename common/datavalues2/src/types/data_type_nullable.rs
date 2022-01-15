@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::ErrorCode;
 
@@ -66,11 +67,16 @@ impl IDataType for DataTypeNullable {
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        todo!()
+        Box::new(NullableSerializer {
+            inner: self.inner.create_serializer(),
+        })
     }
 
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        todo!()
+        Box::new(NullableDeserializer {
+            inner: self.inner.create_deserializer(capacity),
+            bitmap: MutableBitmap::with_capacity(capacity),
+        })
     }
 
     fn create_constant_column(
@@ -88,5 +94,12 @@ impl IDataType for DataTypeNullable {
             )));
         }
         self.inner.create_constant_column(data, size)
+    }
+
+    fn create_column(&self, data: &[DataValue]) -> common_exception::Result<ColumnRef> {
+        let column = self.inner.create_column(data)?;
+        let mut bitmap = MutableBitmap::with_capacity(data.len());
+        bitmap.extend_constant(data.len(), true);
+        Ok(Arc::new(NullableColumn::new(column, bitmap.into())))
     }
 }

@@ -27,6 +27,7 @@ use crate::NullableColumn;
 use crate::StringColumn;
 
 // Series is a util struct to work with Column
+// Maybe rename to ColumnHelper later
 pub struct Series;
 
 impl Series {
@@ -37,7 +38,6 @@ impl Series {
         &*(object as *const dyn Column as *const T)
     }
 
-    // TODO use typeid
     pub fn check_get<T: 'static + Column>(column: &ColumnRef) -> Result<&T> {
         let arr = column.as_any().downcast_ref::<T>().ok_or_else(|| {
             ErrorCode::UnknownColumn(format!(

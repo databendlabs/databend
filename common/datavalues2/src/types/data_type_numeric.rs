@@ -16,6 +16,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_exception::Result;
 
 use super::data_type::IDataType;
 use super::type_id::TypeID;
@@ -83,14 +84,19 @@ macro_rules! impl_numeric {
                 $ty::default().into()
             }
 
-            fn create_constant_column(
-                &self,
-                data: &DataValue,
-                size: usize,
-            ) -> common_exception::Result<ColumnRef> {
+            fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
                 let value: $ty = DFTryFrom::try_from(data)?;
                 let column = Series::new(&[value]);
                 Ok(Arc::new(ConstColumn::new(column, size)))
+            }
+
+            fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {
+                let value: Vec<$ty> = data
+                    .iter()
+                    .map(|v| DFTryFrom::try_from(v))
+                    .collect::<Result<Vec<_>>>()?;
+
+                Ok(Series::new(&value))
             }
 
             fn arrow_type(&self) -> ArrowType {

@@ -12,53 +12,54 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
-use common_io::prelude::*;
-use lexical_core::FromLexical;
 
-use crate::prelude::*;
+use crate::prelude::DataValue;
+use crate::{ColumnRef, MutableNullableColumn, NullableColumn};
+use crate::MutableColumn;
+use crate::MutableNullColumn;
+use crate::TypeDeserializer;
 
-pub struct NumberDeserializer<T: PrimitiveType> {
-    pub builder: MutablePrimitiveColumn<T>,
+pub struct NullableDeserializer {
+    pub inner: Box<dyn TypeDeserializer>,
+    pub bitmap: MutableBitmap,
 }
 
-impl<T> TypeDeserializer for NumberDeserializer<T>
-where
-    T: PrimitiveType,
-    T: Unmarshal<T> + StatBuffer + FromLexical,
-{
+impl TypeDeserializer for NullableDeserializer {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
-        let value: T = reader.read_scalar()?;
-        self.builder.append_value(value);
-        Ok(())
+        self.bitmap.push(true);
+        self.inner.de(reader)
     }
 
     fn de_default(&mut self) {
-        self.builder.append_value(T::default());
+        self.inner.de_default();
+        self.bitmap.push(false);
     }
 
     fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
-            let value: T = reader.read_scalar()?;
-            self.builder.append_value(value);
+            self.inner.de(&mut reader)?;
+            self.bitmap.push(true);
         }
         Ok(())
     }
 
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        let value = lexical_core::parse_partial::<T>(reader)
-            .unwrap_or((T::default(), 0))
-            .0;
-        self.builder.append_value(value);
+        self.inner.de_text(reader)?;
+        self.bitmap.push(true);
         Ok(())
     }
 
     fn de_null(&mut self) -> bool {
-        false
+        self.inner.de_default();
+        self.bitmap.push(false);
+        true
     }
-
     fn finish_to_column(&mut self) -> ColumnRef {
-        self.builder.as_column()
+        let inner_column = self.inner.finish_to_column();
+        Arc::new(NullableColumn::new(inner_column, std::mem::take(&mut self.bitmap).into()))
     }
 }

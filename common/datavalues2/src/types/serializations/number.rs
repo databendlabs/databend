@@ -36,7 +36,7 @@ impl<T: PrimitiveType> TypeSerializer for NumberSerializer<T> {
     }
 
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
-        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(column) };
+        let array: &PrimitiveColumn<T> =  Series::check_get(column)?;
         let result: Vec<String> = array
             .iter()
             .map(|x| {

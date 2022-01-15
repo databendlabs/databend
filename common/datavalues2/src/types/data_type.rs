@@ -21,12 +21,12 @@ use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_exception::Result;
 use dyn_clone::DynClone;
 
+use super::data_type_array::DataTypeArray;
 use super::data_type_boolean::DataTypeBoolean;
 use super::data_type_date::DataTypeDate;
 use super::data_type_date32::DataTypeDate32;
 use super::data_type_datetime::DataTypeDateTime;
 use super::data_type_datetime64::DataTypeDateTime64;
-use super::data_type_list::DataTypeList;
 use super::data_type_nullable::DataTypeNullable;
 use super::data_type_numeric::DataTypeFloat32;
 use super::data_type_numeric::DataTypeFloat64;
@@ -63,6 +63,7 @@ pub trait IDataType: std::fmt::Debug + Sync + Send + DynClone {
     fn default_value(&self) -> DataValue;
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef>;
+    fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef>;
 
     /// arrow_type did not have nullable sign, it's nullable sign is in the field
     fn arrow_type(&self) -> ArrowType;
@@ -100,8 +101,7 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
 
         ArrowType::FixedSizeList(f, size) => {
             let inner = from_arrow_field(f);
-            let name = f.name();
-            Arc::new(DataTypeList::create(name.clone(), *size, inner))
+            Arc::new(DataTypeArray::create(inner))
         }
         ArrowType::Binary | ArrowType::LargeBinary | ArrowType::Utf8 | ArrowType::LargeUtf8 => {
             Arc::new(DataTypeString::default())

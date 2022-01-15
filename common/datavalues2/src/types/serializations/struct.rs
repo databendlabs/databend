@@ -58,6 +58,6 @@ impl TypeSerializer for StructSerializer {
     }
 
     fn serialize_column(&self, _column: &ColumnRef) -> Result<Vec<String>> {
-        unimplemented!()
+        todo!()
     }
 }
