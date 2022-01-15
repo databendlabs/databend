@@ -55,6 +55,7 @@ impl ManagementModeAccess {
                 | PlanNode::CreateUDF(_)
                 | PlanNode::DropUDF(_)
                 | PlanNode::ShowUDF(_)
+                | PlanNode::Select(_) // Allow select from system.* tables, like show tables;
                 | PlanNode::AlterUDF(_) => Ok(()),
                 _ => Err(ErrorCode::ManagementModePermissionDenied(format!(
                     "Access denied for operation:{:?} in management-mode",

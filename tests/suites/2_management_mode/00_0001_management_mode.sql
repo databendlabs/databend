@@ -1,14 +1,18 @@
+-- TENANT1
 SUDO USE TENANT 'tenant1';
 -- database check.
 CREATE DATABASE tenant1_db;
 SHOW CREATE DATABASE tenant1_db;
-DROP DATABASE tenant1_db;
+SHOW DATABASES;
 
 -- table check.
 CREATE TABLE tenant1_tbl(a Int);
 SHOW CREATE TABLE tenant1_tbl;
+SHOW TABLES;
 DESC tenant1_tbl;
+
 DROP TABLE tenant1_tbl;
+DROP DATABASE tenant1_db;
 
 -- user.
 CREATE USER 'test'@'localhost' IDENTIFIED BY 'password';
@@ -25,6 +29,10 @@ ALTER FUNCTION xy AS (x, y) -> (x + y) / 3;
 SHOW FUNCTION xy;
 DROP FUNCTION xy;
 
+-- TENANT2
 SUDO USE TENANT 'tenant2';
+SHOW DATABASES;
+SHOW TABLES;
+
 -- check
-SHOW FUNCTION xy; -- {ErrorCode 4071}
+SHOW FUNCTION xy; -- {ErrorCode 2602}
