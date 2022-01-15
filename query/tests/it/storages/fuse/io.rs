@@ -26,7 +26,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use databend_query::storages::fuse::io::BlockShaper;
+use databend_query::storages::fuse::io::BlockRegulator;
 use databend_query::storages::fuse::io::BlockStreamWriter;
 use databend_query::storages::fuse::DEFAULT_CHUNK_BLOCK_NUM;
 use futures::stream::Stream;
@@ -109,13 +109,12 @@ fn test_block_shaper() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let gen_rows = |n| std::iter::repeat(1i32).take(n).collect::<Vec<_>>();
     let gen_block = |col| DataBlock::create_by_array(schema.clone(), vec![Series::new(col)]);
-
     let test_case =
         |rows_per_sample_block, max_row_per_block, num_blocks, case_name| -> Result<()> {
             // One block, which `row_count` equals `rows_per_sample_block`
             let sample_block = gen_block(gen_rows(rows_per_sample_block));
 
-            let mut shaper = BlockShaper::new(max_row_per_block);
+            let mut shaper = BlockRegulator::new(max_row_per_block);
             let total_rows = rows_per_sample_block * num_blocks;
 
             let mut generated: Vec<DataBlock> = vec![];
@@ -123,8 +122,8 @@ fn test_block_shaper() -> common_exception::Result<()> {
             // feed blocks into shaper
             let rounds = num_blocks;
             for _i in 0..rounds {
-                let blks = shaper.shape(sample_block.clone())?;
-                generated.extend(blks)
+                let blks = shaper.regulate(sample_block.clone())?;
+                generated.extend(blks.into_iter().flatten())
             }
 
             // indicates the shaper that we are done
@@ -164,7 +163,7 @@ fn test_block_shaper() -> common_exception::Result<()> {
                 );
                 let block = sealed.as_ref().unwrap();
                 assert_eq!(
-                    block.num_rows(),
+                    block.iter().map(|i| i.num_rows()).sum::<usize>(),
                     remainder,
                     "[{}], num_rows remains ",
                     case_name
@@ -179,7 +178,7 @@ fn test_block_shaper() -> common_exception::Result<()> {
                 case_name
             );
 
-            generated.extend(sealed);
+            generated.extend(sealed.into_iter().flatten());
 
             assert_eq!(
                 total_rows,
@@ -255,8 +254,8 @@ async fn test_block_stream_writer() -> common_exception::Result<()> {
                      schema,
                      case_name: &'static str| async move {
         let sample_block = gen_block(gen_rows(rows_per_sample_block));
-        let block_stream = futures::stream::iter(std::iter::repeat(sample_block).take(num_blocks));
-        let block_stream = block_stream.map(Ok);
+        let block_stream =
+            futures::stream::iter(std::iter::repeat(Ok(sample_block)).take(num_blocks));
 
         let data_accessor = Arc::new(MockDataAccessor::new());
 
@@ -275,7 +274,7 @@ async fn test_block_stream_writer() -> common_exception::Result<()> {
             Integer::div_ceil(&(rows_per_sample_block * num_blocks), &max_rows_per_block);
         assert_eq!(
             expected_blocks,
-            data_accessor.put_stream_called(),
+            data_accessor.blocks_written(),
             "case: {}",
             case_name
         );
@@ -301,7 +300,7 @@ async fn test_block_stream_writer() -> common_exception::Result<()> {
     .await?;
 
     let rows_perf_sample_block = 10;
-    let rows_per_block = 10;
+    let rows_per_block = 3;
     let blocks_per_segment = 3;
     let number_of_blocks = 100;
     test_case(
@@ -329,7 +328,7 @@ impl MockDataAccessor {
         }
     }
 
-    fn put_stream_called(&self) -> usize {
+    fn blocks_written(&self) -> usize {
         *self.put_stream_called.lock()
     }
 }

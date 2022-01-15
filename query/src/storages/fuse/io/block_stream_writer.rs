@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 use std::sync::Arc;
 
@@ -26,7 +25,6 @@ use futures::stream::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
-use crate::storages::fuse::io::block_shaper::BlockShaper;
 use crate::storages::fuse::io::block_writer;
 use crate::storages::fuse::io::locations::gen_block_location;
 use crate::storages::fuse::meta::SegmentInfo;
@@ -45,20 +43,6 @@ pub struct BlockStreamWriter {
 }
 
 impl BlockStreamWriter {
-    pub fn new(
-        num_block_threshold: usize,
-        data_accessor: Arc<dyn DataAccessor>,
-        data_schema: Arc<DataSchema>,
-    ) -> Self {
-        Self {
-            num_block_threshold,
-            data_accessor,
-            data_schema,
-            number_of_blocks_accumulated: 0,
-            statistics_accumulator: None,
-        }
-    }
-
     pub async fn write_block_stream(
         data_accessor: Arc<dyn DataAccessor>,
         block_stream: SendableDataBlockStream,
@@ -70,8 +54,8 @@ impl BlockStreamWriter {
         let block_stream =
             block_stream.try_filter(|block| std::future::ready(block.num_rows() > 0));
 
-        // merge or split the blocks according to configurations
-        let block_stream_shaper = BlockShaper::new(row_per_block);
+        // merge or split the blocks according to the settings `row_per_block`
+        let block_stream_shaper = BlockRegulator::new(row_per_block);
         let block_stream = Self::transform(block_stream, block_stream_shaper);
         // flatten a TryStream of Vec<DataBlock> into a TryStream of DataBlock
         let block_stream = block_stream
@@ -87,6 +71,20 @@ impl BlockStreamWriter {
         Box::pin(segments)
     }
 
+    pub fn new(
+        num_block_threshold: usize,
+        data_accessor: Arc<dyn DataAccessor>,
+        data_schema: Arc<DataSchema>,
+    ) -> Self {
+        Self {
+            num_block_threshold,
+            data_accessor,
+            data_schema,
+            number_of_blocks_accumulated: 0,
+            statistics_accumulator: None,
+        }
+    }
+
     /// Transforms a stream of S to a stream of T
     ///
     /// It's more like [Stream::filter_map] than [Stream::map] in the sense
@@ -95,14 +93,14 @@ impl BlockStreamWriter {
     fn transform<R, A, S, T>(inputs: R, mapper: A) -> impl futures::stream::Stream<Item = Result<T>>
     where
         R: Stream<Item = Result<S>> + Unpin,
-        A: StreamTransformer<S, T>,
+        A: Regulator<S, T>,
     {
         // For the convenience of passing mutable state back and forth, `unfold` is used
         let init_state = (Some(mapper), inputs);
         try_unfold(init_state, |(mapper, mut inputs)| async move {
             if let Some(mut acc) = mapper {
                 while let Some(item) = inputs.next().await {
-                    match acc.take(item?).await? {
+                    match acc.regulate(item?).await? {
                         Some(item) => return Ok(Some((item, (Some(acc), inputs)))),
                         None => continue,
                     }
@@ -151,36 +149,31 @@ impl BlockStreamWriter {
     }
 }
 
-/// Transformer from S to T
+/// Takes elements of type S in, and spills elements of type T.
 ///
-/// It is intended to be used in transforming a Stream of S to a Stream of T,
+/// The "shape" of the sequence of S might be not be preserved.
 #[async_trait::async_trait]
-trait StreamTransformer<S, T> {
-    /// Take an element s of type S, trying to convert it into T
+pub trait Regulator<S, T> {
+    /// Take an element s of type S, convert it into [Some<T>] if possible;
+    /// otherwise, returns [None]
     ///
-    /// If possible [<Some<T>] should be returned, Otherwise [None].
-    /// Inner state (e.g. accumulators) might be changed while taking in elements.
-    async fn take(&mut self, s: S) -> Result<Option<T>>;
+    /// for example. given a DataBlock s, a setting of `max_row_per_block`
+    ///    - Some<Vec<DataBlock>> might be returned if s is large
+    ///       in this case, s has been split into slices
+    ///    - or [None] might be returned if s is too small
+    ///       in this case, s will be accumulated
+    ///
+    async fn regulate(&mut self, s: S) -> Result<Option<T>>;
 
-    /// Indicates that there will be no more elements be taken. Spills
-    /// [Some<T>] if there were, otherwise [None]
+    /// Indicate that no more elements remains.
+    ///
+    /// Spills [Some<T>] if there were, otherwise [None]
     fn seal(self) -> Result<Option<T>>;
 }
 
 #[async_trait::async_trait]
-impl StreamTransformer<DataBlock, Vec<DataBlock>> for BlockShaper {
-    async fn take(&mut self, s: DataBlock) -> Result<Option<Vec<DataBlock>>> {
-        self.shape(s).map(Some)
-    }
-
-    fn seal(self) -> Result<Option<Vec<DataBlock>>> {
-        Ok(self.seal()?.map(|v| vec![v]))
-    }
-}
-
-#[async_trait::async_trait]
-impl StreamTransformer<DataBlock, SegmentInfo> for BlockStreamWriter {
-    async fn take(&mut self, s: DataBlock) -> Result<Option<SegmentInfo>> {
+impl Regulator<DataBlock, SegmentInfo> for BlockStreamWriter {
+    async fn regulate(&mut self, s: DataBlock) -> Result<Option<SegmentInfo>> {
         self.write_block(s).await
     }
 
@@ -204,5 +197,84 @@ impl StreamTransformer<DataBlock, SegmentInfo> for BlockStreamWriter {
                 Ok(Some(seg))
             }
         }
+    }
+}
+
+/// A regulator that spl
+pub struct BlockRegulator {
+    /// Max number of rows per data block
+    max_row_per_block: usize,
+    /// Number of rows accumulate in `accumulated_blocks`.
+    accumulated_rows: usize,
+    /// Small data blocks accumulated
+    ///
+    /// Invariant: accumulated_blocks.iter().map(|item| item.num_rows()).sum() < max_row_per_block
+    accumulated_blocks: Vec<DataBlock>,
+}
+
+impl BlockRegulator {
+    pub fn new(max_row_per_block: usize) -> Self {
+        Self {
+            max_row_per_block,
+            accumulated_rows: 0,
+            accumulated_blocks: Vec::new(),
+        }
+    }
+    fn reset(&mut self, remains: Vec<DataBlock>) {
+        self.accumulated_rows = remains.iter().map(|item| item.num_rows()).sum();
+        self.accumulated_blocks = remains;
+    }
+
+    /// split or merge the DataBlock according to the configuration
+    pub fn regulate(&mut self, block: DataBlock) -> Result<Option<Vec<DataBlock>>> {
+        let num_rows = block.num_rows();
+
+        // For cases like stmt `insert into .. select ... from ...`, the blocks that feeded
+        // are likely to be properly sized, i.e. exeactly `max_row_per_block` rows per block,
+        // In that cases, just return them.
+        if num_rows == self.max_row_per_block {
+            return Ok(Some(vec![block]));
+        }
+
+        if num_rows + self.accumulated_rows < self.max_row_per_block {
+            self.accumulated_rows += num_rows;
+            self.accumulated_blocks.push(block);
+            Ok(None)
+        } else {
+            let mut blocks = std::mem::take(&mut self.accumulated_blocks);
+            blocks.push(block);
+            let merged = DataBlock::concat_blocks(&blocks)?;
+            let blocks = DataBlock::split_block_by_size(&merged, self.max_row_per_block)?;
+
+            // NOTE: if the `blocks` returned by `split_block_by_size` is guaranteed to be
+            // well-partitioned, then the current impl could be optimized further.
+            let (result, remains) = blocks
+                .into_iter()
+                .partition(|item| item.num_rows() >= self.max_row_per_block);
+            self.reset(remains);
+            Ok(Some(result))
+        }
+    }
+
+    /// Pack the remainders into a DataBlock
+    pub fn seal(self) -> Result<Option<Vec<DataBlock>>> {
+        let remains = self.accumulated_blocks;
+        Ok(if remains.is_empty() {
+            None
+        } else {
+            Some(vec![DataBlock::concat_blocks(&remains)?])
+        })
+    }
+}
+
+// A delegation to keep trait [Regulator] private (to unit tests)
+#[async_trait::async_trait]
+impl Regulator<DataBlock, Vec<DataBlock>> for BlockRegulator {
+    async fn regulate(&mut self, block: DataBlock) -> Result<Option<Vec<DataBlock>>> {
+        BlockRegulator::regulate(self, block)
+    }
+
+    fn seal(self) -> Result<Option<Vec<DataBlock>>> {
+        BlockRegulator::seal(self)
     }
 }
