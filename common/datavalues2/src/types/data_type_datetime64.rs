@@ -30,6 +30,15 @@ pub struct DataTypeDateTime64 {
     tz: Option<String>,
 }
 
+impl DataTypeDateTime64 {
+    pub fn create(tz: Option<String>) -> Self {
+        DataTypeDateTime64 { tz }
+    }
+    pub fn arc(tz: Option<String>) -> DataTypePtr {
+        Arc::new(DataTypeDateTime64 { tz })
+    }
+}
+
 #[typetag::serde]
 impl IDataType for DataTypeDateTime64 {
     fn data_type_id(&self) -> TypeID {

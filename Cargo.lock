@@ -1607,6 +1607,7 @@ dependencies = [
  "common-macros",
  "common-mem-allocator",
  "dyn-clone",
+ "itertools",
  "lexical-core 0.8.2",
  "num",
  "ordered-float 2.10.0",

@@ -84,22 +84,41 @@ impl IDataType for DataTypeNullable {
         data: &DataValue,
         size: usize,
     ) -> common_exception::Result<ColumnRef> {
+        let mut bitmap = MutableBitmap::with_capacity(1);
+
         if self.inner.data_type_id() == TypeID::Null {
             return Ok(Arc::new(NullColumn::new(size)));
         }
-
         if self.inner.data_type_id() == TypeID::Null {
             return Result::Err(ErrorCode::BadDataValueType(format!(
                 "Nullable type can't be inside nullable type",
             )));
         }
-        self.inner.create_constant_column(data, size)
+        let data = if data.is_null() {
+            bitmap.extend_constant(size, false);
+            self.inner.default_value()
+        } else {
+            bitmap.extend_constant(size, true);
+            data.clone()
+        };
+        let column = self.inner.create_constant_column(&data, size)?;
+        Ok(Arc::new(NullableColumn::new(column, bitmap.into())))
     }
 
     fn create_column(&self, data: &[DataValue]) -> common_exception::Result<ColumnRef> {
-        let column = self.inner.create_column(data)?;
+        let mut res = Vec::with_capacity(data.len());
         let mut bitmap = MutableBitmap::with_capacity(data.len());
-        bitmap.extend_constant(data.len(), true);
+
+        for v in data {
+            if v.is_null() {
+                bitmap.push(false);
+                res.push(self.inner.default_value());
+            } else {
+                bitmap.push(true);
+                res.push(v.clone());
+            }
+        }
+        let column = self.inner.create_column(&data)?;
         Ok(Arc::new(NullableColumn::new(column, bitmap.into())))
     }
 }

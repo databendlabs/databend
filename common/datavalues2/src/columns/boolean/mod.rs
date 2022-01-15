@@ -63,6 +63,10 @@ impl BooleanColumn {
             validity,
         ))
     }
+
+    pub fn values(&self) -> &Bitmap {
+        &self.values
+    }
 }
 
 impl Column for BooleanColumn {
@@ -76,10 +80,6 @@ impl Column for BooleanColumn {
 
     fn len(&self) -> usize {
         self.values.len()
-    }
-
-    fn null_at(&self, row: usize) -> bool {
-        !self.values.get_bit(row)
     }
 
     fn memory_size(&self) -> usize {
@@ -125,6 +125,10 @@ impl Column for BooleanColumn {
             previous_offset = offset;
         }
         builder.as_column()
+    }
+
+    fn convert_full_column(&self) -> ColumnRef {
+        Arc::new(self.clone())
     }
 
     unsafe fn get_unchecked(&self, index: usize) -> DataValue {

@@ -17,7 +17,6 @@ use common_exception::Result;
 use crate::prelude::DataValue;
 use crate::Column;
 use crate::ColumnRef;
-use crate::MutableNullableColumn;
 use crate::NullableColumn;
 use crate::Series;
 use crate::TypeSerializer;

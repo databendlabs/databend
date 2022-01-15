@@ -83,10 +83,6 @@ impl MutableBooleanColumn {
         self.values.push(value);
     }
 
-    fn len(&self) -> usize {
-        self.values.len()
-    }
-
     pub fn finish(&mut self) -> BooleanColumn {
         self.shrink_to_fit();
         BooleanColumn {

@@ -14,7 +14,6 @@
 
 use common_exception::Result;
 
-use crate::prelude::DataValue;
 use crate::ColumnRef;
 use crate::MutableColumn;
 use crate::MutableNullColumn;

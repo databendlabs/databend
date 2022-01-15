@@ -98,6 +98,10 @@ impl Column for NullColumn {
         })
     }
 
+    fn convert_full_column(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
     unsafe fn get_unchecked(&self, _index: usize) -> DataValue {
         DataValue::Null
     }

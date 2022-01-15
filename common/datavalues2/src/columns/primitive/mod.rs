@@ -132,6 +132,10 @@ impl<T: PrimitiveType> PrimitiveColumn<T> {
         *self.values.get_unchecked(i)
     }
 
+    pub fn values(&self) -> &[T] {
+        &self.values.as_slice()
+    }
+
     /// Create a new DataArray by taking ownership of the Vec. This operation is zero copy.
     pub fn new_from_vec(values: Vec<T>) -> Self {
         Self {
@@ -198,6 +202,10 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
             previous_offset = offset;
         }
         builder.as_column()
+    }
+
+    fn convert_full_column(&self) -> ColumnRef {
+        Arc::new(self.clone())
     }
 
     /// Note this doesn't do any bound checking, for performance reason.

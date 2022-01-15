@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::Bitmap;
-use serde::de::value;
 
 use crate::prelude::*;
 
@@ -61,6 +59,10 @@ impl StructColumn {
 
     pub fn from_data(values: Vec<ColumnRef>, data_type: DataTypePtr) -> Self {
         Self { values, data_type }
+    }
+
+    pub fn values(&self) -> &[ColumnRef] {
+        &self.values
     }
 }
 
@@ -112,5 +114,9 @@ impl Column for StructColumn {
             values,
             data_type: self.data_type.clone(),
         })
+    }
+
+    fn convert_full_column(&self) -> ColumnRef {
+        Arc::new(self.clone())
     }
 }

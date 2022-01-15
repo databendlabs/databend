@@ -23,9 +23,9 @@ impl TypeSerializer for BooleanSerializer {
     fn serialize_value(&self, value: &DataValue) -> Result<String> {
         if let DataValue::Boolean(x) = value {
             if *x {
-                Ok("true".to_owned())
+                Ok("1".to_owned())
             } else {
-                Ok("false".to_owned())
+                Ok("0".to_owned())
             }
         } else {
             Err(ErrorCode::BadBytes("Incorrect boolean value"))
@@ -33,7 +33,7 @@ impl TypeSerializer for BooleanSerializer {
     }
 
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
-        let array: &BooleanColumn =  Series::check_get(column)?;
+        let array: &BooleanColumn = Series::check_get(column)?;
 
         let result: Vec<String> = array
             .iter()

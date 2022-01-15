@@ -18,7 +18,6 @@ mod mutable;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::cast::binary_to_large_binary;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -122,6 +121,14 @@ impl StringColumn {
         let offset_1 = self.offsets[i + 1];
         (offset_1 - offset).to_usize()
     }
+
+    pub fn values(&self) -> &[u8] {
+        &self.values.as_slice()
+    }
+
+    pub fn offsets(&self) -> &[i64] {
+        &self.offsets.as_slice()
+    }
 }
 
 impl Column for StringColumn {
@@ -182,6 +189,10 @@ impl Column for StringColumn {
             previous_offset = offset;
         }
         builder.as_column()
+    }
+
+    fn convert_full_column(&self) -> ColumnRef {
+        Arc::new(self.clone())
     }
 
     unsafe fn get_unchecked(&self, index: usize) -> DataValue {

@@ -63,6 +63,7 @@ pub trait IDataType: std::fmt::Debug + Sync + Send + DynClone {
     fn default_value(&self) -> DataValue;
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef>;
+
     fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef>;
 
     /// arrow_type did not have nullable sign, it's nullable sign is in the field
@@ -99,10 +100,12 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
         ArrowType::Float32 => Arc::new(DataTypeFloat32::default()),
         ArrowType::Float64 => Arc::new(DataTypeFloat64::default()),
 
-        ArrowType::FixedSizeList(f, size) => {
+        // TODO support other list
+        ArrowType::LargeList(f) => {
             let inner = from_arrow_field(f);
             Arc::new(DataTypeArray::create(inner))
         }
+
         ArrowType::Binary | ArrowType::LargeBinary | ArrowType::Utf8 | ArrowType::LargeUtf8 => {
             Arc::new(DataTypeString::default())
         }
@@ -128,12 +131,12 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
 pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
     if let Some(m) = f.metadata() {
         if let Some(custom_name) = m.get("ARROW:extension:databend_name") {
-            let metatada = m.get("ARROW:extension:databend_metadata");
+            let metatada = m.get("ARROW:extension:databend_metadata").cloned();
             match custom_name.as_str() {
                 "Date" | "Date16" => return Arc::new(DataTypeDate::default()),
                 "Date32" => return Arc::new(DataTypeDate32::default()),
-                "DateTime" | "DateTime32" => return Arc::new(DataTypeDateTime::default()),
-                "DateTime64" => return Arc::new(DataTypeDateTime64::default()),
+                "DateTime" | "DateTime32" => return DataTypeDateTime::arc(metatada),
+                "DateTime64" => return DataTypeDateTime64::arc(metatada),
                 _ => {}
             }
         }

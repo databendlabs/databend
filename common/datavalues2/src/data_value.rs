@@ -111,11 +111,6 @@ impl DataValue {
                 Arc::new(DataTypeArray::create(inner_type))
             }
             DataValue::Struct(x) => {
-                let inner_type = if x.is_empty() {
-                    DataTypeUInt8::arc()
-                } else {
-                    x[0].data_type()
-                };
                 let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
                 Arc::new(DataTypeStruct::create(names, types))

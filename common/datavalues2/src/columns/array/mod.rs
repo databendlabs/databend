@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::types::Index;
 
@@ -76,6 +75,14 @@ impl ArrayColumn {
         let offset_1 = self.offsets[i + 1];
         (offset_1 - offset).to_usize()
     }
+
+    pub fn values(&self) -> &ColumnRef {
+        &self.values
+    }
+
+    pub fn offsets(&self) -> &[i64] {
+        &self.offsets.as_slice()
+    }
 }
 
 impl Column for ArrayColumn {
@@ -126,6 +133,10 @@ impl Column for ArrayColumn {
         // match datatypes
         // TODO: see https://github.com/ClickHouse/ClickHouse/blob/340b53ef853348758c9042b16a8599120ebc8d22/src/Columns/ColumnArray.cpp
         todo!()
+    }
+
+    fn convert_full_column(&self) -> ColumnRef {
+        Arc::new(self.clone())
     }
 
     unsafe fn get_unchecked(&self, index: usize) -> DataValue {

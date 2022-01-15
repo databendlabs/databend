@@ -29,10 +29,6 @@ impl ConstColumn {
     pub fn new(column: ColumnRef, length: usize) -> Self {
         Self { column, length }
     }
-
-    pub fn convert_full_column(&self) -> ColumnRef {
-        self.column.replicate(&[self.length])
-    }
 }
 
 impl Column for ConstColumn {
@@ -93,7 +89,11 @@ impl Column for ConstColumn {
         Arc::new(Self::new(self.column.clone(), *offsets.last().unwrap()))
     }
 
-    unsafe fn get_unchecked(&self, index: usize) -> DataValue {
+    fn convert_full_column(&self) -> ColumnRef {
+        self.column.replicate(&[self.length])
+    }
+
+    unsafe fn get_unchecked(&self, _index: usize) -> DataValue {
         self.column.get_unchecked(0)
     }
 }

@@ -90,14 +90,18 @@ impl IDataType for DataTypeStruct {
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
+        let inners = self.types.iter().map(|v| v.create_serializer()).collect();
+        Box::new(StructSerializer {
+            inners,
+            types: self.types.clone(),
+        })
+    }
+
+    fn create_deserializer(&self, _capacity: usize) -> Box<dyn TypeDeserializer> {
         todo!()
     }
 
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        todo!()
-    }
-
-    fn create_column(&self, data: &[DataValue]) -> common_exception::Result<ColumnRef> {
+    fn create_column(&self, _data: &[DataValue]) -> common_exception::Result<ColumnRef> {
         todo!()
     }
 }

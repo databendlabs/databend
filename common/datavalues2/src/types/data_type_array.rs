@@ -42,7 +42,7 @@ impl DataTypeArray {
 #[typetag::serde]
 impl IDataType for DataTypeArray {
     fn data_type_id(&self) -> TypeID {
-        TypeID::List
+        TypeID::Array
     }
 
     #[inline]
@@ -101,7 +101,7 @@ impl IDataType for DataTypeArray {
         todo!()
     }
 
-    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+    fn create_deserializer(&self, _capacity: usize) -> Box<dyn TypeDeserializer> {
         todo!()
     }
 }

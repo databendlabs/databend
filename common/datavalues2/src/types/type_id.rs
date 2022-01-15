@@ -68,7 +68,7 @@ pub enum TypeID {
 
     Interval,
 
-    List,
+    Array,
     Struct,
 }
 
@@ -169,10 +169,71 @@ impl TypeID {
             ))),
         }
     }
+
+    pub fn to_physical_type(&self) -> PhysicalTypeID {
+        use TypeID::*;
+        match self {
+            Nullable => PhysicalTypeID::Nullable,
+            Null => PhysicalTypeID::Null,
+            Boolean => PhysicalTypeID::Boolean,
+            Int8 => PhysicalTypeID::Primitive(PrimitiveTypeID::Int8),
+            Int16 => PhysicalTypeID::Primitive(PrimitiveTypeID::Int16),
+
+            Int32 | Date32 => PhysicalTypeID::Primitive(PrimitiveTypeID::Int32),
+            Int64 | Interval => PhysicalTypeID::Primitive(PrimitiveTypeID::Int64),
+
+            UInt8 => PhysicalTypeID::Primitive(PrimitiveTypeID::UInt8),
+            Date16 | UInt16 => PhysicalTypeID::Primitive(PrimitiveTypeID::UInt16),
+            DateTime32 | UInt32 => PhysicalTypeID::Primitive(PrimitiveTypeID::UInt32),
+            DateTime64 | UInt64 => PhysicalTypeID::Primitive(PrimitiveTypeID::UInt64),
+            Float32 => PhysicalTypeID::Primitive(PrimitiveTypeID::Float32),
+            Float64 => PhysicalTypeID::Primitive(PrimitiveTypeID::Float64),
+
+            String => PhysicalTypeID::String,
+            Array => PhysicalTypeID::Array,
+            Struct => PhysicalTypeID::Struct,
+        }
+    }
 }
 
 impl std::fmt::Display for TypeID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PhysicalTypeID {
+    Null,
+    Nullable,
+    Boolean,
+    String,
+
+    Primitive(PrimitiveTypeID),
+    Array,
+    Struct,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PrimitiveTypeID {
+    /// A signed 8-bit integer.
+    Int8,
+    /// A signed 16-bit integer.
+    Int16,
+    /// A signed 32-bit integer.
+    Int32,
+    /// A signed 64-bit integer.
+    Int64,
+    /// An unsigned 8-bit integer.
+    UInt8,
+    /// An unsigned 16-bit integer.
+    UInt16,
+    /// An unsigned 32-bit integer.
+    UInt32,
+    /// An unsigned 64-bit integer.
+    UInt64,
+    /// A 32-bit floating point number.
+    Float32,
+    /// A 64-bit floating point number.
+    Float64,
 }

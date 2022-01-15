@@ -383,7 +383,7 @@ pub fn merge_types(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Result<Dat
     match (lhs_id, rhs_id) {
         (Null, _) => Ok(rhs_type.clone()),
         (_, Null) => Ok(lhs_type.clone()),
-        (List, List) => {
+        (Array, Array) => {
             let a = lhs_type.as_any().downcast_ref::<DataTypeArray>().unwrap();
             let b = rhs_type.as_any().downcast_ref::<DataTypeArray>().unwrap();
 

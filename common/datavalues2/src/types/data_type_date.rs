@@ -24,6 +24,12 @@ use crate::prelude::*;
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DataTypeDate {}
 
+impl DataTypeDate {
+    pub fn arc() -> DataTypePtr {
+        Arc::new(DataTypeDate {})
+    }
+}
+
 #[typetag::serde]
 impl IDataType for DataTypeDate {
     fn data_type_id(&self) -> TypeID {
@@ -42,7 +48,7 @@ impl IDataType for DataTypeDate {
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
         let value = data.as_u64()?;
 
-        let column = Series::new(&[value]);
+        let column = Series::new(&[value as u16]);
         Ok(Arc::new(ConstColumn::new(column, size)))
     }
 

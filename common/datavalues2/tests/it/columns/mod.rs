@@ -13,6 +13,5 @@
 // limitations under the License.
 
 mod boolean;
-mod ops;
 mod primitive;
 mod string;

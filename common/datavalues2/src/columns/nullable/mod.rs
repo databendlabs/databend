@@ -109,6 +109,13 @@ impl Column for NullableColumn {
         })
     }
 
+    fn convert_full_column(&self) -> ColumnRef {
+        Arc::new(Self {
+            column: self.column.convert_full_column(),
+            validity: self.validity.clone(),
+        })
+    }
+
     unsafe fn get_unchecked(&self, _index: usize) -> DataValue {
         self.column.get_unchecked(0)
     }

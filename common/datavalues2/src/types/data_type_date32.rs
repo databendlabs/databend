@@ -47,7 +47,7 @@ impl IDataType for DataTypeDate32 {
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
         let value = data.as_i64()?;
-        let column = Series::new(&[value]);
+        let column = Series::new(&[value as i32]);
         Ok(Arc::new(ConstColumn::new(column, size)))
     }
 

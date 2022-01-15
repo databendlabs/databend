@@ -13,13 +13,12 @@
 // limitations under the License.
 
 use std::sync::Arc;
+
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 
-use crate::prelude::DataValue;
-use crate::{ColumnRef, MutableNullableColumn, NullableColumn};
-use crate::MutableColumn;
-use crate::MutableNullColumn;
+use crate::ColumnRef;
+use crate::NullableColumn;
 use crate::TypeDeserializer;
 
 pub struct NullableDeserializer {
@@ -60,6 +59,9 @@ impl TypeDeserializer for NullableDeserializer {
     }
     fn finish_to_column(&mut self) -> ColumnRef {
         let inner_column = self.inner.finish_to_column();
-        Arc::new(NullableColumn::new(inner_column, std::mem::take(&mut self.bitmap).into()))
+        Arc::new(NullableColumn::new(
+            inner_column,
+            std::mem::take(&mut self.bitmap).into(),
+        ))
     }
 }

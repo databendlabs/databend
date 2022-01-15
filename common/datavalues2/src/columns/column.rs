@@ -69,6 +69,8 @@ pub trait Column: Send + Sync {
     // (i-th element should be copied offsets[i] - offsets[i - 1] times.)
     fn replicate(&self, offsets: &[usize]) -> ColumnRef;
 
+    fn convert_full_column(&self) -> ColumnRef;
+
     unsafe fn get_unchecked(&self, index: usize) -> DataValue;
 
     unsafe fn get_u64_unchecked(&self, index: usize) -> Result<u64> {
@@ -114,7 +116,7 @@ impl IntoColumn for ArrayRef {
             Float32 => Arc::new(Float32Column::from_arrow_array(self.as_ref())),
             Float64 => Arc::new(Float64Column::from_arrow_array(self.as_ref())),
 
-            List => Arc::new(ArrayColumn::from_arrow_array(self.as_ref())),
+            Array => Arc::new(ArrayColumn::from_arrow_array(self.as_ref())),
             Struct => Arc::new(StructColumn::from_arrow_array(self.as_ref())),
             String => Arc::new(StringColumn::from_arrow_array(self.as_ref())),
         }
@@ -132,5 +134,12 @@ impl IntoColumn for ArrayRef {
                 Bitmap::from(bm)
             }),
         ))
+    }
+}
+
+impl std::fmt::Debug for dyn Column + '_ {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let array = self.as_arrow_array();
+        std::fmt::Debug::fmt(&array, f)
     }
 }

@@ -33,18 +33,18 @@ pub struct DataTypeNumeric<
 // typetag did not support generic impls, so we have to do this
 pub fn create_primitive_datatype<T: PrimitiveType>() -> Arc<dyn IDataType> {
     match (T::SIGN, T::FLOATING, T::SIZE) {
-        (false, false, 8) => Arc::new(DataTypeUInt8 { _t: PhantomData }),
-        (false, false, 16) => Arc::new(DataTypeUInt16 { _t: PhantomData }),
-        (false, false, 32) => Arc::new(DataTypeUInt32 { _t: PhantomData }),
-        (false, false, 64) => Arc::new(DataTypeUInt64 { _t: PhantomData }),
+        (false, false, 1) => Arc::new(DataTypeUInt8 { _t: PhantomData }),
+        (false, false, 2) => Arc::new(DataTypeUInt16 { _t: PhantomData }),
+        (false, false, 4) => Arc::new(DataTypeUInt32 { _t: PhantomData }),
+        (false, false, 8) => Arc::new(DataTypeUInt64 { _t: PhantomData }),
 
-        (false, false, 8) => Arc::new(DataTypeInt8 { _t: PhantomData }),
-        (false, false, 16) => Arc::new(DataTypeInt16 { _t: PhantomData }),
-        (false, false, 32) => Arc::new(DataTypeInt32 { _t: PhantomData }),
-        (false, false, 64) => Arc::new(DataTypeInt64 { _t: PhantomData }),
+        (true, false, 1) => Arc::new(DataTypeInt8 { _t: PhantomData }),
+        (true, false, 2) => Arc::new(DataTypeInt16 { _t: PhantomData }),
+        (true, false, 4) => Arc::new(DataTypeInt32 { _t: PhantomData }),
+        (true, false, 8) => Arc::new(DataTypeInt64 { _t: PhantomData }),
 
-        (true, true, 32) => Arc::new(DataTypeFloat32 { _t: PhantomData }),
-        (true, true, 64) => Arc::new(DataTypeFloat64 { _t: PhantomData }),
+        (true, true, 4) => Arc::new(DataTypeFloat32 { _t: PhantomData }),
+        (true, true, 8) => Arc::new(DataTypeFloat64 { _t: PhantomData }),
 
         _ => unimplemented!(),
     }

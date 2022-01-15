@@ -28,7 +28,7 @@ pub struct DataField {
 }
 
 impl DataField {
-    pub fn new(name: &str, data_type: DataTypePtr, nullable: bool) -> Self {
+    pub fn new(name: &str, data_type: DataTypePtr) -> Self {
         DataField {
             name: name.to_string(),
             default_expr: None,
@@ -87,7 +87,7 @@ impl From<&ArrowField> for DataField {
     fn from(f: &ArrowField) -> Self {
         let dt: DataTypePtr = from_arrow_field(f);
 
-        DataField::new(f.name(), dt, f.is_nullable())
+        DataField::new(f.name(), dt)
     }
 }
 

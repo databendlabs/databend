@@ -20,7 +20,6 @@ use crate::columns::mutable::MutableColumn;
 use crate::prelude::DataTypePtr;
 use crate::types::create_primitive_datatype;
 use crate::ColumnRef;
-use crate::NewColumn;
 use crate::PrimitiveColumn;
 use crate::PrimitiveType;
 
@@ -111,9 +110,4 @@ where T: PrimitiveType
     pub fn values(&self) -> &Vec<T> {
         &self.values
     }
-
-    fn len(&self) -> usize {
-        self.values.len()
-    }
 }
-

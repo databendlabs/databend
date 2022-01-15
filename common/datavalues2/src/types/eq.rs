@@ -56,7 +56,7 @@ pub fn equal(lhs: &dyn IDataType, rhs: &dyn IDataType) -> bool {
             *lhs.inner_type() == *rhs.inner_type()
         }
 
-        List => {
+        Array => {
             let lhs: &DataTypeArray = lhs.as_any().downcast_ref().unwrap();
             let rhs: &DataTypeArray = rhs.as_any().downcast_ref().unwrap();
 
