@@ -243,7 +243,7 @@ impl QueryContext {
     }
 
     pub fn get_tenant(&self) -> String {
-        if self.shared.conf.query.proxy_mode {
+        if self.shared.conf.query.management_mode {
             self.shared.get_current_tenant()
         } else {
             self.shared.get_tenant()

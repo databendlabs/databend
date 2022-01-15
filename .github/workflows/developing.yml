@@ -95,7 +95,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: ./.github/actions/test_stateful_standalone
 
-  test_proxy_mode:
+  test_management_mode:
     runs-on: ${{ matrix.config.os }}
     needs: build
     strategy:
@@ -104,4 +104,4 @@ jobs:
           - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
     steps:
       - uses: actions/checkout@v2
-      - uses: ./.github/actions/test_proxy_mode
+      - uses: ./.github/actions/test_management_mode
