@@ -59,8 +59,7 @@ where
                 let c: &ConstColumn = unsafe { Series::static_cast(column) };
                 (c.inner(), bitmap.into())
             } else {
-                let c: &ColumnRef = unsafe { Series::static_cast(column) };
-                (c, bitmap.into())
+                (column, bitmap.into())
             }
         };
 

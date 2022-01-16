@@ -35,29 +35,3 @@ pub trait MutableColumn {
     }
     fn shrink_to_fit(&mut self);
 }
-
-// pub fn create_mutable_array(datatype: &DataTypePtr) -> Box<dyn MutableColumn> {
-//     match datatype.data_type_id() {
-//         // TODO
-//         TypeID::Boolean => Box::new(MutableBooleanColumn::default()),
-//         TypeID::UInt8 => Box::new(MutablePrimitiveColumn::<u8>::default()),
-//         TypeID::UInt16 => Box::new(MutablePrimitiveColumn::<u16>::default()),
-//         TypeID::UInt32 => Box::new(MutablePrimitiveColumn::<u32>::default()),
-//         TypeID::UInt64 => Box::new(MutablePrimitiveColumn::<u64>::default()),
-//         TypeID::Int8 => Box::new(MutablePrimitiveColumn::<i8>::default()),
-//         TypeID::Int16 => Box::new(MutablePrimitiveColumn::<i16>::default()),
-//         TypeID::Int32 => Box::new(MutablePrimitiveColumn::<i32>::default()),
-//         TypeID::Int64 => Box::new(MutablePrimitiveColumn::<i64>::default()),
-//         TypeID::Float32 => Box::new(MutablePrimitiveColumn::<f32>::default()),
-//         TypeID::Float64 => Box::new(MutablePrimitiveColumn::<f64>::default()),
-//         TypeID::String => Box::new(MutableStringColumn::default()),
-//         TypeID::Null => Box::new(MutableNullColumn::default()),
-//         TypeID::Nullable => {
-//             let ty: &NullableType = datatype.as_any().downcast_ref().unwrap();
-//             let mutable_inner = create_mutable_array(ty.inner_type());
-//             Box::new(MutableNullableColumn::new(mutable_inner))
-//         }
-//         _ => {
-//         }
-//     }
-// }

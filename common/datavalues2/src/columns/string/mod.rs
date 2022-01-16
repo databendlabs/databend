@@ -85,7 +85,7 @@ impl StringColumn {
     /// just like BinaryArray::from_data_unchecked, as follows
     /// * `offsets` MUST be monotonically increasing
     /// # Panics
-    /// This function panics iff:
+    /// This function panics if:
     /// * The last element of `offsets` is different from `values.len()`.
     /// * The validity is not `None` and its length is different from `offsets.len() - 1`.
     pub unsafe fn from_data_unchecked(offsets: Buffer<i64>, values: Buffer<u8>) -> Self {

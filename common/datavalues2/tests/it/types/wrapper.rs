@@ -14,6 +14,7 @@
 
 use common_datavalues2::prelude::*;
 use common_exception::Result;
+use pretty_assertions::assert_eq;
 
 #[test]
 fn test_primitive_wrapper() -> Result<()> {

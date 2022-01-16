@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues2::prelude::*;
 use common_exception::Result;
+use pretty_assertions::assert_eq;
 
 #[test]
 fn test_create_constant() -> Result<()> {
@@ -108,16 +109,12 @@ fn test_create_constant() -> Result<()> {
                 .collect();
             let full_column2 = test.data_type.create_column(&values).unwrap();
 
-            assert!(full_column == full_column2, "case: {:#?}", test.name);
+            assert_eq!(full_column, full_column2, "case: {:#?}", test.name);
         } else {
             let c: &NullableColumn = Series::check_get(&column).unwrap();
             let full_column = c.convert_full_column();
 
-            assert!(
-                full_column == test.column_expected,
-                "case: {:#?}",
-                test.name
-            );
+            assert_eq!(full_column, test.column_expected, "case: {:#?}", test.name);
         }
     }
     Ok(())

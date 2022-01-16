@@ -1598,7 +1598,6 @@ dependencies = [
 name = "common-datavalues2"
 version = "0.1.0"
 dependencies = [
- "ahash",
  "chrono",
  "chrono-tz",
  "common-arrow",
@@ -1610,13 +1609,8 @@ dependencies = [
  "itertools",
  "lexical-core 0.8.2",
  "num",
- "ordered-float 2.10.0",
  "pretty_assertions",
- "regex",
  "serde",
- "serde_json",
- "simdutf8",
- "strength_reduce",
  "typetag",
 ]
 
