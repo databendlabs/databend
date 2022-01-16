@@ -43,21 +43,21 @@ use crate::common::MetaClientProvider;
 /// A `MetaApi` impl with MetaApi RPC.
 #[allow(dead_code)]
 #[derive(Clone)]
-pub struct MetaRemote {
+pub struct MetaBackend {
     rpc_time_out: Option<Duration>,
     meta_api_provider: Arc<MetaClientProvider>,
 }
 
-impl MetaRemote {
-    pub fn create(apis_provider: Arc<MetaClientProvider>) -> MetaRemote {
+impl MetaBackend {
+    pub fn create(apis_provider: Arc<MetaClientProvider>) -> MetaBackend {
         Self::with_timeout_setting(apis_provider, Some(Duration::from_secs(5)))
     }
 
     pub fn with_timeout_setting(
         apis_provider: Arc<MetaClientProvider>,
         timeout: Option<Duration>,
-    ) -> MetaRemote {
-        MetaRemote {
+    ) -> MetaBackend {
+        MetaBackend {
             rpc_time_out: timeout,
             meta_api_provider: apis_provider,
         }
@@ -76,7 +76,7 @@ impl MetaRemote {
 }
 
 #[async_trait::async_trait]
-impl MetaApi for MetaRemote {
+impl MetaApi for MetaBackend {
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         self.query_backend(move |cli| async move { cli.create_database(req).await })
             .await

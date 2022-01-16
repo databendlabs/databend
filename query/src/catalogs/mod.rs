@@ -20,7 +20,7 @@ mod table_memory_meta;
 mod backends;
 mod impls;
 
-pub use backends::MetaRemote;
+pub use backends::MetaBackend;
 pub use catalog::Catalog;
 pub use catalog_context::CatalogContext;
 pub use impls::DatabaseCatalog;
