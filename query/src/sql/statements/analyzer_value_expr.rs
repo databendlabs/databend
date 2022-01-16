@@ -17,9 +17,10 @@ use common_datavalues::DataValue;
 use common_datavalues::IntervalUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Expression;
 use sqlparser::ast::DateTimeField;
 use sqlparser::ast::Value;
+
+use crate::planners::Expression;
 
 pub struct ValueExprAnalyzer;
 

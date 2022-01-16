@@ -20,13 +20,13 @@ use common_datablocks::SortColumnDescription;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use common_streams::SortStream;
 use common_tracing::tracing;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
+use crate::planners::Expression;
 
 pub struct SortPartialTransform {
     schema: DataSchemaRef,

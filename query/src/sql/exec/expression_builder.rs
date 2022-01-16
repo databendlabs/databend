@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_planners::Expression;
 
+use crate::planners::Expression;
 use crate::sql::BoundVariable;
 use crate::sql::Metadata;
 use crate::sql::ScalarExpr;

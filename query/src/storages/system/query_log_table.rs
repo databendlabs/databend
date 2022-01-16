@@ -23,12 +23,12 @@ use common_infallible::RwLock;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::ReadDataSourcePlan;
-use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
+use crate::planners::ReadDataSourcePlan;
+use crate::planners::TruncateTablePlan;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 

@@ -23,11 +23,11 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
-use common_planners::Expression;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::planners::Expression;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 

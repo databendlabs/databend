@@ -21,10 +21,10 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
+use crate::planners::ReadDataSourcePlan;
 use crate::sessions::QueryContext;
 use crate::storages::github::RepoCommentsTable;
 use crate::storages::github::RepoInfoTable;

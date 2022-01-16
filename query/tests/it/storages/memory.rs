@@ -20,7 +20,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::*;
+use databend_query::planners::*;
 use databend_query::storages::memory::MemoryTable;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;

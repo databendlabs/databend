@@ -26,7 +26,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
-use common_planners::Expression;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::Query;
@@ -34,6 +33,7 @@ use sqlparser::ast::UnaryOperator;
 use sqlparser::ast::Value;
 
 use crate::functions::ContextFunction;
+use crate::planners::Expression;
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_value_expr::ValueExprAnalyzer;
 use crate::sql::statements::AnalyzableStatement;
@@ -210,7 +210,7 @@ impl ExpressionAnalyzer {
             Ok(Expression::AggregateFunction {
                 op: info.name.clone(),
                 distinct: info.distinct,
-                args: vec![common_planners::lit(0i64)],
+                args: vec![crate::planners::lit(0i64)],
                 params: parameters,
             })
         } else {

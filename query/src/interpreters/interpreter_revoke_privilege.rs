@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::RevokePrivilegePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -23,6 +22,7 @@ use common_tracing::tracing;
 use crate::interpreters::interpreter_common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::planners::RevokePrivilegePlan;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]

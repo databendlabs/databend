@@ -16,7 +16,6 @@
 /common/management/      @datafuselabs/query-members
 /common/mem-allocator/   @datafuselabs/query-members
 /common/metrics/         @datafuselabs/query-members
-/common/planners/        @datafuselabs/query-members
 /common/streams/         @datafuselabs/query-members
 /common/tracing/         @datafuselabs/query-members
 /common/base/            @datafuselabs/query-members

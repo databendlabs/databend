@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_planners::Extras;
+use databend_query::planners::Extras;
 use databend_query::storages::fuse::meta::BlockLocation;
 use databend_query::storages::fuse::meta::BlockMeta;
 use databend_query::storages::fuse::FuseTable;

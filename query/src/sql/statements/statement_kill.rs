@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::KillPlan;
-use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::Ident;
 
+use crate::planners::KillPlan;
+use crate::planners::PlanNode;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

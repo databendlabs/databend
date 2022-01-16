@@ -18,12 +18,12 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
-use common_planners::SettingPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::planners::SettingPlan;
 use crate::sessions::QueryContext;
 
 pub struct SettingInterpreter {

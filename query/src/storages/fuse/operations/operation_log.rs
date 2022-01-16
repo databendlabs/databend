@@ -35,7 +35,7 @@ pub struct AppendOperationLogEntry {
 
 impl AppendOperationLogEntry {
     pub fn schema() -> DataSchemaRef {
-        common_planners::SINK_SCHEMA.clone()
+        crate::planners::SINK_SCHEMA.clone()
     }
 
     pub fn new(segment_location: String, segment_info: SegmentInfo) -> Self {

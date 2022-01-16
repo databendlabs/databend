@@ -15,10 +15,10 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::ReadDataSourcePlan;
-use common_planners::TruncateTablePlan;
 use databend_query::catalogs::Catalog;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::planners::ReadDataSourcePlan;
+use databend_query::planners::TruncateTablePlan;
 use databend_query::sql::PlanParser;
 use databend_query::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
 use databend_query::storages::ToReadDataSourcePlan;

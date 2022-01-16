@@ -17,8 +17,8 @@ use std::mem::size_of;
 use common_datavalues::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_planners::*;
 use databend_query::optimizers::*;
+use databend_query::planners::*;
 use pretty_assertions::assert_eq;
 
 use crate::optimizers::optimizer::*;

@@ -21,6 +21,7 @@ mod interpreters;
 mod metrics;
 mod optimizers;
 mod pipelines;
+mod planners;
 mod servers;
 mod sessions;
 mod sql;

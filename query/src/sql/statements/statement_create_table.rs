@@ -21,14 +21,14 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableMeta;
-use common_planners::CreateTablePlan;
-use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOption;
 use sqlparser::ast::ObjectName;
 
 use super::analyzer_expr::ExpressionAnalyzer;
+use crate::planners::CreateTablePlan;
+use crate::planners::PlanNode;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

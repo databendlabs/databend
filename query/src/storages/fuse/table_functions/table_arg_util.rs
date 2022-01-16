@@ -16,8 +16,8 @@
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Expression;
 
+use crate::planners::Expression;
 use crate::table_functions::TableArgs;
 
 pub fn string_value(expr: &Expression) -> Result<String> {

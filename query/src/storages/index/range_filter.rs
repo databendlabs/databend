@@ -22,13 +22,13 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
-use common_planners::lit;
-use common_planners::Expression;
-use common_planners::ExpressionMonotonicityVisitor;
-use common_planners::Expressions;
-use common_planners::RequireColumnsVisitor;
 
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::planners::lit;
+use crate::planners::Expression;
+use crate::planners::ExpressionMonotonicityVisitor;
+use crate::planners::Expressions;
+use crate::planners::RequireColumnsVisitor;
 
 pub type BlockStatistics = HashMap<u32, ColumnStatistics>;
 

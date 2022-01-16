@@ -18,9 +18,9 @@ use common_arrow::arrow_format::flight::data::Action;
 use common_base::tokio;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_planners::Expression;
 use databend_query::api::FlightAction;
 use databend_query::api::ShuffleAction;
+use databend_query::planners::Expression;
 use databend_query::sql::PlanParser;
 
 use crate::tests::create_query_context;

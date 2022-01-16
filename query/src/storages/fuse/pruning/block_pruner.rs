@@ -15,11 +15,11 @@
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::Extras;
 use common_tracing::tracing;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
+use crate::planners::Extras;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::io::MetaReaders;

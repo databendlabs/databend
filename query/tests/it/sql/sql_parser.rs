@@ -24,7 +24,7 @@ use common_meta_types::StageParams;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
-use common_planners::Optimization;
+use databend_query::planners::Optimization;
 use databend_query::sql::statements::DfAlterUDF;
 use databend_query::sql::statements::DfAlterUser;
 use databend_query::sql::statements::DfCopy;

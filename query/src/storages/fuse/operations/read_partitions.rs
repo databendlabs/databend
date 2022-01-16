@@ -17,11 +17,11 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::Extras;
-use common_planners::Part;
-use common_planners::Partitions;
-use common_planners::Statistics;
 
+use crate::planners::Extras;
+use crate::planners::Part;
+use crate::planners::Partitions;
+use crate::planners::Statistics;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::operations::part_info::PartInfo;

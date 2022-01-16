@@ -16,13 +16,13 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::Expression;
 use common_streams::LimitByStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
+use crate::planners::Expression;
 
 pub struct LimitByTransform {
     input: Arc<dyn Processor>,

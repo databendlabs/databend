@@ -18,12 +18,12 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Extras;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing_futures::Instrument;
 use futures::StreamExt;
 
 use super::part_info::PartInfo;
+use crate::planners::Extras;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::io::MetaReaders;

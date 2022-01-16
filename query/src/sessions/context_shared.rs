@@ -25,7 +25,6 @@ use common_exception::Result;
 use common_infallible::Mutex;
 use common_infallible::RwLock;
 use common_meta_types::UserInfo;
-use common_planners::PlanNode;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 
@@ -33,6 +32,7 @@ use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;
 use crate::configs::Config;
+use crate::planners::PlanNode;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::Session;
 use crate::sessions::Settings;

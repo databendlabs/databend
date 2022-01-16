@@ -26,7 +26,6 @@ use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::StateAddr;
 use common_infallible::RwLock;
-use common_planners::Expression;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -34,6 +33,7 @@ use futures::stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
+use crate::planners::Expression;
 
 pub struct GroupByFinalTransform {
     max_block_size: usize,

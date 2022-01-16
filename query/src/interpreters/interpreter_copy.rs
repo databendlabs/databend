@@ -18,7 +18,6 @@ use common_dal::DataAccessor;
 use common_dal::S3;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::CopyPlan;
 use common_streams::DataBlockStream;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
@@ -33,6 +32,7 @@ use nom::IResult;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::planners::CopyPlan;
 use crate::sessions::QueryContext;
 
 pub struct CopyInterpreter {

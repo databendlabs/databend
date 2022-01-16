@@ -14,13 +14,14 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::PlanNode;
 use criterion::Criterion;
 use databend_query::configs::Config;
 use databend_query::interpreters::SelectInterpreter;
 use databend_query::sessions::SessionManager;
 use databend_query::sql::PlanParser;
 use futures::StreamExt;
+
+use crate::planners::PlanNode;
 
 pub mod bench_aggregate_query_sql;
 pub mod bench_filter_query_sql;

@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::PlanNode;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 
@@ -23,6 +22,7 @@ use crate::interpreters::access::ProxyModeAccess;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
+use crate::planners::PlanNode;
 use crate::sessions::QueryContext;
 
 pub struct InterceptorInterpreter {

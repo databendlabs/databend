@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::ReadDataSourcePlan;
 use common_streams::CorrectWithSchemaStream;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
@@ -25,6 +24,7 @@ use common_tracing::tracing;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
+use crate::planners::ReadDataSourcePlan;
 use crate::sessions::QueryContext;
 
 pub struct SourceTransform {

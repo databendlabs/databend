@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::UserPrivilegeSet;
-use common_planners::PlanNode;
-use common_planners::RevokePrivilegePlan;
 use common_tracing::tracing;
 
+use crate::planners::PlanNode;
+use crate::planners::RevokePrivilegePlan;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

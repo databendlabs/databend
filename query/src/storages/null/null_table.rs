@@ -19,13 +19,13 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_planners::ReadDataSourcePlan;
-use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing::info;
 use futures::stream::StreamExt;
 
+use crate::planners::ReadDataSourcePlan;
+use crate::planners::TruncateTablePlan;
 use crate::sessions::QueryContext;
 use crate::storages::StorageContext;
 use crate::storages::Table;

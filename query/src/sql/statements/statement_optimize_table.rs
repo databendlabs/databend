@@ -16,12 +16,12 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Optimization;
-use common_planners::OptimizeTablePlan;
-use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
+use crate::planners::Optimization;
+use crate::planners::OptimizeTablePlan;
+use crate::planners::PlanNode;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

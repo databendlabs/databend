@@ -20,8 +20,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
 use common_exception::Result;
-use common_planners::PlanNode;
 
+use crate::planners::PlanNode;
 use crate::sessions::QueryContext;
 
 #[derive(Clone, Copy)]

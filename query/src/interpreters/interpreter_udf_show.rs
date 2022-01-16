@@ -17,13 +17,13 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planners::ShowUDFPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::planners::ShowUDFPlan;
 use crate::sessions::QueryContext;
 
 pub struct ShowUDFInterpreter {

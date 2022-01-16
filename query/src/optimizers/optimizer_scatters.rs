@@ -18,21 +18,21 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::AggregatorFinalPlan;
-use common_planners::AggregatorPartialPlan;
-use common_planners::BroadcastPlan;
-use common_planners::Expression;
-use common_planners::LimitByPlan;
-use common_planners::LimitPlan;
-use common_planners::PlanBuilder;
-use common_planners::PlanNode;
-use common_planners::PlanRewriter;
-use common_planners::ReadDataSourcePlan;
-use common_planners::SortPlan;
-use common_planners::StageKind;
-use common_planners::StagePlan;
 
 use crate::optimizers::Optimizer;
+use crate::planners::AggregatorFinalPlan;
+use crate::planners::AggregatorPartialPlan;
+use crate::planners::BroadcastPlan;
+use crate::planners::Expression;
+use crate::planners::LimitByPlan;
+use crate::planners::LimitPlan;
+use crate::planners::PlanBuilder;
+use crate::planners::PlanNode;
+use crate::planners::PlanRewriter;
+use crate::planners::ReadDataSourcePlan;
+use crate::planners::SortPlan;
+use crate::planners::StageKind;
+use crate::planners::StagePlan;
 use crate::sessions::QueryContext;
 
 pub struct ScattersOptimizer {

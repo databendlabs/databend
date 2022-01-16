@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::Optimization;
-use common_planners::OptimizeTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
@@ -25,6 +23,8 @@ use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
+use crate::planners::Optimization;
+use crate::planners::OptimizeTablePlan;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
 

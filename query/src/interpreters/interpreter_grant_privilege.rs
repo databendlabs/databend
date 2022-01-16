@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeSet;
-use common_planners::GrantPrivilegePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -25,6 +24,7 @@ use common_tracing::tracing;
 use crate::interpreters::interpreter_common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::planners::GrantPrivilegePlan;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]

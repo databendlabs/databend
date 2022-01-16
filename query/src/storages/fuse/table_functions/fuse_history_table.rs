@@ -27,12 +27,12 @@ use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::Expression;
-use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
+use crate::planners::Expression;
+use crate::planners::ReadDataSourcePlan;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::TableSnapshot;

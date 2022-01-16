@@ -18,10 +18,10 @@ use common_exception::Result;
 use common_meta_types::FileFormat;
 use common_meta_types::StageParams;
 use common_meta_types::UserStageInfo;
-use common_planners::CreateUserStagePlan;
-use common_planners::PlanNode;
 use common_tracing::tracing;
 
+use crate::planners::CreateUserStagePlan;
+use crate::planners::PlanNode;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

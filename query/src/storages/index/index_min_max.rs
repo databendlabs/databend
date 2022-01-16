@@ -17,8 +17,8 @@ use std::collections::HashMap;
 use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_planners::Expression;
 
+use crate::planners::Expression;
 use crate::storages::index::IndexSchemaVersion;
 
 /// Min and Max index.

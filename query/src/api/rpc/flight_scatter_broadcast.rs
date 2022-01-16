@@ -15,9 +15,9 @@
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::Expression;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
+use crate::planners::Expression;
 
 pub struct BroadcastFlightScatter {
     scattered_size: usize,

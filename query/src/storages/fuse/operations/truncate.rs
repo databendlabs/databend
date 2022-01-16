@@ -17,10 +17,10 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::UpsertTableOptionReq;
-use common_planners::TruncateTablePlan;
 use uuid::Uuid;
 
 use crate::catalogs::Catalog;
+use crate::planners::TruncateTablePlan;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io;
 use crate::storages::fuse::meta::TableSnapshot;

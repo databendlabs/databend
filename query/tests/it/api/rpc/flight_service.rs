@@ -23,13 +23,13 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ABORT_SESSION;
-use common_planners::Expression;
 use databend_query::api::DatabendQueryFlightDispatcher;
 use databend_query::api::DatabendQueryFlightService;
 use databend_query::api::FlightAction;
 use databend_query::api::FlightTicket;
 use databend_query::api::ShuffleAction;
 use databend_query::api::StreamTicket;
+use databend_query::planners::Expression;
 use databend_query::sql::PlanParser;
 use tonic::Request;
 

@@ -19,7 +19,8 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
-use common_planners::Expression;
+
+use crate::planners::Expression;
 
 pub struct AggregatorParams {
     pub aggregate_functions: Vec<AggregateFunctionRef>,

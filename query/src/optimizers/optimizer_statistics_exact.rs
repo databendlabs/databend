@@ -16,15 +16,15 @@ use std::sync::Arc;
 
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_planners::AggregatorFinalPlan;
-use common_planners::AggregatorPartialPlan;
-use common_planners::Expression;
-use common_planners::ExpressionPlan;
-use common_planners::PlanBuilder;
-use common_planners::PlanNode;
-use common_planners::PlanRewriter;
 
 use crate::optimizers::Optimizer;
+use crate::planners::AggregatorFinalPlan;
+use crate::planners::AggregatorPartialPlan;
+use crate::planners::Expression;
+use crate::planners::ExpressionPlan;
+use crate::planners::PlanBuilder;
+use crate::planners::PlanNode;
+use crate::planners::PlanRewriter;
 use crate::sessions::QueryContext;
 use crate::storages::ToReadDataSourcePlan;
 

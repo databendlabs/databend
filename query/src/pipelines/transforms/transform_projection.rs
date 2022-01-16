@@ -19,7 +19,6 @@ use std::time::Instant;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use tokio_stream::StreamExt;
@@ -27,6 +26,7 @@ use tokio_stream::StreamExt;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::planners::Expression;
 
 pub struct ProjectionTransform {
     executor: ExpressionExecutor,

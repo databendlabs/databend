@@ -21,7 +21,7 @@ use common_exception::Result;
 /// It is intended to be encoded as string, and assigned to the field `name` of a given [`Part`],
 /// then passed around to the `read` method of [FuseTable], where the name filed will be decoded back to [PartInfo]
 ///
-/// [Part]: common_planners::Part
+/// [Part]: crate::planners::Part
 /// [FuseTable]: crate::storages::fuse::FuseTable
 ///
 #[derive(PartialEq, Debug)]

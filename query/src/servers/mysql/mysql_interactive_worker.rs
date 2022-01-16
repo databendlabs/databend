@@ -21,7 +21,6 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
-use common_planners::PlanNode;
 use common_tracing::tracing;
 use metrics::histogram;
 use msql_srv::ErrorKind;
@@ -35,6 +34,7 @@ use regex::RegexSet;
 use tokio_stream::StreamExt;
 
 use crate::interpreters::InterpreterFactory;
+use crate::planners::PlanNode;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::sessions::QueryContext;

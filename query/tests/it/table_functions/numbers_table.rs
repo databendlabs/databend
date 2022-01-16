@@ -16,7 +16,7 @@
 use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planners::*;
+use databend_query::planners::*;
 use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::NumbersTable;
 use futures::TryStreamExt;

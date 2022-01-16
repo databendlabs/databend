@@ -18,9 +18,9 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
-use common_planners::*;
 
 use crate::optimizers::Optimizer;
+use crate::planners::*;
 use crate::sessions::QueryContext;
 
 pub struct ExprTransformOptimizer {}

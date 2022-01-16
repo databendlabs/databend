@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::PlanNode;
-use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
@@ -25,6 +23,8 @@ use crate::interpreters::plan_schedulers;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
+use crate::planners::PlanNode;
+use crate::planners::SelectPlan;
 use crate::sessions::QueryContext;
 
 pub struct SelectInterpreter {

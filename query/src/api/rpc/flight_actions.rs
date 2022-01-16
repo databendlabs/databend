@@ -17,9 +17,10 @@ use std::convert::TryInto;
 use common_arrow::arrow_format::flight::data::Action;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
-use common_planners::Expression;
-use common_planners::PlanNode;
 use tonic::Status;
+
+use crate::planners::Expression;
+use crate::planners::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ShuffleAction {

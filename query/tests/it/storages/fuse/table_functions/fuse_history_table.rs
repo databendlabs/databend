@@ -17,8 +17,8 @@ use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::catalogs::Catalog;
+use databend_query::planners::*;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 use crate::storages::fuse::table_test_fixture::*;

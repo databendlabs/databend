@@ -17,14 +17,14 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::extract_aliases;
-use common_planners::find_aggregate_exprs_in_expr;
-use common_planners::resolve_aliases_to_exprs;
-use common_planners::Expression;
 use sqlparser::ast::Expr;
 use sqlparser::ast::OffsetRows;
 use sqlparser::ast::SelectItem;
 
+use crate::planners::extract_aliases;
+use crate::planners::find_aggregate_exprs_in_expr;
+use crate::planners::resolve_aliases_to_exprs;
+use crate::planners::Expression;
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::query::QueryASTIR;

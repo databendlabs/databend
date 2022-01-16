@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PlanNode;
 
+use crate::planners::PlanNode;
 use crate::sessions::QueryContext;
 
 pub struct ProxyModeAccess {

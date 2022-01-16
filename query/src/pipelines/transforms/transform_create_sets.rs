@@ -22,7 +22,6 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
-use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use common_streams::SubQueriesStream;
 use common_tracing::tracing;
@@ -38,6 +37,7 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::pipelines::processors::Processor;
+use crate::planners::Expression;
 use crate::sessions::QueryContext;
 
 pub struct CreateSetsTransform {

@@ -16,12 +16,12 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_exception::Result;
-use common_planners::UseDatabasePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::planners::UseDatabasePlan;
 use crate::sessions::QueryContext;
 
 pub struct UseDatabaseInterpreter {

@@ -1874,23 +1874,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-planners"
-version = "0.1.0"
-dependencies = [
- "bitflags",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-functions",
- "common-infallible",
- "common-meta-types",
- "futures",
- "once_cell",
- "pretty_assertions",
- "serde",
-]
-
-[[package]]
 name = "common-streams"
 version = "0.1.0"
 dependencies = [
@@ -2426,6 +2409,7 @@ dependencies = [
  "async-recursion",
  "async-stream",
  "async-trait",
+ "bitflags",
  "bumpalo",
  "byteorder",
  "bytes",
@@ -2459,7 +2443,6 @@ dependencies = [
  "common-meta-sled-store",
  "common-meta-types",
  "common-metrics",
- "common-planners",
  "common-streams",
  "common-tracing",
  "criterion",

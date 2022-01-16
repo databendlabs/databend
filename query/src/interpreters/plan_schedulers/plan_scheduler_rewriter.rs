@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_planners::PlanNode;
 
 use crate::optimizers::Optimizers;
+use crate::planners::PlanNode;
 
 pub fn apply_plan_rewrite(mut optimizer: Optimizers, plan: &PlanNode) -> Result<PlanNode> {
     optimizer.optimize(plan)

@@ -20,10 +20,10 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PlanNode;
-use common_planners::ShowCreateDatabasePlan;
 use sqlparser::ast::ObjectName;
 
+use crate::planners::PlanNode;
+use crate::planners::ShowCreateDatabasePlan;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

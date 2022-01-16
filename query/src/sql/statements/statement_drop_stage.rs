@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::DropUserStagePlan;
-use common_planners::PlanNode;
 use common_tracing::tracing;
 
+use crate::planners::DropUserStagePlan;
+use crate::planners::PlanNode;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

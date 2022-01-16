@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PlanNode;
 
 use super::DescribeStageInterpreter;
 use crate::interpreters::interpreter_stage_drop::DropStageInterpreter;
@@ -50,6 +49,7 @@ use crate::interpreters::ShowUDFInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
 use crate::interpreters::UseTenantInterpreter;
+use crate::planners::PlanNode;
 use crate::sessions::QueryContext;
 
 pub struct InterpreterFactory;

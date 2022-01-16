@@ -24,8 +24,8 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Extras;
 
+use crate::planners::Extras;
 use crate::sql::statements::QueryAnalyzeState;
 use crate::storages::Table;
 

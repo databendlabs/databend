@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planners::*;
+use databend_query::planners::*;
 use databend_query::storages::index::range_filter::build_verifiable_expr;
 use databend_query::storages::index::range_filter::left_bound_for_like_pattern;
 use databend_query::storages::index::range_filter::right_bound_for_like_pattern;

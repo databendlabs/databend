@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_planners::Part;
-use common_planners::Partitions;
+use crate::planners::Part;
+use crate::planners::Partitions;
 
 pub fn generate_block_parts(start: u64, workers: u64, total: u64) -> Partitions {
     let part_size = total / workers;

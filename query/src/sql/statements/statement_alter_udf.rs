@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
-use common_planners::AlterUDFPlan;
-use common_planners::PlanNode;
 use common_tracing::tracing;
 
+use crate::planners::AlterUDFPlan;
+use crate::planners::PlanNode;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

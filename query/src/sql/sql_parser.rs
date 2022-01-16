@@ -28,8 +28,6 @@ use common_meta_types::StageParams;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
-use common_planners::ExplainType;
-use common_planners::Optimization;
 use metrics::histogram;
 use serde::Deserialize;
 use sqlparser::ast::BinaryOperator;
@@ -53,6 +51,8 @@ use sqlparser::tokenizer::Word;
 
 use super::statements::DfCopy;
 use super::statements::DfDescribeStage;
+use crate::planners::ExplainType;
+use crate::planners::Optimization;
 use crate::sql::statements::DfAlterUDF;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCreateDatabase;

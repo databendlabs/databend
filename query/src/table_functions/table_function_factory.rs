@@ -20,10 +20,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::MetaId;
-use common_planners::Expression;
 
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
+use crate::planners::Expression;
 use crate::storages::fuse::FuseHistoryTable;
 use crate::storages::fuse::FUSE_FUNC_HIST;
 use crate::table_functions::NumbersTable;

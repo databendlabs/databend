@@ -17,10 +17,10 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_planners::Expression;
-use common_planners::ReadDataSourcePlan;
 use databend_query::catalogs::Catalog;
 use databend_query::pipelines::transforms::SourceTransform;
+use databend_query::planners::Expression;
+use databend_query::planners::ReadDataSourcePlan;
 use databend_query::sessions::QueryContext;
 use databend_query::storages::ToReadDataSourcePlan;
 

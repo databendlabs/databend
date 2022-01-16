@@ -19,7 +19,6 @@ use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::Expression;
 use common_streams::CorrectWithSchemaStream;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -29,6 +28,7 @@ use futures::StreamExt;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::transform_sort_partial::get_sort_descriptions;
+use crate::planners::Expression;
 
 pub struct SortMergeTransform {
     schema: DataSchemaRef,

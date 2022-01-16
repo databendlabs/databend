@@ -22,10 +22,10 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Expression;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::planners::Expression;
 
 pub struct HashFlightScatter {
     scatter_expression_executor: Arc<ExpressionExecutor>,

@@ -15,23 +15,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::AggregatorFinalPlan;
-use common_planners::AggregatorPartialPlan;
-use common_planners::BroadcastPlan;
-use common_planners::ExpressionPlan;
-use common_planners::FilterPlan;
-use common_planners::HavingPlan;
-use common_planners::LimitByPlan;
-use common_planners::LimitPlan;
-use common_planners::PlanNode;
-use common_planners::ProjectionPlan;
-use common_planners::ReadDataSourcePlan;
-use common_planners::RemotePlan;
-use common_planners::SelectPlan;
-use common_planners::SinkPlan;
-use common_planners::SortPlan;
-use common_planners::StagePlan;
-use common_planners::SubQueriesSetPlan;
 use common_tracing::tracing;
 
 use crate::api::FlightTicket;
@@ -53,6 +36,23 @@ use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
 use crate::pipelines::transforms::SubQueriesPuller;
 use crate::pipelines::transforms::WhereTransform;
+use crate::planners::AggregatorFinalPlan;
+use crate::planners::AggregatorPartialPlan;
+use crate::planners::BroadcastPlan;
+use crate::planners::ExpressionPlan;
+use crate::planners::FilterPlan;
+use crate::planners::HavingPlan;
+use crate::planners::LimitByPlan;
+use crate::planners::LimitPlan;
+use crate::planners::PlanNode;
+use crate::planners::ProjectionPlan;
+use crate::planners::ReadDataSourcePlan;
+use crate::planners::RemotePlan;
+use crate::planners::SelectPlan;
+use crate::planners::SinkPlan;
+use crate::planners::SortPlan;
+use crate::planners::StagePlan;
+use crate::planners::SubQueriesSetPlan;
 use crate::sessions::QueryContext;
 
 pub struct PipelineBuilder {

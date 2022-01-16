@@ -15,7 +15,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_exception::Result;
-use common_planners::PlanNode;
 use common_tracing::tracing;
 use metrics::histogram;
 
@@ -24,6 +23,7 @@ use crate::optimizers::ConstantFoldingOptimizer;
 use crate::optimizers::ExprTransformOptimizer;
 use crate::optimizers::StatisticsExactOptimizer;
 use crate::optimizers::TopNPushDownOptimizer;
+use crate::planners::PlanNode;
 use crate::sessions::QueryContext;
 
 pub trait Optimizer {

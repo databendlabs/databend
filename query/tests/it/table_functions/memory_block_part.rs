@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_planners::Part;
+use databend_query::planners::Part;
 use databend_query::table_functions::generate_block_parts;
 use pretty_assertions::assert_eq;
 

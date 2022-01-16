@@ -17,12 +17,12 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planners::DescribeTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::planners::DescribeTablePlan;
 use crate::sessions::QueryContext;
 
 pub struct DescribeTableInterpreter {

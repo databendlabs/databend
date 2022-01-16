@@ -19,11 +19,11 @@ use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatte
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::ExplainType;
-use common_planners::Expression;
-use common_planners::PlanNode;
-use common_planners::ReadDataSourcePlan;
 
+use crate::planners::ExplainType;
+use crate::planners::Expression;
+use crate::planners::PlanNode;
+use crate::planners::ReadDataSourcePlan;
 use crate::sessions::QueryContext;
 use crate::sql::DfStatement;
 

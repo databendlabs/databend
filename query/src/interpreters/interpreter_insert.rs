@@ -18,8 +18,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_planners::InsertInputSource;
-use common_planners::InsertPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
@@ -30,6 +28,8 @@ use crate::interpreters::plan_schedulers::InsertWithPlan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::transforms::AddOnStream;
+use crate::planners::InsertInputSource;
+use crate::planners::InsertPlan;
 use crate::sessions::QueryContext;
 
 pub struct InsertInterpreter {

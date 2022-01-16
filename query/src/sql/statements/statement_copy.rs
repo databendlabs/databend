@@ -17,11 +17,11 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
-use common_planners::CopyPlan;
-use common_planners::PlanNode;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 
+use crate::planners::CopyPlan;
+use crate::planners::PlanNode;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

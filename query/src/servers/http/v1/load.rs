@@ -17,8 +17,6 @@ use std::sync::Arc;
 use async_compat::CompatExt;
 use async_stream::stream;
 use common_base::ProgressValues;
-use common_planners::InsertInputSource;
-use common_planners::PlanNode;
 use common_streams::CsvSource;
 use common_streams::Source;
 use common_tracing::tracing;
@@ -34,6 +32,8 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::interpreters::InterpreterFactory;
+use crate::planners::InsertInputSource;
+use crate::planners::PlanNode;
 use crate::sessions::SessionManager;
 use crate::sql::PlanParser;
 

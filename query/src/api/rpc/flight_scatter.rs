@@ -15,7 +15,8 @@
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::Expression;
+
+use crate::planners::Expression;
 
 pub trait FlightScatter: Sized {
     fn try_create(schema: DataSchemaRef, expr: Option<Expression>, num: usize) -> Result<Self>;

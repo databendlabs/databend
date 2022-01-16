@@ -29,8 +29,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::InsertPlan;
-use common_planners::PlanNode;
 use common_tracing::tracing;
 use futures::channel::mpsc;
 use futures::channel::mpsc::Receiver;
@@ -42,6 +40,8 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use super::writers::from_clickhouse_block;
 use crate::interpreters::InterpreterFactory;
+use crate::planners::InsertPlan;
+use crate::planners::PlanNode;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;

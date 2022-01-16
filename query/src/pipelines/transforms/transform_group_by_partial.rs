@@ -21,7 +21,6 @@ use common_datablocks::HashMethod;
 use common_datablocks::HashMethodKind;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
@@ -30,6 +29,7 @@ use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::group_by::Aggregator;
 use crate::pipelines::transforms::group_by::AggregatorParams;
 use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
+use crate::planners::Expression;
 
 pub struct GroupByPartialTransform {
     aggr_exprs: Vec<Expression>,

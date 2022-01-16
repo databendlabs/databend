@@ -23,11 +23,11 @@ use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::ReadDataSourcePlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use walkdir::WalkDir;
 
+use crate::planners::ReadDataSourcePlan;
 use crate::sessions::QueryContext;
 use crate::storages::system::TracingTableStream;
 use crate::storages::Table;

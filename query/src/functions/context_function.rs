@@ -19,8 +19,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::FunctionFactory;
-use common_planners::Expression;
 
+use crate::planners::Expression;
 use crate::sessions::QueryContext;
 
 pub struct ContextFunction;

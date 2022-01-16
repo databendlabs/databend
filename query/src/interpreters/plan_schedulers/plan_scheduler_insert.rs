@@ -18,14 +18,14 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_meta_types::TableInfo;
-use common_planners::PlanNode;
-use common_planners::SelectPlan;
-use common_planners::SinkPlan;
-use common_planners::StagePlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::plan_schedulers;
 use crate::optimizers::Optimizers;
+use crate::planners::PlanNode;
+use crate::planners::SelectPlan;
+use crate::planners::SinkPlan;
+use crate::planners::StagePlan;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 

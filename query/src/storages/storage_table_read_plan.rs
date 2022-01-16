@@ -17,10 +17,10 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_planners::Extras;
-use common_planners::ReadDataSourcePlan;
-use common_planners::Statistics;
 
+use crate::planners::Extras;
+use crate::planners::ReadDataSourcePlan;
+use crate::planners::Statistics;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 

@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::ExplainType;
 use common_tracing::tracing;
 
+use crate::planners::ExplainType;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;

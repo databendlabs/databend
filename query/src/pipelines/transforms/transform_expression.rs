@@ -18,13 +18,13 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::planners::Expression;
 /// Executes certain expressions over the block and append the result column to the new block.
 /// Aims to transform a block to another format, such as add one or more columns against the Expressions.
 ///

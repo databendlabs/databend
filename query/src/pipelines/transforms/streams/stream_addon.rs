@@ -23,12 +23,12 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use futures::Stream;
 use futures::StreamExt;
 
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::planners::Expression;
 
 /// Add missing column into the block stream
 pub struct AddOnStream {

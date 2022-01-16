@@ -19,17 +19,17 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
-use common_planners::AggregatorFinalPlan;
-use common_planners::AggregatorPartialPlan;
-use common_planners::Expression;
-use common_planners::ExpressionRewriter;
-use common_planners::Expressions;
-use common_planners::PlanBuilder;
-use common_planners::PlanNode;
-use common_planners::PlanRewriter;
 
 use crate::optimizers::Optimizer;
 use crate::pipelines::transforms::ExpressionExecutor;
+use crate::planners::AggregatorFinalPlan;
+use crate::planners::AggregatorPartialPlan;
+use crate::planners::Expression;
+use crate::planners::ExpressionRewriter;
+use crate::planners::Expressions;
+use crate::planners::PlanBuilder;
+use crate::planners::PlanNode;
+use crate::planners::PlanRewriter;
 use crate::sessions::QueryContext;
 
 pub struct ConstantFoldingOptimizer {}

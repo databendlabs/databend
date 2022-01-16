@@ -21,12 +21,12 @@ use std::sync::Arc;
 use async_recursion::async_recursion;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Expression;
-use common_planners::ReadDataSourcePlan;
 
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::transforms::ProjectionTransform;
 use crate::pipelines::transforms::SourceTransform;
+use crate::planners::Expression;
+use crate::planners::ReadDataSourcePlan;
 use crate::sessions::QueryContext;
 use crate::sql::exec::data_schema_helper::DataSchemaHelper;
 use crate::sql::exec::expression_builder::ExpressionBuilder;

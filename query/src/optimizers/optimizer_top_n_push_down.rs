@@ -19,10 +19,10 @@ use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::*;
 use common_tracing::tracing;
 
 use crate::optimizers::Optimizer;
+use crate::planners::*;
 use crate::sessions::QueryContext;
 
 pub struct TopNPushDownOptimizer {}

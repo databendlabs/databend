@@ -19,10 +19,6 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
-use common_planners::CreateTablePlan;
-use common_planners::InsertInputSource;
-use common_planners::InsertPlan;
-use common_planners::PlanNode;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -30,6 +26,10 @@ use super::InsertInterpreter;
 use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::planners::CreateTablePlan;
+use crate::planners::InsertInputSource;
+use crate::planners::InsertPlan;
+use crate::planners::PlanNode;
 use crate::sessions::QueryContext;
 
 pub struct CreateTableInterpreter {

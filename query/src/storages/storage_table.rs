@@ -22,15 +22,15 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::MetaId;
 use common_meta_types::TableInfo;
-use common_planners::Expression;
-use common_planners::Extras;
-use common_planners::Part;
-use common_planners::Partitions;
-use common_planners::ReadDataSourcePlan;
-use common_planners::Statistics;
-use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
+use crate::planners::Expression;
+use crate::planners::Extras;
+use crate::planners::Part;
+use crate::planners::Partitions;
+use crate::planners::ReadDataSourcePlan;
+use crate::planners::Statistics;
+use crate::planners::TruncateTablePlan;
 use crate::sessions::QueryContext;
 
 #[async_trait::async_trait]

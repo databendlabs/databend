@@ -23,11 +23,12 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::ActionFunction;
-use common_planners::Expression;
-use common_planners::ExpressionAction;
-use common_planners::ExpressionChain;
 use common_tracing::tracing;
+
+use crate::planners::ActionFunction;
+use crate::planners::Expression;
+use crate::planners::ExpressionAction;
+use crate::planners::ExpressionChain;
 
 /// ExpressionExecutor is a helper struct for expressions and projections
 /// Aggregate functions is not covered, because all expressions in aggregate functions functions are executed.
