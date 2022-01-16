@@ -377,12 +377,19 @@ pub fn aggregate_types(args: &[DataTypePtr]) -> Result<DataTypePtr> {
 }
 
 pub fn merge_types(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Result<DataTypePtr> {
+    if lhs_type.is_nullable() || rhs_type.is_nullable() {
+        let lhs_type = unwrap_nullable(lhs_type);
+        let rhs_type = unwrap_nullable(rhs_type);
+        return merge_types(&lhs_type, &rhs_type);
+    }
+
     let lhs_id = lhs_type.data_type_id();
     let rhs_id = rhs_type.data_type_id();
 
     match (lhs_id, rhs_id) {
-        (Null, _) => Ok(rhs_type.clone()),
-        (_, Null) => Ok(lhs_type.clone()),
+        (Null, _) => Ok(wrap_nullable(rhs_type)),
+        (_, Null) => Ok(wrap_nullable(lhs_type)),
+
         (Array, Array) => {
             let a = lhs_type.as_any().downcast_ref::<ArrayType>().unwrap();
             let b = rhs_type.as_any().downcast_ref::<ArrayType>().unwrap();
