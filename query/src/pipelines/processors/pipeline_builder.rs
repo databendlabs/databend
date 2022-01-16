@@ -131,7 +131,6 @@ impl PipelineBuilder {
                 flight_ticket,
                 self.ctx.clone(),
                 /* fetch_node_name */ fetch_node.clone(),
-                /* fetch_stream_schema */ plan.schema.clone(),
             )?))?;
         }
 

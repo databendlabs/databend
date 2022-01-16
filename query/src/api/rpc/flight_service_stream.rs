@@ -49,7 +49,7 @@ impl Stream for FlightDataStream {
             Some(Ok(block)) => match block.try_into() {
                 Err(error) => Some(Err(Status::from(error))),
                 Ok(record_batch) => {
-                    let (dicts, values) = serialize_batch(&record_batch, &self.options);
+                    let (dicts, values) = serialize_batch(&record_batch, &[], &self.options);
 
                     match dicts.is_empty() {
                         true => Some(Ok(values)),

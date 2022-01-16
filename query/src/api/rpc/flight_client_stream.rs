@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::io::flight::deserialize_batch;
+use common_arrow::arrow::io::flight::deserialize_schemas;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_base::tokio::sync::mpsc::Receiver;
@@ -32,7 +33,6 @@ pub struct FlightDataStream();
 impl FlightDataStream {
     #[inline]
     pub fn from_remote(
-        schema: DataSchemaRef,
         inner: Streaming<FlightData>,
     ) -> impl Stream<Item = Result<DataBlock, ErrorCode>> {
         inner.map(move |flight_data| -> Result<DataBlock, ErrorCode> {
@@ -52,11 +52,17 @@ impl FlightDataStream {
                         )
                     }
 
-                    let arrow_schema = Arc::new(schema.to_arrow());
-                    Ok(
-                        deserialize_batch(&flight_data, arrow_schema, true, &Default::default())
-                            .map(create_data_block)?,
+                    let (arrow_schema, ipc_schema) =
+                        deserialize_schemas(flight_data.data_body.as_slice()).unwrap();
+                    let arrow_schema = Arc::new(arrow_schema);
+
+                    Ok(deserialize_batch(
+                        &flight_data,
+                        arrow_schema,
+                        &ipc_schema,
+                        &Default::default(),
                     )
+                    .map(create_data_block)?)
                 }
             }
         })
@@ -66,7 +72,6 @@ impl FlightDataStream {
     #[inline]
     #[allow(dead_code)]
     pub fn from_receiver(
-        schema_ref: DataSchemaRef,
         inner: Receiver<Result<FlightData, ErrorCode>>,
     ) -> impl Stream<Item = Result<DataBlock, ErrorCode>> {
         ReceiverStream::new(inner).map(move |flight_data| match flight_data {
@@ -83,13 +88,14 @@ impl FlightDataStream {
                     DataBlock::create(Arc::new(schema), columns)
                 }
 
-                Ok(deserialize_batch(
-                    &flight_data,
-                    Arc::new(schema_ref.to_arrow()),
-                    true,
-                    &Default::default(),
+                let (arrow_schema, ipc_schema) =
+                    deserialize_schemas(flight_data.data_body.as_slice()).unwrap();
+                let arrow_schema = Arc::new(arrow_schema);
+
+                Ok(
+                    deserialize_batch(&flight_data, arrow_schema, &ipc_schema, &Default::default())
+                        .map(create_data_block)?,
                 )
-                .map(create_data_block)?)
             }
         })
     }
