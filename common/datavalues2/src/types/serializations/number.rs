@@ -36,13 +36,8 @@ impl<T: PrimitiveType> TypeSerializer for NumberSerializer<T> {
     }
 
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
-        let array: &PrimitiveColumn<T> =  Series::check_get(column)?;
-        let result: Vec<String> = array
-            .iter()
-            .map(|x| {
-                 format!("{}", x)
-            })
-            .collect();
+        let array: &PrimitiveColumn<T> = Series::check_get(column)?;
+        let result: Vec<String> = array.iter().map(|x| format!("{}", x)).collect();
         Ok(result)
     }
 }

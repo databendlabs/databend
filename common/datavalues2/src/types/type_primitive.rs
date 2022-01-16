@@ -18,59 +18,59 @@ use std::sync::Arc;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
 
-use super::data_type::IDataType;
+use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Debug, Default, Clone, Copy, serde::Deserialize, serde::Serialize)]
 
-pub struct DataTypeNumeric<
+pub struct PrimitiveDataType<
     T: PrimitiveType + Clone + Copy + std::fmt::Debug + Into<DataValue> + serde::Serialize,
 > {
     _t: PhantomData<T>,
 }
 
 // typetag did not support generic impls, so we have to do this
-pub fn create_primitive_datatype<T: PrimitiveType>() -> Arc<dyn IDataType> {
+pub fn create_primitive_datatype<T: PrimitiveType>() -> Arc<dyn DataType> {
     match (T::SIGN, T::FLOATING, T::SIZE) {
-        (false, false, 1) => Arc::new(DataTypeUInt8 { _t: PhantomData }),
-        (false, false, 2) => Arc::new(DataTypeUInt16 { _t: PhantomData }),
-        (false, false, 4) => Arc::new(DataTypeUInt32 { _t: PhantomData }),
-        (false, false, 8) => Arc::new(DataTypeUInt64 { _t: PhantomData }),
+        (false, false, 1) => Arc::new(UInt8Type { _t: PhantomData }),
+        (false, false, 2) => Arc::new(UInt16Type { _t: PhantomData }),
+        (false, false, 4) => Arc::new(UInt32Type { _t: PhantomData }),
+        (false, false, 8) => Arc::new(UInt64Type { _t: PhantomData }),
 
-        (true, false, 1) => Arc::new(DataTypeInt8 { _t: PhantomData }),
-        (true, false, 2) => Arc::new(DataTypeInt16 { _t: PhantomData }),
-        (true, false, 4) => Arc::new(DataTypeInt32 { _t: PhantomData }),
-        (true, false, 8) => Arc::new(DataTypeInt64 { _t: PhantomData }),
+        (true, false, 1) => Arc::new(Int8Type { _t: PhantomData }),
+        (true, false, 2) => Arc::new(Int16Type { _t: PhantomData }),
+        (true, false, 4) => Arc::new(Int32Type { _t: PhantomData }),
+        (true, false, 8) => Arc::new(Int64Type { _t: PhantomData }),
 
-        (true, true, 4) => Arc::new(DataTypeFloat32 { _t: PhantomData }),
-        (true, true, 8) => Arc::new(DataTypeFloat64 { _t: PhantomData }),
+        (true, true, 4) => Arc::new(Float32Type { _t: PhantomData }),
+        (true, true, 8) => Arc::new(Float64Type { _t: PhantomData }),
 
         _ => unimplemented!(),
     }
 }
 
-pub type DataTypeInt8 = DataTypeNumeric<i8>;
-pub type DataTypeInt16 = DataTypeNumeric<i16>;
-pub type DataTypeInt32 = DataTypeNumeric<i32>;
-pub type DataTypeInt64 = DataTypeNumeric<i64>;
-pub type DataTypeUInt8 = DataTypeNumeric<u8>;
-pub type DataTypeUInt16 = DataTypeNumeric<u16>;
-pub type DataTypeUInt32 = DataTypeNumeric<u32>;
-pub type DataTypeUInt64 = DataTypeNumeric<u64>;
-pub type DataTypeFloat32 = DataTypeNumeric<f32>;
-pub type DataTypeFloat64 = DataTypeNumeric<f64>;
+pub type Int8Type = PrimitiveDataType<i8>;
+pub type Int16Type = PrimitiveDataType<i16>;
+pub type Int32Type = PrimitiveDataType<i32>;
+pub type Int64Type = PrimitiveDataType<i64>;
+pub type UInt8Type = PrimitiveDataType<u8>;
+pub type UInt16Type = PrimitiveDataType<u16>;
+pub type UInt32Type = PrimitiveDataType<u32>;
+pub type UInt64Type = PrimitiveDataType<u64>;
+pub type Float32Type = PrimitiveDataType<f32>;
+pub type Float64Type = PrimitiveDataType<f64>;
 
 macro_rules! impl_numeric {
     ($ty:ident, $tname:ident) => {
-        impl DataTypeNumeric<$ty> {
+        impl PrimitiveDataType<$ty> {
             pub fn arc() -> DataTypePtr {
                 Arc::new(Self { _t: PhantomData })
             }
         }
 
         #[typetag::serde]
-        impl IDataType for DataTypeNumeric<$ty> {
+        impl DataType for PrimitiveDataType<$ty> {
             fn data_type_id(&self) -> TypeID {
                 TypeID::$tname
             }
@@ -86,7 +86,7 @@ macro_rules! impl_numeric {
 
             fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
                 let value: $ty = DFTryFrom::try_from(data)?;
-                let column = Series::new(&[value]);
+                let column = Series::from_data(&[value]);
                 Ok(Arc::new(ConstColumn::new(column, size)))
             }
 
@@ -96,7 +96,7 @@ macro_rules! impl_numeric {
                     .map(|v| DFTryFrom::try_from(v))
                     .collect::<Result<Vec<_>>>()?;
 
-                Ok(Series::new(&value))
+                Ok(Series::from_data(&value))
             }
 
             fn arrow_type(&self) -> ArrowType {

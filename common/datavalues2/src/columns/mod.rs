@@ -27,6 +27,7 @@ mod primitive;
 pub mod series;
 mod string;
 mod struct_;
+mod wrapper;
 
 pub use array::*;
 pub use boolean::*;
@@ -40,3 +41,4 @@ pub use primitive::*;
 pub use series::*;
 pub use string::*;
 pub use struct_::*;
+pub use wrapper::*;

@@ -14,32 +14,32 @@
 
 use std::sync::Arc;
 
-use super::data_type_array::DataTypeArray;
-use super::data_type_nullable::DataTypeNullable;
-use super::data_type_struct::DataTypeStruct;
-use super::IDataType;
+use super::type_array::ArrayType;
+use super::type_nullable::NullableType;
+use super::type_struct::StructType;
+use super::DataType;
 
-impl Eq for dyn IDataType + '_ {}
+impl Eq for dyn DataType + '_ {}
 
-impl PartialEq for dyn IDataType + '_ {
-    fn eq(&self, that: &dyn IDataType) -> bool {
+impl PartialEq for dyn DataType + '_ {
+    fn eq(&self, that: &dyn DataType) -> bool {
         equal(self, that)
     }
 }
 
-impl PartialEq<dyn IDataType> for Arc<dyn IDataType + '_> {
-    fn eq(&self, that: &dyn IDataType) -> bool {
+impl PartialEq<dyn DataType> for Arc<dyn DataType + '_> {
+    fn eq(&self, that: &dyn DataType) -> bool {
         equal(&**self, that)
     }
 }
 
-impl PartialEq<dyn IDataType> for Box<dyn IDataType + '_> {
-    fn eq(&self, that: &dyn IDataType) -> bool {
+impl PartialEq<dyn DataType> for Box<dyn DataType + '_> {
+    fn eq(&self, that: &dyn DataType) -> bool {
         equal(&**self, that)
     }
 }
 
-pub fn equal(lhs: &dyn IDataType, rhs: &dyn IDataType) -> bool {
+pub fn equal(lhs: &dyn DataType, rhs: &dyn DataType) -> bool {
     if lhs.data_type_id() != rhs.data_type_id() {
         return false;
     }
@@ -50,22 +50,22 @@ pub fn equal(lhs: &dyn IDataType, rhs: &dyn IDataType) -> bool {
         | Float64 | String | Date16 | Date32 | Interval | DateTime32 | DateTime64 => true,
 
         Null | Nullable => {
-            let lhs: &DataTypeNullable = lhs.as_any().downcast_ref().unwrap();
-            let rhs: &DataTypeNullable = rhs.as_any().downcast_ref().unwrap();
+            let lhs: &NullableType = lhs.as_any().downcast_ref().unwrap();
+            let rhs: &NullableType = rhs.as_any().downcast_ref().unwrap();
 
             *lhs.inner_type() == *rhs.inner_type()
         }
 
         Array => {
-            let lhs: &DataTypeArray = lhs.as_any().downcast_ref().unwrap();
-            let rhs: &DataTypeArray = rhs.as_any().downcast_ref().unwrap();
+            let lhs: &ArrayType = lhs.as_any().downcast_ref().unwrap();
+            let rhs: &ArrayType = rhs.as_any().downcast_ref().unwrap();
 
             *lhs.inner_type() == *rhs.inner_type()
         }
 
         Struct => {
-            let lhs: &DataTypeStruct = lhs.as_any().downcast_ref().unwrap();
-            let rhs: &DataTypeStruct = rhs.as_any().downcast_ref().unwrap();
+            let lhs: &StructType = lhs.as_any().downcast_ref().unwrap();
+            let rhs: &StructType = rhs.as_any().downcast_ref().unwrap();
 
             *lhs.types() == *rhs.types() && *lhs.names() == *rhs.names()
         }

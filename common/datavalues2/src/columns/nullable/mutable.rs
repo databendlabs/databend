@@ -18,10 +18,10 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::MutableBitmap;
 
 use crate::ColumnRef;
-use crate::DataTypeNullable;
 use crate::DataTypePtr;
 use crate::MutableColumn;
 use crate::NullableColumn;
+use crate::NullableType;
 
 pub struct MutableNullableColumn {
     bitmap: MutableBitmap,
@@ -35,7 +35,7 @@ impl MutableNullableColumn {
         Self {
             bitmap: MutableBitmap::with_capacity(0),
             values,
-            data_type: Arc::new(DataTypeNullable::create(inner_type)),
+            data_type: Arc::new(NullableType::create(inner_type)),
         }
     }
 }

@@ -19,8 +19,8 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use crate::columns::mutable::MutableColumn;
 use crate::types::DataTypePtr;
 use crate::ColumnRef;
-use crate::DataTypeNull;
 use crate::NullColumn;
+use crate::NullType;
 
 #[derive(Debug, Default)]
 pub struct MutableNullColumn {
@@ -38,7 +38,7 @@ impl MutableNullColumn {
 
 impl MutableColumn for MutableNullColumn {
     fn data_type(&self) -> DataTypePtr {
-        Arc::new(DataTypeNull {})
+        Arc::new(NullType {})
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

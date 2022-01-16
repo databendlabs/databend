@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use crate::prelude::*;
 
 impl<'a, T: PrimitiveType> PrimitiveColumn<T> {
     /// constructs a new iterator
     #[inline]
-    pub fn iter(&'a self) -> std::slice::Iter<'a, T>  {
+    pub fn iter(&'a self) -> std::slice::Iter<'a, T> {
         self.values.iter()
     }
 }
 
 impl<T> NewColumn<T> for PrimitiveColumn<T>
-    where T: PrimitiveType
+where T: PrimitiveType
 {
     fn new_from_slice<P: AsRef<[T]>>(slice: P) -> Self {
         let values = Vec::<T>::from(slice.as_ref());

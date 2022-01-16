@@ -16,14 +16,14 @@ use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 
-use super::data_type::IDataType;
+use super::data_type::DataType;
 use crate::prelude::*;
 
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DataTypeNull {}
+pub struct NullType {}
 
 #[typetag::serde]
-impl IDataType for DataTypeNull {
+impl DataType for NullType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Null
     }
@@ -46,7 +46,7 @@ impl IDataType for DataTypeNull {
         Ok(Arc::new(NullColumn::new(size)))
     }
 
-    // DataTypeNull must inside nullable
+    // NullType must inside nullable
     fn arrow_type(&self) -> ArrowType {
         ArrowType::Null
     }

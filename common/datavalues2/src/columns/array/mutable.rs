@@ -16,8 +16,8 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::ArrayColumn;
+use crate::ArrayType;
 use crate::ColumnRef;
-use crate::DataTypeArray;
 use crate::DataTypePtr;
 use crate::MutableColumn;
 
@@ -25,7 +25,7 @@ pub struct MutableArrayColumn<M: MutableColumn> {
     last_offset: usize,
     offsets: Vec<i64>,
     values: M,
-    data_type: DataTypeArray,
+    data_type: ArrayType,
 }
 
 impl<M: MutableColumn + 'static> MutableArrayColumn<M> {

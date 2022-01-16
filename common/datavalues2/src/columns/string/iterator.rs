@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use crate::prelude::*;
-
-
-
 
 /// Iterator over slices of `&[u8]`.
 #[derive(Debug, Clone)]
@@ -53,17 +49,14 @@ impl<'a> Iterator for StringValueIter<'a> {
     }
 }
 
-
-
 impl<'a> StringColumn {
     pub fn iter(&'a self) -> StringValueIter<'a> {
         StringValueIter::new(self)
     }
 }
 
-
 impl<S> NewColumn<S> for StringColumn
-    where S: AsRef<[u8]>
+where S: AsRef<[u8]>
 {
     fn new_from_slice<P: AsRef<[S]>>(slice: P) -> Self {
         let slice = slice.as_ref();

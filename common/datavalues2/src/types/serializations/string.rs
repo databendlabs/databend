@@ -29,7 +29,7 @@ impl TypeSerializer for StringSerializer {
     }
 
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
-        let array: &StringColumn =  Series::check_get(column)?;
+        let array: &StringColumn = Series::check_get(column)?;
 
         let result: Vec<String> = array
             .iter()

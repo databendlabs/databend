@@ -18,21 +18,21 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::data_type::DataType;
 use super::data_type::DataTypePtr;
-use super::data_type::IDataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DataTypeStruct {
+pub struct StructType {
     names: Vec<String>,
     types: Vec<DataTypePtr>,
 }
 
-impl DataTypeStruct {
+impl StructType {
     pub fn create(names: Vec<String>, types: Vec<DataTypePtr>) -> Self {
         debug_assert!(names.len() == types.len());
-        DataTypeStruct { names, types }
+        StructType { names, types }
     }
 
     pub fn names(&self) -> &Vec<String> {
@@ -45,7 +45,7 @@ impl DataTypeStruct {
 }
 
 #[typetag::serde]
-impl IDataType for DataTypeStruct {
+impl DataType for StructType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Struct
     }

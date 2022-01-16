@@ -37,25 +37,25 @@ pub fn construct_numeric_type(
     byte_size: usize,
 ) -> Result<DataTypePtr> {
     match (is_signed, is_floating, byte_size) {
-        (false, false, 1) => Ok(DataTypeUInt8::arc()),
-        (false, false, 2) => Ok(DataTypeUInt16::arc()),
-        (false, false, 4) => Ok(DataTypeUInt32::arc()),
-        (false, false, 8) => Ok(DataTypeUInt64::arc()),
-        (false, true, 4) => Ok(DataTypeFloat32::arc()),
-        (false, true, 8) => Ok(DataTypeFloat64::arc()),
-        (true, false, 1) => Ok(DataTypeInt8::arc()),
-        (true, false, 2) => Ok(DataTypeInt16::arc()),
-        (true, false, 4) => Ok(DataTypeInt32::arc()),
-        (true, false, 8) => Ok(DataTypeInt64::arc()),
-        (true, true, 1) => Ok(DataTypeFloat32::arc()),
-        (true, true, 2) => Ok(DataTypeFloat32::arc()),
-        (true, true, 4) => Ok(DataTypeFloat32::arc()),
-        (true, true, 8) => Ok(DataTypeFloat64::arc()),
+        (false, false, 1) => Ok(UInt8Type::arc()),
+        (false, false, 2) => Ok(UInt16Type::arc()),
+        (false, false, 4) => Ok(UInt32Type::arc()),
+        (false, false, 8) => Ok(UInt64Type::arc()),
+        (false, true, 4) => Ok(Float32Type::arc()),
+        (false, true, 8) => Ok(Float64Type::arc()),
+        (true, false, 1) => Ok(Int8Type::arc()),
+        (true, false, 2) => Ok(Int16Type::arc()),
+        (true, false, 4) => Ok(Int32Type::arc()),
+        (true, false, 8) => Ok(Int64Type::arc()),
+        (true, true, 1) => Ok(Float32Type::arc()),
+        (true, true, 2) => Ok(Float32Type::arc()),
+        (true, true, 4) => Ok(Float32Type::arc()),
+        (true, true, 8) => Ok(Float64Type::arc()),
 
         // TODO support bigint and decimal types, now we just let's overflow
-        (false, false, d) if d > 8 => Ok(DataTypeInt64::arc()),
-        (true, false, d) if d > 8 => Ok(DataTypeUInt64::arc()),
-        (_, true, d) if d > 8 => Ok(DataTypeFloat64::arc()),
+        (false, false, d) if d > 8 => Ok(Int64Type::arc()),
+        (true, false, d) if d > 8 => Ok(UInt64Type::arc()),
+        (_, true, d) if d > 8 => Ok(Float64Type::arc()),
 
         _ => Result::Err(ErrorCode::BadDataValueType(format!(
             "Can't construct type from is_signed: {}, is_floating: {}, byte_size: {}",
@@ -177,7 +177,7 @@ pub fn numerical_arithmetic_coercion(
 
         DataValueBinaryOperator::Modulo => {
             if has_float {
-                return Ok(DataTypeFloat64::arc());
+                return Ok(Float64Type::arc());
             }
             // From clickhouse: NumberTraits.h
             // If modulo of division can yield negative number, we need larger type to accommodate it.
@@ -194,7 +194,7 @@ pub fn numerical_arithmetic_coercion(
         DataValueBinaryOperator::Minus => {
             construct_numeric_type(true, has_float, next_size(max_size))
         }
-        DataValueBinaryOperator::Div => Ok(DataTypeFloat64::arc()),
+        DataValueBinaryOperator::Div => Ok(Float64Type::arc()),
         DataValueBinaryOperator::IntDiv => construct_numeric_type(has_signed, false, max_size),
     }
 }
@@ -234,7 +234,7 @@ pub fn datetime_arithmetic_coercion(
                 Ok(a)
             } else {
                 // Date minus Date or DateTime minus DateTime
-                Ok(DataTypeInt32::arc())
+                Ok(Int32Type::arc())
             }
         }
         _ => e(),
@@ -332,7 +332,7 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
 
     // one of is String and other is number
     if (lhs_id.is_numeric() && rhs_id.is_string()) || (rhs_id.is_numeric() && rhs_id.is_string()) {
-        return Ok(DataTypeFloat64::arc());
+        return Ok(Float64Type::arc());
     }
 
     // one of is datetime and other is number or string
@@ -351,9 +351,9 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
         // one of is datetime
         // TODO datetime64
         if matches!(lhs_id, TypeID::DateTime32) || matches!(rhs_id, TypeID::DateTime32) {
-            return Ok(DataTypeDateTime::arc(None));
+            return Ok(DateTimeType::arc(None));
         }
-        return Ok(DataTypeDate32::arc());
+        return Ok(Date32Type32::arc());
     }
 
     Err(ErrorCode::IllegalDataType(format!(
@@ -384,15 +384,15 @@ pub fn merge_types(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Result<Dat
         (Null, _) => Ok(rhs_type.clone()),
         (_, Null) => Ok(lhs_type.clone()),
         (Array, Array) => {
-            let a = lhs_type.as_any().downcast_ref::<DataTypeArray>().unwrap();
-            let b = rhs_type.as_any().downcast_ref::<DataTypeArray>().unwrap();
+            let a = lhs_type.as_any().downcast_ref::<ArrayType>().unwrap();
+            let b = rhs_type.as_any().downcast_ref::<ArrayType>().unwrap();
 
             let typ = merge_types(a.inner_type(), b.inner_type())?;
-            Ok(Arc::new(DataTypeArray::create(typ)))
+            Ok(Arc::new(ArrayType::create(typ)))
         }
         (Struct, Struct) => {
-            let a = lhs_type.as_any().downcast_ref::<DataTypeStruct>().unwrap();
-            let b = rhs_type.as_any().downcast_ref::<DataTypeStruct>().unwrap();
+            let a = lhs_type.as_any().downcast_ref::<StructType>().unwrap();
+            let b = rhs_type.as_any().downcast_ref::<StructType>().unwrap();
             if a.names() != b.names() {
                 return Err(ErrorCode::BadArguments(
                     "Can't merge structs with different names or sizes".to_string(),
@@ -406,7 +406,7 @@ pub fn merge_types(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Result<Dat
                 .map(|(a, b)| merge_types(a, b))
                 .collect::<Result<Vec<_>>>()?;
 
-            Ok(Arc::new(DataTypeStruct::create(a.names().clone(), types)))
+            Ok(Arc::new(StructType::create(a.names().clone(), types)))
         }
         _ => {
             if lhs_id == rhs_id {

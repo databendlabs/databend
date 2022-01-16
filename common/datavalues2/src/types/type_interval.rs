@@ -15,24 +15,19 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_exception::Result;
 
-use super::data_type::IDataType;
+use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DataTypeString {}
-
-impl DataTypeString {
-    pub fn arc() -> DataTypePtr {
-        Arc::new(Self {})
-    }
-}
+pub struct IntervalType {}
 
 #[typetag::serde]
-impl IDataType for DataTypeString {
+impl DataType for IntervalType {
     fn data_type_id(&self) -> TypeID {
-        TypeID::String
+        TypeID::Interval
     }
 
     #[inline]
@@ -41,46 +36,35 @@ impl IDataType for DataTypeString {
     }
 
     fn default_value(&self) -> DataValue {
-        DataValue::String(vec![])
+        DataValue::Int64(0)
     }
 
-    fn create_constant_column(
-        &self,
-        data: &DataValue,
-        size: usize,
-    ) -> common_exception::Result<ColumnRef> {
-        let value = data.as_string()?;
+    fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
+        let value = data.as_i64()?;
 
-        let column = Series::new(&[value]);
+        let column = Series::from_data(&[value as u32]);
         Ok(Arc::new(ConstColumn::new(column, size)))
     }
 
+    fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {
+        let value = data
+            .iter()
+            .map(|v| v.as_i64())
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Series::from_data(&value))
+    }
+
     fn arrow_type(&self) -> ArrowType {
-        ArrowType::LargeBinary
+        ArrowType::Int64
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(StringSerializer {})
+        Box::new(DateSerializer::<i64>::default())
     }
 
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(StringDeserializer::with_capacity(capacity))
-    }
-
-    fn create_column(&self, data: &[DataValue]) -> common_exception::Result<ColumnRef> {
-        let mut values: Vec<u8> = vec![];
-        let mut offsets: Vec<i64> = vec![0];
-        for v in data.iter() {
-            let value = v.as_string()?;
-            offsets.push(offsets.last().unwrap() + value.len() as i64);
-            values.extend_from_slice(&value);
-        }
-
-        unsafe {
-            Ok(Arc::new(StringColumn::from_data_unchecked(
-                offsets.into(),
-                values.into(),
-            )))
-        }
+        Box::new(DateDeserializer::<i64> {
+            builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
+        })
     }
 }

@@ -33,6 +33,8 @@ pub struct Series;
 impl Series {
     /// Get a pointer to the underlying data of this Series.
     /// Can be useful for fast comparisons.
+    /// # Safety
+    /// Assumes that the `column` is  T.
     pub unsafe fn static_cast<T>(column: &ColumnRef) -> &T {
         let object = column.as_ref();
         &*(object as *const dyn Column as *const T)
@@ -59,13 +61,13 @@ impl Series {
 
 pub trait SeriesFrom<T, Phantom: ?Sized> {
     /// Initialize by name and values.
-    fn new(_: T) -> ColumnRef;
+    fn from_data(_: T) -> ColumnRef;
 }
 
 macro_rules! impl_from {
     ($type:ty, $array:ident) => {
         impl<T: AsRef<$type>> SeriesFrom<T, $type> for Series {
-            fn new(v: T) -> ColumnRef {
+            fn from_data(v: T) -> ColumnRef {
                 Arc::new($array::new_from_slice(v.as_ref()))
             }
         }
@@ -75,7 +77,7 @@ macro_rules! impl_from {
 macro_rules! impl_from_option {
     ($type:ty, $array:ident, $default:expr) => {
         impl<T: AsRef<$type>> SeriesFrom<T, $type> for Series {
-            fn new(v: T) -> ColumnRef {
+            fn from_data(v: T) -> ColumnRef {
                 let iter = v.as_ref().iter().map(|v| v.is_some());
                 let bitmap = MutableBitmap::from_iter(iter);
 
@@ -89,13 +91,13 @@ macro_rules! impl_from_option {
 }
 
 impl<'a, T: AsRef<[&'a str]>> SeriesFrom<T, [&'a str]> for Series {
-    fn new(v: T) -> ColumnRef {
+    fn from_data(v: T) -> ColumnRef {
         Arc::new(StringColumn::new_from_slice(v))
     }
 }
 
 impl<'a, T: AsRef<[Option<&'a str>]>> SeriesFrom<T, [Option<&'a str>]> for Series {
-    fn new(v: T) -> ColumnRef {
+    fn from_data(v: T) -> ColumnRef {
         let iter = v.as_ref().iter().map(|v| v.is_some());
         let bitmap = MutableBitmap::from_iter(iter);
 
@@ -106,14 +108,14 @@ impl<'a, T: AsRef<[Option<&'a str>]>> SeriesFrom<T, [Option<&'a str>]> for Serie
 }
 
 impl<'a, T: AsRef<[&'a [u8]]>> SeriesFrom<T, [&'a [u8]]> for Series {
-    fn new(v: T) -> ColumnRef {
+    fn from_data(v: T) -> ColumnRef {
         let column = StringColumn::new_from_iter(v.as_ref().iter());
         Arc::new(column)
     }
 }
 
 impl<'a, T: AsRef<[Option<&'a [u8]>]>> SeriesFrom<T, [Option<&'a [u8]>]> for Series {
-    fn new(v: T) -> ColumnRef {
+    fn from_data(v: T) -> ColumnRef {
         let iter = v.as_ref().iter().map(|v| v.is_some());
         let bitmap = MutableBitmap::from_iter(iter);
 

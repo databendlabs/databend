@@ -52,7 +52,7 @@ impl Column for NullColumn {
     }
 
     fn data_type(&self) -> DataTypePtr {
-        Arc::new(DataTypeNull {})
+        Arc::new(NullType {})
     }
 
     fn is_nullable(&self) -> bool {

@@ -18,24 +18,24 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::ErrorCode;
 
+use super::data_type::DataType;
 use super::data_type::DataTypePtr;
-use super::data_type::IDataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DataTypeNullable {
+pub struct NullableType {
     inner: DataTypePtr,
 }
 
-impl DataTypeNullable {
+impl NullableType {
     pub fn create(inner: DataTypePtr) -> Self {
-        DataTypeNullable { inner }
+        NullableType { inner }
     }
 
     pub fn create_null() -> Self {
-        let inner = Arc::new(DataTypeNull {});
-        DataTypeNullable { inner }
+        let inner = Arc::new(NullType {});
+        NullableType { inner }
     }
 
     pub fn inner_type(&self) -> &DataTypePtr {
@@ -44,7 +44,7 @@ impl DataTypeNullable {
 }
 
 #[typetag::serde]
-impl IDataType for DataTypeNullable {
+impl DataType for NullableType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Nullable
     }
@@ -90,9 +90,9 @@ impl IDataType for DataTypeNullable {
             return Ok(Arc::new(NullColumn::new(size)));
         }
         if self.inner.data_type_id() == TypeID::Null {
-            return Result::Err(ErrorCode::BadDataValueType(format!(
-                "Nullable type can't be inside nullable type",
-            )));
+            return Result::Err(ErrorCode::BadDataValueType(
+                "Nullable type can't be inside nullable type".to_string(),
+            ));
         }
         let data = if data.is_null() {
             bitmap.extend_constant(size, false);
@@ -118,7 +118,7 @@ impl IDataType for DataTypeNullable {
                 res.push(v.clone());
             }
         }
-        let column = self.inner.create_column(&data)?;
+        let column = self.inner.create_column(&res)?;
         Ok(Arc::new(NullableColumn::new(column, bitmap.into())))
     }
 }

@@ -20,17 +20,17 @@ mod boolean;
 mod date;
 mod date_time;
 mod null;
+mod nullable;
 mod number;
 mod string;
-mod nullable;
 
 pub use boolean::*;
 pub use date::*;
 pub use date_time::*;
 pub use null::*;
+pub use nullable::*;
 pub use number::*;
 pub use string::*;
-pub use nullable::*;
 
 pub trait TypeDeserializer: Send + Sync {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()>;

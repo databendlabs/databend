@@ -123,11 +123,11 @@ impl StringColumn {
     }
 
     pub fn values(&self) -> &[u8] {
-        &self.values.as_slice()
+        self.values.as_slice()
     }
 
     pub fn offsets(&self) -> &[i64] {
-        &self.offsets.as_slice()
+        self.offsets.as_slice()
     }
 }
 
@@ -137,7 +137,7 @@ impl Column for StringColumn {
     }
 
     fn data_type(&self) -> DataTypePtr {
-        DataTypeString::arc()
+        StringType::arc()
     }
 
     fn len(&self) -> usize {
@@ -180,14 +180,15 @@ impl Column for StringColumn {
         let mut builder = MutableStringColumn::with_capacity(*max_size * 5, *max_size);
 
         let mut previous_offset: usize = 0;
-        for i in 0..self.len() {
+
+        (0..self.len()).for_each(|i| {
             let offset: usize = offsets[i];
             let data = unsafe { self.value_unchecked(i) };
             for _ in previous_offset..offset {
                 builder.append_value(data);
             }
             previous_offset = offset;
-        }
+        });
         builder.as_column()
     }
 

@@ -53,7 +53,7 @@ pub trait MutableColumn {
 //         TypeID::String => Box::new(MutableStringColumn::default()),
 //         TypeID::Null => Box::new(MutableNullColumn::default()),
 //         TypeID::Nullable => {
-//             let ty: &DataTypeNullable = datatype.as_any().downcast_ref().unwrap();
+//             let ty: &NullableType = datatype.as_any().downcast_ref().unwrap();
 //             let mutable_inner = create_mutable_array(ty.inner_type());
 //             Box::new(MutableNullableColumn::new(mutable_inner))
 //         }

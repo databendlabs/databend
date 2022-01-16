@@ -15,27 +15,24 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_exception::Result;
 
-use super::data_type::IDataType;
+use super::data_type::DataType;
 use super::type_id::TypeID;
-pub use crate::prelude::*;
-use crate::TypeDeserializer;
-use crate::TypeSerializer;
+use crate::prelude::*;
 
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DataTypeBoolean {}
+pub struct StringType {}
 
-impl DataTypeBoolean {
+impl StringType {
     pub fn arc() -> DataTypePtr {
         Arc::new(Self {})
     }
 }
 
 #[typetag::serde]
-impl IDataType for DataTypeBoolean {
+impl DataType for StringType {
     fn data_type_id(&self) -> TypeID {
-        TypeID::Boolean
+        TypeID::String
     }
 
     #[inline]
@@ -44,34 +41,46 @@ impl IDataType for DataTypeBoolean {
     }
 
     fn default_value(&self) -> DataValue {
-        DataValue::Boolean(false)
+        DataValue::String(vec![])
     }
 
-    fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
-        let value = data.as_bool()?;
-        let column = Series::new(&[value]);
+    fn create_constant_column(
+        &self,
+        data: &DataValue,
+        size: usize,
+    ) -> common_exception::Result<ColumnRef> {
+        let value = data.as_string()?;
+
+        let column = Series::from_data(&[value]);
         Ok(Arc::new(ConstColumn::new(column, size)))
     }
 
-    fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {
-        let value = data
-            .iter()
-            .map(|v| v.as_bool())
-            .collect::<Result<Vec<bool>>>()?;
-
-        Ok(Series::new(&value))
-    }
-
     fn arrow_type(&self) -> ArrowType {
-        ArrowType::Boolean
+        ArrowType::LargeBinary
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(BooleanSerializer {})
+        Box::new(StringSerializer {})
     }
+
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(BooleanDeserializer {
-            builder: MutableBooleanColumn::with_capacity(capacity),
-        })
+        Box::new(StringDeserializer::with_capacity(capacity))
+    }
+
+    fn create_column(&self, data: &[DataValue]) -> common_exception::Result<ColumnRef> {
+        let mut values: Vec<u8> = vec![];
+        let mut offsets: Vec<i64> = vec![0];
+        for v in data.iter() {
+            let value = v.as_string()?;
+            offsets.push(offsets.last().unwrap() + value.len() as i64);
+            values.extend_from_slice(&value);
+        }
+
+        unsafe {
+            Ok(Arc::new(StringColumn::from_data_unchecked(
+                offsets.into(),
+                values.into(),
+            )))
+        }
     }
 }

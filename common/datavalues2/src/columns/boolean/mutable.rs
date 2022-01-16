@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::MutableBitmap;
 
 use crate::columns::mutable::MutableColumn;
-use crate::types::DataTypeBoolean;
+use crate::types::BooleanType;
 use crate::types::DataTypePtr;
 use crate::BooleanColumn;
 use crate::ColumnRef;
@@ -67,14 +67,14 @@ impl MutableBooleanColumn {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             values: MutableBitmap::with_capacity(capacity),
-            data_type: DataTypeBoolean::arc(),
+            data_type: BooleanType::arc(),
         }
     }
 
     pub fn from_data(values: MutableBitmap) -> Self {
         Self {
             values,
-            data_type: DataTypeBoolean::arc(),
+            data_type: BooleanType::arc(),
         }
     }
 

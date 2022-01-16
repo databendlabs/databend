@@ -34,8 +34,12 @@ impl NullableColumn {
         Self { column, validity }
     }
 
-    pub fn inner(&self) -> ColumnRef {
-        self.column.clone()
+    pub fn inner(&self) -> &ColumnRef {
+        &self.column
+    }
+
+    pub fn ensure_validity(&self) -> &Bitmap {
+        &self.validity
     }
 }
 
@@ -46,7 +50,7 @@ impl Column for NullableColumn {
 
     fn data_type(&self) -> DataTypePtr {
         let nest = self.column.data_type();
-        Arc::new(DataTypeNullable::create(nest))
+        Arc::new(NullableType::create(nest))
     }
 
     fn is_nullable(&self) -> bool {
@@ -96,12 +100,13 @@ impl Column for NullableColumn {
         let capacity = *offsets.last().unwrap();
         let mut bitmap = MutableBitmap::with_capacity(capacity);
         let mut previous_offset: usize = 0;
-        for i in 0..self.len() {
+
+        (0..self.len()).for_each(|i| {
             let offset: usize = offsets[i];
             let bit = self.validity.get_bit(i);
             bitmap.extend_constant(offset - previous_offset, bit);
             previous_offset = offset;
-        }
+        });
 
         Arc::new(Self {
             validity: bitmap.into(),

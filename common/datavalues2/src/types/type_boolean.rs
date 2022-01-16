@@ -17,23 +17,25 @@ use std::sync::Arc;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
 
-use super::data_type::IDataType;
+use super::data_type::DataType;
 use super::type_id::TypeID;
-use crate::prelude::*;
+pub use crate::prelude::*;
+use crate::TypeDeserializer;
+use crate::TypeSerializer;
 
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DataTypeDate32 {}
+pub struct BooleanType {}
 
-impl DataTypeDate32 {
+impl BooleanType {
     pub fn arc() -> DataTypePtr {
         Arc::new(Self {})
     }
 }
 
 #[typetag::serde]
-impl IDataType for DataTypeDate32 {
+impl DataType for BooleanType {
     fn data_type_id(&self) -> TypeID {
-        TypeID::Int32
+        TypeID::Boolean
     }
 
     #[inline]
@@ -42,35 +44,34 @@ impl IDataType for DataTypeDate32 {
     }
 
     fn default_value(&self) -> DataValue {
-        DataValue::Int64(0)
+        DataValue::Boolean(false)
     }
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
-        let value = data.as_i64()?;
-        let column = Series::new(&[value as i32]);
+        let value = data.as_bool()?;
+        let column = Series::from_data(&[value]);
         Ok(Arc::new(ConstColumn::new(column, size)))
     }
 
     fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef> {
         let value = data
             .iter()
-            .map(|v| v.as_i64())
-            .collect::<Result<Vec<_>>>()?;
+            .map(|v| v.as_bool())
+            .collect::<Result<Vec<bool>>>()?;
 
-        let value = value.iter().map(|v| *v as i32).collect::<Vec<_>>();
-        Ok(Series::new(&value))
+        Ok(Series::from_data(&value))
     }
 
     fn arrow_type(&self) -> ArrowType {
-        ArrowType::Int32
+        ArrowType::Boolean
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(DateSerializer::<i32>::default())
+        Box::new(BooleanSerializer {})
     }
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        Box::new(DateDeserializer::<i32> {
-            builder: MutablePrimitiveColumn::<i32>::with_capacity(capacity),
+        Box::new(BooleanDeserializer {
+            builder: MutableBooleanColumn::with_capacity(capacity),
         })
     }
 }

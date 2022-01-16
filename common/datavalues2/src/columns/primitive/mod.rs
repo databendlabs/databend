@@ -29,6 +29,7 @@ use common_arrow::arrow::datatypes::TimeUnit;
 pub use iterator::*;
 pub use mutable::*;
 
+use super::wrapper::GetDatas;
 use crate::prelude::*;
 
 /// PrimitiveColumn is generic struct which wrapped arrow's PrimitiveArray
@@ -133,7 +134,7 @@ impl<T: PrimitiveType> PrimitiveColumn<T> {
     }
 
     pub fn values(&self) -> &[T] {
-        &self.values.as_slice()
+        self.values.as_slice()
     }
 
     /// Create a new DataArray by taking ownership of the Vec. This operation is zero copy.
@@ -193,14 +194,15 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
             MutablePrimitiveColumn::<T>::with_capacity(*offsets.last().unwrap() as usize);
 
         let mut previous_offset: usize = 0;
-        for i in 0..self.len() {
+
+        (0..self.len()).for_each(|i| {
             let offset: usize = offsets[i];
             let data = unsafe { self.value_unchecked(i) };
             for _ in previous_offset..offset {
                 builder.append_value(data);
             }
             previous_offset = offset;
-        }
+        });
         builder.as_column()
     }
 
@@ -215,13 +217,10 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
     }
 }
 
-#[inline]
-pub fn to_primitive<T: PrimitiveType>(
-    values: Vec<T>,
-    validity: Option<Bitmap>,
-) -> PrimitiveColumn<T> {
-    let data_type = create_primitive_datatype::<T>();
-    PrimitiveArray::from_data(data_type.arrow_type(), values.into(), validity).into()
+impl<T: PrimitiveType> GetDatas<T> for PrimitiveColumn<T> {
+    fn get_data(&self) -> &[T] {
+        self.values()
+    }
 }
 
 pub type UInt8Column = PrimitiveColumn<u8>;

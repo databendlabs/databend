@@ -76,7 +76,7 @@ where
         }
     }
 
-    fn de_null(&mut self) -> bool{
+    fn de_null(&mut self) -> bool {
         self.builder.append_null()
     }
 

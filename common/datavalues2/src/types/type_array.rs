@@ -19,19 +19,19 @@ use common_arrow::arrow::datatypes::Field;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::data_type::DataType;
 use super::data_type::DataTypePtr;
-use super::data_type::IDataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DataTypeArray {
+pub struct ArrayType {
     inner: DataTypePtr,
 }
 
-impl DataTypeArray {
+impl ArrayType {
     pub fn create(inner: DataTypePtr) -> Self {
-        DataTypeArray { inner }
+        ArrayType { inner }
     }
 
     pub fn inner_type(&self) -> &DataTypePtr {
@@ -40,7 +40,7 @@ impl DataTypeArray {
 }
 
 #[typetag::serde]
-impl IDataType for DataTypeArray {
+impl DataType for ArrayType {
     fn data_type_id(&self) -> TypeID {
         TypeID::Array
     }

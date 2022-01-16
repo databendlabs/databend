@@ -39,7 +39,7 @@ impl ArrayColumn {
 
         let data_type = if let ArrowType::List(f) = ty {
             let ty = from_arrow_field(f);
-            Arc::new(DataTypeArray::create(ty))
+            Arc::new(ArrayType::create(ty))
         } else {
             unreachable!()
         };
@@ -81,7 +81,7 @@ impl ArrayColumn {
     }
 
     pub fn offsets(&self) -> &[i64] {
-        &self.offsets.as_slice()
+        self.offsets.as_slice()
     }
 }
 

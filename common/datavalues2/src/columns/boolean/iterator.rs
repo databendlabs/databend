@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::bitmap::utils::BitmapIter;
+use common_arrow::arrow::bitmap::MutableBitmap;
 
 use crate::prelude::*;
-
 
 impl<'a> BooleanColumn {
     pub fn iter(&'a self) -> BitmapIter<'a> {
@@ -39,4 +38,3 @@ impl NewColumn<bool> for BooleanColumn {
         }
     }
 }
-

@@ -74,46 +74,46 @@ impl DataValue {
     // convert to minialized data type
     pub fn data_type(&self) -> DataTypePtr {
         match self {
-            DataValue::Null => Arc::new(DataTypeNullable::create_null()),
-            DataValue::Boolean(_) => DataTypeBoolean::arc(),
+            DataValue::Null => Arc::new(NullableType::create_null()),
+            DataValue::Boolean(_) => BooleanType::arc(),
             DataValue::Int64(n) => {
                 if *n >= i8::MIN as i64 && *n <= i8::MAX as i64 {
-                    return DataTypeInt8::arc();
+                    return Int8Type::arc();
                 }
                 if *n >= i16::MIN as i64 && *n <= i16::MAX as i64 {
-                    return DataTypeInt16::arc();
+                    return Int16Type::arc();
                 }
                 if *n >= i32::MIN as i64 && *n <= i32::MAX as i64 {
-                    return DataTypeInt32::arc();
+                    return Int32Type::arc();
                 }
-                return DataTypeInt64::arc();
+                Int64Type::arc()
             }
             DataValue::UInt64(n) => {
                 if *n <= u8::MIN as u64 {
-                    return DataTypeUInt8::arc();
+                    return UInt8Type::arc();
                 }
                 if *n <= u16::MIN as u64 {
-                    return DataTypeUInt16::arc();
+                    return UInt16Type::arc();
                 }
                 if *n <= u32::MIN as u64 {
-                    return DataTypeUInt32::arc();
+                    return UInt32Type::arc();
                 }
-                return DataTypeUInt64::arc();
+                UInt64Type::arc()
             }
-            DataValue::Float64(_) => DataTypeFloat64::arc(),
-            DataValue::String(_) => DataTypeString::arc(),
+            DataValue::Float64(_) => Float64Type::arc(),
+            DataValue::String(_) => StringType::arc(),
             DataValue::Array(x) => {
                 let inner_type = if x.is_empty() {
-                    DataTypeUInt8::arc()
+                    UInt8Type::arc()
                 } else {
                     x[0].data_type()
                 };
-                Arc::new(DataTypeArray::create(inner_type))
+                Arc::new(ArrayType::create(inner_type))
             }
             DataValue::Struct(x) => {
                 let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                Arc::new(DataTypeStruct::create(names, types))
+                Arc::new(StructType::create(names, types))
             }
         }
     }

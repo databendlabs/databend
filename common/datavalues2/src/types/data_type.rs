@@ -21,26 +21,26 @@ use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_exception::Result;
 use dyn_clone::DynClone;
 
-use super::data_type_array::DataTypeArray;
-use super::data_type_boolean::DataTypeBoolean;
-use super::data_type_date::DataTypeDate;
-use super::data_type_date32::DataTypeDate32;
-use super::data_type_datetime::DataTypeDateTime;
-use super::data_type_datetime64::DataTypeDateTime64;
-use super::data_type_nullable::DataTypeNullable;
-use super::data_type_numeric::DataTypeFloat32;
-use super::data_type_numeric::DataTypeFloat64;
-use super::data_type_numeric::DataTypeInt16;
-use super::data_type_numeric::DataTypeInt32;
-use super::data_type_numeric::DataTypeInt64;
-use super::data_type_numeric::DataTypeInt8;
-use super::data_type_numeric::DataTypeUInt16;
-use super::data_type_numeric::DataTypeUInt32;
-use super::data_type_numeric::DataTypeUInt64;
-use super::data_type_numeric::DataTypeUInt8;
-use super::data_type_string::DataTypeString;
-use super::data_type_struct::DataTypeStruct;
+use super::type_array::ArrayType;
+use super::type_boolean::BooleanType;
+use super::type_date::DateType;
+use super::type_date32::Date32Type32;
+use super::type_datetime::DateTimeType;
+use super::type_datetime64::DateTime64Type;
 use super::type_id::TypeID;
+use super::type_nullable::NullableType;
+use super::type_primitive::Float32Type;
+use super::type_primitive::Float64Type;
+use super::type_primitive::Int16Type;
+use super::type_primitive::Int32Type;
+use super::type_primitive::Int64Type;
+use super::type_primitive::Int8Type;
+use super::type_primitive::UInt16Type;
+use super::type_primitive::UInt32Type;
+use super::type_primitive::UInt64Type;
+use super::type_primitive::UInt8Type;
+use super::type_string::StringType;
+use super::type_struct::StructType;
 use crate::prelude::*;
 use crate::TypeDeserializer;
 use crate::TypeSerializer;
@@ -48,10 +48,10 @@ use crate::TypeSerializer;
 pub const ARROW_EXTENSION_NAME: &str = "ARROW:extension:databend_name";
 pub const ARROW_EXTENSION_META: &str = "ARROW:extension:databend_metadata";
 
-pub type DataTypePtr = Arc<dyn IDataType>;
+pub type DataTypePtr = Arc<dyn DataType>;
 
 #[typetag::serde(tag = "type")]
-pub trait IDataType: std::fmt::Debug + Sync + Send + DynClone {
+pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
     fn data_type_id(&self) -> TypeID;
 
     fn is_nullable(&self) -> bool {
@@ -87,38 +87,38 @@ pub trait IDataType: std::fmt::Debug + Sync + Send + DynClone {
 
 pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
     match dt {
-        ArrowType::Null => Arc::new(DataTypeNullable::create(Arc::new(DataTypeNull {}))),
-        ArrowType::UInt8 => Arc::new(DataTypeUInt8::default()),
-        ArrowType::UInt16 => Arc::new(DataTypeUInt16::default()),
-        ArrowType::UInt32 => Arc::new(DataTypeUInt32::default()),
-        ArrowType::UInt64 => Arc::new(DataTypeUInt64::default()),
-        ArrowType::Int8 => Arc::new(DataTypeInt8::default()),
-        ArrowType::Int16 => Arc::new(DataTypeInt16::default()),
-        ArrowType::Int32 => Arc::new(DataTypeInt32::default()),
-        ArrowType::Int64 => Arc::new(DataTypeInt64::default()),
-        ArrowType::Boolean => Arc::new(DataTypeBoolean::default()),
-        ArrowType::Float32 => Arc::new(DataTypeFloat32::default()),
-        ArrowType::Float64 => Arc::new(DataTypeFloat64::default()),
+        ArrowType::Null => Arc::new(NullableType::create(Arc::new(NullType {}))),
+        ArrowType::UInt8 => Arc::new(UInt8Type::default()),
+        ArrowType::UInt16 => Arc::new(UInt16Type::default()),
+        ArrowType::UInt32 => Arc::new(UInt32Type::default()),
+        ArrowType::UInt64 => Arc::new(UInt64Type::default()),
+        ArrowType::Int8 => Arc::new(Int8Type::default()),
+        ArrowType::Int16 => Arc::new(Int16Type::default()),
+        ArrowType::Int32 => Arc::new(Int32Type::default()),
+        ArrowType::Int64 => Arc::new(Int64Type::default()),
+        ArrowType::Boolean => Arc::new(BooleanType::default()),
+        ArrowType::Float32 => Arc::new(Float32Type::default()),
+        ArrowType::Float64 => Arc::new(Float64Type::default()),
 
         // TODO support other list
         ArrowType::LargeList(f) => {
             let inner = from_arrow_field(f);
-            Arc::new(DataTypeArray::create(inner))
+            Arc::new(ArrayType::create(inner))
         }
 
         ArrowType::Binary | ArrowType::LargeBinary | ArrowType::Utf8 | ArrowType::LargeUtf8 => {
-            Arc::new(DataTypeString::default())
+            Arc::new(StringType::default())
         }
 
-        ArrowType::Timestamp(_, tz) => Arc::new(DataTypeDateTime::create(tz.clone())),
-        ArrowType::Date32 => Arc::new(DataTypeDate::default()),
-        ArrowType::Date64 => Arc::new(DataTypeDate32::default()),
+        ArrowType::Timestamp(_, tz) => Arc::new(DateTimeType::create(tz.clone())),
+        ArrowType::Date32 => Arc::new(DateType::default()),
+        ArrowType::Date64 => Arc::new(Date32Type32::default()),
 
         ArrowType::Struct(fields) => {
             let names = fields.iter().map(|f| f.name().to_string()).collect();
-            let types = fields.iter().map(|f| from_arrow_field(f)).collect();
+            let types = fields.iter().map(from_arrow_field).collect();
 
-            Arc::new(DataTypeStruct::create(names, types))
+            Arc::new(StructType::create(names, types))
         }
 
         // this is safe, because we define the datatype firstly
@@ -133,10 +133,10 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
         if let Some(custom_name) = m.get("ARROW:extension:databend_name") {
             let metatada = m.get("ARROW:extension:databend_metadata").cloned();
             match custom_name.as_str() {
-                "Date" | "Date16" => return Arc::new(DataTypeDate::default()),
-                "Date32" => return Arc::new(DataTypeDate32::default()),
-                "DateTime" | "DateTime32" => return DataTypeDateTime::arc(metatada),
-                "DateTime64" => return DataTypeDateTime64::arc(metatada),
+                "Date" | "Date16" => return Arc::new(DateType::default()),
+                "Date32" => return Arc::new(Date32Type32::default()),
+                "DateTime" | "DateTime32" => return DateTimeType::arc(metatada),
+                "DateTime64" => return DateTime64Type::arc(metatada),
                 _ => {}
             }
         }
@@ -147,7 +147,7 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
 
     let is_nullable = f.is_nullable();
     if is_nullable {
-        Arc::new(DataTypeNullable::create(ty))
+        Arc::new(NullableType::create(ty))
     } else {
         ty
     }

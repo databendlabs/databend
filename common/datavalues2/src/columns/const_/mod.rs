@@ -56,6 +56,10 @@ impl Column for ConstColumn {
         self.column.null_at(0)
     }
 
+    fn is_const(&self) -> bool {
+        true
+    }
+
     fn validity(&self) -> (bool, Option<&Bitmap>) {
         if self.column.null_at(0) {
             (true, None)

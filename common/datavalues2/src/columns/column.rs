@@ -41,6 +41,10 @@ pub trait Column: Send + Sync {
         false
     }
 
+    fn is_const(&self) -> bool {
+        false
+    }
+
     fn len(&self) -> usize;
     /// whether the array is empty
     fn is_empty(&self) -> bool {
@@ -71,18 +75,26 @@ pub trait Column: Send + Sync {
 
     fn convert_full_column(&self) -> ColumnRef;
 
+    /// # Safety
+    /// Assumes that the `index` is smaller than size.
     unsafe fn get_unchecked(&self, index: usize) -> DataValue;
 
+    /// # Safety
+    /// Assumes that the `index` is smaller than size.
     unsafe fn get_u64_unchecked(&self, index: usize) -> Result<u64> {
         let value = self.get_unchecked(index);
         DFTryFrom::try_from(&value)
     }
 
+    /// # Safety
+    /// Assumes that the `index` is smaller than size.
     unsafe fn get_i64_unchecked(&self, index: usize) -> Result<i64> {
         let value = self.get_unchecked(index);
         DFTryFrom::try_from(&value)
     }
 
+    /// # Safety
+    /// Assumes that the `index` is smaller than size.
     unsafe fn get_string_unchecked(&self, index: usize) -> Result<Vec<u8>> {
         let value = self.get_unchecked(index);
         DFTryFrom::try_from(value)

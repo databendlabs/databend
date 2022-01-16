@@ -75,7 +75,7 @@ impl Column for BooleanColumn {
     }
 
     fn data_type(&self) -> DataTypePtr {
-        DataTypeBoolean::arc()
+        BooleanType::arc()
     }
 
     fn len(&self) -> usize {
@@ -116,14 +116,16 @@ impl Column for BooleanColumn {
         let mut builder = MutableBooleanColumn::with_capacity(*offsets.last().unwrap());
 
         let mut previous_offset: usize = 0;
-        for i in 0..self.len() {
+
+        (0..self.len()).for_each(|i| {
             let offset: usize = offsets[i];
             let data = self.values.get_bit(i);
             for _ in previous_offset..offset {
                 builder.append_value(data);
             }
             previous_offset = offset;
-        }
+        });
+
         builder.as_column()
     }
 

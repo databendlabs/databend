@@ -37,13 +37,13 @@ impl TypeSerializer for NullableSerializer {
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
         let column: &NullableColumn = Series::check_get(column)?;
         let rows = column.len();
-        let mut res = self.inner.serialize_column(&column.inner())?;
+        let mut res = self.inner.serialize_column(column.inner())?;
 
-        for row in 0..rows {
+        (0..rows).for_each(|row| {
             if column.null_at(row) {
                 res[row] = "NULL".to_owned();
             }
-        }
+        });
         Ok(res)
     }
 }

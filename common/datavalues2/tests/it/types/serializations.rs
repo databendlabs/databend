@@ -29,25 +29,25 @@ fn test_serializers() -> Result<()> {
     let tests = vec![
         Test {
             name: "boolean",
-            data_type: DataTypeBoolean::arc(),
+            data_type: BooleanType::arc(),
             value: DataValue::Boolean(true),
-            column: Series::new(vec![true, false, true]),
+            column: Series::from_data(vec![true, false, true]),
             val_str: "1",
             col_str: vec!["1".to_owned(), "0".to_owned(), "1".to_owned()],
         },
         Test {
             name: "int8",
-            data_type: DataTypeInt8::arc(),
+            data_type: Int8Type::arc(),
             value: DataValue::Int64(1),
-            column: Series::new(vec![1i8, 2i8, 1]),
+            column: Series::from_data(vec![1i8, 2i8, 1]),
             val_str: "1",
             col_str: vec!["1".to_owned(), "2".to_owned(), "1".to_owned()],
         },
         Test {
             name: "datetime32",
-            data_type: DataTypeDateTime::arc(None),
+            data_type: DateTimeType::arc(None),
             value: DataValue::UInt64(1630320462),
-            column: Series::new(vec![1630320462u32, 1637117572u32, 1]),
+            column: Series::from_data(vec![1630320462u32, 1637117572u32, 1]),
             val_str: "2021-08-30 10:47:42",
             col_str: vec![
                 "2021-08-30 10:47:42".to_owned(),
@@ -57,9 +57,9 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "date32",
-            data_type: DataTypeDate32::arc(),
+            data_type: Date32Type32::arc(),
             value: DataValue::Int64(18869),
-            column: Series::new(vec![18869i32, 18948i32, 1]),
+            column: Series::from_data(vec![18869i32, 18948i32, 1]),
             val_str: "2021-08-30",
             col_str: vec![
                 "2021-08-30".to_owned(),
@@ -69,9 +69,9 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "string",
-            data_type: DataTypeString::arc(),
+            data_type: StringType::arc(),
             value: DataValue::String("hello".as_bytes().to_vec()),
-            column: Series::new(vec!["hello", "world", "NULL"]),
+            column: Series::from_data(vec!["hello", "world", "NULL"]),
             val_str: "hello",
             col_str: vec!["hello".to_owned(), "world".to_owned(), "NULL".to_owned()],
         },
@@ -87,7 +87,7 @@ fn test_serializers() -> Result<()> {
     }
 
     {
-        let data_type = DataTypeStruct::create(
+        let data_type = StructType::create(
             vec![
                 "item_1".to_owned(),
                 "item_2".to_owned(),
@@ -95,10 +95,10 @@ fn test_serializers() -> Result<()> {
                 "item_4".to_owned(),
             ],
             vec![
-                DataTypeFloat64::arc(),
-                DataTypeString::arc(),
-                DataTypeBoolean::arc(),
-                DataTypeDate::arc(),
+                Float64Type::arc(),
+                StringType::arc(),
+                BooleanType::arc(),
+                DateType::arc(),
             ],
         );
         let serializer = data_type.create_serializer();
