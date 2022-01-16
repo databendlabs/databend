@@ -25,31 +25,17 @@ pub struct ColumnWrapper<'a, T: ScalarType> {
     pub data: &'a [T],
     pub validity: Bitmap,
 
+    // for not nullable column, it's 0. we only need keep one sign bit to tell `null_at` that it's not null.
+    // for nullable column, it's usize::max, validity will be cloned from nullable column.
     null_mask: usize,
+    // for const column, it's 0, `value` function will fetch the first value of the column.
+    // for not const column, it's usize::max, `value` function will fetch the value of the row in the column.
     non_const_mask: usize,
     size: usize,
 }
 
 pub trait GetDatas<E> {
     fn get_data(&self) -> &[E];
-}
-
-#[inline]
-fn get_null_mask(column: &ColumnRef) -> usize {
-    if !column.is_const() && !column.only_null() && column.is_nullable() {
-        usize::MAX
-    } else {
-        0
-    }
-}
-
-#[inline]
-fn non_const_mask(column: &ColumnRef) -> usize {
-    if !column.is_const() && !column.only_null() {
-        usize::MAX
-    } else {
-        0
-    }
 }
 
 impl<'a, T> ColumnWrapper<'a, T>
@@ -114,5 +100,23 @@ where
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.size == 0
+    }
+}
+
+#[inline]
+fn get_null_mask(column: &ColumnRef) -> usize {
+    if !column.is_const() && !column.only_null() && column.is_nullable() {
+        usize::MAX
+    } else {
+        0
+    }
+}
+
+#[inline]
+fn non_const_mask(column: &ColumnRef) -> usize {
+    if !column.is_const() && !column.only_null() {
+        usize::MAX
+    } else {
+        0
     }
 }
