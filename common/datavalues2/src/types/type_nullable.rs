@@ -33,11 +33,6 @@ impl NullableType {
         NullableType { inner }
     }
 
-    pub fn create_null() -> Self {
-        let inner = Arc::new(NullType {});
-        NullableType { inner }
-    }
-
     pub fn inner_type(&self) -> &DataTypePtr {
         &self.inner
     }

@@ -46,3 +46,23 @@ fn test_nullable_wrapper() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn test_constant_wrapper() -> Result<()> {
+    let ty = Int16Type::arc();
+    let column = ty.create_constant_column(&DataValue::Int64(123), 1024)?;
+    let wrapper = ColumnWrapper::<i16>::create(&column)?;
+
+    assert_eq!(wrapper.len(), 1024);
+    assert!(!wrapper.null_at(0));
+    assert!(!wrapper.null_at(99));
+
+    for i in 0..wrapper.len() {
+        if wrapper.null_at(i) {
+            assert_eq!(*wrapper.value(i), 0);
+        } else {
+            assert_eq!(*wrapper.value(i), 123i16);
+        }
+    }
+    Ok(())
+}

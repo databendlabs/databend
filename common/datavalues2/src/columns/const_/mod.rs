@@ -29,6 +29,10 @@ impl ConstColumn {
     pub fn new(column: ColumnRef, length: usize) -> Self {
         Self { column, length }
     }
+
+    pub fn inner(&self) -> &ColumnRef {
+        &self.column
+    }
 }
 
 impl Column for ConstColumn {

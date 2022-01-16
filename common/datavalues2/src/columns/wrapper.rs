@@ -27,6 +27,7 @@ pub struct ColumnWrapper<'a, T: ScalarType> {
 
     null_mask: usize,
     non_const_mask: usize,
+    size: usize,
 }
 
 pub trait GetDatas<E> {
@@ -59,6 +60,7 @@ where
     pub fn create(column: &'a ColumnRef) -> Result<Self> {
         let null_mask = get_null_mask(column);
         let non_const_mask = non_const_mask(column);
+        let size = column.len();
 
         let (column, validity) = if column.is_nullable() {
             let c: &NullableColumn = unsafe { Series::static_cast(column) };
@@ -66,7 +68,14 @@ where
         } else {
             let mut bitmap = MutableBitmap::with_capacity(1);
             bitmap.extend_constant(1, true);
-            (column, bitmap.into())
+
+            if column.is_const() {
+                let c: &ConstColumn = unsafe { Series::static_cast(column) };
+                (c.inner(), bitmap.into())
+            } else {
+                let c: &ColumnRef = unsafe { Series::static_cast(column) };
+                (c, bitmap.into())
+            }
         };
 
         let column: &T::ColumnType = Series::check_get(column)?;
@@ -78,6 +87,7 @@ where
             validity,
             null_mask,
             non_const_mask,
+            size,
         })
     }
 
@@ -98,11 +108,11 @@ where
 
     #[inline]
     pub fn len(&self) -> usize {
-        self.column.len()
+        self.size
     }
 
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.column.len() == 0
+        self.size == 0
     }
 }

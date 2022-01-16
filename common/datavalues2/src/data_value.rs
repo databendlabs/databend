@@ -74,7 +74,7 @@ impl DataValue {
     // convert to minialized data type
     pub fn data_type(&self) -> DataTypePtr {
         match self {
-            DataValue::Null => Arc::new(NullableType::create_null()),
+            DataValue::Null => Arc::new(NullType {}),
             DataValue::Boolean(_) => BooleanType::arc(),
             DataValue::Int64(n) => {
                 if *n >= i8::MIN as i64 && *n <= i8::MAX as i64 {

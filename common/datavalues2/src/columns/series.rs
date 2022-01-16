@@ -21,7 +21,6 @@ use common_exception::Result;
 use crate::prelude::*;
 use crate::Column;
 use crate::ColumnRef;
-use crate::ConstColumn;
 use crate::NewColumn;
 use crate::NullableColumn;
 use crate::StringColumn;
@@ -44,18 +43,10 @@ impl Series {
         let arr = column.as_any().downcast_ref::<T>().ok_or_else(|| {
             ErrorCode::UnknownColumn(format!(
                 "downcast column error, column type: {:?}",
-                column.data_type()
+                column.data_type_id(),
             ))
         });
         arr
-    }
-
-    pub fn convert_full_column(column: &ColumnRef) -> ColumnRef {
-        if let Ok(c) = Self::check_get::<ConstColumn>(column) {
-            c.convert_full_column()
-        } else {
-            column.clone()
-        }
     }
 }
 
