@@ -100,7 +100,7 @@ async fn test_block_pruner() -> Result<()> {
         .await?;
 
     let gen_col =
-        |item, rows| Series::new(std::iter::repeat(item).take(rows).collect::<Vec<u64>>());
+        |value, rows| Series::new(std::iter::repeat(value).take(rows).collect::<Vec<u64>>());
 
     // prepare test blocks
     // - there will be `num_blocks` blocks, for each block, it comprises of `row_per_block` rows,
@@ -109,13 +109,11 @@ async fn test_block_pruner() -> Result<()> {
         .into_iter()
         .map(|idx| {
             Ok(DataBlock::create_by_array(test_schema.clone(), vec![
-                // for column a, all the values are 1
+                // value of column a always equals  1
                 gen_col(1, row_per_block),
                 // for column b
-                // - values are the same in the same block
-                // - and the value equals the index of the block
-                //   in our case, there will be 10 blocks, and the distinct values of col b for
-                //   these blocks look like the sequence `<0,1,...9>`
+                // - for all block `B` in blocks, whose index is `i`
+                // - for all row in `B`, value of column b  equals `i`
                 gen_col(idx as u64, row_per_block),
             ]))
         })

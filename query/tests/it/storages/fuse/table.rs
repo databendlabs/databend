@@ -40,7 +40,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
     // basic append and read
     {
         let num_blocks = 2;
-        let rows_per_block = 3;
+        let rows_per_block = 2;
         let value_start_from = 1;
         let stream =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
@@ -77,7 +77,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         // recall our test setting:
         //   - num_blocks = 2;
         //   - rows_per_block = 2;
-        //   - single column a, and all rows are set to 1
+        //   - value_start_from = 1
         // thus
         let expected = vec![
             "+----+", //
@@ -85,8 +85,8 @@ async fn test_fuse_table_normal_case() -> Result<()> {
             "+----+", //
             "| 1  |", //
             "| 1  |", //
-            "| 1  |", //
-            "| 1  |", //
+            "| 2  |", //
+            "| 2  |", //
             "+----+", //
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, blocks.as_slice());
@@ -96,9 +96,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
     {
         // insert overwrite 5 blocks
-        let num_blocks = 5;
-        let rows_per_block = 3;
-        let value_start_from = 1;
+        let num_blocks = 2;
+        let rows_per_block = 2;
+        let value_start_from = 2;
         let stream =
             TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
 
@@ -113,7 +113,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         assert_ne!(prev_version, table.get_table_info().ident.version);
 
         let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
-        assert_eq!(stats.read_rows, num_blocks as usize * 3);
+        assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
         // inject partitions to current ctx
         ctx.try_set_partitions(parts)?;
@@ -131,27 +131,17 @@ async fn test_fuse_table_normal_case() -> Result<()> {
             .await?;
         let blocks = stream.try_collect::<Vec<_>>().await?;
         let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
-        assert_eq!(rows, num_blocks as usize * 3);
+        assert_eq!(rows, num_blocks * rows_per_block);
 
+        // two block, two rows for each block, value starts with 2
         let expected = vec![
             "+----+", //
             "| id |", //
             "+----+", //
-            "| 4  |", //
-            "| 4  |", //
-            "| 4  |", //
-            "| 4  |", //
-            "| 4  |", //
-            "| 5  |", //
-            "| 5  |", //
-            "| 5  |", //
-            "| 5  |", //
-            "| 5  |", //
-            "| 6  |", //
-            "| 6  |", //
-            "| 6  |", //
-            "| 6  |", //
-            "| 6  |", //
+            "| 2  |", //
+            "| 2  |", //
+            "| 3  |", //
+            "| 3  |", //
             "+----+", //
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, blocks.as_slice());

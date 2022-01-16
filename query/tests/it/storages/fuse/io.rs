@@ -106,29 +106,28 @@ async fn test_fuse_table_block_appender() {
 }
 
 #[test]
-fn test_block_shaper() -> common_exception::Result<()> {
+fn test_block_regulator() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let gen_rows = |n| std::iter::repeat(1i32).take(n).collect::<Vec<_>>();
     let gen_block = |col| DataBlock::create_by_array(schema.clone(), vec![Series::new(col)]);
     let test_case =
         |rows_per_sample_block, max_row_per_block, num_blocks, case_name| -> Result<()> {
-            // One block, which `row_count` equals `rows_per_sample_block`
+            // One block, contains `rows_per_sample_block` rows
             let sample_block = gen_block(gen_rows(rows_per_sample_block));
 
-            let mut shaper = BlockRegulator::new(max_row_per_block);
+            let mut regulator = BlockRegulator::new(max_row_per_block);
             let total_rows = rows_per_sample_block * num_blocks;
 
             let mut generated: Vec<DataBlock> = vec![];
 
             // feed blocks into shaper
-            let rounds = num_blocks;
-            for _i in 0..rounds {
-                let blks = shaper.regulate(sample_block.clone())?;
+            for _i in 0..num_blocks {
+                let blks = regulator.regulate(sample_block.clone())?;
                 generated.extend(blks.into_iter().flatten())
             }
 
             // indicates the shaper that we are done
-            let sealed = shaper.seal()?;
+            let sealed = regulator.seal()?;
 
             // Invariants of `generated` Blocks
             //

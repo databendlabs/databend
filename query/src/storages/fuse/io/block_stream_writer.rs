@@ -63,7 +63,6 @@ impl BlockStreamWriter {
             .try_flatten();
 
         // Write out the blocks.
-        //
         // And transform the stream of DataBlocks into Stream of SegmentInfo at the same time.
         let block_writer = BlockStreamWriter::new(block_per_segment, data_accessor, data_schema);
         let segments = Self::transform(Box::pin(block_stream), block_writer);
@@ -154,15 +153,14 @@ impl BlockStreamWriter {
 /// The "shape" of the sequence of S might be not be preserved.
 #[async_trait::async_trait]
 pub trait Regulator<S, T> {
-    /// Take an element s of type S, convert it into [Some<T>] if possible;
+    /// Takes an element s of type S, convert it into [Some<T>] if possible;
     /// otherwise, returns [None]
     ///
     /// for example. given a DataBlock s, a setting of `max_row_per_block`
-    ///    - Some<Vec<DataBlock>> might be returned if s is large
-    ///       in this case, s has been split into slices
+    ///    - Some<Vec<DataBlock>> might be returned if s contains more rows than `max_row_per_block`
+    ///       in this case, s will been split into vector of (smaller) blocks
     ///    - or [None] might be returned if s is too small
     ///       in this case, s will be accumulated
-    ///
     async fn regulate(&mut self, s: S) -> Result<Option<T>>;
 
     /// Indicate that no more elements remains.
@@ -200,7 +198,6 @@ impl Regulator<DataBlock, SegmentInfo> for BlockStreamWriter {
     }
 }
 
-/// A regulator that spl
 pub struct BlockRegulator {
     /// Max number of rows per data block
     max_row_per_block: usize,
@@ -246,8 +243,6 @@ impl BlockRegulator {
             let merged = DataBlock::concat_blocks(&blocks)?;
             let blocks = DataBlock::split_block_by_size(&merged, self.max_row_per_block)?;
 
-            // NOTE: if the `blocks` returned by `split_block_by_size` is guaranteed to be
-            // well-partitioned, then the current impl could be optimized further.
             let (result, remains) = blocks
                 .into_iter()
                 .partition(|item| item.num_rows() >= self.max_row_per_block);
