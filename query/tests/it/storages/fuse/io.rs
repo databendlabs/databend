@@ -66,7 +66,8 @@ async fn test_fuse_table_block_appender() {
 
     // multiple segments
     let number_of_blocks = 30;
-    let chunk_size = 10;
+    let max_rows_per_block = 3;
+    let max_blocks_per_segment = 1;
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
     let blocks = std::iter::repeat(Ok(block)).take(number_of_blocks);
     let block_stream = futures::stream::iter(blocks);
@@ -75,14 +76,14 @@ async fn test_fuse_table_block_appender() {
         local_fs.clone(),
         Box::pin(block_stream),
         schema.clone(),
-        chunk_size,
-        0,
+        max_rows_per_block,
+        max_blocks_per_segment,
     )
     .await
     .collect::<Vec<_>>()
     .await;
 
-    let len = number_of_blocks / chunk_size;
+    let len = num::Integer::div_ceil(&number_of_blocks, &max_blocks_per_segment);
     assert_eq!(segments.len(), len);
     for segment in segments.iter() {
         assert!(segment.is_ok(), "oops, unexpected result: {:?}", segment);
