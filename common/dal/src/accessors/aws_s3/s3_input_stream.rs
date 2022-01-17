@@ -83,6 +83,7 @@ impl futures::AsyncRead for S3InputStream {
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<std::io::Result<usize>> {
+        dbg!("async read");
         loop {
             let empty = { self.buffer.is_empty() };
             match &mut self.state {
@@ -110,6 +111,7 @@ impl futures::AsyncRead for S3InputStream {
                             super::metrics::METRIC_S3_GETOBJECT_USEDTIME,
                             start.elapsed()
                         );
+
                         reply
                             .body
                             .map(|s| s.fuse())
@@ -123,7 +125,7 @@ impl futures::AsyncRead for S3InputStream {
                         Ok(v) => {
                             self.state = State::GotBody(v);
                         }
-                        Err(e) => return Poll::Ready(Err(Error::new(ErrorKind::Other, e))),
+                        Err(e) => return Poll::Ready(Err(e)),
                     }
                 }
                 State::GotBody(stream) => {
