@@ -119,10 +119,6 @@ impl QueryContextShared {
         self.session.set_current_database(new_database_name);
     }
 
-    pub fn get_current_tenant(&self) -> String {
-        self.session.get_current_tenant()
-    }
-
     pub fn set_current_tenant(&self, tenant: String) {
         self.session.set_current_tenant(tenant);
     }
@@ -133,7 +129,7 @@ impl QueryContextShared {
 
     pub fn get_tenant(&self) -> String {
         if self.conf.query.management_mode {
-            self.get_current_tenant()
+            self.session.get_current_tenant()
         } else {
             self.conf.query.tenant_id.clone()
         }
