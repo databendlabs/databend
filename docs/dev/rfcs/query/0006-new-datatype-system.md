@@ -1,8 +1,9 @@
-# New datatype system design
+# New datavalues system design
 
 ## Sumamry
 
-We need to redesign the `datatype` system because current implementation had some shortcomes, including but not limited to:
+### Short comes of current `DataType`
+
 
 - `DataType` is an enum type, we must use specific type after matching. For example, if we want to create deserializer/serializer by `DataType`, we should always do matching. It does not mean that match is not necessary. If we want to add more and more functions to `DataType`, matching may be very annoyment.
 
@@ -12,121 +13,241 @@ We need to redesign the `datatype` system because current implementation had som
 
 - Hard to put attributes into enum based `DataType`, such as nullable attribute #3726 #3769
 
+### Too many concepts about column (Series/Column/Array)
 
-## New Datatype system design
-
-### Enum `TypeID`
-
-`TypeID` just represents the kind of `DataType`. It does not have extra attributes.
-
+-  DataColumn is an enum, including `Constant(value)` and `Array(Series)`
 ```rust
-enum TypeID {
-    Nothing,
-    Int8,
-    Int16,
-    Int32,
-    ...,
-    Date,
-    DateTime,
-    List,
-    Struct,
-    Nullable,
+pub enum DataColumn {
+    // Array of values.
+    Array(Series),
+    // A Single value.
+    Constant(DataValue, usize),
 }
 ```
 
-### trait `DataType`
-
+- Series is a wrap of `SeriesTrait`
 ```rust
-pub trait DataType {
-    fn type_id() -> TypeID;
-    fn is_nullable() -> bool;
-    fn arrow_type() -> ArrowType;
-    fn create_serializer() -> Box<dyn TypeSerializer>;
-    fn create_deserializer() -> Box<dyn TypeDeserializer>;
-    fn create_builder() -> Box<dyn ArrayBuilder>;
-    ...
-}
+pub struct Series(pub Arc<dyn SeriesTrait>);
 ```
 
-Each `DataType` we can get the `TypeID` to use in simple type match.
-
-Then we can have `DataTypeInt8` and `DataTypeInt16` .. to implement trait `DataType`.
+- SeriesTrait can implement various array，using many macros.
 
 ```rust
-pub DataTypeInt8 = DataTypeNumber<i8>;
+pub struct SeriesWrap<T>(pub T);
+   impl SeriesTrait for SeriesWrap<$da> {
+            fn data_type(&self) -> &DataType {
+                self.0.data_type()
+            }
 
-impl DataType for DataTypeInt8 {
-    fn type_id() -> TypeID {
-        TypeID::Int8
+            fn len(&self) -> usize {
+                self.0.len()
+            }
+            ...
+  }
+```
+
+- For functions, we must consider about `Constant` case for `Column`, so there are many branch matching.
+```rust
+match (
+            columns[0].column().cast_with_type(&DataType::String)?,
+            columns[1].column().cast_with_type(&DataType::UInt64)?,
+        ) {
+            (
+                DataColumn::Constant(DataValue::String(input_string), _),
+                DataColumn::Constant(DataValue::UInt64(times), _),
+            ) => Ok(DataColumn::Constant(
+                DataValue::String(repeat(input_string, times)?),
+                input_rows,
+            )),
+            (
+                DataColumn::Constant(DataValue::String(input_string), _),
+                DataColumn::Array(times),
+            )
+            ...
+```
+
+
+## New DataValues system design
+
+
+### Introduce `DataType` as a trait
+
+```rust
+#[typetag::serde(tag = "type")]
+pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
+    fn data_type_id(&self) -> TypeID;
+
+    fn is_nullable(&self) -> bool {
+        false
     }
-    ...
-}
-
+    ..
+ }
 ```
 
-`DataTypeNullable`:
+Nullable is a special case of `DataType`, it's a wrapper of `DataType`.
 
 ```rust
-struct DatTypeNullable {
-    inner: Box<dyn DataType>
-}
+
+pub struct DataTypeNull {inner: DataTypePtr}
 ```
 
-and `DataTypeStruct`:
+### Simplify `DataValue`
 
 ```rust
-struct DatTypeStruct {
-    names: Vec<String>,
-    inners: Vec<Box<dyn DataType>>
-}
-```
-
-
-### struct `DataField`
-
-Yes, we still need struct `DataField`, because we need it to store other attributes other than `DataType`.
-
-```rust
-struct DataField {
-    name: String,
-    nullable: bool,
-    data_type: Box<dyn DataType>,
-    ...
+pub enum DataValue {
+    /// Base type.
+    Null,
+    Boolean(bool),
+    Int64(i64),
+    UInt64(u64),
+    Float64(f64),
+    String(Vec<u8>),
+    // Container struct.
+    Array(Vec<DataValue>),
+    Struct(Vec<DataValue>),
 }
 ```
 
-
-### Example of a function [`bin`](https://github.com/datafuselabs/databend/blob/7cadfd2b9d11406a06b31207d7e3634f36aa7f00/common/functions/src/scalars/strings/bin.rs)
-
-
+`DataValue` can convert into proper `DataType` by it's value.
 
 ```rust
- fn return_type(&self, args: &[Box<DataType>]) -> Result<Box<DataType>> {
-        if !args[0].is_numeric(){
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected number or null, but got {}",
-                args[0]
-            )));
-        }
-        Ok(Box::new(DataTypeString::create()))
+// convert to minialized data type
+    pub fn data_type(&self) -> DataTypePtr {
+        match self {
+            DataValue::Null => Arc::new(NullType {}),
+            DataValue::Boolean(_) => BooleanType::arc(),
+            DataValue::Int64(n) => {
+                if *n >= i8::MIN as i64 && *n <= i8::MAX as i64 {
+                    return Int8Type::arc();
+                }
+            ...
+   }
+```
+
+Also, `DataValue` can convert into rust primitive values and vice versa.
+
+### Uniform `Series/Array/Column` into `Column`
+
+- `Column` as a trait
+
+```rust
+pub type ColumnRef = Arc<dyn Column>;
+pub trait Column: Send + Sync {
+    fn as_any(&self) -> &dyn Any;
+    /// Type of data that column contains. It's an underlying physical type:
+    /// UInt16 for Date, UInt32 for DateTime, so on.
+    fn data_type_id(&self) -> TypeID {
+        self.data_type().data_type_id()
     }
+    fn data_type(&self) -> DataTypePtr;
+
+    fn is_nullable(&self) -> bool {
+        false
+    }
+
+    fn is_const(&self) -> bool {
+        false
+    }
+   ..
+ }
+
 ```
 
+- Introduce `Constant column`
 
-### Example of `numerical_coercion`
+> `Constant column` is a wrapper of a `Column` with a single value(size = 1)
+```rust
+#[derive(Clone)]
+pub struct ConstColumn {
+    length: usize,
+    column: ColumnRef,
+}
+impl Column for ConstColumn {..}
+```
+
+- Introduce `nullable column`
+
+> `nullable column` is a wrapper of a `Column` and keep an extra bitmap to indicate null values.
 
 ```rust
-pub fn numerical_coercion(
-    lhs_type: &Box<DataType>,
-    rhs_type: &Box<DataType>,
-    allow_overflow: bool,
-) -> Result<Box<DataType>> {
+pub struct NullableColumn {
+    validity: Bitmap,
+    column: ColumnRef,
+}
+impl Column for NullableColumn {..}
+```
 
-    let has_float = lhs_type.is_floating() || rhs_type.is_floating();
-    let has_integer = lhs_type.is_integer() || rhs_type.is_integer();
-    let has_signed = lhs_type.is_signed_numeric() || rhs_type.is_signed_numeric();
+- No extra cost convert from or into Arrow's column format.
 
-    ....
+```rust
+ fn as_arrow_array(&self) -> common_arrow::arrow::array::ArrayRef {
+    let data_type = self.data_type().arrow_type();
+    Arc::new(PrimitiveArray::<T>::from_data(
+        data_type,
+        self.values.clone(),
+        None,
+    ))
+ }
+```
+
+- Keep `Series` as a tool struct, this may help to fast generate a column.
+
+```rust
+// nullable column from options
+let column = Series::from_data(vec![Some(1i8), None, Some(3), Some(4), Some(5)]);
+
+// no nullable column
+let column = Series::from_data(vec![1，2，3，4);
+```
+
+- Downcast into the specific `Column`
+```rust
+impl Series {
+    /// Get a pointer to the underlying data of this Series.
+    /// Can be useful for fast comparisons.
+    /// # Safety
+    /// Assumes that the `column` is  T.
+    pub unsafe fn static_cast<T>(column: &ColumnRef) -> &T {
+        let object = column.as_ref();
+        &*(object as *const dyn Column as *const T)
+    }
+
+    pub fn check_get<T: 'static + Column>(column: &ColumnRef) -> Result<&T> {
+        let arr = column.as_any().downcast_ref::<T>().ok_or_else(|| {
+            ErrorCode::UnknownColumn(format!(
+                "downcast column error, column type: {:?}",
+                column.data_type()
+            ))
+        });
+        arr
+    }
 }
 ```
 
+- Convinient way to view a column by `ColumnWrapper`
+
+No need to care about `Constants` and `Nullable`.
+
+```rust
+let wrapper = ColumnWrapper::<i8>::create(&column)?;
+
+assert_eq!(wrapper.len(), 10);
+assert!(!wrapper.null_at(0));
+for i in 0..wrapper.len() {
+    assert_eq!(*wrapper.value(i), (i + 1) as i8);
+}
+Ok(())
+
+
+let wrapper = ColumnWrapper::<bool>::create(&column)?;
+let c = wrapper.value(0);
+
+let wrapper =  ColumnWrapper::<&str>::create(&column)?;
+let c = wrapper.value(1);
+Ok(())
+```
+
+## TODO
+
+- Make `datavalues2` more mature.
+- Merge `datavalues2` into Databend.
