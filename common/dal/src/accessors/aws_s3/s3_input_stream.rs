@@ -110,6 +110,7 @@ impl futures::AsyncRead for S3InputStream {
                             super::metrics::METRIC_S3_GETOBJECT_USEDTIME,
                             start.elapsed()
                         );
+
                         reply
                             .body
                             .map(|s| s.fuse())
@@ -123,7 +124,7 @@ impl futures::AsyncRead for S3InputStream {
                         Ok(v) => {
                             self.state = State::GotBody(v);
                         }
-                        Err(e) => return Poll::Ready(Err(Error::new(ErrorKind::Other, e))),
+                        Err(e) => return Poll::Ready(Err(e)),
                     }
                 }
                 State::GotBody(stream) => {
