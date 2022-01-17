@@ -41,6 +41,7 @@ common-metrics = { path = "../common/metrics" }
 # Github dependencies
 
 # Crates.io dependencies
+anyerror = "0.1.1"
 anyhow = "1.0.52"
 async-raft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.6.2-alpha.14.1" }
 async-trait = "0.1.52"
