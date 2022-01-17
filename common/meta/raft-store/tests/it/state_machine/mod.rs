@@ -49,6 +49,7 @@ use pretty_assertions::assert_eq;
 use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
 
+mod database_lookup;
 mod meta_api_impl;
 mod placement;
 

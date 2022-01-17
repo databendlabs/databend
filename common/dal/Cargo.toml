@@ -34,3 +34,7 @@ rusoto_credential = "0.47.0"
 common-metrics = { path = "../metrics" }
 rand = "0.8.4"
 tempfile = "3.2.0"
+
+[features]
+# for unit test only
+ut_mock_s3 = []

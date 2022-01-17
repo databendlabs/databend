@@ -40,7 +40,11 @@ fn test_ft_stats_block_stats() -> common_exception::Result<()> {
 
 #[test]
 fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
-    let blocks = TestFixture::gen_sample_blocks(10, 1);
+    let num_of_blocks = 10;
+    let rows_per_block = 3;
+    let val_start_with = 1;
+
+    let blocks = TestFixture::gen_sample_blocks_ex(num_of_blocks, rows_per_block, val_start_with);
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let col_stats = blocks
         .iter()
@@ -51,8 +55,8 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let r = r.unwrap();
     assert_eq!(1, r.len());
     let col_stats = r.get(&0).unwrap();
-    assert_eq!(col_stats.min, DataValue::Int32(Some(1)));
-    assert_eq!(col_stats.max, DataValue::Int32(Some(3)));
+    assert_eq!(col_stats.min, DataValue::Int32(Some(val_start_with)));
+    assert_eq!(col_stats.max, DataValue::Int32(Some(num_of_blocks as i32)));
     Ok(())
 }
 

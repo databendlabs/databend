@@ -41,6 +41,7 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
+use crate::state_machine::DatabaseLookupKey;
 use crate::state_machine::StateMachine;
 use crate::state_machine::TableLookupKey;
 
@@ -114,13 +115,16 @@ impl MetaApi for StateMachine {
 
     async fn list_databases(
         &self,
-        _req: ListDatabaseReq,
+        req: ListDatabaseReq,
     ) -> Result<Vec<Arc<DatabaseInfo>>, ErrorCode> {
         let mut res = vec![];
 
-        let it = self.database_lookup().range(..)?;
+        let it = self
+            .database_lookup()
+            .scan_prefix(&DatabaseLookupKey::new(req.tenant, "".to_string()))?;
+
         for r in it {
-            let (db_lookup_key, seq_id) = r?;
+            let (db_lookup_key, seq_id) = r;
             let seq_meta = self.get_database_meta_by_id(&seq_id.data)?;
 
             let db_info = DatabaseInfo {

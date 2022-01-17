@@ -11,6 +11,7 @@ members = [
     "common/dal2",
     "common/datablocks",
     "common/datavalues",
+    "common/datavalues2",
     "common/exception",
     "common/grpc",
     "common/functions",
