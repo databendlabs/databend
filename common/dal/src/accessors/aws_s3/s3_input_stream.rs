@@ -101,14 +101,9 @@ impl futures::AsyncRead for S3InputStream {
                             counter!(super::metrics::METRIC_S3_GETOBJECT_ERRORS, 1);
                             match e {
                                 RusotoError::Service(GetObjectError::NoSuchKey(msg)) => {
-                                    dbg!("not found");
                                     Error::new(ErrorKind::NotFound, msg)
                                 }
-                                _ => {
-                                    dbg!("other");
-                                    let e = dbg!(e);
-                                    Error::new(ErrorKind::Other, e)
-                                }
+                                _ => Error::new(ErrorKind::Other, e),
                             }
                         })?;
                         histogram!(

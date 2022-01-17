@@ -143,7 +143,6 @@ async fn test_s3_input_stream_seek_api() -> common_exception::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_s3_input_stream_read_exception() -> common_exception::Result<()> {
     let test_key = "not_exist".to_string();
-    // we do need a random test obj in this case
     let fixture = TestFixture::new();
     let s3 = fixture.data_accessor()?;
     let mut input = s3.get_input_stream(&test_key, None)?;
