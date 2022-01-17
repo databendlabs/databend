@@ -132,7 +132,11 @@ impl QueryContextShared {
     }
 
     pub fn get_tenant(&self) -> String {
-        self.conf.query.tenant_id.clone()
+        if self.conf.query.management_mode {
+            self.get_current_tenant()
+        } else {
+            self.conf.query.tenant_id.clone()
+        }
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {

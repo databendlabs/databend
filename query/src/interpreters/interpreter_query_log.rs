@@ -161,7 +161,7 @@ impl InterpreterQueryLog {
     pub async fn log_start(&self) -> Result<()> {
         // User.
         let handler_type = self.ctx.get_current_session().get_type();
-        let tenant_id = self.ctx.get_config().query.tenant_id;
+        let tenant_id = self.ctx.get_tenant();
         let cluster_id = self.ctx.get_config().query.cluster_id;
         let user = self.ctx.get_current_user()?;
         let sql_user = user.name;
