@@ -26,6 +26,16 @@ use rusoto_s3::PutObjectRequest;
 use rusoto_s3::S3Client;
 use rusoto_s3::S3 as RusotoS3;
 
+/// This test suite is not CI ready, and intended to be
+/// used in local dev box, with
+///
+/// - properly configured S3 env vars
+///    pls take a look at `scripts/ci/ci-run-stateful-tests-standalone-s3.sh`
+/// - or mocked s3 service, like minio
+///
+/// To enable this suite, features `ut_mock_s3` should be enabled:
+///
+/// e.g. cargo test --features ut_mock_s3 -p common-dal --test it
 struct TestFixture {
     region_name: String,
     endpoint_url: String,
@@ -98,7 +108,6 @@ impl TestFixture {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[ignore]
 async fn test_s3_input_stream_api() -> common_exception::Result<()> {
     let test_key = "test_s3_input_stream".to_string();
     let fixture = TestFixture::with_test_obj(1024 * 10, test_key.clone());
@@ -113,7 +122,6 @@ async fn test_s3_input_stream_api() -> common_exception::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[ignore]
 async fn test_s3_input_stream_seek_api() -> common_exception::Result<()> {
     let test_key = "test_s3_seek_stream_seek".to_string();
     let fixture = TestFixture::with_test_obj(1024 * 10, test_key.clone());
@@ -133,7 +141,6 @@ async fn test_s3_input_stream_seek_api() -> common_exception::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[ignore]
 async fn test_s3_input_stream_read_exception() -> common_exception::Result<()> {
     let test_key = "not_exist".to_string();
     // we do need a random test obj in this case
