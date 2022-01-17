@@ -9,10 +9,11 @@ use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 // TODO: maybe we also need async transform for `SELECT sleep(1)`?
 pub trait Transform: Send {
     const NAME: &'static str;
+
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock>;
 }
 
-pub struct TransformWrap<T: Transform + 'static> {
+pub struct Transformer<T: Transform + 'static> {
     transform: T,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -21,9 +22,9 @@ pub struct TransformWrap<T: Transform + 'static> {
     output_data: Option<DataBlock>,
 }
 
-impl<T: Transform + 'static> TransformWrap<T> {
+impl<T: Transform + 'static> Transformer<T> {
     pub fn create(input: Arc<InputPort>, output: Arc<OutputPort>, inner: T) -> ProcessorPtr {
-        ProcessorPtr::create(Box::new(TransformWrap {
+        ProcessorPtr::create(Box::new(Transformer {
             input,
             output,
             transform: inner,
@@ -34,7 +35,7 @@ impl<T: Transform + 'static> TransformWrap<T> {
 }
 
 #[async_trait::async_trait]
-impl<T: Transform + 'static> Processor for TransformWrap<T> {
+impl<T: Transform + 'static> Processor for Transformer<T> {
     fn name(&self) -> &'static str {
         T::NAME
     }
@@ -63,7 +64,7 @@ impl<T: Transform + 'static> Processor for TransformWrap<T> {
     }
 }
 
-impl<T: Transform> TransformWrap<T> {
+impl<T: Transform> Transformer<T> {
     fn pull_data(&mut self) -> Result<Event> {
         match self.input.is_finished() {
             true => self.finish_output(),

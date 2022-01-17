@@ -3,13 +3,13 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use crate::pipelines::new::processors::port::{InputPort, OutputPort};
 use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::transforms::transform::{Transform, TransformWrap};
+use crate::pipelines::new::processors::transforms::transform::{Transform, Transformer};
 
 pub struct TransformDummy;
 
 impl TransformDummy {
     pub fn create(input: Arc<InputPort>, output: Arc<OutputPort>) -> ProcessorPtr {
-        TransformWrap::create(input, output, TransformDummy {})
+        Transformer::create(input, output, TransformDummy {})
     }
 }
 

@@ -1,3 +1,4 @@
+use std::fmt::format;
 use common_base::tokio;
 use common_base::tokio::sync::mpsc::{channel, Receiver, Sender};
 use common_datablocks::DataBlock;
@@ -9,15 +10,8 @@ use databend_query::pipelines::new::processors::port::{InputPort, OutputPort};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_simple_pipeline() -> Result<()> {
-    let (_rx, sink_pipe) = create_sink_pipe(1)?;
-    let (_tx, source_pipe) = create_source_pipe(1)?;
+    let graph = create_simple_pipeline()?;
 
-    let mut pipeline = NewPipeline::create();
-    pipeline.add_pipe(source_pipe);
-    pipeline.add_pipe(create_transform_pipe(1)?);
-    pipeline.add_pipe(sink_pipe);
-
-    let graph = RunningGraph::create(pipeline)?;
     assert_eq!(format!("{:?}", graph), "digraph {\
             \n    0 [ label = \"SyncReceiverSource\" ]\
             \n    1 [ label = \"DummyTransform\" ]\
@@ -31,15 +25,8 @@ async fn test_create_simple_pipeline() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_parallel_simple_pipeline() -> Result<()> {
-    let (_rx, sink_pipe) = create_sink_pipe(2)?;
-    let (_tx, source_pipe) = create_source_pipe(2)?;
+    let graph = create_parallel_simple_pipeline();
 
-    let mut pipeline = NewPipeline::create();
-    pipeline.add_pipe(source_pipe);
-    pipeline.add_pipe(create_transform_pipe(2)?);
-    pipeline.add_pipe(sink_pipe);
-
-    let graph = RunningGraph::create(pipeline)?;
     assert_eq!(format!("{:?}", graph), "digraph {\
         \n    0 [ label = \"SyncReceiverSource\" ]\
         \n    1 [ label = \"SyncReceiverSource\" ]\
@@ -63,11 +50,11 @@ async fn test_create_resize_pipeline() -> Result<()> {
 
     let mut pipeline = NewPipeline::create();
     pipeline.add_pipe(source_pipe);
-    pipeline.resize(2);
+    pipeline.resize(2)?;
     pipeline.add_pipe(create_transform_pipe(2)?);
-    pipeline.resize(1);
+    pipeline.resize(1)?;
     pipeline.add_pipe(create_transform_pipe(1)?);
-    pipeline.resize(2);
+    pipeline.resize(2)?;
     pipeline.add_pipe(sink_pipe);
 
     let graph = RunningGraph::create(pipeline)?;
@@ -93,6 +80,48 @@ async fn test_create_resize_pipeline() -> Result<()> {
     \n}\n");
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_simple_pipeline_init_queue() -> Result<()> {
+    unsafe {
+        let graph = create_simple_pipeline()?;
+        assert_eq!(format!("{:?}", graph.init_schedule_queue()?), "ScheduleQueue { sync_queue: [\"SyncReceiverSource\"], async_queue: [] }");
+        Ok(())
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_parallel_simple_pipeline_init_queue() -> Result<()> {
+    unsafe {
+        let graph = create_parallel_simple_pipeline()?;
+        assert_eq!(format!("{:?}", graph.init_schedule_queue()?), "ScheduleQueue { sync_queue: [\"SyncReceiverSource\", \"SyncReceiverSource\"], async_queue: [] }");
+        Ok(())
+    }
+}
+
+fn create_simple_pipeline() -> Result<RunningGraph> {
+    let (_rx, sink_pipe) = create_sink_pipe(1)?;
+    let (_tx, source_pipe) = create_source_pipe(1)?;
+
+    let mut pipeline = NewPipeline::create();
+    pipeline.add_pipe(source_pipe);
+    pipeline.add_pipe(create_transform_pipe(1)?);
+    pipeline.add_pipe(sink_pipe);
+
+    Ok(RunningGraph::create(pipeline)?)
+}
+
+fn create_parallel_simple_pipeline() -> Result<RunningGraph> {
+    let (_rx, sink_pipe) = create_sink_pipe(2)?;
+    let (_tx, source_pipe) = create_source_pipe(2)?;
+
+    let mut pipeline = NewPipeline::create();
+    pipeline.add_pipe(source_pipe);
+    pipeline.add_pipe(create_transform_pipe(2)?);
+    pipeline.add_pipe(sink_pipe);
+
+    Ok(RunningGraph::create(pipeline)?)
 }
 
 fn create_source_pipe(size: usize) -> Result<(Vec<Sender<Result<DataBlock>>>, NewPipe)> {

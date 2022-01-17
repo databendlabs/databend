@@ -11,15 +11,15 @@ pub trait Sink: Send {
     fn consume(&mut self, data_block: DataBlock) -> Result<()>;
 }
 
-pub struct SinkWrap<T: Sink + 'static> {
+pub struct Sinker<T: Sink + 'static> {
     inner: T,
     input: Arc<InputPort>,
     input_data: Option<DataBlock>,
 }
 
-impl<T: Sink + 'static> SinkWrap<T> {
+impl<T: Sink + 'static> Sinker<T> {
     pub fn create(input: Arc<InputPort>, inner: T) -> ProcessorPtr {
-        ProcessorPtr::create(Box::new(SinkWrap {
+        ProcessorPtr::create(Box::new(Sinker {
             inner,
             input,
             input_data: None,
@@ -28,7 +28,7 @@ impl<T: Sink + 'static> SinkWrap<T> {
 }
 
 #[async_trait::async_trait]
-impl<T: Sink + 'static> Processor for SinkWrap<T> {
+impl<T: Sink + 'static> Processor for Sinker<T> {
     fn name(&self) -> &'static str {
         T::NAME
     }

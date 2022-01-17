@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::sync::Arc;
 use common_exception::{Result};
 
@@ -13,10 +14,20 @@ pub struct PipelineExecutor {
 
 impl PipelineExecutor {
     pub fn create(pipeline: NewPipeline, workers: usize) -> Result<Arc<PipelineExecutor>> {
-        Ok(Arc::new(PipelineExecutor {
-            graph: RunningGraph::create(pipeline)?,
-            global_tasks_queue: ExecutorTasksQueue::create(workers),
-        }))
+        unsafe {
+            let mut global_tasks_queue = ExecutorTasksQueue::create(workers);
+
+            let graph = RunningGraph::create(pipeline)?;
+            let mut init_schedule_queue = graph.init_schedule_queue()?;
+
+            let mut tasks = VecDeque::new();
+            while let Some(task) = init_schedule_queue.pop_task() {
+                tasks.push_back(task);
+            }
+
+            global_tasks_queue.init_tasks(tasks);
+            Ok(Arc::new(PipelineExecutor { graph, global_tasks_queue }))
+        }
     }
 
     pub unsafe fn execute_with_single_worker(&self, worker_num: usize) -> Result<()> {
@@ -26,7 +37,6 @@ impl PipelineExecutor {
             // When there are not enough tasks, the thread will be blocked, so we need loop check.
             while !self.global_tasks_queue.is_finished() && !context.has_task() {
                 // let (sender, receiver) = std::sync::mpsc::channel();
-                // receiver.recv()
                 self.global_tasks_queue.steal_task_to_context(&mut context);
             }
 

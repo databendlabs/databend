@@ -2,6 +2,7 @@
 use std::collections::VecDeque;
 use std::fmt::{Debug, write};
 use std::sync::Arc;
+use petgraph::Direction;
 use petgraph::dot::{Config, Dot};
 use petgraph::prelude::{EdgeIndex, NodeIndex, StableGraph};
 use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
@@ -141,10 +142,18 @@ impl ExecutingGraph {
         Ok(ExecutingGraph { graph })
     }
 
-    pub unsafe fn schedule_queue(locker: &StateLockGuard, index: NodeIndex) -> Result<ScheduleQueue> {
+    pub unsafe fn init_schedule_queue(locker: &StateLockGuard) -> Result<ScheduleQueue> {
+        let mut schedule_queue = ScheduleQueue::create();
+        for sink_index in locker.graph.externals(Direction::Outgoing) {
+            ExecutingGraph::schedule_queue(locker, sink_index, &mut schedule_queue)?;
+        }
+
+        Ok(schedule_queue)
+    }
+
+    pub unsafe fn schedule_queue(locker: &StateLockGuard, index: NodeIndex, schedule_queue: &mut ScheduleQueue) -> Result<()> {
         let mut need_schedule_nodes = VecDeque::new();
         let mut need_schedule_edges = VecDeque::new();
-        let mut schedule_queue = ScheduleQueue::create();
 
         need_schedule_nodes.push_back(index);
         while !need_schedule_nodes.is_empty() || !need_schedule_edges.is_empty() {
@@ -189,7 +198,7 @@ impl ExecutingGraph {
             }
         }
 
-        Ok(schedule_queue)
+        Ok(())
     }
 }
 
@@ -214,6 +223,16 @@ impl ScheduleQueue {
     #[inline]
     pub fn push_async(&mut self, processor: ProcessorPtr) {
         self.async_queue.push_back(processor);
+    }
+
+    pub fn pop_task(&mut self) -> Option<ExecutorTask> {
+        match self.sync_queue.pop_front() {
+            Some(processor) => Some(ExecutorTask::Sync(processor)),
+            None => match self.async_queue.pop_front() {
+                None => None,
+                Some(processor) => Some(ExecutorTask::Async(processor))
+            }
+        }
     }
 
     pub fn schedule_tail(mut self, worker_id: usize, global: &ExecutorTasksQueue) {
@@ -255,12 +274,6 @@ impl ScheduleQueue {
     }
 }
 
-impl Debug for ScheduleQueue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "")
-    }
-}
-
 pub struct RunningGraph(RwLock<ExecutingGraph>);
 
 impl RunningGraph {
@@ -270,8 +283,14 @@ impl RunningGraph {
         Ok(RunningGraph(RwLock::new(graph_state)))
     }
 
+    pub unsafe fn init_schedule_queue(&self) -> Result<ScheduleQueue> {
+        ExecutingGraph::init_schedule_queue(&self.0.upgradable_read())
+    }
+
     pub unsafe fn schedule_queue(&self, node_index: NodeIndex) -> Result<ScheduleQueue> {
-        ExecutingGraph::schedule_queue(&self.0.upgradable_read(), node_index)
+        let mut schedule_queue = ScheduleQueue::create();
+        ExecutingGraph::schedule_queue(&self.0.upgradable_read(), node_index, &mut schedule_queue)?;
+        Ok(schedule_queue)
     }
 }
 
@@ -293,6 +312,30 @@ impl Debug for RunningGraph {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         let graph = self.0.read();
         write!(f, "{:?}", graph)
+    }
+}
+
+impl Debug for ScheduleQueue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        struct QueueFmt<'a>(&'a VecDeque<ProcessorPtr>);
+
+        impl<'a> Debug for QueueFmt<'a> {
+            fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+                unsafe {
+                    let mut debug_list = f.debug_list();
+                    for processor in self.0 {
+                        debug_list.entry(&format!("{}", processor.name()));
+                    }
+
+                    debug_list.finish()
+                }
+            }
+        }
+
+        f.debug_struct("ScheduleQueue")
+            .field("sync_queue", &QueueFmt(&self.sync_queue))
+            .field("async_queue", &QueueFmt(&self.async_queue))
+            .finish()
     }
 }
 

@@ -48,6 +48,21 @@ impl ExecutorTasksQueue {
         self.wait_wakeup(context)
     }
 
+    pub fn init_tasks(&self, mut tasks: VecDeque<ExecutorTask>) {
+        unsafe {
+            let mut worker_id = 0;
+            let mut workers_tasks = self.workers_tasks.lock();
+            while let Some(task) = tasks.pop_front() {
+                workers_tasks.push_task(worker_id, task);
+
+                worker_id += 1;
+                if worker_id == workers_tasks.workers_sync_tasks.len() {
+                    worker_id = 0;
+                }
+            }
+        }
+    }
+
     pub fn push_tasks(&self, worker_id: usize, mut tasks: VecDeque<ExecutorTask>) {
         unsafe {
             let mut workers_tasks = self.workers_tasks.lock();

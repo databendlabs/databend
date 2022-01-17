@@ -19,15 +19,15 @@ pub enum DirectedEdge {
 impl DirectedEdge {
     pub fn get_source<N, E>(&self, graph: &StableGraph<N, E>) -> NodeIndex {
         match self {
-            DirectedEdge::Source(edge_index) => graph.edge_endpoints(*edge_index).unwrap().1,
-            DirectedEdge::Target(edge_index) => graph.edge_endpoints(*edge_index).unwrap().0,
+            DirectedEdge::Source(edge_index) => graph.edge_endpoints(*edge_index).unwrap().0,
+            DirectedEdge::Target(edge_index) => graph.edge_endpoints(*edge_index).unwrap().1,
         }
     }
 
     pub fn get_target<N, E>(&self, graph: &StableGraph<N, E>) -> NodeIndex {
         match self {
-            DirectedEdge::Source(edge_index) => graph.edge_endpoints(*edge_index).unwrap().0,
-            DirectedEdge::Target(edge_index) => graph.edge_endpoints(*edge_index).unwrap().1,
+            DirectedEdge::Source(edge_index) => graph.edge_endpoints(*edge_index).unwrap().1,
+            DirectedEdge::Target(edge_index) => graph.edge_endpoints(*edge_index).unwrap().0,
         }
     }
 }

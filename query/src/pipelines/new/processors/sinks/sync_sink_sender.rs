@@ -4,7 +4,7 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::sinks::sync_sink::{Sink, SinkWrap};
+use crate::pipelines::new::processors::sinks::sync_sink::{Sink, Sinker};
 
 pub struct SyncSenderSink {
     sender: Sender<Result<DataBlock>>,
@@ -12,7 +12,7 @@ pub struct SyncSenderSink {
 
 impl SyncSenderSink {
     pub fn create(sender: Sender<Result<DataBlock>>, input: Arc<InputPort>) -> ProcessorPtr {
-        SinkWrap::create(input, SyncSenderSink { sender })
+        Sinker::create(input, SyncSenderSink { sender })
     }
 }
 
