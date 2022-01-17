@@ -12,13 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use self::mysql_handler::MySQLHandler;
-pub use self::mysql_session::MySQLConnection;
+//! *Credits to the work of https://github.com/pola-rs/polars, which served as
+//! insipration for the crate*
+//!
 
-mod mysql_handler;
-mod mysql_interactive_worker;
-mod mysql_metrics;
-mod mysql_session;
-#[allow(clippy::unused_io_amount)]
-mod reject_connection;
-mod writers;
+#[macro_use]
+mod macros;
+
+mod utils;
+
+pub mod columns;
+pub mod data_field;
+pub mod data_schema;
+pub mod data_value;
+pub mod data_value_operator;
+pub mod prelude;
+pub mod types;
+
+pub use columns::*;
+pub use data_field::*;
+pub use data_schema::*;
+pub use data_value::*;
+pub use data_value_operator::*;
+pub use prelude::*;
+pub use types::*;
+pub use utils::*;

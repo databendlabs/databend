@@ -12,13 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use self::mysql_handler::MySQLHandler;
-pub use self::mysql_session::MySQLConnection;
+use std::any::Any;
 
-mod mysql_handler;
-mod mysql_interactive_worker;
-mod mysql_metrics;
-mod mysql_session;
-#[allow(clippy::unused_io_amount)]
-mod reject_connection;
-mod writers;
+use common_arrow::arrow::bitmap::MutableBitmap;
+
+use crate::types::DataTypePtr;
+use crate::ColumnRef;
+
+pub trait MutableColumn {
+    fn data_type(&self) -> DataTypePtr;
+    fn as_any(&self) -> &dyn Any;
+    fn as_mut_any(&mut self) -> &mut dyn Any;
+    fn as_column(&mut self) -> ColumnRef;
+
+    fn append_default(&mut self);
+
+    fn append_null(&mut self) -> bool {
+        false
+    }
+    fn validity(&self) -> Option<&MutableBitmap> {
+        None
+    }
+    fn shrink_to_fit(&mut self);
+}

@@ -12,13 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use self::mysql_handler::MySQLHandler;
-pub use self::mysql_session::MySQLConnection;
+use common_exception::Result;
 
-mod mysql_handler;
-mod mysql_interactive_worker;
-mod mysql_metrics;
-mod mysql_session;
-#[allow(clippy::unused_io_amount)]
-mod reject_connection;
-mod writers;
+use crate::prelude::DataValue;
+use crate::ColumnRef;
+use crate::TypeSerializer;
+
+#[derive(Clone, Debug, Default)]
+pub struct NullSerializer {}
+
+impl TypeSerializer for NullSerializer {
+    fn serialize_value(&self, _value: &DataValue) -> Result<String> {
+        Ok("NULL".to_owned())
+    }
+
+    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
+        let result: Vec<String> = vec!["NULL".to_owned(); column.len()];
+        Ok(result)
+    }
+}

@@ -12,13 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use self::mysql_handler::MySQLHandler;
-pub use self::mysql_session::MySQLConnection;
+use common_exception::Result;
 
-mod mysql_handler;
-mod mysql_interactive_worker;
-mod mysql_metrics;
-mod mysql_session;
-#[allow(clippy::unused_io_amount)]
-mod reject_connection;
-mod writers;
+use crate::prelude::*;
+
+mod boolean;
+mod date;
+mod date_time;
+mod null;
+mod nullable;
+mod number;
+mod string;
+mod struct_;
+
+pub use boolean::*;
+pub use date::*;
+pub use date_time::*;
+pub use null::*;
+pub use nullable::*;
+pub use number::*;
+pub use string::*;
+pub use struct_::*;
+
+pub trait TypeSerializer: Send + Sync {
+    fn serialize_value(&self, value: &DataValue) -> Result<String>;
+    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>>;
+}
