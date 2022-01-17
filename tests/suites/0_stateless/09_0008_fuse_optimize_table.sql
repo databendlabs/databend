@@ -50,13 +50,15 @@ optimize table m compact;
 drop table m;
 
 
--- optimize memory table should not panic/throws exception (fuse engine)
+-- optimize fuse table multiple times should not panic/throws exception
 
 create table m(a uint64) engine=Fuse;
 insert into m values(1);
 insert into m values(2);
+
 optimize table m;
 optimize table m;
+
 optimize table m all;
 optimize table m purge;
 optimize table m compact;
