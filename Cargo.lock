@@ -53,6 +53,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyerror"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df0eff878df53fcffe838345abfa5b3d7eeb87e856f53b7461e0e5d51fb9d045"
+dependencies = [
+ "backtrace",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "anyhow"
 version = "1.0.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2388,6 +2399,7 @@ dependencies = [
 name = "databend-meta"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "anyhow",
  "async-raft",
  "async-trait",
