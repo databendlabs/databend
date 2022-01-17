@@ -13,6 +13,8 @@ use crate::pipelines::new::processors::Processor;
 ///     - Memory storage engine.
 ///     - SELECT * FROM numbers_mt(1000)
 pub trait SyncSource: Send {
+    const NAME: &'static str;
+
     fn generate(&mut self) -> Result<Option<DataBlock>>;
 }
 
@@ -96,6 +98,10 @@ impl<T: 'static + SyncSource> SyncSourceProcessorWrap<T> {
 
 #[async_trait::async_trait]
 impl<T: 'static + SyncSource> Processor for SyncSourceProcessorWrap<T> {
+    fn name(&self) -> &'static str {
+        T::NAME
+    }
+
     fn event(&mut self) -> Result<Event> {
         Ok(match &self.generated_data {
             None if self.is_finish => self.close_outputs(),
@@ -162,6 +168,10 @@ impl<T: 'static + SyncSource> SingleOutputSyncSourceProcessorWrap<T> {
 
 #[async_trait::async_trait]
 impl<T: 'static + SyncSource> Processor for SingleOutputSyncSourceProcessorWrap<T> {
+    fn name(&self) -> &'static str {
+        T::NAME
+    }
+
     fn event(&mut self) -> Result<Event> {
         Ok(match &self.generated_data {
             None if self.is_finish => self.close_output(),

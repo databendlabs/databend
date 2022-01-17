@@ -1,7 +1,10 @@
 // running graph
 use std::collections::VecDeque;
+use std::fmt::{Debug, write};
 use std::sync::Arc;
+use petgraph::dot::{Config, Dot};
 use petgraph::prelude::{EdgeIndex, NodeIndex, StableGraph};
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
 
 use common_exception::Result;
 use common_infallible::Mutex;
@@ -67,7 +70,7 @@ impl ExecutingGraph {
         let mut edge_stack: Vec<Arc<OutputPort>> = Vec::new();
         for query_pipe in &pipeline.pipes {
             match query_pipe {
-                NewPipe::ResizePipe { processor: processor, inputs_port, outputs_port } => unsafe {
+                NewPipe::ResizePipe { processor, inputs_port, outputs_port } => unsafe {
                     assert_eq!(node_stack.len(), inputs_port.len());
 
                     let resize_node = Node::create(processor, inputs_port, outputs_port);
@@ -98,20 +101,28 @@ impl ExecutingGraph {
                     let mut new_edge_stack = Vec::with_capacity(outputs_port.len());
 
                     for index in 0..processors.len() {
-                        let target_node = Node::create(
-                            &processors[index],
-                            &[inputs_port[index].clone()],
-                            &[outputs_port[index].clone()],
-                        );
+                        let mut p_inputs_port = Vec::with_capacity(1);
+                        let mut p_outputs_port = Vec::with_capacity(1);
 
+                        if !inputs_port.is_empty() {
+                            p_inputs_port.push(inputs_port[index].clone());
+                        }
+
+                        if !outputs_port.is_empty() {
+                            p_outputs_port.push(outputs_port[index].clone());
+                        }
+
+                        let target_node = Node::create(&processors[index], &p_inputs_port, &p_outputs_port);
                         let target_index = graph.add_node(target_node.clone());
 
-                        let source_index = node_stack[index];
-                        let edge_index = graph.add_edge(source_index, target_index, ());
+                        if !node_stack.is_empty() {
+                            let source_index = node_stack[index];
+                            let edge_index = graph.add_edge(source_index, target_index, ());
 
-                        inputs_port[index].set_trigger(target_node.create_trigger(edge_index));
-                        edge_stack[index].set_trigger(graph[source_index].create_trigger(edge_index));
-                        connect(&inputs_port[index], &edge_stack[index]);
+                            inputs_port[index].set_trigger(target_node.create_trigger(edge_index));
+                            edge_stack[index].set_trigger(graph[source_index].create_trigger(edge_index));
+                            connect(&inputs_port[index], &edge_stack[index]);
+                        }
 
                         if !outputs_port.is_empty() {
                             new_node_stack.push(target_index);
@@ -244,6 +255,12 @@ impl ScheduleQueue {
     }
 }
 
+impl Debug for ScheduleQueue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "")
+    }
+}
+
 pub struct RunningGraph(RwLock<ExecutingGraph>);
 
 impl RunningGraph {
@@ -252,10 +269,30 @@ impl RunningGraph {
         // graph_state.initialize_tasks()?;
         Ok(RunningGraph(RwLock::new(graph_state)))
     }
-}
 
-impl RunningGraph {
     pub unsafe fn schedule_queue(&self, node_index: NodeIndex) -> Result<ScheduleQueue> {
         ExecutingGraph::schedule_queue(&self.0.upgradable_read(), node_index)
     }
 }
+
+impl Debug for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        unsafe {
+            write!(f, "{}", self.processor.name())
+        }
+    }
+}
+
+impl Debug for ExecutingGraph {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:?}", Dot::with_config(&self.graph, &[Config::EdgeNoLabel]))
+    }
+}
+
+impl Debug for RunningGraph {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let graph = self.0.read();
+        write!(f, "{:?}", graph)
+    }
+}
+

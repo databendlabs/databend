@@ -1,12 +1,12 @@
 mod async_source;
 mod sync_source;
 mod table_source;
+mod sync_source_receiver;
 
 pub use async_source::ASyncSourceProcessorWrap;
-pub use async_source::AsyncSource;
-pub use sync_source::SyncSource;
 pub use sync_source::SyncSourceProcessorWrap;
 pub use table_source::TableSource;
+pub use sync_source_receiver::SyncReceiverSource;
 
 mod source_example {
     use std::sync::Arc;
@@ -15,10 +15,9 @@ mod source_example {
 
     use crate::pipelines::new::processors::port::OutputPort;
     use crate::pipelines::new::processors::processor::ProcessorPtr;
-    use crate::pipelines::new::processors::sources::ASyncSourceProcessorWrap;
-    use crate::pipelines::new::processors::sources::AsyncSource;
-    use crate::pipelines::new::processors::sources::SyncSource;
-    use crate::pipelines::new::processors::sources::SyncSourceProcessorWrap;
+    use crate::pipelines::new::processors::sources::async_source::AsyncSource;
+    use crate::pipelines::new::processors::sources::sync_source::SyncSource;
+    use crate::pipelines::new::processors::sources::{ASyncSourceProcessorWrap, SyncSourceProcessorWrap};
 
     struct ExampleSyncSource {
         pos: usize,
@@ -38,6 +37,8 @@ mod source_example {
     }
 
     impl SyncSource for ExampleSyncSource {
+        const NAME: &'static str = "Example";
+
         fn generate(&mut self) -> Result<Option<DataBlock>> {
             self.pos += 1;
             match self.data_blocks.len() >= self.pos {
@@ -66,6 +67,8 @@ mod source_example {
 
     #[async_trait::async_trait]
     impl AsyncSource for ExampleAsyncSource {
+        const NAME: &'static str = "Async";
+
         async fn generate(&mut self) -> Result<Option<DataBlock>> {
             self.pos += 1;
             match self.data_blocks.len() >= self.pos {

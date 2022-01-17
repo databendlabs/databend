@@ -6,16 +6,18 @@ use crate::pipelines::new::processors::Processor;
 use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 
 pub trait Sink: Send {
+    const NAME: &'static str;
+
     fn consume(&mut self, data_block: DataBlock) -> Result<()>;
 }
 
-struct SinkWrap<T: Sink> {
+pub struct SinkWrap<T: Sink + 'static> {
     inner: T,
     input: Arc<InputPort>,
     input_data: Option<DataBlock>,
 }
 
-impl<T: Sink> SinkWrap<T> {
+impl<T: Sink + 'static> SinkWrap<T> {
     pub fn create(input: Arc<InputPort>, inner: T) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(SinkWrap {
             inner,
@@ -26,13 +28,17 @@ impl<T: Sink> SinkWrap<T> {
 }
 
 #[async_trait::async_trait]
-impl<T: Sink> Processor for SinkWrap<T> {
+impl<T: Sink + 'static> Processor for SinkWrap<T> {
+    fn name(&self) -> &'static str {
+        T::NAME
+    }
+
     fn event(&mut self) -> Result<Event> {
         if self.input_data.is_some() {
             return Ok(Event::Sync);
         }
 
-        if self.input.finish() {
+        if self.input.is_finished() {
             return Ok(Event::Finished);
         }
 

@@ -11,6 +11,8 @@ use crate::pipelines::new::processors::Processor;
 
 #[async_trait::async_trait]
 pub trait AsyncSource: Send {
+    const NAME: &'static str;
+
     async fn generate(&mut self) -> Result<Option<DataBlock>>;
 }
 
@@ -96,6 +98,10 @@ impl<T: 'static + AsyncSource> ASyncSourceProcessorWrap<T> {
 
 #[async_trait::async_trait]
 impl<T: 'static + AsyncSource> Processor for ASyncSourceProcessorWrap<T> {
+    fn name(&self) -> &'static str {
+        T::NAME
+    }
+
     fn event(&mut self) -> Result<Event> {
         Ok(match &self.generated_data {
             None if self.is_finish => self.close_outputs(),
@@ -163,6 +169,10 @@ impl<T: 'static + AsyncSource> SingleOutputASyncSourceProcessorWrap<T> {
 
 #[async_trait::async_trait]
 impl<T: 'static + AsyncSource> Processor for SingleOutputASyncSourceProcessorWrap<T> {
+    fn name(&self) -> &'static str {
+        T::NAME
+    }
+
     fn event(&mut self) -> Result<Event> {
         Ok(match &self.generated_data {
             None if self.is_finish => self.close_output(),

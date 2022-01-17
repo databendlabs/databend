@@ -15,3 +15,6 @@ pub use port_trigger::DirectedEdge;
 pub use port_trigger::UpdateList;
 pub use port_trigger::UpdateTrigger;
 pub use resize_processor::ResizeProcessor;
+pub use sources::SyncReceiverSource;
+pub use transforms::TransformDummy;
+pub use sinks::SyncSenderSink;

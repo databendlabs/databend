@@ -25,6 +25,8 @@ impl PipelineExecutor {
         while !self.global_tasks_queue.is_finished() {
             // When there are not enough tasks, the thread will be blocked, so we need loop check.
             while !self.global_tasks_queue.is_finished() && !context.has_task() {
+                // let (sender, receiver) = std::sync::mpsc::channel();
+                // receiver.recv()
                 self.global_tasks_queue.steal_task_to_context(&mut context);
             }
 

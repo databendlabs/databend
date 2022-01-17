@@ -11,8 +11,21 @@ pub struct ResizeProcessor {
 
 impl ResizeProcessor {
     pub fn create(inputs: usize, outputs: usize) -> Self {
-        // ResizeProcessor {}
-        unimplemented!()
+        let mut inputs_port = Vec::with_capacity(inputs);
+        let mut outputs_port = Vec::with_capacity(outputs);
+
+        for _index in 0..inputs {
+            inputs_port.push(InputPort::create());
+        }
+
+        for _index in 0..outputs {
+            outputs_port.push(OutputPort::create());
+        }
+
+        ResizeProcessor {
+            inputs: inputs_port,
+            outputs: outputs_port,
+        }
     }
 
     pub fn get_inputs(&self) -> &[Arc<InputPort>] {
@@ -26,6 +39,10 @@ impl ResizeProcessor {
 
 #[async_trait::async_trait]
 impl Processor for ResizeProcessor {
+    fn name(&self) -> &'static str {
+        "Resize"
+    }
+
     fn event(&mut self) -> Result<Event> {
         todo!()
     }

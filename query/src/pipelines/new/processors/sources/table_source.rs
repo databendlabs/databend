@@ -2,12 +2,13 @@ use std::sync::Arc;
 use tokio_stream::StreamExt;
 use common_datablocks::DataBlock;
 use common_planners::ReadDataSourcePlan;
-use crate::pipelines::new::processors::sources::{AsyncSource, ASyncSourceProcessorWrap};
 use crate::sessions::QueryContext;
 use common_exception::{ErrorCode, Result};
 use common_streams::{ProgressStream, SendableDataBlockStream};
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::sources::async_source::AsyncSource;
+use crate::pipelines::new::processors::sources::ASyncSourceProcessorWrap;
 
 pub struct TableSource {
     initialized: bool,
@@ -37,6 +38,8 @@ impl TableSource {
 
 #[async_trait::async_trait]
 impl AsyncSource for TableSource {
+    const NAME: &'static str = "TableSource";
+
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if !self.initialized {
             self.initialized = true;

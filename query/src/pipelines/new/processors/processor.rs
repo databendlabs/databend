@@ -17,6 +17,8 @@ pub enum Event {
 // The design is inspired by ClickHouse processors
 #[async_trait::async_trait]
 pub trait Processor: Send {
+    fn name(&self) -> &'static str;
+
     fn event(&mut self) -> Result<Event>;
 
     // Synchronous work.
@@ -44,6 +46,10 @@ impl ProcessorPtr {
         ProcessorPtr {
             inner: Arc::new(UnsafeCell::new(inner)),
         }
+    }
+
+    pub unsafe fn name(&self) -> &'static str {
+        (&*self.inner.get()).name()
     }
 
     pub unsafe fn event(&self) -> Result<Event> {
