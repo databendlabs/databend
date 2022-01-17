@@ -20,6 +20,8 @@ mod user;
 
 pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
+pub use role::role_api::RoleMgrApi;
+pub use role::role_mgr::RoleMgr;
 pub use stage::StageMgr;
 pub use stage::StageMgrApi;
 pub use udf::UdfMgr;
