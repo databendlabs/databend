@@ -27,6 +27,15 @@ pub struct RoleInfo {
     pub grants: UserGrantSet,
 }
 
+impl RoleInfo {
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            grants: UserGrantSet::empty(),
+        }
+    }
+}
+
 impl TryFrom<Vec<u8>> for RoleInfo {
     type Error = ErrorCode;
 
