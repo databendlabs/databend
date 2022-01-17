@@ -103,6 +103,21 @@ impl InputPort {
         }
     }
 
+    pub fn is_finished(&self) -> bool {
+        (self.shared.get_flags() & IS_FINISHED) != 0
+    }
+
+    pub fn set_need_data(&self) {
+        unsafe {
+            UpdateTrigger::update_input(&self.update_trigger);
+            self.shared.set_flags(NEED_DATA, NEED_DATA);
+        }
+    }
+
+    pub fn set_not_need_data(&self) {
+        self.shared.set_flags(0, NEED_DATA);
+    }
+
     pub fn has_data(&self) -> bool {
         (self.shared.get_flags() & HAS_DATA) != 0
     }
