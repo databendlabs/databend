@@ -5,6 +5,7 @@ mod sources;
 mod transforms;
 mod port_trigger;
 mod resize_processor;
+mod sinks;
 
 pub use port::connect;
 pub use processor::Processor;

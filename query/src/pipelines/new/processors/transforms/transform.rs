@@ -1,9 +1,10 @@
+use std::cell::UnsafeCell;
 use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::{ErrorCode, Result};
 use crate::pipelines::new::processors::port::{InputPort, OutputPort};
 use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::processors::processor::Event;
+use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 
 // TODO: maybe we also need async transform for `SELECT sleep(1)`?
 pub trait Transform: Send {
@@ -17,6 +18,18 @@ pub struct TransformWrap<T: Transform> {
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
+}
+
+impl<T: Transform> TransformWrap<T> {
+    pub fn create(input: Arc<InputPort>, output: Arc<OutputPort>, inner: T) -> ProcessorPtr {
+        ProcessorPtr::create(Box::new(TransformWrap {
+            input,
+            output,
+            transform: inner,
+            input_data: None,
+            output_data: None,
+        }))
+    }
 }
 
 #[async_trait::async_trait]
