@@ -96,8 +96,13 @@ async fn test_management_mode_access() -> Result<()> {
             name: "denied",
             tests: vec![
                 Test {
-                    name: "select-denied",
-                    query: "select 1",
+                    name: "table-create-access-passed",
+                    query: "CREATE TABLE t1(a int)",
+                    is_err: false,
+                },
+                Test {
+                    name: "insert-denied",
+                    query: "insert into t1 values(1)",
                     is_err: true,
                 },
             ],
