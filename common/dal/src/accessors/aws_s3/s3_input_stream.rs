@@ -83,7 +83,6 @@ impl futures::AsyncRead for S3InputStream {
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<std::io::Result<usize>> {
-        dbg!("async read");
         loop {
             let empty = { self.buffer.is_empty() };
             match &mut self.state {
@@ -102,9 +101,14 @@ impl futures::AsyncRead for S3InputStream {
                             counter!(super::metrics::METRIC_S3_GETOBJECT_ERRORS, 1);
                             match e {
                                 RusotoError::Service(GetObjectError::NoSuchKey(msg)) => {
+                                    dbg!("not found");
                                     Error::new(ErrorKind::NotFound, msg)
                                 }
-                                _ => Error::new(ErrorKind::Other, e),
+                                _ => {
+                                    dbg!("other");
+                                    let e = dbg!(e);
+                                    Error::new(ErrorKind::Other, e)
+                                }
                             }
                         })?;
                         histogram!(
