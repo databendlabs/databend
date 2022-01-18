@@ -23,7 +23,7 @@ use pretty_assertions::assert_eq;
 #[tokio::test]
 async fn test_use_tenant_interpreter() -> Result<()> {
     let mut config = Config::default();
-    config.query.proxy_mode = true;
+    config.query.management_mode = true;
     let ctx = crate::tests::create_query_context_with_config(config.clone())?;
 
     let plan = PlanParser::parse("SUDO USE TENANT 't1'", ctx.clone()).await?;
@@ -48,7 +48,7 @@ async fn test_use_tenant_interpreter_error() -> Result<()> {
 
     if let Err(e) = interpreter.execute(None).await {
         let expect =
-            "Code: 1062, displayText = Access denied:'USE TENANT' only used in proxy-mode.";
+            "Code: 1062, displayText = Access denied:'USE TENANT' only used in management-mode.";
         assert_eq!(expect, format!("{}", e));
     } else {
         panic!();

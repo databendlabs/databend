@@ -1,5 +1,5 @@
-name: 'Test Proxy Mode'
-description: 'Running stateless tests in proxy-mode'
+name: 'Test Management Mode'
+description: 'Running stateless tests in management-mode'
 inputs:
   profile:
     description: 'The profile for this test'
@@ -41,8 +41,8 @@ runs:
       run: |
         chmod +x ./target/debug/databend-*
 
-    - name: Run Stateless Tests with Proxy Mode
+    - name: Run Stateless Tests with Management Mode
       shell: bash
       if: matrix.config.os != 'ubuntu-latest'
       run: |
-        bash ./scripts/ci/ci-run-stateless-tests-proxy-mode.sh
+        bash ./scripts/ci/ci-run-stateless-tests-management-mode.sh

@@ -19,7 +19,7 @@ use common_planners::PlanNode;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::access::ProxyModeAccess;
+use crate::interpreters::access::ManagementModeAccess;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
@@ -30,7 +30,7 @@ pub struct InterceptorInterpreter {
     plan: PlanNode,
     inner: InterpreterPtr,
     query_log: InterpreterQueryLog,
-    proxy_mode_access: ProxyModeAccess,
+    management_mode_access: ManagementModeAccess,
 }
 
 impl InterceptorInterpreter {
@@ -40,7 +40,7 @@ impl InterceptorInterpreter {
             plan: plan.clone(),
             inner,
             query_log: InterpreterQueryLog::create(ctx.clone(), plan),
-            proxy_mode_access: ProxyModeAccess::create(ctx),
+            management_mode_access: ManagementModeAccess::create(ctx),
         }
     }
 }
@@ -55,8 +55,8 @@ impl Interpreter for InterceptorInterpreter {
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        // proxy mode access check.
-        self.proxy_mode_access.check(&self.plan)?;
+        // Management mode access check.
+        self.management_mode_access.check(&self.plan)?;
 
         let result_stream = self.inner.execute(input_stream).await?;
         let metric_stream =
