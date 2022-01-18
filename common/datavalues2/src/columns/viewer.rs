@@ -53,7 +53,7 @@ where
             (c.inner(), c.ensure_validity().clone())
         } else {
             let mut bitmap = MutableBitmap::with_capacity(1);
-            bitmap.extend_constant(1, true);
+            bitmap.push(true);
 
             if column.is_const() {
                 let c: &ConstColumn = unsafe { Series::static_cast(column) };

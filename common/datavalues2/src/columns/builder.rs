@@ -41,19 +41,19 @@ where T: ScalarType + Default
     #[inline]
     pub fn append_null(&mut self) {
         self.builder.append_default();
-        self.validity.extend_constant(1, false);
+        self.validity.push(false);
     }
 
     #[inline]
     pub fn append_value(&mut self, value: T) {
         self.builder.append(value);
-        self.validity.extend_constant(1, true);
+        self.validity.push(true);
     }
 
     #[inline]
     pub fn append(&mut self, value: T, valid: bool) {
         self.builder.append(value);
-        self.validity.extend_constant(1, valid);
+        self.validity.push(valid);
     }
 
     #[inline]
