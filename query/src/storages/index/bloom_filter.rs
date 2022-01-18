@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use bincode;
+use common_datablocks::DataBlock;
 use common_datavalues::fasthash::city;
 use common_datavalues::fasthash::FastHasher;
 use common_datavalues::prelude::DataColumn;
@@ -24,6 +25,54 @@ use common_exception::Result;
 use common_tracing::tracing;
 
 use crate::storages::index::IndexSchemaVersion;
+
+/*
+pub struct BloomFilterBuilder {}
+
+impl BloomFilterBuilder {
+
+    /// For every applicable column, we will create a bloom filter.
+    /// The bloom filter will be stored with field name 'BloomFilter(column_name)'
+    #[inline(always)]
+    pub fn to_bloom_column_name(column_name: &str) -> String {
+        "Bloom(" + column_name + ")".to_owned()
+    }
+
+    /// Create bloom filters from input data blocks.
+    /// Return the bloom filters in data block.
+    ///
+    /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
+    pub fn create_bloom_filters(blocks: &[DataBlock]) -> Result<DataBlock> {
+        if blocks.is_empty() {
+            return Err(ErrorCode::BadArguments(
+                "blocks is empty",
+            ));
+        }
+
+        let num_rows = 0;
+        blocks.iter().map(|block| {
+            num_rows += block.num_rows();
+        });
+
+        let mut rng = rand::thread_rng();
+        let max_num_bits = 1024; // maximum 1024 bits/128 bytes
+
+        let fields = blocks[0].schema().fields();
+        for i in 0..fields.len() {
+            let field_name = fields[i].name();
+            let data_type = fields[i].data_type();
+
+            if BloomFilter::is_supported_type(data_type) {
+                let seed: u64= rng.gen();
+                let bloom = BloomFilter::with_rate_and_max_bits(num_rows, 0.01, 1024, seed);
+            }
+        }
+
+
+    }
+}
+*/
+
 
 // The seed values are from clickhouse.
 // See https://github.com/ClickHouse/ClickHouse/blob/1bf375e2b761db5b99b0f403b90c412a530f4d5c/src/Interpreters/BloomFilter.cpp#L18
@@ -55,6 +104,17 @@ impl BloomFilter {
     pub fn with_rate(num_items: u64, false_positive_rate: f64, seed: u64) -> Self {
         let num_bits = Self::optimal_num_bits(num_items, false_positive_rate);
         let num_hashes = Self::optimal_num_hashes(num_items, num_bits as u64);
+
+        Self::with_size(num_bits, num_hashes, seed)
+    }
+
+    /// Create a bloom filter instance with estimated number of items, expected false positive rate,
+    /// and maximum number of bits.
+    pub fn with_rate_and_max_bits(num_items: u64, false_positive_rate: f64, max_num_bits: usize, seed: u64) -> Self {
+        let mut num_bits = Self::optimal_num_bits(num_items, false_positive_rate);
+        let num_hashes = Self::optimal_num_hashes(num_items, num_bits as u64);
+
+        num_bits = std::cmp::min(num_bits, max_num_bits);
 
         Self::with_size(num_bits, num_hashes, seed)
     }
