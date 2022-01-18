@@ -18,17 +18,17 @@ use std::hash::Hasher;
 
 use ahash::AHasher;
 use ahash::RandomState as AhashRandomState;
-use fasthash::city::Hasher64 as City64;
-use fasthash::FastHasher;
+use seahash::SeaHasher;
 
 /// TODO:
 /// This is very slow because it involves lots of copy to keep the origin state
-/// We should have our custom none-state hashe functions
-#[derive(Clone, Debug)]
+/// We should have our custom none-state hash functions
+/// Tracked work item: https://github.com/datafuselabs/databend/issues/3897
+#[derive(Clone)]
 pub enum DFHasher {
     SipHasher(DefaultHasher),
     AhashHasher(AHasher),
-    CityHasher64(City64, u64),
+    SeaHasher64(SeaHasher, [u64; 4]),
 }
 
 macro_rules! apply_fn {
@@ -36,7 +36,7 @@ macro_rules! apply_fn {
         match $self {
             DFHasher::SipHasher(v) => v.$func(),
             DFHasher::AhashHasher(v) => v.$func(),
-            DFHasher::CityHasher64(v, _) => v.$func(),
+            DFHasher::SeaHasher64(v, _) => v.$func(),
         }
     }};
 
@@ -44,7 +44,7 @@ macro_rules! apply_fn {
         match $self {
             DFHasher::SipHasher(v) => v.$func($arg),
             DFHasher::AhashHasher(v) => v.$func($arg),
-            DFHasher::CityHasher64(v, _) => v.$func($arg),
+            DFHasher::SeaHasher64(v, _) => v.$func($arg),
         }
     }};
 }
@@ -58,8 +58,9 @@ impl DFHasher {
                 let state = AhashRandomState::new();
                 DFHasher::AhashHasher(state.build_hasher())
             }
-            DFHasher::CityHasher64(_, seed) => {
-                DFHasher::CityHasher64(City64::with_seed(*seed), *seed)
+            DFHasher::SeaHasher64(_, seeds) => {
+                let hasher = SeaHasher::with_seeds(seeds[0], seeds[1], seeds[2], seeds[3]);
+                DFHasher::SeaHasher64(hasher, *seeds)
             }
         }
     }

@@ -63,14 +63,22 @@ fn create_block() -> DataBlock {
     ])
 }
 
+fn create_seeds() -> [u64; 4] {
+    let seed0: u64 = rand::random();
+    let seed1: u64 = rand::random();
+    let seed2: u64 = rand::random();
+    let seed3: u64 = rand::random();
+    [seed0, seed1, seed2, seed3]
+}
+
 #[test]
 fn test_num_bits_hashes() -> Result<()> {
     // use this website for verification: https://hur.st/bloomfilter/
-    let bloom = BloomFilter::with_rate(100000, 0.01, 123123);
+    let bloom = BloomFilter::with_rate(100000, 0.01, create_seeds());
     assert_eq!(bloom.num_bits(), 958506);
     assert_eq!(bloom.num_hashes(), 7);
 
-    let bloom = BloomFilter::with_rate(4000, 0.02, 123123);
+    let bloom = BloomFilter::with_rate(4000, 0.02, create_seeds());
     assert_eq!(bloom.num_bits(), 32570);
     assert_eq!(bloom.num_hashes(), 6);
     Ok(())
@@ -85,7 +93,7 @@ fn test_bloom_add_find_string() -> Result<()> {
 
     let col = block.column(0);
 
-    let mut bloom = BloomFilter::with_rate(4, 0.000001, 123123);
+    let mut bloom = BloomFilter::with_rate(4, 0.000001, create_seeds());
 
     bloom.add(col)?;
     assert!(bloom.find(DataValue::String(Some(b"Alice".to_vec())))?);
@@ -120,7 +128,7 @@ fn test_bloom_interval() -> Result<()> {
 
     let col = block.column(0);
 
-    let mut bloom = BloomFilter::with_rate(6, 0.000001, 123123);
+    let mut bloom = BloomFilter::with_rate(6, 0.000001, create_seeds());
 
     // this case false positive not exist
     bloom.add(col)?;
@@ -145,7 +153,7 @@ fn test_bloom_f64_serialization() -> Result<()> {
 
     let col = block.column(0);
 
-    let mut bloom = BloomFilter::with_rate(10, 0.000001, 123123);
+    let mut bloom = BloomFilter::with_rate(10, 0.000001, create_seeds());
     bloom.add(col)?;
 
     let buf = bloom.to_vec()?;

@@ -13,10 +13,8 @@
 // limitations under the License.
 
 use bincode;
-use common_datablocks::DataBlock;
-use common_datavalues::fasthash::city;
-use common_datavalues::fasthash::FastHasher;
 use common_datavalues::prelude::DataColumn;
+use common_datavalues::seahash::SeaHasher;
 use common_datavalues::DFHasher;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -73,12 +71,6 @@ impl BloomFilterBuilder {
 }
 */
 
-
-// The seed values are from clickhouse.
-// See https://github.com/ClickHouse/ClickHouse/blob/1bf375e2b761db5b99b0f403b90c412a530f4d5c/src/Interpreters/BloomFilter.cpp#L18
-const SEED_GEN_A: u64 = 845897321;
-const SEED_GEN_B: u64 = 217728422;
-
 /// Bloom filter for data skipping.
 /// Most ideas/implementations are ported from Clickhouse.
 /// https://github.com/ClickHouse/ClickHouse/blob/1bf375e2b761db5b99b0f403b90c412a530f4d5c/src/Interpreters/BloomFilter.cpp
@@ -94,45 +86,42 @@ pub struct BloomFilter {
 
     version: IndexSchemaVersion,
 
-    seed1: u64,
-
-    seed2: u64,
+    seeds: [u64; 4],
 }
 
 impl BloomFilter {
     /// Create a bloom filter instance with estimated number of items and expected false positive rate.
-    pub fn with_rate(num_items: u64, false_positive_rate: f64, seed: u64) -> Self {
+    pub fn with_rate(num_items: u64, false_positive_rate: f64, seeds: [u64; 4]) -> Self {
         let num_bits = Self::optimal_num_bits(num_items, false_positive_rate);
         let num_hashes = Self::optimal_num_hashes(num_items, num_bits as u64);
 
-        Self::with_size(num_bits, num_hashes, seed)
+        Self::with_size(num_bits, num_hashes, seeds)
     }
 
     /// Create a bloom filter instance with estimated number of items, expected false positive rate,
     /// and maximum number of bits.
-    pub fn with_rate_and_max_bits(num_items: u64, false_positive_rate: f64, max_num_bits: usize, seed: u64) -> Self {
+    pub fn with_rate_and_max_bits(
+        num_items: u64,
+        false_positive_rate: f64,
+        max_num_bits: usize,
+        seeds: [u64; 4],
+    ) -> Self {
         let mut num_bits = Self::optimal_num_bits(num_items, false_positive_rate);
         let num_hashes = Self::optimal_num_hashes(num_items, num_bits as u64);
 
         num_bits = std::cmp::min(num_bits, max_num_bits);
 
-        Self::with_size(num_bits, num_hashes, seed)
+        Self::with_size(num_bits, num_hashes, seeds)
     }
 
     /// Create a bloom filter instance with specified bitmap length and number of hashes
-    pub fn with_size(num_bits: usize, num_hashes: usize, seed: u64) -> Self {
+    pub fn with_size(num_bits: usize, num_hashes: usize, seeds: [u64; 4]) -> Self {
         // calculate the number of u64 we need
         let num_u64 = (num_bits + 63) / 64;
 
-        // Seed calculation is ported from clickhouse.
-        // https://github.com/ClickHouse/ClickHouse/blob/1bf375e2b761db5b99b0f403b90c412a530f4d5c/src/Interpreters/BloomFilter.cpp#L50
-        let seed1 = seed;
-        let seed2 = SEED_GEN_A * seed + SEED_GEN_B;
-
         Self {
             container: vec![0; num_u64],
-            seed1,
-            seed2,
+            seeds,
             num_hashes,
             num_bits,
             version: IndexSchemaVersion::V1,
@@ -217,10 +206,12 @@ impl BloomFilter {
         Self::is_supported_type(&value.data_type()) && !value.is_null()
     }
 
+    // Create hasher for bloom. Use seahash for now, may change to city hash.
     #[inline(always)]
-    fn create_city_hasher(seed: u64) -> DFHasher {
-        let hasher = city::Hasher64::with_seed(seed);
-        DFHasher::CityHasher64(hasher, seed)
+    fn create_hasher(&self) -> DFHasher {
+        let hasher =
+            SeaHasher::with_seeds(self.seeds[0], self.seeds[1], self.seeds[2], self.seeds[3]);
+        DFHasher::SeaHasher64(hasher, self.seeds)
     }
 
     #[inline(always)]
@@ -252,11 +243,11 @@ impl BloomFilter {
 
         let series = column.to_minimal_array()?;
 
-        let city_hasher1 = Self::create_city_hasher(self.seed1);
-        let hash1_arr = series.vec_hash(city_hasher1)?;
+        let hasher1 = self.create_hasher();
+        let hash1_arr = series.vec_hash(hasher1)?;
 
-        let city_hasher2 = Self::create_city_hasher(self.seed2);
-        let hash2_arr = series.vec_hash(city_hasher2)?;
+        let hasher2 = self.create_hasher();
+        let hash2_arr = series.vec_hash(hasher2)?;
 
         let validity = series.validity();
         let no_null = validity == None || series.null_count() == 0;
@@ -311,12 +302,12 @@ impl BloomFilter {
         let col = DataColumn::Constant(val, 1);
         let series = col.to_minimal_array()?;
 
-        let city_hasher1 = Self::create_city_hasher(self.seed1);
-        let hash1_arr = series.vec_hash(city_hasher1)?;
+        let hasher1 = self.create_hasher();
+        let hash1_arr = series.vec_hash(hasher1)?;
         let hash1 = hash1_arr.inner().value(0);
 
-        let city_hasher2 = Self::create_city_hasher(self.seed2);
-        let hash2_arr = series.vec_hash(city_hasher2)?;
+        let hasher2 = self.create_hasher();
+        let hash2_arr = series.vec_hash(hasher2)?;
         let hash2 = hash2_arr.inner().value(0);
 
         let h1 = std::num::Wrapping(hash1);
