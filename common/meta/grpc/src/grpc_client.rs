@@ -16,13 +16,14 @@ use std::fmt::Debug;
 use std::time::Duration;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
+use common_containers::ItemManager;
+use common_containers::Pool;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::SerializedError;
 use common_grpc::ConnectionFactory;
 use common_grpc::RpcClientTlsConfig;
 use common_meta_types::protobuf::meta_client::MetaClient;
-use common_meta_types::protobuf::GetReply;
 use common_meta_types::protobuf::GetRequest;
 use common_meta_types::protobuf::HandshakeRequest;
 use common_meta_types::protobuf::RaftRequest;
@@ -30,6 +31,8 @@ use common_tracing::tracing;
 use futures::stream::StreamExt;
 use prost::Message;
 use serde::de::DeserializeOwned;
+use tonic::async_trait;
+use tonic::client::GrpcService;
 use tonic::codegen::InterceptedService;
 use tonic::metadata::MetadataValue;
 use tonic::service::Interceptor;
@@ -41,56 +44,86 @@ use crate::grpc_action::MetaGrpcWriteReq;
 use crate::grpc_action::RequestFor;
 use crate::MetaGrpcClientConf;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
+struct MetaChannelManager {
+    timeout: Option<Duration>,
+    conf: Option<RpcClientTlsConfig>,
+}
+
+#[async_trait]
+impl ItemManager for MetaChannelManager {
+    type Key = String;
+    type Item = Channel;
+    type Error = ErrorCode;
+
+    async fn build(&self, addr: &Self::Key) -> std::result::Result<Self::Item, Self::Error> {
+        ConnectionFactory::create_rpc_channel(addr, self.timeout, self.conf.clone())
+    }
+
+    async fn check(&self, mut ch: Self::Item) -> std::result::Result<Self::Item, Self::Error> {
+        futures::future::poll_fn(|cx| (&mut ch).poll_ready(cx))
+            .await
+            .map_err(|e| {
+                ErrorCode::CannotConnectNode(format!("Check rpc connect failed, error: {}", e))
+            })?;
+        Ok(ch)
+    }
+}
+
 pub struct MetaGrpcClient {
-    #[allow(dead_code)]
-    token: Vec<u8>,
-    pub(crate) client: MetaClient<InterceptedService<Channel, AuthInterceptor>>,
+    conn_pool: Pool<MetaChannelManager>,
+    addr: String,
+    username: String,
+    password: String,
+    // pub(crate) client: MetaClient<InterceptedService<Channel, AuthInterceptor>>,
 }
 
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 impl MetaGrpcClient {
     pub async fn try_new(conf: &MetaGrpcClientConf) -> Result<MetaGrpcClient> {
-        Self::with_tls_conf(
-            &conf.meta_service_config.address,
-            &conf.meta_service_config.username,
-            &conf.meta_service_config.password,
-            Some(Duration::from_secs(conf.client_timeout_in_second)),
-            conf.meta_service_config.tls_conf.clone(),
-        )
-        .await
+        let mgr = MetaChannelManager {
+            timeout: Some(Duration::from_secs(conf.client_timeout_in_second)),
+            conf: conf.meta_service_config.tls_conf.clone(),
+        };
+        Ok(Self {
+            conn_pool: Pool::new(mgr, Duration::from_millis(50)),
+            addr: conf.meta_service_config.address.to_string(),
+            username: conf.meta_service_config.username.to_string(),
+            password: conf.meta_service_config.password.to_string(),
+        })
     }
 
     #[tracing::instrument(level = "debug", skip(password))]
-    pub async fn try_create(addr: &str, username: &str, password: &str) -> Result<Self> {
-        Self::with_tls_conf(addr, username, password, None, None).await
-    }
-
-    #[tracing::instrument(level = "debug", skip(password))]
-    pub async fn with_tls_conf(
+    pub async fn try_create(
         addr: &str,
         username: &str,
         password: &str,
         timeout: Option<Duration>,
         conf: Option<RpcClientTlsConfig>,
     ) -> Result<Self> {
-        let res = ConnectionFactory::create_rpc_channel(addr, timeout, conf);
+        let mgr = MetaChannelManager { timeout, conf };
 
-        tracing::debug!("connecting to {}, res: {:?}", addr, res);
+        Ok(Self {
+            conn_pool: Pool::new(mgr, Duration::from_millis(50)),
+            addr: addr.to_string(),
+            username: username.to_string(),
+            password: password.to_string(),
+        })
+    }
 
-        let channel = res?;
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn make_client_with_tls(
+        &self,
+    ) -> Result<MetaClient<InterceptedService<Channel, AuthInterceptor>>> {
+        let channel = self.conn_pool.get(&self.addr).await?;
+        tracing::debug!("connecting to {}, channel: {:?}", &self.addr, channel);
 
         let mut client = MetaClient::new(channel.clone());
-        let token = MetaGrpcClient::handshake(&mut client, username, password).await?;
+        let token = MetaGrpcClient::handshake(&mut client, &self.username, &self.password).await?;
+        let client = { MetaClient::with_interceptor(channel, AuthInterceptor { token }) };
 
-        let client = {
-            let token = token.clone();
-            MetaClient::with_interceptor(channel, AuthInterceptor { token })
-        };
-
-        let rx = Self { token, client };
-        Ok(rx)
+        Ok(client)
     }
 
     /// Handshake.
@@ -132,7 +165,8 @@ impl MetaGrpcClient {
         let req: Request<RaftRequest> = (&act).try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
-        let result = self.client.clone().write_msg(req).await?.into_inner();
+        let mut client = self.make_client_with_tls().await?;
+        let result = client.write_msg(req).await?.into_inner();
 
         if result.error.is_empty() {
             let v = serde_json::from_str::<R>(&result.data)?;
@@ -154,7 +188,8 @@ impl MetaGrpcClient {
         let req: Request<GetRequest> = (&act).try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
-        let result = self.client.clone().read_msg(req).await?.into_inner();
+        let mut client = self.make_client_with_tls().await?;
+        let result = client.read_msg(req).await?.into_inner();
         if result.ok {
             let v = serde_json::from_str::<R>(&result.value)?;
             Ok(v)
@@ -163,18 +198,6 @@ impl MetaGrpcClient {
                 "Can not receive data from grpc server, action: {:?}",
                 act
             )))
-        }
-    }
-
-    #[tracing::instrument(level = "debug", skip(self, req))]
-    pub async fn check_connection(&self, req: Request<GetRequest>) -> Result<GetReply> {
-        let result = self.client.clone().read_msg(req).await?.into_inner();
-        if result.ok {
-            Ok(result)
-        } else {
-            Err(ErrorCode::EmptyData(
-                "Can not receive data from grpc server",
-            ))
         }
     }
 }

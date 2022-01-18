@@ -15,6 +15,7 @@ test = false
 
 [dependencies]
 common-arrow = { path = "../../arrow" }
+common-containers = { path = "../../containers" }
 common-exception = { path = "../../exception" }
 common-grpc = {path = "../../grpc" }
 common-meta-api = { path = "../api" }

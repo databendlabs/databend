@@ -1803,6 +1803,7 @@ version = "0.1.0"
 dependencies = [
  "common-arrow",
  "common-base",
+ "common-containers",
  "common-exception",
  "common-grpc",
  "common-meta-api",
