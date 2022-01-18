@@ -14,7 +14,6 @@
 
 #![feature(backtrace)]
 
-pub mod any_error;
 pub mod api;
 pub mod configs;
 pub mod errors;

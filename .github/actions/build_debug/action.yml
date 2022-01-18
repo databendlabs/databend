@@ -15,12 +15,9 @@ runs:
         version: '3.x'
         repo-token: ${{ inputs.github_token }}
 
-    - uses: actions-rs/toolchain@v1
-      with:
-        target: ${{ matrix.config.target }}
-        toolchain: nightly
-        override: true
-        components: rustfmt, clippy
+    - name: Add rust target
+      shell: bash
+      run: rustup target add ${{ matrix.config.target }}
 
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1

@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use anyerror::AnyError;
 use common_exception::ErrorCode;
 use common_exception::SerializedError;
 use common_meta_types::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
-
-use crate::any_error::AnyError;
 
 /// Top level error MetaNode would return.
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]

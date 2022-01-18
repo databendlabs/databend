@@ -11,11 +11,9 @@ runs:
     - name: Maximize build space
       uses: ./.github/actions/cleanup
 
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
-        target: ${{ matrix.config.target }}
-        override: true
+    - name: Add rust target
+      shell: bash
+      run: rustup target add ${{ matrix.config.target }}
 
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
