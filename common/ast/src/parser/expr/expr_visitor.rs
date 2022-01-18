@@ -151,8 +151,8 @@ pub trait ExprVisitor: Sized + Send {
     async fn visit_function(&mut self, function: &Function) -> Result<()> {
         for function_arg in &function.args {
             match function_arg {
-                FunctionArg::Named { arg, .. } => self.visit_function_arg(arg).await?,
-                FunctionArg::Unnamed(arg) => self.visit_function_arg(arg).await?,
+                FunctionArg::Named { arg, .. } => self.visit_function_arg(&arg).await?,
+                FunctionArg::Unnamed(arg) => self.visit_function_arg(&arg).await?,
             };
         }
 

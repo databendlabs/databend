@@ -62,7 +62,7 @@ impl ExpressionAnalyzer {
                 ExprRPNItem::Identifier(v) => self.analyze_identifier(v, &mut stack)?,
                 ExprRPNItem::QualifiedIdentifier(v) => self.analyze_identifiers(v, &mut stack)?,
                 ExprRPNItem::Function(v) => self.analyze_function(v, &mut stack)?,
-                // ExprRPNItem::Wildcard => self.analyze_wildcard(&mut stack)?,
+                ExprRPNItem::Wildcard => self.analyze_wildcard(&mut stack)?,
                 ExprRPNItem::Exists(v) => self.analyze_exists(v, &mut stack).await?,
                 ExprRPNItem::Subquery(v) => self.analyze_scalar_subquery(v, &mut stack).await?,
                 ExprRPNItem::Cast(v) => self.analyze_cast(v, &mut stack)?,
@@ -309,10 +309,10 @@ impl ExpressionAnalyzer {
         )))
     }
 
-    // fn analyze_wildcard(&self, arguments: &mut Vec<Expression>) -> Result<()> {
-    //     arguments.push(Expression::Wildcard);
-    //     Ok(())
-    // }
+    fn analyze_wildcard(&self, arguments: &mut Vec<Expression>) -> Result<()> {
+        arguments.push(Expression::Wildcard);
+        Ok(())
+    }
 
     fn analyze_cast(
         &self,
@@ -385,7 +385,7 @@ enum ExprRPNItem {
     Identifier(Ident),
     QualifiedIdentifier(Vec<Ident>),
     Function(FunctionExprInfo),
-    // Wildcard,
+    Wildcard,
     Exists(Box<Query>),
     Subquery(Box<Query>),
     Cast(common_datavalues::DataType),
@@ -582,5 +582,10 @@ impl ExprVisitor for ExprRPNBuilder {
 
     async fn post_visit(&mut self, expr: &Expr) -> Result<()> {
         self.process_expr(expr)
+    }
+
+    fn visit_wildcard(&mut self) -> Result<()> {
+        self.rpn.push(ExprRPNItem::Wildcard);
+        Ok(())
     }
 }
