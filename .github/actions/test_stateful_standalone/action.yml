@@ -11,7 +11,9 @@ runs:
     - name: Maximize build space
       uses: ./.github/actions/cleanup
 
-    - uses: actions-rs/toolchain@v1
+    # Use forked version of action-rs to fix rust-toolchain.toml not supported.
+    # Should be removed after https://github.com/actions-rs/toolchain/pull/209 get merged.
+    - uses: oxidecomputer/actions-rs_toolchain@ad3f86084a8a5acf2c09cb691421b31cf8af7a36
       with:
         default: true
         target: ${{ matrix.config.target }}
