@@ -51,7 +51,7 @@ common-ast = { path = "../common/ast" }
 
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "e4c8f3d" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "b42ff01" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "c33837e" }
 
 # Crates.io dependencies
 ahash = "0.7.6"

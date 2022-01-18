@@ -21,6 +21,7 @@ use pretty_assertions::assert_eq;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Function;
 use sqlparser::ast::FunctionArg;
+use sqlparser::ast::FunctionArgExpr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::UnaryOperator;
@@ -53,10 +54,12 @@ async fn test_udf_transformer() -> Result<()> {
                 quote_style: None,
             }]),
             params: vec![],
-            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident {
-                value: "test".to_string(),
-                quote_style: None,
-            }))],
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                Expr::Identifier(Ident {
+                    value: "test".to_string(),
+                    quote_style: None,
+                }),
+            ))],
             over: None,
             distinct: false,
         },
@@ -72,10 +75,12 @@ async fn test_udf_transformer() -> Result<()> {
                 quote_style: None,
             }]),
             params: vec![],
-            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident {
-                value: "test".to_string(),
-                quote_style: None,
-            }))],
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                Expr::Identifier(Ident {
+                    value: "test".to_string(),
+                    quote_style: None,
+                })
+            ))],
             over: None,
             distinct: false,
         }))))
@@ -88,10 +93,12 @@ async fn test_udf_transformer() -> Result<()> {
                 quote_style: None,
             }]),
             params: vec![],
-            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident {
-                value: "test".to_string(),
-                quote_style: None,
-            }))],
+            args: vec![FunctionArg::Unnamed(FunctionArgExpr::Expr(
+                Expr::Identifier(Ident {
+                    value: "test".to_string(),
+                    quote_style: None,
+                })
+            ))],
             over: None,
             distinct: false,
         },

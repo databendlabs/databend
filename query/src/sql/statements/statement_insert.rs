@@ -26,6 +26,7 @@ use common_tracing::tracing;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
+use sqlparser::ast::OnInsert;
 use sqlparser::ast::Query;
 use sqlparser::ast::SetExpr;
 use sqlparser::ast::SqliteOnConflict;
@@ -59,6 +60,8 @@ pub struct DfInsertStatement {
     pub after_columns: Vec<Ident>,
     /// whether the insert has the table keyword (Hive)
     pub table: bool,
+    /// on duplicate key update
+    pub on: Option<OnInsert>,
 }
 
 #[async_trait::async_trait]
