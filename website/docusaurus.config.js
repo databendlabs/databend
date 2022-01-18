@@ -25,12 +25,12 @@ const config = {
                     path: '../docs/overview',
                     routeBasePath: 'overview',
                     sidebarPath: require.resolve('../docs/overview/sidebars.js'),
-                    editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
+                    editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
                 },
                 blog: {
                     showReadingTime: true,
                     editUrl:
-                        'https://github.com/datafuselabs/databend/edit/main/website/databend/blog',
+                        'https://github.com/datafuselabs/databend/edit/main/databend/blog',
                 },
                 theme: {
                     customCss: require.resolve('./src/css/custom.scss'),
@@ -58,7 +58,7 @@ const config = {
                 path: '../docs/user',
                 routeBasePath: 'user',
                 sidebarPath: require.resolve('../docs/user/sidebars.js'),
-                editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
+                editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
             },
         ],
         [
@@ -69,7 +69,7 @@ const config = {
                 path: '../docs/dev',
                 routeBasePath: 'dev',
                 sidebarPath: require.resolve('../docs/dev/sidebars.js'),
-                editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
+                editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
             },
         ],
         [
