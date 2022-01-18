@@ -50,7 +50,7 @@ async fn test_grpc_client_handshake_timeout() {
     let res = MetaGrpcClient::try_create(&srv_addr, "", "", Some(timeout), None)
         .await
         .unwrap();
-    let client = res.make_client_with_tls().await;
+    let client = res.make_client().await;
     let actual = client.unwrap_err().message();
     let expect = "status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} }";
     assert_eq!(actual, expect);

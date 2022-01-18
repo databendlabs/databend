@@ -87,7 +87,7 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
         .await
         .unwrap();
 
-    let c = r.make_client_with_tls().await;
+    let c = r.make_client().await;
     assert!(c.is_err());
     if let Err(e) = c {
         assert_eq!(e.code(), ErrorCode::TLSConfigurationFailure("").code());

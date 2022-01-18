@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::time::Duration;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
+use common_base::tokio::sync::RwLock;
 use common_containers::ItemManager;
 use common_containers::Pool;
 use common_exception::ErrorCode;
@@ -24,8 +26,10 @@ use common_exception::SerializedError;
 use common_grpc::ConnectionFactory;
 use common_grpc::RpcClientTlsConfig;
 use common_meta_types::protobuf::meta_client::MetaClient;
+use common_meta_types::protobuf::GetReply;
 use common_meta_types::protobuf::GetRequest;
 use common_meta_types::protobuf::HandshakeRequest;
+use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_tracing::tracing;
 use futures::stream::StreamExt;
@@ -37,7 +41,9 @@ use tonic::codegen::InterceptedService;
 use tonic::metadata::MetadataValue;
 use tonic::service::Interceptor;
 use tonic::transport::Channel;
+use tonic::Code;
 use tonic::Request;
+use tonic::Status;
 
 use crate::grpc_action::MetaGrpcReadReq;
 use crate::grpc_action::MetaGrpcWriteReq;
@@ -75,7 +81,7 @@ pub struct MetaGrpcClient {
     addr: String,
     username: String,
     password: String,
-    // pub(crate) client: MetaClient<InterceptedService<Channel, AuthInterceptor>>,
+    token: Arc<RwLock<Option<Vec<u8>>>>,
 }
 
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
@@ -91,6 +97,7 @@ impl MetaGrpcClient {
             addr: conf.meta_service_config.address.to_string(),
             username: conf.meta_service_config.username.to_string(),
             password: conf.meta_service_config.password.to_string(),
+            token: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -109,18 +116,26 @@ impl MetaGrpcClient {
             addr: addr.to_string(),
             username: username.to_string(),
             password: password.to_string(),
+            token: Arc::new(RwLock::new(None)),
         })
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn make_client_with_tls(
+    pub async fn make_client(
         &self,
     ) -> Result<MetaClient<InterceptedService<Channel, AuthInterceptor>>> {
         let channel = self.conn_pool.get(&self.addr).await?;
         tracing::debug!("connecting to {}, channel: {:?}", &self.addr, channel);
 
         let mut client = MetaClient::new(channel.clone());
-        let token = MetaGrpcClient::handshake(&mut client, &self.username, &self.password).await?;
+        let mut t = self.token.write().await;
+        let token = match t.clone() {
+            Some(t) => t,
+            None => MetaGrpcClient::handshake(&mut client, &self.username, &self.password).await?,
+        };
+        {
+            *t = Some(token.clone());
+        }
         let client = { MetaClient::with_interceptor(channel, AuthInterceptor { token }) };
 
         Ok(client)
@@ -162,11 +177,30 @@ impl MetaGrpcClient {
         R: DeserializeOwned,
     {
         let act: MetaGrpcWriteReq = v.into();
-        let req: Request<RaftRequest> = (&act).try_into()?;
+        let req: Request<RaftRequest> = (&act.clone()).try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
-        let mut client = self.make_client_with_tls().await?;
-        let result = client.write_msg(req).await?.into_inner();
+        let mut client = self.make_client().await?;
+        let result = client.write_msg(req).await;
+        let result: std::result::Result<RaftReply, Status> = match result {
+            Ok(r) => Ok(r.into_inner()),
+            Err(s) => {
+                if status_is_retryable(&s) {
+                    {
+                        let mut token = self.token.write().await;
+                        *token = None;
+                    }
+                    let mut client = self.make_client().await?;
+                    let req: Request<RaftRequest> = (&act).try_into()?;
+                    let req = common_tracing::inject_span_to_tonic_request(req);
+                    Ok(client.write_msg(req).await?.into_inner())
+                } else {
+                    Err(s)
+                }
+            }
+        };
+
+        let result = result?;
 
         if result.error.is_empty() {
             let v = serde_json::from_str::<R>(&result.data)?;
@@ -185,11 +219,29 @@ impl MetaGrpcClient {
         R: DeserializeOwned,
     {
         let act: MetaGrpcReadReq = v.into();
-        let req: Request<GetRequest> = (&act).try_into()?;
+        let req: Request<GetRequest> = (&act.clone()).try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
-        let mut client = self.make_client_with_tls().await?;
-        let result = client.read_msg(req).await?.into_inner();
+        let mut client = self.make_client().await?;
+        let result = client.read_msg(req).await;
+        let result: std::result::Result<GetReply, Status> = match result {
+            Ok(r) => Ok(r.into_inner()),
+            Err(s) => {
+                if status_is_retryable(&s) {
+                    {
+                        let mut token = self.token.write().await;
+                        *token = None;
+                    }
+                    let mut client = self.make_client().await?;
+                    let req: Request<GetRequest> = (&act).try_into()?;
+                    let req = common_tracing::inject_span_to_tonic_request(req);
+                    Ok(client.read_msg(req).await?.into_inner())
+                } else {
+                    Err(s)
+                }
+            }
+        };
+        let result = result?;
         if result.ok {
             let v = serde_json::from_str::<R>(&result.value)?;
             Ok(v)
@@ -200,6 +252,10 @@ impl MetaGrpcClient {
             )))
         }
     }
+}
+
+fn status_is_retryable(status: &Status) -> bool {
+    matches!(status.code(), Code::Unauthenticated | Code::Internal)
 }
 
 #[derive(Clone)]
