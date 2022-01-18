@@ -1,6 +1,6 @@
 FROM debian:buster
 COPY ./dev_setup.sh /build_setup.sh
-COPY ./rust-toolchain /rust-toolchain
+COPY ./rust-toolchain.toml /rust-toolchain.toml
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y && \
     apt-get install -yq \
@@ -37,7 +37,7 @@ ENV RUSTUP_HOME=/opt/rust/rustup \
 RUN curl https://sh.rustup.rs -sSf |\
     env CARGO_HOME=/opt/rust/cargo \
         sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path && \
-    export RUST_VERSION="$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' /rust-toolchain)" && \
+    export RUST_VERSION="$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' /rust-toolchain.toml)" && \
     env CARGO_HOME=/opt/rust/cargo rustup install $RUST_VERSION && \
     env CARGO_HOME=/opt/rust/cargo rustup set profile minimal && \
     env CARGO_HOME=/opt/rust/cargo rustup component add rustfmt rust-src clippy miri --toolchain $RUST_VERSION && \
