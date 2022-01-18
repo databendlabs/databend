@@ -157,7 +157,7 @@ perf-tool: build-perf-tool
 	docker buildx build . -f ./docker/perf-tool/Dockerfile  --platform linux/amd64 --allow network.host --builder host -t ${HUB}/perf-tool:${TAG} --push
 # used for the build of dev container
 dev-container:
-	cp ./rust-toolchain.toml ./docker/build-tool
+	cp ./rust-toolchain ./docker/build-tool
 	docker build ./docker/build-tool -t ${HUB}/dev-container:${TAG} -f ./docker/build-tool/Dockerfile
 profile:
 	bash ./scripts/ci/ci-run-profile.sh

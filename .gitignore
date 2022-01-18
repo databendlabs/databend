@@ -49,7 +49,7 @@ hfuzz_workspace/
 *.stdout-e
 tests/perfs/*-result.json
 docker/build-tool/dev_setup.sh
-docker/build-tool/rust-toolchain.toml
+docker/build-tool/rust-toolchain
 
 # python
 venv/
