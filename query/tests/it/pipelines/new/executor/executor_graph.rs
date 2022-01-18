@@ -10,74 +10,66 @@ use databend_query::pipelines::new::processors::port::{InputPort, OutputPort};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_simple_pipeline() -> Result<()> {
-    let graph = create_simple_pipeline()?;
-
-    assert_eq!(format!("{:?}", graph), "digraph {\
+    assert_eq!(
+        format!("{:?}", create_simple_pipeline()?),
+        "digraph {\
             \n    0 [ label = \"SyncReceiverSource\" ]\
             \n    1 [ label = \"DummyTransform\" ]\
             \n    2 [ label = \"SyncSenderSink\" ]\
             \n    0 -> 1 [ ]\
             \n    1 -> 2 [ ]\
-    \n}\n");
+        \n}\n"
+    );
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_parallel_simple_pipeline() -> Result<()> {
-    let graph = create_parallel_simple_pipeline();
-
-    assert_eq!(format!("{:?}", graph), "digraph {\
-        \n    0 [ label = \"SyncReceiverSource\" ]\
-        \n    1 [ label = \"SyncReceiverSource\" ]\
-        \n    2 [ label = \"DummyTransform\" ]\
-        \n    3 [ label = \"DummyTransform\" ]\
-        \n    4 [ label = \"SyncSenderSink\" ]\
-        \n    5 [ label = \"SyncSenderSink\" ]\
-        \n    0 -> 2 [ ]\
-        \n    1 -> 3 [ ]\
-        \n    2 -> 4 [ ]\
-        \n    3 -> 5 [ ]\
-    \n}\n");
+    assert_eq!(
+        format!("{:?}", create_parallel_simple_pipeline()),
+        "digraph {\
+            \n    0 [ label = \"SyncReceiverSource\" ]\
+            \n    1 [ label = \"SyncReceiverSource\" ]\
+            \n    2 [ label = \"DummyTransform\" ]\
+            \n    3 [ label = \"DummyTransform\" ]\
+            \n    4 [ label = \"SyncSenderSink\" ]\
+            \n    5 [ label = \"SyncSenderSink\" ]\
+            \n    0 -> 2 [ ]\
+            \n    1 -> 3 [ ]\
+            \n    2 -> 4 [ ]\
+            \n    3 -> 5 [ ]\
+        \n}\n"
+    );
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_resize_pipeline() -> Result<()> {
-    let (_rx, sink_pipe) = create_sink_pipe(2)?;
-    let (_tx, source_pipe) = create_source_pipe(1)?;
-
-    let mut pipeline = NewPipeline::create();
-    pipeline.add_pipe(source_pipe);
-    pipeline.resize(2)?;
-    pipeline.add_pipe(create_transform_pipe(2)?);
-    pipeline.resize(1)?;
-    pipeline.add_pipe(create_transform_pipe(1)?);
-    pipeline.resize(2)?;
-    pipeline.add_pipe(sink_pipe);
-
-    let graph = RunningGraph::create(pipeline)?;
-    assert_eq!(format!("{:?}", graph), "digraph {\
-        \n    0 [ label = \"SyncReceiverSource\" ]\
-        \n    1 [ label = \"Resize\" ]\
-        \n    2 [ label = \"DummyTransform\" ]\
-        \n    3 [ label = \"DummyTransform\" ]\
-        \n    4 [ label = \"Resize\" ]\
-        \n    5 [ label = \"DummyTransform\" ]\
-        \n    6 [ label = \"Resize\" ]\
-        \n    7 [ label = \"SyncSenderSink\" ]\
-        \n    8 [ label = \"SyncSenderSink\" ]\
-        \n    0 -> 1 [ ]\
-        \n    1 -> 2 [ ]\
-        \n    1 -> 3 [ ]\
-        \n    2 -> 4 [ ]\
-        \n    3 -> 4 [ ]\
-        \n    4 -> 5 [ ]\
-        \n    5 -> 6 [ ]\
-        \n    6 -> 7 [ ]\
-        \n    6 -> 8 [ ]\
-    \n}\n");
+    assert_eq!(
+        format!("{:?}", create_resize_pipeline()?),
+        "digraph {\
+            \n    0 [ label = \"SyncReceiverSource\" ]\
+            \n    1 [ label = \"Resize\" ]\
+            \n    2 [ label = \"DummyTransform\" ]\
+            \n    3 [ label = \"DummyTransform\" ]\
+            \n    4 [ label = \"Resize\" ]\
+            \n    5 [ label = \"DummyTransform\" ]\
+            \n    6 [ label = \"Resize\" ]\
+            \n    7 [ label = \"SyncSenderSink\" ]\
+            \n    8 [ label = \"SyncSenderSink\" ]\
+            \n    0 -> 1 [ ]\
+            \n    1 -> 2 [ ]\
+            \n    1 -> 3 [ ]\
+            \n    2 -> 4 [ ]\
+            \n    3 -> 4 [ ]\
+            \n    4 -> 5 [ ]\
+            \n    5 -> 6 [ ]\
+            \n    6 -> 7 [ ]\
+            \n    6 -> 8 [ ]\
+        \n}\n"
+    );
 
     Ok(())
 }
@@ -85,8 +77,15 @@ async fn test_create_resize_pipeline() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_simple_pipeline_init_queue() -> Result<()> {
     unsafe {
-        let graph = create_simple_pipeline()?;
-        assert_eq!(format!("{:?}", graph.init_schedule_queue()?), "ScheduleQueue { sync_queue: [\"SyncReceiverSource\"], async_queue: [] }");
+        assert_eq!(
+            format!("{:?}", create_simple_pipeline()?.init_schedule_queue()?),
+            "ScheduleQueue { \
+                sync_queue: [\
+                    QueueItem { id: 0, name: \"SyncReceiverSource\" }\
+                ], \
+                async_queue: [] \
+            }"
+        );
         Ok(())
     }
 }
@@ -94,8 +93,31 @@ async fn test_simple_pipeline_init_queue() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_parallel_simple_pipeline_init_queue() -> Result<()> {
     unsafe {
-        let graph = create_parallel_simple_pipeline()?;
-        assert_eq!(format!("{:?}", graph.init_schedule_queue()?), "ScheduleQueue { sync_queue: [\"SyncReceiverSource\", \"SyncReceiverSource\"], async_queue: [] }");
+        assert_eq!(
+            format!("{:?}", create_parallel_simple_pipeline()?.init_schedule_queue()?),
+            "ScheduleQueue { \
+                sync_queue: [\
+                    QueueItem { id: 0, name: \"SyncReceiverSource\" }, \
+                    QueueItem { id: 1, name: \"SyncReceiverSource\" }\
+                ], \
+                async_queue: [] \
+            }"
+        );
+        Ok(())
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_resize_pipeline_init_queue() -> Result<()> {
+    unsafe {
+        assert_eq!(
+            format!("{:?}", create_resize_pipeline()?.init_schedule_queue()?),
+            "ScheduleQueue { \
+                sync_queue: [QueueItem { id: 0, name: \"SyncReceiverSource\" }], \
+                async_queue: [] \
+            }"
+        );
+
         Ok(())
     }
 }
@@ -119,6 +141,22 @@ fn create_parallel_simple_pipeline() -> Result<RunningGraph> {
     let mut pipeline = NewPipeline::create();
     pipeline.add_pipe(source_pipe);
     pipeline.add_pipe(create_transform_pipe(2)?);
+    pipeline.add_pipe(sink_pipe);
+
+    Ok(RunningGraph::create(pipeline)?)
+}
+
+fn create_resize_pipeline() -> Result<RunningGraph> {
+    let (_rx, sink_pipe) = create_sink_pipe(2)?;
+    let (_tx, source_pipe) = create_source_pipe(1)?;
+
+    let mut pipeline = NewPipeline::create();
+    pipeline.add_pipe(source_pipe);
+    pipeline.resize(2)?;
+    pipeline.add_pipe(create_transform_pipe(2)?);
+    pipeline.resize(1)?;
+    pipeline.add_pipe(create_transform_pipe(1)?);
+    pipeline.resize(2)?;
     pipeline.add_pipe(sink_pipe);
 
     Ok(RunningGraph::create(pipeline)?)

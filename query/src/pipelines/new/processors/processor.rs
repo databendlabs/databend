@@ -2,9 +2,12 @@ use std::cell::UnsafeCell;
 use std::sync::Arc;
 use futures::future::BoxFuture;
 use futures::FutureExt;
+use petgraph::graph::node_index;
+use petgraph::prelude::NodeIndex;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use crate::pipelines::new::unsafe_cell_wrap::UnSafeCellWrap;
 
 pub enum Event {
     NeedData,
@@ -34,6 +37,7 @@ pub trait Processor: Send {
 
 #[derive(Clone)]
 pub struct ProcessorPtr {
+    id: Arc<UnsafeCell<NodeIndex>>,
     inner: Arc<UnsafeCell<Box<dyn Processor>>>,
 }
 
@@ -44,8 +48,17 @@ unsafe impl Sync for ProcessorPtr {}
 impl ProcessorPtr {
     pub fn create(inner: Box<dyn Processor>) -> ProcessorPtr {
         ProcessorPtr {
+            id: Arc::new(UnsafeCell::new(node_index(0))),
             inner: Arc::new(UnsafeCell::new(inner)),
         }
+    }
+
+    pub unsafe fn id(&self) -> NodeIndex {
+        *self.id.get()
+    }
+
+    pub unsafe fn set_id(&self, id: NodeIndex) {
+        *(&mut *self.id.get()) = id;
     }
 
     pub unsafe fn name(&self) -> &'static str {

@@ -1,4 +1,3 @@
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll};
@@ -54,18 +53,20 @@ impl ExecutorWorkerContext {
 
     unsafe fn execute_sync_task(&mut self, processor: ProcessorPtr) -> Result<NodeIndex> {
         processor.process()?;
-        unimplemented!()
+        Ok(processor.id())
     }
 
     unsafe fn execute_async_task(&mut self, processor: ProcessorPtr, queue: &ExecutorTasksQueue) -> Result<NodeIndex> {
+        let id = processor.id();
         let finished = Arc::new(AtomicBool::new(false));
         let mut future = processor.async_process();
-        self.schedule_async_task(ExecutingAsyncTask { finished, future }, queue)
+        self.schedule_async_task(ExecutingAsyncTask { id, finished, future }, queue)
     }
 
     unsafe fn schedule_async_task(&mut self, mut task: ExecutingAsyncTask, queue: &ExecutorTasksQueue) -> Result<NodeIndex> {
         task.finished.store(false, Ordering::Relaxed);
 
+        let id = task.id;
         loop {
             let waker = ExecutingAsyncTaskWaker::create(&task.finished);
 
@@ -73,11 +74,11 @@ impl ExecutorWorkerContext {
             let mut cx = Context::from_waker(&waker);
 
             match task.future.as_mut().poll(&mut cx) {
-                Poll::Ready(Ok(res)) => { unimplemented!(); }
+                Poll::Ready(Ok(_)) => { return Ok(id); }
                 Poll::Ready(Err(cause)) => { return Err(cause); }
                 Poll::Pending => {
                     match queue.push_executing_async_task(self.worker_num, task) {
-                        None => { unimplemented!() }
+                        None => { return Ok(id); }
                         Some(t) => { task = t; }
                     };
                 }

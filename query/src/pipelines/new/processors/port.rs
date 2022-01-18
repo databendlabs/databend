@@ -57,22 +57,29 @@ impl SharedStatus {
         }
     }
 
-    pub fn set_flags(&self, set_flags: usize, unset_flags: usize) {
+    pub fn set_flags(&self, set_flags: usize, unset_flags: usize) -> usize {
         let mut expected = std::ptr::null_mut();
         let mut desired = set_flags as *mut SharedData;
 
         unsafe {
-            while let Err(new_expected) = self.data.compare_exchange_weak(
-                expected,
-                desired,
-                Ordering::SeqCst,
-                Ordering::Relaxed,
-            ) {
-                expected = new_expected;
-                let address = desired as usize;
-                let desired_data = address & UNSET_FLAGS_MASK;
-                let desired_flags = (address & FLAGS_MASK & !unset_flags) | set_flags;
-                desired = (desired_data | desired_flags) as *mut SharedData;
+            loop {
+                match self.data.compare_exchange_weak(
+                    expected,
+                    desired,
+                    Ordering::SeqCst,
+                    Ordering::Relaxed,
+                ) {
+                    Ok(old_value) => {
+                        return old_value as usize & FLAGS_MASK;
+                    }
+                    Err(new_expected) => {
+                        expected = new_expected;
+                        let address = desired as usize;
+                        let desired_data = address & UNSET_FLAGS_MASK;
+                        let desired_flags = (address & FLAGS_MASK & !unset_flags) | set_flags;
+                        desired = (desired_data | desired_flags) as *mut SharedData;
+                    }
+                }
             }
         }
     }
@@ -97,9 +104,11 @@ impl InputPort {
 
     pub fn finish(&self) {
         unsafe {
-            UpdateTrigger::update_input(&self.update_trigger);
+            let flags = self.shared.set_flags(IS_FINISHED, IS_FINISHED);
 
-            self.shared.set_flags(IS_FINISHED, IS_FINISHED);
+            if flags & IS_FINISHED == 0 {
+                UpdateTrigger::update_input(&self.update_trigger);
+            }
         }
     }
 
@@ -109,8 +118,10 @@ impl InputPort {
 
     pub fn set_need_data(&self) {
         unsafe {
-            UpdateTrigger::update_input(&self.update_trigger);
-            self.shared.set_flags(NEED_DATA, NEED_DATA);
+            let flags = self.shared.set_flags(NEED_DATA, NEED_DATA);
+            if flags & NEED_DATA == 0 {
+                UpdateTrigger::update_input(&self.update_trigger);
+            }
         }
     }
 
@@ -166,9 +177,11 @@ impl OutputPort {
 
     pub fn finish(&self) {
         unsafe {
-            UpdateTrigger::update_output(&self.update_trigger);
+            let flags = self.shared.set_flags(IS_FINISHED, IS_FINISHED);
 
-            self.shared.set_flags(IS_FINISHED, IS_FINISHED);
+            if flags & IS_FINISHED == 0 {
+                UpdateTrigger::update_output(&self.update_trigger);
+            }
         }
     }
 

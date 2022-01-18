@@ -76,6 +76,7 @@ impl ExecutingGraph {
 
                     let resize_node = Node::create(processor, inputs_port, outputs_port);
                     let target_index = graph.add_node(resize_node.clone());
+                    processor.set_id(target_index);
 
                     for index in 0..node_stack.len() {
                         let source_index = node_stack[index];
@@ -115,6 +116,7 @@ impl ExecutingGraph {
 
                         let target_node = Node::create(&processors[index], &p_inputs_port, &p_outputs_port);
                         let target_index = graph.add_node(target_node.clone());
+                        processors[index].set_id(target_index);
 
                         if !node_stack.is_empty() {
                             let source_index = node_stack[index];
@@ -317,25 +319,29 @@ impl Debug for RunningGraph {
 
 impl Debug for ScheduleQueue {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        struct QueueFmt<'a>(&'a VecDeque<ProcessorPtr>);
-
-        impl<'a> Debug for QueueFmt<'a> {
-            fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-                unsafe {
-                    let mut debug_list = f.debug_list();
-                    for processor in self.0 {
-                        debug_list.entry(&format!("{}", processor.name()));
-                    }
-
-                    debug_list.finish()
-                }
-            }
+        #[derive(Debug)]
+        struct QueueItem {
+            id: usize,
+            name: String,
         }
 
-        f.debug_struct("ScheduleQueue")
-            .field("sync_queue", &QueueFmt(&self.sync_queue))
-            .field("async_queue", &QueueFmt(&self.async_queue))
-            .finish()
+        unsafe {
+            let mut sync_queue = Vec::with_capacity(self.sync_queue.len());
+            let mut async_queue = Vec::with_capacity(self.async_queue.len());
+
+            for item in &self.sync_queue {
+                sync_queue.push(QueueItem { id: item.id().index(), name: item.name().to_string() })
+            }
+
+            for item in &self.async_queue {
+                async_queue.push(QueueItem { id: item.id().index(), name: item.name().to_string() })
+            }
+
+            f.debug_struct("ScheduleQueue")
+                .field("sync_queue", &sync_queue)
+                .field("async_queue", &async_queue)
+                .finish()
+        }
     }
 }
 

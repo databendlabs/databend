@@ -3,6 +3,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc};
 use futures::future::BoxFuture;
+use petgraph::prelude::NodeIndex;
 
 use common_exception::Result;
 use common_infallible::Mutex;
@@ -95,6 +96,7 @@ impl ExecutorTasksQueue {
 }
 
 pub struct ExecutingAsyncTask {
+    pub id: NodeIndex,
     pub finished: Arc<AtomicBool>,
     pub future: BoxFuture<'static, Result<()>>,
 }
