@@ -18,6 +18,7 @@ mod conditionals;
 mod dates;
 mod expressions;
 mod function;
+mod function2;
 mod function_alias;
 mod function_column;
 mod function_factory;

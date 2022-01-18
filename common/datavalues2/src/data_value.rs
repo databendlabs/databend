@@ -120,7 +120,7 @@ impl DataValue {
 
     #[inline]
     pub fn is_integer(&self) -> bool {
-        matches!(self, |DataValue::Int64(_)| DataValue::UInt64(_))
+        matches!(self, DataValue::Int64(_) | DataValue::UInt64(_))
     }
 
     #[inline]
@@ -130,10 +130,7 @@ impl DataValue {
 
     #[inline]
     pub fn is_unsigned_integer(&self) -> bool {
-        matches!(
-            self,
-                | DataValue::UInt64(_)
-        )
+        matches!(self, DataValue::UInt64(_))
     }
 
     pub fn to_values(&self, size: usize) -> Result<Vec<DataValue>> {

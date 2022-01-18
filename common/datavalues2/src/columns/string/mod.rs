@@ -177,7 +177,7 @@ impl Column for StringColumn {
         }
 
         let max_size = offsets.iter().max().unwrap();
-        let mut builder = MutableStringColumn::with_capacity(*max_size * 5, *max_size);
+        let mut builder = MutableStringColumn::with_capacity(*max_size);
 
         let mut previous_offset: usize = 0;
 

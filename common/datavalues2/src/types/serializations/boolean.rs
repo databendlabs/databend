@@ -19,13 +19,16 @@ use crate::prelude::*;
 
 pub struct BooleanSerializer {}
 
+const TRUE_STR: &str = "1";
+const FALSE_STR: &str = "0";
+
 impl TypeSerializer for BooleanSerializer {
     fn serialize_value(&self, value: &DataValue) -> Result<String> {
         if let DataValue::Boolean(x) = value {
             if *x {
-                Ok("1".to_owned())
+                Ok(TRUE_STR.to_owned())
             } else {
-                Ok("0".to_owned())
+                Ok(FALSE_STR.to_owned())
             }
         } else {
             Err(ErrorCode::BadBytes("Incorrect boolean value"))
@@ -37,7 +40,13 @@ impl TypeSerializer for BooleanSerializer {
 
         let result: Vec<String> = array
             .iter()
-            .map(|v| if v { "1".to_owned() } else { "0".to_owned() })
+            .map(|v| {
+                if v {
+                    TRUE_STR.to_owned()
+                } else {
+                    FALSE_STR.to_owned()
+                }
+            })
             .collect();
         Ok(result)
     }

@@ -22,6 +22,7 @@ mod macros;
 mod utils;
 
 pub mod columns;
+pub mod convert;
 pub mod data_field;
 pub mod data_schema;
 pub mod data_value;
@@ -30,6 +31,7 @@ pub mod prelude;
 pub mod types;
 
 pub use columns::*;
+pub use convert::*;
 pub use data_field::*;
 pub use data_schema::*;
 pub use data_value::*;

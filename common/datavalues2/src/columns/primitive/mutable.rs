@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_arrow::arrow::bitmap::MutableBitmap;
 
 use crate::columns::mutable::MutableColumn;
 use crate::prelude::DataTypePtr;
 use crate::types::create_primitive_datatype;
-use crate::ColumnRef;
 use crate::PrimitiveColumn;
 use crate::PrimitiveType;
 
@@ -31,22 +28,19 @@ where T: PrimitiveType
     values: Vec<T>,
 }
 
-impl<T> MutablePrimitiveColumn<T>
-where T: PrimitiveType
-{
-    pub fn finish(&mut self) -> PrimitiveColumn<T> {
-        self.shrink_to_fit();
-        PrimitiveColumn::<T> {
-            values: std::mem::take(&mut self.values).into(),
-        }
-    }
-}
-
-impl<T> MutableColumn for MutablePrimitiveColumn<T>
+impl<T> MutableColumn<T, PrimitiveColumn<T>> for MutablePrimitiveColumn<T>
 where T: PrimitiveType
 {
     fn data_type(&self) -> DataTypePtr {
         self.data_type.clone()
+    }
+
+    fn with_capacity(capacity: usize) -> Self {
+        let data_type = create_primitive_datatype::<T>();
+        MutablePrimitiveColumn {
+            data_type,
+            values: Vec::<T>::with_capacity(capacity),
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -57,8 +51,11 @@ where T: PrimitiveType
         self
     }
 
-    fn as_column(&mut self) -> ColumnRef {
-        Arc::new(self.finish())
+    fn finish(&mut self) -> PrimitiveColumn<T> {
+        self.shrink_to_fit();
+        PrimitiveColumn::<T> {
+            values: std::mem::take(&mut self.values).into(),
+        }
     }
 
     fn append_default(&mut self) {
@@ -71,6 +68,14 @@ where T: PrimitiveType
 
     fn shrink_to_fit(&mut self) {
         self.values.shrink_to_fit();
+    }
+
+    fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    fn append(&mut self, item: T) {
+        self.append_value(item);
     }
 }
 
@@ -89,14 +94,6 @@ where T: PrimitiveType
 {
     pub fn new() -> Self {
         Self::with_capacity(0)
-    }
-
-    pub fn with_capacity(capacity: usize) -> Self {
-        let data_type = create_primitive_datatype::<T>();
-        MutablePrimitiveColumn {
-            data_type,
-            values: Vec::<T>::with_capacity(capacity),
-        }
     }
 
     pub fn from_data(data_type: DataTypePtr, values: Vec<T>) -> Self {

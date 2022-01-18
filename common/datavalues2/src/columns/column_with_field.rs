@@ -12,35 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-mod builder;
-mod mutable;
+use crate::ColumnRef;
+use crate::DataField;
+use crate::DataTypePtr;
 
-mod array;
-mod boolean;
-mod column;
-mod column_with_field;
-mod const_;
-mod eq;
-mod null;
-mod nullable;
-mod primitive;
-pub mod series;
-mod string;
-mod struct_;
-mod viewer;
+#[derive(Clone, Debug)]
+pub struct ColumnWithField {
+    pub(crate) column: ColumnRef,
+    pub(crate) field: DataField,
+}
+impl ColumnWithField {
+    pub fn new(column: ColumnRef, field: DataField) -> Self {
+        Self { column, field }
+    }
+    pub fn column(&self) -> &ColumnRef {
+        &self.column
+    }
+    pub fn field(&self) -> &DataField {
+        &self.field
+    }
+    pub fn data_type(&self) -> &DataTypePtr {
+        self.field.data_type()
+    }
+}
 
-pub use array::*;
-pub use boolean::*;
-pub use builder::*;
-pub use column::*;
-pub use column_with_field::*;
-pub use const_::*;
-pub use mutable::*;
-pub use null::*;
-pub use nullable::*;
-pub use primitive::*;
-pub use series::*;
-pub use string::*;
-pub use struct_::*;
-pub use viewer::*;
+pub type ColumnsWithField = [ColumnWithField];

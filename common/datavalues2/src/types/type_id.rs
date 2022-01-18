@@ -29,7 +29,6 @@ use common_macros::MallocSizeOf;
     Ord,
     MallocSizeOf,
 )]
-
 pub enum TypeID {
     Null,
     Nullable,

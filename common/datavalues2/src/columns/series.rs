@@ -21,7 +21,6 @@ use common_exception::Result;
 use crate::prelude::*;
 use crate::Column;
 use crate::ColumnRef;
-use crate::NewColumn;
 use crate::NullableColumn;
 use crate::StringColumn;
 
@@ -48,6 +47,12 @@ impl Series {
         });
         arr
     }
+}
+
+pub trait NewColumn<N> {
+    /// create non-nullable column by values
+    fn new_from_slice<P: AsRef<[N]>>(v: P) -> Self;
+    fn new_from_iter(it: impl Iterator<Item = N>) -> Self;
 }
 
 pub trait SeriesFrom<T, Phantom: ?Sized> {

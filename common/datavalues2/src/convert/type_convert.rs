@@ -10,26 +10,26 @@
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
-// limitations under the License.
+// limitations under the License.pub use data_type::*;
 
-use common_exception::Result;
+use common_datavalues::prelude::DataField as OldDataField;
 
-use crate::prelude::DataValue;
-use crate::ColumnRef;
-use crate::TypeSerializer;
+use crate::from_arrow_field;
+use crate::DataField;
 
-#[derive(Clone, Debug, Default)]
-pub struct NullSerializer {}
+impl From<OldDataField> for DataField {
+    fn from(old: OldDataField) -> Self {
+        let arrow_field = old.to_arrow();
+        let new_type = from_arrow_field(&arrow_field);
 
-const NULL_STR: &str = "NULL";
-
-impl TypeSerializer for NullSerializer {
-    fn serialize_value(&self, _value: &DataValue) -> Result<String> {
-        Ok(NULL_STR.to_owned())
+        DataField::new(old.name(), new_type)
     }
+}
 
-    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
-        let result: Vec<String> = vec![NULL_STR.to_owned(); column.len()];
-        Ok(result)
+impl From<DataField> for OldDataField {
+    fn from(field: DataField) -> OldDataField {
+        let arrow_field = field.to_arrow();
+
+        From::from(&arrow_field)
     }
 }

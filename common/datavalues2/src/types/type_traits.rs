@@ -76,7 +76,8 @@ impl FloatType for f64 {}
 
 pub trait ScalarType: Sized {
     type Type: DataType;
-    type ColumnType: Column;
+    type ColumnType: Column + 'static;
+    type MutableColumnType: MutableColumn<Self, Self::ColumnType>;
 }
 
 macro_rules! impl_primitive_scalar_type {
@@ -84,6 +85,7 @@ macro_rules! impl_primitive_scalar_type {
         impl ScalarType for $native {
             type Type = PrimitiveDataType<$native>;
             type ColumnType = PrimitiveColumn<$native>;
+            type MutableColumnType = MutablePrimitiveColumn<$native>;
         }
     };
 }
@@ -102,4 +104,11 @@ impl_primitive_scalar_type!(f64);
 impl ScalarType for bool {
     type Type = BooleanType;
     type ColumnType = BooleanColumn;
+    type MutableColumnType = MutableBooleanColumn;
+}
+
+impl ScalarType for &[u8] {
+    type Type = StringType;
+    type ColumnType = StringColumn;
+    type MutableColumnType = MutableStringColumn;
 }
