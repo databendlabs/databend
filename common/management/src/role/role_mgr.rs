@@ -60,17 +60,14 @@ impl RoleMgr {
         };
 
         let kv_api = self.kv_api.clone();
-        let upsert_kv = async move {
-            kv_api
-                .upsert_kv(UpsertKVAction::new(
-                    &key,
-                    match_seq,
-                    Operation::Update(value),
-                    None,
-                ))
-                .await
-        };
-        let res = upsert_kv.await?;
+        let res = kv_api
+            .upsert_kv(UpsertKVAction::new(
+                &key,
+                match_seq,
+                Operation::Update(value),
+                None,
+            ))
+            .await?;
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownRole(format!(
@@ -108,8 +105,7 @@ impl RoleMgrApi for RoleMgr {
     async fn get_role(&self, role_name: &str, seq: Option<u64>) -> Result<SeqV<RoleInfo>> {
         let key = format!("{}/{}", self.role_prefix, role_name);
         let kv_api = self.kv_api.clone();
-        let get_kv = async move { kv_api.get_kv(&key).await };
-        let res = get_kv.await?;
+        let res = kv_api.get_kv(&key).await?;
         let seq_value =
             res.ok_or_else(|| ErrorCode::UnknownRole(format!("unknown role {}", role_name)))?;
 
@@ -125,8 +121,7 @@ impl RoleMgrApi for RoleMgr {
     async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>> {
         let role_prefix = self.role_prefix.clone();
         let kv_api = self.kv_api.clone();
-        let prefix_list_kv = async move { kv_api.prefix_list_kv(role_prefix.as_str()).await };
-        let values = prefix_list_kv.await?;
+        let values = kv_api.prefix_list_kv(role_prefix.as_str()).await?;
 
         let mut r = vec![];
         for (_key, val) in values {
@@ -176,17 +171,14 @@ impl RoleMgrApi for RoleMgr {
     async fn drop_role(&self, role_name: String, seq: Option<u64>) -> Result<()> {
         let key = format!("{}/{}", self.role_prefix, role_name);
         let kv_api = self.kv_api.clone();
-        let upsert_kv = async move {
-            kv_api
-                .upsert_kv(UpsertKVAction::new(
-                    &key,
-                    seq.into(),
-                    Operation::Delete,
-                    None,
-                ))
-                .await
-        };
-        let res = upsert_kv.await?;
+        let res = kv_api
+            .upsert_kv(UpsertKVAction::new(
+                &key,
+                seq.into(),
+                Operation::Delete,
+                None,
+            ))
+            .await?;
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {
