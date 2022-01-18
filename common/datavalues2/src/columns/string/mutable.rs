@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use crate::prelude::*;
 
 pub struct MutableStringColumn {
@@ -23,17 +21,7 @@ pub struct MutableStringColumn {
 }
 
 impl MutableStringColumn {
-    pub fn with_capacity(capacity: usize, offset_capacity: usize) -> Self {
-        let mut offsets = Vec::with_capacity(offset_capacity + 1);
-        offsets.push(0);
-
-        Self {
-            last_size: 0,
-            offsets,
-            values: Vec::with_capacity(capacity),
-        }
-    }
-
+    #[inline]
     pub fn append_value(&mut self, v: impl AsRef<[u8]>) {
         let bytes = v.as_ref();
         self.last_size += bytes.len();
@@ -41,26 +29,31 @@ impl MutableStringColumn {
         self.values.extend_from_slice(bytes);
     }
 
-    pub fn finish(&mut self) -> StringColumn {
-        self.last_size = 0;
-        unsafe {
-            StringColumn::from_data_unchecked(
-                std::mem::take(&mut self.offsets).into(),
-                std::mem::take(&mut self.values).into(),
-            )
+    pub fn with_values_capacity(values_capacity: usize, capacity: usize) -> Self {
+        let mut offsets = Vec::with_capacity(capacity + 1);
+        offsets.push(0);
+
+        Self {
+            last_size: 0,
+            offsets,
+            values: Vec::with_capacity(values_capacity),
         }
     }
 }
 
 impl Default for MutableStringColumn {
     fn default() -> Self {
-        Self::with_capacity(0, 0)
+        Self::with_capacity(0)
     }
 }
 
-impl MutableColumn for MutableStringColumn {
+impl MutableColumn<&[u8], StringColumn> for MutableStringColumn {
     fn data_type(&self) -> DataTypePtr {
         StringType::arc()
+    }
+
+    fn with_capacity(capacity: usize) -> Self {
+        Self::with_values_capacity(capacity * 3, capacity)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -71,8 +64,14 @@ impl MutableColumn for MutableStringColumn {
         self
     }
 
-    fn as_column(&mut self) -> ColumnRef {
-        Arc::new(self.finish())
+    fn finish(&mut self) -> StringColumn {
+        self.last_size = 0;
+        unsafe {
+            StringColumn::from_data_unchecked(
+                std::mem::take(&mut self.offsets).into(),
+                std::mem::take(&mut self.values).into(),
+            )
+        }
     }
 
     fn append_default(&mut self) {
@@ -86,5 +85,13 @@ impl MutableColumn for MutableStringColumn {
     fn shrink_to_fit(&mut self) {
         self.offsets.shrink_to_fit();
         self.values.shrink_to_fit();
+    }
+
+    fn len(&self) -> usize {
+        self.offsets.len() - 1
+    }
+
+    fn append(&mut self, item: &[u8]) {
+        self.append_value(item);
     }
 }

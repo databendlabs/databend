@@ -16,7 +16,7 @@ use common_datavalues2::prelude::*;
 
 #[test]
 fn test_empty_boolean_column() {
-    let mut builder = MutableStringColumn::with_capacity(16, 16);
+    let mut builder = MutableStringColumn::with_values_capacity(16, 16);
     let data_column: StringColumn = builder.finish();
     let mut iter = data_column.iter();
     assert_eq!(None, iter.next());

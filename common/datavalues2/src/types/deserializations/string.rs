@@ -28,7 +28,7 @@ impl StringDeserializer {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             buffer: Vec::new(),
-            builder: MutableStringColumn::with_capacity(capacity * 5, capacity),
+            builder: MutableStringColumn::with_capacity(capacity),
         }
     }
 }

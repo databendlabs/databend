@@ -20,7 +20,7 @@ use crate::prelude::*;
 
 /// A wrapper for a column.
 /// It can help to better access the data without cast into nullable/const column.
-pub struct ColumnWrapper<'a, T: ScalarType> {
+pub struct ColumnViewer<'a, T: ScalarType> {
     pub column: &'a T::ColumnType,
     pub data: &'a [T],
     pub validity: Bitmap,
@@ -38,7 +38,7 @@ pub trait GetDatas<E> {
     fn get_data(&self) -> &[E];
 }
 
-impl<'a, T> ColumnWrapper<'a, T>
+impl<'a, T> ColumnViewer<'a, T>
 where
     T: ScalarType + Default,
     T::ColumnType: Clone + GetDatas<T> + 'static,

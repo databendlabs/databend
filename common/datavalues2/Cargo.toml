@@ -16,12 +16,14 @@ common-arrow = { path = "../arrow" }
 common-exception = { path = "../exception" }
 common-io = { path = "../io" }
 common-macros = { path = "../macros" }
+common-datavalues = { path = "../datavalues" }
 common-mem-allocator = { path = "../mem-allocator" }
 
 # Github dependencies
 
 # Crates.io dependencies
 num = "0.4.0"
+
 serde = { version = "1.0.133", features = ["derive"] }
 lexical-core = "0.8.2"
 chrono = "0.4.19"
@@ -32,3 +34,10 @@ itertools = "0.10.3"
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"
+rand = "0.8"
+criterion = "0.3.5"
+
+
+[[bench]]
+name = "if_else_then"
+harness = false

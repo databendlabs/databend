@@ -19,7 +19,7 @@ use pretty_assertions::assert_eq;
 #[test]
 fn test_primitive_wrapper() -> Result<()> {
     let column = Series::from_data(vec![1i8, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    let wrapper = ColumnWrapper::<i8>::create(&column)?;
+    let wrapper = ColumnViewer::<i8>::create(&column)?;
 
     assert_eq!(wrapper.len(), 10);
     assert!(!wrapper.null_at(0));
@@ -32,7 +32,7 @@ fn test_primitive_wrapper() -> Result<()> {
 #[test]
 fn test_nullable_wrapper() -> Result<()> {
     let column = Series::from_data(vec![Some(1i8), None, Some(3), Some(4), Some(5)]);
-    let wrapper = ColumnWrapper::<i8>::create(&column)?;
+    let wrapper = ColumnViewer::<i8>::create(&column)?;
 
     assert_eq!(wrapper.len(), 5);
     assert!(!wrapper.null_at(0));
@@ -52,7 +52,7 @@ fn test_nullable_wrapper() -> Result<()> {
 fn test_constant_wrapper() -> Result<()> {
     let ty = Int16Type::arc();
     let column = ty.create_constant_column(&DataValue::Int64(123), 1024)?;
-    let wrapper = ColumnWrapper::<i16>::create(&column)?;
+    let wrapper = ColumnViewer::<i16>::create(&column)?;
 
     assert_eq!(wrapper.len(), 1024);
     assert!(!wrapper.null_at(0));

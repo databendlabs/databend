@@ -12,15 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::*;
-use common_arrow::arrow::buffer::Buffer;
-use common_arrow::arrow::types::Index;
-
-mod mutable;
 use std::sync::Arc;
 
+use common_arrow::arrow::array::*;
+use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-pub use mutable::*;
+use common_arrow::arrow::types::Index;
 
 use crate::prelude::*;
 

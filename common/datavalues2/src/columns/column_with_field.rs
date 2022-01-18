@@ -12,24 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-
-use crate::prelude::DataValue;
 use crate::ColumnRef;
-use crate::TypeSerializer;
+use crate::DataField;
+use crate::DataTypePtr;
 
-#[derive(Clone, Debug, Default)]
-pub struct NullSerializer {}
-
-const NULL_STR: &str = "NULL";
-
-impl TypeSerializer for NullSerializer {
-    fn serialize_value(&self, _value: &DataValue) -> Result<String> {
-        Ok(NULL_STR.to_owned())
+#[derive(Clone, Debug)]
+pub struct ColumnWithField {
+    pub(crate) column: ColumnRef,
+    pub(crate) field: DataField,
+}
+impl ColumnWithField {
+    pub fn new(column: ColumnRef, field: DataField) -> Self {
+        Self { column, field }
     }
-
-    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
-        let result: Vec<String> = vec![NULL_STR.to_owned(); column.len()];
-        Ok(result)
+    pub fn column(&self) -> &ColumnRef {
+        &self.column
+    }
+    pub fn field(&self) -> &DataField {
+        &self.field
+    }
+    pub fn data_type(&self) -> &DataTypePtr {
+        self.field.data_type()
     }
 }
+
+pub type ColumnsWithField = [ColumnWithField];
