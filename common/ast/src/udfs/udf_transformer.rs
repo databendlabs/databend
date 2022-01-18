@@ -232,7 +232,7 @@ impl UDFTransformer {
                                 name: name.clone(),
                                 arg: FunctionArgExpr::Expr(
                                     Self::clone_expr_with_replacement(
-                                        &function_arg_as_expr(arg).unwrap(),
+                                        &function_arg_as_expr(&arg).unwrap(),
                                         replacement_fn,
                                     )
                                     .unwrap(),
@@ -241,7 +241,7 @@ impl UDFTransformer {
                             FunctionArg::Unnamed(arg) => {
                                 FunctionArg::Unnamed(FunctionArgExpr::Expr(
                                     Self::clone_expr_with_replacement(
-                                        &function_arg_as_expr(arg).unwrap(),
+                                        &function_arg_as_expr(&arg).unwrap(),
                                         replacement_fn,
                                     )
                                     .unwrap(),

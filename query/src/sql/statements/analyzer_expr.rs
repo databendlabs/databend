@@ -473,9 +473,6 @@ impl ExprRPNBuilder {
             Expr::BinaryOp { op, .. } => {
                 self.rpn.push(ExprRPNItem::binary_operator(op.to_string()));
             }
-            // Expr::Wildcard => {
-            //     self.rpn.push(ExprRPNItem::Wildcard);
-            // }
             Expr::Exists(subquery) => {
                 self.rpn.push(ExprRPNItem::Exists(subquery.clone()));
             }

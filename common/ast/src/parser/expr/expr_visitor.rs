@@ -52,7 +52,6 @@ pub trait ExprVisitor: Sized + Send {
             Expr::IsNotNull(expr) => self.visit_simple_function(expr, "isnotnull").await,
             Expr::UnaryOp { op, expr } => self.visit_unary_expr(op, expr).await,
             Expr::BinaryOp { left, op, right } => self.visit_binary_expr(left, op, right).await,
-            // Expr::Wildcard => self.visit_wildcard(),
             Expr::Exists(subquery) => self.visit_exists(subquery),
             Expr::Subquery(subquery) => self.visit_subquery(subquery),
             Expr::Function(function) => self.visit_function(function).await,
