@@ -709,7 +709,7 @@ impl TransformerSqlparser {
                     .args
                     .iter()
                     .map(|arg| match arg {
-                        FunctionArg::Unnamed(expr) => self.transform_function_arg(&expr),
+                        FunctionArg::Unnamed(expr) => self.transform_function_arg(expr),
                         FunctionArg::Named { .. } => Err(ErrorCode::SyntaxException(std::format!(
                             "Unsupported SQL statement: {}",
                             self.orig_stmt
