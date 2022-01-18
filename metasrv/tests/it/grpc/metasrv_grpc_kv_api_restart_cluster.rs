@@ -129,7 +129,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
 /// - Start a cluster of 3.
 /// - Test upsert kv and read on different nodes.
 /// - Stop and restart the cluster.
-/// - Test upsert kv and read on different nodes.
+/// - Test read kv using same grpc client.
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
