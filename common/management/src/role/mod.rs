@@ -12,5 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) mod role_api;
-pub(crate) mod role_mgr;
+mod role_api;
+mod role_mgr;
+
+pub use role_api::RoleMgrApi;
+pub use role_mgr::RoleMgr;
