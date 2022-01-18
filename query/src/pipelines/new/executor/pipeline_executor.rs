@@ -33,6 +33,11 @@ impl PipelineExecutor {
         }
     }
 
+    pub fn finish(&self) {
+        self.global_tasks_queue.finish();
+        self.workers_notify.wakeup_all();
+    }
+
     pub unsafe fn execute_with_single_worker(&self, worker_num: usize) -> Result<()> {
         let workers_notify = self.workers_notify.clone();
         let mut context = ExecutorWorkerContext::create(worker_num, workers_notify);

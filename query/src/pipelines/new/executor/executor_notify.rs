@@ -77,6 +77,27 @@ impl WorkersNotify {
         }
     }
 
+    pub fn wakeup_all(&self) {
+        let mut mutable_state = self.mutable_state.lock();
+        if mutable_state.waiting_size > 0 {
+            mutable_state.waiting_size = 0;
+
+            for index in 0..mutable_state.workers_waiting.len() {
+                mutable_state.workers_waiting[index] = false;
+            }
+
+            drop(mutable_state);
+            for index in 0..self.workers_notify.len() {
+                let mut waiting = self.workers_notify[index].waiting.lock();
+
+                if *waiting {
+                    *waiting = false;
+                    self.workers_notify[index].condvar.notify_one();
+                }
+            }
+        }
+    }
+
     pub fn wait(&self, worker_id: usize) {
         let mut mutable_state = self.mutable_state.lock();
         mutable_state.waiting_size += 1;

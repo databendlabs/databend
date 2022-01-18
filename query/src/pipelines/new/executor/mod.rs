@@ -8,3 +8,4 @@ mod executor_worker_context;
 mod executor_notify;
 
 pub use executor_graph::RunningGraph;
+pub use pipeline_executor::PipelineExecutor;

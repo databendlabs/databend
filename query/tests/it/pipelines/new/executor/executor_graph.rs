@@ -1,11 +1,14 @@
 use std::fmt::format;
+use std::sync::Arc;
 use petgraph::graph::node_index;
 use common_base::tokio;
 use common_base::tokio::sync::mpsc::{channel, Receiver, Sender};
 use common_datablocks::DataBlock;
+use common_datavalues::{DataField, DataSchema, DataType, DataValue};
+use common_datavalues::columns::DataColumn;
 use common_exception::Result;
 use databend_query::pipelines::new::{NewPipe, NewPipeline};
-use databend_query::pipelines::new::executor::RunningGraph;
+use databend_query::pipelines::new::executor::{PipelineExecutor, RunningGraph};
 use databend_query::pipelines::new::processors::{SyncReceiverSource, SyncSenderSink, TransformDummy};
 use databend_query::pipelines::new::processors::port::{InputPort, OutputPort};
 
@@ -126,23 +129,38 @@ async fn test_resize_pipeline_init_queue() -> Result<()> {
 // #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 // async fn test_simple_pipeline_schedule_queue() -> Result<()> {
 //     unsafe {
-//         let (rx, sink_pipe) = create_sink_pipe(1)?;
-//         let (tx, source_pipe) = create_source_pipe(1)?;
+//         let (mut rx, sink_pipe) = create_sink_pipe(1)?;
+//         let (mut tx, source_pipe) = create_source_pipe(1)?;
 //
 //         let mut pipeline = NewPipeline::create();
 //         pipeline.add_pipe(source_pipe);
 //         pipeline.add_pipe(create_transform_pipe(1)?);
 //         pipeline.add_pipe(sink_pipe);
 //
-//         let graph = RunningGraph::create(pipeline)?;
-//         let mut schedule_queue = graph.schedule_queue(node_index(0))?;
+//         let executor = PipelineExecutor::create(pipeline, 1)?;
+//         let thread1_executor = executor.clone();
+//         let thread1 = std::thread::spawn(move || {
+//             thread1_executor.execute_with_single_worker(0);
+//         });
 //
-//         // match schedule_queue.pop_task() {
-//         //     Some(ExecutorTask::) =>
-//         // }
-//         println!("{:?}", schedule_queue.pop_task());
-//         println!("{:?}", schedule_queue.pop_task());
-//         // let s = schedule_queue.pop_task();
+//         let thread2 = std::thread::spawn(move || {
+//             let tx = tx.remove(0);
+//             for index in 0..5 {
+//                 let schema = DataSchema::new(vec![DataField::new("field", DataType::Int8, false)]);
+//                 tx.blocking_send(Ok(DataBlock::create(Arc::new(schema), vec![DataColumn::Constant(DataValue::Int8(Some(index)), 2)])));
+//             }
+//         });
+//
+//         let thread3 = std::thread::spawn(move || {
+//             while let Some(data) = rx[0].blocking_recv() {
+//                 println!("{:?}", data);
+//             }
+//         });
+//
+//         thread2.join();
+//         // thread3.join();
+//         executor.finish();
+//         thread1.join();
 //     }
 //
 //

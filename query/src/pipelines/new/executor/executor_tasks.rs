@@ -25,6 +25,10 @@ impl ExecutorTasksQueue {
         }
     }
 
+    pub fn finish(&self) {
+        self.finished.store(true, Ordering::Relaxed);
+    }
+
     pub fn is_finished(&self) -> bool {
         self.finished.load(Ordering::Relaxed)
     }

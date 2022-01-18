@@ -255,9 +255,9 @@ impl ScheduleQueue {
         debug_assert!(!context.has_task());
 
         match self.sync_queue.is_empty() {
-            true => self.schedule_async(global, context),
-            false if !self.async_queue.is_empty() => self.schedule_sync(global, context),
-            false => { /* do nothing*/ }
+            false => self.schedule_sync(global, context),
+            true if !self.async_queue.is_empty() => self.schedule_async(global, context),
+            true => { /* do nothing*/ }
         }
 
         self.schedule_tail(global, context)
