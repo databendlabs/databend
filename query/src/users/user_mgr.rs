@@ -126,6 +126,7 @@ impl UserApiProvider {
             Err(e) => Err(e.add_message_back("(while add user).")),
         }
     }
+
     pub async fn grant_user_privileges(
         &self,
         tenant: &str,

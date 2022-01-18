@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_management::RoleMgr;
+use common_management::RoleMgrApi;
 use common_management::StageMgr;
 use common_management::StageMgrApi;
 use common_management::UdfMgr;
@@ -49,6 +51,10 @@ impl UserApiProvider {
 
     pub fn get_user_api_client(&self, tenant: &str) -> Arc<dyn UserMgrApi> {
         Arc::new(UserMgr::new(self.client.clone(), tenant))
+    }
+
+    pub fn get_role_api_client(&self, tenant: &str) -> Arc<dyn RoleMgrApi> {
+        Arc::new(RoleMgr::new(self.client.clone(), tenant))
     }
 
     pub fn get_stage_api_client(&self, tenant: &str) -> Arc<dyn StageMgrApi> {
