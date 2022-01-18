@@ -13,11 +13,11 @@
 // limitations under the License.
 
 mod api;
+mod catalogs;
 mod clusters;
 mod common;
 mod configs;
 mod functions;
-mod catalogs;
 mod interpreters;
 mod metrics;
 mod optimizers;
