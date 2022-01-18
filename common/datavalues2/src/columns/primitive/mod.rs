@@ -29,7 +29,7 @@ use common_arrow::arrow::datatypes::TimeUnit;
 pub use iterator::*;
 pub use mutable::*;
 
-use super::wrapper::GetDatas;
+use super::viewer::GetDatas;
 use crate::prelude::*;
 
 /// PrimitiveColumn is generic struct which wrapped arrow's PrimitiveArray

@@ -20,7 +20,6 @@ extern crate criterion;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::if_then_else::if_then_else;
 use common_arrow::arrow::types::NativeType;
 use common_datavalues2::prelude::*;
@@ -60,7 +59,7 @@ fn databend_if_else_then(
     let predicate: &NullableColumn = Series::check_get(ifs)?;
     let bool_c: &BooleanColumn = Series::check_get(predicate.inner())?;
     let bools = bool_c.values();
-    let bit_null = predicate.ensure_validity();
+    let validity_predict = predicate.ensure_validity();
 
     if lhs.data_type() != rhs.data_type() {
         return Err(ErrorCode::BadDataValueType(
@@ -93,22 +92,20 @@ fn databend_if_else_then(
 
     match physical_id {
         PhysicalTypeID::Primitive(t) => with_match_physical_primitive_type!(t, |$T| {
-                 let lhs_wrapper = ColumnViewer::<$T>::create(lhs)?;
+
+        let lhs_wrapper = ColumnViewer::<$T>::create(lhs)?;
         let rhs_wrapper = ColumnViewer::<$T>::create(rhs)?;
         let size = lhs_wrapper.len();
 
         let mut builder = ColumnBuilder::<$T>::with_capacity(size);
-        for row in 0..size {
-            let mut is_null = bit_null.get_bit(row);
 
-            let result = if bools.get_bit(row) {
-                is_null |= lhs_wrapper.null_at(row);
-                lhs_wrapper.value(row)
+        for row in 0..size {
+            let valid = validity_predict.get_bit(row);
+             if bools.get_bit(row) {
+                builder.append(*lhs_wrapper.value(row), valid & lhs_wrapper.valid_at(row));
             } else {
-                is_null |= lhs_wrapper.null_at(row);
-                rhs_wrapper.value(row)
+                builder.append(*rhs_wrapper.value(row), valid & rhs_wrapper.valid_at(row));
             };
-            builder.append(*result, is_null)
         }
 
         Ok(builder.build(size, true))

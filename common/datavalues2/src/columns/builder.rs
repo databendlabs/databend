@@ -51,9 +51,9 @@ where T: ScalarType + Default
     }
 
     #[inline]
-    pub fn append(&mut self, value: T, is_null: bool) {
+    pub fn append(&mut self, value: T, valid: bool) {
         self.builder.append(value);
-        self.validity.extend_constant(1, is_null);
+        self.validity.extend_constant(1, valid);
     }
 
     #[inline]

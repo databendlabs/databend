@@ -77,8 +77,13 @@ where
     }
 
     #[inline]
+    pub fn valid_at(&self, i: usize) -> bool {
+        unsafe { self.validity.get_bit_unchecked(i & self.null_mask) }
+    }
+
+    #[inline]
     pub fn null_at(&self, i: usize) -> bool {
-        unsafe { !self.validity.get_bit_unchecked(i & self.null_mask) }
+        !self.valid_at(i)
     }
 
     #[inline]
