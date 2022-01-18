@@ -113,13 +113,11 @@ impl UserMgrApi for UserMgr {
     ) -> Result<SeqV<UserInfo>> {
         let user_key = format_user_key(&username, &hostname);
         let key = format!("{}/{}", self.user_prefix, user_key);
-        let kv_api = self.kv_api.clone();
-        let res = kv_api.get_kv(&key).await?;
+        let res = self.kv_api.get_kv(&key).await?;
         let seq_value =
             res.ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", user_key)))?;
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
-            // Ok(_) => Ok(SeqV::new(seq_value.seq, seq_value.data.try_into()?)),
             Ok(_) => Ok(seq_value.into_seqv()?),
             Err(_) => Err(ErrorCode::UnknownUser(format!("unknown user {}", user_key))),
         }
@@ -127,8 +125,7 @@ impl UserMgrApi for UserMgr {
 
     async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>> {
         let user_prefix = self.user_prefix.clone();
-        let kv_api = self.kv_api.clone();
-        let values = kv_api.prefix_list_kv(user_prefix.as_str()).await?;
+        let values = self.kv_api.prefix_list_kv(user_prefix.as_str()).await?;
 
         let mut r = vec![];
         for (_key, val) in values {
@@ -172,8 +169,8 @@ impl UserMgrApi for UserMgr {
             Some(s) => MatchSeq::Exact(s),
         };
 
-        let kv_api = self.kv_api.clone();
-        let res = kv_api
+        let res = self
+            .kv_api
             .upsert_kv(UpsertKVAction::new(
                 &key,
                 match_seq,
@@ -227,8 +224,8 @@ impl UserMgrApi for UserMgr {
     async fn drop_user(&self, username: String, hostname: String, seq: Option<u64>) -> Result<()> {
         let user_key = format_user_key(&username, &hostname);
         let key = format!("{}/{}", self.user_prefix, user_key);
-        let kv_api = self.kv_api.clone();
-        let res = kv_api
+        let res = self
+            .kv_api
             .upsert_kv(UpsertKVAction::new(
                 &key,
                 seq.into(),
