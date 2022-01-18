@@ -38,7 +38,7 @@ impl RejectConnection {
 
         let size = buffer.len().to_le_bytes();
         buffer.splice(0..0, [size[0], size[1], size[2], 2].iter().cloned());
-        stream.write(&buffer).await?;
+        stream.write_all(&buffer).await?;
         stream.flush().await?;
 
         Ok(())
@@ -47,7 +47,7 @@ impl RejectConnection {
     async fn send_handshake(stream: &mut TcpStream) -> Result<()> {
         // Send handshake, packet from msql-srv. Packet[seq = 0]
         stream
-            .write(&[
+            .write_all(&[
                 69, 00, 00, 00, 10, 53, 46, 49, 46, 49, 48, 45, 97, 108, 112, 104, 97, 45, 109,
                 115, 113, 108, 45, 112, 114, 111, 120, 121, 0, 8, 0, 0, 0, 59, 88, 44, 112, 111,
                 95, 107, 125, 0, 0, 66, 33, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 62, 111,
@@ -62,12 +62,12 @@ impl RejectConnection {
 
     async fn receive_handshake_response(stream: &mut TcpStream) -> Result<()> {
         let mut buffer = vec![0; 4];
-        stream.read(&mut buffer).await?;
+        stream.read_exact(&mut buffer).await?;
 
         // Ignore handshake response. Packet[seq = 1]
         let len = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], 0]);
         buffer.resize(len as usize, 0);
-        stream.read(&mut buffer).await?;
+        stream.read_exact(&mut buffer).await?;
 
         Ok(())
     }

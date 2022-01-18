@@ -157,6 +157,8 @@ build_exceptions! {
     UnknownUser(2201),
     UserAlreadyExists(2202),
     IllegalUserInfoFormat(2203),
+    UnknownRole(2204),
+    IllegalRoleInfoFormat(2205),
 
     // meta-api error codes
     DatabaseAlreadyExists(2301),

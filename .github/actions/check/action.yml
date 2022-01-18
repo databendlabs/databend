@@ -15,12 +15,6 @@ runs:
         version: '3.x'
         repo-token: ${{ inputs.github_token }}
 
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
-        override: true
-        components: rustfmt, clippy
-
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
       with:

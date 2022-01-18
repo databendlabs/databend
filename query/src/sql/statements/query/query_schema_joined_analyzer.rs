@@ -123,8 +123,8 @@ impl JoinedSchemaAnalyzer {
 
         for table_arg in &item.args {
             table_args.push(match table_arg {
-                FunctionArg::Named { arg, .. } => analyzer.analyze(arg).await?,
-                FunctionArg::Unnamed(arg) => analyzer.analyze(arg).await?,
+                FunctionArg::Named { arg, .. } => analyzer.analyze_function_arg(arg).await?,
+                FunctionArg::Unnamed(arg) => analyzer.analyze_function_arg(arg).await?,
             });
         }
 

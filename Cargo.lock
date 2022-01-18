@@ -53,6 +53,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyerror"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df0eff878df53fcffe838345abfa5b3d7eeb87e856f53b7461e0e5d51fb9d045"
+dependencies = [
+ "backtrace",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "anyhow"
 version = "1.0.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2392,6 +2403,7 @@ dependencies = [
 name = "databend-meta"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "anyhow",
  "async-raft",
  "async-trait",
@@ -6593,8 +6605,8 @@ dependencies = [
 
 [[package]]
 name = "sqlparser"
-version = "0.11.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=b42ff01#b42ff010752d5fc4bce12f0b29d077d7e2fee023"
+version = "0.13.1-alpha.0"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=c33837e#c33837ec4f7146acf5b00ec4739f2f031fc1ff1e"
 dependencies = [
  "log",
 ]

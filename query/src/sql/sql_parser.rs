@@ -304,6 +304,7 @@ impl<'a> DfParser<'a> {
                 format,
                 after_columns,
                 table,
+                on,
             } => Ok(DfStatement::InsertQuery(DfInsertStatement {
                 or,
                 table_name,
@@ -314,6 +315,7 @@ impl<'a> DfParser<'a> {
                 format,
                 after_columns,
                 table,
+                on,
             })),
             _ => parser_err!("Expect set insert statement"),
         }
