@@ -1,7 +1,8 @@
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc};
+use std::sync::{Arc, Condvar};
+use std::thread::Thread;
 use futures::future::BoxFuture;
 use petgraph::prelude::NodeIndex;
 
@@ -36,17 +37,19 @@ impl ExecutorTasksQueue {
                 let task = workers_tasks.pop_task(context.get_worker_num());
                 context.set_task(task);
 
-                if !workers_tasks.is_empty() {
-                    // TODO:
-                    // match context.get_worker_num() {
-                    // }
+                let workers_notify = context.get_workers_notify();
+                if !workers_tasks.is_empty() && !workers_notify.is_empty() {
+                    let worker_id = context.get_worker_num();
+                    let wakeup_worker_id = workers_tasks.best_worker_id(worker_id + 1);
+                    workers_notify.wakeup(wakeup_worker_id);
                 }
 
                 return;
             }
-        }
 
-        self.wait_wakeup(context)
+            drop(workers_tasks);
+            context.get_workers_notify().wait(context.get_worker_num());
+        }
     }
 
     pub fn init_tasks(&self, mut tasks: VecDeque<ExecutorTask>) {
@@ -64,12 +67,18 @@ impl ExecutorTasksQueue {
         }
     }
 
-    pub fn push_tasks(&self, worker_id: usize, mut tasks: VecDeque<ExecutorTask>) {
+    pub fn push_tasks(&self, ctx: &mut ExecutorWorkerContext, mut tasks: VecDeque<ExecutorTask>) {
         unsafe {
+            let worker_id = ctx.get_worker_num();
             let mut workers_tasks = self.workers_tasks.lock();
             while let Some(task) = tasks.pop_front() {
                 workers_tasks.push_task(worker_id, task);
             }
+
+            let wake_worker_id = workers_tasks.best_worker_id(worker_id + 1);
+
+            drop(workers_tasks);
+            ctx.get_workers_notify().wakeup(wake_worker_id);
         }
     }
 
@@ -87,16 +96,11 @@ impl ExecutorTasksQueue {
             }
         }
     }
-
-    pub fn wait_wakeup(&self, thread: &mut ExecutorWorkerContext) {
-        // condvar.wait(guard);
-        // TODO:
-        unimplemented!()
-    }
 }
 
 pub struct ExecutingAsyncTask {
     pub id: NodeIndex,
+    pub worker_id: usize,
     pub finished: Arc<AtomicBool>,
     pub future: BoxFuture<'static, Result<()>>,
 }
@@ -154,6 +158,35 @@ impl ExecutorTasks {
         }
 
         ExecutorTask::None
+    }
+
+    pub fn best_worker_id(&self, mut worker_id: usize) -> usize {
+        for _index in 0..self.workers_sync_tasks.len() {
+            if worker_id >= self.workers_sync_tasks.len() {
+                worker_id = 0;
+            }
+
+            if !self.workers_sync_tasks[worker_id].is_empty() {
+                return worker_id;
+            }
+
+            if !self.workers_async_tasks[worker_id].is_empty() {
+                return worker_id;
+            }
+
+            if !self.workers_executing_async_tasks[worker_id].is_empty() {
+                let async_tasks = &self.workers_executing_async_tasks[worker_id];
+                for index in 0..async_tasks.len() {
+                    if async_tasks[index].finished.load(Ordering::Relaxed) {
+                        return worker_id;
+                    }
+                }
+            }
+
+            worker_id += 1;
+        }
+
+        worker_id
     }
 
     pub unsafe fn pop_task(&mut self, mut worker_id: usize) -> ExecutorTask {

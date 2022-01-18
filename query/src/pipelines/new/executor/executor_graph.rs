@@ -237,7 +237,7 @@ impl ScheduleQueue {
         }
     }
 
-    pub fn schedule_tail(mut self, worker_id: usize, global: &ExecutorTasksQueue) {
+    pub fn schedule_tail(mut self, global: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
         let mut tasks = VecDeque::with_capacity(self.sync_queue.len());
 
         while let Some(processor) = self.sync_queue.pop_front() {
@@ -248,7 +248,7 @@ impl ScheduleQueue {
             tasks.push_back(ExecutorTask::Async(processor));
         }
 
-        global.push_tasks(worker_id, tasks)
+        global.push_tasks(ctx, tasks)
     }
 
     pub fn schedule(mut self, global: &ExecutorTasksQueue, context: &mut ExecutorWorkerContext) {
@@ -260,7 +260,7 @@ impl ScheduleQueue {
             false => { /* do nothing*/ }
         }
 
-        self.schedule_tail(context.get_worker_num(), global)
+        self.schedule_tail(global, context)
     }
 
     fn schedule_sync(&mut self, _: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {

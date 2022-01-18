@@ -1,4 +1,5 @@
 use std::fmt::format;
+use petgraph::graph::node_index;
 use common_base::tokio;
 use common_base::tokio::sync::mpsc::{channel, Receiver, Sender};
 use common_datablocks::DataBlock;
@@ -121,6 +122,32 @@ async fn test_resize_pipeline_init_queue() -> Result<()> {
         Ok(())
     }
 }
+
+// #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+// async fn test_simple_pipeline_schedule_queue() -> Result<()> {
+//     unsafe {
+//         let (rx, sink_pipe) = create_sink_pipe(1)?;
+//         let (tx, source_pipe) = create_source_pipe(1)?;
+//
+//         let mut pipeline = NewPipeline::create();
+//         pipeline.add_pipe(source_pipe);
+//         pipeline.add_pipe(create_transform_pipe(1)?);
+//         pipeline.add_pipe(sink_pipe);
+//
+//         let graph = RunningGraph::create(pipeline)?;
+//         let mut schedule_queue = graph.schedule_queue(node_index(0))?;
+//
+//         // match schedule_queue.pop_task() {
+//         //     Some(ExecutorTask::) =>
+//         // }
+//         println!("{:?}", schedule_queue.pop_task());
+//         println!("{:?}", schedule_queue.pop_task());
+//         // let s = schedule_queue.pop_task();
+//     }
+//
+//
+//     unimplemented!("")
+// }
 
 fn create_simple_pipeline() -> Result<RunningGraph> {
     let (_rx, sink_pipe) = create_sink_pipe(1)?;

@@ -1,11 +1,15 @@
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll};
 use futures::task::{ArcWake};
 use petgraph::prelude::NodeIndex;
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
+use common_base::tokio::sync::mpsc::{Receiver, Sender};
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use crate::pipelines::new::executor::executor_notify::WorkersNotify;
 
 use crate::pipelines::new::executor::executor_tasks::{ExecutingAsyncTask, ExecutorTasksQueue};
 use crate::pipelines::new::processors::processor::ProcessorPtr;
@@ -20,12 +24,14 @@ pub enum ExecutorTask {
 pub struct ExecutorWorkerContext {
     worker_num: usize,
     task: ExecutorTask,
+    workers_notify: Arc<WorkersNotify>,
 }
 
 impl ExecutorWorkerContext {
-    pub fn create(worker_num: usize) -> Self {
+    pub fn create(worker_num: usize, workers_notify: Arc<WorkersNotify>) -> Self {
         ExecutorWorkerContext {
             worker_num,
+            workers_notify,
             task: ExecutorTask::None,
         }
     }
@@ -58,9 +64,10 @@ impl ExecutorWorkerContext {
 
     unsafe fn execute_async_task(&mut self, processor: ProcessorPtr, queue: &ExecutorTasksQueue) -> Result<NodeIndex> {
         let id = processor.id();
+        let worker_id = self.worker_num;
         let finished = Arc::new(AtomicBool::new(false));
         let mut future = processor.async_process();
-        self.schedule_async_task(ExecutingAsyncTask { id, finished, future }, queue)
+        self.schedule_async_task(ExecutingAsyncTask { id, finished, future, worker_id }, queue)
     }
 
     unsafe fn schedule_async_task(&mut self, mut task: ExecutingAsyncTask, queue: &ExecutorTasksQueue) -> Result<NodeIndex> {
@@ -68,7 +75,8 @@ impl ExecutorWorkerContext {
 
         let id = task.id;
         loop {
-            let waker = ExecutingAsyncTaskWaker::create(&task.finished);
+            let workers_notify = self.get_workers_notify().clone();
+            let waker = ExecutingAsyncTaskWaker::create(&task.finished, task.worker_id, workers_notify);
 
             let waker = futures::task::waker_ref(&waker);
             let mut cx = Context::from_waker(&waker);
@@ -77,7 +85,7 @@ impl ExecutorWorkerContext {
                 Poll::Ready(Ok(_)) => { return Ok(id); }
                 Poll::Ready(Err(cause)) => { return Err(cause); }
                 Poll::Pending => {
-                    match queue.push_executing_async_task(self.worker_num, task) {
+                    match queue.push_executing_async_task(task.worker_id, task) {
                         None => { return Ok(id); }
                         Some(t) => { task = t; }
                     };
@@ -86,23 +94,36 @@ impl ExecutorWorkerContext {
         }
     }
 
-
-    pub fn wait_wakeup(&self) {
-        // condvar.wait(guard);
+    pub fn get_workers_notify(&self) -> &Arc<WorkersNotify> {
+        &self.workers_notify
     }
 }
 
-struct ExecutingAsyncTaskWaker(Arc<AtomicBool>);
+struct ExecutingAsyncTaskWaker(usize, Arc<AtomicBool>, Arc<WorkersNotify>);
 
 impl ExecutingAsyncTaskWaker {
-    pub fn create(flag: &Arc<AtomicBool>) -> Arc<ExecutingAsyncTaskWaker> {
-        Arc::new(ExecutingAsyncTaskWaker(flag.clone()))
+    pub fn create(flag: &Arc<AtomicBool>, worker_id: usize, workers_notify: Arc<WorkersNotify>) -> Arc<ExecutingAsyncTaskWaker> {
+        Arc::new(ExecutingAsyncTaskWaker(worker_id, flag.clone(), workers_notify))
     }
 }
 
 impl ArcWake for ExecutingAsyncTaskWaker {
     fn wake_by_ref(arc_self: &Arc<Self>) {
-        arc_self.0.store(true, Ordering::Release);
+        arc_self.1.store(true, Ordering::Release);
+        arc_self.2.wakeup(arc_self.0);
+    }
+}
+
+impl Debug for ExecutorTask {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        unsafe {
+            match self {
+                ExecutorTask::None => write!(f, "ExecutorTask::None"),
+                ExecutorTask::Sync(p) => write!(f, "ExecutorTask::Sync {{ id: {}, name: {}}}", p.id().index(), p.name()),
+                ExecutorTask::Async(p) => write!(f, "ExecutorTask::Async {{ id: {}, name: {}}}", p.id().index(), p.name()),
+                ExecutorTask::AsyncSchedule(t) => write!(f, "ExecutorTask::AsyncSchedule {{ id: {}}}", t.id.index())
+            }
+        }
     }
 }
 
