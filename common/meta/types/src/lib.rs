@@ -103,7 +103,6 @@ pub use table::TableNameIndent;
 pub use table::UpsertTableOptionReply;
 pub use table::UpsertTableOptionReq;
 pub use user_auth::AuthInfo;
-pub use user_auth::AuthInfoArgs;
 pub use user_auth::AuthType;
 pub use user_auth::PasswordType;
 pub use user_defined_function::UserDefinedFunction;

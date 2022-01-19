@@ -472,8 +472,6 @@ mod drop {
 
 mod update {
     use common_meta_types::AuthInfo;
-    use common_meta_types::AuthInfoArgs;
-    use common_meta_types::AuthType;
     use common_meta_types::UserInfo;
 
     use super::*;
@@ -486,19 +484,6 @@ mod update {
             } else {
                 PasswordType::DoubleSha1
             },
-        }
-    }
-
-    fn new_test_auth_info_args(full: bool) -> AuthInfoArgs {
-        let arg_with = if full {
-            Some(AuthType::Sha256Password)
-        } else {
-            Some(AuthType::DoubleShaPassword)
-        };
-
-        AuthInfoArgs {
-            arg_with,
-            arg_by: Some("test_password_new".to_string()),
         }
     }
 
@@ -561,7 +546,7 @@ mod update {
         let res = user_mgr.update_user(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            new_test_auth_info_args(full),
+            new_test_auth_info(full),
             test_seq,
         );
 
@@ -593,7 +578,7 @@ mod update {
         let res = user_mgr.update_user(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            new_test_auth_info_args(false),
+            new_test_auth_info(false),
             test_seq,
         );
         assert_eq!(
@@ -644,7 +629,7 @@ mod update {
         let res = user_mgr.update_user(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            new_test_auth_info_args(true),
+            new_test_auth_info(true),
             test_seq,
         );
         assert_eq!(

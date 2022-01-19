@@ -17,14 +17,10 @@
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::str::FromStr;
 use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_io::prelude::OptionsDeserializer;
-use common_meta_types::AuthInfo;
-use common_meta_types::AuthInfoArgs;
-use common_meta_types::AuthType;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
 use common_meta_types::StageParams;
@@ -58,6 +54,7 @@ use super::statements::DfCopy;
 use super::statements::DfDescribeStage;
 use crate::sql::statements::DfAlterUDF;
 use crate::sql::statements::DfAlterUser;
+use crate::sql::statements::DfAuthOption;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateStage;
 use crate::sql::statements::DfCreateTable;
@@ -695,18 +692,13 @@ impl<'a> DfParser<'a> {
             String::from("%")
         };
 
-        let auth_info_args = self.get_auth_info_args()?;
-
-        let auth_info = match auth_info_args {
-            None => AuthInfo::None,
-            Some(a) => a.create_auth_info().map_err(ParserError::ParserError)?,
-        };
+        let auth_option = self.parse_auth_option()?;
 
         let create = DfCreateUser {
             if_not_exists,
             name,
             hostname,
-            auth_info,
+            auth_options: auth_option,
         };
 
         Ok(DfStatement::CreateUser(create))
@@ -730,13 +722,14 @@ impl<'a> DfParser<'a> {
         } else {
             String::from("")
         };
-        let auth_info_args_opt = self.get_auth_info_args()?;
+
+        let auth_option = self.parse_auth_option()?;
 
         let alter = DfAlterUser {
             if_current_user,
             name,
             hostname,
-            auth_info_args: auth_info_args_opt,
+            auth_option,
         };
 
         Ok(DfStatement::AlterUser(alter))
@@ -758,51 +751,36 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::DropUser(drop))
     }
 
-    fn get_auth_info_args(&mut self) -> Result<Option<AuthInfoArgs>, ParserError> {
-        let exist_not_identified = self.parser.parse_keyword(Keyword::NOT);
+    fn parse_auth_option(&mut self) -> Result<DfAuthOption, ParserError> {
+        let exist_not = self.parser.parse_keyword(Keyword::NOT);
         let exist_identified = self.consume_token("IDENTIFIED");
 
-        if exist_not_identified {
+        if exist_not {
             if !exist_identified {
                 parser_err!("expect IDENTIFIED after NOT")
             } else {
-                Ok(Some(AuthInfoArgs {
-                    arg_with: Some(AuthType::NoPassword),
-                    arg_by: None,
-                }))
+                Ok(DfAuthOption::no_password())
             }
         } else if !exist_identified {
-            Ok(None)
+            Ok(DfAuthOption::default())
         } else {
             let arg_with = if self.consume_token("WITH") {
-                Some(
-                    AuthType::from_str(&self.parser.parse_literal_string()?)
-                        .map_err(ParserError::ParserError)?,
-                )
+                Some(self.parser.parse_literal_string()?)
             } else {
                 None
             };
-
-            match arg_with {
-                Some(AuthType::NoPassword) => Ok(Some(AuthInfoArgs {
-                    arg_with: Some(AuthType::NoPassword),
-                    arg_by: None,
-                })),
-                _ => {
-                    if self.parser.parse_keyword(Keyword::BY) {
-                        let arg_by = self.parser.parse_literal_string()?;
-                        if arg_by.is_empty() {
-                            parser_err!("Missing password")
-                        } else {
-                            Ok(Some(AuthInfoArgs {
-                                arg_with,
-                                arg_by: Some(arg_by),
-                            }))
-                        }
-                    } else {
-                        parser_err!("Expected keyword BY")
-                    }
-                }
+            if arg_with == Some("no_password".to_string()) {
+                Ok(DfAuthOption::no_password())
+            } else {
+                let auth_string = if self.parser.parse_keyword(Keyword::BY) {
+                    Some(self.parser.parse_literal_string()?)
+                } else {
+                    None
+                };
+                Ok(DfAuthOption {
+                    plugin: arg_with,
+                    by_value: auth_string,
+                })
             }
         }
     }

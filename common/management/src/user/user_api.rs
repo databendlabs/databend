@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_meta_types::AuthInfoArgs;
+use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::SeqV;
 use common_meta_types::UserInfo;
@@ -36,7 +36,7 @@ pub trait UserMgrApi: Sync + Send {
         &self,
         username: String,
         hostname: String,
-        auth_info_args: AuthInfoArgs,
+        auth_info_args: AuthInfo,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 

@@ -14,12 +14,13 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::AuthInfoArgs;
 use common_planners::AlterUserPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 
+use super::statement_create_user::DfAuthOption;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -31,19 +32,37 @@ pub struct DfAlterUser {
     pub name: String,
     pub hostname: String,
     // None means no change to make
-    pub auth_info_args: Option<AuthInfoArgs>,
+    pub auth_option: DfAuthOption,
 }
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfAlterUser {
-    #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
-    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+        let user_info = if self.if_current_user {
+            ctx.get_current_user()?
+        } else {
+            ctx.get_user_manager()
+                .get_user(&ctx.get_tenant(), &self.name, &self.hostname)
+                .await?
+        };
+
+        let new_auth_info = user_info
+            .auth_info
+            .alter(&self.auth_option.plugin, &self.auth_option.by_value)
+            .map_err(ErrorCode::SyntaxException)?;
+
+        let new_auth_info = if user_info.auth_info == new_auth_info {
+            None
+        } else {
+            Some(new_auth_info)
+        };
+
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::AlterUser(
             AlterUserPlan {
-                if_current_user: self.if_current_user,
-                name: self.name.clone(),
-                hostname: self.hostname.clone(),
-                auth_info_args: self.auth_info_args.clone(),
+                name: user_info.name.clone(),
+                hostname: user_info.hostname,
+                auth_info: new_auth_info,
             },
         ))))
     }

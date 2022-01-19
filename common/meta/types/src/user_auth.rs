@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 // Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -94,6 +96,51 @@ fn double_sha1(v: &[u8]) -> [u8; 20] {
 }
 
 impl AuthInfo {
+    fn new(auth_type: AuthType, auth_string: &Option<String>) -> Result<AuthInfo, String> {
+        match auth_type {
+            AuthType::NoPassword => Ok(AuthInfo::None),
+            AuthType::PlaintextPassword
+            | AuthType::Sha256Password
+            | AuthType::DoubleShaPassword => {
+                match auth_string {
+                    Some(p) => Ok(AuthInfo::Password {
+                        password: Vec::from(p.to_string()),
+                        // safe unwrap
+                        password_type: auth_type.get_password_type().unwrap(),
+                    }),
+                    None => Err("need password".to_string()),
+                }
+            }
+        }
+    }
+
+    pub fn create(
+        auth_type: &Option<String>,
+        auth_string: &Option<String>,
+    ) -> Result<AuthInfo, String> {
+        let default = AuthType::Sha256Password;
+        let auth_type = auth_type
+            .clone()
+            .map(|s| AuthType::from_str(&s))
+            .transpose()?
+            .unwrap_or(default);
+        AuthInfo::new(auth_type, auth_string)
+    }
+
+    pub fn alter(
+        &self,
+        auth_type: &Option<String>,
+        auth_string: &Option<String>,
+    ) -> Result<AuthInfo, String> {
+        let old_auth_type = self.get_type();
+        let new_auth_type = auth_type
+            .clone()
+            .map(|s| AuthType::from_str(&s))
+            .transpose()?
+            .unwrap_or(old_auth_type);
+        AuthInfo::new(new_auth_type, auth_string)
+    }
+
     pub fn get_type(&self) -> AuthType {
         match self {
             AuthInfo::None => AuthType::NoPassword,
@@ -185,46 +232,6 @@ impl AuthInfo {
                 // TODO(youngsofun): we should store password hash later
             } => Ok(p == password_input_plaintext),
         }
-    }
-}
-
-#[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq)]
-pub struct AuthInfoArgs {
-    pub arg_with: Option<AuthType>,
-    pub arg_by: Option<String>,
-}
-
-impl AuthInfoArgs {
-    pub fn create_auth_info(&self) -> Result<AuthInfo, String> {
-        // 'by' without 'with' means default auth_type
-        let default = AuthType::Sha256Password;
-        let auth_type = self.arg_with.clone().unwrap_or(default);
-        match auth_type {
-            AuthType::NoPassword => Ok(AuthInfo::None),
-            AuthType::PlaintextPassword
-            | AuthType::Sha256Password
-            | AuthType::DoubleShaPassword => {
-                match &self.arg_by {
-                    Some(p) => Ok(AuthInfo::Password {
-                        password: Vec::from(p.to_string()),
-                        // safe unwrap
-                        password_type: auth_type.get_password_type().unwrap(),
-                    }),
-                    None => Err("need password".to_string()),
-                }
-            }
-        }
-    }
-
-    pub fn alter_auth_info(self, auth_info: &AuthInfo) -> Result<AuthInfo, String> {
-        // 'by' without 'with' means old auth_type
-        let old_auth_type = auth_info.clone().get_type();
-        let new_auth_type = self.arg_with.clone().unwrap_or(old_auth_type);
-        AuthInfoArgs {
-            arg_with: Some(new_auth_type),
-            arg_by: self.arg_by,
-        }
-        .create_auth_info()
     }
 }
 

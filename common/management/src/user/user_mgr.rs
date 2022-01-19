@@ -18,7 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_meta_api::KVApi;
-use common_meta_types::AuthInfoArgs;
+use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
@@ -150,19 +150,12 @@ impl UserMgrApi for UserMgr {
         &self,
         username: String,
         hostname: String,
-        auth_info_args: AuthInfoArgs,
+        new_auth_info: AuthInfo,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
         let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
         let user_info = user_val_seq.await?.data;
 
-        let new_auth_info = auth_info_args
-            .alter_auth_info(&user_info.auth_info)
-            .map_err(ErrorCode::AuthenticateFailure)?;
-
-        if new_auth_info == user_info.auth_info {
-            return Ok(seq);
-        }
         let mut new_user_info = UserInfo::new(username.clone(), hostname.clone(), new_auth_info);
         new_user_info.grants = user_info.grants;
 

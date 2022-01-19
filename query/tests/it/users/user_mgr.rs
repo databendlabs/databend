@@ -15,8 +15,6 @@
 use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
-use common_meta_types::AuthInfoArgs;
-use common_meta_types::AuthType;
 use common_meta_types::GrantObject;
 use common_meta_types::PasswordType;
 use common_meta_types::UserGrantSet;
@@ -169,12 +167,14 @@ async fn test_user_manager() -> Result<()> {
         let old_user = user_mgr.get_user(tenant, user, hostname).await?;
         assert_eq!(old_user.auth_info.get_password().unwrap(), Vec::from(pwd));
 
+        // alter both password & password_type
         let new_pwd = "test1";
+        let auth_info = AuthInfo::Password {
+            password: Vec::from(new_pwd),
+            password_type: PasswordType::Sha256,
+        };
         user_mgr
-            .update_user(tenant, user, hostname, AuthInfoArgs {
-                arg_with: Some(AuthType::Sha256Password),
-                arg_by: Some(new_pwd.to_string()),
-            })
+            .update_user(tenant, user, hostname, auth_info)
             .await?;
         let new_user = user_mgr.get_user(tenant, user, hostname).await?;
         assert_eq!(
@@ -186,12 +186,14 @@ async fn test_user_manager() -> Result<()> {
             PasswordType::Sha256
         );
 
+        // alter password only
         let new_new_pwd = "test2";
+        let auth_info = AuthInfo::Password {
+            password: Vec::from(new_new_pwd),
+            password_type: PasswordType::Sha256,
+        };
         user_mgr
-            .update_user(tenant, user, hostname, AuthInfoArgs {
-                arg_with: Some(AuthType::Sha256Password),
-                arg_by: Some(new_new_pwd.to_string()),
-            })
+            .update_user(tenant, user, hostname, auth_info.clone())
             .await?;
         let new_new_user = user_mgr.get_user(tenant, user, hostname).await?;
         assert_eq!(
@@ -200,10 +202,7 @@ async fn test_user_manager() -> Result<()> {
         );
 
         let not_exist = user_mgr
-            .update_user(tenant, "user", hostname, AuthInfoArgs {
-                arg_with: Some(AuthType::Sha256Password),
-                arg_by: Some(new_new_pwd.to_string()),
-            })
+            .update_user(tenant, "user", hostname, auth_info.clone())
             .await;
         // ErrorCode::UnknownUser
         assert_eq!(not_exist.err().unwrap().code(), 2201)

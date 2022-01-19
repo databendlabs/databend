@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_planners::CreateUserPlan;
@@ -24,13 +25,28 @@ use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DfAuthOption {
+    pub plugin: Option<String>,
+    pub by_value: Option<String>,
+}
+
+impl DfAuthOption {
+    pub fn no_password() -> Self {
+        DfAuthOption {
+            plugin: Some("no_password".to_string()),
+            by_value: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfCreateUser {
     pub if_not_exists: bool,
     /// User name
     pub name: String,
     pub hostname: String,
-    pub auth_info: AuthInfo,
+    pub auth_options: DfAuthOption,
 }
 
 #[async_trait::async_trait]
@@ -41,7 +57,8 @@ impl AnalyzableStatement for DfCreateUser {
             CreateUserPlan {
                 name: self.name.clone(),
                 hostname: self.hostname.clone(),
-                auth_info: self.auth_info.clone(),
+                auth_info: AuthInfo::create(&self.auth_options.plugin, &self.auth_options.by_value)
+                    .map_err(ErrorCode::SyntaxException)?,
             },
         ))))
     }
