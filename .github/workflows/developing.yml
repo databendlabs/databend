@@ -47,7 +47,7 @@ jobs:
 
   test_unit:
     runs-on: ${{ matrix.config.os }}
-    needs: build
+    needs: check
     strategy:
       matrix:
         config:
