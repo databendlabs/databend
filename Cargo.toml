@@ -40,6 +40,10 @@ members = [
     # CLI
     "cli",
 
+    # Tests
+    "tests/integration",
+    "tests/framework",
+
     # Tools
     "tools/fuzz",
     "tools/benchmark",
