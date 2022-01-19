@@ -19,10 +19,12 @@ use common_base::tokio;
 use common_exception::ErrorCode;
 use common_management::*;
 use common_meta_api::KVApi;
+use common_meta_types::AuthInfo;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
+use common_meta_types::PasswordType;
 use common_meta_types::PrefixListReply;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
@@ -55,9 +57,15 @@ fn format_user_key(username: &str, hostname: &str) -> String {
     format!("'{}'@'{}'", username, hostname)
 }
 
+fn default_test_auth_info() -> AuthInfo {
+    AuthInfo::Password {
+        password: Vec::from("test_password"),
+        password_type: PasswordType::DoubleSha1,
+    }
+}
+
 mod add {
     use common_meta_types::Operation;
-    use common_meta_types::PasswordType;
     use common_meta_types::UserInfo;
 
     use super::*;
@@ -65,14 +73,11 @@ mod add {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_add_user() -> common_exception::Result<()> {
         let test_user_name = "test_user";
-        let test_password = "test_password";
         let test_hostname = "localhost";
-        let password_type = PasswordType::Sha256;
         let user_info = UserInfo::new(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            Vec::from(test_password),
-            password_type.clone(),
+            default_test_auth_info(),
         );
         let v = serde_json::to_vec(&user_info)?;
         let value = Operation::Update(serde_json::to_vec(&user_info)?);
@@ -128,8 +133,7 @@ mod add {
             let user_info = UserInfo::new(
                 test_user_name.to_string(),
                 test_hostname.to_string(),
-                Vec::from(test_password),
-                password_type.clone(),
+                default_test_auth_info(),
             );
 
             let res = user_mgr.add_user(user_info).await;
@@ -159,8 +163,7 @@ mod add {
             let user_info = UserInfo::new(
                 test_user_name.to_string(),
                 test_hostname.to_string(),
-                Vec::from(test_password),
-                password_type,
+                default_test_auth_info(),
             );
 
             let res = user_mgr.add_user(user_info).await;
@@ -175,7 +178,6 @@ mod add {
 }
 
 mod get {
-    use common_meta_types::PasswordType;
     use common_meta_types::UserInfo;
 
     use super::*;
@@ -192,8 +194,7 @@ mod get {
         let user_info = UserInfo::new(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            Vec::from("pass"),
-            PasswordType::Sha256,
+            default_test_auth_info(),
         );
         let value = serde_json::to_vec(&user_info)?;
 
@@ -227,8 +228,7 @@ mod get {
         let user_info = UserInfo::new(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            Vec::from("pass"),
-            PasswordType::Sha256,
+            default_test_auth_info(),
         );
         let value = serde_json::to_vec(&user_info)?;
 
@@ -327,7 +327,6 @@ mod get {
 }
 
 mod get_users {
-    use common_meta_types::PasswordType;
     use common_meta_types::UserInfo;
 
     use super::*;
@@ -341,6 +340,7 @@ mod get_users {
         let mut keys = vec![];
         let mut res = vec![];
         let mut user_infos = vec![];
+
         for i in 0..9 {
             let name = format!("test_user_{}", i);
             names.push(name.clone());
@@ -349,7 +349,8 @@ mod get_users {
 
             let key = format!("tenant1/{}", format_user_key(&name, &hostname));
             keys.push(key);
-            let user_info = UserInfo::new(name, hostname, Vec::from("pass"), PasswordType::Sha256);
+
+            let user_info = UserInfo::new(name, hostname, default_test_auth_info());
             res.push((
                 "fake_key".to_string(),
                 SeqV::new(i, serde_json::to_vec(&user_info)?),
@@ -470,29 +471,46 @@ mod drop {
 }
 
 mod update {
-    use common_meta_types::PasswordType;
+    use common_meta_types::AuthInfo;
     use common_meta_types::UserInfo;
 
     use super::*;
 
+    fn new_test_auth_info(full: bool) -> AuthInfo {
+        AuthInfo::Password {
+            password: Vec::from("test_password_new"),
+            password_type: if full {
+                PasswordType::Sha256
+            } else {
+                PasswordType::DoubleSha1
+            },
+        }
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_update_user_normal_partial_update() -> common_exception::Result<()> {
+    async fn test_update_user_normal_update_full() -> common_exception::Result<()> {
+        test_update_user_normal(true).await
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_update_user_normal_update_partial() -> common_exception::Result<()> {
+        test_update_user_normal(false).await
+    }
+
+    async fn test_update_user_normal(full: bool) -> common_exception::Result<()> {
         let test_user_name = "name";
         let test_hostname = "localhost";
+
         let test_key = format!(
             "__fd_users/tenant1/{}",
             format_user_key(test_user_name, test_hostname)
         );
         let test_seq = None;
 
-        let old_pass = "old_key";
-        let old_password_type = PasswordType::DoubleSha1;
-
         let user_info = UserInfo::new(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            Vec::from(old_pass),
-            old_password_type,
+            default_test_auth_info(),
         );
         let prev_value = serde_json::to_vec(&user_info)?;
 
@@ -507,13 +525,10 @@ mod update {
         }
 
         // and then, update_kv should be called
-
-        let new_pass = "new pass";
         let new_user_info = UserInfo::new(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            Vec::from(new_pass),
-            PasswordType::DoubleSha1,
+            new_test_auth_info(full),
         );
         let new_value_with_old_salt = serde_json::to_vec(&new_user_info)?;
 
@@ -533,100 +548,10 @@ mod update {
         let res = user_mgr.update_user(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            Some(new_user_info.password),
-            None,
+            new_test_auth_info(full),
             test_seq,
         );
 
-        assert!(res.await.is_ok());
-        Ok(())
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_update_user_normal_full_update() -> common_exception::Result<()> {
-        let test_user_name = "name";
-        let test_hostname = "localhost";
-        let test_key = format!(
-            "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
-        );
-        let test_seq = None;
-
-        let old_pass = "old_key";
-        let old_password_type = PasswordType::DoubleSha1;
-
-        let user_info = UserInfo::new(
-            test_user_name.to_string(),
-            test_hostname.to_string(),
-            Vec::from(old_pass),
-            old_password_type,
-        );
-        let prev_value = serde_json::to_vec(&user_info)?;
-
-        // - get_kv should be called
-        let mut kv = MockKV::new();
-        {
-            let test_key = test_key.clone();
-            kv.expect_get_kv()
-                .with(predicate::function(move |v| v == test_key.as_str()))
-                .times(1)
-                .return_once(move |_k| Ok(Some(SeqV::new(0, prev_value))));
-        }
-        // - update_kv should be called
-
-        let new_pass = "new_pass";
-        let new_password_type = PasswordType::Sha256;
-
-        let new_user_info = UserInfo::new(
-            test_user_name.to_string(),
-            test_hostname.to_string(),
-            Vec::from(new_pass),
-            new_password_type.clone(),
-        );
-        let new_value = serde_json::to_vec(&new_user_info)?;
-
-        kv.expect_upsert_kv()
-            .with(predicate::eq(UpsertKVAction::new(
-                &test_key,
-                MatchSeq::GE(1),
-                Operation::Update(new_value),
-                None,
-            )))
-            .times(1)
-            .return_once(|_| Ok(UpsertKVActionReply::new(None, Some(SeqV::new(0, vec![])))));
-
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
-
-        let res = user_mgr.update_user(
-            test_user_name.to_string(),
-            test_hostname.to_string(),
-            Some(new_user_info.password),
-            Some(new_password_type),
-            test_seq,
-        );
-        assert!(res.await.is_ok());
-        Ok(())
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_update_user_none_update() -> common_exception::Result<()> {
-        // mock kv expects nothing
-        let test_name = "name";
-        let test_hostname = "localhost";
-        let kv = MockKV::new();
-
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
-
-        let new_password: Option<Vec<u8>> = None;
-        let res = user_mgr.update_user(
-            test_name.to_string(),
-            test_hostname.to_string(),
-            new_password,
-            None,
-            None,
-        );
         assert!(res.await.is_ok());
         Ok(())
     }
@@ -655,8 +580,7 @@ mod update {
         let res = user_mgr.update_user(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            Some(Vec::from("new_pass".as_bytes())),
-            None,
+            new_test_auth_info(false),
             test_seq,
         );
         assert_eq!(
@@ -676,14 +600,10 @@ mod update {
         );
         let test_seq = None;
 
-        let old_pass = "old_key";
-        let old_password_type = PasswordType::DoubleSha1;
-
         let user_info = UserInfo::new(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            Vec::from(old_pass),
-            old_password_type,
+            default_test_auth_info(),
         );
         let prev_value = serde_json::to_vec(&user_info)?;
 
@@ -711,8 +631,7 @@ mod update {
         let res = user_mgr.update_user(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            Some(Vec::from("new_pass".as_bytes())),
-            Some(PasswordType::Sha256),
+            new_test_auth_info(true),
             test_seq,
         );
         assert_eq!(
@@ -725,7 +644,6 @@ mod update {
 
 mod set_user_privileges {
     use common_meta_types::GrantObject;
-    use common_meta_types::PasswordType;
     use common_meta_types::UserInfo;
     use common_meta_types::UserPrivilegeSet;
     use common_meta_types::UserPrivilegeType;
@@ -745,8 +663,7 @@ mod set_user_privileges {
         let mut user_info = UserInfo::new(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            Vec::from("pass"),
-            PasswordType::DoubleSha1,
+            default_test_auth_info(),
         );
         let prev_value = serde_json::to_vec(&user_info)?;
 

@@ -1886,6 +1886,7 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
+ "sha1",
  "thiserror",
  "tonic",
  "tonic-build",

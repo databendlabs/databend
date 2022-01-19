@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_exception::Result;
+use common_meta_types::AuthInfo;
 use common_meta_types::PasswordType;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
@@ -31,22 +32,25 @@ async fn test_users_table() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
     let tenant = ctx.get_tenant();
     ctx.get_settings().set_max_threads(2)?;
+    let auth_data = AuthInfo::None;
     ctx.get_user_manager()
         .add_user(&tenant, UserInfo {
+            auth_info: auth_data,
             name: "test".to_string(),
             hostname: "localhost".to_string(),
-            password: Vec::from(""),
-            password_type: PasswordType::None,
             grants: UserGrantSet::empty(),
             quota: UserQuota::no_limit(),
         })
         .await?;
+    let auth_data = AuthInfo::Password {
+        password: Vec::from("123456789"),
+        password_type: PasswordType::PlainText,
+    };
     ctx.get_user_manager()
         .add_user(&tenant, UserInfo {
+            auth_info: auth_data,
             name: "test1".to_string(),
             hostname: "%".to_string(),
-            password: Vec::from("123456789"),
-            password_type: PasswordType::PlainText,
             grants: UserGrantSet::empty(),
             quota: UserQuota::no_limit(),
         })
@@ -61,12 +65,12 @@ async fn test_users_table() -> Result<()> {
     assert_eq!(block.num_columns(), 4);
 
     let expected = vec![
-        "+-------+-----------+-----------+---------------+",
-        "| name  | hostname  | password  | password_type |",
-        "+-------+-----------+-----------+---------------+",
-        "| test  | localhost |           | 0             |",
-        "| test1 | %         | 123456789 | 1             |",
-        "+-------+-----------+-----------+---------------+",
+        "+-------+-----------+-----------+--------------------+",
+        "| name  | hostname  | password  | auth_type          |",
+        "+-------+-----------+-----------+--------------------+",
+        "| test  | localhost |           | no_password        |",
+        "| test1 | %         | 123456789 | plaintext_password |",
+        "+-------+-----------+-----------+--------------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     Ok(())

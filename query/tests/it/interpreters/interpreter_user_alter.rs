@@ -14,6 +14,7 @@
 
 use common_base::tokio;
 use common_exception::Result;
+use common_meta_types::AuthInfo;
 use common_meta_types::PasswordType;
 use common_meta_types::UserInfo;
 use databend_query::interpreters::*;
@@ -32,17 +33,20 @@ async fn test_alter_user_interpreter() -> Result<()> {
     let hostname = "localhost";
     let password = "test";
     let new_password = "password";
-    let user_info = UserInfo::new(
-        name.to_string(),
-        hostname.to_string(),
-        Vec::from(password),
-        PasswordType::PlainText,
-    );
+    let auth_info = AuthInfo::Password {
+        password: Vec::from(password),
+        password_type: PasswordType::PlainText,
+    };
+
+    let user_info = UserInfo::new(name.to_string(), hostname.to_string(), auth_info);
     let user_mgr = ctx.get_user_manager();
     user_mgr.add_user("", user_info).await?;
 
     let old_user = user_mgr.get_user(&tenant, name, hostname).await?;
-    assert_eq!(old_user.password, Vec::from(password));
+    assert_eq!(
+        old_user.auth_info.get_password().unwrap(),
+        Vec::from(password)
+    );
 
     let test_query = format!(
         "ALTER USER '{}'@'{}' IDENTIFIED BY '{}'",
@@ -55,7 +59,10 @@ async fn test_alter_user_interpreter() -> Result<()> {
     let mut stream = executor.execute(None).await?;
     while let Some(_block) = stream.next().await {}
     let new_user = user_mgr.get_user(&tenant, name, hostname).await?;
-    assert_eq!(new_user.password, Vec::from(new_password));
+    assert_eq!(
+        new_user.auth_info.get_password(),
+        Some(Vec::from(new_password))
+    );
 
     Ok(())
 }

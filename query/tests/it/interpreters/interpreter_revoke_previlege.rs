@@ -14,6 +14,7 @@
 
 use common_base::tokio;
 use common_exception::Result;
+use common_meta_types::AuthInfo;
 use common_meta_types::PasswordType;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
@@ -32,12 +33,11 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
     let name = "test";
     let hostname = "localhost";
     let password = "test";
-    let user_info = UserInfo::new(
-        name.to_string(),
-        hostname.to_string(),
-        Vec::from(password),
-        PasswordType::PlainText,
-    );
+    let auth_info = AuthInfo::Password {
+        password: Vec::from(password),
+        password_type: PasswordType::PlainText,
+    };
+    let user_info = UserInfo::new(name.to_string(), hostname.to_string(), auth_info);
     assert_eq!(user_info.grants, UserGrantSet::empty());
     let user_mgr = ctx.get_user_manager();
     user_mgr.add_user(&tenant, user_info).await?;
