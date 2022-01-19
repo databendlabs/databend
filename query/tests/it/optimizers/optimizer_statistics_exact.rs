@@ -28,8 +28,12 @@ fn test_statistics_exact_optimizer() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
     let total = ctx.get_settings().get_max_block_size()? as u64;
-    let statistics =
-        Statistics::new_exact(total as usize, ((total) * size_of::<u64>() as u64) as usize);
+    let statistics = Statistics::new_exact(
+        total as usize,
+        ((total) * size_of::<u64>() as u64) as usize,
+        total as usize,
+        total as usize,
+    );
     ctx.try_set_statistics(&statistics)?;
     let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
         table_info: TableInfo::simple(

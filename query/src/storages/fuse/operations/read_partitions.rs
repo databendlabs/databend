@@ -39,14 +39,24 @@ impl FuseTable {
         match snapshot {
             Some(snapshot) => {
                 let schema = self.table_info.schema();
-                ctx.get_dal_context()
-                    .inc_partitions_total(snapshot.summary.block_count as usize);
                 let block_metas = BlockPruner::new(&snapshot)
                     .apply(schema, &push_downs, ctx.as_ref())
                     .await?;
+
+                let partitions_scanned = block_metas.len();
+                let partitions_total = snapshot.summary.block_count as usize;
+
+                let (mut statistics, parts) = Self::to_partitions(&block_metas, push_downs);
+
+                // Update planner statistics.
+                statistics.partitions_total = partitions_total;
+                statistics.partitions_scanned = partitions_scanned;
+
+                // Update context statistics.
+                ctx.get_dal_context().inc_partitions_total(partitions_total);
                 ctx.get_dal_context()
-                    .inc_partitions_scanned(block_metas.len());
-                let (statistics, parts) = Self::to_partitions(&block_metas, push_downs);
+                    .inc_partitions_scanned(partitions_scanned);
+
                 Ok((statistics, parts))
             }
             None => Ok((Statistics::default(), vec![])),

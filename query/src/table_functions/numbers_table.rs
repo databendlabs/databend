@@ -124,6 +124,8 @@ impl Table for NumbersTable {
         let statistics = Statistics::new_exact(
             self.total as usize,
             ((self.total) * size_of::<u64>() as u64) as usize,
+            self.total as usize,
+            self.total as usize,
         );
         let parts =
             generate_block_parts(0, ctx.get_settings().get_max_threads()? as u64, self.total);
