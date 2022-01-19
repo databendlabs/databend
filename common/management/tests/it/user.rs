@@ -491,10 +491,12 @@ mod update {
     async fn test_update_user_normal_update_full() -> common_exception::Result<()> {
         test_update_user_normal(true).await
     }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_update_user_normal_update_partial() -> common_exception::Result<()> {
         test_update_user_normal(false).await
     }
+
     async fn test_update_user_normal(full: bool) -> common_exception::Result<()> {
         let test_user_name = "name";
         let test_hostname = "localhost";
