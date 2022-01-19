@@ -32,6 +32,8 @@ pub struct DalMetrics {
     pub write_rows: usize,
     /// Number of partitions scanned
     pub partitions_scanned: usize,
+    /// Number of partitions, before pruning
+    pub partitions_total: usize,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -97,6 +99,14 @@ impl DalContext {
         if partitions > 0 {
             let mut metrics = self.metrics.write();
             metrics.partitions_scanned += partitions;
+        }
+    }
+
+    //// Increment numbers of partitions (before pruning)
+    pub fn inc_partitions_total(&self, partitions: usize) {
+        if partitions > 0 {
+            let mut metrics = self.metrics.write();
+            metrics.partitions_total += partitions;
         }
     }
 
