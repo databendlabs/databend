@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+use std::sync::RwLock;
+
 use common_arrow::arrow::bitmap::utils::BitmapIter;
 use common_arrow::arrow::bitmap::MutableBitmap;
 
@@ -28,6 +31,8 @@ impl NewColumn<bool> for BooleanColumn {
         let bitmap = MutableBitmap::from_iter(slice.as_ref().iter().cloned());
         BooleanColumn {
             values: bitmap.into(),
+            data_cached: Arc::new(RwLock::new(false)),
+            data: Arc::new(Vec::new()),
         }
     }
 
@@ -35,6 +40,8 @@ impl NewColumn<bool> for BooleanColumn {
         let bitmap = MutableBitmap::from_iter(it);
         BooleanColumn {
             values: bitmap.into(),
+            data_cached: Arc::new(RwLock::new(false)),
+            data: Arc::new(Vec::new()),
         }
     }
 }

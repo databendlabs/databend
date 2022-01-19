@@ -17,6 +17,22 @@ use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 #[test]
+fn test_boolean_wrapper() -> Result<()> {
+    let column = Series::from_data(vec![true, true, false, false]);
+    let wrapper = ColumnViewer::<bool>::create(&column)?;
+
+    assert_eq!(wrapper.len(), 4);
+    assert!(!wrapper.null_at(0));
+    for i in 0..2 {
+        assert!(*wrapper.value(i));
+    }
+    for i in 2..4 {
+        assert!(!*wrapper.value(i));
+    }
+    Ok(())
+}
+
+#[test]
 fn test_primitive_wrapper() -> Result<()> {
     let column = Series::from_data(vec![1i8, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     let wrapper = ColumnViewer::<i8>::create(&column)?;

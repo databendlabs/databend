@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+use std::sync::RwLock;
+
 use common_arrow::arrow::bitmap::MutableBitmap;
 
 use crate::columns::mutable::MutableColumn;
@@ -44,6 +47,8 @@ impl MutableColumn<bool, BooleanColumn> for MutableBooleanColumn {
         self.shrink_to_fit();
         BooleanColumn {
             values: std::mem::take(&mut self.values).into(),
+            data_cached: Arc::new(RwLock::new(false)),
+            data: Arc::new(Vec::new()),
         }
     }
 
@@ -95,6 +100,8 @@ impl MutableBooleanColumn {
         self.shrink_to_fit();
         BooleanColumn {
             values: std::mem::take(&mut self.values).into(),
+            data_cached: Arc::new(RwLock::new(false)),
+            data: Arc::new(Vec::new()),
         }
     }
 }

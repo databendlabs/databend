@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
@@ -29,12 +30,16 @@ pub use mutable::*;
 #[derive(Debug, Clone)]
 pub struct BooleanColumn {
     values: Bitmap,
+    data_cached: Arc<RwLock<bool>>,
+    data: Arc<Vec<bool>>,
 }
 
 impl From<BooleanArray> for BooleanColumn {
     fn from(array: BooleanArray) -> Self {
         Self {
             values: array.values().clone(),
+            data_cached: Arc::new(RwLock::new(false)),
+            data: Arc::new(Vec::new()),
         }
     }
 }
@@ -43,6 +48,8 @@ impl BooleanColumn {
     pub fn new(array: BooleanArray) -> Self {
         Self {
             values: array.values().clone(),
+            data_cached: Arc::new(RwLock::new(false)),
+            data: Arc::new(Vec::new()),
         }
     }
 
@@ -66,6 +73,24 @@ impl BooleanColumn {
 
     pub fn values(&self) -> &Bitmap {
         &self.values
+    }
+
+    fn build_data(&self) {
+        let mut data_cached = self.data_cached.write().unwrap();
+        if !*data_cached {
+            unsafe {
+                let x_ptr = Arc::as_ptr(&self.data);
+                let x_ptr = x_ptr as *mut Vec<bool>;
+                std::ptr::drop_in_place(x_ptr);
+
+                let mut new_data = Vec::with_capacity(self.values.len());
+                for i in 0..self.values().len() {
+                    new_data.push(self.values.get_bit(i));
+                }
+                *x_ptr = new_data;
+            }
+        }
+        *data_cached = true;
     }
 }
 
@@ -99,6 +124,8 @@ impl Column for BooleanColumn {
         unsafe {
             Arc::new(Self {
                 values: self.values.clone().slice_unchecked(offset, length),
+                data_cached: Arc::new(RwLock::new(false)),
+                data: Arc::new(Vec::new()),
             })
         }
     }
@@ -135,5 +162,14 @@ impl Column for BooleanColumn {
 
     unsafe fn get_unchecked(&self, index: usize) -> DataValue {
         DataValue::Boolean(self.values.get_bit(index))
+    }
+}
+
+impl GetDatas<bool> for BooleanColumn {
+    fn get_data(&self) -> &[bool] {
+        if !*self.data_cached.read().unwrap() {
+            self.build_data();
+        }
+        self.data.as_slice()
     }
 }
