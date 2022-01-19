@@ -16,7 +16,7 @@ use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
-use common_meta_types::PasswordType;
+use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
@@ -36,8 +36,8 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
     let hostname = "localhost";
     let password = "test";
     let auth_info = AuthInfo::Password {
-        password: Vec::from(password),
-        password_type: PasswordType::PlainText,
+        hash_value: Vec::from(password),
+        hash_method: PasswordHashMethod::PlainText,
     };
     let user_info = UserInfo::new(name.to_string(), hostname.to_string(), auth_info);
     assert_eq!(user_info.grants, UserGrantSet::empty());

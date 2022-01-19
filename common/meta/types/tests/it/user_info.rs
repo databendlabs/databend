@@ -14,7 +14,7 @@
 
 use common_exception::exception::Result;
 use common_meta_types::AuthInfo;
-use common_meta_types::PasswordType;
+use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
 
 #[test]
@@ -34,8 +34,8 @@ fn test_user_info() -> Result<()> {
         name: "old-name".to_string(),
         hostname: "old-host".to_string(),
         auth_info: AuthInfo::Password {
-            password: Vec::from("pwd"),
-            password_type: PasswordType::Sha256,
+            hash_value: Vec::from("pwd"),
+            hash_method: PasswordHashMethod::Sha256,
         },
     };
 
@@ -46,8 +46,8 @@ fn test_user_info() -> Result<()> {
         "old-name".to_string(),
         "old-host".to_string(),
         AuthInfo::Password {
-            password: Vec::from("pwd"),
-            password_type: PasswordType::Sha256,
+            hash_value: Vec::from("pwd"),
+            hash_method: PasswordHashMethod::Sha256,
         },
     );
     assert_eq!(new, expect);
