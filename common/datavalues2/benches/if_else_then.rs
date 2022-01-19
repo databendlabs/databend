@@ -28,7 +28,7 @@ fn add_benchmark(c: &mut Criterion) {
     let size = 1048576;
     let lhs: ArrayRef = Arc::new(create_primitive_array::<i32>(size, 0.2));
     let rhs: ArrayRef = Arc::new(create_primitive_array::<i32>(size, 0.3));
-    let ifs: ArrayRef = Arc::new(create_boolean_array(size, 0.1, 0.3));
+    let ifs: ArrayRef = Arc::new(create_boolean_array(size, 0.0, 0.3));
 
     c.bench_function("arrow2_if_else_then", |b| {
         b.iter(|| criterion::black_box(arrow2_if_else_then(&lhs, &rhs, &ifs)))
@@ -94,7 +94,7 @@ fn databend_if_else_then(
         let rhs_wrapper = ColumnViewer::<$T>::create(rhs)?;
         let size = lhs_wrapper.len();
 
-        let mut builder = ColumnBuilder::<$T>::with_capacity(size);
+        let mut builder = NullableColumnBuilder::<$T>::with_capacity(size);
 
         for row in 0..size {
             let valid = validity_predict.get_bit(row);
@@ -105,7 +105,7 @@ fn databend_if_else_then(
             };
         }
 
-        Ok(builder.build(size, true))
+        Ok(builder.build(size))
             }),
         PhysicalTypeID::Boolean => todo!(),
         PhysicalTypeID::String => todo!(),

@@ -15,39 +15,23 @@
 use std::fmt;
 
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Datelike;
-use common_datavalues::chrono::NaiveDate;
-use common_datavalues::chrono::NaiveDateTime;
-use common_datavalues::chrono::TimeZone;
-use common_datavalues::chrono::Utc;
-use common_datavalues::columns::DataColumn;
-use common_datavalues::prelude::ArrayApply;
-use common_datavalues::prelude::DFInt32Array;
-use common_datavalues::prelude::DFStringArray;
-use common_datavalues::prelude::DFUInt16Array;
-use common_datavalues::prelude::DFUInt32Array;
-use common_datavalues::prelude::DFUInt64Array;
-use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::prelude::IntoSeries;
-use common_datavalues::prelude::Series;
-use common_datavalues::DataType;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::Function;
+use super::cast_with_type;
+use crate::scalars::function2::Function2;
 use crate::with_match_primitive_type;
 
 #[derive(Clone)]
 pub struct CastFunction {
     _display_name: String,
     /// The data type to cast to
-    cast_type: DataType,
+    cast_type: DataTypePtr,
 }
 
 impl CastFunction {
-    pub fn create(display_name: String, cast_type: DataType) -> Result<Box<dyn Function>> {
+    pub fn create(display_name: String, cast_type: DataTypePtr) -> Result<Box<dyn Function2>> {
         Ok(Box::new(Self {
             _display_name: display_name,
             cast_type,
@@ -55,21 +39,20 @@ impl CastFunction {
     }
 }
 
-impl Function for CastFunction {
+impl Function2 for CastFunction {
     fn name(&self) -> &str {
         "CastFunction"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = self.cast_type.clone();
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        Ok(self.cast_type.clone())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        if columns[0].data_type() == &self.cast_type {
-            return Ok(columns[0].column().clone());
-        }
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        cast_with_type(columns[0].column(), &self.cast_type)
+    }
+
+    fn to() {
         let series = columns[0].column().clone().to_minimal_array()?;
         const DATE_FMT: &str = "%Y-%m-%d";
         const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
@@ -189,7 +172,7 @@ impl Function for CastFunction {
             _ => series.cast_with_type(&self.cast_type),
         }?;
 
-        let column: DataColumn = array.into();
+        let column: ColumnRef = array.into();
         Ok(column.resize_constant(input_rows))
     }
 }

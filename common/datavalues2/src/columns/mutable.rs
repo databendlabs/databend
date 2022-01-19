@@ -36,7 +36,6 @@ pub trait MutableColumn<Item, ColumnImpl: Column + 'static> {
     }
 
     fn finish(&mut self) -> ColumnImpl;
-
     fn append(&mut self, item: Item);
     fn append_default(&mut self);
 

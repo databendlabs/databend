@@ -46,6 +46,13 @@ pub fn equal(lhs: &dyn Column, rhs: &dyn Column) -> bool {
         return false;
     }
 
+    if lhs.is_const() || rhs.is_const() {
+        return equal(
+            lhs.convert_full_column().as_ref(),
+            rhs.convert_full_column().as_ref(),
+        );
+    }
+
     use crate::PhysicalTypeID::*;
 
     match lhs.data_type_id().to_physical_type() {

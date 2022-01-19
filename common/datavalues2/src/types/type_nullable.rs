@@ -84,7 +84,7 @@ impl DataType for NullableType {
         if self.inner.data_type_id() == TypeID::Null {
             return Ok(Arc::new(NullColumn::new(size)));
         }
-        if self.inner.data_type_id() == TypeID::Null {
+        if self.inner.data_type_id() == TypeID::Nullable {
             return Result::Err(ErrorCode::BadDataValueType(
                 "Nullable type can't be inside nullable type".to_string(),
             ));

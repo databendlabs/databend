@@ -76,7 +76,7 @@ impl FloatType for f64 {}
 
 pub trait ScalarType: Sized {
     type Type: DataType;
-    type ColumnType: Column + 'static;
+    type ColumnType: Column + NewColumn<Self> + 'static;
     type MutableColumnType: MutableColumn<Self, Self::ColumnType>;
 }
 

@@ -36,9 +36,14 @@ itertools = "0.10.3"
 pretty_assertions = "1.0.0"
 rand = "0.8"
 criterion = "0.3.5"
+pprof = { version = "0.6.2", features = ["flamegraph"] }
 
 
 [[bench]]
 name = "if_else_then"
+harness = false
+
+[[bench]]
+name = "builder"
 harness = false
 

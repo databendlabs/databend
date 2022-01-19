@@ -13,5 +13,6 @@
 // limitations under the License.
 
 mod boolean;
+mod builder;
 mod primitive;
 mod string;
