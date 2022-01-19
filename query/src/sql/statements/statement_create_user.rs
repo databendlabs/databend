@@ -57,8 +57,11 @@ impl AnalyzableStatement for DfCreateUser {
             CreateUserPlan {
                 name: self.name.clone(),
                 hostname: self.hostname.clone(),
-                auth_info: AuthInfo::create(&self.auth_options.auth_type, &self.auth_options.by_value)
-                    .map_err(ErrorCode::SyntaxException)?,
+                auth_info: AuthInfo::create(
+                    &self.auth_options.auth_type,
+                    &self.auth_options.by_value,
+                )
+                .map_err(ErrorCode::SyntaxException)?,
             },
         ))))
     }
