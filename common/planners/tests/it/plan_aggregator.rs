@@ -36,7 +36,7 @@ fn test_aggregator_plan() -> Result<()> {
         Projection: sumx:UInt64\
         \n  AggregatorFinal: groupBy=[[]], aggr=[[sum(number) as sumx]]\
         \n    AggregatorPartial: groupBy=[[]], aggr=[[sum(number) as sumx]]\
-        \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
+        \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]";
     let actual = format!("{:?}", explain);
     assert_eq!(expect, actual);
     Ok(())

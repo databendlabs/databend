@@ -37,8 +37,8 @@ impl Test {
         let statistics = Statistics {
             read_rows: total,
             read_bytes: total * 8,
-            partitions_scanned: 1,
-            partitions_total: 1,
+            partitions_scanned: 8,
+            partitions_total: 8,
             is_exact: true,
         };
 

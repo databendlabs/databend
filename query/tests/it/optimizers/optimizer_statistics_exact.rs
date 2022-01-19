@@ -80,7 +80,7 @@ fn test_statistics_exact_optimizer() -> Result<()> {
         Projection: count(0):UInt64\
         \n  Projection: 10000 as count(0):UInt64\
         \n    Expression: 10000:UInt64 (Exact Statistics)\
-        \n      ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]";
+        \n      ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1]";
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);
     Ok(())
