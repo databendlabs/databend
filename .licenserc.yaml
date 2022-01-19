@@ -3,34 +3,30 @@ header:
     spdx-id: Apache-2.0
     copyright-owner: Datafuse Labs
   paths-ignore:
-    - "target"
+    # ignore docs and helper tools
     - "scripts"
     - "docker"
     - "docs"
-    - "deploy"
     - "website"
     - "tests"
     - "tools"
+    # Ignore hidden files
+    - ".cargo"
     - ".github"
     - ".dockerignore"
-    - ".licenserc.yaml"
     - ".gitignore"
     - ".gitattributes"
-    - "Cargo.lock"
-    - "**/Cargo.toml"
-    - "codecov.yml"
-    - "CHANGELOG.md"
+    # Ignore LICENSE and Makefile
     - "LICENSE"
     - "Makefile"
-    - "README.md"
+    # Ignore docs and generated files
     - "**/*.md"
     - "**/*.json"
     - "**/*.sql"
-    - "rust-toolchain.toml"
-    - "rustfmt.toml"
     - "**/*.proto"
-    - ".cargo"
-    - ".yamllint.yml"
-    - ".mergify.yml"
+    - "**/*.yml"
+    - "**/*.yaml"
+    - "**/*.toml"
+    - "**/*.lock"
 
   comment: on-failure
