@@ -575,11 +575,7 @@ fn copy_test() -> Result<()> {
                 "csv_header".into() => "1".into(),
                 "field_delimitor".into() => ",".into(),
          }
-        }
-        ),
-
-
-
+        }),
     )?;
 
     Ok(())
