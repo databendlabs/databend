@@ -28,7 +28,7 @@ async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     MetaApiTestSuite {}.database_create_get_drop(&client).await
 }
@@ -40,7 +40,7 @@ async fn test_meta_api_database_create_get_drop_in_diff_tenant() -> anyhow::Resu
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     MetaApiTestSuite {}
         .database_create_get_drop_in_diff_tenant(&client)
@@ -54,7 +54,7 @@ async fn test_meta_api_database_list() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     MetaApiTestSuite {}.database_list(&client).await
 }
@@ -66,7 +66,7 @@ async fn test_meta_api_database_list_in_diff_tenant() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     MetaApiTestSuite {}
         .database_list_in_diff_tenant(&client)
@@ -80,7 +80,7 @@ async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     MetaApiTestSuite {}.table_create_get_drop(&client).await
 }
@@ -92,7 +92,7 @@ async fn test_meta_api_table_list() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     MetaApiTestSuite {}.table_list(&client).await
 }
@@ -106,7 +106,7 @@ async fn test_meta_api_flight_get_database_meta_ddl_table() -> anyhow::Result<()
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_metasrv().await?;
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     let test_db = "db1";
     let plan = CreateDatabasePlan {
@@ -184,7 +184,7 @@ async fn test_meta_api_flight_get_database_meta_empty_db() -> anyhow::Result<()>
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_metasrv().await?;
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     // Empty Database
     let res = client.get_database_meta(None).await?;
@@ -198,7 +198,7 @@ async fn test_meta_api_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_metasrv().await?;
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     // create-db operation will increases meta_version
     let plan = CreateDatabasePlan {
