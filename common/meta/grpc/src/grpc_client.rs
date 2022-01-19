@@ -131,10 +131,13 @@ impl MetaGrpcClient {
         let mut t = self.token.write().await;
         let token = match t.clone() {
             Some(t) => t,
-            None => MetaGrpcClient::handshake(&mut client, &self.username, &self.password).await?,
+            None => {
+                let new_token =
+                    MetaGrpcClient::handshake(&mut client, &self.username, &self.password).await?;
+                *t = Some(new_token.clone());
+                new_token
+            }
         };
-
-        *t = Some(token.clone());
 
         let client = { MetaClient::with_interceptor(channel, AuthInterceptor { token }) };
 
