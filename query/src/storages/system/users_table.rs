@@ -37,8 +37,8 @@ impl UsersTable {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("name", DataType::String, false),
             DataField::new("hostname", DataType::String, false),
-            DataField::new("password", DataType::String, true),
             DataField::new("auth_type", DataType::String, false),
+            DataField::new("auth_string", DataType::String, true),
         ]);
 
         let table_info = TableInfo {
@@ -79,16 +79,16 @@ impl Table for UsersTable {
             .iter()
             .map(|x| x.auth_info.get_type().to_str().to_owned())
             .collect();
-        let passwords: Vec<Vec<u8>> = users
+        let auth_strings: Vec<String> = users
             .iter()
-            .map(|x| x.auth_info.get_password().unwrap_or_default())
+            .map(|x| x.auth_info.get_auth_string())
             .collect();
 
         let block = DataBlock::create_by_array(self.table_info.schema(), vec![
             Series::new(names),
             Series::new(hostnames),
-            Series::new(passwords),
             Series::new(auth_types),
+            Series::new(auth_strings),
         ]);
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),

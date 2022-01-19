@@ -106,7 +106,7 @@ pub use table::UpsertTableOptionReply;
 pub use table::UpsertTableOptionReq;
 pub use user_auth::AuthInfo;
 pub use user_auth::AuthType;
-pub use user_auth::PasswordType;
+pub use user_auth::PasswordHashMethod;
 pub use user_defined_function::UserDefinedFunction;
 pub use user_grant::GrantEntry;
 pub use user_grant::GrantObject;

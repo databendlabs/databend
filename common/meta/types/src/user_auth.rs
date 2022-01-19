@@ -14,6 +14,8 @@ use std::str::FromStr;
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use common_exception::ErrorCode;
+use sha2::Digest;
+use sha2::Sha256;
 
 const NO_PASSWORD_STR: &str = "no_password";
 const PLAINTEXT_PASSWORD_STR: &str = "plaintext_password";
@@ -66,11 +68,11 @@ impl AuthType {
         format!("Expected auth type {}, found: {}", all, s)
     }
 
-    fn get_password_type(self) -> Option<PasswordType> {
+    fn get_password_type(self) -> Option<PasswordHashMethod> {
         match self {
-            AuthType::PlaintextPassword => Some(PasswordType::PlainText),
-            AuthType::Sha256Password => Some(PasswordType::Sha256),
-            AuthType::DoubleShaPassword => Some(PasswordType::DoubleSha1),
+            AuthType::PlaintextPassword => Some(PasswordHashMethod::PlainText),
+            AuthType::Sha256Password => Some(PasswordHashMethod::Sha256),
+            AuthType::DoubleShaPassword => Some(PasswordHashMethod::DoubleSha1),
             _ => None,
         }
     }
@@ -80,8 +82,8 @@ impl AuthType {
 pub enum AuthInfo {
     None,
     Password {
-        password: Vec<u8>,
-        password_type: PasswordType,
+        hash_value: Vec<u8>,
+        hash_method: PasswordHashMethod,
     },
 }
 
@@ -96,21 +98,21 @@ fn double_sha1(v: &[u8]) -> [u8; 20] {
 }
 
 impl AuthInfo {
-    fn new(auth_type: AuthType, auth_string: &Option<String>) -> Result<AuthInfo, String> {
+    pub fn new(auth_type: AuthType, auth_string: &Option<String>) -> Result<AuthInfo, String> {
         match auth_type {
             AuthType::NoPassword => Ok(AuthInfo::None),
             AuthType::PlaintextPassword
             | AuthType::Sha256Password
-            | AuthType::DoubleShaPassword => {
-                match auth_string {
-                    Some(p) => Ok(AuthInfo::Password {
-                        password: Vec::from(p.to_string()),
-                        // safe unwrap
-                        password_type: auth_type.get_password_type().unwrap(),
-                    }),
-                    None => Err("need password".to_string()),
+            | AuthType::DoubleShaPassword => match auth_string {
+                Some(p) => {
+                    let method = auth_type.get_password_type().unwrap();
+                    Ok(AuthInfo::Password {
+                        hash_value: method.hash(p.as_bytes()),
+                        hash_method: method,
+                    })
                 }
-            }
+                None => Err("need password".to_string()),
+            },
         }
     }
 
@@ -145,31 +147,40 @@ impl AuthInfo {
         match self {
             AuthInfo::None => AuthType::NoPassword,
             AuthInfo::Password {
-                password: _,
-                password_type: t,
+                hash_value: _,
+                hash_method: t,
             } => match t {
-                PasswordType::PlainText => AuthType::PlaintextPassword,
-                PasswordType::Sha256 => AuthType::Sha256Password,
-                PasswordType::DoubleSha1 => AuthType::DoubleShaPassword,
+                PasswordHashMethod::PlainText => AuthType::PlaintextPassword,
+                PasswordHashMethod::Sha256 => AuthType::Sha256Password,
+                PasswordHashMethod::DoubleSha1 => AuthType::DoubleShaPassword,
             },
         }
     }
 
+    pub fn get_auth_string(&self) -> String {
+        match self {
+            AuthInfo::Password {
+                hash_value: p,
+                hash_method: t,
+            } => t.to_string(p),
+            AuthInfo::None => "".to_string(),
+        }
+    }
     pub fn get_password(&self) -> Option<Vec<u8>> {
         match self {
             AuthInfo::Password {
-                password: p,
-                password_type: _,
+                hash_value: p,
+                hash_method: _,
             } => Some(p.to_vec()),
             _ => None,
         }
     }
 
-    pub fn get_password_type(&self) -> Option<PasswordType> {
+    pub fn get_password_type(&self) -> Option<PasswordHashMethod> {
         match self {
             AuthInfo::Password {
-                password: _,
-                password_type: t,
+                hash_value: _,
+                hash_method: t,
             } => Some(*t),
             _ => None,
         }
@@ -178,13 +189,12 @@ impl AuthInfo {
     fn restore_sha1_mysql(
         salt: &[u8],
         input: &[u8],
-        user_password: &[u8],
+        user_password_hash: &[u8],
     ) -> Result<Vec<u8>, ErrorCode> {
-        let double_sha1 = calc_sha1(&calc_sha1(user_password)[..]);
         // SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1( password ) ) )
         let mut m = sha1::Sha1::new();
         m.update(salt);
-        m.update(&double_sha1[..]);
+        m.update(user_password_hash);
 
         let result = m.digest().bytes();
         if input.len() != result.len() {
@@ -201,21 +211,18 @@ impl AuthInfo {
         match self {
             AuthInfo::None => Ok(true),
             AuthInfo::Password {
-                password: p,
-                password_type: t,
-            } => {
-                match t {
-                    PasswordType::PlainText => Ok(p == password_input),
-                    PasswordType::DoubleSha1 => {
-                        let password_sha1 = AuthInfo::restore_sha1_mysql(salt, password_input, p)?;
-                        // TODO(youngsofun): we should store double_sha1(password) later
-                        Ok(double_sha1(p) == calc_sha1(&password_sha1))
-                    }
-                    PasswordType::Sha256 => Err(ErrorCode::AuthenticateFailure(
-                        "login with sha256_password user for mysql protocol not supported yet.",
-                    )),
+                hash_value: p,
+                hash_method: t,
+            } => match t {
+                PasswordHashMethod::PlainText => Ok(p == password_input),
+                PasswordHashMethod::DoubleSha1 => {
+                    let password_sha1 = AuthInfo::restore_sha1_mysql(salt, password_input, p)?;
+                    Ok(*p == calc_sha1(&password_sha1))
                 }
-            }
+                PasswordHashMethod::Sha256 => Err(ErrorCode::AuthenticateFailure(
+                    "login with sha256_password user for mysql protocol not supported yet.",
+                )),
+            },
         }
     }
 
@@ -227,10 +234,9 @@ impl AuthInfo {
         match self {
             AuthInfo::None => Ok(true),
             AuthInfo::Password {
-                password: p,
-                password_type: _t,
-                // TODO(youngsofun): we should store password hash later
-            } => Ok(p == password_input_plaintext),
+                hash_value: p,
+                hash_method: t,
+            } => Ok(*p == t.hash(password_input_plaintext)),
         }
     }
 }
@@ -244,14 +250,31 @@ impl Default for AuthInfo {
 #[derive(
     serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd,
 )]
-pub enum PasswordType {
+pub enum PasswordHashMethod {
     PlainText = 0,
     DoubleSha1 = 1,
     Sha256 = 2,
 }
 
-impl Default for PasswordType {
+impl PasswordHashMethod {
+    fn hash(self, user_input: &[u8]) -> Vec<u8> {
+        match self {
+            PasswordHashMethod::PlainText => Vec::from(user_input),
+            PasswordHashMethod::DoubleSha1 => double_sha1(user_input).to_vec(),
+            PasswordHashMethod::Sha256 => Sha256::digest(user_input).to_vec(),
+        }
+    }
+
+    fn to_string(self, hash_value: &[u8]) -> String {
+        match self {
+            PasswordHashMethod::PlainText => String::from_utf8_lossy(hash_value).into_owned(),
+            _ => hex::encode(hash_value),
+        }
+    }
+}
+
+impl Default for PasswordHashMethod {
     fn default() -> Self {
-        PasswordType::Sha256
+        PasswordHashMethod::Sha256
     }
 }

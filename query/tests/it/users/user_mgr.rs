@@ -16,7 +16,7 @@ use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
-use common_meta_types::PasswordType;
+use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
@@ -38,8 +38,8 @@ async fn test_user_manager() -> Result<()> {
     let user_mgr = UserApiProvider::create_global(config).await?;
 
     let auth_info = AuthInfo::Password {
-        password: Vec::from(pwd),
-        password_type: PasswordType::PlainText,
+        hash_value: Vec::from(pwd),
+        hash_method: PasswordHashMethod::PlainText,
     };
 
     // add user hostname.
@@ -158,8 +158,8 @@ async fn test_user_manager() -> Result<()> {
         let hostname = "localhost";
         let pwd = "test";
         let auth_info = AuthInfo::Password {
-            password: Vec::from(pwd),
-            password_type: PasswordType::PlainText,
+            hash_value: Vec::from(pwd),
+            hash_method: PasswordHashMethod::PlainText,
         };
         let user_info = User::new(user, hostname, auth_info.clone());
         user_mgr.add_user(tenant, user_info.into()).await?;
@@ -170,8 +170,8 @@ async fn test_user_manager() -> Result<()> {
         // alter both password & password_type
         let new_pwd = "test1";
         let auth_info = AuthInfo::Password {
-            password: Vec::from(new_pwd),
-            password_type: PasswordType::Sha256,
+            hash_value: Vec::from(new_pwd),
+            hash_method: PasswordHashMethod::Sha256,
         };
         user_mgr
             .update_user(tenant, user, hostname, auth_info)
@@ -183,14 +183,14 @@ async fn test_user_manager() -> Result<()> {
         );
         assert_eq!(
             new_user.auth_info.get_password_type().unwrap(),
-            PasswordType::Sha256
+            PasswordHashMethod::Sha256
         );
 
         // alter password only
         let new_new_pwd = "test2";
         let auth_info = AuthInfo::Password {
-            password: Vec::from(new_new_pwd),
-            password_type: PasswordType::Sha256,
+            hash_value: Vec::from(new_new_pwd),
+            hash_method: PasswordHashMethod::Sha256,
         };
         user_mgr
             .update_user(tenant, user, hostname, auth_info.clone())

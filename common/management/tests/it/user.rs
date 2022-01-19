@@ -24,7 +24,7 @@ use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
-use common_meta_types::PasswordType;
+use common_meta_types::PasswordHashMethod;
 use common_meta_types::PrefixListReply;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
@@ -59,8 +59,8 @@ fn format_user_key(username: &str, hostname: &str) -> String {
 
 fn default_test_auth_info() -> AuthInfo {
     AuthInfo::Password {
-        password: Vec::from("test_password"),
-        password_type: PasswordType::DoubleSha1,
+        hash_value: Vec::from("test_password"),
+        hash_method: PasswordHashMethod::DoubleSha1,
     }
 }
 
@@ -478,11 +478,11 @@ mod update {
 
     fn new_test_auth_info(full: bool) -> AuthInfo {
         AuthInfo::Password {
-            password: Vec::from("test_password_new"),
-            password_type: if full {
-                PasswordType::Sha256
+            hash_value: Vec::from("test_password_new"),
+            hash_method: if full {
+                PasswordHashMethod::Sha256
             } else {
-                PasswordType::DoubleSha1
+                PasswordHashMethod::DoubleSha1
             },
         }
     }
