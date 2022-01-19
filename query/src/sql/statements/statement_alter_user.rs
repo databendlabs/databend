@@ -49,7 +49,7 @@ impl AnalyzableStatement for DfAlterUser {
 
         let new_auth_info = user_info
             .auth_info
-            .alter(&self.auth_option.plugin, &self.auth_option.by_value)
+            .alter(&self.auth_option.auth_type, &self.auth_option.by_value)
             .map_err(ErrorCode::SyntaxException)?;
 
         let new_auth_info = if user_info.auth_info == new_auth_info {

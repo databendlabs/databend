@@ -27,14 +27,14 @@ use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct DfAuthOption {
-    pub plugin: Option<String>,
+    pub auth_type: Option<String>,
     pub by_value: Option<String>,
 }
 
 impl DfAuthOption {
     pub fn no_password() -> Self {
         DfAuthOption {
-            plugin: Some("no_password".to_string()),
+            auth_type: Some("no_password".to_string()),
             by_value: None,
         }
     }
@@ -57,7 +57,7 @@ impl AnalyzableStatement for DfCreateUser {
             CreateUserPlan {
                 name: self.name.clone(),
                 hostname: self.hostname.clone(),
-                auth_info: AuthInfo::create(&self.auth_options.plugin, &self.auth_options.by_value)
+                auth_info: AuthInfo::create(&self.auth_options.auth_type, &self.auth_options.by_value)
                     .map_err(ErrorCode::SyntaxException)?,
             },
         ))))

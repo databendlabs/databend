@@ -693,7 +693,7 @@ fn show_create_test() -> Result<()> {
 
 fn create_user_auth_test(
     auth_clause: &str,
-    auth_plugin: Option<String>,
+    auth_type: Option<String>,
     auth_string: Option<String>,
 ) -> Result<()> {
     expect_parse_ok(
@@ -703,7 +703,7 @@ fn create_user_auth_test(
             name: String::from("test"),
             hostname: String::from("localhost"),
             auth_options: DfAuthOption {
-                plugin: auth_plugin,
+                auth_type,
                 by_value: auth_string,
             },
         }),
@@ -767,7 +767,7 @@ fn create_user_test() -> Result<()> {
 
 fn alter_user_auth_test(
     auth_clause: &str,
-    auth_plugin: Option<String>,
+    auth_type: Option<String>,
     auth_string: Option<String>,
 ) -> Result<()> {
     expect_parse_ok(
@@ -777,7 +777,7 @@ fn alter_user_auth_test(
             name: String::from("test"),
             hostname: String::from("localhost"),
             auth_option: DfAuthOption {
-                plugin: auth_plugin,
+                auth_type,
                 by_value: auth_string,
             },
         }),
@@ -821,7 +821,7 @@ fn alter_user_test() -> Result<()> {
             name: String::from(""),
             hostname: String::from(""),
             auth_option: DfAuthOption {
-                plugin: None,
+                auth_type: None,
                 by_value: Some(password),
             },
         }),
@@ -834,7 +834,7 @@ fn alter_user_test() -> Result<()> {
             name: String::from("test@localhost"),
             hostname: String::from("%"),
             auth_option: DfAuthOption {
-                plugin: Some("sha256_password".to_string()),
+                auth_type: Some("sha256_password".to_string()),
                 by_value: Some("password".to_string()),
             },
         }),

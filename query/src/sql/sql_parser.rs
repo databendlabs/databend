@@ -778,7 +778,7 @@ impl<'a> DfParser<'a> {
                     None
                 };
                 Ok(DfAuthOption {
-                    plugin: arg_with,
+                    auth_type: arg_with,
                     by_value: auth_string,
                 })
             }
