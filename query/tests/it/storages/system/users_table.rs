@@ -82,7 +82,7 @@ async fn test_users_table() -> Result<()> {
         "+-------+-----------+--------------------+------------------------------------------------------------------+",
         "| test  | localhost | no_password        |                                                                  |",
         "| test1 | %         | plaintext_password | 123456789                                                        |",
-        "| test1 | %         | sha256_password    | 15e2b0d3c33891ebb0f1ef609ec419420c20e320ce94c65fbc8c3312448eb225 |",
+        "| test2 | %         | sha256_password    | 15e2b0d3c33891ebb0f1ef609ec419420c20e320ce94c65fbc8c3312448eb225 |",
         "+-------+-----------+--------------------+------------------------------------------------------------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
