@@ -30,7 +30,7 @@ pub struct DalMetrics {
     pub write_bytes: usize,
     /// Number of rows written
     pub write_rows: usize,
-    /// Number of partitions scanned
+    /// Number of partitions scanned, after pruning
     pub partitions_scanned: usize,
     /// Number of partitions, before pruning
     pub partitions_total: usize,
