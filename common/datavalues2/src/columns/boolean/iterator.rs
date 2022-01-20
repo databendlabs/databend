@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use common_arrow::arrow::bitmap::utils::BitmapIter;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_infallible::RwLock;
 
 use crate::prelude::*;
 

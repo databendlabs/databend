@@ -29,6 +29,16 @@ fn test_boolean_wrapper() -> Result<()> {
     for i in 2..4 {
         assert!(!*wrapper.value(i));
     }
+
+    // sub column
+    let sub_column = column.slice(1, 2);
+    let wrapper = ColumnViewer::<bool>::create(&sub_column)?;
+
+    assert_eq!(wrapper.len(), 2);
+    assert!(!wrapper.null_at(0));
+    assert!(*wrapper.value(0));
+    assert!(!*wrapper.value(1));
+
     Ok(())
 }
 

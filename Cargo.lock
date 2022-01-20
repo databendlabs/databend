@@ -1614,6 +1614,7 @@ dependencies = [
  "common-arrow",
  "common-datavalues",
  "common-exception",
+ "common-infallible",
  "common-io",
  "common-macros",
  "common-mem-allocator",

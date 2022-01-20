@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_infallible::RwLock;
 
 use crate::prelude::*;
 
@@ -76,7 +76,7 @@ impl BooleanColumn {
     }
 
     fn build_data(&self) {
-        let mut data_cached = self.data_cached.write().unwrap();
+        let mut data_cached = self.data_cached.write();
         if !*data_cached {
             unsafe {
                 let x_ptr = Arc::as_ptr(&self.data);
@@ -122,11 +122,21 @@ impl Column for BooleanColumn {
             "the offset of the new Buffer cannot exceed the existing length"
         );
         unsafe {
-            Arc::new(Self {
-                values: self.values.clone().slice_unchecked(offset, length),
-                data_cached: Arc::new(RwLock::new(false)),
-                data: Arc::new(Vec::new()),
-            })
+            let values = self.values.clone().slice_unchecked(offset, length);
+            if *self.data_cached.read() {
+                let data = Arc::new(self.data.as_slice()[offset..offset + length].to_vec());
+                Arc::new(Self {
+                    values,
+                    data_cached: Arc::new(RwLock::new(true)),
+                    data,
+                })
+            } else {
+                Arc::new(Self {
+                    values,
+                    data_cached: Arc::new(RwLock::new(false)),
+                    data: Arc::new(Vec::new()),
+                })
+            }
         }
     }
 
@@ -167,7 +177,7 @@ impl Column for BooleanColumn {
 
 impl GetDatas<bool> for BooleanColumn {
     fn get_data(&self) -> &[bool] {
-        if !*self.data_cached.read().unwrap() {
+        if !*self.data_cached.read() {
             self.build_data();
         }
         self.data.as_slice()
