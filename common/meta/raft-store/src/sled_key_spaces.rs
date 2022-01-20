@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_raft::raft::Entry;
+use common_meta_sled_store::openraft;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::LogEntry;
@@ -22,12 +22,15 @@ use common_meta_types::NodeId;
 use common_meta_types::SeqNum;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
+use openraft::raft::Entry;
 
 use crate::state::RaftStateKey;
 use crate::state::RaftStateValue;
 use crate::state_machine::table_lookup::TableLookupValue;
 use crate::state_machine::ClientLastRespValue;
 use crate::state_machine::DatabaseLookupKey;
+use crate::state_machine::LogMetaKey;
+use crate::state_machine::LogMetaValue;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaValue;
 use crate::state_machine::TableLookupKey;
@@ -39,6 +42,15 @@ impl SledKeySpace for Logs {
     const NAME: &'static str = "log";
     type K = LogIndex;
     type V = Entry<LogEntry>;
+}
+
+/// Types for raft log meta data in SledTree
+pub struct LogMeta {}
+impl SledKeySpace for LogMeta {
+    const PREFIX: u8 = 13;
+    const NAME: &'static str = "log-meta";
+    type K = LogMetaKey;
+    type V = LogMetaValue;
 }
 
 /// Types for Node in SledTree

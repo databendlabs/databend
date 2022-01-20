@@ -14,7 +14,7 @@
 
 use std::fmt;
 
-use async_raft::NodeId;
+use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 

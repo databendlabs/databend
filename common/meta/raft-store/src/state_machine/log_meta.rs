@@ -16,7 +16,6 @@ use std::fmt;
 
 use common_exception::ErrorCode;
 use common_meta_sled_store::openraft;
-use common_meta_sled_store::openraft::EffectiveMembership;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::SledOrderedSerde;
 use openraft::LogId;
@@ -25,45 +24,33 @@ use serde::Serialize;
 use sled::IVec;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum StateMachineMetaKey {
-    /// The last applied log id in the state machine.
-    LastApplied,
-
-    /// Whether the state machine is initialized.
-    Initialized,
-
-    /// The last membership config
-    LastMembership,
+pub enum LogMetaKey {
+    /// The last purged log id in the log.
+    ///
+    /// Log entries are purged after being applied to state machine.
+    /// Even when all logs are purged the last purged log id has to be stored.
+    /// Because raft replication requires logs to be consecutive.
+    LastPurged,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, derive_more::TryInto)]
-pub enum StateMachineMetaValue {
+pub enum LogMetaValue {
     LogId(LogId),
-    Bool(bool),
-    Membership(EffectiveMembership),
 }
 
-impl fmt::Display for StateMachineMetaKey {
+impl fmt::Display for LogMetaKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            StateMachineMetaKey::LastApplied => {
-                write!(f, "last-applied")
-            }
-            StateMachineMetaKey::Initialized => {
-                write!(f, "initialized")
-            }
-            StateMachineMetaKey::LastMembership => {
-                write!(f, "last-membership")
+            LogMetaKey::LastPurged => {
+                write!(f, "last-purged")
             }
         }
     }
 }
 
-impl SledOrderedSerde for StateMachineMetaKey {
+impl SledOrderedSerde for LogMetaKey {
     fn ser(&self) -> Result<IVec, ErrorCode> {
         let i = match self {
-            StateMachineMetaKey::LastApplied => 1,
-            StateMachineMetaKey::Initialized => 2,
-            StateMachineMetaKey::LastMembership => 3,
+            LogMetaKey::LastPurged => 1,
         };
 
         Ok(IVec::from(&[i]))
@@ -73,11 +60,7 @@ impl SledOrderedSerde for StateMachineMetaKey {
     where Self: Sized {
         let slice = v.as_ref();
         if slice[0] == 1 {
-            return Ok(StateMachineMetaKey::LastApplied);
-        } else if slice[0] == 2 {
-            return Ok(StateMachineMetaKey::Initialized);
-        } else if slice[0] == 3 {
-            return Ok(StateMachineMetaKey::LastMembership);
+            return Ok(LogMetaKey::LastPurged);
         }
 
         Err(ErrorCode::MetaStoreDamaged("invalid key IVec"))
