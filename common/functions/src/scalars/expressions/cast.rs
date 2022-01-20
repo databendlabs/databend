@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
+use std::sync::Arc;
 
 use common_datavalues2::prelude::*;
 use common_exception::Result;
@@ -35,6 +36,24 @@ impl CastFunction {
         Ok(Box::new(Self {
             _display_name: display_name.to_string(),
             cast_type: data_type.clone(),
+        }))
+    }
+
+    pub fn create_try(display_name: &str, type_name: &str) -> Result<Box<dyn Function2>> {
+        let factory = TypeFactory::instance();
+        let data_type = factory.get(type_name)?;
+
+        if data_type.is_nullable() {
+            return Ok(Box::new(Self {
+                _display_name: display_name.to_string(),
+                cast_type: data_type.clone(),
+            }));
+        }
+
+        let nullable_type = NullableType::create(data_type.clone());
+        Ok(Box::new(Self {
+            _display_name: display_name.to_string(),
+            cast_type: Arc::new(nullable_type),
         }))
     }
 }
