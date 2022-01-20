@@ -16,6 +16,7 @@ use common_exception::Result;
 
 use crate::prelude::*;
 
+mod array;
 mod boolean;
 mod date;
 mod date_time;
@@ -25,6 +26,7 @@ mod number;
 mod string;
 mod struct_;
 
+pub use array::*;
 pub use boolean::*;
 pub use date::*;
 pub use date_time::*;

@@ -14,44 +14,43 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use itertools::izip;
 
 use crate::prelude::*;
 
-pub struct StructSerializer {
-    pub inners: Vec<Box<dyn TypeSerializer>>,
-    pub types: Vec<DataTypePtr>,
+pub struct ArraySerializer {
+    pub inner: Box<dyn TypeSerializer>,
+    pub typ: DataTypePtr,
 }
 
-impl TypeSerializer for StructSerializer {
+impl TypeSerializer for ArraySerializer {
     fn serialize_value(&self, value: &DataValue) -> Result<String> {
-        if let DataValue::Struct(vals) = value {
+        if let DataValue::Array(vals) = value {
             let mut res = String::new();
-            res.push('(');
+            res.push('[');
             let mut first = true;
-
-            for (val, inner, typ) in izip!(vals, &self.inners, &self.types) {
+            let quoted = self.typ.data_type_id().is_quoted();
+            for val in vals {
                 if !first {
                     res.push_str(", ");
                 }
                 first = false;
 
-                let s = inner.serialize_value(val)?;
-                if typ.data_type_id().is_quoted() {
+                let s = self.inner.serialize_value(val)?;
+                if quoted {
                     res.push_str(&format!("'{}'", s));
                 } else {
                     res.push_str(&s);
                 }
             }
-            res.push(')');
+            res.push(']');
             Ok(res)
         } else {
-            Err(ErrorCode::BadBytes("Incorrect Struct value"))
+            Err(ErrorCode::BadBytes("Incorrect Array value"))
         }
     }
 
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
-        let column: &StructColumn = Series::check_get(column)?;
+        let column: &ArrayColumn = Series::check_get(column)?;
         let mut result = Vec::with_capacity(column.len());
         for i in 0..column.len() {
             let val = unsafe { column.get_unchecked(i) };

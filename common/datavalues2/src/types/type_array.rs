@@ -98,7 +98,10 @@ impl DataType for ArrayType {
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        todo!()
+        Box::new(ArraySerializer {
+            inner: self.inner.create_serializer(),
+            typ: self.inner.clone(),
+        })
     }
 
     fn create_deserializer(&self, _capacity: usize) -> Box<dyn TypeDeserializer> {

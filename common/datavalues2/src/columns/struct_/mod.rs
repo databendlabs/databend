@@ -53,10 +53,6 @@ impl StructColumn {
         )
     }
 
-    pub fn data_type(&self) -> DataTypePtr {
-        self.data_type.clone()
-    }
-
     pub fn from_data(values: Vec<ColumnRef>, data_type: DataTypePtr) -> Self {
         Self { values, data_type }
     }
