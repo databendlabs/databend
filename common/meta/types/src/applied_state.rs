@@ -14,8 +14,8 @@
 
 use std::fmt::Debug;
 
-use async_raft::AppDataResponse;
 use common_exception::ErrorCode;
+use openraft::AppDataResponse;
 use serde::Deserialize;
 use serde::Serialize;
 

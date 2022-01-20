@@ -28,8 +28,12 @@ fn test_statistics_exact_optimizer() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
     let total = ctx.get_settings().get_max_block_size()? as u64;
-    let statistics =
-        Statistics::new_exact(total as usize, ((total) * size_of::<u64>() as u64) as usize);
+    let statistics = Statistics::new_exact(
+        total as usize,
+        ((total) * size_of::<u64>() as u64) as usize,
+        total as usize,
+        total as usize,
+    );
     ctx.try_set_statistics(&statistics)?;
     let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
         table_info: TableInfo::simple(
@@ -76,7 +80,7 @@ fn test_statistics_exact_optimizer() -> Result<()> {
         Projection: count(0):UInt64\
         \n  Projection: 10000 as count(0):UInt64\
         \n    Expression: 10000:UInt64 (Exact Statistics)\
-        \n      ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]";
+        \n      ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1]";
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);
     Ok(())

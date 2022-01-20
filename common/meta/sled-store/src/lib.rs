@@ -18,6 +18,7 @@
 pub use db::get_sled_db;
 pub use db::init_sled_db;
 pub use db::init_temp_sled_db;
+pub use openraft;
 pub use sled;
 pub use sled_key_space::SledKeySpace;
 pub use sled_serde::SledOrderedSerde;

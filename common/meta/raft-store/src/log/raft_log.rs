@@ -14,16 +14,21 @@
 
 use std::ops::RangeBounds;
 
-use async_raft::raft::Entry;
+use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_types::LogEntry;
+use common_meta_types::LogId;
 use common_meta_types::LogIndex;
 use common_tracing::tracing;
+use openraft::raft::Entry;
 
 use crate::config::RaftConfig;
+use crate::sled_key_spaces::LogMeta;
 use crate::sled_key_spaces::Logs;
+use crate::state_machine::LogMetaKey;
+use crate::state_machine::LogMetaValue;
 
 const TREE_RAFT_LOG: &str = "raft_log";
 
@@ -55,6 +60,24 @@ impl RaftLog {
 
     pub fn last(&self) -> common_exception::Result<Option<(LogIndex, Entry<LogEntry>)>> {
         self.logs().last()
+    }
+
+    pub async fn set_last_purged(&self, log_id: LogId) -> common_exception::Result<()> {
+        self.log_meta()
+            .insert(&LogMetaKey::LastPurged, &LogMetaValue::LogId(log_id))
+            .await?;
+        Ok(())
+    }
+
+    pub fn get_last_purged(&self) -> common_exception::Result<Option<LogId>> {
+        let res = self.log_meta().get(&LogMetaKey::LastPurged)?;
+        match res {
+            None => Ok(None),
+            Some(l) => {
+                let log_id: LogId = l.try_into().unwrap();
+                Ok(Some(log_id))
+            }
+        }
     }
 
     /// Delete logs that are in `range`.
@@ -120,6 +143,11 @@ impl RaftLog {
 
     /// Returns a borrowed key space in sled::Tree for logs
     fn logs(&self) -> AsKeySpace<Logs> {
+        self.inner.key_space()
+    }
+
+    /// Returns a borrowed key space in sled::Tree for logs
+    fn log_meta(&self) -> AsKeySpace<LogMeta> {
         self.inner.key_space()
     }
 }
