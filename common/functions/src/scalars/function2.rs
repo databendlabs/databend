@@ -21,8 +21,10 @@ use common_datavalues2::column_convert::convert2_old_column;
 use common_datavalues2::ColumnRef;
 use common_datavalues2::ColumnWithField;
 use common_datavalues2::ColumnsWithField;
+use common_datavalues2::ConstColumn;
 use common_datavalues2::DataField;
 use common_datavalues2::DataTypePtr;
+use common_datavalues2::Series;
 use common_exception::Result;
 use dyn_clone::DynClone;
 
@@ -113,7 +115,7 @@ impl Function for Function2Adapter {
     fn eval(
         &self,
         columns: &common_datavalues::prelude::DataColumnsWithField,
-        _input_rows: usize,
+        input_rows: usize,
     ) -> Result<common_datavalues::prelude::DataColumn> {
         let columns = columns
             .iter()
@@ -125,8 +127,32 @@ impl Function for Function2Adapter {
             })
             .collect::<Vec<_>>();
 
-        let col = self.inner.eval(&columns, _input_rows)?;
+        // unwrap nullable
+        // TODO after moving all functions to datavalues2
+        // if self.passthrough_null() {
+        //     if columns.iter().all(|v| v.data_type().is_nullable()) {
 
+        //     }
+        // }
+
+        // is there nullable constant? Did not consider this case
+        // unwrap constant
+        if self.inner.passthrough_constant() && columns.iter().all(|v| v.column().is_const()) {
+            let columns = columns
+                .iter()
+                .map(|v| {
+                    let c = v.column();
+                    let c: &ConstColumn = unsafe { Series::static_cast(c) };
+
+                    ColumnWithField::new(c.inner().clone(), v.field().clone())
+                })
+                .collect::<Vec<_>>();
+            let col = self.inner.eval(&columns, input_rows)?;
+            let column = convert2_old_column(&col);
+            return Ok(column);
+        }
+
+        let col = self.inner.eval(&columns, input_rows)?;
         let column = convert2_old_column(&col);
         Ok(column)
     }

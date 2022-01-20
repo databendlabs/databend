@@ -44,7 +44,7 @@ impl DataType for BooleanType {
     }
 
     fn name(&self) -> &str {
-        "Bool"
+        "Boolean"
     }
 
     fn default_value(&self) -> DataValue {

@@ -40,7 +40,7 @@ impl ToCastFunction {
     }
 
     pub fn register(factory: &mut Function2Factory) {
-        let to_names = vec![
+        let names = vec![
             "Null",
             "Boolean",
             "UInt8",
@@ -62,7 +62,7 @@ impl ToCastFunction {
             "DateTime64",
         ];
 
-        for name in to_names {
+        for name in names {
             let to_name = format!("to{}", name);
             factory.register(&to_name, Self::cast_function_creator(name).unwrap());
         }
