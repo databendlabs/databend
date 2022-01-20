@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod processors;
-pub mod transforms;
+pub mod port;
+pub mod processor;
 
-// TODO: pub mod for tests
-pub mod new;
+mod port_trigger;
+mod resize_processor;
+mod sinks;
+mod sources;
+mod transforms;
+
+pub use port::connect;
+pub use port_trigger::DirectedEdge;
+pub use port_trigger::UpdateList;
+pub use port_trigger::UpdateTrigger;
+pub use processor::Processor;
+pub use processor::Processors;
+pub use resize_processor::ResizeProcessor;
+pub use sinks::SyncSenderSink;
+pub use sources::SyncReceiverSource;
+pub use sources::TableSource;
+pub use transforms::TransformDummy;

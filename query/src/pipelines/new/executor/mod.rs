@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod processors;
-pub mod transforms;
+mod pipeline_executor;
+mod pipeline_runtime_executor;
+mod pipeline_threads_executor;
 
-// TODO: pub mod for tests
-pub mod new;
+mod executor_graph;
+mod executor_notify;
+mod executor_tasks;
+mod executor_worker_context;
+
+pub use executor_graph::RunningGraph;
+pub use pipeline_executor::PipelineExecutor;

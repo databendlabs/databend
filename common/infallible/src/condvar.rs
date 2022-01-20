@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,25 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use parking_lot::Mutex as ParkingMutex;
+use parking_lot::Condvar as ParkingCondvar;
 use parking_lot::MutexGuard;
 
-/// A simple wrapper around the lock() function of a std::sync::Mutex
-#[derive(Debug)]
-pub struct Mutex<T>(ParkingMutex<T>);
+pub struct Condvar(ParkingCondvar);
 
-unsafe impl<T> Send for Mutex<T> where ParkingMutex<T>: Send {}
-
-unsafe impl<T> Sync for Mutex<T> where ParkingMutex<T>: Sync {}
-
-impl<T> Mutex<T> {
-    /// creates mutex
-    pub fn new(t: T) -> Self {
-        Self(ParkingMutex::new(t))
+impl Condvar {
+    pub fn create() -> Condvar {
+        Condvar(ParkingCondvar::new())
     }
 
-    /// lock the mutex
-    pub fn lock(&self) -> MutexGuard<'_, T> {
-        self.0.lock()
+    #[inline]
+    pub fn notify_one(&self) -> bool {
+        self.0.notify_one()
+    }
+
+    #[inline]
+    pub fn wait<T: ?Sized>(&self, mutex_guard: &mut MutexGuard<'_, T>) {
+        self.0.wait(mutex_guard)
     }
 }
