@@ -84,7 +84,7 @@ macro_rules! impl_numeric {
                 $name
             }
 
-            fn alias(&self) -> &[&str] {
+            fn aliases(&self) -> &[&str] {
                 $alias
             }
 

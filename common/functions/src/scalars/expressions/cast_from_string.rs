@@ -78,18 +78,10 @@ pub fn cast_from_string(
         }
         TypeID::DateTime64 => {
             let mut builder = ColumnBuilder::<u64>::with_capacity(size);
-
-            let type_date_tim64 = data_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
-            let div = if type_date_tim64.precision() <= 3 {
-                1_000_000 // ms
-            } else {
-                1 //ns
-            };
-
             for (row, v) in str_column.iter().enumerate() {
                 match string_to_datetime64(v) {
                     Some(d) => {
-                        builder.append(d.timestamp_nanos() as u64 / div);
+                        builder.append(d.timestamp_nanos() as u64);
                     }
                     None => bitmap.set(row, false),
                 }

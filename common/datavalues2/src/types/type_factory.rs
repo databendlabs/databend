@@ -52,6 +52,7 @@ static TYPE_FACTORY: Lazy<Arc<TypeFactory>> = Lazy::new(|| {
 
     type_factory.add_array_wrapper();
     type_factory.add_nullable_wrapper();
+
     Arc::new(type_factory)
 });
 
@@ -81,7 +82,7 @@ impl TypeFactory {
     pub fn register(&mut self, data_type: DataTypePtr) {
         let mut names = vec![data_type.name()];
 
-        for alias in data_type.alias() {
+        for alias in data_type.aliases() {
             names.push(alias);
         }
         for name in names {
@@ -92,18 +93,26 @@ impl TypeFactory {
 
     pub fn add_array_wrapper(&mut self) {
         let mut arrays = HashMap::new();
-        for (_k, v) in self.case_insensitive_types.iter() {
+        for (k, v) in self.case_insensitive_types.iter() {
             let data_type: DataTypePtr = Arc::new(ArrayType::create(v.clone()));
-            arrays.insert(data_type.name().to_lowercase(), data_type.clone());
+            arrays.insert(
+                format!("Array({})", k).to_ascii_lowercase(),
+                data_type.clone(),
+            );
         }
         self.case_insensitive_types.extend(arrays);
     }
 
     pub fn add_nullable_wrapper(&mut self) {
         let mut nulls = HashMap::new();
-        for (_k, v) in self.case_insensitive_types.iter() {
-            let data_type: DataTypePtr = Arc::new(NullableType::create(v.clone()));
-            nulls.insert(data_type.name().to_lowercase(), data_type.clone());
+        for (k, v) in self.case_insensitive_types.iter() {
+            if v.can_inside_nullable() {
+                let data_type: DataTypePtr = Arc::new(NullableType::create(v.clone()));
+                nulls.insert(
+                    format!("Nullable({})", k).to_ascii_lowercase(),
+                    data_type.clone(),
+                );
+            }
         }
         self.case_insensitive_types.extend(nulls);
     }

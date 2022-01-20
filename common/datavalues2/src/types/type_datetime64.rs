@@ -41,19 +41,20 @@ impl DateTime64Type {
     pub fn arc(precision: usize, tz: Option<String>) -> DataTypePtr {
         Arc::new(DateTime64Type { precision, tz })
     }
+
     pub fn precision(&self) -> usize {
         self.precision
     }
 
     #[inline]
     pub fn utc_timestamp(&self, v: u64) -> DateTime<Utc> {
-        if self.precision <= 3 {
-            // ms
-            Utc.timestamp(v as i64 / 1000, (v % 1000 * 1_000_000) as u32)
-        } else {
-            // ns
-            Utc.timestamp(v as i64 / 1_000_000_000_000, (v % 1_000_000_000_000) as u32)
-        }
+        // ns
+        Utc.timestamp(v as i64 / 1_000_000_000, (v % 1_000_000_000) as u32)
+    }
+
+    #[inline]
+    pub fn seconds(&self, v: u64) -> u64 {
+        v / 1_000_000_000
     }
 }
 

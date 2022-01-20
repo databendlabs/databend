@@ -54,7 +54,7 @@ impl DataType for DateTimeType {
         "DateTime"
     }
 
-    fn alias(&self) -> &[&str] {
+    fn aliases(&self) -> &[&str] {
         &["DateTime32"]
     }
 

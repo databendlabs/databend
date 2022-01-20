@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -45,7 +46,7 @@ impl DataType for DateType {
         "Date"
     }
 
-    fn alias(&self) -> &[&str] {
+    fn aliases(&self) -> &[&str] {
         &["Date16"]
     }
 
@@ -71,6 +72,12 @@ impl DataType for DateType {
 
     fn arrow_type(&self) -> ArrowType {
         ArrowType::UInt16
+    }
+
+    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
+        let mut mp = BTreeMap::new();
+        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Date16".to_string());
+        Some(mp)
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {

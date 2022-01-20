@@ -571,11 +571,16 @@ impl RewriteHelper {
 
                 Ok(Expression::Alias(alias.clone(), Box::new(new_expr)))
             }
-            Expression::Cast { expr, data_type } => {
+            Expression::Cast {
+                expr,
+                data_type,
+                is_nullable,
+            } => {
                 let new_expr = RewriteHelper::expr_rewrite_alias(expr, data)?;
                 Ok(Expression::Cast {
                     expr: Box::new(new_expr),
                     data_type: data_type.clone(),
+                    is_nullable: *is_nullable,
                 })
             }
             Expression::Wildcard

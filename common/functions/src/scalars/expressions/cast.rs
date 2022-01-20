@@ -43,7 +43,7 @@ impl CastFunction {
         let factory = TypeFactory::instance();
         let data_type = factory.get(type_name)?;
 
-        if data_type.is_nullable() {
+        if data_type.is_nullable() || !data_type.can_inside_nullable() {
             return Ok(Box::new(Self {
                 _display_name: display_name.to_string(),
                 cast_type: data_type.clone(),

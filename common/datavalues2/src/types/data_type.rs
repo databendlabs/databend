@@ -60,13 +60,17 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
 
     fn name(&self) -> &str;
 
-    fn alias(&self) -> &[&str] {
+    fn aliases(&self) -> &[&str] {
         &[]
     }
 
     fn as_any(&self) -> &dyn Any;
 
     fn default_value(&self) -> DataValue;
+
+    fn can_inside_nullable(&self) -> bool {
+        true
+    }
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef>;
 
@@ -93,7 +97,7 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
 
 pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
     match dt {
-        ArrowType::Null => Arc::new(NullableType::create(Arc::new(NullType {}))),
+        ArrowType::Null => Arc::new(NullType {}),
         ArrowType::UInt8 => Arc::new(UInt8Type::default()),
         ArrowType::UInt16 => Arc::new(UInt16Type::default()),
         ArrowType::UInt32 => Arc::new(UInt32Type::default()),
@@ -152,7 +156,7 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
     let ty = from_arrow_type(dt);
 
     let is_nullable = f.is_nullable();
-    if is_nullable {
+    if is_nullable && ty.can_inside_nullable() {
         Arc::new(NullableType::create(ty))
     } else {
         ty
@@ -160,7 +164,7 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
 }
 
 pub fn wrap_nullable(data_type: &DataTypePtr) -> DataTypePtr {
-    if matches!(data_type.data_type_id(), TypeID::Nullable | TypeID::Null) {
+    if !data_type.can_inside_nullable() {
         return data_type.clone();
     }
     Arc::new(NullableType::create(data_type.clone()))

@@ -31,6 +31,7 @@ pub struct NullableType {
 
 impl NullableType {
     pub fn create(inner: DataTypePtr) -> Self {
+        debug_assert!(inner.can_inside_nullable());
         NullableType {
             name: format!("Nullable({})", inner.name()),
             inner,
@@ -59,6 +60,10 @@ impl DataType for NullableType {
 
     fn is_nullable(&self) -> bool {
         true
+    }
+
+    fn can_inside_nullable(&self) -> bool {
+        false
     }
 
     fn default_value(&self) -> DataValue {

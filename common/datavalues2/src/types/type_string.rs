@@ -44,7 +44,7 @@ impl DataType for StringType {
         "String"
     }
 
-    fn alias(&self) -> &[&str] {
+    fn aliases(&self) -> &[&str] {
         &["Binary", "Varchar", "Char", "Text", "Blob"]
     }
 

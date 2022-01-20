@@ -43,6 +43,10 @@ impl DataType for NullType {
         "Null"
     }
 
+    fn can_inside_nullable(&self) -> bool {
+        false
+    }
+
     // it's nothing, so we can't create any default value
     fn default_value(&self) -> DataValue {
         DataValue::Null

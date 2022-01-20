@@ -32,6 +32,8 @@ pub struct ArrayType {
 
 impl ArrayType {
     pub fn create(inner: DataTypePtr) -> Self {
+        let aliases = inner.aliases();
+
         ArrayType {
             name: format!("Array({})", inner.name()),
             inner,
@@ -58,12 +60,12 @@ impl DataType for ArrayType {
         &self.name
     }
 
-    fn alias(&self) -> &[&str] {
-        &[]
-    }
-
     fn default_value(&self) -> DataValue {
         DataValue::Array(vec![])
+    }
+
+    fn can_inside_nullable(&self) -> bool {
+        false
     }
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {

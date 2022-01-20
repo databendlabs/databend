@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues2::chrono::DateTime;
 use common_datavalues2::chrono::TimeZone;
@@ -46,6 +48,18 @@ pub fn cast_from_date16(
             Ok((builder.as_column(), None))
         }
 
+        TypeID::DateTime32 => {
+            let it = c.iter().map(|v| *v as u32 * 24 * 3600);
+            let result = Arc::new(UInt32Column::new_from_iter(it));
+            Ok((result, None))
+        }
+
+        TypeID::DateTime64 => {
+            let it = c.iter().map(|v| *v as u64 * 24 * 3600 * 1_000_000_000);
+            let result = Arc::new(UInt64Column::new_from_iter(it));
+            Ok((result, None))
+        }
+
         _ => arrow_cast_compute(column, data_type, cast_options),
     }
 }
@@ -68,6 +82,18 @@ pub fn cast_from_date32(
                 builder.append(s.as_bytes());
             }
             Ok((builder.as_column(), None))
+        }
+
+        TypeID::DateTime32 => {
+            let it = c.iter().map(|v| *v as u32 * 24 * 3600);
+            let result = Arc::new(UInt32Column::new_from_iter(it));
+            Ok((result, None))
+        }
+
+        TypeID::DateTime64 => {
+            let it = c.iter().map(|v| *v as u64 * 24 * 3600 * 1_000_000_000);
+            let result = Arc::new(UInt64Column::new_from_iter(it));
+            Ok((result, None))
         }
 
         _ => arrow_cast_compute(column, data_type, cast_options),
@@ -94,6 +120,24 @@ pub fn cast_from_datetime32(
             Ok((builder.as_column(), None))
         }
 
+        TypeID::Date16 => {
+            let it = c.iter().map(|v| (*v as i64 / 24 / 3600) as u16);
+            let result = Arc::new(UInt16Column::new_from_iter(it));
+            Ok((result, None))
+        }
+
+        TypeID::Date32 => {
+            let it = c.iter().map(|v| (*v as i64 / 24 / 3600) as i32);
+            let result = Arc::new(Int32Column::new_from_iter(it));
+            Ok((result, None))
+        }
+
+        TypeID::DateTime64 => {
+            let it = c.iter().map(|v| *v as u64 * 1_000_000_000);
+            let result = Arc::new(UInt64Column::new_from_iter(it));
+            Ok((result, None))
+        }
+
         _ => arrow_cast_compute(column, data_type, cast_options),
     }
 }
@@ -107,15 +151,40 @@ pub fn cast_from_datetime64(
     let c: &UInt64Column = Series::check_get(&c)?;
     let size = c.len();
 
+    let date_time64 = data_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
+
     match data_type.data_type_id() {
         TypeID::String => {
             let mut builder = MutableStringColumn::with_capacity(size);
-            let date_time64 = data_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
             for v in c.iter() {
                 let s = datetime_to_string(date_time64.utc_timestamp(*v), TIME64_FMT);
                 builder.append(s.as_bytes());
             }
             Ok((builder.as_column(), None))
+        }
+
+        TypeID::Date16 => {
+            let date_time64 = data_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
+
+            let it = c
+                .iter()
+                .map(|v| (date_time64.seconds(*v) / 24 / 3600) as u16);
+            let result = Arc::new(UInt16Column::new_from_iter(it));
+            Ok((result, None))
+        }
+
+        TypeID::Date32 => {
+            let it = c
+                .iter()
+                .map(|v| (date_time64.seconds(*v) / 24 / 3600) as i32);
+            let result = Arc::new(Int32Column::new_from_iter(it));
+            Ok((result, None))
+        }
+
+        TypeID::DateTime32 => {
+            let it = c.iter().map(|v| date_time64.seconds(*v) as u32);
+            let result = Arc::new(UInt32Column::new_from_iter(it));
+            Ok((result, None))
         }
 
         _ => arrow_cast_compute(column, data_type, cast_options),

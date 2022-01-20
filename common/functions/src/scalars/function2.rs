@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
+use std::sync::Arc;
 
 use common_datavalues::prelude::DataField as OldDataField;
 use common_datavalues::DataTypeAndNullable;
@@ -117,14 +118,9 @@ impl Function for Function2Adapter {
         columns: &common_datavalues::prelude::DataColumnsWithField,
         input_rows: usize,
     ) -> Result<common_datavalues::prelude::DataColumn> {
-        let columns = columns
+        let columns: Vec<ColumnWithField> = columns
             .iter()
-            .map(|c| {
-                let col = convert2_new_column(c.column(), c.field().is_nullable());
-                let new_f: DataField = c.field().clone().into();
-
-                ColumnWithField::new(col, new_f)
-            })
+            .map(|c| convert2_new_column(c))
             .collect::<Vec<_>>();
 
         // unwrap nullable
@@ -147,7 +143,9 @@ impl Function for Function2Adapter {
                     ColumnWithField::new(c.inner().clone(), v.field().clone())
                 })
                 .collect::<Vec<_>>();
-            let col = self.inner.eval(&columns, input_rows)?;
+
+            let col = self.inner.eval(&columns, 1)?;
+            let col: ColumnRef = Arc::new(ConstColumn::new(col, input_rows));
             let column = convert2_old_column(&col);
             return Ok(column);
         }

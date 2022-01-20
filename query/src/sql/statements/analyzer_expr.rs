@@ -327,6 +327,7 @@ impl ExpressionAnalyzer {
                 args.push(Expression::Cast {
                     expr: Box::new(inner_expr),
                     data_type: data_type.clone(),
+                    is_nullable: false,
                 });
                 Ok(())
             }
