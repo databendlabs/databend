@@ -20,19 +20,19 @@ use common_planners::PlanNode;
 
 use crate::sessions::QueryContext;
 
-pub struct ProxyModeAccess {
+pub struct ManagementModeAccess {
     ctx: Arc<QueryContext>,
 }
 
-impl ProxyModeAccess {
+impl ManagementModeAccess {
     pub fn create(ctx: Arc<QueryContext>) -> Self {
-        ProxyModeAccess { ctx }
+        ManagementModeAccess { ctx }
     }
 
-    // Check what we can do if in proxy mode.
+    // Check what we can do if in management mode.
     pub fn check(&self, plan: &PlanNode) -> Result<()> {
-        // Allows for proxy-mode.
-        if self.ctx.get_config().query.proxy_mode {
+        // Allows for management-mode.
+        if self.ctx.get_config().query.management_mode {
             return match plan {
                 PlanNode::Stage(_)
                 | PlanNode::CreateDatabase(_)
@@ -55,16 +55,18 @@ impl ProxyModeAccess {
                 | PlanNode::CreateUDF(_)
                 | PlanNode::DropUDF(_)
                 | PlanNode::ShowUDF(_)
+                | PlanNode::UseDatabase(_)
+                | PlanNode::Select(_) // Allow select from system.* tables, like show tables;
                 | PlanNode::AlterUDF(_) => Ok(()),
-                _ => Err(ErrorCode::ProxyModePermissionDenied(format!(
-                    "Access denied for operation:{:?} in proxy-mode",
+                _ => Err(ErrorCode::ManagementModePermissionDenied(format!(
+                    "Access denied for operation:{:?} in management-mode",
                     plan.name()
                 ))),
             };
         } else {
             match plan {
-                PlanNode::UseTenant(_) => Err(ErrorCode::ProxyModePermissionDenied(
-                    "Access denied:'USE TENANT' only used in proxy-mode",
+                PlanNode::UseTenant(_) => Err(ErrorCode::ManagementModePermissionDenied(
+                    "Access denied:'USE TENANT' only used in management-mode",
                 )),
                 _ => Ok(()),
             }

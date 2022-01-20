@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "databend"
+version = "0.1.0"
+description = "Apache-2.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+numpy = "^1.22.1"
+pyre-check = "^0.9.10"
+boto3 = "^1.20.38"
+moto = {extras = ["all"], version = "^2.3.2"}
+yapf = "^0.32.0"
+shfmt-py = "^3.3.1"
+mysql-connector-python = "^8.0.28"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

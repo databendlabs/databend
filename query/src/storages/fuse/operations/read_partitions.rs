@@ -39,6 +39,8 @@ impl FuseTable {
         match snapshot {
             Some(snapshot) => {
                 let schema = self.table_info.schema();
+                ctx.get_dal_context()
+                    .inc_partitions_total(snapshot.summary.block_count as usize);
                 let block_metas = BlockPruner::new(&snapshot)
                     .apply(schema, &push_downs, ctx.as_ref())
                     .await?;

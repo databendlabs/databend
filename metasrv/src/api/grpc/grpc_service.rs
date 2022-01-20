@@ -57,12 +57,12 @@ impl MetaGrpcImpl {
             .get_bin("auth-token-bin")
             .and_then(|v| v.to_bytes().ok())
             .and_then(|b| String::from_utf8(b.to_vec()).ok())
-            .ok_or_else(|| Status::internal("Error auth-token-bin is empty"))?;
+            .ok_or_else(|| Status::unauthenticated("Error auth-token-bin is empty"))?;
 
         let claim = self
             .token
             .try_verify_token(token)
-            .map_err(|e| Status::internal(e.to_string()))?;
+            .map_err(|e| Status::unauthenticated(e.to_string()))?;
         Ok(claim)
     }
 }

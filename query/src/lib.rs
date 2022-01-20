@@ -15,6 +15,7 @@
 #![feature(hash_raw_entry)]
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]
+#![feature(bool_to_option)]
 
 pub mod api;
 pub mod catalogs;

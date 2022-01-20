@@ -86,6 +86,15 @@ impl TryInto<MetaGrpcWriteReq> for Request<RaftRequest> {
     }
 }
 
+impl tonic::IntoRequest<RaftRequest> for MetaGrpcWriteReq {
+    fn into_request(self) -> Request<RaftRequest> {
+        let raft_request = RaftRequest {
+            data: serde_json::to_string(&self).expect("fail to serialize"),
+        };
+        tonic::Request::new(raft_request)
+    }
+}
+
 /// Try convert DoActionAction to tonic::Request<RaftRequest>.
 impl TryInto<Request<RaftRequest>> for &MetaGrpcWriteReq {
     type Error = ErrorCode;
@@ -110,6 +119,16 @@ impl TryInto<MetaGrpcReadReq> for Request<GetRequest> {
         let action = serde_json::from_str::<MetaGrpcReadReq>(json_str)
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
         Ok(action)
+    }
+}
+
+impl tonic::IntoRequest<GetRequest> for MetaGrpcReadReq {
+    fn into_request(self) -> Request<GetRequest> {
+        let get_req = GetRequest {
+            key: serde_json::to_string(&self).expect("fail to serialize"),
+        };
+
+        tonic::Request::new(get_req)
     }
 }
 

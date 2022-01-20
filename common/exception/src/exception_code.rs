@@ -114,7 +114,7 @@ build_exceptions! {
     InvalidSourceFormat(1059),
     StrParseError(1060),
     IllegalGrant(1061),
-    ProxyModePermissionDenied(1062),
+    ManagementModePermissionDenied(1062),
     PermissionDenied(1063),
     UnmarshalError(1064),
     SemanticError(1065),

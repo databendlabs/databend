@@ -72,7 +72,7 @@ table_cache_block_meta_count = 102400
 table_memory_cache_mb_size = 256
 table_disk_cache_root = \"_cache\"
 table_disk_cache_mb_size = 1024
-proxy_mode = false
+management_mode = false
 
 [log]
 log_level = \"INFO\"

@@ -8,15 +8,15 @@ The CREATE USER statement creates new Databend accounts. It enables authenticati
 ## Syntax
 
 ```sql
-CREATE USER IDENTIFIED [WITH auth_plugin] BY 'auth_string'
+CREATE USER IDENTIFIED [WITH auth_type ] BY 'auth_string'
 
-auth_plugin: {
+auth_type: {
     plaintext_password
   | double_sha1_password
   | sha256_password
 }
 
-auth_plugin default is sha256_password
+auth_type default is sha256_password
 ```
 
 ## Examples
