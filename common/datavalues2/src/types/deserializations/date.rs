@@ -52,11 +52,6 @@ where
     }
 
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        if reader.eq_ignore_ascii_case(b"null") {
-            self.builder.append_null();
-            return Ok(());
-        }
-
         match lexical_core::parse::<T>(reader) {
             Ok(v) => {
                 self.builder.append_value(v);
@@ -74,10 +69,6 @@ where
                 Ok(())
             }
         }
-    }
-
-    fn de_null(&mut self) -> bool {
-        self.builder.append_null()
     }
 
     fn finish_to_column(&mut self) -> ColumnRef {

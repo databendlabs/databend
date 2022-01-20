@@ -12,22 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_arrow::arrow::bitmap::MutableBitmap;
 
 use crate::columns::mutable::MutableColumn;
 use crate::types::BooleanType;
 use crate::types::DataTypePtr;
 use crate::BooleanColumn;
-use crate::ColumnRef;
 
 pub struct MutableBooleanColumn {
     values: MutableBitmap,
     data_type: DataTypePtr,
 }
 
-impl MutableColumn for MutableBooleanColumn {
+impl MutableColumn<bool, BooleanColumn> for MutableBooleanColumn {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -36,8 +33,18 @@ impl MutableColumn for MutableBooleanColumn {
         self
     }
 
-    fn as_column(&mut self) -> ColumnRef {
-        Arc::new(self.finish())
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            values: MutableBitmap::with_capacity(capacity),
+            data_type: BooleanType::arc(),
+        }
+    }
+
+    fn finish(&mut self) -> BooleanColumn {
+        self.shrink_to_fit();
+        BooleanColumn {
+            values: std::mem::take(&mut self.values).into(),
+        }
     }
 
     fn data_type(&self) -> DataTypePtr {
@@ -51,6 +58,14 @@ impl MutableColumn for MutableBooleanColumn {
     fn append_default(&mut self) {
         self.append_value(false);
     }
+
+    fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    fn append(&mut self, item: bool) {
+        self.append_value(item)
+    }
 }
 
 impl Default for MutableBooleanColumn {
@@ -62,13 +77,6 @@ impl Default for MutableBooleanColumn {
 impl MutableBooleanColumn {
     pub fn new() -> Self {
         Self::with_capacity(0)
-    }
-
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            values: MutableBitmap::with_capacity(capacity),
-            data_type: BooleanType::arc(),
-        }
     }
 
     pub fn from_data(values: MutableBitmap) -> Self {

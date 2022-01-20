@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-
-mod mutable;
-use std::sync::Arc;
-
-pub use mutable::*;
 
 use crate::prelude::*;
 

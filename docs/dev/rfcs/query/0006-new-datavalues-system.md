@@ -224,12 +224,12 @@ impl Series {
 }
 ```
 
-- Convinient way to view a column by `ColumnWrapper`
+- Convinient way to view a column by `ColumnViewer`
 
 No need to care about `Constants` and `Nullable`.
 
 ```rust
-let wrapper = ColumnWrapper::<i8>::create(&column)?;
+let wrapper = ColumnViewer::<i8>::create(&column)?;
 
 assert_eq!(wrapper.len(), 10);
 assert!(!wrapper.null_at(0));
@@ -239,10 +239,10 @@ for i in 0..wrapper.len() {
 Ok(())
 
 
-let wrapper = ColumnWrapper::<bool>::create(&column)?;
+let wrapper = ColumnViewer::<bool>::create(&column)?;
 let c = wrapper.value(0);
 
-let wrapper =  ColumnWrapper::<&str>::create(&column)?;
+let wrapper =  ColumnViewer::<&str>::create(&column)?;
 let c = wrapper.value(1);
 Ok(())
 ```

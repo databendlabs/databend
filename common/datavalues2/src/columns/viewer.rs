@@ -20,7 +20,7 @@ use crate::prelude::*;
 
 /// A wrapper for a column.
 /// It can help to better access the data without cast into nullable/const column.
-pub struct ColumnWrapper<'a, T: ScalarType> {
+pub struct ColumnViewer<'a, T: ScalarType> {
     pub column: &'a T::ColumnType,
     pub data: &'a [T],
     pub validity: Bitmap,
@@ -38,7 +38,7 @@ pub trait GetDatas<E> {
     fn get_data(&self) -> &[E];
 }
 
-impl<'a, T> ColumnWrapper<'a, T>
+impl<'a, T> ColumnViewer<'a, T>
 where
     T: ScalarType + Default,
     T::ColumnType: Clone + GetDatas<T> + 'static,
@@ -53,7 +53,7 @@ where
             (c.inner(), c.ensure_validity().clone())
         } else {
             let mut bitmap = MutableBitmap::with_capacity(1);
-            bitmap.extend_constant(1, true);
+            bitmap.push(true);
 
             if column.is_const() {
                 let c: &ConstColumn = unsafe { Series::static_cast(column) };
@@ -77,8 +77,13 @@ where
     }
 
     #[inline]
+    pub fn valid_at(&self, i: usize) -> bool {
+        unsafe { self.validity.get_bit_unchecked(i & self.null_mask) }
+    }
+
+    #[inline]
     pub fn null_at(&self, i: usize) -> bool {
-        unsafe { !self.validity.get_bit_unchecked(i & self.null_mask) }
+        !self.valid_at(i)
     }
 
     #[inline]

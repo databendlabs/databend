@@ -113,7 +113,9 @@ impl IntoColumn for ArrayRef {
         use TypeID::*;
         let data_type: DataTypePtr = from_arrow_type(self.data_type());
         match data_type.data_type_id() {
-            Nullable | Null => Arc::new(NullColumn::from_arrow_array(self.as_ref())),
+            // arrow type has no nullable type
+            Nullable => unimplemented!(),
+            Null => Arc::new(NullColumn::from_arrow_array(self.as_ref())),
             Boolean => Arc::new(BooleanColumn::from_arrow_array(self.as_ref())),
             UInt8 => Arc::new(UInt8Column::from_arrow_array(self.as_ref())),
             UInt16 | Date16 => Arc::new(UInt16Column::from_arrow_array(self.as_ref())),
