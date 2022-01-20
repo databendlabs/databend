@@ -88,12 +88,23 @@ pub async fn streaming_load(
         .unwrap_or("0")
         .eq_ignore_ascii_case("1");
 
+    let tt = req
+        .headers()
+        .get("field_delimitor")
+        .and_then(|v| v.to_str().ok());
+
     let field_delimitor = req
         .headers()
         .get("field_delimitor")
         .and_then(|v| v.to_str().ok())
         .map(|v| match v.len() {
-            n if n >= 1 => v.as_bytes()[0],
+            n if n >= 1 => {
+                if v.as_bytes()[0] == b'\\' {
+                    b'\t'
+                } else {
+                    v.as_bytes()[0]
+                }
+            }
             _ => b',',
         })
         .unwrap_or(b',');
@@ -103,7 +114,13 @@ pub async fn streaming_load(
         .get("record_delimitor")
         .and_then(|v| v.to_str().ok())
         .map(|v| match v.len() {
-            n if n >= 1 => v.as_bytes()[0],
+            n if n >= 1 => {
+                if v.as_bytes()[0] == b'\\' {
+                    b'\n'
+                } else {
+                    v.as_bytes()[0]
+                }
+            }
             _ => b'\n',
         })
         .unwrap_or(b'\n');
