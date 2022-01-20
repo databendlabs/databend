@@ -21,44 +21,55 @@ use crate::users::UserApiProvider;
 /// user stage operations.
 impl UserApiProvider {
     // Add a new stage.
-    pub async fn add_stage(&self, info: UserStageInfo) -> Result<u64> {
-        let stage_api_provider = self.get_stage_api_client();
+    pub async fn add_stage(
+        &self,
+        tenant: &str,
+        info: UserStageInfo,
+        if_not_exists: bool,
+    ) -> Result<u64> {
+        let stage_api_provider = self.get_stage_api_client(tenant);
         let add_stage = stage_api_provider.add_stage(info);
         match add_stage.await {
             Ok(res) => Ok(res),
-            Err(failure) => Err(failure.add_message_back("(while add stage).")),
+            Err(e) => {
+                if if_not_exists && e.code() == ErrorCode::stage_already_exists_code() {
+                    Ok(u64::MIN)
+                } else {
+                    Err(e)
+                }
+            }
         }
     }
 
     // Get one stage from by tenant.
-    pub async fn get_stage(&self, stage_name: &str) -> Result<UserStageInfo> {
-        let stage_api_provider = self.get_stage_api_client();
+    pub async fn get_stage(&self, tenant: &str, stage_name: &str) -> Result<UserStageInfo> {
+        let stage_api_provider = self.get_stage_api_client(tenant);
         let get_stage = stage_api_provider.get_stage(stage_name, None);
         Ok(get_stage.await?.data)
     }
 
     // Get the tenant all stage list.
-    pub async fn get_stages(&self) -> Result<Vec<UserStageInfo>> {
-        let stage_api_provider = self.get_stage_api_client();
+    pub async fn get_stages(&self, tenant: &str) -> Result<Vec<UserStageInfo>> {
+        let stage_api_provider = self.get_stage_api_client(tenant);
         let get_stages = stage_api_provider.get_stages();
 
         match get_stages.await {
-            Err(failure) => Err(failure.add_message_back("(while get stages).")),
+            Err(e) => Err(e.add_message_back("(while get stages).")),
             Ok(seq_stages_info) => Ok(seq_stages_info),
         }
     }
 
     // Drop a stage by name.
-    pub async fn drop_stage(&self, name: &str, if_exist: bool) -> Result<()> {
-        let stage_api_provider = self.get_stage_api_client();
+    pub async fn drop_stage(&self, tenant: &str, name: &str, if_exists: bool) -> Result<()> {
+        let stage_api_provider = self.get_stage_api_client(tenant);
         let drop_stage = stage_api_provider.drop_stage(name, None);
         match drop_stage.await {
             Ok(res) => Ok(res),
-            Err(failure) => {
-                if if_exist && failure.code() == ErrorCode::UnknownStageCode() {
+            Err(e) => {
+                if if_exists && e.code() == ErrorCode::unknown_stage_code() {
                     Ok(())
                 } else {
-                    Err(failure.add_message_back("(while drop stage)"))
+                    Err(e.add_message_back("(while drop stage)"))
                 }
             }
         }

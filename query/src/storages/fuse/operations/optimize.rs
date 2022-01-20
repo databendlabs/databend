@@ -16,14 +16,13 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_cache::Cache;
 use common_dal::DataAccessor;
 use common_exception::Result;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::snapshot_location;
-use crate::storages::fuse::io::SegmentReader;
-use crate::storages::fuse::io::SnapshotReader;
-use crate::storages::fuse::meta::TableSnapshot;
+use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
@@ -34,12 +33,11 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         keep_last_snapshot: bool,
     ) -> Result<()> {
-        let da = ctx.get_data_accessor()?;
+        let da = ctx.get_storage_accessor()?;
         let tbl_info = self.get_table_info();
         let snapshot_loc = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
-        let mut snapshots =
-            SnapshotReader::read_snapshot_history(da.as_ref(), snapshot_loc, ctx.get_table_cache())
-                .await?;
+        let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
+        let mut snapshots = reader.read_snapshot_history(snapshot_loc).await?;
 
         let min_history_len = if !keep_last_snapshot { 0 } else { 1 };
 
@@ -49,7 +47,7 @@ impl FuseTable {
         }
 
         let current_segments: HashSet<&String>;
-        let current_snapshot: TableSnapshot;
+        let current_snapshot;
         if !keep_last_snapshot {
             // if truncate_all requested, gc root contains nothing;
             current_segments = HashSet::new();
@@ -67,12 +65,9 @@ impl FuseTable {
         let seg_delta = prevs.difference(&current_segments).collect::<Vec<_>>();
 
         // blocks to be removed
-        let prev_blocks: HashSet<String> = self
-            .blocks_of(da.clone(), seg_delta.iter(), ctx.clone())
-            .await?;
-        let current_blocks: HashSet<String> = self
-            .blocks_of(da.clone(), current_segments.iter(), ctx.clone())
-            .await?;
+        let prev_blocks: HashSet<String> = self.blocks_of(seg_delta.iter(), ctx.clone()).await?;
+        let current_blocks: HashSet<String> =
+            self.blocks_of(current_segments.iter(), ctx.clone()).await?;
         let block_delta = prev_blocks.difference(&current_blocks);
 
         // NOTE: the following actions are NOT transactional yet
@@ -80,17 +75,29 @@ impl FuseTable {
         // 1. remove blocks
         for x in block_delta {
             self.remove_location(da.clone(), x).await?;
+            if let Some(c) = ctx.get_storage_cache_manager().get_block_meta_cache() {
+                let cache = &mut *c.write().await;
+                cache.pop(x.as_str());
+            }
         }
 
         // 2. remove the segments
         for x in seg_delta {
-            self.remove_location(da.clone(), x).await?;
+            self.remove_location(da.clone(), x.as_str()).await?;
+            if let Some(c) = ctx.get_storage_cache_manager().get_table_segment_cache() {
+                let cache = &mut *c.write().await;
+                cache.pop(x.as_str());
+            }
         }
 
         // 3. remove the snapshots
         for x in snapshots.iter().rev() {
             let loc = snapshot_location(&x.snapshot_id);
-            self.remove_location(da.clone(), loc).await?
+            self.remove_location(da.clone(), loc.as_str()).await?;
+            if let Some(c) = ctx.get_storage_cache_manager().get_table_snapshot_cache() {
+                let cache = &mut *c.write().await;
+                cache.pop(loc.as_str());
+            }
         }
 
         Ok(())
@@ -98,15 +105,15 @@ impl FuseTable {
 
     async fn blocks_of(
         &self,
-        data_accessor: Arc<dyn DataAccessor>,
         locations: impl Iterator<Item = impl AsRef<str>>,
         ctx: Arc<QueryContext>,
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
-        for x in locations {
-            let res = SegmentReader::read(data_accessor.as_ref(), x, ctx.get_table_cache()).await?;
-            for block_meta in res.blocks {
-                result.insert(block_meta.location.path);
+        let reader = MetaReaders::segment_info_reader(ctx.as_ref());
+        for location in locations {
+            let res = reader.read(location).await?;
+            for block_meta in &res.blocks {
+                result.insert(block_meta.location.path.clone());
             }
         }
         Ok(result)

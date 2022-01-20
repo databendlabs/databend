@@ -19,14 +19,14 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;
-use common_streams::ParquetSource;
 use common_streams::SendableDataBlockStream;
-use common_streams::Source;
 use common_tracing::tracing_futures::Instrument;
 use futures::StreamExt;
 
 use super::part_info::PartInfo;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::io::BlockReader;
+use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
@@ -59,9 +59,9 @@ impl FuseTable {
                 },
             )
             .flatten();
-        let da = ctx.get_data_accessor()?;
+        let da = ctx.get_storage_accessor()?;
         let arrow_schema = self.table_info.schema().to_arrow();
-        let table_schema = Arc::new(DataSchema::from(arrow_schema));
+        let table_schema = Arc::new(DataSchema::from(arrow_schema)); // TODO is this self.table_info?
 
         let part_stream = futures::stream::iter(iter);
 
@@ -71,35 +71,27 @@ impl FuseTable {
                 let da = da.clone();
                 let table_schema = table_schema.clone();
                 let projection = projection.clone();
+                let reader = MetaReaders::block_meta_reader(ctx.clone());
                 async move {
                     let part_info = PartInfo::decode(&part.name)?;
                     let part_location = part_info.location();
                     let part_len = part_info.length();
 
-                    let mut source = ParquetSource::with_hints(
+                    let mut block_reader = BlockReader::new(
                         da,
                         part_info.location().to_owned(),
                         table_schema,
                         projection,
-                        None, // TODO cache parquet meta
-                        Some(part_len),
-                        Some(read_buffer_size),
+                        part_len,
+                        read_buffer_size,
+                        reader,
                     );
-                    source
-                        .read()
-                        .await
-                        .map_err(|e| {
-                            ErrorCode::ParquetError(format!(
-                                "fail to read block {}, {}",
-                                part_location, e
-                            ))
-                        })?
-                        .ok_or_else(|| {
-                            ErrorCode::ParquetError(format!(
-                                "reader returns None for block {}",
-                                part_location,
-                            ))
-                        })
+                    block_reader.read().await.map_err(|e| {
+                        ErrorCode::ParquetError(format!(
+                            "fail to read block {}, {}",
+                            part_location, e
+                        ))
+                    })
                 }
             })
             .buffer_unordered(bite_size as usize)

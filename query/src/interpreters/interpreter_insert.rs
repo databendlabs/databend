@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::GrantObject;
+use common_meta_types::UserPrivilegeType;
 use common_planners::InsertInputSource;
 use common_planners::InsertPlan;
 use common_streams::DataBlockStream;
@@ -52,6 +54,12 @@ impl Interpreter for InsertInterpreter {
         mut input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
+
+        self.ctx.get_current_session().validate_privilege(
+            &GrantObject::Table(plan.database_name.clone(), plan.table_name.clone()),
+            UserPrivilegeType::Insert,
+        )?;
+
         let table = self
             .ctx
             .get_table(&plan.database_name, &plan.table_name)
@@ -100,7 +108,7 @@ impl Interpreter for InsertInterpreter {
         }?;
         // feed back the append operation logs to table
         table
-            .commit(
+            .commit_insertion(
                 self.ctx.clone(),
                 append_logs.try_collect().await?,
                 self.plan.overwrite,

@@ -16,13 +16,11 @@ use std::collections::hash_map::Entry::Occupied;
 use std::collections::hash_map::Entry::Vacant;
 use std::collections::HashMap;
 use std::future::Future;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::tokio;
 use common_base::SignalStream;
-use common_cache::storage::StorageCache;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -33,13 +31,11 @@ use futures::StreamExt;
 
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
-use crate::configs::config_storage::StorageType;
 use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
-use crate::storages::fuse::cache::LocalCache;
-use crate::storages::fuse::cache::LocalCacheConfig;
+use crate::storages::cache::CacheManager;
 use crate::users::UserApiProvider;
 
 pub struct SessionManager {
@@ -51,27 +47,12 @@ pub struct SessionManager {
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
-    pub(in crate::sessions) table_cache: Arc<Option<Box<dyn StorageCache>>>,
+    pub(in crate::sessions) storage_cache_manager: Arc<CacheManager>,
 }
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
-        let storage_type = StorageType::from_str(conf.storage.storage_type.as_str())
-            .map_err(|err| ErrorCode::InvalidConfig(format!("Invalid config: {}", err)))?;
-        let table_cache = if conf.query.table_cache_enabled && storage_type != StorageType::Disk {
-            let cache_conf = LocalCacheConfig {
-                memory_cache_size_mb: conf.query.table_memory_cache_mb_size,
-                disk_cache_size_mb: conf.query.table_disk_cache_mb_size,
-                disk_cache_root: conf.query.table_disk_cache_root.clone(),
-                tenant_id: conf.query.tenant_id.clone(),
-                cluster_id: conf.query.cluster_id.clone(),
-            };
-            let table_cache = LocalCache::create(cache_conf)?;
-            Arc::new(Some(table_cache))
-        } else {
-            Arc::new(None)
-        };
-
+        let storage_cache_mgr = CacheManager::init(&conf.query);
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
 
         // Cluster discovery.
@@ -79,8 +60,6 @@ impl SessionManager {
 
         // User manager and init the default users.
         let user = UserApiProvider::create_global(conf.clone()).await?;
-        user.load_udfs(conf.clone()).await?;
-
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
 
         let max_active_sessions = conf.query.max_active_sessions as usize;
@@ -92,7 +71,7 @@ impl SessionManager {
             http_query_manager,
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
-            table_cache,
+            storage_cache_manager: Arc::new(storage_cache_mgr),
         }))
     }
 
@@ -108,7 +87,7 @@ impl SessionManager {
         self.http_query_manager.clone()
     }
 
-    // Get the user api provider.
+    /// Get the user api provider.
     pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
         self.user.clone()
     }
@@ -117,8 +96,8 @@ impl SessionManager {
         self.catalog.clone()
     }
 
-    pub fn get_table_cache(self: &Arc<Self>) -> Arc<Option<Box<dyn StorageCache>>> {
-        self.table_cache.clone()
+    pub fn get_storage_cache_manager(&self) -> &CacheManager {
+        self.storage_cache_manager.as_ref()
     }
 
     pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
@@ -175,7 +154,7 @@ impl SessionManager {
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn get_session(self: &Arc<Self>, id: &String) -> Option<SessionRef> {
+    pub fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
         let sessions = self.active_sessions.read();
         sessions
             .get(id)

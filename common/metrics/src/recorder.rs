@@ -28,21 +28,6 @@ static PROMETHEUS_HANDLE: Lazy<Arc<RwLock<Option<PrometheusHandle>>>> =
 pub const LABEL_KEY_TENANT: &str = "tenant";
 pub const LABEL_KEY_CLUSTER: &str = "cluster_name";
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct TenantLabel {
-    pub tenant_id: String,
-    pub cluster_id: String,
-}
-
-impl TenantLabel {
-    pub fn new(tenant_id: impl Into<String>, cluster_id: impl Into<String>) -> Self {
-        Self {
-            tenant_id: tenant_id.into(),
-            cluster_id: cluster_id.into(),
-        }
-    }
-}
-
 #[inline]
 pub fn label_counter(name: &'static str, tenant_id: &str, cluster_id: &str) {
     label_counter_with_val(name, 1, tenant_id, cluster_id)

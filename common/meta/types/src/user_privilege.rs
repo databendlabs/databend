@@ -47,6 +47,8 @@ pub enum UserPrivilegeType {
     CreateRole = 1 << 11,
     // Privilege to Grant/Revoke privileges to users or roles
     Grant = 1 << 12,
+    // Privilege to Create Stage.
+    CreateStage = 1 << 13,
     // TODO: remove this later
     Set = 1 << 4,
 }
@@ -82,6 +84,7 @@ impl std::fmt::Display for UserPrivilegeType {
             UserPrivilegeType::Super => "SUPER",
             UserPrivilegeType::CreateUser => "CREATE USER",
             UserPrivilegeType::CreateRole => "CREATE ROLE",
+            UserPrivilegeType::CreateStage => "CREATE STAGE",
             UserPrivilegeType::Grant => "GRANT",
             UserPrivilegeType::Set => "SET",
         })
@@ -98,6 +101,10 @@ impl UserPrivilegeSet {
         UserPrivilegeSet {
             privileges: BitFlags::empty(),
         }
+    }
+
+    pub fn iter(self) -> impl Iterator<Item = UserPrivilegeType> {
+        BitFlags::from(self).iter()
     }
 
     /// The all privileges which available to the global grant object. It contains ALL the privileges

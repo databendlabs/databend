@@ -37,11 +37,11 @@ use databend_query::configs::Config;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::PlanParser;
+use databend_query::storages::fuse::FuseHistoryTable;
 use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_query::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
-use databend_query::storages::FuseHistoryTable;
 use databend_query::storages::Table;
 use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::TableArgs;
@@ -67,10 +67,12 @@ impl TestFixture {
         config.storage.disk.temp_data_path = tmp_dir.path().to_str().unwrap().to_string();
         let ctx = crate::tests::create_query_context_with_config(config).unwrap();
 
-        let random_prefix: String = Uuid::new_v4().to_simple().to_string();
+        let tenant = ctx.get_tenant();
+        let random_prefix: String = Uuid::new_v4().simple().to_string();
         // prepare a randomly named default database
         let db_name = gen_db_name(&random_prefix);
         let plan = CreateDatabasePlan {
+            tenant,
             if_not_exists: false,
             db: db_name,
             meta: DatabaseMeta {
@@ -94,6 +96,10 @@ impl TestFixture {
         self.ctx.clone()
     }
 
+    pub fn default_tenant(&self) -> String {
+        self.ctx().get_tenant()
+    }
+
     pub fn default_db_name(&self) -> String {
         gen_db_name(&self.prefix)
     }
@@ -109,6 +115,7 @@ impl TestFixture {
     pub fn default_crate_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
             if_not_exists: false,
+            tenant: self.default_tenant(),
             db: self.default_db_name(),
             table: self.default_table_name(),
             table_meta: TableMeta {
@@ -128,23 +135,40 @@ impl TestFixture {
         catalog.create_table(create_table_plan.into()).await
     }
 
-    pub fn gen_sample_blocks(num: u32, start: i32) -> Vec<Result<DataBlock>> {
-        (0..num)
+    pub fn gen_sample_blocks(num: usize, start: i32) -> Vec<Result<DataBlock>> {
+        Self::gen_sample_blocks_ex(num, 3, start)
+    }
+
+    pub fn gen_sample_blocks_ex(
+        num_of_block: usize,
+        rows_perf_block: usize,
+        start: i32,
+    ) -> Vec<Result<DataBlock>> {
+        (0..num_of_block)
             .into_iter()
-            .map(|_v| {
+            .map(|idx| {
                 let schema =
                     DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
-                Ok(DataBlock::create_by_array(schema, vec![Series::new(vec![
-                    start,
-                    start + 1,
-                    start + 2,
-                ])]))
+                Ok(DataBlock::create_by_array(schema, vec![Series::new(
+                    std::iter::repeat_with(|| idx as i32 + start)
+                        .take(rows_perf_block)
+                        .collect::<Vec<i32>>(),
+                )]))
             })
             .collect()
     }
 
-    pub fn gen_sample_blocks_stream(num: u32, start: i32) -> SendableDataBlockStream {
+    pub fn gen_sample_blocks_stream(num: usize, start: i32) -> SendableDataBlockStream {
         let blocks = Self::gen_sample_blocks(num, start);
+        Box::pin(futures::stream::iter(blocks))
+    }
+
+    pub fn gen_sample_blocks_stream_ex(
+        num_of_block: usize,
+        rows_perf_block: usize,
+        val_start_from: i32,
+    ) -> SendableDataBlockStream {
+        let blocks = Self::gen_sample_blocks_ex(num_of_block, rows_perf_block, val_start_from);
         Box::pin(futures::stream::iter(blocks))
     }
 
@@ -152,6 +176,7 @@ impl TestFixture {
         self.ctx
             .get_catalog()
             .get_table(
+                self.default_tenant().as_str(),
                 self.default_db_name().as_str(),
                 self.default_table_name().as_str(),
             )
@@ -245,12 +270,12 @@ pub async fn execute_command(query: &str, ctx: Arc<QueryContext>) -> Result<()> 
     Ok(())
 }
 
-pub async fn append_sample_data(num_blocks: u32, fixture: &TestFixture) -> Result<()> {
+pub async fn append_sample_data(num_blocks: usize, fixture: &TestFixture) -> Result<()> {
     append_sample_data_overwrite(num_blocks, false, fixture).await
 }
 
 pub async fn append_sample_data_overwrite(
-    num_blocks: u32,
+    num_blocks: usize,
     overwrite: bool,
     fixture: &TestFixture,
 ) -> Result<()> {
@@ -259,7 +284,7 @@ pub async fn append_sample_data_overwrite(
     let ctx = fixture.ctx();
     let stream = table.append_data(ctx.clone(), stream).await?;
     table
-        .commit(ctx, stream.try_collect().await?, overwrite)
+        .commit_insertion(ctx, stream.try_collect().await?, overwrite)
         .await
 }
 

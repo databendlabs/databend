@@ -13,11 +13,11 @@ test = false
 [dependencies] # In alphabetical order
 common-arrow = { path = "../arrow" }
 
-anyhow = "1.0.51"
+anyhow = "1.0.52"
 backtrace = "0.3.63"
 octocrab = "0.15.3"
-serde = { version = "1.0.132", features = ["derive"] }
-serde_json = "1.0.73"
+serde = { version = "1.0.133", features = ["derive"] }
+serde_json = "1.0.74"
 thiserror = "1.0.30"
 tonic = "0.6.2"
 prost = "0.9.0"
@@ -25,6 +25,6 @@ paste = "1.0.6"
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1",default-features = false }
 
 # Github dependencies
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "b42ff01" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "c33837e" }
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
 

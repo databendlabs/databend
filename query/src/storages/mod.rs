@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod cache;
 pub mod fuse;
 pub mod github;
 pub mod index;
@@ -24,8 +25,6 @@ mod storage_factory;
 mod storage_table;
 mod storage_table_read_plan;
 
-pub use fuse::FuseHistoryTable;
-pub use fuse::FUSE_FUNC_HIST;
 pub use storage_context::StorageContext;
 pub use storage_factory::StorageCreator;
 pub use storage_factory::StorageFactory;

@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::GrantObject;
+use common_meta_types::UserPrivilegeType;
 use common_planners::DropDatabasePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -45,6 +47,10 @@ impl Interpreter for DropDatabaseInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        self.ctx
+            .get_current_session()
+            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Drop)?;
+
         let catalog = self.ctx.get_catalog();
         catalog.drop_database(self.plan.clone().into()).await?;
 

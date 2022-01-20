@@ -15,12 +15,14 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::GrantObject;
+use common_meta_types::UserPrivilegeSet;
 use common_planners::GrantPrivilegePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::interpreters::interpreter_common::grant_object_exists_or_err;
+use crate::interpreters::interpreter_common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -50,15 +52,22 @@ impl Interpreter for GrantPrivilegeInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
 
-        plan.on.validate_privileges(plan.priv_types)?;
-        grant_object_exists_or_err(&self.ctx, &plan.on).await?;
+        validate_grant_privileges(&plan.on, plan.priv_types)?;
+        validate_grant_object_exists(&self.ctx, &plan.on).await?;
 
         // TODO: check user existence
         // TODO: check privilege on granting on the grant object
 
-        let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
+        let tenant = self.ctx.get_tenant();
+        let user_mgr = self.ctx.get_user_manager();
         user_mgr
-            .grant_user_privileges(&plan.name, &plan.hostname, plan.on, plan.priv_types)
+            .grant_user_privileges(
+                &tenant,
+                &plan.name,
+                &plan.hostname,
+                plan.on,
+                plan.priv_types,
+            )
             .await?;
 
         Ok(Box::pin(DataBlockStream::create(
@@ -67,4 +76,18 @@ impl Interpreter for GrantPrivilegeInterpreter {
             vec![],
         )))
     }
+}
+
+/// Check if there's any privilege which can not be granted to this GrantObject.
+/// Some global privileges can not be granted to a database or table, for example,
+/// a KILL statement is meaningless for a table.
+pub fn validate_grant_privileges(object: &GrantObject, privileges: UserPrivilegeSet) -> Result<()> {
+    let available_privileges = object.available_privileges();
+    let ok = privileges
+        .iter()
+        .all(|p| available_privileges.has_privilege(p));
+    if !ok {
+        return Err(common_exception::ErrorCode::IllegalGrant("Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used"));
+    }
+    Ok(())
 }

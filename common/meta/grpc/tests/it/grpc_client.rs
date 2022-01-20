@@ -29,11 +29,14 @@ async fn test_grpc_client_action_timeout() {
     // use `timeout=3secs` here cause our mock grpc
     // server's handshake impl will sleep 2secs.
     let timeout = Duration::from_secs(3);
-    let client = MetaGrpcClient::with_tls_conf(&srv_addr, "", "", Some(timeout), None)
+
+    let client = MetaGrpcClient::try_create(&srv_addr, "", "", Some(timeout), None)
         .await
         .unwrap();
 
-    let res = client.get_database(GetDatabaseReq::new("xx")).await;
+    let res = client
+        .get_database(GetDatabaseReq::new("tenant1", "xx"))
+        .await;
     let actual = res.unwrap_err().message();
     let expect = "status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} }";
     assert_eq!(actual, expect);
@@ -44,8 +47,11 @@ async fn test_grpc_client_handshake_timeout() {
     let srv_addr = start_grpc_server();
 
     let timeout = Duration::from_secs(1);
-    let res = MetaGrpcClient::with_tls_conf(&srv_addr, "", "", Some(timeout), None).await;
-    let actual = res.unwrap_err().message();
+    let res = MetaGrpcClient::try_create(&srv_addr, "", "", Some(timeout), None)
+        .await
+        .unwrap();
+    let client = res.make_client().await;
+    let actual = client.unwrap_err().message();
     let expect = "status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} }";
     assert_eq!(actual, expect);
 }

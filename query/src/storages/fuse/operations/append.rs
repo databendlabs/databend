@@ -26,10 +26,10 @@ use crate::storages::fuse::io;
 use crate::storages::fuse::io::BlockStreamWriter;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::FuseTable;
-use crate::storages::fuse::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
-use crate::storages::fuse::DEFAULT_CHUNK_BLOCK_NUM;
-use crate::storages::fuse::TBL_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
-use crate::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
+use crate::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
+use crate::storages::fuse::DEFAULT_ROW_PER_BLOCK;
+use crate::storages::fuse::TBL_OPT_KEY_BLOCK_PER_SEGMENT;
+use crate::storages::fuse::TBL_OPT_KEY_ROW_PER_BLOCK;
 
 pub type AppendOperationLogEntryStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<AppendOperationLogEntry>> + Send>>;
@@ -41,20 +41,19 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,
     ) -> Result<AppendOperationLogEntryStream> {
-        let chunk_block_num = self.get_option(TBL_OPT_KEY_CHUNK_BLOCK_NUM, DEFAULT_CHUNK_BLOCK_NUM);
-        let block_size_threshold = self.get_option(
-            TBL_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
-            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
-        );
+        let rows_per_block = self.get_option(TBL_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
 
-        let da = ctx.get_data_accessor()?;
+        let block_per_seg =
+            self.get_option(TBL_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+
+        let da = ctx.get_storage_accessor()?;
 
         let mut segment_stream = BlockStreamWriter::write_block_stream(
             da.clone(),
             stream,
             self.table_info.schema().clone(),
-            chunk_block_num,
-            block_size_threshold,
+            rows_per_block,
+            block_per_seg,
         )
         .await;
 

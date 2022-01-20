@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod access;
 mod interpreter;
 mod interpreter_common;
 mod interpreter_copy;
@@ -44,6 +45,7 @@ mod interpreter_udf_create;
 mod interpreter_udf_drop;
 mod interpreter_udf_show;
 mod interpreter_use_database;
+mod interpreter_use_tenant;
 mod interpreter_user_alter;
 mod interpreter_user_create;
 mod interpreter_user_drop;
@@ -81,6 +83,7 @@ pub use interpreter_udf_create::CreatUDFInterpreter;
 pub use interpreter_udf_drop::DropUDFInterpreter;
 pub use interpreter_udf_show::ShowUDFInterpreter;
 pub use interpreter_use_database::UseDatabaseInterpreter;
+pub use interpreter_use_tenant::UseTenantInterpreter;
 pub use interpreter_user_alter::AlterUserInterpreter;
 pub use interpreter_user_create::CreateUserInterpreter;
 pub use interpreter_user_drop::DropUserInterpreter;

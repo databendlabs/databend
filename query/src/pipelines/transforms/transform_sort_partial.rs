@@ -92,7 +92,7 @@ pub fn get_sort_descriptions(
                 ref expr,
                 asc,
                 nulls_first,
-                origin_expr: _,
+                ..
             } => {
                 let column_name = expr.to_data_field(schema)?.name().clone();
                 sort_columns_descriptions.push(SortColumnDescription {

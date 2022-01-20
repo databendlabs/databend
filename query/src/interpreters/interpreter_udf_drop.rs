@@ -48,9 +48,10 @@ impl Interpreter for DropUDFInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
-        let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
+        let tenant = self.ctx.get_tenant();
+        let user_mgr = self.ctx.get_user_manager();
         user_mgr
-            .drop_udf(plan.name.as_str(), plan.if_exists)
+            .drop_udf(&tenant, plan.name.as_str(), plan.if_exists)
             .await?;
 
         Ok(Box::pin(DataBlockStream::create(

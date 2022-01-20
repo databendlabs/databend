@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::buffer::MutableBuffer;
 
 use crate::prelude::*;
 
@@ -24,8 +22,8 @@ use crate::prelude::*;
 /// * ensure the total len of transformed DFStringArray values <= estimate_bytes
 pub fn transform<F>(from: &DFStringArray, estimate_bytes: usize, mut f: F) -> DFStringArray
 where F: FnMut(&[u8], &mut [u8]) -> Option<usize> {
-    let mut values: MutableBuffer<u8> = MutableBuffer::with_capacity(estimate_bytes);
-    let mut offsets: MutableBuffer<i64> = MutableBuffer::with_capacity(from.len() + 1);
+    let mut values: Vec<u8> = Vec::with_capacity(estimate_bytes);
+    let mut offsets: Vec<i64> = Vec::with_capacity(from.len() + 1);
     let mut validity = MutableBitmap::with_capacity(from.len());
     offsets.push(0);
 
@@ -39,7 +37,7 @@ where F: FnMut(&[u8], &mut [u8]) -> Option<usize> {
             );
             if let Some(len) = f(x, bytes) {
                 offset += len;
-                offsets.push(i64::from_isize(offset as isize).unwrap());
+                offsets.push(offset as i64);
                 validity.push(true);
             } else {
                 offsets.push(offset as i64);
@@ -65,8 +63,8 @@ pub fn transform_with_no_null<F>(
 where
     F: FnMut(&[u8], &mut [u8]) -> usize,
 {
-    let mut values: MutableBuffer<u8> = MutableBuffer::with_capacity(estimate_bytes);
-    let mut offsets: MutableBuffer<i64> = MutableBuffer::with_capacity(from.len() + 1);
+    let mut values: Vec<u8> = Vec::with_capacity(estimate_bytes);
+    let mut offsets: Vec<i64> = Vec::with_capacity(from.len() + 1);
     offsets.push(0);
 
     let mut offset: usize = 0;
@@ -80,7 +78,7 @@ where
             let len = f(x, bytes);
 
             offset += len;
-            offsets.push(i64::from_isize(offset as isize).unwrap());
+            offsets.push(offset as i64);
         }
         values.set_len(offset);
         values.shrink_to_fit();
@@ -108,8 +106,8 @@ where
     F1: Fn(&T) -> usize, // each value may turn to value with max size
     F2: FnMut(&T, &mut [u8]) -> usize,
 {
-    let mut values: MutableBuffer<u8> = MutableBuffer::new();
-    let mut offsets: MutableBuffer<i64> = MutableBuffer::with_capacity(from.len() + 1);
+    let mut values: Vec<u8> = Vec::new();
+    let mut offsets: Vec<i64> = Vec::with_capacity(from.len() + 1);
     offsets.push(0);
 
     let mut offset: usize = 0;

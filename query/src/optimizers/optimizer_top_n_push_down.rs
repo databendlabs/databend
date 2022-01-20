@@ -22,8 +22,6 @@ use common_exception::Result;
 use common_planners::*;
 use common_tracing::tracing;
 
-use super::MonotonicityCheckVisitor;
-use super::RequireColumnsVisitor;
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;
 
@@ -168,12 +166,13 @@ impl TopNPushDownImpl {
 
                 let column_name = columns.iter().next().unwrap();
 
-                let (left, right) = match self.variables_range.get(column_name) {
-                    None => (None, None),
-                    Some((l, r)) => (l.clone(), r.clone()),
-                };
+                let (left, right) = self
+                    .variables_range
+                    .get(column_name)
+                    .cloned()
+                    .unwrap_or((None, None));
 
-                match MonotonicityCheckVisitor::extract_sort_column(
+                match ExpressionMonotonicityVisitor::extract_sort_column(
                     schema.clone(),
                     expr,
                     left,

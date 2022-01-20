@@ -15,7 +15,15 @@
 mod dal;
 mod ops;
 
+pub mod credential;
 pub mod error;
 pub mod services;
 
 pub use dal::DataAccessor;
+
+#[cfg(test)]
+mod tests {
+    mod ops {
+        mod io;
+    }
+}

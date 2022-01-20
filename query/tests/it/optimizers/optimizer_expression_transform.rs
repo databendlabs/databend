@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::Result;
 use databend_query::optimizers::*;
+use databend_query::sql::PlanParser;
 
-#[test]
-fn test_expression_transform_optimizer() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_expression_transform_optimizer() -> Result<()> {
     struct Test {
         name: &'static str,
         query: &'static str,
@@ -118,7 +120,7 @@ fn test_expression_transform_optimizer() -> Result<()> {
     for test in tests {
         let ctx = crate::tests::create_query_context()?;
 
-        let plan = crate::tests::parse_query(test.query, &ctx)?;
+        let plan = PlanParser::parse(test.query, ctx.clone()).await?;
         let mut optimizer = ExprTransformOptimizer::create(ctx);
         let optimized = optimizer.optimize(&plan)?;
         let actual = format!("{:?}", optimized);

@@ -16,7 +16,6 @@ use std::borrow::BorrowMut;
 
 use bumpalo::Bump;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::buffer::MutableBuffer;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -59,7 +58,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             input_array: Box::new(MutablePrimitiveArrayBuilder::<u64, true>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::<u64, true>::from_data(
                 DataType::UInt64,
-                MutableBuffer::from([4u64]),
+                Vec::from([4u64]),
                 Some(MutableBitmap::from([true])),
             )),
         },
@@ -74,7 +73,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::from_data(
                 DataType::Int64,
-                MutableBuffer::from([10i64]),
+                Vec::from([10i64]),
                 Some(MutableBitmap::from([true])),
             )),
         },
@@ -89,7 +88,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             input_array: Box::new(MutablePrimitiveArrayBuilder::<u64, true>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::<u64, true>::from_data(
                 DataType::UInt64,
-                MutableBuffer::from([10u64]),
+                Vec::from([10u64]),
                 Some(MutableBitmap::from([true])),
             )),
         },
@@ -104,7 +103,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::from_data(
                 DataType::Int64,
-                MutableBuffer::from([1i64]),
+                Vec::from([1i64]),
                 Some(MutableBitmap::from([true])),
             )),
         },
@@ -119,7 +118,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::from_data(
                 DataType::Int64,
-                MutableBuffer::from([4i64]),
+                Vec::from([4i64]),
                 Some(MutableBitmap::from([true])),
             )),
         },
@@ -134,7 +133,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::from_data(
                 DataType::Int64,
-                MutableBuffer::from([30i64]),
+                Vec::from([30i64]),
                 Some(MutableBitmap::from([true])),
             )),
         },
@@ -149,7 +148,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64, true>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::<f64, true>::from_data(
                 DataType::Float64,
-                MutableBuffer::from([3f64]),
+                Vec::from([3f64]),
                 Some(MutableBitmap::from([true])),
             )),
         },
@@ -243,7 +242,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             input_array: Box::new(MutablePrimitiveArrayBuilder::<u64, true>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::<u64, true>::from_data(
                 DataType::UInt64,
-                MutableBuffer::from([0u64]),
+                Vec::from([0u64]),
                 Some(MutableBitmap::from([true])),
             )),
         },
@@ -258,7 +257,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::from_data(
                 DataType::Int64,
-                MutableBuffer::from([0i64]),
+                Vec::from([0i64]),
                 Some(MutableBitmap::from([false])),
             )),
         },
@@ -273,7 +272,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             input_array: Box::new(MutablePrimitiveArrayBuilder::<u64, true>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::<u64, true>::from_data(
                 DataType::UInt64,
-                MutableBuffer::from([0u64]),
+                Vec::from([0u64]),
                 Some(MutableBitmap::from([true])),
             )),
         },
@@ -288,7 +287,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::from_data(
                 DataType::Int64,
-                MutableBuffer::from([0i64]),
+                Vec::from([0i64]),
                 Some(MutableBitmap::from([false])),
             )),
         },
@@ -303,7 +302,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::from_data(
                 DataType::Int64,
-                MutableBuffer::from([0i64]),
+                Vec::from([0i64]),
                 Some(MutableBitmap::from([false])),
             )),
         },
@@ -318,7 +317,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::<i64, true>::from_data(
                 DataType::Int64,
-                MutableBuffer::from([0i64]),
+                Vec::from([0i64]),
                 Some(MutableBitmap::from([false])),
             )),
         },
@@ -333,7 +332,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64, true>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::<f64, true>::from_data(
                 DataType::Float64,
-                MutableBuffer::from([0f64]),
+                Vec::from([0f64]),
                 Some(MutableBitmap::from([false])),
             )),
         },

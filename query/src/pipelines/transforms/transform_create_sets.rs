@@ -171,7 +171,7 @@ impl<'a> SubQueriesPuller<'a> {
 
     fn init(&mut self) -> Result<()> {
         for query_expression in &self.expressions {
-            let subquery_ctx = QueryContext::new(self.ctx.clone());
+            let subquery_ctx = QueryContext::create_from(self.ctx.clone());
 
             match query_expression {
                 Expression::Subquery { query_plan, .. } => {

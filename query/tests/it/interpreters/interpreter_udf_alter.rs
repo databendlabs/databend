@@ -14,7 +14,6 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
 use futures::stream::StreamExt;
@@ -25,49 +24,47 @@ async fn test_alter_udf_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
     let ctx = crate::tests::create_query_context()?;
+    let tenant = ctx.get_tenant();
 
-    static TEST_QUERY: &str =
-        "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(isnull(p)) DESC = 'This is a description'";
-    if let PlanNode::CreateUDF(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
-        let executor = CreatUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
+    {
+        static TEST_QUERY: &str =
+            "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(isnull(p)) DESC = 'This is a description'";
+        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatUDFInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
         let udf = ctx
-            .get_sessions_manager()
             .get_user_manager()
-            .get_udf("isnotempty")
+            .get_udf(&tenant, "isnotempty")
             .await?;
 
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["p".to_string()]);
         assert_eq!(udf.definition, "not(isnull(p))");
         assert_eq!(udf.description, "This is a description")
-    } else {
-        panic!()
     }
 
-    static TEST_QUERY1: &str =
+    {
+        static TEST_QUERY1: &str =
         "ALTER FUNCTION isnotempty AS (d) -> not(isnotnull(d)) DESC = 'This is a new description'";
-    if let PlanNode::AlterUDF(plan) = PlanParser::parse(TEST_QUERY1, ctx.clone()).await? {
-        let executor = AlterUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
+        let plan = PlanParser::parse(TEST_QUERY1, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "AlterUDFInterpreter");
 
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
 
         let udf = ctx
-            .get_sessions_manager()
             .get_user_manager()
-            .get_udf("isnotempty")
+            .get_udf(&tenant, "isnotempty")
             .await?;
 
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["d".to_string()]);
         assert_eq!(udf.definition, "not(isnotnull(d))");
         assert_eq!(udf.description, "This is a new description")
-    } else {
-        panic!()
     }
+
     Ok(())
 }

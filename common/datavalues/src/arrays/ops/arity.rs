@@ -17,7 +17,6 @@ use common_exception::Result;
 
 use crate::prelude::combine_validities;
 use crate::prelude::to_primitive;
-use crate::prelude::AlignedVec;
 use crate::prelude::DFPrimitiveArray;
 use crate::DFPrimitiveType;
 
@@ -39,7 +38,7 @@ where
         .zip(rhs.into_no_null_iter())
         .map(|(l, r)| op(*l, *r));
 
-    let av = AlignedVec::<_>::from_trusted_len_iter(values);
+    let av = values.collect();
     to_primitive::<R>(av, validity)
 }
 
@@ -51,7 +50,7 @@ where
     F: Fn(I) -> O,
 {
     let values = array.into_no_null_iter().map(|v| op(*v));
-    let av = AlignedVec::<_>::from_trusted_len_iter(values);
+    let av = values.collect();
     to_primitive::<O>(av, array.inner().validity().cloned())
 }
 
@@ -73,7 +72,7 @@ where
         .zip(rhs.into_no_null_iter())
         .map(|(l, r)| op(*l, *r));
 
-    let av = AlignedVec::<_>::from_trusted_len_iter(values);
+    let av = values.collect();
     to_primitive::<R>(av, validity)
 }
 
@@ -95,7 +94,7 @@ where
         .zip(rhs.into_no_null_iter())
         .map(|(l, r)| op(*l, *r));
 
-    let av = AlignedVec::<_>::try_from_trusted_len_iter(values)?;
+    let av = values.collect::<Result<Vec<_>>>()?;
     Ok(to_primitive::<R>(av, validity))
 }
 
@@ -107,6 +106,6 @@ where
     F: Fn(I) -> Result<O>,
 {
     let values = array.into_no_null_iter().map(|v| op(*v));
-    let av = AlignedVec::<_>::try_from_trusted_len_iter(values)?;
+    let av = values.collect::<Result<Vec<_>>>()?;
     Ok(to_primitive::<O>(av, array.inner().validity().cloned()))
 }

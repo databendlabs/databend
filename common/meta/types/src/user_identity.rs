@@ -12,8 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct UserIdentity {
     pub username: String,
     pub hostname: String,
+}
+
+impl fmt::Display for UserIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
+        write!(f, "'{}'@'{}'", self.username, self.hostname)
+    }
 }

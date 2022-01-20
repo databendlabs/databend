@@ -71,6 +71,7 @@ use crate::SortPlan;
 use crate::StagePlan;
 use crate::TruncateTablePlan;
 use crate::UseDatabasePlan;
+use crate::UseTenantPlan;
 
 /// `PlanRewriter` is a visitor that can help to rewrite `PlanNode`
 /// By default, a `PlanRewriter` will traverse the plan tree in pre-order and return rewritten plan tree.
@@ -109,6 +110,7 @@ pub trait PlanRewriter: Sized {
             PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
             PlanNode::CreateDatabase(plan) => self.rewrite_create_database(plan),
             PlanNode::UseDatabase(plan) => self.rewrite_use_database(plan),
+            PlanNode::UseTenant(plan) => self.rewrite_use_tenant(plan),
             PlanNode::SetVariable(plan) => self.rewrite_set_variable(plan),
             PlanNode::Stage(plan) => self.rewrite_stage(plan),
             PlanNode::Broadcast(plan) => self.rewrite_broadcast(plan),
@@ -307,6 +309,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_use_database(&mut self, plan: &UseDatabasePlan) -> Result<PlanNode> {
         Ok(PlanNode::UseDatabase(plan.clone()))
+    }
+
+    fn rewrite_use_tenant(&mut self, plan: &UseTenantPlan) -> Result<PlanNode> {
+        Ok(PlanNode::UseTenant(plan.clone()))
     }
 
     fn rewrite_set_variable(&mut self, plan: &SettingPlan) -> Result<PlanNode> {

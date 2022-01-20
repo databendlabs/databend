@@ -11,9 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
-use common_meta_types::PasswordType;
+use common_meta_types::AuthInfo;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserQuota;
@@ -22,22 +21,15 @@ use common_meta_types::UserQuota;
 pub struct User {
     name: String,
     hostname: String,
-    password: String,
-    password_type: PasswordType,
+    auth_data: AuthInfo,
 }
 
 impl User {
-    pub fn new(
-        name: impl Into<String>,
-        hostname: impl Into<String>,
-        password: impl Into<String>,
-        password_type: PasswordType,
-    ) -> Self {
+    pub fn new(name: impl Into<String>, hostname: impl Into<String>, auth_info: AuthInfo) -> Self {
         User {
             name: name.into(),
             hostname: hostname.into(),
-            password: password.into(),
-            password_type,
+            auth_data: auth_info,
         }
     }
 }
@@ -50,8 +42,7 @@ impl From<&User> for UserInfo {
         UserInfo {
             name: user.name.clone(),
             hostname: user.hostname.clone(),
-            password: Vec::from(user.password.clone()),
-            password_type: user.password_type.clone(),
+            auth_info: user.auth_data.clone(),
             grants,
             quota,
         }

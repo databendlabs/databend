@@ -265,7 +265,7 @@ impl From<&ArrowDataType> for DataType {
                 "Date32" => DataType::Date32,
                 "DateTime32" => DataType::DateTime32(extra.clone()),
                 "DateTime64" => DataType::DateTime64(3, extra.clone()),
-                _ => unimplemented!("data_type: {}", dt),
+                _ => unimplemented!("data_type: {:?}", dt),
             },
 
             ArrowDataType::Struct(fields) => {
@@ -275,7 +275,7 @@ impl From<&ArrowDataType> for DataType {
 
             // this is safe, because we define the datatype firstly
             _ => {
-                unimplemented!("data_type: {}", dt)
+                unimplemented!("data_type: {:?}", dt)
             }
         }
     }

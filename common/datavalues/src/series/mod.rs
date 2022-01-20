@@ -13,11 +13,9 @@
 // limitations under the License.
 
 mod comparison;
-mod series_debug;
 mod series_impl;
 mod wrap;
 
 pub use comparison::*;
-pub use series_debug::*;
 pub use series_impl::*;
 pub use wrap::SeriesWrap;

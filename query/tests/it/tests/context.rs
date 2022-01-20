@@ -16,9 +16,12 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_embedded::MetaEmbedded;
+use common_meta_types::AuthInfo;
+use common_meta_types::GrantObject;
 use common_meta_types::NodeInfo;
-use common_meta_types::PasswordType;
+use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
+use common_meta_types::UserPrivilegeSet;
 use databend_query::catalogs::CatalogContext;
 use databend_query::clusters::Cluster;
 use databend_query::configs::Config;
@@ -34,16 +37,25 @@ pub fn create_query_context() -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
-    // Set user.
-    let user_info = UserInfo::new(
-        "test_user".to_string(),
-        "%".to_string(),
-        Vec::from("pass"),
-        PasswordType::Sha256,
+    // Set user with all privileges
+    let mut user_info = UserInfo::new(
+        "root".to_string(),
+        "127.0.0.1".to_string(),
+        AuthInfo::Password {
+            hash_method: PasswordHashMethod::Sha256,
+            hash_value: Vec::from("pass"),
+        },
     );
+    user_info.grants.grant_privileges(
+        "root",
+        "127.0.0.1",
+        &GrantObject::Global,
+        UserPrivilegeSet::available_privileges_on_global(),
+    );
+
     dummy_session.set_current_user(user_info);
 
-    let context = QueryContext::from_shared(QueryContextShared::try_create(
+    let context = QueryContext::create_from_shared(QueryContextShared::try_create(
         sessions.get_conf().clone(),
         Arc::new(dummy_session.as_ref().clone()),
         Cluster::empty(),
@@ -57,7 +69,23 @@ pub fn create_query_context_with_config(config: Config) -> Result<Arc<QueryConte
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
-    let context = QueryContext::from_shared(QueryContextShared::try_create(
+    let mut user_info = UserInfo::new(
+        "root".to_string(),
+        "127.0.0.1".to_string(),
+        AuthInfo::Password {
+            hash_method: PasswordHashMethod::Sha256,
+            hash_value: Vec::from("pass"),
+        },
+    );
+    user_info.grants.grant_privileges(
+        "root",
+        "127.0.0.1",
+        &GrantObject::Global,
+        UserPrivilegeSet::available_privileges_on_global(),
+    );
+    dummy_session.set_current_user(user_info);
+
+    let context = QueryContext::create_from_shared(QueryContextShared::try_create(
         config,
         Arc::new(dummy_session.as_ref().clone()),
         Cluster::empty(),
@@ -134,7 +162,7 @@ pub fn create_query_context_with_cluster(desc: ClusterDescriptor) -> Result<Arc<
     let local_id = desc.local_node_id;
     let nodes = desc.cluster_nodes_list;
 
-    let context = QueryContext::from_shared(QueryContextShared::try_create(
+    let context = QueryContext::create_from_shared(QueryContextShared::try_create(
         sessions.get_conf().clone(),
         Arc::new(dummy_session.as_ref().clone()),
         Cluster::create(nodes, local_id),

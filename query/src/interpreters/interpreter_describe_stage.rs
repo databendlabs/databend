@@ -49,12 +49,10 @@ impl Interpreter for DescribeStageInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let schema = self.plan.schema();
         let default_stage = UserStageInfo::default();
-        let stage = self
-            .ctx
-            .get_sessions_manager()
-            .get_user_manager()
-            .get_stage(self.plan.name.as_str())
-            .await?;
+
+        let tenant = self.ctx.get_tenant();
+        let user_mgr = self.ctx.get_user_manager();
+        let stage = user_mgr.get_stage(&tenant, self.plan.name.as_str()).await?;
 
         let mut parent_properties: Vec<&str> = vec![];
         let mut properties: Vec<&str> = vec![];

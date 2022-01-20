@@ -44,11 +44,11 @@ where T: DFPrimitiveType
 impl<T> FromIterator<T> for DFPrimitiveArray<T>
 where T: DFPrimitiveType
 {
-    // We use AlignedVec because it is way faster than Arrows builder. We can do this because we
+    // We use Vec because it is way faster than Arrows builder. We can do this because we
     // know we don't have null values.
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        let av = iter.into_iter().collect::<AlignedVec<T>>();
-        DFPrimitiveArray::<T>::new_from_aligned_vec(av)
+        let av = iter.into_iter().collect::<Vec<T>>();
+        DFPrimitiveArray::<T>::new_from_vec(av)
     }
 }
 

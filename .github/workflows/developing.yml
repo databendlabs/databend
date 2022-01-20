@@ -5,9 +5,11 @@ on:
     branches-ignore:
       - main
     paths-ignore:
+      - 'docs/**'
       - 'website/**'
   pull_request:
     paths-ignore:
+      - 'docs/**'
       - 'website/**'
 
 concurrency:
@@ -45,7 +47,7 @@ jobs:
 
   test_unit:
     runs-on: ${{ matrix.config.os }}
-    needs: build
+    needs: check
     strategy:
       matrix:
         config:
@@ -92,3 +94,14 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: ./.github/actions/test_stateful_standalone
+
+  test_management_mode:
+    runs-on: ${{ matrix.config.os }}
+    needs: build
+    strategy:
+      matrix:
+        config:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/test_management_mode

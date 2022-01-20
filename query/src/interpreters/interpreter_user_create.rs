@@ -51,16 +51,16 @@ impl Interpreter for CreateUserInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
-        let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
+        let tenant = self.ctx.get_tenant();
+        let user_mgr = self.ctx.get_user_manager();
         let user_info = UserInfo {
+            auth_info: plan.auth_info.clone(),
             name: plan.name,
             hostname: plan.hostname,
-            password: plan.password,
-            password_type: plan.password_type,
             grants: UserGrantSet::empty(),
             quota: UserQuota::no_limit(),
         };
-        user_mgr.add_user(user_info).await?;
+        user_mgr.add_user(&tenant, user_info).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

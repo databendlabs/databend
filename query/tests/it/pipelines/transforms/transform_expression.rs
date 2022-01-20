@@ -87,7 +87,7 @@ async fn test_transform_expression_error() -> Result<()> {
     ]);
     let actual = format!("{}", result.err().unwrap());
     let expect =
-        "Code: 6, displayText = Unable to get field named \"xnumber\". Valid fields: [\"number\"].";
+        "Code: 1006, displayText = Unable to get field named \"xnumber\". Valid fields: [\"number\"].";
     assert_eq!(expect, actual);
 
     Ok(())

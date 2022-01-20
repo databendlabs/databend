@@ -106,13 +106,6 @@ pub fn arithmetic_mul_div_monotonicity(
     args: &[Monotonicity],
     op: DataValueBinaryOperator,
 ) -> Result<Monotonicity> {
-    if args.len() != 2 {
-        return Err(ErrorCode::BadArguments(format!(
-            "Invalid argument lengths {} for get_monotonicity",
-            args.len()
-        )));
-    }
-
     if !matches!(
         op,
         DataValueBinaryOperator::Mul | DataValueBinaryOperator::Div

@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
+use common_meta_types::GrantObject;
+use common_meta_types::UserPrivilegeType;
 use common_planners::CreateTablePlan;
 use common_planners::InsertInputSource;
 use common_planners::InsertPlan;
@@ -51,6 +53,11 @@ impl Interpreter for CreateTableInterpreter {
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        self.ctx.get_current_session().validate_privilege(
+            &GrantObject::Database(self.plan.db.clone()),
+            UserPrivilegeType::Create,
+        )?;
+
         match &self.plan.as_select {
             Some(select_plan_node) => {
                 self.create_table_as_select(input_stream, select_plan_node.clone())
@@ -67,11 +74,14 @@ impl CreateTableInterpreter {
         input_stream: Option<SendableDataBlockStream>,
         select_plan_node: Box<PlanNode>,
     ) -> Result<SendableDataBlockStream> {
+        let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog();
 
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
         catalog.create_table(self.plan.clone().into()).await?;
-        let table = catalog.get_table(&self.plan.db, &self.plan.table).await?;
+        let table = catalog
+            .get_table(tenant.as_str(), &self.plan.db, &self.plan.table)
+            .await?;
 
         // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',
         // we use the definitions to create the table schema. It may happen that the "AS SELECT" query's schema doesn't

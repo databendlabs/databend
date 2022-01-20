@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -57,6 +56,7 @@ impl RequestHandler<CreateDatabaseReq> for ActionHandler {
         &self,
         req: CreateDatabaseReq,
     ) -> common_exception::Result<CreateDatabaseReply> {
+        let tenant = req.tenant;
         let db_name = &req.db;
         let db_meta = &req.meta;
         let if_not_exists = req.if_not_exists;
@@ -64,6 +64,7 @@ impl RequestHandler<CreateDatabaseReq> for ActionHandler {
         let cr = LogEntry {
             txid: None,
             cmd: CreateDatabase {
+                tenant,
                 name: db_name.clone(),
                 meta: db_meta.clone(),
             },
@@ -104,11 +105,13 @@ impl RequestHandler<GetDatabaseReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<DropDatabaseReq> for ActionHandler {
     async fn handle(&self, req: DropDatabaseReq) -> common_exception::Result<DropDatabaseReply> {
+        let tenant = req.tenant;
         let db_name = &req.db;
         let if_exists = req.if_exists;
         let cr = LogEntry {
             txid: None,
             cmd: DropDatabase {
+                tenant,
                 name: db_name.clone(),
             },
         };
@@ -136,6 +139,7 @@ impl RequestHandler<DropDatabaseReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<CreateTableReq> for ActionHandler {
     async fn handle(&self, req: CreateTableReq) -> common_exception::Result<CreateTableReply> {
+        let tenant = req.tenant;
         let db_name = &req.db;
         let table_name = &req.table;
         let if_not_exists = req.if_not_exists;
@@ -147,6 +151,7 @@ impl RequestHandler<CreateTableReq> for ActionHandler {
         let cr = LogEntry {
             txid: None,
             cmd: CreateTable {
+                tenant,
                 db_name: db_name.clone(),
                 table_name: table_name.clone(),
                 table_meta,
@@ -179,6 +184,7 @@ impl RequestHandler<CreateTableReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<DropTableReq> for ActionHandler {
     async fn handle(&self, req: DropTableReq) -> common_exception::Result<DropTableReply> {
+        let tenant = req.tenant;
         let db_name = &req.db;
         let table_name = &req.table;
         let if_exists = req.if_exists;
@@ -186,6 +192,7 @@ impl RequestHandler<DropTableReq> for ActionHandler {
         let cr = LogEntry {
             txid: None,
             cmd: DropTable {
+                tenant,
                 db_name: db_name.clone(),
                 table_name: table_name.clone(),
             },

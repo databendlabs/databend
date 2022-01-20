@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod access;
 mod interpreter_database_create;
 mod interpreter_database_drop;
 mod interpreter_describe_stage;
@@ -29,13 +30,13 @@ mod interpreter_stage_create;
 mod interpreter_stage_drop;
 mod interpreter_table_create;
 mod interpreter_table_drop;
-mod interpreter_table_optimize;
 mod interpreter_table_truncate;
 mod interpreter_udf_alter;
 mod interpreter_udf_create;
 mod interpreter_udf_drop;
 mod interpreter_udf_show;
 mod interpreter_use_database;
+mod interpreter_use_tenant;
 mod interpreter_user_alter;
 mod interpreter_user_create;
 mod interpreter_user_drop;

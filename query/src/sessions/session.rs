@@ -20,7 +20,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_macros::MallocSizeOf;
 use common_mem_allocator::malloc_size;
+use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
+use common_meta_types::UserPrivilegeType;
 use futures::channel::*;
 
 use crate::catalogs::DatabaseCatalog;
@@ -107,7 +109,7 @@ impl Session {
         let context_shared = self.mutable_state.get_context_shared();
 
         Ok(match context_shared.as_ref() {
-            Some(shared) => QueryContext::from_shared(shared.clone()),
+            Some(shared) => QueryContext::create_from_shared(shared.clone()),
             None => {
                 let config = self.config.clone();
                 let discovery = self.sessions.get_cluster_discovery();
@@ -118,10 +120,10 @@ impl Session {
 
                 let ctx_shared = self.mutable_state.get_context_shared();
                 match ctx_shared.as_ref() {
-                    Some(shared) => QueryContext::from_shared(shared.clone()),
+                    Some(shared) => QueryContext::create_from_shared(shared.clone()),
                     None => {
                         self.mutable_state.set_context_shared(Some(shared.clone()));
-                        QueryContext::from_shared(shared)
+                        QueryContext::create_from_shared(shared)
                     }
                 }
             }
@@ -150,6 +152,14 @@ impl Session {
         self.mutable_state.get_current_database()
     }
 
+    pub fn get_current_tenant(self: &Arc<Self>) -> String {
+        self.mutable_state.get_current_tenant()
+    }
+
+    pub fn set_current_tenant(self: &Arc<Self>, tenant: String) {
+        self.mutable_state.set_current_tenant(tenant);
+    }
+
     pub fn get_current_user(self: &Arc<Self>) -> Result<UserInfo> {
         self.mutable_state
             .get_current_user()
@@ -158,6 +168,28 @@ impl Session {
 
     pub fn set_current_user(self: &Arc<Self>, user: UserInfo) {
         self.mutable_state.set_current_user(user)
+    }
+
+    pub fn validate_privilege(
+        self: &Arc<Self>,
+        object: &GrantObject,
+        privilege: UserPrivilegeType,
+    ) -> Result<()> {
+        // TODO: cache the grants info for current user
+        let current_user = self.get_current_user()?;
+        let ok = current_user.grants.verify_privilege(
+            &current_user.name,
+            &current_user.hostname,
+            object,
+            privilege,
+        );
+        if !ok {
+            return Err(ErrorCode::PermissionDenied(format!(
+                "Permission denied, user '{}'@'{}' requires {} privilege on {}",
+                &current_user.name, &current_user.hostname, privilege, object
+            )));
+        }
+        Ok(())
     }
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {

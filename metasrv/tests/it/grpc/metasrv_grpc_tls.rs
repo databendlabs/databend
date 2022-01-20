@@ -48,10 +48,10 @@ async fn test_tls_server() -> anyhow::Result<()> {
     };
 
     let client =
-        MetaGrpcClient::with_tls_conf(addr.as_str(), "root", "xxx", None, Some(tls_conf)).await?;
+        MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, Some(tls_conf)).await?;
 
     let r = client
-        .get_table(("do not care", "do not care").into())
+        .get_table(("do not care", "do not care", "do not care").into())
         .await;
     assert!(r.is_err());
 
@@ -83,10 +83,13 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
         domain_name: TEST_CN_NAME.to_string(),
     };
 
-    let r = MetaGrpcClient::with_tls_conf("addr", "root", "xxx", None, Some(tls_conf)).await;
+    let r = MetaGrpcClient::try_create("addr", "root", "xxx", None, Some(tls_conf))
+        .await
+        .unwrap();
 
-    assert!(r.is_err());
-    if let Err(e) = r {
+    let c = r.make_client().await;
+    assert!(c.is_err());
+    if let Err(e) = c {
         assert_eq!(e.code(), ErrorCode::TLSConfigurationFailure("").code());
     }
     Ok(())

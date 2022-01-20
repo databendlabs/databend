@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+
 pub trait StatBuffer {
-    type Buffer: AsMut<[u8]> + AsRef<[u8]> + Copy + Sync;
+    type Buffer: AsMut<[u8]> + AsRef<[u8]> + Copy + Sync + Debug;
     fn buffer() -> Self::Buffer;
 }
 
@@ -102,5 +104,13 @@ impl StatBuffer for bool {
 
     fn buffer() -> Self::Buffer {
         [0; 1]
+    }
+}
+
+impl StatBuffer for char {
+    type Buffer = [u8; 4];
+
+    fn buffer() -> Self::Buffer {
+        [0; 4]
     }
 }

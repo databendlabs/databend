@@ -19,8 +19,8 @@ use std::sync::Arc;
 use common_base::ProgressValues;
 use common_dal::DalMetrics;
 use common_datablocks::DataBlock;
-use common_datavalues::series::Series;
-use common_datavalues::series::SeriesFrom;
+use common_datavalues::prelude::Series;
+use common_datavalues::prelude::SeriesFrom;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
@@ -125,8 +125,7 @@ impl Table for ProcessesTable {
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let sessions_manager = ctx.get_sessions_manager();
-        let processes_info = sessions_manager.processes_info();
+        let processes_info = ctx.get_processes_info();
 
         let mut processes_id = Vec::with_capacity(processes_info.len());
         let mut processes_type = Vec::with_capacity(processes_info.len());

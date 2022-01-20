@@ -161,8 +161,13 @@ impl ExecuteState {
         let default_user = "root".to_string();
         let user_name = request.session.user.as_ref().unwrap_or(&default_user);
         let user_manager = session.get_user_manager();
-        // TODO: list user's grant list and check client address
-        let user_info = user_manager.get_user(user_name, "%").await?;
+
+        // take root@127.0.0.1 with all privileges yet
+        // TODO: verify the user identity by jwt
+        let ctx = session.create_context().await?;
+        let user_info = user_manager
+            .get_user(&ctx.get_tenant(), user_name, "127.0.0.1")
+            .await?;
         session.set_current_user(user_info);
 
         let plan = PlanParser::parse(sql, context.clone()).await?;

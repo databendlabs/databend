@@ -15,10 +15,9 @@
 use common_base::tokio;
 use common_exception::Result;
 use databend_query::pipelines::processors::*;
+use databend_query::sql::PlanParser;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_local_pipeline_builds() -> Result<()> {
@@ -175,7 +174,7 @@ async fn test_local_pipeline_builds() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
     for test in tests {
         // Plan build check.
-        let plan = parse_query(test.query, &ctx)?;
+        let plan = PlanParser::parse(test.query, ctx.clone()).await?;
         let actual_plan = format!("{:?}", plan);
         assert_eq!(test.plan, actual_plan, "{:#?}", test.name);
 

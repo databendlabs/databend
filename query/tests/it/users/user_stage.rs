@@ -27,9 +27,11 @@ async fn test_user_stage() -> Result<()> {
     let mut config = Config::default();
     config.query.tenant_id = "tenant1".to_string();
 
+    let tenant = "tenant1";
     let comments = "this is a comment";
     let stage_name1 = "stage1";
     let stage_name2 = "stage2";
+    let if_not_exists = false;
     let user_mgr = UserApiProvider::create_global(config).await?;
 
     // add 1.
@@ -43,7 +45,9 @@ async fn test_user_stage() -> Result<()> {
             }),
             FileFormat::default(),
         );
-        user_mgr.add_stage(stage_info).await?;
+        user_mgr
+            .add_stage(tenant, stage_info, if_not_exists)
+            .await?;
     }
 
     // add 2.
@@ -57,38 +61,40 @@ async fn test_user_stage() -> Result<()> {
             }),
             FileFormat::default(),
         );
-        user_mgr.add_stage(stage_info).await?;
+        user_mgr
+            .add_stage(tenant, stage_info, if_not_exists)
+            .await?;
     }
 
     // get all.
     {
-        let stages = user_mgr.get_stages().await?;
+        let stages = user_mgr.get_stages(tenant).await?;
         assert_eq!(2, stages.len());
         assert_eq!(stage_name2, stages[1].stage_name);
     }
 
     // get.
     {
-        let stage = user_mgr.get_stage(stage_name1).await?;
+        let stage = user_mgr.get_stage(tenant, stage_name1).await?;
         assert_eq!(stage_name1, stage.stage_name);
     }
 
     // drop.
     {
-        user_mgr.drop_stage(stage_name1, false).await?;
-        let stages = user_mgr.get_stages().await?;
+        user_mgr.drop_stage(tenant, stage_name1, false).await?;
+        let stages = user_mgr.get_stages(tenant).await?;
         assert_eq!(1, stages.len());
     }
 
     // repeat drop same one not with if exist.
     {
-        let res = user_mgr.drop_stage(stage_name1, false).await;
+        let res = user_mgr.drop_stage(tenant, stage_name1, false).await;
         assert!(res.is_err());
     }
 
     // repeat drop same one with if exist.
     {
-        let res = user_mgr.drop_stage(stage_name1, true).await;
+        let res = user_mgr.drop_stage(tenant, stage_name1, true).await;
         assert!(res.is_ok());
     }
 

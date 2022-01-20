@@ -63,17 +63,95 @@ impl ConfigsTable {
         group: String,
         config_value: Value,
     ) {
+        ConfigsTable::extract_config_with_name_prefix(
+            names,
+            values,
+            groups,
+            descs,
+            group,
+            config_value,
+            None,
+        );
+    }
+
+    fn extract_config_with_name_prefix(
+        names: &mut Vec<String>,
+        values: &mut Vec<String>,
+        groups: &mut Vec<String>,
+        descs: &mut Vec<String>,
+        group: String,
+        config_value: Value,
+        name_prefix: Option<String>,
+    ) {
         for (k, v) in config_value.as_object().unwrap().into_iter() {
-            names.push(k.to_string());
             match v {
-                Value::String(s) => values.push(s.to_string()),
-                Value::Number(n) => values.push(n.to_string()),
-                Value::Bool(b) => values.push(b.to_string()),
+                Value::String(s) => ConfigsTable::push_config(
+                    names,
+                    values,
+                    groups,
+                    descs,
+                    k.to_string(),
+                    s.to_string(),
+                    group.clone(),
+                    "".to_string(),
+                    name_prefix.clone(),
+                ),
+                Value::Number(n) => ConfigsTable::push_config(
+                    names,
+                    values,
+                    groups,
+                    descs,
+                    k.to_string(),
+                    n.to_string(),
+                    group.clone(),
+                    "".to_string(),
+                    name_prefix.clone(),
+                ),
+                Value::Bool(b) => ConfigsTable::push_config(
+                    names,
+                    values,
+                    groups,
+                    descs,
+                    k.to_string(),
+                    b.to_string(),
+                    group.clone(),
+                    "".to_string(),
+                    name_prefix.clone(),
+                ),
+                Value::Object(_) => ConfigsTable::extract_config_with_name_prefix(
+                    names,
+                    values,
+                    groups,
+                    descs,
+                    group.clone(),
+                    v.clone(),
+                    Some(k.to_string()),
+                ),
                 _ => unimplemented!(),
             }
-            groups.push(group.clone());
-            descs.push("".to_string());
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn push_config(
+        names: &mut Vec<String>,
+        values: &mut Vec<String>,
+        groups: &mut Vec<String>,
+        descs: &mut Vec<String>,
+        name: String,
+        value: String,
+        group: String,
+        desc: String,
+        name_prefix: Option<String>,
+    ) {
+        if let Some(prefix) = name_prefix {
+            names.push(format!("{}.{}", prefix, name));
+        } else {
+            names.push(name);
+        }
+        values.push(value);
+        groups.push(group);
+        descs.push(desc);
     }
 }
 
@@ -130,6 +208,17 @@ impl Table for ConfigsTable {
             &mut descs,
             "meta".to_string(),
             meta_config_value,
+        );
+
+        let storage_config = config.storage;
+        let storage_config_value = serde_json::to_value(storage_config)?;
+        ConfigsTable::extract_config(
+            &mut names,
+            &mut values,
+            &mut groups,
+            &mut descs,
+            "storage".to_string(),
+            storage_config_value,
         );
 
         let names: Vec<&str> = names.iter().map(|x| x.as_str()).collect();

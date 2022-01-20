@@ -33,7 +33,7 @@ mod utils;
 pub mod arrays;
 pub mod columns;
 pub mod prelude;
-pub mod series;
+mod series;
 pub mod types;
 
 /// third partry

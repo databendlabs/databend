@@ -103,7 +103,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    async fn commit(
+    async fn commit_insertion(
         &self,
         _ctx: Arc<QueryContext>,
         _operations: Vec<DataBlock>,

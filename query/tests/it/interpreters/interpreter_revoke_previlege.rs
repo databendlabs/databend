@@ -14,10 +14,10 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_meta_types::PasswordType;
+use common_meta_types::AuthInfo;
+use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
-use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
 use futures::stream::StreamExt;
@@ -28,30 +28,28 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
     let ctx = crate::tests::create_query_context()?;
+    let tenant = ctx.get_tenant().to_string();
+
     let name = "test";
     let hostname = "localhost";
     let password = "test";
-    let user_info = UserInfo::new(
-        name.to_string(),
-        hostname.to_string(),
-        Vec::from(password),
-        PasswordType::PlainText,
-    );
+    let auth_info = AuthInfo::Password {
+        hash_value: Vec::from(password),
+        hash_method: PasswordHashMethod::PlainText,
+    };
+    let user_info = UserInfo::new(name.to_string(), hostname.to_string(), auth_info);
     assert_eq!(user_info.grants, UserGrantSet::empty());
-    let user_mgr = ctx.get_sessions_manager().get_user_manager();
-    user_mgr.add_user(user_info).await?;
+    let user_mgr = ctx.get_user_manager();
+    user_mgr.add_user(&tenant, user_info).await?;
 
     let test_query = format!("REVOKE ALL ON *.* FROM '{}'@'{}'", name, hostname);
-    if let PlanNode::RevokePrivilege(plan) = PlanParser::parse(&test_query, ctx.clone()).await? {
-        let executor = RevokePrivilegeInterpreter::try_create(ctx, plan.clone())?;
-        assert_eq!(executor.name(), "RevokePrivilegeInterpreter");
-        let mut stream = executor.execute(None).await?;
-        while let Some(_block) = stream.next().await {}
-        let new_user = user_mgr.get_user(name, hostname).await?;
-        assert_eq!(new_user.grants, UserGrantSet::empty());
-    } else {
-        panic!()
-    }
+    let plan = PlanParser::parse(&test_query, ctx.clone()).await?;
+    let executor = InterpreterFactory::get(ctx, plan.clone())?;
+    assert_eq!(executor.name(), "RevokePrivilegeInterpreter");
+    let mut stream = executor.execute(None).await?;
+    while let Some(_block) = stream.next().await {}
+    let new_user = user_mgr.get_user(&tenant, name, hostname).await?;
+    assert_eq!(new_user.grants, UserGrantSet::empty());
 
     Ok(())
 }

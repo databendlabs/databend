@@ -88,6 +88,10 @@ pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> Vec<Worker
         .with(stdout_logging_layer)
         .with(file_logging_layer)
         .with(jaeger_layer);
+
+    #[cfg(feature = "console")]
+    let subscriber = subscriber.with(console_subscriber::spawn());
+
     tracing::subscriber::set_global_default(subscriber)
         .expect("error setting global tracing subscriber");
 

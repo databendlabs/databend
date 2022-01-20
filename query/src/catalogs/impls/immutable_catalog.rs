@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 use std::sync::Arc;
 
@@ -64,7 +63,7 @@ impl ImmutableCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for ImmutableCatalog {
-    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         if db_name == "system" {
             return Ok(self.sys_db.clone());
         }
@@ -74,7 +73,7 @@ impl Catalog for ImmutableCatalog {
         )))
     }
 
-    async fn list_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
         Ok(vec![self.sys_db.clone()])
     }
 
@@ -105,8 +104,13 @@ impl Catalog for ImmutableCatalog {
         Ok((ti.ident.clone(), Arc::new(ti.meta.clone())))
     }
 
-    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
-        let _db = self.get_database(db_name).await?;
+    async fn get_table(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        let _db = self.get_database(tenant, db_name).await?;
 
         let table = self
             .sys_db_meta
@@ -116,9 +120,9 @@ impl Catalog for ImmutableCatalog {
         Ok(table.clone())
     }
 
-    async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         // ensure db exists
-        let _db = self.get_database(db_name).await?;
+        let _db = self.get_database(tenant, db_name).await?;
         self.sys_db_meta.get_all_tables()
     }
 

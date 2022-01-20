@@ -24,16 +24,18 @@ async fn test_user_udf() -> Result<()> {
     let mut config = Config::default();
     config.query.tenant_id = "tenant1".to_string();
 
+    let tenant = "tenant1";
     let description = "this is a description";
     let isempty = "isempty";
     let isnotempty = "isnotempty";
+    let if_not_exists = false;
     let user_mgr = UserApiProvider::create_global(config).await?;
 
     // add isempty.
     {
         let udf =
             UserDefinedFunction::new(isempty, vec!["p".to_string()], "isnull(p)", description);
-        user_mgr.add_udf(udf).await?;
+        user_mgr.add_udf(tenant, udf, if_not_exists).await?;
     }
 
     // add isnotempty.
@@ -44,12 +46,12 @@ async fn test_user_udf() -> Result<()> {
             "not(isempty(p))",
             description,
         );
-        user_mgr.add_udf(udf).await?;
+        user_mgr.add_udf(tenant, udf, if_not_exists).await?;
     }
 
     // get all.
     {
-        let udfs = user_mgr.get_udfs().await?;
+        let udfs = user_mgr.get_udfs(tenant).await?;
         assert_eq!(2, udfs.len());
         assert_eq!(isempty, udfs[0].name);
         assert_eq!(isnotempty, udfs[1].name);
@@ -57,27 +59,27 @@ async fn test_user_udf() -> Result<()> {
 
     // get.
     {
-        let udf = user_mgr.get_udf(isempty).await?;
+        let udf = user_mgr.get_udf(tenant, isempty).await?;
         assert_eq!(isempty, udf.name);
     }
 
     // drop.
     {
-        user_mgr.drop_udf(isnotempty, false).await?;
-        let udfs = user_mgr.get_udfs().await?;
+        user_mgr.drop_udf(tenant, isnotempty, false).await?;
+        let udfs = user_mgr.get_udfs(tenant).await?;
         assert_eq!(1, udfs.len());
         assert_eq!(isempty, udfs[0].name);
     }
 
     // repeat drop same one not with if exist.
     {
-        let res = user_mgr.drop_udf(isnotempty, false).await;
+        let res = user_mgr.drop_udf(tenant, isnotempty, false).await;
         assert!(res.is_err());
     }
 
     // repeat drop same one with if exist.
     {
-        let res = user_mgr.drop_udf(isnotempty, true).await;
+        let res = user_mgr.drop_udf(tenant, isnotempty, true).await;
         assert!(res.is_ok());
     }
 

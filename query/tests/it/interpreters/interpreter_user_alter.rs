@@ -14,9 +14,9 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_meta_types::PasswordType;
+use common_meta_types::AuthInfo;
+use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
-use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
 use futures::stream::StreamExt;
@@ -27,37 +27,42 @@ async fn test_alter_user_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
     let ctx = crate::tests::create_query_context()?;
+    let tenant = ctx.get_tenant().to_string();
+
     let name = "test";
     let hostname = "localhost";
     let password = "test";
     let new_password = "password";
-    let user_info = UserInfo::new(
-        name.to_string(),
-        hostname.to_string(),
-        Vec::from(password),
-        PasswordType::PlainText,
-    );
-    let user_mgr = ctx.get_sessions_manager().get_user_manager();
-    user_mgr.add_user(user_info).await?;
+    let auth_info = AuthInfo::Password {
+        hash_value: Vec::from(password),
+        hash_method: PasswordHashMethod::PlainText,
+    };
 
-    let old_user = user_mgr.get_user(name, hostname).await?;
-    assert_eq!(old_user.password, Vec::from(password));
+    let user_info = UserInfo::new(name.to_string(), hostname.to_string(), auth_info);
+    let user_mgr = ctx.get_user_manager();
+    user_mgr.add_user("", user_info).await?;
+
+    let old_user = user_mgr.get_user(&tenant, name, hostname).await?;
+    assert_eq!(
+        old_user.auth_info.get_password().unwrap(),
+        Vec::from(password)
+    );
 
     let test_query = format!(
         "ALTER USER '{}'@'{}' IDENTIFIED BY '{}'",
         name, hostname, new_password
     );
 
-    if let PlanNode::AlterUser(plan) = PlanParser::parse(&test_query, ctx.clone()).await? {
-        let executor = AlterUserInterpreter::try_create(ctx, plan.clone())?;
-        assert_eq!(executor.name(), "AlterUserInterpreter");
-        let mut stream = executor.execute(None).await?;
-        while let Some(_block) = stream.next().await {}
-        let new_user = user_mgr.get_user(name, hostname).await?;
-        assert_eq!(new_user.password, Vec::from(new_password))
-    } else {
-        panic!()
-    }
+    let plan = PlanParser::parse(&test_query, ctx.clone()).await?;
+    let executor = InterpreterFactory::get(ctx, plan.clone())?;
+    assert_eq!(executor.name(), "AlterUserInterpreter");
+    let mut stream = executor.execute(None).await?;
+    while let Some(_block) = stream.next().await {}
+    let new_user = user_mgr.get_user(&tenant, name, hostname).await?;
+    assert_eq!(
+        new_user.auth_info.get_password(),
+        Some(Vec::from(new_password))
+    );
 
     Ok(())
 }

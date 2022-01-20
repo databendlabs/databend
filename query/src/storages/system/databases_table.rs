@@ -68,7 +68,8 @@ impl Table for DatabasesTable {
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let dbs = ctx.get_catalog().list_databases().await?;
+        let tenant = ctx.get_tenant();
+        let dbs = ctx.get_catalog().list_databases(tenant.as_str()).await?;
 
         let db_names: Vec<&[u8]> = dbs
             .iter()

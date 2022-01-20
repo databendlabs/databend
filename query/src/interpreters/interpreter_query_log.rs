@@ -17,8 +17,8 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_datablocks::DataBlock;
+use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::series::Series;
 use common_exception::Result;
 use common_planners::PlanNode;
 
@@ -66,6 +66,8 @@ pub struct LogEvent {
     pub scan_byte_cost_ms: u64,
     pub scan_seeks: u64,
     pub scan_seek_cost_ms: u64,
+    pub scan_partitions: u64,
+    pub total_partitions: u64,
     pub result_rows: u64,
     pub result_bytes: u64,
     pub cpu_usage: u32,
@@ -109,8 +111,8 @@ impl InterpreterQueryLog {
             Series::new(vec![event.tenant_id.as_str()]),
             Series::new(vec![event.cluster_id.as_str()]),
             Series::new(vec![event.sql_user.as_str()]),
-            Series::new(vec![event.sql_user_privileges.as_str()]),
             Series::new(vec![event.sql_user_quota.as_str()]),
+            Series::new(vec![event.sql_user_privileges.as_str()]),
             // Query.
             Series::new(vec![event.query_id.as_str()]),
             Series::new(vec![event.query_kind.as_str()]),
@@ -131,6 +133,8 @@ impl InterpreterQueryLog {
             Series::new(vec![event.scan_byte_cost_ms as u64]),
             Series::new(vec![event.scan_seeks as u64]),
             Series::new(vec![event.scan_seek_cost_ms as u64]),
+            Series::new(vec![event.scan_partitions as u64]),
+            Series::new(vec![event.total_partitions as u64]),
             Series::new(vec![event.result_rows as u64]),
             Series::new(vec![event.result_bytes as u64]),
             Series::new(vec![event.cpu_usage]),
@@ -158,8 +162,8 @@ impl InterpreterQueryLog {
 
     pub async fn log_start(&self) -> Result<()> {
         // User.
-        let handler_type = self.ctx.get_session().get_type();
-        let tenant_id = self.ctx.get_config().query.tenant_id;
+        let handler_type = self.ctx.get_current_session().get_type();
+        let tenant_id = self.ctx.get_tenant();
         let cluster_id = self.ctx.get_config().query.cluster_id;
         let user = self.ctx.get_current_user()?;
         let sql_user = user.name;
@@ -188,10 +192,12 @@ impl InterpreterQueryLog {
         let scan_byte_cost_ms = 0u64;
         let scan_seeks = 0u64;
         let scan_seek_cost_ms = 0u64;
+        let scan_partitions = 0u64;
+        let total_partitions = 0u64;
         let result_rows = 0u64;
         let result_bytes = 0u64;
         let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
-        let memory_usage = self.ctx.get_session().get_memory_usage() as u64;
+        let memory_usage = self.ctx.get_current_session().get_memory_usage() as u64;
 
         // Client.
         let client_address = format!("{:?}", self.ctx.get_client_address());
@@ -221,6 +227,8 @@ impl InterpreterQueryLog {
             scan_byte_cost_ms,
             scan_seeks,
             scan_seek_cost_ms,
+            scan_partitions,
+            total_partitions,
             result_rows,
             result_bytes,
             cpu_usage,
@@ -240,7 +248,7 @@ impl InterpreterQueryLog {
 
     pub async fn log_finish(&self) -> Result<()> {
         // User.
-        let handler_type = self.ctx.get_session().get_type();
+        let handler_type = self.ctx.get_current_session().get_type();
         let tenant_id = self.ctx.get_config().query.tenant_id;
         let cluster_id = self.ctx.get_config().query.cluster_id;
         let user = self.ctx.get_current_user()?;
@@ -260,16 +268,18 @@ impl InterpreterQueryLog {
             .expect("Time went backwards")
             .as_millis() as u64;
         let event_date = (event_time / (24 * 3600000)) as i32;
-        let written_rows = 0u64;
         let dal_metrics = self.ctx.get_dal_metrics();
+        let written_rows = dal_metrics.write_rows as u64;
         let written_bytes = dal_metrics.write_bytes as u64;
         let scan_rows = self.ctx.get_scan_progress_value().read_rows as u64;
         let scan_bytes = self.ctx.get_scan_progress_value().read_bytes as u64;
         let scan_byte_cost_ms = dal_metrics.read_byte_cost_ms as u64;
         let scan_seeks = dal_metrics.read_seeks as u64;
         let scan_seek_cost_ms = dal_metrics.read_seek_cost_ms as u64;
+        let scan_partitions = dal_metrics.partitions_scanned as u64;
+        let total_partitions = dal_metrics.partitions_total as u64;
         let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
-        let memory_usage = self.ctx.get_session().get_memory_usage() as u64;
+        let memory_usage = self.ctx.get_current_session().get_memory_usage() as u64;
 
         // Result.
         let result_rows = self.ctx.get_result_progress_value().read_rows as u64;
@@ -305,6 +315,8 @@ impl InterpreterQueryLog {
             scan_byte_cost_ms,
             scan_seeks,
             scan_seek_cost_ms,
+            scan_partitions,
+            total_partitions,
             result_rows,
             result_bytes,
             cpu_usage,

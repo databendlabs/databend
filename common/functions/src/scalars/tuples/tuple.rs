@@ -19,7 +19,7 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_datavalues::arrays::DFStructArray;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::series::IntoSeries;
+use common_datavalues::prelude::IntoSeries;
 use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeAndNullable;

@@ -18,4 +18,3 @@ mod optimizer_expression_transform;
 mod optimizer_scatters;
 mod optimizer_statistics_exact;
 mod optimizer_top_n_push_down;
-mod utils;

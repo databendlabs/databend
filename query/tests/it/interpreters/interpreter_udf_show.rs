@@ -14,43 +14,40 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
 use futures::stream::StreamExt;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
-use crate::tests::parse_query;
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_show_create_udf_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
+    let tenant = ctx.get_tenant();
 
     static CREATE_UDF: &str =
         "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(isnull(p)) DESC = 'This is a description'";
 
-    if let PlanNode::CreateUDF(plan) = PlanParser::parse(CREATE_UDF, ctx.clone()).await? {
-        let executor = CreatUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
+    {
+        let plan = PlanParser::parse(CREATE_UDF, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatUDFInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
         let udf = ctx
-            .get_sessions_manager()
             .get_user_manager()
-            .get_udf("isnotempty")
+            .get_udf(&tenant, "isnotempty")
             .await?;
 
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["p".to_string()]);
         assert_eq!(udf.definition, "not(isnull(p))");
-        assert_eq!(udf.description, "This is a description")
-    } else {
-        panic!()
+        assert_eq!(udf.description, "This is a description");
     }
 
-    if let PlanNode::ShowUDF(plan) = parse_query("show function isnotempty", &ctx)? {
-        let executor = ShowUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
+    {
+        let plan = PlanParser::parse("show function isnotempty", ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowUDFInterpreter");
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -62,8 +59,6 @@ async fn test_show_create_udf_interpreter() -> Result<()> {
             "+------------+------------+----------------+-----------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-    } else {
-        panic!();
     }
 
     Ok(())

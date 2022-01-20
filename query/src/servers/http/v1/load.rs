@@ -58,9 +58,15 @@ pub async fn streaming_load(
     // Auth.
     let user_name = "root";
     let user_manager = session.get_user_manager();
+
     // TODO: list user's grant list and check client address
+
+    let ctx = session
+        .create_context()
+        .await
+        .map_err(InternalServerError)?;
     let user_info = user_manager
-        .get_user(user_name, "%")
+        .get_user(&ctx.get_tenant(), user_name, "127.0.0.1")
         .await
         .map_err(InternalServerError)?;
     session.set_current_user(user_info);

@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 use std::sync::Arc;
 
@@ -19,13 +18,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_meta_api::KVApi;
+use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
-use common_meta_types::PasswordType;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UserInfo;
@@ -63,17 +62,14 @@ impl UserMgr {
         };
 
         let kv_api = self.kv_api.clone();
-        let upsert_kv = async move {
-            kv_api
-                .upsert_kv(UpsertKVAction::new(
-                    &key,
-                    match_seq,
-                    Operation::Update(value),
-                    None,
-                ))
-                .await
-        };
-        let res = upsert_kv.await?;
+        let res = kv_api
+            .upsert_kv(UpsertKVAction::new(
+                &key,
+                match_seq,
+                Operation::Update(value),
+                None,
+            ))
+            .await?;
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownUser(format!(
@@ -117,14 +113,11 @@ impl UserMgrApi for UserMgr {
     ) -> Result<SeqV<UserInfo>> {
         let user_key = format_user_key(&username, &hostname);
         let key = format!("{}/{}", self.user_prefix, user_key);
-        let kv_api = self.kv_api.clone();
-        let get_kv = async move { kv_api.get_kv(&key).await };
-        let res = get_kv.await?;
+        let res = self.kv_api.get_kv(&key).await?;
         let seq_value =
             res.ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", user_key)))?;
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
-            // Ok(_) => Ok(SeqV::new(seq_value.seq, seq_value.data.try_into()?)),
             Ok(_) => Ok(seq_value.into_seqv()?),
             Err(_) => Err(ErrorCode::UnknownUser(format!("unknown user {}", user_key))),
         }
@@ -132,9 +125,7 @@ impl UserMgrApi for UserMgr {
 
     async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>> {
         let user_prefix = self.user_prefix.clone();
-        let kv_api = self.kv_api.clone();
-        let prefix_list_kv = async move { kv_api.prefix_list_kv(user_prefix.as_str()).await };
-        let values = prefix_list_kv.await?;
+        let values = self.kv_api.prefix_list_kv(user_prefix.as_str()).await?;
 
         let mut r = vec![];
         for (_key, val) in values {
@@ -151,22 +142,13 @@ impl UserMgrApi for UserMgr {
         &self,
         username: String,
         hostname: String,
-        new_password: Option<Vec<u8>>,
-        new_password_type: Option<PasswordType>,
+        new_auth_info: AuthInfo,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
-        if new_password.is_none() && new_password_type.is_none() {
-            return Ok(seq);
-        }
         let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
         let user_info = user_val_seq.await?.data;
 
-        let mut new_user_info = UserInfo::new(
-            username.clone(),
-            hostname.clone(),
-            new_password.map_or(user_info.password.clone(), |v| v.to_vec()),
-            new_password_type.unwrap_or(user_info.password_type),
-        );
+        let mut new_user_info = UserInfo::new(username.clone(), hostname.clone(), new_auth_info);
         new_user_info.grants = user_info.grants;
 
         let user_key = format_user_key(&new_user_info.name, &new_user_info.hostname);
@@ -178,18 +160,15 @@ impl UserMgrApi for UserMgr {
             Some(s) => MatchSeq::Exact(s),
         };
 
-        let kv_api = self.kv_api.clone();
-        let upsert_kv = async move {
-            kv_api
-                .upsert_kv(UpsertKVAction::new(
-                    &key,
-                    match_seq,
-                    Operation::Update(value),
-                    None,
-                ))
-                .await
-        };
-        let res = upsert_kv.await?;
+        let res = self
+            .kv_api
+            .upsert_kv(UpsertKVAction::new(
+                &key,
+                match_seq,
+                Operation::Update(value),
+                None,
+            ))
+            .await?;
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(Some(s)),
             None => Err(ErrorCode::UnknownUser(format!(
@@ -236,18 +215,15 @@ impl UserMgrApi for UserMgr {
     async fn drop_user(&self, username: String, hostname: String, seq: Option<u64>) -> Result<()> {
         let user_key = format_user_key(&username, &hostname);
         let key = format!("{}/{}", self.user_prefix, user_key);
-        let kv_api = self.kv_api.clone();
-        let upsert_kv = async move {
-            kv_api
-                .upsert_kv(UpsertKVAction::new(
-                    &key,
-                    seq.into(),
-                    Operation::Delete,
-                    None,
-                ))
-                .await
-        };
-        let res = upsert_kv.await?;
+        let res = self
+            .kv_api
+            .upsert_kv(UpsertKVAction::new(
+                &key,
+                seq.into(),
+                Operation::Delete,
+                None,
+            ))
+            .await?;
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {

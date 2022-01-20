@@ -451,7 +451,7 @@ async fn test_metasrv_install_snapshot() -> anyhow::Result<()> {
             let res = ms.install_snapshot(&data).await;
             assert!(res.is_err(), "different ids disallow installing snapshot");
             assert!(res.unwrap_err().to_string().starts_with(
-                "Code: 2404, displayText = another snapshot install is not finished yet: 1 2"
+                "Code: 2007, displayText = another snapshot install is not finished yet: 1 2"
             ));
         }
 

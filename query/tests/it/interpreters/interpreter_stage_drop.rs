@@ -17,7 +17,6 @@ use common_exception::Result;
 use common_meta_types::Compression;
 use common_meta_types::FileFormat;
 use common_meta_types::Format;
-use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
 use futures::stream::StreamExt;
@@ -28,21 +27,22 @@ async fn test_drop_stage_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
     let ctx = crate::tests::create_query_context()?;
+    let tenant = ctx.get_tenant();
 
     static CREATE_STAGE: &str = "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter='\n') comments='test'";
 
     static DROP_STAGE_IF_EXISTS: &str = "DROP STAGE IF EXISTS test_stage";
     static DROP_STAGE: &str = "DROP STAGE test_stage";
 
-    if let PlanNode::CreateUserStage(plan) = PlanParser::parse(CREATE_STAGE, ctx.clone()).await? {
-        let executor = CreatStageInterpreter::try_create(ctx.clone(), plan.clone())?;
+    {
+        let plan = PlanParser::parse(CREATE_STAGE, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatStageInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
         let stage = ctx
-            .get_sessions_manager()
             .get_user_manager()
-            .get_stage("test_stage")
+            .get_stage(&tenant, "test_stage")
             .await?;
 
         assert_eq!(stage.file_format, FileFormat {
@@ -50,49 +50,42 @@ async fn test_drop_stage_interpreter() -> Result<()> {
             compression: Compression::Gzip,
             ..Default::default()
         });
-        assert_eq!(stage.comments, String::from("test"))
-    } else {
-        panic!()
+        assert_eq!(stage.comments, String::from("test"));
     }
 
-    if let PlanNode::DropUserStage(plan) = PlanParser::parse(DROP_STAGE, ctx.clone()).await? {
-        let executor = DropStageInterpreter::try_create(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "DropStageInterpreter");
-        let res = executor.execute(None).await;
-        assert!(res.is_ok());
-    } else {
-        panic!()
-    }
-
-    if let PlanNode::DropUserStage(plan) =
-        PlanParser::parse(DROP_STAGE_IF_EXISTS, ctx.clone()).await?
     {
-        let executor = DropStageInterpreter::try_create(ctx.clone(), plan.clone())?;
+        let plan = PlanParser::parse(DROP_STAGE, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropStageInterpreter");
         let res = executor.execute(None).await;
         assert!(res.is_ok());
-    } else {
-        panic!()
     }
 
-    if let PlanNode::DropUserStage(plan) = PlanParser::parse(DROP_STAGE, ctx.clone()).await? {
-        let executor = DropStageInterpreter::try_create(ctx.clone(), plan.clone())?;
+    {
+        let plan = PlanParser::parse(DROP_STAGE_IF_EXISTS, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "DropStageInterpreter");
+        let res = executor.execute(None).await;
+        assert!(res.is_ok());
+    }
+
+    {
+        let plan = PlanParser::parse(DROP_STAGE, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropStageInterpreter");
         let res = executor.execute(None).await;
         assert!(res.is_err());
-    } else {
-        panic!()
     }
 
-    if let PlanNode::CreateUserStage(plan) = PlanParser::parse(CREATE_STAGE, ctx.clone()).await? {
-        let executor = CreatStageInterpreter::try_create(ctx.clone(), plan.clone())?;
+    {
+        let plan = PlanParser::parse(CREATE_STAGE, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatStageInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
         let stage = ctx
-            .get_sessions_manager()
             .get_user_manager()
-            .get_stage("test_stage")
+            .get_stage(&tenant, "test_stage")
             .await?;
 
         assert_eq!(stage.file_format, FileFormat {
@@ -101,19 +94,14 @@ async fn test_drop_stage_interpreter() -> Result<()> {
             ..Default::default()
         });
         assert_eq!(stage.comments, String::from("test"))
-    } else {
-        panic!()
     }
 
-    if let PlanNode::DropUserStage(plan) =
-        PlanParser::parse(DROP_STAGE_IF_EXISTS, ctx.clone()).await?
     {
-        let executor = DropStageInterpreter::try_create(ctx.clone(), plan.clone())?;
+        let plan = PlanParser::parse(DROP_STAGE_IF_EXISTS, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropStageInterpreter");
         let res = executor.execute(None).await;
         assert!(res.is_ok());
-    } else {
-        panic!()
     }
 
     Ok(())

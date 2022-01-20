@@ -40,10 +40,10 @@ miri:
 	MIRIFLAGS="-Zmiri-disable-isolation" cargo miri test
 
 run: build
-	bash ./scripts/deploy/databend-query-standalone.sh release
+	bash ./scripts/ci/deploy/databend-query-standalone.sh release
 
 run-debug: build-debug
-	bash ./scripts/deploy/databend-query-standalone.sh
+	bash ./scripts/ci/deploy/databend-query-standalone.sh
 
 build:
 	bash ./scripts/build/build-release.sh
@@ -83,7 +83,7 @@ cli-test:
 	bash ./scripts/ci/ci-run-cli-unit-tests.sh
 
 unit-test:
-	ulimit -n 10000; bash ./scripts/ci/ci-run-unit-tests.sh
+	ulimit -n 10000;ulimit -s 16384; RUST_LOG="ERROR" bash ./scripts/ci/ci-run-unit-tests.sh
 
 # Bendctl with cluster for stateful test.
 cluster: build cli-build
@@ -106,12 +106,12 @@ embedded-meta-test: build-debug
 
 stateless-test: build-debug
 	rm -rf ./_meta*/
-	ulimit -n 10000; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
+	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
 stateful-ctl-test:
 	rm -rf ./_meta*/
 	rm -rf ./.databend/
-	ulimit -n 10000; bash ./scripts/ci/ci-run-stateful-tests-standalone-ctl.sh
+	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateful-tests-standalone-ctl.sh
 
 stateful-ctl-cluster-test:
 	rm -rf ./_meta*/
@@ -155,7 +155,10 @@ run-codegen:
 
 perf-tool: build-perf-tool
 	docker buildx build . -f ./docker/perf-tool/Dockerfile  --platform linux/amd64 --allow network.host --builder host -t ${HUB}/perf-tool:${TAG} --push
-
+# used for the build of dev container
+dev-container:
+	cp ./rust-toolchain.toml ./docker/build-tool
+	docker build ./docker/build-tool -t ${HUB}/dev-container:${TAG} -f ./docker/build-tool/Dockerfile
 profile:
 	bash ./scripts/ci/ci-run-profile.sh
 

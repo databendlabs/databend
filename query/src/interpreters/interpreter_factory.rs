@@ -49,6 +49,7 @@ use crate::interpreters::ShowGrantsInterpreter;
 use crate::interpreters::ShowUDFInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
+use crate::interpreters::UseTenantInterpreter;
 use crate::sessions::QueryContext;
 
 pub struct InterpreterFactory;
@@ -67,6 +68,7 @@ impl InterpreterFactory {
             PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::OptimizeTable(v) => OptimizeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx_clone, v),
+            PlanNode::UseTenant(v) => UseTenantInterpreter::try_create(ctx_clone, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx_clone, v),
             PlanNode::Insert(v) => InsertInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),

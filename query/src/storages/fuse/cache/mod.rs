@@ -12,6 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod local_cache;
-pub use local_cache::LocalCache;
-pub use local_cache::LocalCacheConfig;
+mod local_cache;
+mod metrics;
+
+pub use local_cache::new_memory_cache;
+pub use local_cache::CachedReader;
+pub use local_cache::HasTenantLabel;
+pub use local_cache::Loader;
+pub use local_cache::MemoryCache;
+
+pub use self::metrics::TenantLabel;

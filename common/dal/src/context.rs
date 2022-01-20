@@ -18,15 +18,22 @@ use common_infallible::RwLock;
 
 #[derive(Clone, Debug, Default)]
 pub struct DalMetrics {
-    // Read bytes.
+    /// Read bytes.
     pub read_bytes: usize,
-    // Seek times of read.
+    /// Seek times of read.
     pub read_seeks: usize,
-    // Cost(in ms) of read bytes.
+    /// Cost(in ms) of read bytes.
     pub read_byte_cost_ms: usize,
-    // Cost(in ms) of seek by reading.
+    /// Cost(in ms) of seek by reading.
     pub read_seek_cost_ms: usize,
+    /// Bytes written by data access layer
     pub write_bytes: usize,
+    /// Number of rows written
+    pub write_rows: usize,
+    /// Number of partitions scanned, after pruning
+    pub partitions_scanned: usize,
+    /// Number of partitions, before pruning
+    pub partitions_total: usize,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -43,14 +50,18 @@ impl DalContext {
 
     /// Increment read bytes.
     pub fn inc_read_bytes(&self, bytes: usize) {
-        let mut metrics = self.metrics.write();
-        metrics.read_bytes += bytes;
+        if bytes > 0 {
+            let mut metrics = self.metrics.write();
+            metrics.read_bytes += bytes;
+        }
     }
 
     /// Increment write bytes.
     pub fn inc_write_bytes(&self, bytes: usize) {
-        let mut metrics = self.metrics.write();
-        metrics.write_bytes += bytes;
+        if bytes > 0 {
+            let mut metrics = self.metrics.write();
+            metrics.write_bytes += bytes;
+        }
     }
 
     /// Increment read seek times.
@@ -59,16 +70,44 @@ impl DalContext {
         metrics.read_seeks += 1;
     }
 
-    // Increment cost for reading bytes.
+    /// Increment cost for reading bytes.
     pub fn inc_read_byte_cost_ms(&self, cost: usize) {
-        let mut metrics = self.metrics.write();
-        metrics.read_byte_cost_ms += cost;
+        if cost > 0 {
+            let mut metrics = self.metrics.write();
+            metrics.read_byte_cost_ms += cost;
+        }
     }
 
-    // Increment cost for reading seek.
+    //// Increment cost for reading seek.
     pub fn inc_read_seek_cost_ms(&self, cost: usize) {
-        let mut metrics = self.metrics.write();
-        metrics.read_seek_cost_ms += cost;
+        if cost > 0 {
+            let mut metrics = self.metrics.write();
+            metrics.read_seek_cost_ms += cost;
+        }
+    }
+
+    //// Increment numbers of rows written
+    pub fn inc_write_rows(&self, rows: usize) {
+        if rows > 0 {
+            let mut metrics = self.metrics.write();
+            metrics.write_rows += rows;
+        }
+    }
+
+    //// Increment numbers of partitions scanned
+    pub fn inc_partitions_scanned(&self, partitions: usize) {
+        if partitions > 0 {
+            let mut metrics = self.metrics.write();
+            metrics.partitions_scanned += partitions;
+        }
+    }
+
+    //// Increment numbers of partitions (before pruning)
+    pub fn inc_partitions_total(&self, partitions: usize) {
+        if partitions > 0 {
+            let mut metrics = self.metrics.write();
+            metrics.partitions_total += partitions;
+        }
     }
 
     pub fn get_metrics(&self) -> DalMetrics {

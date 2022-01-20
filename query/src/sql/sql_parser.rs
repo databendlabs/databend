@@ -23,7 +23,6 @@ use common_exception::ErrorCode;
 use common_io::prelude::OptionsDeserializer;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
-use common_meta_types::PasswordType;
 use common_meta_types::StageParams;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
@@ -55,6 +54,7 @@ use super::statements::DfCopy;
 use super::statements::DfDescribeStage;
 use crate::sql::statements::DfAlterUDF;
 use crate::sql::statements::DfAlterUser;
+use crate::sql::statements::DfAuthOption;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateStage;
 use crate::sql::statements::DfCreateTable;
@@ -88,6 +88,7 @@ use crate::sql::statements::DfShowUDF;
 use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
+use crate::sql::statements::DfUseTenant;
 use crate::sql::DfHint;
 use crate::sql::DfStatement;
 
@@ -253,6 +254,7 @@ impl<'a> DfParser<'a> {
                         "USE" => self.parse_use_database(),
                         "KILL" => self.parse_kill_query(),
                         "OPTIMIZE" => self.parse_optimize(),
+                        "SUDO" => self.parse_sudo_command(),
                         _ => self.expected("Keyword", self.parser.peek_token()),
                     },
                     _ => self.expected("an SQL statement", Token::Word(w)),
@@ -302,6 +304,7 @@ impl<'a> DfParser<'a> {
                 format,
                 after_columns,
                 table,
+                on,
             } => Ok(DfStatement::InsertQuery(DfInsertStatement {
                 or,
                 table_name,
@@ -312,6 +315,7 @@ impl<'a> DfParser<'a> {
                 format,
                 after_columns,
                 table,
+                on,
             })),
             _ => parser_err!("Expect set insert statement"),
         }
@@ -637,12 +641,26 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::DropTable(drop))
     }
 
+    // Parse 'sudo ...'.
+    fn parse_sudo_command(&mut self) -> Result<DfStatement, ParserError> {
+        self.parser.next_token();
+        match self.consume_token("USE") {
+            true if self.consume_token("TENANT") => self.parse_use_tenant(),
+            _ => self.expected("Unsupported sudo command", self.parser.peek_token()),
+        }
+    }
+
+    // Parse 'sudo use tenant [tenant id]'.
+    fn parse_use_tenant(&mut self) -> Result<DfStatement, ParserError> {
+        let name = self.parser.parse_object_name()?;
+        Ok(DfStatement::UseTenant(DfUseTenant { name }))
+    }
+
     // Parse 'use database' db name.
     fn parse_use_database(&mut self) -> Result<DfStatement, ParserError> {
         if !self.consume_token("USE") {
             return self.expected("Must USE", self.parser.peek_token());
         }
-
         let name = self.parser.parse_object_name()?;
         Ok(DfStatement::UseDatabase(DfUseDatabase { name }))
     }
@@ -676,14 +694,13 @@ impl<'a> DfParser<'a> {
             String::from("%")
         };
 
-        let (password_type, password) = self.get_auth_option()?;
+        let auth_option = self.parse_auth_option()?;
 
         let create = DfCreateUser {
             if_not_exists,
             name,
             hostname,
-            password_type,
-            password,
+            auth_options: auth_option,
         };
 
         Ok(DfStatement::CreateUser(create))
@@ -708,14 +725,13 @@ impl<'a> DfParser<'a> {
             String::from("")
         };
 
-        let (password_type, password) = self.get_auth_option()?;
+        let auth_option = self.parse_auth_option()?;
 
         let alter = DfAlterUser {
             if_current_user,
             name,
             hostname,
-            new_password_type: password_type,
-            new_password: password,
+            auth_option,
         };
 
         Ok(DfStatement::AlterUser(alter))
@@ -737,36 +753,36 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::DropUser(drop))
     }
 
-    fn get_auth_option(&mut self) -> Result<(PasswordType, String), ParserError> {
-        let exist_not_identified = self.parser.parse_keyword(Keyword::NOT);
+    fn parse_auth_option(&mut self) -> Result<DfAuthOption, ParserError> {
+        let exist_not = self.parser.parse_keyword(Keyword::NOT);
         let exist_identified = self.consume_token("IDENTIFIED");
-        let exist_with = self.consume_token("WITH");
 
-        if exist_not_identified || !exist_identified {
-            Ok((PasswordType::None, String::from("")))
+        if exist_not {
+            if !exist_identified {
+                parser_err!("expect IDENTIFIED after NOT")
+            } else {
+                Ok(DfAuthOption::no_password())
+            }
+        } else if !exist_identified {
+            Ok(DfAuthOption::default())
         } else {
-            let password_type = if exist_with {
-                match self.parser.parse_literal_string()?.as_str() {
-                    "no_password" => PasswordType::None,
-                    "plaintext_password" => PasswordType::PlainText,
-                    "sha256_password" => PasswordType::Sha256,
-                    "double_sha1_password" => PasswordType::DoubleSha1,
-                    unexpected => return parser_err!(format!("Expected auth type {}, found: {}", "'no_password'|'plaintext_password'|'sha256_password'|'double_sha1_password'", unexpected))
-                }
+            let arg_with = if self.consume_token("WITH") {
+                Some(self.parser.parse_literal_string()?)
             } else {
-                PasswordType::Sha256
+                None
             };
-
-            if PasswordType::None == password_type {
-                Ok((PasswordType::None, String::from("")))
-            } else if self.parser.parse_keyword(Keyword::BY) {
-                let password = self.parser.parse_literal_string()?;
-                if password.is_empty() {
-                    return parser_err!("Missing password");
-                }
-                Ok((password_type, password))
+            if arg_with == Some("no_password".to_string()) {
+                Ok(DfAuthOption::no_password())
             } else {
-                return parser_err!("Expected keyword BY");
+                let auth_string = if self.parser.parse_keyword(Keyword::BY) {
+                    Some(self.parser.parse_literal_string()?)
+                } else {
+                    None
+                };
+                Ok(DfAuthOption {
+                    auth_type: arg_with,
+                    by_value: auth_string,
+                })
             }
         }
     }

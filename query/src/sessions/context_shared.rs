@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use common_base::Progress;
 use common_base::Runtime;
-use common_cache::storage::StorageCache;
 use common_dal::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -120,8 +119,20 @@ impl QueryContextShared {
         self.session.set_current_database(new_database_name);
     }
 
+    pub fn set_current_tenant(&self, tenant: String) {
+        self.session.set_current_tenant(tenant);
+    }
+
     pub fn get_current_user(&self) -> Result<UserInfo> {
         self.session.get_current_user()
+    }
+
+    pub fn get_tenant(&self) -> String {
+        if self.conf.query.management_mode {
+            self.session.get_current_tenant()
+        } else {
+            self.conf.query.tenant_id.clone()
+        }
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
@@ -137,7 +148,6 @@ impl QueryContextShared {
         let table_meta_key = (database.to_string(), table.to_string());
 
         let already_in_cache = { self.tables_refs.lock().contains_key(&table_meta_key) };
-
         match already_in_cache {
             false => self.get_table_to_cache(database, table).await,
             true => Ok(self
@@ -150,8 +160,9 @@ impl QueryContextShared {
     }
 
     async fn get_table_to_cache(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+        let tenant = self.get_tenant();
         let catalog = self.get_catalog();
-        let cache_table = catalog.get_table(database, table).await?;
+        let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
 
         let table_meta_key = (database.to_string(), table.to_string());
         let mut tables_refs = self.tables_refs.lock();
@@ -201,10 +212,6 @@ impl QueryContextShared {
     pub fn add_source_abort_handle(&self, handle: AbortHandle) {
         let mut sources_abort_handle = self.sources_abort_handle.write();
         sources_abort_handle.push(handle);
-    }
-
-    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn StorageCache>>> {
-        self.session.sessions.get_table_cache()
     }
 }
 

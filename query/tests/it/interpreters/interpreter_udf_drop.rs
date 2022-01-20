@@ -14,7 +14,6 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
 use futures::stream::StreamExt;
@@ -25,6 +24,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
     let ctx = crate::tests::create_query_context()?;
+    let tenant = ctx.get_tenant();
 
     static CREATE_UDF: &str =
         "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(isnull(p)) DESC = 'This is a description'";
@@ -32,78 +32,69 @@ async fn test_drop_udf_interpreter() -> Result<()> {
     static DROP_UDF_IF_EXISTS: &str = "DROP FUNCTION IF EXISTS isnotempty";
     static DROP_UDF: &str = "DROP FUNCTION isnotempty";
 
-    if let PlanNode::CreateUDF(plan) = PlanParser::parse(CREATE_UDF, ctx.clone()).await? {
-        let executor = CreatUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
+    {
+        let plan = PlanParser::parse(CREATE_UDF, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatUDFInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
         let udf = ctx
-            .get_sessions_manager()
             .get_user_manager()
-            .get_udf("isnotempty")
+            .get_udf(&tenant, "isnotempty")
             .await?;
 
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["p".to_string()]);
         assert_eq!(udf.definition, "not(isnull(p))");
         assert_eq!(udf.description, "This is a description")
-    } else {
-        panic!()
     }
 
-    if let PlanNode::DropUDF(plan) = PlanParser::parse(DROP_UDF, ctx.clone()).await? {
-        let executor = DropUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
+    {
+        let plan = PlanParser::parse(DROP_UDF, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUDFInterpreter");
         let res = executor.execute(None).await;
         assert!(res.is_ok());
-    } else {
-        panic!()
     }
 
-    if let PlanNode::DropUDF(plan) = PlanParser::parse(DROP_UDF_IF_EXISTS, ctx.clone()).await? {
-        let executor = DropUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
+    {
+        let plan = PlanParser::parse(DROP_UDF_IF_EXISTS, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUDFInterpreter");
         let res = executor.execute(None).await;
         assert!(res.is_ok());
-    } else {
-        panic!()
     }
 
-    if let PlanNode::DropUDF(plan) = PlanParser::parse(DROP_UDF, ctx.clone()).await? {
-        let executor = DropUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
+    {
+        let plan = PlanParser::parse(DROP_UDF, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUDFInterpreter");
         let res = executor.execute(None).await;
         assert!(res.is_err());
-    } else {
-        panic!()
     }
 
-    if let PlanNode::CreateUDF(plan) = PlanParser::parse(CREATE_UDF, ctx.clone()).await? {
-        let executor = CreatUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
+    {
+        let plan = PlanParser::parse(CREATE_UDF, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatUDFInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
         let udf = ctx
-            .get_sessions_manager()
             .get_user_manager()
-            .get_udf("isnotempty")
+            .get_udf(&tenant, "isnotempty")
             .await?;
 
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["p".to_string()]);
         assert_eq!(udf.definition, "not(isnull(p))");
         assert_eq!(udf.description, "This is a description")
-    } else {
-        panic!()
     }
-
-    if let PlanNode::DropUDF(plan) = PlanParser::parse(DROP_UDF_IF_EXISTS, ctx.clone()).await? {
-        let executor = DropUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
+    {
+        let plan = PlanParser::parse(DROP_UDF_IF_EXISTS, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUDFInterpreter");
         let res = executor.execute(None).await;
         assert!(res.is_ok());
-    } else {
-        panic!()
     }
 
     Ok(())

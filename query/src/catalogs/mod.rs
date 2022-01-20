@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 mod catalog;
 mod catalog_context;
@@ -21,7 +20,7 @@ mod table_memory_meta;
 mod backends;
 mod impls;
 
-pub use backends::MetaRemote;
+pub use backends::MetaBackend;
 pub use catalog::Catalog;
 pub use catalog_context::CatalogContext;
 pub use impls::DatabaseCatalog;

@@ -11,16 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 use std::sync::Arc;
 
+use common_ast::udfs::UDFParser;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::scalars::FunctionFactory;
-use common_functions::udfs::UDFFactory;
-use common_functions::udfs::UDFParser;
+use common_functions::is_builtin_function;
 use common_meta_api::KVApi;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
@@ -37,7 +34,6 @@ static UDF_API_KEY_PREFIX: &str = "__fd_udfs";
 
 pub struct UdfMgr {
     kv_api: Arc<dyn KVApi>,
-    tenant: String,
     udf_prefix: String,
 }
 
@@ -46,33 +42,25 @@ impl UdfMgr {
     pub fn new(kv_api: Arc<dyn KVApi>, tenant: &str) -> Self {
         UdfMgr {
             kv_api,
-            tenant: tenant.to_owned(),
             udf_prefix: format!("{}/{}", UDF_API_KEY_PREFIX, tenant),
         }
-    }
-
-    fn is_builtin_function(name: &str) -> bool {
-        FunctionFactory::instance().check(name) || AggregateFunctionFactory::instance().check(name)
     }
 }
 
 #[async_trait::async_trait]
 impl UdfMgrApi for UdfMgr {
     async fn add_udf(&self, info: UserDefinedFunction) -> Result<u64> {
-        if UdfMgr::is_builtin_function(info.name.as_str()) {
-            return Err(ErrorCode::UDFAlreadyExists(format!(
+        if is_builtin_function(info.name.as_str()) {
+            return Err(ErrorCode::UdfAlreadyExists(format!(
                 "It's a builtin function: {}",
                 info.name.as_str()
             )));
         }
 
         let mut udf_parser = UDFParser::default();
-        udf_parser.parse_definition(
-            &self.tenant,
-            &info.name,
-            &info.parameters,
-            &info.definition,
-        )?;
+        udf_parser
+            .parse(&info.name, &info.parameters, &info.definition)
+            .await?;
 
         let seq = MatchSeq::Exact(0);
         let val = Operation::Update(serde_json::to_vec(&info)?);
@@ -84,17 +72,8 @@ impl UdfMgrApi for UdfMgr {
         let res = upsert_info.await?.into_add_result()?;
 
         match res.res {
-            OkOrExist::Ok(v) => {
-                UDFFactory::register(
-                    self.tenant.as_str(),
-                    info.name.as_str(),
-                    &info.parameters,
-                    info.definition.as_str(),
-                )?;
-
-                Ok(v.seq)
-            }
-            OkOrExist::Exists(v) => Err(ErrorCode::UDFAlreadyExists(format!(
+            OkOrExist::Ok(v) => Ok(v.seq),
+            OkOrExist::Exists(v) => Err(ErrorCode::UdfAlreadyExists(format!(
                 "UDF already exists, seq [{}]",
                 v.seq
             ))),
@@ -102,9 +81,9 @@ impl UdfMgrApi for UdfMgr {
     }
 
     async fn update_udf(&self, info: UserDefinedFunction, seq: Option<u64>) -> Result<u64> {
-        if UdfMgr::is_builtin_function(info.name.as_str()) {
-            return Err(ErrorCode::UDFAlreadyExists(format!(
-                "Builtin function can not be udpated: {}",
+        if is_builtin_function(info.name.as_str()) {
+            return Err(ErrorCode::UdfAlreadyExists(format!(
+                "Builtin function can not be updated: {}",
                 info.name.as_str()
             )));
         }
@@ -120,16 +99,7 @@ impl UdfMgrApi for UdfMgr {
 
         let res = upsert_info.await?;
         match res.result {
-            Some(SeqV { seq: s, .. }) => {
-                UDFFactory::register(
-                    self.tenant.as_str(),
-                    info.name.as_str(),
-                    &info.parameters,
-                    info.definition.as_str(),
-                )?;
-
-                Ok(s)
-            }
+            Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownUDF(format!(
                 "unknown UDF, or seq not match {}",
                 info.name.clone()
@@ -177,8 +147,6 @@ impl UdfMgrApi for UdfMgr {
         };
         let res = upsert_kv.await?;
         if res.prev.is_some() && res.result.is_none() {
-            UDFFactory::unregister(self.tenant.as_str(), udf_name)?;
-
             Ok(())
         } else {
             Err(ErrorCode::UnknownUDF(format!("Unknown UDF {}", udf_name)))

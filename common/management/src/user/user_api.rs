@@ -11,11 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 use common_exception::Result;
+use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
-use common_meta_types::PasswordType;
 use common_meta_types::SeqV;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
@@ -37,8 +36,7 @@ pub trait UserMgrApi: Sync + Send {
         &self,
         username: String,
         hostname: String,
-        new_password: Option<Vec<u8>>,
-        new_password_type: Option<PasswordType>,
+        auth_info_args: AuthInfo,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 

@@ -27,137 +27,125 @@ use futures::TryStreamExt;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test]
-async fn test_fuse_table_simple_case() -> Result<()> {
+async fn test_fuse_table_normal_case() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
 
-    // create test table
     let create_table_plan = fixture.default_crate_table_plan();
     let catalog = ctx.get_catalog();
     catalog.create_table(create_table_plan.into()).await?;
 
-    // get table
-    let table = fixture.latest_default_table().await?;
+    let mut table = fixture.latest_default_table().await?;
 
-    // insert 5 blocks
-    let num_blocks = 5;
-    let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
+    // basic append and read
+    {
+        let num_blocks = 2;
+        let rows_per_block = 2;
+        let value_start_from = 1;
+        let stream =
+            TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
 
-    let r = table.append_data(ctx.clone(), stream).await?;
-    table
-        .commit(ctx.clone(), r.try_collect().await?, false)
-        .await?;
+        let r = table.append_data(ctx.clone(), stream).await?;
+        table
+            .commit_insertion(ctx.clone(), r.try_collect().await?, false)
+            .await?;
 
-    // get the latest tbl
-    let prev_version = table.get_table_info().ident.version;
-    let table = fixture.latest_default_table().await?;
-    assert_ne!(prev_version, table.get_table_info().ident.version);
+        // get the latest tbl
+        let prev_version = table.get_table_info().ident.version;
+        table = fixture.latest_default_table().await?;
+        assert_ne!(prev_version, table.get_table_info().ident.version);
 
-    let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
-    assert_eq!(parts.len(), num_blocks as usize);
-    assert_eq!(stats.read_rows, num_blocks as usize * 3);
+        let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
+        assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
-    // inject partitions to current ctx
-    ctx.try_set_partitions(parts)?;
+        ctx.try_set_partitions(parts)?;
+        let stream = table
+            .read(ctx.clone(), &ReadDataSourcePlan {
+                table_info: Default::default(),
+                scan_fields: None,
+                parts: Default::default(),
+                statistics: Default::default(),
+                description: "".to_string(),
+                tbl_args: None,
+                push_downs: None,
+            })
+            .await?;
+        let blocks = stream.try_collect::<Vec<_>>().await?;
+        let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
+        assert_eq!(rows, num_blocks * rows_per_block);
 
-    let stream = table
-        .read(ctx.clone(), &ReadDataSourcePlan {
-            table_info: Default::default(),
-            scan_fields: None,
-            parts: Default::default(),
-            statistics: Default::default(),
-            description: "".to_string(),
-            tbl_args: None,
-            push_downs: None,
-        })
-        .await?;
-    let blocks = stream.try_collect::<Vec<_>>().await?;
-    let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
-    assert_eq!(rows, num_blocks as usize * 3);
-
-    let expected = vec![
-        "+----+", //
-        "| id |", //
-        "+----+", //
-        "| 1  |", //
-        "| 1  |", //
-        "| 1  |", //
-        "| 1  |", //
-        "| 1  |", //
-        "| 2  |", //
-        "| 2  |", //
-        "| 2  |", //
-        "| 2  |", //
-        "| 2  |", //
-        "| 3  |", //
-        "| 3  |", //
-        "| 3  |", //
-        "| 3  |", //
-        "| 3  |", //
-        "+----+", //
-    ];
-    common_datablocks::assert_blocks_sorted_eq(expected, blocks.as_slice());
+        // recall our test setting:
+        //   - num_blocks = 2;
+        //   - rows_per_block = 2;
+        //   - value_start_from = 1
+        // thus
+        let expected = vec![
+            "+----+", //
+            "| id |", //
+            "+----+", //
+            "| 1  |", //
+            "| 1  |", //
+            "| 2  |", //
+            "| 2  |", //
+            "+----+", //
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, blocks.as_slice());
+    }
 
     // test commit with overwrite
 
-    // insert overwrite 5 blocks
-    let num_blocks = 5;
-    let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 4);
+    {
+        // insert overwrite 5 blocks
+        let num_blocks = 2;
+        let rows_per_block = 2;
+        let value_start_from = 2;
+        let stream =
+            TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
 
-    let r = table.append_data(ctx.clone(), stream).await?;
-    table
-        .commit(ctx.clone(), r.try_collect().await?, true)
-        .await?;
+        let r = table.append_data(ctx.clone(), stream).await?;
+        table
+            .commit_insertion(ctx.clone(), r.try_collect().await?, true)
+            .await?;
 
-    // get the latest tbl
-    let prev_version = table.get_table_info().ident.version;
-    let table = fixture.latest_default_table().await?;
-    assert_ne!(prev_version, table.get_table_info().ident.version);
+        // get the latest tbl
+        let prev_version = table.get_table_info().ident.version;
+        let table = fixture.latest_default_table().await?;
+        assert_ne!(prev_version, table.get_table_info().ident.version);
 
-    let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
-    assert_eq!(parts.len(), num_blocks as usize);
-    assert_eq!(stats.read_rows, num_blocks as usize * 3);
+        let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
+        assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
-    // inject partitions to current ctx
-    ctx.try_set_partitions(parts)?;
+        // inject partitions to current ctx
+        ctx.try_set_partitions(parts)?;
 
-    let stream = table
-        .read(ctx.clone(), &ReadDataSourcePlan {
-            table_info: Default::default(),
-            scan_fields: None,
-            parts: Default::default(),
-            statistics: Default::default(),
-            description: "".to_string(),
-            tbl_args: None,
-            push_downs: None,
-        })
-        .await?;
-    let blocks = stream.try_collect::<Vec<_>>().await?;
-    let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
-    assert_eq!(rows, num_blocks as usize * 3);
+        let stream = table
+            .read(ctx.clone(), &ReadDataSourcePlan {
+                table_info: Default::default(),
+                scan_fields: None,
+                parts: Default::default(),
+                statistics: Default::default(),
+                description: "".to_string(),
+                tbl_args: None,
+                push_downs: None,
+            })
+            .await?;
+        let blocks = stream.try_collect::<Vec<_>>().await?;
+        let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
+        assert_eq!(rows, num_blocks * rows_per_block);
 
-    let expected = vec![
-        "+----+", //
-        "| id |", //
-        "+----+", //
-        "| 4  |", //
-        "| 4  |", //
-        "| 4  |", //
-        "| 4  |", //
-        "| 4  |", //
-        "| 5  |", //
-        "| 5  |", //
-        "| 5  |", //
-        "| 5  |", //
-        "| 5  |", //
-        "| 6  |", //
-        "| 6  |", //
-        "| 6  |", //
-        "| 6  |", //
-        "| 6  |", //
-        "+----+", //
-    ];
-    common_datablocks::assert_blocks_sorted_eq(expected, blocks.as_slice());
+        // two block, two rows for each block, value starts with 2
+        let expected = vec![
+            "+----+", //
+            "| id |", //
+            "+----+", //
+            "| 2  |", //
+            "| 2  |", //
+            "| 3  |", //
+            "| 3  |", //
+            "+----+", //
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, blocks.as_slice());
+    }
 
     Ok(())
 }
@@ -188,11 +176,14 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     // 2. truncate table which has data
     let num_blocks = 10;
-    let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
+    let rows_per_block = 3;
+    let value_start_from = 1;
+    let stream =
+        TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
 
     let r = table.append_data(ctx.clone(), stream).await?;
     table
-        .commit(ctx.clone(), r.try_collect().await?, false)
+        .commit_insertion(ctx.clone(), r.try_collect().await?, false)
         .await?;
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
@@ -202,11 +193,10 @@ async fn test_fuse_table_truncate() -> Result<()> {
     assert_ne!(prev_version, table.get_table_info().ident.version);
 
     // ensure data ingested
-    let (stats, parts) = table
+    let (stats, _) = table
         .read_partitions(ctx.clone(), source_plan.push_downs.clone())
         .await?;
-    assert_eq!(parts.len(), 10);
-    assert_eq!(stats.read_rows, 10 * 3);
+    assert_eq!(stats.read_rows, (num_blocks * rows_per_block) as usize);
 
     // truncate
     let r = table.truncate(ctx.clone(), truncate_plan).await;
@@ -252,7 +242,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
         let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
         let r = table.append_data(ctx.clone(), stream).await?;
         table
-            .commit(ctx.clone(), r.try_collect().await?, false)
+            .commit_insertion(ctx.clone(), r.try_collect().await?, false)
             .await?;
     }
 

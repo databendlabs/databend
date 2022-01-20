@@ -35,6 +35,9 @@ pub const QUERY_METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
 pub const QUERY_WAIT_TIMEOUT_MILLS: &str = "QUERY_WAIT_TIMEOUT_MILLS";
 pub const QUERY_MAX_QUERY_LOG_SIZE: &str = "QUERY_MAX_QUERY_LOG_SIZE";
 pub const QUERY_TABLE_CACHE_ENABLED: &str = "QUERY_TABLE_CACHE_ENABLED";
+pub const QUERY_TABLE_CACHE_SNAPSHOT_COUNT: &str = "QUERY_TABLE_CACHE_SNAPSHOT_COUNT";
+pub const QUERY_TABLE_CACHE_SEGMENT_COUNT: &str = "QUERY_TABLE_CACHE_SEGMENT_COUNT";
+pub const QUERY_TABLE_CACHE_BLOCK_META_COUNT: &str = "QUERY_TABLE_CACHE_BLOCK_META_COUNT";
 pub const QUERY_TABLE_MEMORY_CACHE_MB_SIZE: &str = "QUERY_TABLE_MEMORY_CACHE_MB_SIZE";
 pub const QUERY_TABLE_DISK_CACHE_ROOT: &str = "QUERY_TABLE_DISK_CACHE_ROOT";
 pub const QUERY_TABLE_DISK_CACHE_MB_SIZE: &str = "QUERY_TABLE_DISK_CACHE_MB_SIZE";
@@ -57,6 +60,8 @@ const QUERY_TABLE_ENGINE_CSV_ENABLED: &str = "QUERY_TABLE_ENGINE_CSV_ENABLED";
 const QUERY_TABLE_ENGINE_PARQUET_ENABLED: &str = "QUERY_TABLE_ENGINE_PARQUET_ENABLED";
 const QUERY_TABLE_ENGINE_MEMORY_ENABLED: &str = "QUERY_TABLE_ENGINE_MEMORY_ENABLED";
 const QUERY_DATABASE_ENGINE_GITHUB_ENABLED: &str = "QUERY_DATABASE_ENGINE_GITHUB_ENABLED";
+
+const QUERY_MANAGEMENT_MODE: &str = "QUERY_MANAGEMENT_MODE";
 
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
@@ -176,6 +181,18 @@ pub struct QueryConfig {
     #[clap(long, env = QUERY_TABLE_CACHE_ENABLED)]
     pub table_cache_enabled: bool,
 
+    /// Max number of cached table snapshot  
+    #[clap(long, env = QUERY_TABLE_CACHE_SNAPSHOT_COUNT, default_value = "256")]
+    pub table_cache_snapshot_count: u64,
+
+    /// Max number of cached table segment
+    #[clap(long, env = QUERY_TABLE_CACHE_SEGMENT_COUNT, default_value = "10240")]
+    pub table_cache_segment_count: u64,
+
+    /// Max number of cached table block meta
+    #[clap(long, env = QUERY_TABLE_CACHE_BLOCK_META_COUNT, default_value = "102400")]
+    pub table_cache_block_meta_count: u64,
+
     /// Table memory cache size (mb)
     #[clap(long, env = QUERY_TABLE_MEMORY_CACHE_MB_SIZE, default_value = "256")]
     pub table_memory_cache_mb_size: u64,
@@ -187,6 +204,10 @@ pub struct QueryConfig {
     /// Table disk cache size (mb)
     #[clap(long, env = QUERY_TABLE_DISK_CACHE_MB_SIZE, default_value = "1024")]
     pub table_disk_cache_mb_size: u64,
+
+    /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
+    #[clap(long, env = QUERY_MANAGEMENT_MODE)]
+    pub management_mode: bool,
 }
 
 impl Default for QueryConfig {
@@ -222,9 +243,13 @@ impl Default for QueryConfig {
             wait_timeout_mills: 5000,
             max_query_log_size: 10000,
             table_cache_enabled: false,
+            table_cache_snapshot_count: 256,
+            table_cache_segment_count: 10240,
+            table_cache_block_meta_count: 102400,
             table_memory_cache_mb_size: 256,
             table_disk_cache_root: "_cache".to_string(),
             table_disk_cache_mb_size: 1024,
+            management_mode: false,
         }
     }
 }
@@ -417,6 +442,27 @@ impl QueryConfig {
         env_helper!(
             mut_config,
             query,
+            table_cache_snapshot_count,
+            u64,
+            QUERY_TABLE_CACHE_SNAPSHOT_COUNT
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_cache_segment_count,
+            u64,
+            QUERY_TABLE_CACHE_SEGMENT_COUNT
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_cache_block_meta_count,
+            u64,
+            QUERY_TABLE_CACHE_BLOCK_META_COUNT
+        );
+        env_helper!(
+            mut_config,
+            query,
             table_memory_cache_mb_size,
             u64,
             QUERY_TABLE_MEMORY_CACHE_MB_SIZE
@@ -434,6 +480,13 @@ impl QueryConfig {
             table_disk_cache_mb_size,
             u64,
             QUERY_TABLE_DISK_CACHE_MB_SIZE
+        );
+        env_helper!(
+            mut_config,
+            query,
+            management_mode,
+            bool,
+            QUERY_MANAGEMENT_MODE
         );
     }
 }

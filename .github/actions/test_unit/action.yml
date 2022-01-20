@@ -18,13 +18,6 @@ runs:
         version: '3.x'
         repo-token: ${{ inputs.github_token }}
 
-    - uses: actions-rs/toolchain@v1
-      with:
-        target: ${{ matrix.config.target }}
-        toolchain: nightly
-        override: true
-        components: rustfmt, clippy
-
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
       with:
@@ -34,12 +27,12 @@ runs:
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --all-features --no-fail-fast
+        args: --no-fail-fast
       env:
         RUST_TEST_THREADS: 2
         RUST_LOG: ERROR
         RUST_BACKTRACE: full
-        RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+        RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests --cfg tokio_unstable'
         RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
 
     - name: Install grcov

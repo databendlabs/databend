@@ -14,4 +14,4 @@
 
 mod block_pruner;
 
-pub use block_pruner::apply_block_pruning;
+pub use block_pruner::BlockPruner;

@@ -63,7 +63,7 @@ async fn test_memorytable() -> Result<()> {
             .unwrap();
         // with overwrite false
         table
-            .commit(ctx.clone(), r.try_collect().await?, false)
+            .commit_insertion(ctx.clone(), r.try_collect().await?, false)
             .await?;
     }
 
@@ -156,7 +156,7 @@ async fn test_memorytable() -> Result<()> {
             .unwrap();
         // with overwrite = true
         table
-            .commit(ctx.clone(), r.try_collect().await?, true)
+            .commit_insertion(ctx.clone(), r.try_collect().await?, true)
             .await?;
     }
 

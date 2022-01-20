@@ -13,14 +13,13 @@
 // limitations under the License.
 
 use common_base::tokio;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::Compression;
 use common_meta_types::FileFormat;
 use common_meta_types::Format;
-use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
-use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -28,17 +27,17 @@ async fn test_create_stage_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
     let ctx = crate::tests::create_query_context()?;
+    let tenant = ctx.get_tenant();
 
     static TEST_QUERY: &str = "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter='\n') comments='test'";
-    if let PlanNode::CreateUserStage(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
-        let executor = CreatStageInterpreter::try_create(ctx.clone(), plan.clone())?;
+    {
+        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatStageInterpreter");
-        let mut stream = executor.execute(None).await?;
-        while let Some(_block) = stream.next().await {}
+        executor.execute(None).await?;
         let stage = ctx
-            .get_sessions_manager()
             .get_user_manager()
-            .get_stage("test_stage")
+            .get_stage(&tenant, "test_stage")
             .await?;
 
         assert_eq!(stage.file_format, FileFormat {
@@ -46,20 +45,19 @@ async fn test_create_stage_interpreter() -> Result<()> {
             compression: Compression::Gzip,
             ..Default::default()
         });
-        assert_eq!(stage.comments, String::from("test"))
-    } else {
-        panic!()
+        assert_eq!(stage.comments, String::from("test"));
     }
 
-    if let PlanNode::CreateUserStage(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
-        let executor = CreatStageInterpreter::try_create(ctx.clone(), plan.clone())?;
+    // IF NOT EXISTS.
+    {
+        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatStageInterpreter");
-        let is_err = executor.execute(None).await.is_err();
-        assert!(!is_err);
+        executor.execute(None).await?;
+
         let stage = ctx
-            .get_sessions_manager()
             .get_user_manager()
-            .get_stage("test_stage")
+            .get_stage(&tenant, "test_stage")
             .await?;
 
         assert_eq!(stage.file_format, FileFormat {
@@ -67,21 +65,22 @@ async fn test_create_stage_interpreter() -> Result<()> {
             compression: Compression::Gzip,
             ..Default::default()
         });
-        assert_eq!(stage.comments, String::from("test"))
-    } else {
-        panic!()
+        assert_eq!(stage.comments, String::from("test"));
     }
 
     static TEST_QUERY1: &str = "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter='\n') comments='test'";
-    if let PlanNode::CreateUserStage(plan) = PlanParser::parse(TEST_QUERY1, ctx.clone()).await? {
-        let executor = CreatStageInterpreter::try_create(ctx.clone(), plan.clone())?;
+    {
+        let plan = PlanParser::parse(TEST_QUERY1, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatStageInterpreter");
-        let is_err = executor.execute(None).await.is_err();
-        assert!(is_err);
+        let r = executor.execute(None).await;
+        assert!(r.is_err());
+        let e = r.err();
+        assert_eq!(e.unwrap().code(), ErrorCode::stage_already_exists_code());
+
         let stage = ctx
-            .get_sessions_manager()
             .get_user_manager()
-            .get_stage("test_stage")
+            .get_stage(&tenant, "test_stage")
             .await?;
 
         assert_eq!(stage.file_format, FileFormat {
@@ -89,9 +88,7 @@ async fn test_create_stage_interpreter() -> Result<()> {
             compression: Compression::Gzip,
             ..Default::default()
         });
-        assert_eq!(stage.comments, String::from("test"))
-    } else {
-        panic!()
+        assert_eq!(stage.comments, String::from("test"));
     }
     Ok(())
 }

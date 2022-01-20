@@ -142,7 +142,7 @@ impl MetaSrvTestContext {
     pub async fn grpc_client(&self) -> anyhow::Result<MetaGrpcClient> {
         let addr = self.config.grpc_api_address.clone();
 
-        let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+        let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
         Ok(client)
     }
 

@@ -12,23 +12,103 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
 use std::pin::Pin;
+use std::task::Context;
 use std::task::Poll;
 
-pub type Reader = Box<dyn futures::io::AsyncRead + Unpin + Send>;
+use bytes;
+use futures;
+use futures::ready;
+use futures::AsyncRead;
+use pin_project::pin_project;
 
-pub struct CallbackReader {
-    inner: Reader,
-    f: Box<dyn Fn(usize)>,
+pub type Reader = Box<dyn AsyncRead + Unpin + Send>;
+
+const CAPACITY: usize = 4096;
+
+/// ReaderStream is used to convert a `futures::io::AsyncRead` into a `futures::Stream`.
+///
+/// Most code inspired by `tokio_util::io::ReaderStream`.
+#[pin_project]
+pub struct ReaderStream {
+    #[pin]
+    reader: Option<Reader>,
+    buf: bytes::BytesMut,
 }
 
-impl futures::AsyncRead for CallbackReader {
+impl ReaderStream {
+    pub fn new(r: Reader) -> Self {
+        ReaderStream {
+            reader: Some(r),
+            buf: bytes::BytesMut::new(),
+        }
+    }
+}
+
+impl futures::Stream for ReaderStream {
+    type Item = Result<bytes::Bytes, io::Error>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.as_mut().project();
+
+        let reader = match this.reader.as_pin_mut() {
+            Some(r) => r,
+            None => return Poll::Ready(None),
+        };
+
+        // We will always use the same underlying buffer, the allocation happens only once.
+        if this.buf.is_empty() {
+            this.buf.resize(CAPACITY, 0);
+        }
+
+        match ready!(reader.poll_read(cx, this.buf)) {
+            Err(err) => {
+                self.project().reader.set(None);
+                Poll::Ready(Some(Err(err)))
+            }
+            Ok(0) => {
+                self.project().reader.set(None);
+                Poll::Ready(None)
+            }
+            Ok(n) => {
+                let chunk = this.buf.split_to(n);
+                Poll::Ready(Some(Ok(chunk.freeze())))
+            }
+        }
+    }
+}
+
+#[pin_project]
+pub struct CallbackReader<F: FnMut(usize)> {
+    #[pin]
+    inner: Reader,
+    f: F,
+}
+
+impl<F> CallbackReader<F>
+where F: FnMut(usize)
+{
+    /// # TODO
+    ///
+    /// Mark as dead_code for now, we will use it sooner while implement streams support.
+    #[allow(dead_code)]
+    pub fn new(r: Reader, f: F) -> Self {
+        CallbackReader { inner: r, f }
+    }
+}
+
+impl<F> futures::AsyncRead for CallbackReader<F>
+where F: FnMut(usize)
+{
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut [u8],
     ) -> Poll<std::io::Result<usize>> {
-        let r = Pin::new(&mut self.inner).poll_read(cx, buf);
+        let this = self.as_mut().project();
+
+        let r = this.inner.poll_read(cx, buf);
 
         if let Poll::Ready(Ok(len)) = r {
             (self.f)(len);

@@ -36,6 +36,7 @@ def remove_control_characters(s):
     """
     https://github.com/html5lib/html5lib-python/issues/96#issuecomment-43438438
     """
+
     def str_to_int(s, default, base=10):
         if int(s, base) < 0x10000:
             return chr(int(s, base))
@@ -65,7 +66,6 @@ def run_single_test(args, ext, client_options, case_file, stdout_file,
         pattern = "sed '/^\s*--/d' {test} | {client} {options} > {stdout} 2>&1"
 
     command = pattern.format(**params)
-
     proc = Popen(command, shell=True, env=os.environ)
     start_time = datetime.now()
     while (datetime.now() -
@@ -619,7 +619,8 @@ if __name__ == '__main__':
     )
 
     args = parser.parse_args()
-
+    if os.getenv("DATABEND_DEV_CONTAINER") is not None:
+        args.client = 'stdbuf -i0 -o0 -e0 {}'.format(args.client)
     if args.suites is None and os.path.isdir('suites'):
         args.suites = 'suites'
     if args.suites is None:

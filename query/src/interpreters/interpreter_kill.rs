@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::GrantObject;
+use common_meta_types::UserPrivilegeType;
 use common_planners::KillPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -46,8 +48,12 @@ impl Interpreter for KillInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        self.ctx
+            .get_current_session()
+            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super)?;
+
         let id = &self.plan.id;
-        match self.ctx.get_sessions_manager().get_session(id) {
+        match self.ctx.get_session_by_id(id) {
             None => Err(ErrorCode::UnknownSession(format!(
                 "Not found session id {}",
                 id

@@ -15,14 +15,20 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use common_ast::parser::expr::ExprTraverser;
 use common_ast::parser::expr::ExprVisitor;
+use common_ast::udfs::UDFDefinition;
+use common_ast::udfs::UDFFetcher;
+use common_ast::udfs::UDFParser;
+use common_ast::udfs::UDFTransformer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::udfs::UDFTransformer;
+use common_functions::is_builtin_function;
 use common_planners::Expression;
 use sqlparser::ast::Expr;
+use sqlparser::ast::FunctionArgExpr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::Query;
 use sqlparser::ast::UnaryOperator;
@@ -50,7 +56,7 @@ impl ExpressionAnalyzer {
         let mut stack = Vec::new();
 
         // Build RPN for expr. because async function unsupported recursion
-        for rpn_item in &ExprRPNBuilder::build(self.context.clone(), expr)? {
+        for rpn_item in &ExprRPNBuilder::build(self.context.clone(), expr).await? {
             match rpn_item {
                 ExprRPNItem::Value(v) => Self::analyze_value(v, &mut stack)?,
                 ExprRPNItem::Identifier(v) => self.analyze_identifier(v, &mut stack)?,
@@ -61,6 +67,7 @@ impl ExpressionAnalyzer {
                 ExprRPNItem::Subquery(v) => self.analyze_scalar_subquery(v, &mut stack).await?,
                 ExprRPNItem::Cast(v) => self.analyze_cast(v, &mut stack)?,
                 ExprRPNItem::Between(negated) => self.analyze_between(*negated, &mut stack)?,
+                ExprRPNItem::InList(v) => self.analyze_inlist(v, &mut stack)?,
             }
         }
 
@@ -72,8 +79,47 @@ impl ExpressionAnalyzer {
         }
     }
 
+    pub async fn analyze_function_arg(&self, arg_expr: &FunctionArgExpr) -> Result<Expression> {
+        match arg_expr {
+            FunctionArgExpr::Expr(expr) => self.analyze(expr).await,
+            FunctionArgExpr::Wildcard => Ok(Expression::Wildcard),
+            FunctionArgExpr::QualifiedWildcard(_) => Err(ErrorCode::SyntaxException(std::format!(
+                "Unsupported arg statement: {}",
+                arg_expr
+            ))),
+        }
+    }
+
     fn analyze_value(value: &Value, args: &mut Vec<Expression>) -> Result<()> {
         args.push(ValueExprAnalyzer::analyze(value)?);
+        Ok(())
+    }
+
+    fn analyze_inlist(&self, info: &InListInfo, args: &mut Vec<Expression>) -> Result<()> {
+        let mut list = Vec::with_capacity(info.list_size);
+        for _index in 0..info.list_size {
+            match args.pop() {
+                None => {
+                    return Err(ErrorCode::LogicalError("It's a bug."));
+                }
+                Some(arg) => {
+                    list.insert(0, arg);
+                }
+            }
+        }
+
+        let expr = args
+            .pop()
+            .ok_or_else(|| ErrorCode::LogicalError("It's a bug."))?;
+        list.insert(0, expr);
+
+        let op = if info.negated {
+            "NOT_IN".to_string()
+        } else {
+            "IN".to_string()
+        };
+
+        args.push(Expression::ScalarFunction { op, args: list });
         Ok(())
     }
 
@@ -219,7 +265,7 @@ impl ExpressionAnalyzer {
         let statement = DfQueryStatement::try_from(subquery.clone())?;
 
         let query_context = self.context.clone();
-        let subquery_context = QueryContext::new(query_context.clone());
+        let subquery_context = QueryContext::create_from(query_context.clone());
 
         let analyze_subquery = statement.analyze(subquery_context);
         if let AnalyzedResult::SelectQuery(analyze_data) = analyze_subquery.await? {
@@ -244,7 +290,7 @@ impl ExpressionAnalyzer {
         let statement = DfQueryStatement::try_from(subquery.clone())?;
 
         let query_context = self.context.clone();
-        let subquery_context = QueryContext::new(query_context.clone());
+        let subquery_context = QueryContext::create_from(query_context.clone());
 
         let analyze_subquery = statement.analyze(subquery_context);
         if let AnalyzedResult::SelectQuery(analyze_data) = analyze_subquery.await? {
@@ -329,6 +375,11 @@ struct FunctionExprInfo {
     parameters: Vec<Value>,
 }
 
+struct InListInfo {
+    list_size: usize,
+    negated: bool,
+}
+
 enum ExprRPNItem {
     Value(Value),
     Identifier(Ident),
@@ -339,6 +390,7 @@ enum ExprRPNItem {
     Subquery(Box<Query>),
     Cast(common_datavalues::DataType),
     Between(bool),
+    InList(InListInfo),
 }
 
 impl ExprRPNItem {
@@ -379,12 +431,12 @@ struct ExprRPNBuilder {
 }
 
 impl ExprRPNBuilder {
-    pub fn build(context: Arc<QueryContext>, expr: &Expr) -> Result<Vec<ExprRPNItem>> {
+    pub async fn build(context: Arc<QueryContext>, expr: &Expr) -> Result<Vec<ExprRPNItem>> {
         let mut builder = ExprRPNBuilder {
             context,
             rpn: Vec::new(),
         };
-        ExprTraverser::accept(expr, &mut builder)?;
+        ExprTraverser::accept(expr, &mut builder).await?;
         Ok(builder.rpn)
     }
 
@@ -420,9 +472,6 @@ impl ExprRPNBuilder {
             }
             Expr::BinaryOp { op, .. } => {
                 self.rpn.push(ExprRPNItem::binary_operator(op.to_string()));
-            }
-            Expr::Wildcard => {
-                self.rpn.push(ExprRPNItem::Wildcard);
             }
             Expr::Exists(subquery) => {
                 self.rpn.push(ExprRPNItem::Exists(subquery.clone()));
@@ -483,6 +532,14 @@ impl ExprRPNBuilder {
                         .push(ExprRPNItem::function(String::from("tuple"), len));
                 }
             }
+            Expr::InList {
+                expr: _,
+                list,
+                negated,
+            } => self.rpn.push(ExprRPNItem::InList(InListInfo {
+                list_size: list.len(),
+                negated: *negated,
+            })),
             _ => (),
         }
 
@@ -490,21 +547,42 @@ impl ExprRPNBuilder {
     }
 }
 
+#[async_trait]
+impl UDFFetcher for ExprRPNBuilder {
+    async fn get_udf_definition(&self, name: &str) -> Result<UDFDefinition> {
+        let tenant = self.context.get_tenant();
+        let udf = self
+            .context
+            .get_user_manager()
+            .get_udf(&tenant, name)
+            .await?;
+        let mut udf_parser = UDFParser::default();
+        let definition = udf_parser
+            .parse(&udf.name, &udf.parameters, &udf.definition)
+            .await?;
+
+        Ok(UDFDefinition::new(udf.parameters, definition))
+    }
+}
+
+#[async_trait]
 impl ExprVisitor for ExprRPNBuilder {
-    fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
+    async fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
         if let Expr::Function(function) = expr {
-            if let Ok(Some(transformed_expr)) = UDFTransformer::transform_function(
-                self.context.get_config().query.tenant_id.as_str(),
-                function,
-            ) {
-                return Ok(transformed_expr);
+            if !is_builtin_function(&function.name.to_string()) {
+                return UDFTransformer::transform_function(function, self).await;
             }
         }
 
         Ok(expr.clone())
     }
 
-    fn post_visit(&mut self, expr: &Expr) -> Result<()> {
+    async fn post_visit(&mut self, expr: &Expr) -> Result<()> {
         self.process_expr(expr)
+    }
+
+    fn visit_wildcard(&mut self) -> Result<()> {
+        self.rpn.push(ExprRPNItem::Wildcard);
+        Ok(())
     }
 }
