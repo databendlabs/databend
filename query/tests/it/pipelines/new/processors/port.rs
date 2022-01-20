@@ -28,6 +28,7 @@ async fn test_input_and_output_port() -> Result<()> {
         move || {
             barrier.wait();
             for index in 0..100 {
+                input.set_need_data();
                 while !input.has_data() {}
                 let data = input.pull_data().unwrap();
                 assert_eq!(data.unwrap_err().message(), format!("{}", index));
