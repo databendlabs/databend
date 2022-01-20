@@ -121,9 +121,13 @@ impl Table for NumbersTable {
         ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
+        let max_block_size = ctx.get_settings().get_max_block_size()?;
+        let fake_partitions = (self.total / max_block_size) + 1;
         let statistics = Statistics::new_exact(
             self.total as usize,
             ((self.total) * size_of::<u64>() as u64) as usize,
+            fake_partitions as usize,
+            fake_partitions as usize,
         );
         let parts =
             generate_block_parts(0, ctx.get_settings().get_max_threads()? as u64, self.total);
