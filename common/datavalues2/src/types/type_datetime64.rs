@@ -15,6 +15,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::TimeZone;
+use chrono::Utc;
 use chrono_tz::Tz;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
@@ -27,15 +30,30 @@ use crate::prelude::*;
 
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DateTime64Type {
+    precision: usize,
     tz: Option<String>,
 }
 
 impl DateTime64Type {
-    pub fn create(tz: Option<String>) -> Self {
-        DateTime64Type { tz }
+    pub fn create(precision: usize, tz: Option<String>) -> Self {
+        DateTime64Type { precision, tz }
     }
-    pub fn arc(tz: Option<String>) -> DataTypePtr {
-        Arc::new(DateTime64Type { tz })
+    pub fn arc(precision: usize, tz: Option<String>) -> DataTypePtr {
+        Arc::new(DateTime64Type { precision, tz })
+    }
+    pub fn precision(&self) -> usize {
+        self.precision
+    }
+
+    #[inline]
+    pub fn utc_timestamp(&self, v: u64) -> DateTime<Utc> {
+        if self.precision <= 3 {
+            // ms
+            Utc.timestamp(v as i64 / 1000, (v % 1000 * 1_000_000) as u32)
+        } else {
+            // ns
+            Utc.timestamp(v as i64 / 1_000_000_000_000, (v % 1_000_000_000_000) as u32)
+        }
     }
 }
 
@@ -48,6 +66,10 @@ impl DataType for DateTime64Type {
     #[inline]
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn name(&self) -> &str {
+        "DateTime64"
     }
 
     fn default_value(&self) -> DataValue {

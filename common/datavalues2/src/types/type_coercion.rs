@@ -353,7 +353,7 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
         if matches!(lhs_id, TypeID::DateTime32) || matches!(rhs_id, TypeID::DateTime32) {
             return Ok(DateTimeType::arc(None));
         }
-        return Ok(Date32Type32::arc());
+        return Ok(Date32Type::arc());
     }
 
     Err(ErrorCode::IllegalDataType(format!(
@@ -378,8 +378,8 @@ pub fn aggregate_types(args: &[DataTypePtr]) -> Result<DataTypePtr> {
 
 pub fn merge_types(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Result<DataTypePtr> {
     if lhs_type.is_nullable() || rhs_type.is_nullable() {
-        let lhs_type = unwrap_nullable(lhs_type);
-        let rhs_type = unwrap_nullable(rhs_type);
+        let lhs_type = remove_nullable(lhs_type);
+        let rhs_type = remove_nullable(rhs_type);
         return merge_types(&lhs_type, &rhs_type);
     }
 

@@ -14,12 +14,19 @@
 
 use std::fmt;
 
+use common_datavalues::prelude::DataField as OldDataField;
+use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::column_convert::convert2_new_column;
+use common_datavalues2::column_convert::convert2_old_column;
 use common_datavalues2::ColumnRef;
+use common_datavalues2::ColumnWithField;
 use common_datavalues2::ColumnsWithField;
+use common_datavalues2::DataField;
 use common_datavalues2::DataTypePtr;
 use common_exception::Result;
 use dyn_clone::DynClone;
 
+use super::Function;
 use crate::scalars::Monotonicity;
 
 pub trait Function2: fmt::Display + Sync + Send + DynClone {
@@ -53,6 +60,88 @@ pub trait Function2: fmt::Display + Sync + Send + DynClone {
     fn passthrough_null(&self) -> bool {
         true
     }
+
+    /// If all args are constant column, then we just return the constant result
+    /// TODO, we should cache the constant result inside the context for better performance
+    fn passthrough_constant(&self) -> bool {
+        true
+    }
 }
 
 dyn_clone::clone_trait_object!(Function2);
+
+#[derive(Clone)]
+pub struct Function2Adapter {
+    inner: Box<dyn Function2>,
+}
+
+impl Function2Adapter {
+    pub fn create(inner: Box<dyn Function2>) -> Box<dyn Function> {
+        Box::new(Self { inner })
+    }
+}
+impl Function for Function2Adapter {
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+
+    fn return_type(
+        &self,
+        args: &[common_datavalues::DataTypeAndNullable],
+    ) -> Result<common_datavalues::DataTypeAndNullable> {
+        let args = args
+            .iter()
+            .map(|arg| OldDataField::new("xx", arg.data_type().clone(), arg.is_nullable()))
+            .collect::<Vec<_>>();
+
+        let mut types = vec![];
+        let fs: Vec<DataField> = args.iter().map(|f| f.clone().into()).collect();
+        for t in fs.iter() {
+            types.push(t.data_type());
+        }
+
+        let ty = self.inner.return_type(&types)?;
+        let new_typ = DataField::new("xx", ty);
+        let old_f: OldDataField = new_typ.into();
+
+        Ok(DataTypeAndNullable::create(
+            old_f.data_type(),
+            old_f.is_nullable(),
+        ))
+    }
+
+    fn eval(
+        &self,
+        columns: &common_datavalues::prelude::DataColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<common_datavalues::prelude::DataColumn> {
+        let columns = columns
+            .iter()
+            .map(|c| {
+                let col = convert2_new_column(c.column(), c.field().is_nullable());
+                let new_f: DataField = c.field().clone().into();
+
+                ColumnWithField::new(col, new_f)
+            })
+            .collect::<Vec<_>>();
+
+        let col = self.inner.eval(&columns, _input_rows)?;
+
+        let column = convert2_old_column(&col);
+        Ok(column)
+    }
+
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+        self.inner.get_monotonicity(args)
+    }
+
+    fn passthrough_null(&self) -> bool {
+        self.inner.passthrough_null()
+    }
+}
+
+impl std::fmt::Display for Function2Adapter {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}

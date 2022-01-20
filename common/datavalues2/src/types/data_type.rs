@@ -24,7 +24,7 @@ use dyn_clone::DynClone;
 use super::type_array::ArrayType;
 use super::type_boolean::BooleanType;
 use super::type_date::DateType;
-use super::type_date32::Date32Type32;
+use super::type_date32::Date32Type;
 use super::type_datetime::DateTimeType;
 use super::type_datetime64::DateTime64Type;
 use super::type_id::TypeID;
@@ -56,6 +56,12 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
 
     fn is_nullable(&self) -> bool {
         false
+    }
+
+    fn name(&self) -> &str;
+
+    fn alias(&self) -> &[&str] {
+        &[]
     }
 
     fn as_any(&self) -> &dyn Any;
@@ -112,7 +118,7 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
 
         ArrowType::Timestamp(_, tz) => Arc::new(DateTimeType::create(tz.clone())),
         ArrowType::Date32 => Arc::new(DateType::default()),
-        ArrowType::Date64 => Arc::new(Date32Type32::default()),
+        ArrowType::Date64 => Arc::new(Date32Type::default()),
 
         ArrowType::Struct(fields) => {
             let names = fields.iter().map(|f| f.name().to_string()).collect();
@@ -134,9 +140,9 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
             let metatada = m.get("ARROW:extension:databend_metadata").cloned();
             match custom_name.as_str() {
                 "Date" | "Date16" => return Arc::new(DateType::default()),
-                "Date32" => return Arc::new(Date32Type32::default()),
+                "Date32" => return Arc::new(Date32Type::default()),
                 "DateTime" | "DateTime32" => return DateTimeType::arc(metatada),
-                "DateTime64" => return DateTime64Type::arc(metatada),
+                "DateTime64" => return DateTime64Type::arc(3, metatada),
                 _ => {}
             }
         }
@@ -160,7 +166,7 @@ pub fn wrap_nullable(data_type: &DataTypePtr) -> DataTypePtr {
     Arc::new(NullableType::create(data_type.clone()))
 }
 
-pub fn unwrap_nullable(data_type: &DataTypePtr) -> DataTypePtr {
+pub fn remove_nullable(data_type: &DataTypePtr) -> DataTypePtr {
     if matches!(data_type.data_type_id(), TypeID::Nullable) {
         let nullable = data_type.as_any().downcast_ref::<NullableType>().unwrap();
         return nullable.inner_type().clone();

@@ -41,6 +41,14 @@ impl DataType for DateType {
         self
     }
 
+    fn name(&self) -> &str {
+        "Date"
+    }
+
+    fn alias(&self) -> &[&str] {
+        &["Date16"]
+    }
+
     fn default_value(&self) -> DataValue {
         DataValue::UInt64(0)
     }

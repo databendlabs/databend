@@ -22,6 +22,12 @@ use crate::prelude::*;
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct NullType {}
 
+impl NullType {
+    pub fn arc() -> DataTypePtr {
+        Arc::new(Self {})
+    }
+}
+
 #[typetag::serde]
 impl DataType for NullType {
     fn data_type_id(&self) -> TypeID {
@@ -31,6 +37,10 @@ impl DataType for NullType {
     #[inline]
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn name(&self) -> &str {
+        "Null"
     }
 
     // it's nothing, so we can't create any default value

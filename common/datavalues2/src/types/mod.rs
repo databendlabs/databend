@@ -33,6 +33,7 @@ pub mod type_id;
 
 pub mod deserializations;
 pub mod serializations;
+mod type_factory;
 
 pub use data_type::*;
 pub use deserializations::*;
@@ -44,6 +45,7 @@ pub use type_date::*;
 pub use type_date32::*;
 pub use type_datetime::*;
 pub use type_datetime64::*;
+pub use type_factory::*;
 pub use type_id::*;
 pub use type_interval::*;
 pub use type_null::*;

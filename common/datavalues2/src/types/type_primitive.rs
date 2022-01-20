@@ -62,7 +62,7 @@ pub type Float32Type = PrimitiveDataType<f32>;
 pub type Float64Type = PrimitiveDataType<f64>;
 
 macro_rules! impl_numeric {
-    ($ty:ident, $tname:ident) => {
+    ($ty:ident, $tname:ident, $name: expr, $alias: expr) => {
         impl PrimitiveDataType<$ty> {
             pub fn arc() -> DataTypePtr {
                 Arc::new(Self { _t: PhantomData })
@@ -78,6 +78,14 @@ macro_rules! impl_numeric {
             #[inline]
             fn as_any(&self) -> &dyn std::any::Any {
                 self
+            }
+
+            fn name(&self) -> &str {
+                $name
+            }
+
+            fn alias(&self) -> &[&str] {
+                $alias
             }
 
             fn default_value(&self) -> DataValue {
@@ -115,16 +123,16 @@ macro_rules! impl_numeric {
         }
     };
 }
+//
+impl_numeric!(u8, UInt8, "UInt8", &[]);
+impl_numeric!(u16, UInt16, "UInt16", &[]);
+impl_numeric!(u32, UInt32, "UInt32", &[]);
+impl_numeric!(u64, UInt64, "UInt64", &[]);
 
-impl_numeric!(u8, UInt8);
-impl_numeric!(u16, UInt16);
-impl_numeric!(u32, UInt32);
-impl_numeric!(u64, UInt64);
+impl_numeric!(i8, Int8, "Int8", &["tinyint"]);
+impl_numeric!(i16, Int16, "Int16", &["smallint"]);
+impl_numeric!(i32, Int32, "Int32", &["int"]);
+impl_numeric!(i64, Int64, "Int64", &["bigint"]);
 
-impl_numeric!(i8, Int8);
-impl_numeric!(i16, Int16);
-impl_numeric!(i32, Int32);
-impl_numeric!(i64, Int64);
-
-impl_numeric!(f32, Float32);
-impl_numeric!(f64, Float64);
+impl_numeric!(f32, Float32, "Float32", &["float"]);
+impl_numeric!(f64, Float64, "Float64", &["double"]);

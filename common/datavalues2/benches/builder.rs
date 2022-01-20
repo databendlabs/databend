@@ -48,7 +48,7 @@ fn from_iter(values: &Buffer<i32>) -> Result<Box<dyn Array>> {
 fn from_builder(values: &Buffer<i32>) -> Result<Arc<dyn Column>> {
     let it = (0..values.len()).map(|i| i32::abs(i as i32) as u32);
 
-    Ok(ColumnBuilder::<u32>::from_iter(it))
+    Ok(ColumnBuilder::<u32>::from_item_iter(it))
 }
 
 criterion_group!(benches, add_benchmark);

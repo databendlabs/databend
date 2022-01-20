@@ -22,23 +22,27 @@ use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct Date32Type32 {}
+pub struct Date32Type {}
 
-impl Date32Type32 {
+impl Date32Type {
     pub fn arc() -> DataTypePtr {
         Arc::new(Self {})
     }
 }
 
 #[typetag::serde]
-impl DataType for Date32Type32 {
+impl DataType for Date32Type {
     fn data_type_id(&self) -> TypeID {
-        TypeID::Int32
+        TypeID::Date32
     }
 
     #[inline]
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn name(&self) -> &str {
+        "Date32"
     }
 
     fn default_value(&self) -> DataValue {

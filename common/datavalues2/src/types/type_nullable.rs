@@ -26,11 +26,15 @@ use crate::prelude::*;
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct NullableType {
     inner: DataTypePtr,
+    name: String,
 }
 
 impl NullableType {
     pub fn create(inner: DataTypePtr) -> Self {
-        NullableType { inner }
+        NullableType {
+            name: format!("Nullable({})", inner.name()),
+            inner,
+        }
     }
 
     pub fn inner_type(&self) -> &DataTypePtr {
@@ -47,6 +51,10 @@ impl DataType for NullableType {
     #[inline]
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn name(&self) -> &str {
+        &self.name
     }
 
     fn is_nullable(&self) -> bool {

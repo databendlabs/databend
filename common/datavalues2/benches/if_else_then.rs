@@ -64,7 +64,7 @@ fn databend_if_else_then(
         ));
     }
 
-    let physical_id = unwrap_nullable(&lhs.data_type())
+    let physical_id = remove_nullable(&lhs.data_type())
         .data_type_id()
         .to_physical_type();
 

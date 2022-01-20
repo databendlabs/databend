@@ -35,6 +35,10 @@ impl DataType for IntervalType {
         self
     }
 
+    fn name(&self) -> &str {
+        "interval"
+    }
+
     fn default_value(&self) -> DataValue {
         DataValue::Int64(0)
     }

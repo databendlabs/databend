@@ -40,6 +40,14 @@ impl DataType for StringType {
         self
     }
 
+    fn name(&self) -> &str {
+        "String"
+    }
+
+    fn alias(&self) -> &[&str] {
+        &["Binary", "Varchar", "Char", "Text", "Blob"]
+    }
+
     fn default_value(&self) -> DataValue {
         DataValue::String(vec![])
     }

@@ -63,7 +63,7 @@ fn test_builder() -> Result<()> {
 
         if column.is_nullable() {
             let mut builder = NullableColumnBuilder::<T>::with_capacity(size);
-            let viewer = ColumnViewer::<T>::create(&column)?;
+            let viewer = ColumnViewer::<T>::create(column)?;
 
             for row in 0..size {
                 builder.append(*viewer.value(row), viewer.valid_at(row));
@@ -72,7 +72,7 @@ fn test_builder() -> Result<()> {
             Ok(result)
         } else {
             let mut builder = ColumnBuilder::<T>::with_capacity(size);
-            let viewer = ColumnViewer::<T>::create(&column)?;
+            let viewer = ColumnViewer::<T>::create(column)?;
 
             for row in 0..size {
                 builder.append(*viewer.value(row));
@@ -93,7 +93,7 @@ fn test_builder() -> Result<()> {
             column = Arc::new(NullableColumn::new(column, bm.into()));
         }
 
-        let ty = unwrap_nullable(&column.data_type());
+        let ty = remove_nullable(&column.data_type());
         let ty = ty.data_type_id().to_physical_type();
 
         with_match_scalar_types_error!(ty, |$T| {

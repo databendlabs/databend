@@ -97,7 +97,7 @@ where T: ScalarType + Default
         self.builder.append(value);
     }
 
-    pub fn from_iter<I: Iterator<Item = T>>(iter: I) -> ColumnRef {
+    pub fn from_item_iter<I: Iterator<Item = T>>(iter: I) -> ColumnRef {
         let column = <T::ColumnType as NewColumn<T>>::new_from_iter(iter);
         Arc::new(column)
     }

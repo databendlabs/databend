@@ -11,11 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use common_datavalues::DataType;
+use common_exception::Result;
 
-use crate::scalars::function_factory::FactoryCreator;
-use crate::scalars::function_factory::FunctionDescription;
-use crate::scalars::function_factory::FunctionFactory;
+use crate::scalars::function2_factory::Factory2Creator;
+use crate::scalars::function2_factory::Function2Description;
+use crate::scalars::function2_factory::Function2Factory;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::CastFunction;
 
@@ -23,53 +23,48 @@ use crate::scalars::CastFunction;
 pub struct ToCastFunction;
 
 impl ToCastFunction {
-    fn cast_function_creator(to_type: DataType) -> FunctionDescription {
+    fn cast_function_creator(type_name: &'static str) -> Result<Function2Description> {
         let mut features = FunctionFeatures::default()
             .deterministic()
             .monotonicity()
             .num_arguments(1);
-        if to_type == DataType::Boolean {
+
+        if type_name.eq_ignore_ascii_case("Boolean") {
             features = features.bool_function();
         }
 
-        let function_creator: FactoryCreator = Box::new(move |display_name| {
-            CastFunction::create(display_name.to_string(), to_type.clone())
-        });
+        let function_creator: Factory2Creator =
+            Box::new(move |display_name| CastFunction::create(display_name, type_name));
 
-        FunctionDescription::creator(function_creator).features(features)
+        Ok(Function2Description::creator(function_creator).features(features))
     }
 
-    pub fn register(factory: &mut FunctionFactory) {
-        factory.register("toNull", Self::cast_function_creator(DataType::Null));
-        factory.register("toBoolean", Self::cast_function_creator(DataType::Boolean));
-        factory.register("toUInt8", Self::cast_function_creator(DataType::UInt8));
-        factory.register("toUInt16", Self::cast_function_creator(DataType::UInt16));
-        factory.register("toUInt32", Self::cast_function_creator(DataType::UInt32));
-        factory.register("toUInt64", Self::cast_function_creator(DataType::UInt64));
-        factory.register("toInt8", Self::cast_function_creator(DataType::Int8));
-        factory.register("toInt16", Self::cast_function_creator(DataType::Int16));
-        factory.register("toInt32", Self::cast_function_creator(DataType::Int32));
-        factory.register("toInt64", Self::cast_function_creator(DataType::Int64));
-        factory.register("toFloat32", Self::cast_function_creator(DataType::Float32));
-        factory.register("toFloat64", Self::cast_function_creator(DataType::Float64));
-        factory.register("toDate16", Self::cast_function_creator(DataType::Date16));
-        factory.register("toDate32", Self::cast_function_creator(DataType::Date32));
-        factory.register("toString", Self::cast_function_creator(DataType::String));
+    pub fn register(factory: &mut Function2Factory) {
+        let to_names = vec![
+            "Null",
+            "Boolean",
+            "UInt8",
+            "UInt16",
+            "UInt32",
+            "UInt64",
+            "Int8",
+            "Int16",
+            "Int32",
+            "Int64",
+            "Float32",
+            "Float64",
+            "Date16",
+            "Date32",
+            "String",
+            "Date",
+            "DateTime",
+            "DateTime32",
+            "DateTime64",
+        ];
 
-        // aliases
-        factory.register("toDate", Self::cast_function_creator(DataType::Date16));
-        factory.register(
-            "toDateTime",
-            Self::cast_function_creator(DataType::DateTime32(None)),
-        );
-        factory.register(
-            "toDateTime32",
-            Self::cast_function_creator(DataType::DateTime32(None)),
-        );
-        // TODO support precision parameter
-        factory.register(
-            "toDateTime64",
-            Self::cast_function_creator(DataType::DateTime64(3, None)),
-        );
+        for name in to_names {
+            let to_name = format!("to{}", name);
+            factory.register(&to_name, Self::cast_function_creator(name).unwrap());
+        }
     }
 }

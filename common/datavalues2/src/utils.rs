@@ -58,11 +58,11 @@ pub fn combine_validities(lhs: Option<&Bitmap>, rhs: Option<&Bitmap>) -> Option<
     }
 }
 
-pub fn combine_validities_2(lhs: &Option<Bitmap>, rhs: &Option<Bitmap>) -> Option<Bitmap> {
+pub fn combine_validities_2(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<Bitmap> {
     match (lhs, rhs) {
-        (Some(lhs), None) => Some(lhs.clone()),
-        (None, Some(rhs)) => Some(rhs.clone()),
+        (Some(lhs), None) => Some(lhs),
+        (None, Some(rhs)) => Some(rhs),
         (None, None) => None,
-        (Some(lhs), Some(rhs)) => Some(lhs & rhs),
+        (Some(lhs), Some(rhs)) => Some((&lhs) & (&rhs)),
     }
 }
