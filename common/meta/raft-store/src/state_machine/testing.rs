@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_raft::raft::Entry;
-use async_raft::raft::EntryConfigChange;
-use async_raft::raft::EntryNormal;
-use async_raft::raft::EntryPayload;
-use async_raft::raft::MembershipConfig;
+use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
@@ -25,6 +21,9 @@ use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::RaftTxId;
 use maplit::btreeset;
+use openraft::raft::Entry;
+use openraft::raft::EntryPayload;
+use openraft::Membership;
 use sled::IVec;
 
 use crate::state_machine::SnapshotKeyValue;
@@ -34,35 +33,23 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
     let logs = vec![
         Entry {
             log_id: LogId { term: 1, index: 1 },
-            payload: EntryPayload::ConfigChange(EntryConfigChange {
-                membership: MembershipConfig {
-                    members: btreeset![1, 2, 3],
-                    members_after_consensus: None,
-                },
-            }),
+            payload: EntryPayload::Membership(Membership::new_single(btreeset![1, 2, 3])),
         },
         Entry {
             log_id: LogId { term: 1, index: 4 },
-            payload: EntryPayload::Normal(EntryNormal {
-                data: LogEntry {
-                    txid: None,
-                    cmd: Cmd::UpsertKV {
-                        key: "a".to_string(),
-                        seq: MatchSeq::Any,
-                        value: Operation::Update(b"A".to_vec()),
-                        value_meta: None,
-                    },
+            payload: EntryPayload::Normal(LogEntry {
+                txid: None,
+                cmd: Cmd::UpsertKV {
+                    key: "a".to_string(),
+                    seq: MatchSeq::Any,
+                    value: Operation::Update(b"A".to_vec()),
+                    value_meta: None,
                 },
             }),
         },
         Entry {
             log_id: LogId { term: 1, index: 5 },
-            payload: EntryPayload::ConfigChange(EntryConfigChange {
-                membership: MembershipConfig {
-                    members: btreeset![4, 5, 6],
-                    members_after_consensus: None,
-                },
-            }),
+            payload: EntryPayload::Membership(Membership::new_single(btreeset![4, 5, 6])),
         },
         Entry {
             log_id: LogId { term: 1, index: 6 },
@@ -70,24 +57,20 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
         },
         Entry {
             log_id: LogId { term: 1, index: 8 },
-            payload: EntryPayload::Normal(EntryNormal {
-                data: LogEntry {
-                    txid: None,
-                    cmd: Cmd::IncrSeq {
-                        key: "c".to_string(),
-                    },
+            payload: EntryPayload::Normal(LogEntry {
+                txid: None,
+                cmd: Cmd::IncrSeq {
+                    key: "c".to_string(),
                 },
             }),
         },
         Entry {
             log_id: LogId { term: 1, index: 9 },
-            payload: EntryPayload::Normal(EntryNormal {
-                data: LogEntry {
-                    txid: None,
-                    cmd: Cmd::AddNode {
-                        node_id: 5,
-                        node: Default::default(),
-                    },
+            payload: EntryPayload::Normal(LogEntry {
+                txid: None,
+                cmd: Cmd::AddNode {
+                    node_id: 5,
+                    node: Default::default(),
                 },
             }),
         },
@@ -96,7 +79,7 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
         "[2, 0, 0, 0, 0, 0, 0, 0, 5]:{\"name\":\"\",\"address\":\"\"}", // Nodes
         "[3, 1]:{\"LogId\":{\"term\":1,\"index\":9}}",                  // sm meta: LastApplied
         "[3, 2]:{\"Bool\":true}",                                       // sm meta: init
-        "[3, 3]:{\"Membership\":{\"members\":[4,5,6],\"members_after_consensus\":null}}", // membership
+        "[3, 3]:{\"Membership\":{\"log_id\":{\"term\":1,\"index\":5},\"membership\":{\"configs\":[[4,5,6]],\"all_nodes\":[4,5,6]}}}", // membership
         "[6, 97]:{\"seq\":1,\"meta\":null,\"data\":[65]}", // generic kv
         "[7, 99]:1",                                       // sequence: c
         "[7, 103, 101, 110, 101, 114, 105, 99, 45, 107, 118]:1", // sequence: by upsertkv

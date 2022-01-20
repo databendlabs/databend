@@ -13,18 +13,10 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::fmt::Debug;
 use std::io::Cursor;
+use std::ops::RangeBounds;
 
-use async_raft::async_trait::async_trait;
-use async_raft::raft::Entry;
-use async_raft::raft::EntryPayload;
-use async_raft::raft::MembershipConfig;
-use async_raft::storage::CurrentSnapshotData;
-use async_raft::storage::HardState;
-use async_raft::storage::InitialState;
-use async_raft::RaftStorage;
-use async_raft::SnapshotMeta;
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::ops::Bound;
 use common_base::tokio::sync::RwLock;
 use common_base::tokio::sync::RwLockWriteGuard;
 use common_exception::ErrorCode;
@@ -36,13 +28,26 @@ use common_meta_raft_store::state_machine::SerializableSnapshot;
 use common_meta_raft_store::state_machine::Snapshot;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::get_sled_db;
+use common_meta_sled_store::openraft;
+use common_meta_sled_store::openraft::storage::LogState;
+use common_meta_sled_store::openraft::EffectiveMembership;
+use common_meta_sled_store::openraft::ErrorSubject;
+use common_meta_sled_store::openraft::ErrorVerb;
+use common_meta_sled_store::openraft::StateMachineChanges;
 use common_meta_types::AppliedState;
 use common_meta_types::LogEntry;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_tracing::tracing;
+use openraft::async_trait::async_trait;
+use openraft::raft::Entry;
+use openraft::storage::HardState;
+use openraft::LogId;
+use openraft::RaftStorage;
+use openraft::SnapshotMeta;
+use openraft::StorageError;
 
-use crate::errors::ShutdownError;
+use crate::store::ToStorageError;
 use crate::Opened;
 
 /// An storage implementing the `async_raft::RaftStorage` trait.
@@ -148,10 +153,6 @@ impl MetaRaftStore {
         self.state_machine.write().await
     }
 
-    pub async fn read_hard_state(&self) -> common_exception::Result<Option<HardState>> {
-        self.raft_state.read_hard_state()
-    }
-
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
     #[tracing::instrument(level = "debug", skip(self, data))]
     pub async fn install_snapshot(&self, data: &[u8]) -> common_exception::Result<()> {
@@ -192,7 +193,7 @@ impl MetaRaftStore {
         }
 
         tracing::info!(
-            "installed state machine from snapshot, no_kvs: {} last_applied: {}",
+            "installed state machine from snapshot, no_kvs: {} last_applied: {:?}",
             nkvs,
             new_sm.get_last_applied()?,
         );
@@ -209,7 +210,7 @@ impl MetaRaftStore {
             .await?;
 
         tracing::info!(
-            "installed state machine from snapshot, last_applied: {}",
+            "installed state machine from snapshot, last_applied: {:?}",
             new_sm.get_last_applied()?,
         );
 
@@ -224,154 +225,91 @@ impl MetaRaftStore {
         *sm = new_sm;
         Ok(())
     }
-
-    /// Go backwards through the log to find the most recent membership config <= `upto_index`.
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_membership_from_log(
-        &self,
-        upto_index: Option<u64>,
-    ) -> anyhow::Result<MembershipConfig> {
-        let right_bound = upto_index.map_or(Bound::Unbounded, Bound::Included);
-
-        let it = self.log.range((Bound::Included(0), right_bound))?.rev();
-
-        for rkv in it {
-            let (_log_index, ent) = rkv?;
-            match &ent.payload {
-                EntryPayload::ConfigChange(cfg) => {
-                    return Ok(cfg.membership.clone());
-                }
-                EntryPayload::SnapshotPointer(snap_ptr) => {
-                    return Ok(snap_ptr.membership.clone());
-                }
-                _ => {}
-            }
-        }
-
-        Ok(MembershipConfig::new_initial(self.id))
-    }
 }
 
 #[async_trait]
 impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
-    type Snapshot = Cursor<Vec<u8>>;
-    type ShutdownError = ShutdownError;
+    type SnapshotData = Cursor<Vec<u8>>;
+
+    #[tracing::instrument(level = "debug", skip(self, hs), fields(id=self.id))]
+    async fn save_hard_state(&self, hs: &HardState) -> Result<(), StorageError> {
+        self.raft_state
+            .write_hard_state(hs)
+            .await
+            .map_to_sto_err(ErrorSubject::HardState, ErrorVerb::Write)?;
+        Ok(())
+    }
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
-    async fn get_membership_config(&self) -> anyhow::Result<MembershipConfig> {
-        self.get_membership_from_log(None).await
-    }
-
-    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
-    async fn get_initial_state(&self) -> anyhow::Result<InitialState> {
-        let hard_state = self.raft_state.read_hard_state()?;
-
-        let membership = self.get_membership_config().await?;
-        let sm = self.state_machine.read().await;
-
-        match hard_state {
-            Some(inner) => {
-                let last = self.log.last()?;
-                let last_log_id = match last {
-                    Some((_index, ent)) => ent.log_id,
-                    None => (0, 0).into(),
-                };
-
-                let last_applied_log = sm.get_last_applied()?;
-
-                let st = InitialState {
-                    last_log_id,
-                    last_applied_log,
-                    hard_state: inner,
-                    membership,
-                };
-                tracing::info!("build initial state from storage: {:?}", st);
-                Ok(st)
-            }
-            None => {
-                let new = InitialState::new_initial(self.id);
-                tracing::info!("create initial state: {:?}", new);
-                self.raft_state.write_hard_state(&new.hard_state).await?;
-                Ok(new)
-            }
-        }
-    }
-
-    #[tracing::instrument(level = "info", skip(self, hs), fields(id=self.id))]
-    async fn save_hard_state(&self, hs: &HardState) -> anyhow::Result<()> {
-        self.raft_state.write_hard_state(hs).await?;
-        Ok(())
-    }
-
-    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
-    async fn get_log_entries(&self, start: u64, stop: u64) -> anyhow::Result<Vec<Entry<LogEntry>>> {
-        // Invalid request, return empty vec.
-        if start > stop {
-            tracing::error!(
-                "get_log_entries: invalid request, start({}) > stop({})",
-                start,
-                stop
-            );
-            return Ok(vec![]);
-        }
-
-        Ok(self.log.range_values(start..stop)?)
-    }
-
-    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
-    async fn delete_logs_from(&self, start: u64, stop: Option<u64>) -> anyhow::Result<()> {
-        if stop.as_ref().map(|stop| &start > stop).unwrap_or(false) {
-            tracing::error!(
-                "delete_logs_from: invalid request, start({}) > stop({:?})",
-                start,
-                stop
-            );
-            return Ok(());
-        }
-
-        // If a stop point was specified, delete from start until the given stop point.
-        if let Some(stop) = stop.as_ref() {
-            self.log.range_remove(start..*stop).await?;
-        } else {
-            self.log.range_remove(start..).await?;
-        }
-        Ok(())
-    }
-
-    #[tracing::instrument(level = "info", skip(self, entry), fields(id=self.id))]
-    async fn append_entry_to_log(&self, entry: &Entry<LogEntry>) -> anyhow::Result<()> {
-        self.log.insert(entry).await?;
-        Ok(())
-    }
-
-    #[tracing::instrument(level = "info", skip(self, entries), fields(id=self.id))]
-    async fn replicate_to_log(&self, entries: &[Entry<LogEntry>]) -> anyhow::Result<()> {
-        // TODO(xp): replicated_to_log should not block. Do the actual work in another task.
-        self.log.append(entries).await?;
-        Ok(())
-    }
-
-    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
-    async fn apply_entry_to_state_machine(
+    async fn try_get_log_entries<RB: RangeBounds<u64> + Clone + Debug + Send + Sync>(
         &self,
-        entry: &Entry<LogEntry>,
-    ) -> anyhow::Result<AppliedState> {
-        let sm = self.state_machine.write().await;
-        let resp = sm.apply(entry).await?;
-        Ok(resp)
+        range: RB,
+    ) -> Result<Vec<Entry<LogEntry>>, StorageError> {
+        let entries = self
+            .log
+            .range_values(range)
+            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)?;
+
+        Ok(entries)
     }
 
-    #[tracing::instrument(level = "info", skip(self, entries), fields(id=self.id))]
-    async fn replicate_to_state_machine(&self, entries: &[&Entry<LogEntry>]) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
+    async fn delete_conflict_logs_since(&self, log_id: LogId) -> Result<(), StorageError> {
+        self.log
+            .range_remove(log_id.index..)
+            .await
+            .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
+    async fn purge_logs_upto(&self, log_id: LogId) -> Result<(), StorageError> {
+        self.log
+            .set_last_purged(log_id)
+            .await
+            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Write)?;
+        self.log
+            .range_remove(..=log_id.index)
+            .await
+            .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, entries), fields(id=self.id))]
+    async fn append_to_log(&self, entries: &[&Entry<LogEntry>]) -> Result<(), StorageError> {
+        // TODO(xp): replicated_to_log should not block. Do the actual work in another task.
+        let entries = entries.iter().map(|x| (*x).clone()).collect::<Vec<_>>();
+        self.log
+            .append(&entries)
+            .await
+            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Write)?;
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, entries), fields(id=self.id))]
+    async fn apply_to_state_machine(
+        &self,
+        entries: &[&Entry<LogEntry>],
+    ) -> Result<Vec<AppliedState>, StorageError> {
+        let mut res = Vec::with_capacity(entries.len());
+
         let sm = self.state_machine.write().await;
         for entry in entries {
-            sm.apply(*entry).await?;
+            let r = sm
+                .apply(*entry)
+                .await
+                .map_to_sto_err(ErrorSubject::Apply(entry.log_id), ErrorVerb::Write)?;
+            res.push(r);
         }
-        Ok(())
+        Ok(res)
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
-    async fn do_log_compaction(&self) -> anyhow::Result<CurrentSnapshotData<Self::Snapshot>> {
+    #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
+    async fn build_snapshot(
+        &self,
+    ) -> Result<openraft::storage::Snapshot<Self::SnapshotData>, StorageError> {
         // NOTE: do_log_compaction is guaranteed to be serialized called by RaftCore.
 
         // TODO(xp): add test of small chunk snapshot transfer and installation
@@ -380,33 +318,26 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
 
         // 1. Take a serialized snapshot
 
-        let (view, last_applied_log, last_membership, snapshot_id) =
-            self.state_machine.write().await.snapshot()?;
+        let (view, last_applied_log, snapshot_id) = self
+            .state_machine
+            .write()
+            .await
+            .snapshot()
+            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)?;
 
-        let data = StateMachine::serialize_snapshot(view)?;
+        let data = StateMachine::serialize_snapshot(view)
+            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)?;
         let snapshot_size = data.len();
 
         let snap_meta = SnapshotMeta {
             last_log_id: last_applied_log,
             snapshot_id,
-            membership: last_membership.clone(),
         };
 
         let snapshot = Snapshot {
             meta: snap_meta.clone(),
             data: data.clone(),
         };
-
-        // 2. Remove logs that are included in snapshot.
-
-        // When encountered a snapshot pointer, raft replication is switched to snapshot replication.
-        self.log
-            .insert(&Entry::new_snapshot_pointer(&snapshot.meta))
-            .await?;
-
-        self.log.range_remove(0..last_applied_log.index).await?;
-
-        tracing::debug!("log range_remove complete");
 
         // Update the snapshot first.
         {
@@ -416,23 +347,23 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
 
         tracing::debug!(snapshot_size = snapshot_size, "log compaction complete");
 
-        Ok(CurrentSnapshotData {
+        Ok(openraft::storage::Snapshot {
             meta: snap_meta,
             snapshot: Box::new(Cursor::new(data)),
         })
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
-    async fn create_snapshot(&self) -> anyhow::Result<Box<Self::Snapshot>> {
+    #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
+    async fn begin_receiving_snapshot(&self) -> Result<Box<Self::SnapshotData>, StorageError> {
         Ok(Box::new(Cursor::new(Vec::new())))
     }
 
-    #[tracing::instrument(level = "info", skip(self, snapshot), fields(id=self.id))]
-    async fn finalize_snapshot_installation(
+    #[tracing::instrument(level = "debug", skip(self, snapshot), fields(id=self.id))]
+    async fn install_snapshot(
         &self,
         meta: &SnapshotMeta,
-        snapshot: Box<Self::Snapshot>,
-    ) -> anyhow::Result<()> {
+        snapshot: Box<Self::SnapshotData>,
+    ) -> Result<StateMachineChanges, StorageError> {
         // TODO(xp): disallow installing a snapshot with smaller last_applied.
 
         tracing::debug!(
@@ -456,30 +387,26 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
             }
         };
 
-        // When encountered a snapshot pointer, raft replication is switched to snapshot replication.
-        self.log
-            .insert(&Entry::new_snapshot_pointer(&new_snapshot.meta))
-            .await?;
-
-        self.log.range_remove(0..meta.last_log_id.index).await?;
-
         // Update current snapshot.
         {
             let mut current_snapshot = self.current_snapshot.write().await;
             *current_snapshot = Some(new_snapshot);
         }
-        Ok(())
+        Ok(StateMachineChanges {
+            last_applied: meta.last_log_id,
+            is_snapshot: true,
+        })
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
+    #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
     async fn get_current_snapshot(
         &self,
-    ) -> anyhow::Result<Option<CurrentSnapshotData<Self::Snapshot>>> {
+    ) -> Result<Option<openraft::storage::Snapshot<Self::SnapshotData>>, StorageError> {
         tracing::info!("got snapshot start");
         let snap = match &*self.current_snapshot.read().await {
             Some(snapshot) => {
                 let data = snapshot.data.clone();
-                Ok(Some(CurrentSnapshotData {
+                Ok(Some(openraft::storage::Snapshot {
                     meta: snapshot.meta.clone(),
                     snapshot: Box::new(Cursor::new(data)),
                 }))
@@ -490,6 +417,50 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
         tracing::info!("got snapshot complete");
 
         snap
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    async fn read_hard_state(&self) -> Result<Option<HardState>, StorageError> {
+        let hard_state = self
+            .raft_state
+            .read_hard_state()
+            .map_to_sto_err(ErrorSubject::HardState, ErrorVerb::Read)?;
+        Ok(hard_state)
+    }
+
+    async fn get_log_state(&self) -> Result<LogState, StorageError> {
+        let last_purged_log_id = self
+            .log
+            .get_last_purged()
+            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)?;
+
+        let last = self
+            .log
+            .last()
+            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)?;
+
+        let last_log_id = match last {
+            None => last_purged_log_id,
+            Some(x) => Some(x.1.log_id),
+        };
+
+        Ok(LogState {
+            last_purged_log_id,
+            last_log_id,
+        })
+    }
+
+    async fn last_applied_state(
+        &self,
+    ) -> Result<(Option<LogId>, Option<EffectiveMembership>), StorageError> {
+        let sm = self.state_machine.read().await;
+        let last_applied = sm
+            .get_last_applied()
+            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)?;
+        let last_membership = sm
+            .get_membership()
+            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)?;
+        Ok((last_applied, last_membership))
     }
 }
 
@@ -502,14 +473,14 @@ impl MetaRaftStore {
 
     pub async fn get_voters(&self) -> common_exception::Result<Vec<Node>> {
         let sm = self.state_machine.read().await;
-        let ms = self
-            .get_membership_config()
-            .await
-            .expect("get membership config");
+        let ms = self.get_membership().await.expect("get membership config");
+
+        let membership = ms.unwrap();
+
         let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
         let voters = nodes
             .into_iter()
-            .filter(|(node_id, _)| ms.contains(node_id))
+            .filter(|(node_id, _)| membership.membership.contains(node_id))
             .map(|(_, node)| node)
             .collect();
         Ok(voters)
@@ -517,14 +488,14 @@ impl MetaRaftStore {
 
     pub async fn get_non_voters(&self) -> common_exception::Result<Vec<Node>> {
         let sm = self.state_machine.read().await;
-        let ms = self
-            .get_membership_config()
-            .await
-            .expect("get membership config");
+        let ms = self.get_membership().await.expect("get membership config");
+
+        let membership = ms.unwrap();
+
         let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
         let non_voters = nodes
             .into_iter()
-            .filter(|(node_id, _)| !ms.contains(node_id))
+            .filter(|(node_id, _)| !membership.membership.contains(node_id))
             .map(|(_, node)| node)
             .collect();
         Ok(non_voters)
@@ -544,10 +515,14 @@ impl MetaRaftStore {
     pub async fn list_non_voters(&self) -> HashSet<NodeId> {
         // TODO(xp): consistency
         let mut rst = HashSet::new();
-        let ms = self
-            .get_membership_config()
-            .await
-            .expect("fail to get membership");
+        let membership = self.get_membership().await.expect("fail to get membership");
+
+        let membership = match membership {
+            None => {
+                return HashSet::new();
+            }
+            Some(x) => x,
+        };
 
         let node_ids = {
             let sm = self.state_machine.read().await;
@@ -556,7 +531,7 @@ impl MetaRaftStore {
         };
         for node_id in node_ids {
             // it has been added into this cluster and is not a voter.
-            if !ms.contains(&node_id) {
+            if !membership.membership.contains(&node_id) {
                 rst.insert(node_id);
             }
         }

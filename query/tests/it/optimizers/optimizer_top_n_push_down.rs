@@ -31,7 +31,7 @@ async fn test_simple() -> Result<()> {
     Limit: 10\
     \n  Projection: number:UInt64\
     \n    Sort: number:UInt64\
-    \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000], push_downs: [projections: [0], limit: 10, order_by: [number]]";
+    \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], limit: 10, order_by: [number]]";
 
     let actual = format!("{:?}", plan_node);
     assert_eq!(expect, actual);
@@ -52,7 +52,7 @@ async fn test_simple_with_offset() -> Result<()> {
     Limit: 10, 5\
     \n  Projection: number:UInt64\
     \n    Sort: number:UInt64\
-    \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000], push_downs: [projections: [0], limit: 15, order_by: [number]]";
+    \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], limit: 15, order_by: [number]]";
 
     let actual = format!("{:?}", plan_node);
     assert_eq!(expect, actual);
@@ -76,7 +76,7 @@ async fn test_nested_projection() -> Result<()> {
     \n    Limit: 11\
     \n      Projection: number:UInt64\
     \n        Sort: number:UInt64\
-    \n          ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000], push_downs: [projections: [0], limit: 11, order_by: [number]]";
+    \n          ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], limit: 11, order_by: [number]]";
 
     let actual = format!("{:?}", plan_node);
     assert_eq!(expect, actual);
@@ -101,7 +101,7 @@ async fn test_aggregate() -> Result<()> {
     \n      AggregatorFinal: groupBy=[[(number % 10)]], aggr=[[sum(number)]]\
     \n        AggregatorPartial: groupBy=[[(number % 10)]], aggr=[[sum(number)]]\
     \n          Expression: (number % 10):UInt8, number:UInt64 (Before GroupBy)\
-    \n            ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000], push_downs: [projections: [0]]";
+    \n            ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]";
 
     let actual = format!("{:?}", plan_node);
     assert_eq!(expect, actual);
@@ -124,7 +124,7 @@ async fn test_monotonic_function() -> Result<()> {
             Projection: (number * number):UInt64\
             \n  Sort: (number + (number + 3)):UInt64\
             \n    Expression: (number * number):UInt64, (number + (number + 3)):UInt64 (Before OrderBy)\
-            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800], push_downs: [projections: [0]]",
+            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
         },
         // TODO: broken this by select statement analyzer.
         Test {
@@ -135,7 +135,7 @@ async fn test_monotonic_function() -> Result<()> {
             \n  Projection: (number * number):UInt64\
             \n    Sort: ((number + number) + 3):UInt64\
             \n      Expression: (number * number):UInt64, ((number + number) + 3):UInt64 (Before OrderBy)\
-            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800], push_downs: [projections: [0], limit: 10, order_by: [((number + number) + 3)]]",
+            \n        ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], limit: 10, order_by: [((number + number) + 3)]]",
         },
         //TODO: add more function tests
     ];

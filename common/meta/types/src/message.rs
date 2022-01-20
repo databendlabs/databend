@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use async_raft::raft::AppendEntriesRequest;
-use async_raft::raft::InstallSnapshotRequest;
-use async_raft::raft::VoteRequest;
+use openraft::raft::AppendEntriesRequest;
+use openraft::raft::InstallSnapshotRequest;
+use openraft::raft::VoteRequest;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;

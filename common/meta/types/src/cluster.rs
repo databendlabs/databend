@@ -17,9 +17,9 @@ use std::fmt;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-use async_raft::NodeId;
 use common_exception::exception::ErrorCode;
 use common_exception::exception::Result;
+use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 

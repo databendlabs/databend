@@ -114,9 +114,9 @@ async fn test_memorytable() -> Result<()> {
             ],
         ];
         let expected_statistics_vec = vec![
-            Statistics::new_estimated(4usize, 16usize),
-            Statistics::new_estimated(4usize, 32usize),
-            Statistics::new_exact(4usize, 48usize),
+            Statistics::new_estimated(4usize, 16usize, 0, 0),
+            Statistics::new_estimated(4usize, 32usize, 0, 0),
+            Statistics::new_exact(4usize, 48usize, 2, 2),
         ];
 
         for i in 0..push_downs_vec.len() {

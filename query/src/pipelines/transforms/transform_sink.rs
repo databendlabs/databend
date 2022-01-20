@@ -78,7 +78,7 @@ impl Processor for SinkTransform {
 
     #[tracing::instrument(level = "debug", name = "sink_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        tracing::debug!("executing sink transform");
+        tracing::debug!("executing sinks transform");
         let tbl = self
             .ctx
             .get_catalog()

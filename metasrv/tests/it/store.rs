@@ -12,20 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_raft::raft::Entry;
-use async_raft::raft::EntryConfigChange;
-use async_raft::raft::EntryPayload;
-use async_raft::raft::EntrySnapshotPointer;
-use async_raft::raft::MembershipConfig;
-use async_raft::storage::HardState;
-use async_raft::LogId;
-use async_raft::RaftStorage;
+use std::sync::Arc;
+use std::sync::Mutex;
+
 use common_base::tokio;
 use common_meta_raft_store::state_machine::testing::pretty_snapshot;
 use common_meta_raft_store::state_machine::testing::snapshot_logs;
 use common_meta_raft_store::state_machine::SerializableSnapshot;
-use common_meta_raft_store::state_machine::StateMachineMetaKey::LastMembership;
-use common_meta_raft_store::state_machine::StateMachineMetaValue;
+use common_meta_sled_store::openraft::async_trait::async_trait;
+use common_meta_sled_store::openraft::storage::HardState;
+use common_meta_sled_store::openraft::testing::StoreBuilder;
+use common_meta_sled_store::openraft::EffectiveMembership;
+use common_meta_sled_store::openraft::LogId;
+use common_meta_sled_store::openraft::Membership;
+use common_meta_sled_store::openraft::RaftStorage;
+use common_meta_types::AppliedState;
+use common_meta_types::LogEntry;
 use common_tracing::tracing;
 use databend_meta::store::MetaRaftStore;
 use databend_meta::Opened;
@@ -33,6 +35,38 @@ use maplit::btreeset;
 
 use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
+
+struct BB {
+    pub test_contexts: Arc<Mutex<Vec<MetaSrvTestContext>>>,
+}
+
+#[async_trait]
+impl StoreBuilder<LogEntry, AppliedState, MetaRaftStore> for BB {
+    async fn build(&self) -> MetaRaftStore {
+        let tc = MetaSrvTestContext::new(555);
+        let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(()))
+            .await
+            .expect("fail to create store");
+
+        {
+            let mut tcs = self.test_contexts.lock().unwrap();
+            tcs.push(tc);
+        }
+        ms
+    }
+}
+
+#[test]
+fn test_impl_raft_storage() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_meta_ut!();
+    let _ent = ut_span.enter();
+
+    common_meta_sled_store::openraft::testing::Suite::test_all(BB {
+        test_contexts: Arc::new(Mutex::new(vec![])),
+    })?;
+
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_metasrv_restart() -> anyhow::Result<()> {
@@ -84,154 +118,6 @@ async fn test_metasrv_restart() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_metasrv_get_membership_from_log() -> anyhow::Result<()> {
-    // - Create a metasrv
-    // - Append logs
-    // - Get membership from log.
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let id = 3;
-    let tc = MetaSrvTestContext::new(id);
-
-    tracing::info!("--- new metasrv");
-    let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
-
-    let c0 = MembershipConfig {
-        members: btreeset![4],
-        members_after_consensus: None,
-    };
-
-    let c1 = MembershipConfig {
-        members: btreeset![1, 2, 3],
-        members_after_consensus: None,
-    };
-
-    let c2 = MembershipConfig {
-        members: btreeset![1],
-        members_after_consensus: Some(btreeset![2, 3,]),
-    };
-
-    let logs = vec![
-        Entry {
-            log_id: LogId { term: 1, index: 2 },
-            payload: EntryPayload::SnapshotPointer(EntrySnapshotPointer {
-                id: "pseudo-id".to_string(),
-                membership: c1.clone(),
-            }),
-        },
-        Entry {
-            log_id: LogId { term: 1, index: 5 },
-            payload: EntryPayload::ConfigChange(EntryConfigChange {
-                membership: c2.clone(),
-            }),
-        },
-    ];
-
-    for l in logs.iter() {
-        ms.log.insert(l).await?;
-    }
-
-    // no snapshot meta:
-
-    let got = ms.get_membership_from_log(Some(2)).await?;
-    assert_eq!(&c1, &got);
-
-    let got = ms.get_membership_from_log(Some(1)).await?;
-    assert_eq!(
-        MembershipConfig {
-            members: btreeset![3],
-            members_after_consensus: None,
-        },
-        got,
-        "no membership found in log, returning a default value"
-    );
-
-    // with snapshot meta:
-    ms.state_machine
-        .write()
-        .await
-        .sm_meta()
-        .insert(
-            &LastMembership,
-            &StateMachineMetaValue::Membership(c0.clone()),
-        )
-        .await?;
-
-    let got = ms.get_membership_from_log(None).await?;
-    assert_eq!(&c2, &got);
-
-    let got = ms.get_membership_from_log(Some(5)).await?;
-    assert_eq!(&c2, &got);
-
-    let got = ms.get_membership_from_log(Some(4)).await?;
-    assert_eq!(&c1, &got);
-
-    let got = ms.get_membership_from_log(Some(2)).await?;
-    assert_eq!(&c1, &got);
-
-    let got = ms.get_membership_from_log(Some(1)).await?;
-    assert_eq!(
-        MembershipConfig {
-            members: btreeset![3],
-            members_after_consensus: None,
-        },
-        got,
-        "default membership"
-    );
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_metasrv_do_log_compaction_empty() -> anyhow::Result<()> {
-    // - Create a metasrv
-    // - Create a snapshot check snapshot state
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let id = 3;
-    let tc = MetaSrvTestContext::new(id);
-
-    let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
-
-    tracing::info!("--- snapshot without any data");
-
-    let curr_snap = ms.do_log_compaction().await?;
-    assert_eq!(LogId { term: 0, index: 0 }, curr_snap.meta.last_log_id);
-
-    assert_eq!(
-        MembershipConfig {
-            members: btreeset![],
-            members_after_consensus: None,
-        },
-        curr_snap.meta.membership
-    );
-
-    tracing::info!("--- check snapshot");
-    {
-        let data = curr_snap.snapshot.into_inner();
-
-        let ser_snap: SerializableSnapshot = serde_json::from_slice(&data)?;
-        let res = pretty_snapshot(&ser_snap.kvs);
-        tracing::debug!("res: {:?}", res);
-
-        let want = vec![
-            "[3, 2]:{\"Bool\":true}", // sm meta: init
-        ]
-        .iter()
-        .map(|x| x.to_string())
-        .collect::<Vec<_>>();
-
-        assert_eq!(want, res);
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_metasrv_do_log_compaction_1_snap_ptr_1_log() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Apply logs
@@ -257,22 +143,8 @@ async fn test_metasrv_do_log_compaction_1_snap_ptr_1_log() -> anyhow::Result<()>
         }
     }
 
-    let curr_snap = ms.do_log_compaction().await?;
+    let curr_snap = ms.build_snapshot().await?;
     assert_eq!(LogId { term: 1, index: 4 }, curr_snap.meta.last_log_id);
-    assert_eq!(
-        MembershipConfig {
-            members: btreeset![1, 2, 3],
-            members_after_consensus: None,
-        },
-        curr_snap.meta.membership
-    );
-    assert_eq!(
-        MembershipConfig {
-            members: btreeset![4, 5, 6],
-            members_after_consensus: None,
-        },
-        ms.get_membership_config().await?
-    );
 
     tracing::info!("--- check snapshot");
     {
@@ -285,7 +157,7 @@ async fn test_metasrv_do_log_compaction_1_snap_ptr_1_log() -> anyhow::Result<()>
         let want = vec![
             "[3, 1]:{\"LogId\":{\"term\":1,\"index\":4}}", // sm meta: LastApplied
             "[3, 2]:{\"Bool\":true}",                      // sm meta: init
-            "[3, 3]:{\"Membership\":{\"members\":[1,2,3],\"members_after_consensus\":null}}", // membership
+            "[3, 3]:{\"Membership\":{\"log_id\":{\"term\":1,\"index\":1},\"membership\":{\"configs\":[[1,2,3]],\"all_nodes\":[1,2,3]}}}", // membership
             "[6, 97]:{\"seq\":1,\"meta\":null,\"data\":[65]}", // generic kv
             "[7, 103, 101, 110, 101, 114, 105, 99, 45, 107, 118]:1", // sequence: by upsertkv
         ]
@@ -299,7 +171,8 @@ async fn test_metasrv_do_log_compaction_1_snap_ptr_1_log() -> anyhow::Result<()>
     tracing::info!("--- check logs");
     {
         let log_indexes = ms.log.range_keys(..)?;
-        assert_eq!(vec![4u64, 5u64, 6, 8, 9], log_indexes);
+        // build_snapshot does not purge logs
+        assert_eq!(vec![1u64, 4u64, 5u64, 6, 8, 9], log_indexes);
     }
 
     Ok(())
@@ -328,15 +201,8 @@ async fn test_metasrv_do_log_compaction_all_logs_with_memberchange() -> anyhow::
         ms.state_machine.write().await.apply(l).await?;
     }
 
-    let curr_snap = ms.do_log_compaction().await?;
+    let curr_snap = ms.build_snapshot().await?;
     assert_eq!(LogId { term: 1, index: 9 }, curr_snap.meta.last_log_id);
-    assert_eq!(
-        MembershipConfig {
-            members: btreeset![4, 5, 6],
-            members_after_consensus: None,
-        },
-        curr_snap.meta.membership
-    );
 
     tracing::info!("--- check snapshot");
     {
@@ -347,12 +213,6 @@ async fn test_metasrv_do_log_compaction_all_logs_with_memberchange() -> anyhow::
         tracing::debug!("res: {:?}", res);
 
         assert_eq!(want, res);
-    }
-
-    tracing::info!("--- check logs");
-    {
-        let log_indexes = ms.log.range_keys(..)?;
-        assert_eq!(vec![9u64], log_indexes);
     }
 
     Ok(())
@@ -381,19 +241,12 @@ async fn test_metasrv_do_log_compaction_current_snapshot() -> anyhow::Result<()>
         ms.state_machine.write().await.apply(l).await?;
     }
 
-    ms.do_log_compaction().await?;
+    ms.build_snapshot().await?;
 
     tracing::info!("--- check get_current_snapshot");
 
     let curr_snap = ms.get_current_snapshot().await?.unwrap();
     assert_eq!(LogId { term: 1, index: 9 }, curr_snap.meta.last_log_id);
-    assert_eq!(
-        MembershipConfig {
-            members: btreeset![4, 5, 6],
-            members_after_consensus: None,
-        },
-        curr_snap.meta.membership
-    );
 
     tracing::info!("--- check snapshot");
     {
@@ -434,7 +287,7 @@ async fn test_metasrv_install_snapshot() -> anyhow::Result<()> {
             ms.log.insert(l).await?;
             ms.state_machine.write().await.apply(l).await?;
         }
-        snap = ms.do_log_compaction().await?;
+        snap = ms.build_snapshot().await?;
     }
 
     let data = snap.snapshot.into_inner();
@@ -467,20 +320,20 @@ async fn test_metasrv_install_snapshot() -> anyhow::Result<()> {
 
             let mem = ms.state_machine.write().await.get_membership()?;
             assert_eq!(
-                Some(MembershipConfig {
-                    members: btreeset![4, 5, 6],
-                    members_after_consensus: None,
+                Some(EffectiveMembership {
+                    log_id: LogId::new(1, 5),
+                    membership: Membership::new_single(btreeset! {4,5,6})
                 }),
                 mem
             );
 
             let last_applied = ms.state_machine.write().await.get_last_applied()?;
-            assert_eq!(LogId { term: 1, index: 9 }, last_applied);
+            assert_eq!(Some(LogId::new(1, 9)), last_applied);
         }
 
         tracing::info!("--- check snapshot");
         {
-            let curr_snap = ms.do_log_compaction().await?;
+            let curr_snap = ms.build_snapshot().await?;
             let data = curr_snap.snapshot.into_inner();
 
             let ser_snap: SerializableSnapshot = serde_json::from_slice(&data)?;
@@ -493,5 +346,3 @@ async fn test_metasrv_install_snapshot() -> anyhow::Result<()> {
 
     Ok(())
 }
-
-// TODO(xp): test finalize_snapshot_installation

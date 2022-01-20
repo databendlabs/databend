@@ -14,10 +14,10 @@
 
 use std::fmt;
 
-use async_raft::raft::MembershipConfig;
-use async_raft::LogId;
 use common_exception::ErrorCode;
 use common_meta_sled_store::SledOrderedSerde;
+use openraft::LogId;
+use openraft::Membership;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
@@ -37,7 +37,7 @@ pub enum StateMachineMetaKey {
 pub enum StateMachineMetaValue {
     LogId(LogId),
     Bool(bool),
-    Membership(MembershipConfig),
+    Membership(Membership),
 }
 
 impl fmt::Display for StateMachineMetaKey {
@@ -99,7 +99,7 @@ impl From<StateMachineMetaValue> for bool {
         }
     }
 }
-impl From<StateMachineMetaValue> for MembershipConfig {
+impl From<StateMachineMetaValue> for Membership {
     fn from(v: StateMachineMetaValue) -> Self {
         match v {
             StateMachineMetaValue::Membership(x) => x,

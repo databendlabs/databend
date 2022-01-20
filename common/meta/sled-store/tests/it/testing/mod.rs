@@ -27,7 +27,7 @@ macro_rules! init_sled_ut {
         let t = tempfile::tempdir().expect("create temp dir to sled db");
 
         common_meta_sled_store::init_temp_sled_db(t);
-        common_tracing::init_default_ut_tracing();
+        common_tracing::init_meta_ut_tracing();
 
         let name = common_tracing::func_name!();
         let span =

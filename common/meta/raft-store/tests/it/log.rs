@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_raft::raft::Entry;
-use async_raft::raft::EntryNormal;
-use async_raft::raft::EntryPayload;
-use async_raft::LogId;
 use common_base::tokio;
 use common_meta_raft_store::log::RaftLog;
+use common_meta_sled_store::openraft;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
+use openraft::raft::Entry;
+use openraft::raft::EntryPayload;
+use openraft::LogId;
 
 use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
@@ -50,12 +50,10 @@ async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
         },
         Entry {
             log_id: LogId { term: 3, index: 4 },
-            payload: EntryPayload::Normal(EntryNormal {
-                data: LogEntry {
-                    txid: None,
-                    cmd: Cmd::IncrSeq {
-                        key: "foo".to_string(),
-                    },
+            payload: EntryPayload::Normal(LogEntry {
+                txid: None,
+                cmd: Cmd::IncrSeq {
+                    key: "foo".to_string(),
                 },
             }),
         },
@@ -127,12 +125,10 @@ async fn test_raft_log_insert() -> anyhow::Result<()> {
         },
         Entry {
             log_id: LogId { term: 3, index: 4 },
-            payload: EntryPayload::Normal(EntryNormal {
-                data: LogEntry {
-                    txid: None,
-                    cmd: Cmd::IncrSeq {
-                        key: "foo".to_string(),
-                    },
+            payload: EntryPayload::Normal(LogEntry {
+                txid: None,
+                cmd: Cmd::IncrSeq {
+                    key: "foo".to_string(),
                 },
             }),
         },
@@ -164,12 +160,10 @@ async fn test_raft_log_get() -> anyhow::Result<()> {
         },
         Entry {
             log_id: LogId { term: 3, index: 4 },
-            payload: EntryPayload::Normal(EntryNormal {
-                data: LogEntry {
-                    txid: None,
-                    cmd: Cmd::IncrSeq {
-                        key: "foo".to_string(),
-                    },
+            payload: EntryPayload::Normal(LogEntry {
+                txid: None,
+                cmd: Cmd::IncrSeq {
+                    key: "foo".to_string(),
                 },
             }),
         },
@@ -203,12 +197,10 @@ async fn test_raft_log_last() -> anyhow::Result<()> {
         },
         Entry {
             log_id: LogId { term: 3, index: 4 },
-            payload: EntryPayload::Normal(EntryNormal {
-                data: LogEntry {
-                    txid: None,
-                    cmd: Cmd::IncrSeq {
-                        key: "foo".to_string(),
-                    },
+            payload: EntryPayload::Normal(LogEntry {
+                txid: None,
+                cmd: Cmd::IncrSeq {
+                    key: "foo".to_string(),
                 },
             }),
         },
@@ -235,12 +227,10 @@ async fn test_raft_log_range_remove() -> anyhow::Result<()> {
         },
         Entry {
             log_id: LogId { term: 3, index: 4 },
-            payload: EntryPayload::Normal(EntryNormal {
-                data: LogEntry {
-                    txid: None,
-                    cmd: Cmd::IncrSeq {
-                        key: "foo".to_string(),
-                    },
+            payload: EntryPayload::Normal(LogEntry {
+                txid: None,
+                cmd: Cmd::IncrSeq {
+                    key: "foo".to_string(),
                 },
             }),
         },
