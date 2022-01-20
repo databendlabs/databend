@@ -85,7 +85,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         shutdown_handle.add_service(handler);
 
         tracing::info!(
-            "MySQL handler listening on {}, Usage: mysql -h{} -P{}",
+            "MySQL handler listening on {}, Usage: mysql -uroot -h{} -P{}",
             listening,
             listening.ip(),
             listening.port(),
