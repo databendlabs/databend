@@ -33,40 +33,40 @@ impl ExecutorTasksQueue {
         self.finished.load(Ordering::Relaxed)
     }
 
-    // Pull task from the global task queue
-    pub fn steal_task_to_context(&self, context: &mut ExecutorWorkerContext) {
-        unsafe {
-            let mut workers_tasks = self.workers_tasks.lock();
-            if !workers_tasks.is_empty() {
-                let task = workers_tasks.pop_task(context.get_worker_num());
-                context.set_task(task);
+    /// Pull task from the global task queue
+    ///
+    /// # Safety
+    ///
+    /// Method is thread unsafe and require thread safe call
+    pub unsafe fn steal_task_to_context(&self, context: &mut ExecutorWorkerContext) {
+        let mut workers_tasks = self.workers_tasks.lock();
+        if !workers_tasks.is_empty() {
+            let task = workers_tasks.pop_task(context.get_worker_num());
+            context.set_task(task);
 
-                let workers_notify = context.get_workers_notify();
-                if !workers_tasks.is_empty() && !workers_notify.is_empty() {
-                    let worker_id = context.get_worker_num();
-                    let wakeup_worker_id = workers_tasks.best_worker_id(worker_id + 1);
-                    workers_notify.wakeup(wakeup_worker_id);
-                }
-
-                return;
+            let workers_notify = context.get_workers_notify();
+            if !workers_tasks.is_empty() && !workers_notify.is_empty() {
+                let worker_id = context.get_worker_num();
+                let wakeup_worker_id = workers_tasks.best_worker_id(worker_id + 1);
+                workers_notify.wakeup(wakeup_worker_id);
             }
 
-            drop(workers_tasks);
-            context.get_workers_notify().wait(context.get_worker_num());
+            return;
         }
+
+        drop(workers_tasks);
+        context.get_workers_notify().wait(context.get_worker_num());
     }
 
-    pub fn init_tasks(&self, mut tasks: VecDeque<ExecutorTask>) {
-        unsafe {
-            let mut worker_id = 0;
-            let mut workers_tasks = self.workers_tasks.lock();
-            while let Some(task) = tasks.pop_front() {
-                workers_tasks.push_task(worker_id, task);
+    pub unsafe fn init_tasks(&self, mut tasks: VecDeque<ExecutorTask>) {
+        let mut worker_id = 0;
+        let mut workers_tasks = self.workers_tasks.lock();
+        while let Some(task) = tasks.pop_front() {
+            workers_tasks.push_task(worker_id, task);
 
-                worker_id += 1;
-                if worker_id == workers_tasks.workers_sync_tasks.len() {
-                    worker_id = 0;
-                }
+            worker_id += 1;
+            if worker_id == workers_tasks.workers_sync_tasks.len() {
+                worker_id = 0;
             }
         }
     }
