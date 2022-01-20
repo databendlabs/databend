@@ -1,10 +1,13 @@
-use std::cell::UnsafeCell;
 use std::sync::Arc;
+
 use common_datablocks::DataBlock;
-use common_exception::{ErrorCode, Result};
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
+use common_exception::Result;
+
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::Event;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 
 // TODO: maybe we also need async transform for `SELECT sleep(1)`?
 pub trait Transform: Send {
@@ -49,9 +52,9 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
                 None => self.pull_data(),
                 Some(data) => {
                     self.output.push_data(Ok(data));
-                    return Ok(Event::NeedConsume);
+                    Ok(Event::NeedConsume)
                 }
-            }
+            },
         }
     }
 
@@ -69,7 +72,7 @@ impl<T: Transform> Transformer<T> {
         match self.input.is_finished() {
             true => self.finish_output(),
             false if !self.input.has_data() => self.need_data(),
-            false => self.receive_input_data()
+            false => self.receive_input_data(),
         }
     }
 

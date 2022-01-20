@@ -1,10 +1,12 @@
-use std::sync::{Arc, Barrier};
+use std::sync::Arc;
+use std::sync::Barrier;
 
 use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use databend_query::pipelines::new::processors::port::{InputPort, OutputPort};
-use databend_query::pipelines::new::processors::{connect};
+use databend_query::pipelines::new::processors::connect;
+use databend_query::pipelines::new::processors::port::InputPort;
+use databend_query::pipelines::new::processors::port::OutputPort;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_input_and_output_port() -> Result<()> {
@@ -36,11 +38,10 @@ async fn test_input_and_output_port() -> Result<()> {
 
         connect(&input, &output);
         let thread_1 = std::thread::spawn(input_port(input, barrier.clone()));
-        let thread_2 = std::thread::spawn(output_port(output, barrier.clone()));
+        let thread_2 = std::thread::spawn(output_port(output, barrier));
 
         thread_1.join().unwrap();
         thread_2.join().unwrap();
         Ok(())
     }
 }
-

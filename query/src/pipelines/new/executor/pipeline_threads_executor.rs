@@ -7,12 +7,14 @@ use common_exception::Result;
 use crate::pipelines::new::executor::pipeline_executor::PipelineExecutor;
 use crate::pipelines::new::pipeline::NewPipeline;
 
+#[allow(dead_code)]
 pub struct PipelineThreadsExecutor {
     base: Option<Arc<PipelineExecutor>>,
 
     pipeline: Option<NewPipeline>,
 }
 
+#[allow(dead_code)]
 impl PipelineThreadsExecutor {
     pub fn create(pipeline: NewPipeline) -> Result<PipelineThreadsExecutor> {
         Ok(PipelineThreadsExecutor {
@@ -23,7 +25,9 @@ impl PipelineThreadsExecutor {
 
     pub fn start(&mut self, workers: usize) -> Result<()> {
         if self.base.is_some() {
-            return Err(ErrorCode::AlreadyStarted("PipelineThreadsExecutor is already started."));
+            return Err(ErrorCode::AlreadyStarted(
+                "PipelineThreadsExecutor is already started.",
+            ));
         }
 
         match self.pipeline.take() {

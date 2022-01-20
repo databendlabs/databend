@@ -1,15 +1,15 @@
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Condvar};
-use std::thread::Thread;
-use futures::future::BoxFuture;
-use petgraph::prelude::NodeIndex;
+use std::sync::Arc;
 
 use common_exception::Result;
 use common_infallible::Mutex;
+use futures::future::BoxFuture;
+use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::new::executor::executor_worker_context::{ExecutorWorkerContext, ExecutorTask};
+use crate::pipelines::new::executor::executor_worker_context::ExecutorTask;
+use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 
 pub struct ExecutorTasksQueue {
@@ -86,7 +86,11 @@ impl ExecutorTasksQueue {
         }
     }
 
-    pub fn push_executing_async_task(&self, worker_id: usize, task: ExecutingAsyncTask) -> Option<ExecutingAsyncTask> {
+    pub fn push_executing_async_task(
+        &self,
+        worker_id: usize,
+        task: ExecutingAsyncTask,
+    ) -> Option<ExecutingAsyncTask> {
         unsafe {
             let mut workers_tasks = self.workers_tasks.lock();
 
@@ -156,7 +160,9 @@ impl ExecutorTasks {
             let async_tasks = &mut self.workers_executing_async_tasks[worker_id];
             for index in 0..async_tasks.len() {
                 if async_tasks[index].finished.load(Ordering::Relaxed) {
-                    return ExecutorTask::AsyncSchedule(async_tasks.swap_remove_front(index).unwrap());
+                    return ExecutorTask::AsyncSchedule(
+                        async_tasks.swap_remove_front(index).unwrap(),
+                    );
                 }
             }
         }
@@ -180,8 +186,9 @@ impl ExecutorTasks {
 
             if !self.workers_executing_async_tasks[worker_id].is_empty() {
                 let async_tasks = &self.workers_executing_async_tasks[worker_id];
-                for index in 0..async_tasks.len() {
-                    if async_tasks[index].finished.load(Ordering::Relaxed) {
+
+                for task_item in async_tasks {
+                    if task_item.finished.load(Ordering::Relaxed) {
                         return worker_id;
                     }
                 }
@@ -202,7 +209,9 @@ impl ExecutorTasks {
                         worker_id = 0;
                     }
                 }
-                other => { return other; }
+                other => {
+                    return other;
+                }
             }
         }
 

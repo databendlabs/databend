@@ -1,5 +1,7 @@
 use std::sync::Arc;
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
+
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 
 pub enum NewPipe {
@@ -19,7 +21,7 @@ impl NewPipe {
     pub fn size(&self) -> usize {
         match self {
             NewPipe::SimplePipe { outputs_port, .. } => outputs_port.len(),
-            NewPipe::ResizePipe { outputs_port, .. } => outputs_port.len()
+            NewPipe::ResizePipe { outputs_port, .. } => outputs_port.len(),
         }
     }
 }
@@ -51,4 +53,3 @@ impl SourcePipeBuilder {
         self.outputs_port.push(output_port);
     }
 }
-

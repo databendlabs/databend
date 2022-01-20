@@ -8,11 +8,13 @@ use common_exception::Result;
 use crate::pipelines::new::executor::pipeline_executor::PipelineExecutor;
 use crate::pipelines::new::pipeline::NewPipeline;
 
+#[allow(dead_code)]
 pub struct PipelineRuntimeExecutor {
     base: Option<Arc<PipelineExecutor>>,
     pipeline: Option<NewPipeline>,
 }
 
+#[allow(dead_code)]
 impl PipelineRuntimeExecutor {
     pub fn create(pipeline: NewPipeline) -> Result<PipelineRuntimeExecutor> {
         Ok(PipelineRuntimeExecutor {
@@ -23,7 +25,9 @@ impl PipelineRuntimeExecutor {
 
     pub fn start(&mut self, workers: usize, runtime: Runtime) -> Result<()> {
         if self.base.is_some() {
-            return Err(ErrorCode::AlreadyStarted("PipelineRuntimeExecutor is already started."));
+            return Err(ErrorCode::AlreadyStarted(
+                "PipelineRuntimeExecutor is already started.",
+            ));
         }
 
         match self.pipeline.take() {

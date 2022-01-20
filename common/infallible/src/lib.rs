@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod condvar;
 mod exit_guard;
 mod mutex;
 mod rwlock;
 mod rwlock_upgrade_read;
-mod condvar;
 
+pub use condvar::Condvar;
 pub use exit_guard::ExitGuard;
 pub use mutex::Mutex;
 pub use rwlock::RwLock;
 pub use rwlock_upgrade_read::RwLockUpgradableReadGuard;
-pub use condvar::Condvar;
 
 #[macro_export]
 macro_rules! exit_scope {

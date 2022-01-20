@@ -1,29 +1,37 @@
 // running graph
 use std::collections::VecDeque;
-use std::fmt::{Debug, write};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
-use petgraph::Direction;
-use petgraph::dot::{Config, Dot};
-use petgraph::prelude::{EdgeIndex, NodeIndex, StableGraph};
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
 
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_infallible::RwLock;
 use common_infallible::RwLockUpgradableReadGuard;
+use petgraph::dot::Config;
+use petgraph::dot::Dot;
+use petgraph::prelude::EdgeIndex;
+use petgraph::prelude::NodeIndex;
+use petgraph::prelude::StableGraph;
+use petgraph::Direction;
 
 use crate::pipelines::new::executor::executor_tasks::ExecutorTasksQueue;
-use crate::pipelines::new::executor::executor_worker_context::{ExecutorTask, ExecutorWorkerContext};
+use crate::pipelines::new::executor::executor_worker_context::ExecutorTask;
+use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::new::pipe::NewPipe;
 use crate::pipelines::new::pipeline::NewPipeline;
+use crate::pipelines::new::processors::connect;
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::{connect, UpdateList, UpdateTrigger, DirectedEdge};
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
+use crate::pipelines::new::processors::DirectedEdge;
+use crate::pipelines::new::processors::UpdateList;
+use crate::pipelines::new::processors::UpdateTrigger;
 
 enum State {
     Idle,
-    Preparing,
+    // Preparing,
     Processing,
     Finished,
 }
@@ -33,12 +41,18 @@ struct Node {
     processor: ProcessorPtr,
 
     updated_list: Arc<UpdateList>,
+    #[allow(dead_code)]
     inputs_port: Vec<Arc<InputPort>>,
+    #[allow(dead_code)]
     outputs_port: Vec<Arc<OutputPort>>,
 }
 
 impl Node {
-    pub fn create(processor: &ProcessorPtr, inputs_port: &[Arc<InputPort>], outputs_port: &[Arc<OutputPort>]) -> Arc<Node> {
+    pub fn create(
+        processor: &ProcessorPtr,
+        inputs_port: &[Arc<InputPort>],
+        outputs_port: &[Arc<OutputPort>],
+    ) -> Arc<Node> {
         Arc::new(Node {
             state: Mutex::new(State::Idle),
             processor: processor.clone(),
@@ -64,14 +78,18 @@ struct ExecutingGraph {
 type StateLockGuard<'a> = RwLockUpgradableReadGuard<'a, ExecutingGraph>;
 
 impl ExecutingGraph {
-    pub fn create(mut pipeline: NewPipeline) -> Result<ExecutingGraph> {
+    pub fn create(pipeline: NewPipeline) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
 
         let mut node_stack = Vec::new();
         let mut edge_stack: Vec<Arc<OutputPort>> = Vec::new();
         for query_pipe in &pipeline.pipes {
             match query_pipe {
-                NewPipe::ResizePipe { processor, inputs_port, outputs_port } => unsafe {
+                NewPipe::ResizePipe {
+                    processor,
+                    inputs_port,
+                    outputs_port,
+                } => unsafe {
                     assert_eq!(node_stack.len(), inputs_port.len());
 
                     let resize_node = Node::create(processor, inputs_port, outputs_port);
@@ -83,7 +101,8 @@ impl ExecutingGraph {
                         let edge_index = graph.add_edge(source_index, target_index, ());
 
                         inputs_port[index].set_trigger(resize_node.create_trigger(edge_index));
-                        edge_stack[index].set_trigger(graph[source_index].create_trigger(edge_index));
+                        edge_stack[index]
+                            .set_trigger(graph[source_index].create_trigger(edge_index));
                         connect(&inputs_port[index], &edge_stack[index]);
                     }
 
@@ -93,8 +112,12 @@ impl ExecutingGraph {
                         node_stack.push(target_index);
                         edge_stack.push(output_port.clone());
                     }
-                }
-                NewPipe::SimplePipe { processors, inputs_port, outputs_port } => unsafe {
+                },
+                NewPipe::SimplePipe {
+                    processors,
+                    inputs_port,
+                    outputs_port,
+                } => unsafe {
                     assert_eq!(node_stack.len(), inputs_port.len());
                     assert!(inputs_port.is_empty() || inputs_port.len() == processors.len());
                     assert!(outputs_port.is_empty() || outputs_port.len() == processors.len());
@@ -114,7 +137,8 @@ impl ExecutingGraph {
                             p_outputs_port.push(outputs_port[index].clone());
                         }
 
-                        let target_node = Node::create(&processors[index], &p_inputs_port, &p_outputs_port);
+                        let target_node =
+                            Node::create(&processors[index], &p_inputs_port, &p_outputs_port);
                         let target_index = graph.add_node(target_node.clone());
                         processors[index].set_id(target_index);
 
@@ -123,7 +147,8 @@ impl ExecutingGraph {
                             let edge_index = graph.add_edge(source_index, target_index, ());
 
                             inputs_port[index].set_trigger(target_node.create_trigger(edge_index));
-                            edge_stack[index].set_trigger(graph[source_index].create_trigger(edge_index));
+                            edge_stack[index]
+                                .set_trigger(graph[source_index].create_trigger(edge_index));
                             connect(&inputs_port[index], &edge_stack[index]);
                         }
 
@@ -135,7 +160,7 @@ impl ExecutingGraph {
 
                     node_stack = new_node_stack;
                     edge_stack = new_edge_stack;
-                }
+                },
             };
         }
 
@@ -144,6 +169,9 @@ impl ExecutingGraph {
         Ok(ExecutingGraph { graph })
     }
 
+    /// # Safety
+    ///
+    /// Method is thread unsafe and require thread safe call
     pub unsafe fn init_schedule_queue(locker: &StateLockGuard) -> Result<ScheduleQueue> {
         let mut schedule_queue = ScheduleQueue::create();
         for sink_index in locker.graph.externals(Direction::Outgoing) {
@@ -153,13 +181,19 @@ impl ExecutingGraph {
         Ok(schedule_queue)
     }
 
-    pub unsafe fn schedule_queue(locker: &StateLockGuard, index: NodeIndex, schedule_queue: &mut ScheduleQueue) -> Result<()> {
+    /// # Safety
+    ///
+    /// Method is thread unsafe and require thread safe call
+    pub unsafe fn schedule_queue(
+        locker: &StateLockGuard,
+        index: NodeIndex,
+        schedule_queue: &mut ScheduleQueue,
+    ) -> Result<()> {
         let mut need_schedule_nodes = VecDeque::new();
         let mut need_schedule_edges = VecDeque::new();
 
         need_schedule_nodes.push_back(index);
         while !need_schedule_nodes.is_empty() || !need_schedule_edges.is_empty() {
-
             // To avoid lock too many times, we will try to cache lock.
             let mut state_guard_cache = None;
 
@@ -180,7 +214,7 @@ impl ExecutingGraph {
                 let node = &locker.graph[schedule_index];
                 let mut node_status = match state_guard_cache.take() {
                     None => node.state.lock(),
-                    Some(status_guard) => status_guard
+                    Some(status_guard) => status_guard,
                 };
 
                 *node_status = match node.processor.event()? {
@@ -230,10 +264,7 @@ impl ScheduleQueue {
     pub fn pop_task(&mut self) -> Option<ExecutorTask> {
         match self.sync_queue.pop_front() {
             Some(processor) => Some(ExecutorTask::Sync(processor)),
-            None => match self.async_queue.pop_front() {
-                None => None,
-                Some(processor) => Some(ExecutorTask::Async(processor))
-            }
+            None => self.async_queue.pop_front().map(ExecutorTask::Async),
         }
     }
 
@@ -280,15 +311,21 @@ pub struct RunningGraph(RwLock<ExecutingGraph>);
 
 impl RunningGraph {
     pub fn create(pipeline: NewPipeline) -> Result<RunningGraph> {
-        let mut graph_state = ExecutingGraph::create(pipeline)?;
+        let graph_state = ExecutingGraph::create(pipeline)?;
         // graph_state.initialize_tasks()?;
         Ok(RunningGraph(RwLock::new(graph_state)))
     }
 
+    /// # Safety
+    ///
+    /// Method is thread unsafe and require thread safe call
     pub unsafe fn init_schedule_queue(&self) -> Result<ScheduleQueue> {
         ExecutingGraph::init_schedule_queue(&self.0.upgradable_read())
     }
 
+    /// # Safety
+    ///
+    /// Method is thread unsafe and require thread safe call
     pub unsafe fn schedule_queue(&self, node_index: NodeIndex) -> Result<ScheduleQueue> {
         let mut schedule_queue = ScheduleQueue::create();
         ExecutingGraph::schedule_queue(&self.0.upgradable_read(), node_index, &mut schedule_queue)?;
@@ -298,15 +335,17 @@ impl RunningGraph {
 
 impl Debug for Node {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        unsafe {
-            write!(f, "{}", self.processor.name())
-        }
+        unsafe { write!(f, "{}", self.processor.name()) }
     }
 }
 
 impl Debug for ExecutingGraph {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{:?}", Dot::with_config(&self.graph, &[Config::EdgeNoLabel]))
+        write!(
+            f,
+            "{:?}",
+            Dot::with_config(&self.graph, &[Config::EdgeNoLabel])
+        )
     }
 }
 
@@ -320,6 +359,7 @@ impl Debug for RunningGraph {
 impl Debug for ScheduleQueue {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         #[derive(Debug)]
+        #[allow(dead_code)]
         struct QueueItem {
             id: usize,
             name: String,
@@ -330,11 +370,17 @@ impl Debug for ScheduleQueue {
             let mut async_queue = Vec::with_capacity(self.async_queue.len());
 
             for item in &self.sync_queue {
-                sync_queue.push(QueueItem { id: item.id().index(), name: item.name().to_string() })
+                sync_queue.push(QueueItem {
+                    id: item.id().index(),
+                    name: item.name().to_string(),
+                })
             }
 
             for item in &self.async_queue {
-                async_queue.push(QueueItem { id: item.id().index(), name: item.name().to_string() })
+                async_queue.push(QueueItem {
+                    id: item.id().index(),
+                    name: item.name().to_string(),
+                })
             }
 
             f.debug_struct("ScheduleQueue")
@@ -344,4 +390,3 @@ impl Debug for ScheduleQueue {
         }
     }
 }
-

@@ -1,17 +1,19 @@
 use std::fmt::Debug;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::task::{Context, Poll};
-use futures::task::{ArcWake};
-use petgraph::prelude::NodeIndex;
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
-use common_base::tokio::sync::mpsc::{Receiver, Sender};
+use std::task::Context;
+use std::task::Poll;
 
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use crate::pipelines::new::executor::executor_notify::WorkersNotify;
+use futures::task::ArcWake;
+use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::new::executor::executor_tasks::{ExecutingAsyncTask, ExecutorTasksQueue};
+use crate::pipelines::new::executor::executor_notify::WorkersNotify;
+use crate::pipelines::new::executor::executor_tasks::ExecutingAsyncTask;
+use crate::pipelines::new::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 
 pub enum ExecutorTask {
@@ -53,7 +55,9 @@ impl ExecutorWorkerContext {
             ExecutorTask::None => Err(ErrorCode::LogicalError("Execute none task.")),
             ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
             ExecutorTask::Async(processor) => self.execute_async_task(processor, queue),
-            ExecutorTask::AsyncSchedule(boxed_future) => self.schedule_async_task(boxed_future, queue),
+            ExecutorTask::AsyncSchedule(boxed_future) => {
+                self.schedule_async_task(boxed_future, queue)
+            }
         }
     }
 
@@ -62,32 +66,57 @@ impl ExecutorWorkerContext {
         Ok(processor.id())
     }
 
-    unsafe fn execute_async_task(&mut self, processor: ProcessorPtr, queue: &ExecutorTasksQueue) -> Result<NodeIndex> {
+    unsafe fn execute_async_task(
+        &mut self,
+        processor: ProcessorPtr,
+        queue: &ExecutorTasksQueue,
+    ) -> Result<NodeIndex> {
         let id = processor.id();
         let worker_id = self.worker_num;
         let finished = Arc::new(AtomicBool::new(false));
-        let mut future = processor.async_process();
-        self.schedule_async_task(ExecutingAsyncTask { id, finished, future, worker_id }, queue)
+        let future = processor.async_process();
+        self.schedule_async_task(
+            ExecutingAsyncTask {
+                id,
+                finished,
+                future,
+                worker_id,
+            },
+            queue,
+        )
     }
 
-    unsafe fn schedule_async_task(&mut self, mut task: ExecutingAsyncTask, queue: &ExecutorTasksQueue) -> Result<NodeIndex> {
+    unsafe fn schedule_async_task(
+        &mut self,
+        mut task: ExecutingAsyncTask,
+        queue: &ExecutorTasksQueue,
+    ) -> Result<NodeIndex> {
         task.finished.store(false, Ordering::Relaxed);
 
         let id = task.id;
         loop {
             let workers_notify = self.get_workers_notify().clone();
-            let waker = ExecutingAsyncTaskWaker::create(&task.finished, task.worker_id, workers_notify);
+            let waker =
+                ExecutingAsyncTaskWaker::create(&task.finished, task.worker_id, workers_notify);
 
             let waker = futures::task::waker_ref(&waker);
             let mut cx = Context::from_waker(&waker);
 
             match task.future.as_mut().poll(&mut cx) {
-                Poll::Ready(Ok(_)) => { return Ok(id); }
-                Poll::Ready(Err(cause)) => { return Err(cause); }
+                Poll::Ready(Ok(_)) => {
+                    return Ok(id);
+                }
+                Poll::Ready(Err(cause)) => {
+                    return Err(cause);
+                }
                 Poll::Pending => {
                     match queue.push_executing_async_task(task.worker_id, task) {
-                        None => { return Ok(id); }
-                        Some(t) => { task = t; }
+                        None => {
+                            return Ok(id);
+                        }
+                        Some(t) => {
+                            task = t;
+                        }
                     };
                 }
             };
@@ -102,8 +131,16 @@ impl ExecutorWorkerContext {
 struct ExecutingAsyncTaskWaker(usize, Arc<AtomicBool>, Arc<WorkersNotify>);
 
 impl ExecutingAsyncTaskWaker {
-    pub fn create(flag: &Arc<AtomicBool>, worker_id: usize, workers_notify: Arc<WorkersNotify>) -> Arc<ExecutingAsyncTaskWaker> {
-        Arc::new(ExecutingAsyncTaskWaker(worker_id, flag.clone(), workers_notify))
+    pub fn create(
+        flag: &Arc<AtomicBool>,
+        worker_id: usize,
+        workers_notify: Arc<WorkersNotify>,
+    ) -> Arc<ExecutingAsyncTaskWaker> {
+        Arc::new(ExecutingAsyncTaskWaker(
+            worker_id,
+            flag.clone(),
+            workers_notify,
+        ))
     }
 }
 
@@ -119,11 +156,22 @@ impl Debug for ExecutorTask {
         unsafe {
             match self {
                 ExecutorTask::None => write!(f, "ExecutorTask::None"),
-                ExecutorTask::Sync(p) => write!(f, "ExecutorTask::Sync {{ id: {}, name: {}}}", p.id().index(), p.name()),
-                ExecutorTask::Async(p) => write!(f, "ExecutorTask::Async {{ id: {}, name: {}}}", p.id().index(), p.name()),
-                ExecutorTask::AsyncSchedule(t) => write!(f, "ExecutorTask::AsyncSchedule {{ id: {}}}", t.id.index())
+                ExecutorTask::Sync(p) => write!(
+                    f,
+                    "ExecutorTask::Sync {{ id: {}, name: {}}}",
+                    p.id().index(),
+                    p.name()
+                ),
+                ExecutorTask::Async(p) => write!(
+                    f,
+                    "ExecutorTask::Async {{ id: {}, name: {}}}",
+                    p.id().index(),
+                    p.name()
+                ),
+                ExecutorTask::AsyncSchedule(t) => {
+                    write!(f, "ExecutorTask::AsyncSchedule {{ id: {}}}", t.id.index())
+                }
             }
         }
     }
 }
-

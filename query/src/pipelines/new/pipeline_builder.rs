@@ -1,17 +1,25 @@
 use std::sync::Arc;
-use common_exception::{ErrorCode, Result};
-use common_planners::{FilterPlan, PlanNode, PlanVisitor, ReadDataSourcePlan};
+
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::FilterPlan;
+use common_planners::PlanNode;
+use common_planners::PlanVisitor;
+use common_planners::ReadDataSourcePlan;
+
 use crate::pipelines::new::pipe::SourcePipeBuilder;
 use crate::pipelines::new::pipeline::NewPipeline;
 use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::{TableSource};
+use crate::pipelines::new::processors::TableSource;
 use crate::sessions::QueryContext;
 
+#[allow(dead_code)]
 struct QueryPipelineBuilder {
     ctx: Arc<QueryContext>,
     pipeline: NewPipeline,
 }
 
+#[allow(dead_code)]
 impl QueryPipelineBuilder {
     pub fn create(ctx: Arc<QueryContext>) -> QueryPipelineBuilder {
         QueryPipelineBuilder {
@@ -20,7 +28,7 @@ impl QueryPipelineBuilder {
         }
     }
 
-    pub fn finalize(mut self) -> Result<NewPipeline> {
+    pub fn finalize(self) -> Result<NewPipeline> {
         Ok(self.pipeline)
     }
 }

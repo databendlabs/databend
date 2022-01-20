@@ -1,4 +1,5 @@
-use parking_lot::{Condvar as ParkingCondvar, MutexGuard};
+use parking_lot::Condvar as ParkingCondvar;
+use parking_lot::MutexGuard;
 
 pub struct Condvar(ParkingCondvar);
 

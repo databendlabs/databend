@@ -12,7 +12,7 @@ unsafe impl<T: Sized> Sync for UnSafeCellWrap<T> {}
 impl<T: Sized> UnSafeCellWrap<T> {
     pub fn create(inner: T) -> UnSafeCellWrap<T> {
         UnSafeCellWrap {
-            inner: UnsafeCell::new(inner)
+            inner: UnsafeCell::new(inner),
         }
     }
 

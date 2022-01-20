@@ -1,12 +1,14 @@
 use std::sync::Arc;
+
 use common_base::tokio::sync::mpsc::Receiver;
 // use std::sync::mpsc::Receiver;
 use common_datablocks::DataBlock;
 use common_exception::Result;
+
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::sources::sync_source::SyncSource;
-use crate::pipelines::new::processors::sources::SyncSourceProcessorWrap;
+use crate::pipelines::new::processors::sources::SyncSourcer;
 
 pub struct SyncReceiverSource {
     receiver: Receiver<Result<DataBlock>>,
@@ -14,10 +16,7 @@ pub struct SyncReceiverSource {
 
 impl SyncReceiverSource {
     pub fn create(rx: Receiver<Result<DataBlock>>, out: Arc<OutputPort>) -> Result<ProcessorPtr> {
-        SyncSourceProcessorWrap::create(
-            vec![out],
-            SyncReceiverSource { receiver: rx },
-        )
+        SyncSourcer::create(vec![out], SyncReceiverSource { receiver: rx })
     }
 }
 
@@ -33,4 +32,3 @@ impl SyncSource for SyncReceiverSource {
         }
     }
 }
-

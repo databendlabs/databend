@@ -5,7 +5,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::{Event};
+use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
 
@@ -19,7 +19,7 @@ pub trait SyncSource: Send {
 }
 
 // TODO: This can be refactored using proc macros
-pub struct SyncSourceProcessorWrap<T: 'static + SyncSource> {
+pub struct SyncSourcer<T: 'static + SyncSource> {
     is_finish: bool,
     best_push_pos: usize,
 
@@ -28,14 +28,11 @@ pub struct SyncSourceProcessorWrap<T: 'static + SyncSource> {
     generated_data: Option<DataBlock>,
 }
 
-impl<T: 'static + SyncSource> SyncSourceProcessorWrap<T> {
+impl<T: 'static + SyncSource> SyncSourcer<T> {
     pub fn create(mut outputs: Vec<Arc<OutputPort>>, inner: T) -> Result<ProcessorPtr> {
         match outputs.len() {
             0 => Err(ErrorCode::LogicalError("Source output port is empty.")),
-            1 => Ok(SingleOutputSyncSourceProcessorWrap::create(
-                outputs.remove(0),
-                inner,
-            )),
+            1 => Ok(SingleOutputSyncSourcer::create(outputs.remove(0), inner)),
             _ => Ok(ProcessorPtr::create(Box::new(Self {
                 inner,
                 outputs,
@@ -97,7 +94,7 @@ impl<T: 'static + SyncSource> SyncSourceProcessorWrap<T> {
 }
 
 #[async_trait::async_trait]
-impl<T: 'static + SyncSource> Processor for SyncSourceProcessorWrap<T> {
+impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
     fn name(&self) -> &'static str {
         T::NAME
     }
@@ -125,7 +122,7 @@ impl<T: 'static + SyncSource> Processor for SyncSourceProcessorWrap<T> {
 
 /// The optimization of SyncSourceProcessorWrap.
 /// It's used when source has only one output port.
-struct SingleOutputSyncSourceProcessorWrap<T: 'static + SyncSource> {
+struct SingleOutputSyncSourcer<T: 'static + SyncSource> {
     is_finish: bool,
 
     inner: T,
@@ -133,7 +130,7 @@ struct SingleOutputSyncSourceProcessorWrap<T: 'static + SyncSource> {
     generated_data: Option<DataBlock>,
 }
 
-impl<T: 'static + SyncSource> SingleOutputSyncSourceProcessorWrap<T> {
+impl<T: 'static + SyncSource> SingleOutputSyncSourcer<T> {
     pub fn create(output: Arc<OutputPort>, inner: T) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(Self {
             inner,
@@ -167,7 +164,7 @@ impl<T: 'static + SyncSource> SingleOutputSyncSourceProcessorWrap<T> {
 }
 
 #[async_trait::async_trait]
-impl<T: 'static + SyncSource> Processor for SingleOutputSyncSourceProcessorWrap<T> {
+impl<T: 'static + SyncSource> Processor for SingleOutputSyncSourcer<T> {
     fn name(&self) -> &'static str {
         T::NAME
     }

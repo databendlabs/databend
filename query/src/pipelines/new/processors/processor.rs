@@ -1,13 +1,12 @@
 use std::cell::UnsafeCell;
 use std::sync::Arc;
+
+use common_exception::ErrorCode;
+use common_exception::Result;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
-
-use common_exception::ErrorCode;
-use common_exception::Result;
-use crate::pipelines::new::unsafe_cell_wrap::UnSafeCellWrap;
 
 pub enum Event {
     NeedData,
@@ -53,26 +52,32 @@ impl ProcessorPtr {
         }
     }
 
+    /// # Safety
     pub unsafe fn id(&self) -> NodeIndex {
         *self.id.get()
     }
 
+    /// # Safety
     pub unsafe fn set_id(&self, id: NodeIndex) {
-        *(&mut *self.id.get()) = id;
+        *self.id.get() = id;
     }
 
+    /// # Safety
     pub unsafe fn name(&self) -> &'static str {
         (&*self.inner.get()).name()
     }
 
+    /// # Safety
     pub unsafe fn event(&self) -> Result<Event> {
         (&mut *self.inner.get()).event()
     }
 
+    /// # Safety
     pub unsafe fn process(&self) -> Result<()> {
         (&mut *self.inner.get()).process()
     }
 
+    /// # Safety
     pub unsafe fn async_process(&self) -> BoxFuture<'static, Result<()>> {
         (&mut *self.inner.get()).async_process().boxed()
     }

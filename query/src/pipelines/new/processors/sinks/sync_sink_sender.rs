@@ -1,10 +1,13 @@
 use std::sync::Arc;
+
 use common_base::tokio::sync::mpsc::Sender;
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
+
 use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::sinks::sync_sink::{Sink, Sinker};
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::sinks::sync_sink::Sink;
+use crate::pipelines::new::processors::sinks::sync_sink::Sinker;
 
 pub struct SyncSenderSink {
     sender: Sender<Result<DataBlock>>,

@@ -26,32 +26,37 @@ unsafe impl Send for SharedStatus {}
 
 impl SharedStatus {
     pub fn create() -> Arc<SharedStatus> {
-        Arc::new(SharedStatus { data: AtomicPtr::new(std::ptr::null_mut()) })
+        Arc::new(SharedStatus {
+            data: AtomicPtr::new(std::ptr::null_mut()),
+        })
     }
 
-    pub fn swap(&self, data: *mut SharedData, set_flags: usize, unset_flags: usize) -> *mut SharedData {
+    pub fn swap(
+        &self,
+        data: *mut SharedData,
+        set_flags: usize,
+        unset_flags: usize,
+    ) -> *mut SharedData {
         let mut expected = std::ptr::null_mut();
         let mut desired = (data as usize | set_flags) as *mut SharedData;
 
         loop {
-            unsafe {
-                match self.data.compare_exchange_weak(
-                    expected,
-                    desired,
-                    Ordering::SeqCst,
-                    Ordering::Relaxed,
-                ) {
-                    Err(new_expected) => {
-                        expected = new_expected;
-                        let address = expected as usize;
-                        let desired_data = desired as usize & UNSET_FLAGS_MASK;
-                        let desired_flags = (address & FLAGS_MASK & !unset_flags) | set_flags;
-                        desired = (desired_data | desired_flags) as *mut SharedData;
-                    }
-                    Ok(old_value) => {
-                        let old_value_ptr = old_value as usize;
-                        return (old_value_ptr & UNSET_FLAGS_MASK) as *mut SharedData;
-                    }
+            match self.data.compare_exchange_weak(
+                expected,
+                desired,
+                Ordering::SeqCst,
+                Ordering::Relaxed,
+            ) {
+                Err(new_expected) => {
+                    expected = new_expected;
+                    let address = expected as usize;
+                    let desired_data = desired as usize & UNSET_FLAGS_MASK;
+                    let desired_flags = (address & FLAGS_MASK & !unset_flags) | set_flags;
+                    desired = (desired_data | desired_flags) as *mut SharedData;
+                }
+                Ok(old_value) => {
+                    let old_value_ptr = old_value as usize;
+                    return (old_value_ptr & UNSET_FLAGS_MASK) as *mut SharedData;
                 }
             }
         }
@@ -60,25 +65,22 @@ impl SharedStatus {
     pub fn set_flags(&self, set_flags: usize, unset_flags: usize) -> usize {
         let mut expected = std::ptr::null_mut();
         let mut desired = set_flags as *mut SharedData;
-
-        unsafe {
-            loop {
-                match self.data.compare_exchange_weak(
-                    expected,
-                    desired,
-                    Ordering::SeqCst,
-                    Ordering::Relaxed,
-                ) {
-                    Ok(old_value) => {
-                        return old_value as usize & FLAGS_MASK;
-                    }
-                    Err(new_expected) => {
-                        expected = new_expected;
-                        let address = desired as usize;
-                        let desired_data = address & UNSET_FLAGS_MASK;
-                        let desired_flags = (address & FLAGS_MASK & !unset_flags) | set_flags;
-                        desired = (desired_data | desired_flags) as *mut SharedData;
-                    }
+        loop {
+            match self.data.compare_exchange_weak(
+                expected,
+                desired,
+                Ordering::SeqCst,
+                Ordering::Relaxed,
+            ) {
+                Ok(old_value) => {
+                    return old_value as usize & FLAGS_MASK;
+                }
+                Err(new_expected) => {
+                    expected = new_expected;
+                    let address = desired as usize;
+                    let desired_data = address & UNSET_FLAGS_MASK;
+                    let desired_flags = (address & FLAGS_MASK & !unset_flags) | set_flags;
+                    desired = (desired_data | desired_flags) as *mut SharedData;
                 }
             }
         }
@@ -144,10 +146,16 @@ impl InputPort {
         }
     }
 
+    /// # Safety
+    ///
+    /// Method is thread unsafe and require thread safe call
     pub unsafe fn set_shared(&self, shared: Arc<SharedStatus>) {
         self.shared.set_value(shared);
     }
 
+    /// # Safety
+    ///
+    /// Method is thread unsafe and require thread safe call
     pub unsafe fn set_trigger(&self, update_trigger: *mut UpdateTrigger) {
         self.update_trigger.set_value(update_trigger)
     }
@@ -191,18 +199,27 @@ impl OutputPort {
 
     pub fn can_push(&self) -> bool {
         let flags = self.shared.get_flags();
-        ((flags & NEED_DATA) != 1) && ((flags & HAS_DATA) == 0)
+        ((flags & NEED_DATA) == NEED_DATA) && ((flags & HAS_DATA) == 0)
     }
 
+    /// # Safety
+    ///
+    /// Method is thread unsafe and require thread safe call
     pub unsafe fn set_shared(&self, shared: Arc<SharedStatus>) {
         self.shared.set_value(shared);
     }
 
+    /// # Safety
+    ///
+    /// Method is thread unsafe and require thread safe call
     pub unsafe fn set_trigger(&self, update_trigger: *mut UpdateTrigger) {
         self.update_trigger.set_value(update_trigger)
     }
 }
 
+/// Connect input and output ports.
+///
+/// # Safety
 pub unsafe fn connect(input: &InputPort, output: &OutputPort) {
     let shared_status = SharedStatus::create();
 

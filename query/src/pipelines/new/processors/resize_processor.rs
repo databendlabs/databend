@@ -1,8 +1,11 @@
 use std::sync::Arc;
-use crate::pipelines::new::processors::Processor;
+
 use common_exception::Result;
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
+
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
+use crate::pipelines::new::processors::Processor;
 
 pub struct ResizeProcessor {
     inputs: Vec<Arc<InputPort>>,
@@ -25,7 +28,12 @@ impl ResizeProcessor {
             outputs_port.push(OutputPort::create());
         }
 
-        ResizeProcessor { inputs: inputs_port, outputs: outputs_port, cur_input_index: 0, cur_output_index: 0 }
+        ResizeProcessor {
+            inputs: inputs_port,
+            outputs: outputs_port,
+            cur_input_index: 0,
+            cur_output_index: 0,
+        }
     }
 
     pub fn get_inputs(&self) -> &[Arc<InputPort>] {
@@ -61,7 +69,7 @@ impl ResizeProcessor {
                 self.cur_input_index = index;
                 return match finished {
                     true => Some(input.clone()),
-                    false => None
+                    false => None,
                 };
             }
         }
@@ -92,7 +100,7 @@ impl ResizeProcessor {
                 self.cur_output_index = index;
                 return match finished {
                     true => Some(output.clone()),
-                    false => None
+                    false => None,
                 };
             }
         }

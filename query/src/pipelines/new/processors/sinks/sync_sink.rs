@@ -1,9 +1,12 @@
 use std::sync::Arc;
+
 use common_datablocks::DataBlock;
 use common_exception::Result;
+
 use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::processor::Event;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 
 pub trait Sink: Send {
     const NAME: &'static str;
@@ -62,4 +65,3 @@ impl<T: Sink + 'static> Processor for Sinker<T> {
         Ok(())
     }
 }
-

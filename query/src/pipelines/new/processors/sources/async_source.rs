@@ -5,7 +5,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::{Event};
+use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
 
@@ -19,7 +19,7 @@ pub trait AsyncSource: Send {
 // TODO: This can be refactored using proc macros
 // TODO: Most of its current code is consistent with sync. We need refactor this with better async
 // scheduling after supported expand processors. It will be implemented using a similar dynamic window.
-pub struct ASyncSourceProcessorWrap<T: 'static + AsyncSource> {
+pub struct AsyncSourcer<T: 'static + AsyncSource> {
     is_finish: bool,
     best_push_pos: usize,
 
@@ -28,14 +28,11 @@ pub struct ASyncSourceProcessorWrap<T: 'static + AsyncSource> {
     generated_data: Option<DataBlock>,
 }
 
-impl<T: 'static + AsyncSource> ASyncSourceProcessorWrap<T> {
+impl<T: 'static + AsyncSource> AsyncSourcer<T> {
     pub fn create(mut outputs: Vec<Arc<OutputPort>>, inner: T) -> Result<ProcessorPtr> {
         match outputs.len() {
             0 => Err(ErrorCode::LogicalError("Source output port is empty.")),
-            1 => Ok(SingleOutputASyncSourceProcessorWrap::create(
-                outputs.remove(0),
-                inner,
-            )),
+            1 => Ok(SingleOutputASyncSourcer::create(outputs.remove(0), inner)),
             _ => Ok(ProcessorPtr::create(Box::new(Self {
                 inner,
                 outputs,
@@ -97,7 +94,7 @@ impl<T: 'static + AsyncSource> ASyncSourceProcessorWrap<T> {
 }
 
 #[async_trait::async_trait]
-impl<T: 'static + AsyncSource> Processor for ASyncSourceProcessorWrap<T> {
+impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
     fn name(&self) -> &'static str {
         T::NAME
     }
@@ -125,7 +122,7 @@ impl<T: 'static + AsyncSource> Processor for ASyncSourceProcessorWrap<T> {
 
 /// The optimization of SyncSourceProcessorWrap.
 /// It's used when source has only one output port.
-struct SingleOutputASyncSourceProcessorWrap<T: 'static + AsyncSource> {
+struct SingleOutputASyncSourcer<T: 'static + AsyncSource> {
     is_finish: bool,
 
     inner: T,
@@ -133,7 +130,7 @@ struct SingleOutputASyncSourceProcessorWrap<T: 'static + AsyncSource> {
     generated_data: Option<DataBlock>,
 }
 
-impl<T: 'static + AsyncSource> SingleOutputASyncSourceProcessorWrap<T> {
+impl<T: 'static + AsyncSource> SingleOutputASyncSourcer<T> {
     pub fn create(output: Arc<OutputPort>, inner: T) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(Self {
             inner,
@@ -168,7 +165,7 @@ impl<T: 'static + AsyncSource> SingleOutputASyncSourceProcessorWrap<T> {
 }
 
 #[async_trait::async_trait]
-impl<T: 'static + AsyncSource> Processor for SingleOutputASyncSourceProcessorWrap<T> {
+impl<T: 'static + AsyncSource> Processor for SingleOutputASyncSourcer<T> {
     fn name(&self) -> &'static str {
         T::NAME
     }

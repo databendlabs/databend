@@ -1,16 +1,17 @@
-use std::fmt::format;
-use std::sync::Arc;
-use petgraph::graph::node_index;
 use common_base::tokio;
-use common_base::tokio::sync::mpsc::{channel, Receiver, Sender};
+use common_base::tokio::sync::mpsc::channel;
+use common_base::tokio::sync::mpsc::Receiver;
+use common_base::tokio::sync::mpsc::Sender;
 use common_datablocks::DataBlock;
-use common_datavalues::{DataField, DataSchema, DataType, DataValue};
-use common_datavalues::columns::DataColumn;
 use common_exception::Result;
-use databend_query::pipelines::new::{NewPipe, NewPipeline};
-use databend_query::pipelines::new::executor::{PipelineExecutor, RunningGraph};
-use databend_query::pipelines::new::processors::{SyncReceiverSource, SyncSenderSink, TransformDummy};
-use databend_query::pipelines::new::processors::port::{InputPort, OutputPort};
+use databend_query::pipelines::new::executor::RunningGraph;
+use databend_query::pipelines::new::processors::port::InputPort;
+use databend_query::pipelines::new::processors::port::OutputPort;
+use databend_query::pipelines::new::processors::SyncReceiverSource;
+use databend_query::pipelines::new::processors::SyncSenderSink;
+use databend_query::pipelines::new::processors::TransformDummy;
+use databend_query::pipelines::new::NewPipe;
+use databend_query::pipelines::new::NewPipeline;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_simple_pipeline() -> Result<()> {
@@ -98,7 +99,10 @@ async fn test_simple_pipeline_init_queue() -> Result<()> {
 async fn test_parallel_simple_pipeline_init_queue() -> Result<()> {
     unsafe {
         assert_eq!(
-            format!("{:?}", create_parallel_simple_pipeline()?.init_schedule_queue()?),
+            format!(
+                "{:?}",
+                create_parallel_simple_pipeline()?.init_schedule_queue()?
+            ),
             "ScheduleQueue { \
                 sync_queue: [\
                     QueueItem { id: 0, name: \"SyncReceiverSource\" }, \
@@ -176,7 +180,7 @@ fn create_simple_pipeline() -> Result<RunningGraph> {
     pipeline.add_pipe(create_transform_pipe(1)?);
     pipeline.add_pipe(sink_pipe);
 
-    Ok(RunningGraph::create(pipeline)?)
+    RunningGraph::create(pipeline)
 }
 
 fn create_parallel_simple_pipeline() -> Result<RunningGraph> {
@@ -188,7 +192,7 @@ fn create_parallel_simple_pipeline() -> Result<RunningGraph> {
     pipeline.add_pipe(create_transform_pipe(2)?);
     pipeline.add_pipe(sink_pipe);
 
-    Ok(RunningGraph::create(pipeline)?)
+    RunningGraph::create(pipeline)
 }
 
 fn create_resize_pipeline() -> Result<RunningGraph> {
@@ -204,7 +208,7 @@ fn create_resize_pipeline() -> Result<RunningGraph> {
     pipeline.resize(2)?;
     pipeline.add_pipe(sink_pipe);
 
-    Ok(RunningGraph::create(pipeline)?)
+    RunningGraph::create(pipeline)
 }
 
 fn create_source_pipe(size: usize) -> Result<(Vec<Sender<Result<DataBlock>>>, NewPipe)> {
@@ -258,7 +262,6 @@ fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, Ne
         inputs.push(input.clone());
         processors.push(SyncSenderSink::create(tx, input));
     }
-
 
     Ok((rxs, NewPipe::SimplePipe {
         processors,

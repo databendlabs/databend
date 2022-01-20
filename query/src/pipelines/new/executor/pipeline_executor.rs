@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
-use common_exception::{Result};
+
+use common_exception::Result;
 
 use crate::pipelines::new::executor::executor_graph::RunningGraph;
 use crate::pipelines::new::executor::executor_notify::WorkersNotify;
@@ -18,7 +19,7 @@ impl PipelineExecutor {
     pub fn create(pipeline: NewPipeline, workers: usize) -> Result<Arc<PipelineExecutor>> {
         unsafe {
             let workers_notify = WorkersNotify::create(workers);
-            let mut global_tasks_queue = ExecutorTasksQueue::create(workers);
+            let global_tasks_queue = ExecutorTasksQueue::create(workers);
 
             let graph = RunningGraph::create(pipeline)?;
             let mut init_schedule_queue = graph.init_schedule_queue()?;
@@ -29,7 +30,11 @@ impl PipelineExecutor {
             }
 
             global_tasks_queue.init_tasks(tasks);
-            Ok(Arc::new(PipelineExecutor { graph, workers_notify, global_tasks_queue }))
+            Ok(Arc::new(PipelineExecutor {
+                graph,
+                workers_notify,
+                global_tasks_queue,
+            }))
         }
     }
 
@@ -38,6 +43,9 @@ impl PipelineExecutor {
         self.workers_notify.wakeup_all();
     }
 
+    /// # Safety
+    ///
+    /// Method is thread unsafe and require thread safe call
     pub unsafe fn execute_with_single_worker(&self, worker_num: usize) -> Result<()> {
         let workers_notify = self.workers_notify.clone();
         let mut context = ExecutorWorkerContext::create(worker_num, workers_notify);

@@ -1,8 +1,7 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Sender;
-use std::sync::mpsc::Receiver;
-use common_infallible::{Condvar, Mutex};
+
+use common_infallible::Condvar;
+use common_infallible::Mutex;
 
 struct WorkerNotify {
     waiting: Mutex<bool>,
@@ -40,12 +39,15 @@ impl WorkersNotify {
 
         Arc::new(WorkersNotify {
             workers_notify,
-            mutable_state: Mutex::new(WorkersNotifyMutable { waiting_size: 0, workers_waiting }),
+            mutable_state: Mutex::new(WorkersNotifyMutable {
+                waiting_size: 0,
+                workers_waiting,
+            }),
         })
     }
 
     pub fn is_empty(&self) -> bool {
-        let mut mutable_state = self.mutable_state.lock();
+        let mutable_state = self.mutable_state.lock();
         mutable_state.waiting_size == 0
     }
 
@@ -109,4 +111,3 @@ impl WorkersNotify {
         self.workers_notify[worker_id].condvar.wait(&mut waiting);
     }
 }
-
