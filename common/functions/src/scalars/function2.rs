@@ -118,10 +118,8 @@ impl Function for Function2Adapter {
         columns: &common_datavalues::prelude::DataColumnsWithField,
         input_rows: usize,
     ) -> Result<common_datavalues::prelude::DataColumn> {
-        let columns: Vec<ColumnWithField> = columns
-            .iter()
-            .map(|c| convert2_new_column(c))
-            .collect::<Vec<_>>();
+        let columns: Vec<ColumnWithField> =
+            columns.iter().map(convert2_new_column).collect::<Vec<_>>();
 
         // unwrap nullable
         // TODO after moving all functions to datavalues2

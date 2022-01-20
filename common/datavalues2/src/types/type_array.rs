@@ -32,8 +32,6 @@ pub struct ArrayType {
 
 impl ArrayType {
     pub fn create(inner: DataTypePtr) -> Self {
-        let aliases = inner.aliases();
-
         ArrayType {
             name: format!("Array({})", inner.name()),
             inner,
