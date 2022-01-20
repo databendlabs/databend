@@ -88,11 +88,6 @@ pub async fn streaming_load(
         .unwrap_or("0")
         .eq_ignore_ascii_case("1");
 
-    let tt = req
-        .headers()
-        .get("field_delimitor")
-        .and_then(|v| v.to_str().ok());
-
     let field_delimitor = req
         .headers()
         .get("field_delimitor")
