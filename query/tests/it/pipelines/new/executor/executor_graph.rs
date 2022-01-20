@@ -46,7 +46,7 @@ async fn test_create_simple_pipeline() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_parallel_simple_pipeline() -> Result<()> {
     assert_eq!(
-        format!("{:?}", create_parallel_simple_pipeline()),
+        format!("{:?}", create_parallel_simple_pipeline()?),
         "digraph {\
             \n    0 [ label = \"SyncReceiverSource\" ]\
             \n    1 [ label = \"SyncReceiverSource\" ]\
