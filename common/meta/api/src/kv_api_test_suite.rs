@@ -30,7 +30,7 @@ pub struct KVApiTestSuite {}
 
 impl KVApiTestSuite {
     #[tracing::instrument(level = "info", skip(self, builder))]
-    pub async fn test_single_node<KV, B>(&self, builder: B) -> anyhow::Result<()>
+    pub async fn test_all<KV, B>(&self, builder: B) -> anyhow::Result<()>
     where
         KV: KVApi,
         B: KVApiBuilder<KV>,
@@ -42,6 +42,19 @@ impl KVApiTestSuite {
         self.kv_meta(&builder.build().await).await?;
         self.kv_list(&builder.build().await).await?;
         self.kv_mget(&builder.build().await).await?;
+
+        {
+            let cluster = builder.build_cluster().await;
+            self.kv_write_read_across_nodes(&cluster[0], &cluster[1])
+                .await?;
+        }
+
+        {
+            let cluster = builder.build_cluster().await;
+            self.kv_write_read_across_nodes(&cluster[1], &cluster[2])
+                .await?;
+        }
+
         Ok(())
     }
 }
@@ -522,7 +535,7 @@ impl KVApiTestSuite {
 /// Test that write and read should be forwarded to leader
 impl KVApiTestSuite {
     #[tracing::instrument(level = "info", skip(self, kv1, kv2))]
-    pub async fn kv_write_read_cross_nodes<KV: KVApi>(
+    pub async fn kv_write_read_across_nodes<KV: KVApi>(
         &self,
         kv1: &KV,
         kv2: &KV,

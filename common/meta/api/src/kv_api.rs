@@ -26,7 +26,11 @@ use common_meta_types::UpsertKVActionReply;
 pub trait KVApiBuilder<T>
 where T: KVApi
 {
+    /// Create a KVApi
     async fn build(&self) -> T;
+
+    /// Create a KVApi cluster
+    async fn build_cluster(&self) -> Vec<T>;
 }
 
 #[async_trait]

@@ -23,7 +23,9 @@ use common_meta_grpc::MetaGrpcClient;
 use common_tracing::tracing_futures::Instrument;
 
 use crate::init_meta_ut;
+use crate::tests::service::start_metasrv_cluster;
 use crate::tests::service::MetaSrvTestContext;
+use crate::tests::start_metasrv;
 
 struct Builder {
     pub test_contexts: Arc<Mutex<Vec<MetaSrvTestContext>>>,
@@ -32,7 +34,7 @@ struct Builder {
 #[async_trait]
 impl KVApiBuilder<MetaGrpcClient> for Builder {
     async fn build(&self) -> MetaGrpcClient {
-        let (tc, addr) = crate::tests::start_metasrv().await.unwrap();
+        let (tc, addr) = start_metasrv().await.unwrap();
 
         let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None)
             .await
@@ -45,16 +47,34 @@ impl KVApiBuilder<MetaGrpcClient> for Builder {
 
         client
     }
+
+    async fn build_cluster(&self) -> Vec<MetaGrpcClient> {
+        let tcs = start_metasrv_cluster(&[0, 1, 2]).await.unwrap();
+
+        let cluster = vec![
+            tcs[0].grpc_client().await.unwrap(),
+            tcs[1].grpc_client().await.unwrap(),
+            tcs[2].grpc_client().await.unwrap(),
+        ];
+
+        {
+            let mut test_contexts = self.test_contexts.lock().unwrap();
+            test_contexts.extend(tcs);
+        }
+
+        cluster
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_kv_api_single_node() -> anyhow::Result<()> {
+async fn test_metasrv_kv_api() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
 
     let builder = Builder {
         test_contexts: Arc::new(Mutex::new(vec![])),
     };
-    async { KVApiTestSuite {}.test_single_node(builder).await }
+
+    async { KVApiTestSuite {}.test_all(builder).await }
         .instrument(ut_span)
         .await
 }
