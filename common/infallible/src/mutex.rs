@@ -20,6 +20,7 @@ use parking_lot::MutexGuard;
 pub struct Mutex<T>(ParkingMutex<T>);
 
 unsafe impl<T> Send for Mutex<T> where ParkingMutex<T>: Send {}
+
 unsafe impl<T> Sync for Mutex<T> where ParkingMutex<T>: Sync {}
 
 impl<T> Mutex<T> {

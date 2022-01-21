@@ -114,7 +114,7 @@ build_exceptions! {
     InvalidSourceFormat(1059),
     StrParseError(1060),
     IllegalGrant(1061),
-    ProxyModePermissionDenied(1062),
+    ManagementModePermissionDenied(1062),
     PermissionDenied(1063),
     UnmarshalError(1064),
     SemanticError(1065),
@@ -123,6 +123,11 @@ build_exceptions! {
     UnexpectedResponseType(1066),
     UnknownException(1067),
     TokioError(1068),
+
+    // pipeline executor
+    PipelineAreadlyStarted(1069),
+    PipelineNotStarted(1070),
+    PipelineUnInitialized(1071),
 
     // http query error
     HttpNotFound(1072),
@@ -157,6 +162,8 @@ build_exceptions! {
     UnknownUser(2201),
     UserAlreadyExists(2202),
     IllegalUserInfoFormat(2203),
+    UnknownRole(2204),
+    IllegalRoleInfoFormat(2205),
 
     // meta-api error codes
     DatabaseAlreadyExists(2301),

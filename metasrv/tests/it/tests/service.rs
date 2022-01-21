@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_raft::NodeId;
 use common_base::tokio;
 use common_base::GlobalSequence;
 use common_base::Stoppable;
 use common_meta_grpc::MetaGrpcClient;
+use common_meta_sled_store::openraft::NodeId;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::GetRequest;
 use common_tracing::tracing;
@@ -142,7 +142,7 @@ impl MetaSrvTestContext {
     pub async fn grpc_client(&self) -> anyhow::Result<MetaGrpcClient> {
         let addr = self.config.grpc_api_address.clone();
 
-        let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+        let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
         Ok(client)
     }
 
@@ -200,7 +200,7 @@ macro_rules! init_meta_ut {
         common_meta_sled_store::init_temp_sled_db(t);
 
         // common_tracing::init_tracing(&format!("ut-{}", name), "./_logs")
-        common_tracing::init_default_ut_tracing();
+        common_tracing::init_meta_ut_tracing();
 
         let name = common_tracing::func_name!();
         let span =

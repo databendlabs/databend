@@ -87,6 +87,10 @@ pub struct RaftConfig {
     #[clap(long, env = KVSRV_INSTALL_SNAPSHOT_TIMEOUT, default_value = "4000")]
     pub install_snapshot_timeout: u64,
 
+    /// The maximum number of applied logs to keep before purging
+    #[clap(long, env = "RAFT_MAX_APPLIED_LOG_TO_KEEP", default_value = "1000")]
+    pub max_applied_log_to_keep: u64,
+
     /// Whether to boot up a new cluster. If already booted, it is ignored
     #[clap(long, env = KVSRV_BOOT)]
     pub boot: bool,
@@ -125,6 +129,7 @@ impl Default for RaftConfig {
             snapshot_logs_since_last: 1024,
             heartbeat_interval: 1000,
             install_snapshot_timeout: 4000,
+            max_applied_log_to_keep: 1000,
             boot: false,
             single: false,
             join: vec![],

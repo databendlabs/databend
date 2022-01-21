@@ -9,52 +9,45 @@ Create a new table.
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 (
-    name1 type1,
-    name2 type2,
+    <col_name> <col_type> [ { DEFAULT <expr> }],
+    <col_name> <col_type> [ { DEFAULT <expr> }],
     ...
-) ENGINE = engine
-[OPTIONS]
+)
 ```
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 LIKE [db.]origin_table_name
-ENGINE = engine
-[OPTIONS]
 ```
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 LIKE [db.]origin_table_name
-ENGINE = engine
-[OPTIONS]
 AS SELECT query
 ```
 
-:::note
-Local engine is one of `Memory`, `Parquet`, `JSONEachRow`, `Null` or `CSV`, data will be stored in the DatabendQuery memory/disk locally.
-
-Remote engine is `remote`, will be stored in the remote DatabendStore cluster.
-:::
+## Default Values
+```sql
+DEFAULT <expr>
+```
+Specifies a default value inserted in the column if a value is not specified via an INSERT or CREATE TABLE AS SELECT statement.
 
 
 ## Examples
 
-### Memory engine
-
 ```sql
-mysql> CREATE TABLE test(a UInt64, b Varchar) Engine = Memory;
+mysql> CREATE TABLE test(a UInt64, b Varchar, c Varchar DEFAULT concat(b, '-b'));
 
 mysql> INSERT INTO test(a,b) values(888, 'stars');
 
-mysql> SELECT * FROM test;
-+------+---------+
-| a    | b       |
-+------+---------+
-|  888 |  stars  |
-+------+---------+
+mysql> select * from test;
++------+-------+---------+
+| a    | b     | c       |
++------+-------+---------+
+|  888 | stars | stars-b |
++------+-------+---------+
 ```
 ### Create Table Like statement
 ```sql
-mysql> CREATE TABLE test(a UInt64, b Varchar) Engine = Memory;
+mysql> CREATE TABLE test(a UInt64, b Varchar);
 
 mysql> INSERT INTO test(a,b) values(888, 'stars');
 
@@ -65,7 +58,7 @@ mysql> SELECT * FROM test;
 |  888 |  stars  |
 +------+---------+
 
-mysql> CREATE TABLE test2 LIKE test Engine = Memory;
+mysql> CREATE TABLE test2 LIKE test;
 
 mysql> INSERT INTO test2(a,b) values(0, 'sun');
 
@@ -80,7 +73,7 @@ mysql> SELECT * FROM test2;
 ### Create Table As Select (CTAS) statement
 
 ```sql
-mysql> CREATE TABLE source(a UInt64, b Varchar) Engine = Memory;
+mysql> CREATE TABLE source(a UInt64, b Varchar) 
 
 mysql> INSERT INTO source(a,b) values(888, 'stars');
 

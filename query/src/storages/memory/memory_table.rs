@@ -110,7 +110,7 @@ impl Table for MemoryTable {
                 let rows = blocks.iter().map(|block| block.num_rows()).sum();
                 let bytes = blocks.iter().map(|block| block.memory_size()).sum();
 
-                Statistics::new_exact(rows, bytes)
+                Statistics::new_exact(rows, bytes, blocks.len(), blocks.len())
             }
         };
 

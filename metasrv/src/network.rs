@@ -15,20 +15,22 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_raft::async_trait::async_trait;
-use async_raft::raft::AppendEntriesRequest;
-use async_raft::raft::AppendEntriesResponse;
-use async_raft::raft::InstallSnapshotRequest;
-use async_raft::raft::InstallSnapshotResponse;
-use async_raft::raft::VoteRequest;
-use async_raft::raft::VoteResponse;
-use async_raft::RaftNetwork;
 use common_containers::ItemManager;
 use common_containers::Pool;
+use common_meta_sled_store::openraft;
+use common_meta_sled_store::openraft::MessageSummary;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::LogEntry;
 use common_meta_types::NodeId;
 use common_tracing::tracing;
+use openraft::async_trait::async_trait;
+use openraft::raft::AppendEntriesRequest;
+use openraft::raft::AppendEntriesResponse;
+use openraft::raft::InstallSnapshotRequest;
+use openraft::raft::InstallSnapshotResponse;
+use openraft::raft::VoteRequest;
+use openraft::raft::VoteResponse;
+use openraft::RaftNetwork;
 use tonic::client::GrpcService;
 use tonic::transport::channel::Channel;
 
@@ -87,8 +89,8 @@ impl Network {
 
 #[async_trait]
 impl RaftNetwork<LogEntry> for Network {
-    #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
-    async fn append_entries(
+    #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id, rpc=%rpc.summary()))]
+    async fn send_append_entries(
         &self,
         target: NodeId,
         rpc: AppendEntriesRequest<LogEntry>,
@@ -109,8 +111,8 @@ impl RaftNetwork<LogEntry> for Network {
         Ok(resp)
     }
 
-    #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
-    async fn install_snapshot(
+    #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id, rpc=%rpc.summary()))]
+    async fn send_install_snapshot(
         &self,
         target: NodeId,
         rpc: InstallSnapshotRequest,
@@ -130,7 +132,7 @@ impl RaftNetwork<LogEntry> for Network {
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
-    async fn vote(&self, target: NodeId, rpc: VoteRequest) -> anyhow::Result<VoteResponse> {
+    async fn send_vote(&self, target: NodeId, rpc: VoteRequest) -> anyhow::Result<VoteResponse> {
         tracing::debug!("vote: req to: target={} {:?}", target, rpc);
 
         let mut client = self.make_client(&target).await?;

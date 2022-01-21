@@ -25,7 +25,7 @@ async fn test_kv_api_mget() -> anyhow::Result<()> {
 
     let (_tc, addr) = crate::tests::start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     KVApiTestSuite {}.kv_mget(&client).await
 }
@@ -37,7 +37,7 @@ async fn test_kv_api_list() -> anyhow::Result<()> {
 
     let (_tc, addr) = crate::tests::start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     KVApiTestSuite {}.kv_list(&client).await
 }
@@ -49,7 +49,7 @@ async fn test_kv_api_delete() -> anyhow::Result<()> {
 
     let (_tc, addr) = crate::tests::start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     KVApiTestSuite {}.kv_delete(&client).await
 }
@@ -61,7 +61,7 @@ async fn test_kv_api_update() -> anyhow::Result<()> {
 
     let (_tc, addr) = crate::tests::start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     KVApiTestSuite {}.kv_update(&client).await
 }
@@ -75,7 +75,7 @@ async fn test_kv_api_update_meta() -> anyhow::Result<()> {
 
     let (_tc, addr) = crate::tests::start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     KVApiTestSuite {}.kv_meta(&client).await
 }
@@ -87,7 +87,7 @@ async fn test_kv_api_timeout() -> anyhow::Result<()> {
 
     let (_tc, addr) = crate::tests::start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     KVApiTestSuite {}.kv_timeout(&client).await
 }
@@ -99,7 +99,7 @@ async fn test_kv_api_write_read() -> anyhow::Result<()> {
 
     let (_tc, addr) = crate::tests::start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None).await?;
 
     KVApiTestSuite {}.kv_write_read(&client).await
 }

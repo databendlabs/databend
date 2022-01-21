@@ -19,7 +19,7 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::PlanParser;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_proxy_mode_access() -> Result<()> {
+async fn test_management_mode_access() -> Result<()> {
     struct TestGroup {
         name: &'static str,
         tests: Vec<Test>,
@@ -96,8 +96,13 @@ async fn test_proxy_mode_access() -> Result<()> {
             name: "denied",
             tests: vec![
                 Test {
-                    name: "select-denied",
-                    query: "select 1",
+                    name: "table-create-access-passed",
+                    query: "CREATE TABLE t1(a int)",
+                    is_err: false,
+                },
+                Test {
+                    name: "insert-denied",
+                    query: "insert into t1 values(1)",
                     is_err: true,
                 },
             ],
@@ -105,7 +110,7 @@ async fn test_proxy_mode_access() -> Result<()> {
     ];
 
     let mut config = Config::default();
-    config.query.proxy_mode = true;
+    config.query.management_mode = true;
 
     for group in groups {
         let ctx = crate::tests::create_query_context_with_config(config.clone())?;

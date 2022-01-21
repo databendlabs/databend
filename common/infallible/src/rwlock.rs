@@ -16,12 +16,15 @@ use parking_lot::RwLock as ParkingRwLock;
 use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
 
+use crate::RwLockUpgradableReadGuard;
+
 /// A simple wrapper around the lock() function of a std::sync::RwLock
 /// The only difference is that you don't need to call unwrap() on it.
 #[derive(Debug, Default)]
 pub struct RwLock<T>(ParkingRwLock<T>);
 
 unsafe impl<T> Send for RwLock<T> where ParkingRwLock<T>: Send {}
+
 unsafe impl<T> Sync for RwLock<T> where ParkingRwLock<T>: Sync {}
 
 impl<T> RwLock<T> {
@@ -38,6 +41,11 @@ impl<T> RwLock<T> {
     /// lock the rwlock in write mode
     pub fn write(&self) -> RwLockWriteGuard<'_, T> {
         self.0.write()
+    }
+
+    // lock the rwlock in read mode and can be upgrade to write mode
+    pub fn upgradable_read(&self) -> RwLockUpgradableReadGuard<'_, T> {
+        RwLockUpgradableReadGuard::create(self.0.upgradable_read())
     }
 
     /// return the owned type consuming the lock

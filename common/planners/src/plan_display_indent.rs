@@ -206,11 +206,12 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
     fn format_read_source(f: &mut Formatter, plan: &ReadDataSourcePlan) -> fmt::Result {
         write!(
             f,
-            "ReadDataSource: scan partitions: [{}], scan schema: {}, statistics: [read_rows: {:?}, read_bytes: {:?}]",
-            plan.parts.len(),
+            "ReadDataSource: scan schema: {}, statistics: [read_rows: {:?}, read_bytes: {:?}, partitions_scanned: {:?}, partitions_total: {:?}]",
             PlanNode::display_scan_fields(&plan.scan_fields()),
             plan.statistics.read_rows,
             plan.statistics.read_bytes,
+            plan.statistics.partitions_scanned,
+            plan.statistics.partitions_total,
         )?;
 
         if let Some(p) = &plan.push_downs {

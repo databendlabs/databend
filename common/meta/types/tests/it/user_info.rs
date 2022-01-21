@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use common_exception::exception::Result;
-use common_meta_types::PasswordType;
+use common_meta_types::AuthInfo;
+use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
 
 #[test]
@@ -26,15 +27,16 @@ fn test_user_info() -> Result<()> {
     pub struct OldUserInfo {
         pub name: String,
         pub hostname: String,
-        pub password: Vec<u8>,
-        pub password_type: PasswordType,
+        pub auth_info: AuthInfo,
     }
 
     let old = OldUserInfo {
         name: "old-name".to_string(),
         hostname: "old-host".to_string(),
-        password: Vec::from("pwd"),
-        password_type: PasswordType::Sha256,
+        auth_info: AuthInfo::Password {
+            hash_value: Vec::from("pwd"),
+            hash_method: PasswordHashMethod::Sha256,
+        },
     };
 
     let ser_old = serde_json::to_string(&old)?;
@@ -43,8 +45,10 @@ fn test_user_info() -> Result<()> {
     let expect = UserInfo::new(
         "old-name".to_string(),
         "old-host".to_string(),
-        Vec::from("pwd"),
-        PasswordType::Sha256,
+        AuthInfo::Password {
+            hash_value: Vec::from("pwd"),
+            hash_method: PasswordHashMethod::Sha256,
+        },
     );
     assert_eq!(new, expect);
 
