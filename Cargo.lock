@@ -1604,6 +1604,8 @@ dependencies = [
  "itertools",
  "lexical-core 0.8.2",
  "num",
+ "once_cell",
+ "pprof",
  "pretty_assertions",
  "rand",
  "serde",

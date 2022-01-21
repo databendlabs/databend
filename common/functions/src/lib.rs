@@ -18,8 +18,11 @@ pub mod aggregates;
 pub mod scalars;
 
 use aggregates::AggregateFunctionFactory;
+use scalars::Function2Factory;
 use scalars::FunctionFactory;
 
 pub fn is_builtin_function(name: &str) -> bool {
-    FunctionFactory::instance().check(name) || AggregateFunctionFactory::instance().check(name)
+    Function2Factory::instance().check(name)
+        || FunctionFactory::instance().check(name)
+        || AggregateFunctionFactory::instance().check(name)
 }

@@ -89,6 +89,7 @@ impl HashFlightScatter {
                 Expression::Cast {
                     expr: Box::new(expr),
                     data_type: DataType::UInt64,
+                    is_nullable: true,
                 },
                 Expression::create_literal(DataValue::UInt64(Some(num as u64))),
             ],

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -22,16 +23,16 @@ use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct Date32Type32 {}
+pub struct Date32Type {}
 
-impl Date32Type32 {
+impl Date32Type {
     pub fn arc() -> DataTypePtr {
         Arc::new(Self {})
     }
 }
 
 #[typetag::serde]
-impl DataType for Date32Type32 {
+impl DataType for Date32Type {
     fn data_type_id(&self) -> TypeID {
         TypeID::Date32
     }
@@ -39,6 +40,10 @@ impl DataType for Date32Type32 {
     #[inline]
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn name(&self) -> &str {
+        "Date32"
     }
 
     fn default_value(&self) -> DataValue {
@@ -63,6 +68,12 @@ impl DataType for Date32Type32 {
 
     fn arrow_type(&self) -> ArrowType {
         ArrowType::Int32
+    }
+
+    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
+        let mut mp = BTreeMap::new();
+        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Date32".to_string());
+        Some(mp)
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {

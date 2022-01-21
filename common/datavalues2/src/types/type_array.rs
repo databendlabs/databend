@@ -26,12 +26,16 @@ use crate::prelude::*;
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct ArrayType {
+    name: String,
     inner: DataTypePtr,
 }
 
 impl ArrayType {
     pub fn create(inner: DataTypePtr) -> Self {
-        ArrayType { inner }
+        ArrayType {
+            name: format!("Array({})", inner.name()),
+            inner,
+        }
     }
 
     pub fn inner_type(&self) -> &DataTypePtr {
@@ -50,8 +54,16 @@ impl DataType for ArrayType {
         self
     }
 
+    fn name(&self) -> &str {
+        &self.name
+    }
+
     fn default_value(&self) -> DataValue {
         DataValue::Array(vec![])
+    }
+
+    fn can_inside_nullable(&self) -> bool {
+        false
     }
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {

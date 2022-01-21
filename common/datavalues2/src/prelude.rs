@@ -18,6 +18,7 @@ use common_arrow::arrow::array::MutableBinaryArray;
 
 pub use crate::columns::*;
 pub use crate::data_value::DFTryFrom;
+pub use crate::macros::*;
 pub use crate::types::*;
 pub use crate::utils::*;
 // common structs

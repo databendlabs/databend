@@ -151,6 +151,7 @@ impl DfInsertStatement {
                     Expression::Cast {
                         expr: Box::new(expr),
                         data_type: schema.field(i).data_type().clone(),
+                        is_nullable: schema.field(i).is_nullable(),
                     }
                 } else {
                     expr

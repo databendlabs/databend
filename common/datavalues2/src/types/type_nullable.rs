@@ -26,11 +26,16 @@ use crate::prelude::*;
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct NullableType {
     inner: DataTypePtr,
+    name: String,
 }
 
 impl NullableType {
     pub fn create(inner: DataTypePtr) -> Self {
-        NullableType { inner }
+        debug_assert!(inner.can_inside_nullable());
+        NullableType {
+            name: format!("Nullable({})", inner.name()),
+            inner,
+        }
     }
 
     pub fn inner_type(&self) -> &DataTypePtr {
@@ -49,8 +54,16 @@ impl DataType for NullableType {
         self
     }
 
+    fn name(&self) -> &str {
+        &self.name
+    }
+
     fn is_nullable(&self) -> bool {
         true
+    }
+
+    fn can_inside_nullable(&self) -> bool {
+        false
     }
 
     fn default_value(&self) -> DataValue {
@@ -84,7 +97,7 @@ impl DataType for NullableType {
         if self.inner.data_type_id() == TypeID::Null {
             return Ok(Arc::new(NullColumn::new(size)));
         }
-        if self.inner.data_type_id() == TypeID::Null {
+        if self.inner.data_type_id() == TypeID::Nullable {
             return Result::Err(ErrorCode::BadDataValueType(
                 "Nullable type can't be inside nullable type".to_string(),
             ));

@@ -20,6 +20,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
+use super::Function2Adapter;
+use super::Function2Factory;
 use crate::scalars::ArithmeticFunction;
 use crate::scalars::ComparisonFunction;
 use crate::scalars::ConditionalFunction;
@@ -31,7 +33,6 @@ use crate::scalars::MathsFunction;
 use crate::scalars::NullableFunction;
 use crate::scalars::OtherFunction;
 use crate::scalars::StringFunction;
-use crate::scalars::ToCastFunction;
 use crate::scalars::TupleClassFunction;
 use crate::scalars::UUIDFunction;
 use crate::scalars::UdfFunction;
@@ -127,8 +128,8 @@ impl FunctionDescription {
 }
 
 pub struct ArithmeticDescription {
-    features: FunctionFeatures,
-    arithmetic_creator: ArithmeticCreator,
+    pub features: FunctionFeatures,
+    pub arithmetic_creator: ArithmeticCreator,
 }
 
 impl ArithmeticDescription {
@@ -152,6 +153,7 @@ pub struct FunctionFactory {
 
 static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     let mut function_factory = FunctionFactory::create();
+
     ArithmeticFunction::register(&mut function_factory);
     ComparisonFunction::register(&mut function_factory);
     LogicFunction::register(&mut function_factory);
@@ -159,7 +161,6 @@ static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     StringFunction::register(&mut function_factory);
     UdfFunction::register(&mut function_factory);
     HashesFunction::register(&mut function_factory);
-    ToCastFunction::register(&mut function_factory);
     ConditionalFunction::register(&mut function_factory);
     DateFunction::register(&mut function_factory);
     OtherFunction::register(&mut function_factory);
@@ -199,6 +200,13 @@ impl FunctionFactory {
     ) -> Result<Box<dyn Function>> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
+
+        let factory2 = Function2Factory::instance();
+        if let Ok(v) = factory2.get(origin_name, &[]) {
+            let adapter = Function2Adapter::create(v);
+            return Ok(adapter);
+        }
+
         match self.case_insensitive_desc.get(&lowercase_name) {
             // TODO(Winter): we should write similar function names into error message if function name is not found.
             None => match self.case_insensitive_arithmetic_desc.get(&lowercase_name) {
@@ -215,6 +223,12 @@ impl FunctionFactory {
     pub fn get_features(&self, name: impl AsRef<str>) -> Result<FunctionFeatures> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
+
+        let factory2 = Function2Factory::instance();
+        if let Ok(v) = factory2.get_features(origin_name) {
+            return Ok(v);
+        }
+
         match self.case_insensitive_desc.get(&lowercase_name) {
             // TODO(Winter): we should write similar function names into error message if function name is not found.
             None => match self.case_insensitive_arithmetic_desc.get(&lowercase_name) {

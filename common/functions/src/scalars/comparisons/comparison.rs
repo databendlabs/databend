@@ -16,6 +16,7 @@ use std::fmt;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::DataField as NewDataField;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionFactory;
@@ -29,6 +30,7 @@ use crate::scalars::ComparisonLtFunction;
 use crate::scalars::ComparisonNotEqFunction;
 use crate::scalars::ComparisonNotLikeFunction;
 use crate::scalars::Function;
+use crate::scalars::Function2Adapter;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
@@ -91,10 +93,10 @@ fn cast_column(
     data_type: DataType,
     input_rows: usize,
 ) -> Result<DataColumnWithField> {
-    let new_col = CastFunction::create("cast".to_string(), data_type.clone())
-        .unwrap()
-        .eval(&[column.clone()], input_rows)?;
-
-    let new_field = DataField::new(column.field().name(), data_type, false);
-    Ok(DataColumnWithField::new(new_col, new_field))
+    let new_field = DataField::new("_dummy", data_type, false);
+    let result = new_field.clone();
+    let nf: NewDataField = new_field.into();
+    let func2 = CastFunction::create("cast", nf.data_type().name()).unwrap();
+    let new_col = Function2Adapter::create(func2).eval(&[column.clone()], input_rows)?;
+    Ok(DataColumnWithField::new(new_col, result))
 }

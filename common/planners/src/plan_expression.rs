@@ -122,6 +122,8 @@ pub enum Expression {
         expr: Box<Expression>,
         /// The `DataType` the expression will yield
         data_type: DataType,
+        /// default false, if it's try_cast, is_null is true
+        is_nullable: bool,
     },
 
     /// Scalar sub query. such as `SELECT (SELECT 1)`
@@ -214,7 +216,9 @@ impl Expression {
                 }
             }
             Expression::Sort { expr, .. } => expr.column_name(),
-            Expression::Cast { expr, data_type } => {
+            Expression::Cast {
+                expr, data_type, ..
+            } => {
                 format!("cast({} as {:?})", expr.column_name(), data_type)
             }
             Expression::Subquery { name, .. } => name.clone(),
@@ -421,7 +425,9 @@ impl fmt::Debug for Expression {
 
             Expression::Sort { expr, .. } => write!(f, "{:?}", expr),
             Expression::Wildcard => write!(f, "*"),
-            Expression::Cast { expr, data_type } => {
+            Expression::Cast {
+                expr, data_type, ..
+            } => {
                 write!(f, "cast({:?} as {:?})", expr, data_type)
             }
         }

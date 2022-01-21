@@ -60,7 +60,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "date32",
-            data_type: Date32Type32::arc(),
+            data_type: Date32Type::arc(),
             value: DataValue::Int64(18869),
             column: Series::from_data(vec![18869i32, 18948i32, 1]),
             val_str: "2021-08-30",

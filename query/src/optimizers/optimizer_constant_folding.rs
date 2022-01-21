@@ -285,11 +285,13 @@ impl PlanRewriter for ConstantFoldingImpl {
                 typ: &DataType,
                 expr: Expression,
                 origin_expr: &Expression,
+                is_nullable: bool,
             ) -> Result<Expression> {
                 if matches!(&expr, Expression::Literal { .. }) {
                     let optimize_expr = Expression::Cast {
                         expr: Box::new(expr),
                         data_type: typ.clone(),
+                        is_nullable,
                     };
 
                     return ConstantFoldingImpl::execute_expression(
@@ -301,6 +303,7 @@ impl PlanRewriter for ConstantFoldingImpl {
                 Ok(Expression::Cast {
                     expr: Box::new(expr),
                     data_type: typ.clone(),
+                    is_nullable,
                 })
             }
         }

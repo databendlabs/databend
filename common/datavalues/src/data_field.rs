@@ -149,6 +149,7 @@ impl DataField {
             DataType::Date16 => Some("Date16"),
             DataType::Date32 => Some("Date32"),
             DataType::DateTime32(_) => Some("DateTime32"),
+            DataType::DateTime64(_, _) => Some("DateTime64"),
             _ => None,
         };
 
@@ -187,6 +188,7 @@ impl From<&ArrowField> for DataField {
                     "Date16" => dt = DataType::Date16,
                     "Date32" => dt = DataType::Date32,
                     "DateTime32" => dt = DataType::DateTime32(metatada.cloned()),
+                    "DateTime64" => dt = DataType::DateTime64(3, metatada.cloned()),
                     _ => {}
                 }
             }

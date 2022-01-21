@@ -47,6 +47,14 @@ impl Series {
         });
         arr
     }
+
+    pub fn remove_nullable(column: &ColumnRef) -> ColumnRef {
+        if let Ok(column) = Self::check_get::<NullableColumn>(column) {
+            column.inner().clone()
+        } else {
+            column.clone()
+        }
+    }
 }
 
 pub trait NewColumn<N> {

@@ -50,6 +50,14 @@ impl DataType for DateTimeType {
         self
     }
 
+    fn name(&self) -> &str {
+        "DateTime"
+    }
+
+    fn aliases(&self) -> &[&str] {
+        &["DateTime32"]
+    }
+
     fn default_value(&self) -> DataValue {
         DataValue::UInt64(0)
     }

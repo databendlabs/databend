@@ -60,6 +60,7 @@ impl AddOnStream {
                         Box::new(Expression::Cast {
                             expr: Box::new(expression),
                             data_type: f.data_type().clone(),
+                            is_nullable: f.is_nullable(),
                         }),
                     );
 

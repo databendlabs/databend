@@ -33,3 +33,27 @@ impl From<DataField> for OldDataField {
         From::from(&arrow_field)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use common_datavalues::prelude::DataField as OldDataField;
+    use common_datavalues::prelude::DataType as OldDataType;
+
+    use crate::DataField;
+
+    #[test]
+    fn test_convert_field() {
+        let old_f = OldDataField::new("name", OldDataType::Date32, false);
+        let new_f = DataField::from(old_f);
+        assert!(new_f.data_type().name() == "Date32");
+        let old_f = OldDataField::from(new_f);
+        assert!(old_f.data_type() == &OldDataType::Date32);
+
+        let old_f = OldDataField::new("name", OldDataType::Date16, false);
+        let new_f = DataField::from(old_f);
+        assert!(new_f.data_type().name() == "Date");
+
+        let old_f = OldDataField::from(new_f);
+        assert!(old_f.data_type() == &OldDataType::Date16);
+    }
+}

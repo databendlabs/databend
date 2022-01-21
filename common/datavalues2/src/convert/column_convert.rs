@@ -16,16 +16,19 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datavalues::prelude::DataColumn as OldDataColumn;
+use common_datavalues::prelude::DataColumnWithField as OldDataColumnWithField;
 
 use crate::ColumnRef;
+use crate::ColumnWithField;
 use crate::ConstColumn;
+use crate::DataField;
 use crate::IntoColumn;
 use crate::NullableColumn;
 
-pub fn convert2_new_column(column: &OldDataColumn, nullable: bool) -> ColumnRef {
+pub fn convert2_new_column(column: &OldDataColumnWithField) -> ColumnWithField {
     let result = convert2_new_column_nonull(column);
-    if nullable {
-        let arrow_c = column.get_array_ref().unwrap();
+    if column.field().is_nullable() && result.data_type().can_inside_nullable() {
+        let arrow_c = column.column().get_array_ref().unwrap();
         let bitmap = arrow_c.validity().cloned();
 
         let bitmap = if let Some(b) = bitmap {
@@ -36,32 +39,41 @@ pub fn convert2_new_column(column: &OldDataColumn, nullable: bool) -> ColumnRef 
             b.into()
         };
 
-        let column = NullableColumn::new(result, bitmap);
-        return Arc::new(column);
+        let column = NullableColumn::new(result.column().clone(), bitmap);
+        return ColumnWithField::new(Arc::new(column), result.field().clone());
     }
 
     result
 }
 
-pub fn convert2_old_column(column: &ColumnRef) -> OldDataColumn {
-    let arrow_c = column.as_arrow_array();
+fn convert2_new_column_nonull(column: &OldDataColumnWithField) -> ColumnWithField {
+    let field = column.field().clone();
+    let field: DataField = field.into();
 
-    OldDataColumn::from(arrow_c)
-}
-
-fn convert2_new_column_nonull(column: &OldDataColumn) -> ColumnRef {
-    match column {
+    match column.column() {
         OldDataColumn::Array(array) => {
             let arrow_column = array.get_array_ref();
-
-            arrow_column.into_column()
+            ColumnWithField::new(arrow_column.into_column(), field)
         }
         OldDataColumn::Constant(value, size) => {
             let s = value.to_series_with_size(1).unwrap();
             let arrow_column = s.get_array_ref();
             let col = arrow_column.into_column();
 
-            Arc::new(ConstColumn::new(col, *size))
+            ColumnWithField::new(Arc::new(ConstColumn::new(col, *size)), field)
         }
     }
+}
+
+pub fn convert2_old_column(column: &ColumnRef) -> OldDataColumn {
+    let arrow_c = column.as_arrow_array();
+    OldDataColumn::from(arrow_c)
+}
+
+pub fn convert2_old_column_with_fiekd(column: &ColumnWithField) -> OldDataColumnWithField {
+    let new_f = column.field().clone();
+    let old_field = new_f.into();
+
+    let arrow_c = column.column().as_arrow_array();
+    OldDataColumnWithField::new(OldDataColumn::from(arrow_c), old_field)
 }

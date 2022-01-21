@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[macro_export]
 macro_rules! with_match_physical_primitive_type {(
     $key_type:expr, | $_:tt $T:ident | $($body:tt)*
 ) => ({
@@ -28,6 +29,31 @@ macro_rules! with_match_physical_primitive_type {(
         UInt64 => __with_ty__! { u64 },
         Float32 => __with_ty__! { f32 },
         Float64 => __with_ty__! { f64 },
+    }
+})}
+
+#[macro_export]
+macro_rules! with_match_scalar_types_error {(
+    $key_type:expr, | $_:tt $T:ident | $($body:tt)*
+) => ({
+    macro_rules! __with_ty__ {( $_ $T:ident ) => ( $($body)* )}
+    use common_datavalues2::PhysicalTypeID::*;
+    use common_datavalues2::PrimitiveTypeID;
+    use common_exception::ErrorCode;
+    match $key_type {
+       	Primitive(PrimitiveTypeID::Int8) => __with_ty__! { i8 },
+        Primitive(PrimitiveTypeID::Int16) => __with_ty__! { i16 },
+        Primitive(PrimitiveTypeID::Int32) => __with_ty__! { i32 },
+        Primitive(PrimitiveTypeID::Int64) => __with_ty__! { i64 },
+        Primitive(PrimitiveTypeID::UInt8) => __with_ty__! { u8 },
+        Primitive(PrimitiveTypeID::UInt16) => __with_ty__! { u16 },
+        Primitive(PrimitiveTypeID::UInt32) => __with_ty__! { u32 },
+        Primitive(PrimitiveTypeID::UInt64) => __with_ty__! { u64 },
+        Primitive(PrimitiveTypeID::Float32) => __with_ty__! { f32 },
+        Primitive(PrimitiveTypeID::Float64) => __with_ty__! { f64 },
+        v => return Err(ErrorCode::BadDataValueType(
+            format!("Ops is not support on datatype: {:?}",v)
+        ))
     }
 })}
 

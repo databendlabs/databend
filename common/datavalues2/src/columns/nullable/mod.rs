@@ -28,6 +28,20 @@ pub struct NullableColumn {
 
 impl NullableColumn {
     pub fn new(column: ColumnRef, validity: Bitmap) -> Self {
+        debug_assert!(column.data_type().can_inside_nullable());
+        Self { column, validity }
+    }
+
+    pub fn new_from_opt(column: ColumnRef, validity: Option<Bitmap>) -> Self {
+        let validity = match validity {
+            Some(v) => v,
+            None => {
+                let mut bitmap = MutableBitmap::with_capacity(column.len());
+                bitmap.extend_constant(column.len(), true);
+                bitmap.into()
+            }
+        };
+
         Self { column, validity }
     }
 

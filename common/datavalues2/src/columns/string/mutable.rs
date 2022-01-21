@@ -47,7 +47,7 @@ impl Default for MutableStringColumn {
     }
 }
 
-impl MutableColumn<&[u8], StringColumn> for MutableStringColumn {
+impl<'a> MutableColumn<&'a [u8], StringColumn> for MutableStringColumn {
     fn data_type(&self) -> DataTypePtr {
         StringType::arc()
     }
@@ -91,7 +91,7 @@ impl MutableColumn<&[u8], StringColumn> for MutableStringColumn {
         self.offsets.len() - 1
     }
 
-    fn append(&mut self, item: &[u8]) {
+    fn append(&mut self, item: &'a [u8]) {
         self.append_value(item);
     }
 }

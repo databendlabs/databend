@@ -55,6 +55,14 @@ impl DataType for StructType {
         self
     }
 
+    fn name(&self) -> &str {
+        "Struct"
+    }
+
+    fn can_inside_nullable(&self) -> bool {
+        false
+    }
+
     fn default_value(&self) -> DataValue {
         let c: Vec<DataValue> = self.types.iter().map(|t| t.default_value()).collect();
         DataValue::Struct(c)
