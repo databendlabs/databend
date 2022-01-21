@@ -45,13 +45,20 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
+  test_unit_ubuntu:
+    runs-on: [datebend-unit-test, linux, x64]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/test_unit_ubuntu
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test_unit:
     runs-on: ${{ matrix.config.os }}
     needs: check
     strategy:
       matrix:
         config:
-          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
           - { os: macos-11, target: x86_64-apple-darwin }
     steps:
       - uses: actions/checkout@v2
