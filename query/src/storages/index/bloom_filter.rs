@@ -12,80 +12,257 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use bincode;
+use common_datablocks::DataBlock;
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::seahash::SeaHasher;
 use common_datavalues::DFHasher;
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Expression;
 use common_tracing::tracing;
 
 use crate::storages::index::IndexSchemaVersion;
 
-/*
-pub struct BloomFilterBuilder {}
+/// BloomFilterExprEvalResult represents the evaluation result of an expression by bloom filter.
+///
+/// For example, expression of 'age = 12' should return false is the bloom filter are sure
+/// of the nonexistent of value '12' in column 'age'. Otherwise should return 'Unknown'.
+///
+/// If the column is not applicable for bloom filter, like DataType::struct, NotApplicable is used.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BloomFilterExprEvalResult {
+    False,
+    Unknown,
+    NotApplicable,
+}
 
-impl BloomFilterBuilder {
+/// BloomFilterIndex represents multiple  bloom filters (per column) in data block.
+///
+/// By default we create bloom filter per column for a parquet data file. For columns whose data_type
+/// are not applicable for a bloom filter, we skip the creation.
+/// That is to say, it is legal to have a BloomFilterBlock with zero columns.
+///
+/// For example, for the data block as follows:
+///```
+///         +---name--+--age--+
+///         | "Alice" |  20   |
+///         | "Bob"   |  30   |
+///         +---------+-------+
+/// ```
+/// We will create bloom filter files
+///```
+///         +---Bloom(name)--+--Bloom(age)--+
+///         |  123456789abcd |  ac2345bcd   |
+///         +----------------+--------------+
+/// ```
+pub struct BloomFilterIndexer {
+    pub inner: DataBlock,
+}
 
+const BLOOM_FILTER_MAX_NUM_BITS: usize = 2048;
+const BLOOM_FILTER_DEFAULT_FALSE_POSITIVE_RATE: f64 = 0.01;
+
+impl BloomFilterIndexer {
     /// For every applicable column, we will create a bloom filter.
-    /// The bloom filter will be stored with field name 'BloomFilter(column_name)'
-    #[inline(always)]
+    /// The bloom filter will be stored with field name 'Bloom(column_name)'
     pub fn to_bloom_column_name(column_name: &str) -> String {
-        "Bloom(" + column_name + ")".to_owned()
+        format!("Bloom({})", column_name)
     }
 
-    /// Create bloom filters from input data blocks.
-    /// Return the bloom filters in data block.
+    #[inline(always)]
+    fn create_seeds() -> [u64; 4] {
+        let seed0: u64 = rand::random();
+        let seed1: u64 = rand::random();
+        let seed2: u64 = rand::random();
+        let seed3: u64 = rand::random();
+        [seed0, seed1, seed2, seed3]
+    }
+
+    /// Create a bloom filter block from input data blocks.
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
-    pub fn create_bloom_filters(blocks: &[DataBlock]) -> Result<DataBlock> {
+    pub fn from_data(blocks: &[DataBlock]) -> Result<Self> {
         if blocks.is_empty() {
-            return Err(ErrorCode::BadArguments(
-                "blocks is empty",
-            ));
+            return Err(ErrorCode::BadArguments("data blocks is empty"));
         }
 
-        let num_rows = 0;
-        blocks.iter().map(|block| {
-            num_rows += block.num_rows();
-        });
+        let total_num_rows = blocks.iter().map(|block| block.num_rows() as u64).sum();
 
-        let mut rng = rand::thread_rng();
-        let max_num_bits = 1024; // maximum 1024 bits/128 bytes
+        let mut bloom_columns = vec![];
+        let mut bloom_fields = vec![];
 
         let fields = blocks[0].schema().fields();
-        for i in 0..fields.len() {
-            let field_name = fields[i].name();
-            let data_type = fields[i].data_type();
+        for (i, field) in fields.iter().enumerate() {
+            if BloomFilter::is_supported_type(field.data_type()) {
+                // create field
+                let bloom_column_name = Self::to_bloom_column_name(field.name());
+                let bloom_field = DataField::new(&bloom_column_name, DataType::String, false);
+                bloom_fields.push(bloom_field);
 
-            if BloomFilter::is_supported_type(data_type) {
-                let seed: u64= rng.gen();
-                let bloom = BloomFilter::with_rate_and_max_bits(num_rows, 0.01, 1024, seed);
+                // create bloom filter per column
+                let seeds = Self::create_seeds();
+                let mut bloom_filter = BloomFilter::with_rate_and_max_bits(
+                    total_num_rows,
+                    BLOOM_FILTER_DEFAULT_FALSE_POSITIVE_RATE,
+                    BLOOM_FILTER_MAX_NUM_BITS,
+                    seeds,
+                );
+
+                // ingest the same column data from all blocks
+                for block in blocks.iter() {
+                    let col = block.column(i);
+                    bloom_filter.add(col)?;
+                }
+
+                // create bloom filter column
+                let serialized_bytes = bloom_filter.to_vec()?;
+                let bloom_column =
+                    DataColumn::Constant(DataValue::String(Some(serialized_bytes)), 1);
+                bloom_columns.push(bloom_column);
             }
         }
 
+        let schema = Arc::new(DataSchema::new(bloom_fields));
+        let block = DataBlock::create(schema, bloom_columns);
+        Ok(Self { inner: block })
+    }
 
+    fn find(&self, column_name: &str, target: DataValue) -> Result<BloomFilterExprEvalResult> {
+        let bloom_column = Self::to_bloom_column_name(column_name);
+        if !self.inner.schema().has_field(&bloom_column)
+            || !BloomFilter::is_supported_value(&target)
+        {
+            // The column doesn't have bloom filter bitmap
+            return Ok(BloomFilterExprEvalResult::NotApplicable);
+        }
+
+        let val = self.inner.first(&bloom_column)?;
+        let bloom_bytes = val.as_string()?;
+        let bloom_filter = BloomFilter::from_vec(bloom_bytes.as_ref())?;
+        if bloom_filter.find(target)? {
+            Ok(BloomFilterExprEvalResult::Unknown)
+        } else {
+            Ok(BloomFilterExprEvalResult::False)
+        }
+    }
+
+    /// Returns false when the expression must be false, otherwise true.
+    /// The 'true' doesn't really mean the expression is true, but 'maybe true'.
+    /// That is to say, you still need the load all data and run the execution.
+    #[allow(dead_code)]
+    pub fn maybe_true(&self, expr: &Expression) -> Result<bool> {
+        Ok(self.eval(expr)? != BloomFilterExprEvalResult::False)
+    }
+
+    /// Apply the predicate expression, return the result.
+    /// If we are sure of skipping the scan, return false, e.g. the expression must be false.
+    /// This happens when the data doesn't show up in bloom filter.
+    ///
+    /// Otherwise return either Unknown or NotApplicable.
+    pub fn eval(&self, expr: &Expression) -> Result<BloomFilterExprEvalResult> {
+        //TODO: support multiple columns and other ops like 'in' ...
+        match expr {
+            Expression::BinaryExpression { left, op, right } => match op.to_lowercase().as_str() {
+                "=" => self.eval_equivalent_expression(left, right),
+                "and" => self.eval_logical_and(left, right),
+                "or" => self.eval_logical_or(left, right),
+                _ => Ok(BloomFilterExprEvalResult::NotApplicable),
+            },
+            _ => Ok(BloomFilterExprEvalResult::NotApplicable),
+        }
+    }
+
+    // Evaluate the equivalent expression like "name='Alice'"
+    fn eval_equivalent_expression(
+        &self,
+        left: &Expression,
+        right: &Expression,
+    ) -> Result<BloomFilterExprEvalResult> {
+        // For now only support single column like "name = 'Alice'"
+        match (left, right) {
+            // match the expression of 'column_name = literal constant'
+            (Expression::Column(column), Expression::Literal { value, .. })
+            | (Expression::Literal { value, .. }, Expression::Column(column)) => {
+                self.find(column, value.clone())
+            }
+            _ => Ok(BloomFilterExprEvalResult::NotApplicable),
+        }
+    }
+
+    // Evaluate the logical and expression
+    fn eval_logical_and(
+        &self,
+        left: &Expression,
+        right: &Expression,
+    ) -> Result<BloomFilterExprEvalResult> {
+        let left_result = self.eval(left)?;
+        if left_result == BloomFilterExprEvalResult::False {
+            return Ok(BloomFilterExprEvalResult::False);
+        }
+
+        let right_result = self.eval(right)?;
+        if right_result == BloomFilterExprEvalResult::False {
+            return Ok(BloomFilterExprEvalResult::False);
+        }
+
+        if left_result == BloomFilterExprEvalResult::NotApplicable
+            || right_result == BloomFilterExprEvalResult::NotApplicable
+        {
+            Ok(BloomFilterExprEvalResult::NotApplicable)
+        } else {
+            Ok(BloomFilterExprEvalResult::Unknown)
+        }
+    }
+
+    // Evaluate the logical or expression
+    fn eval_logical_or(
+        &self,
+        left: &Expression,
+        right: &Expression,
+    ) -> Result<BloomFilterExprEvalResult> {
+        let left_result = self.eval(left)?;
+        let right_result = self.eval(right)?;
+        match (&left_result, &right_result) {
+            (&BloomFilterExprEvalResult::False, &BloomFilterExprEvalResult::False) => {
+                Ok(BloomFilterExprEvalResult::False)
+            }
+            (&BloomFilterExprEvalResult::False, _) => Ok(right_result),
+            (_, &BloomFilterExprEvalResult::False) => Ok(left_result),
+            (&BloomFilterExprEvalResult::Unknown, &BloomFilterExprEvalResult::Unknown) => {
+                Ok(BloomFilterExprEvalResult::Unknown)
+            }
+            _ => Ok(BloomFilterExprEvalResult::NotApplicable),
+        }
     }
 }
-*/
 
-/// Bloom filter for data skipping.
+/// A bloom filter implementation for data column and values.
+///
 /// Most ideas/implementations are ported from Clickhouse.
 /// https://github.com/ClickHouse/ClickHouse/blob/1bf375e2b761db5b99b0f403b90c412a530f4d5c/src/Interpreters/BloomFilter.cpp
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct BloomFilter {
-    // container for bitmap
+    // Container for bitmap
     container: Vec<u64>,
 
-    // number of bits of the bitmap
+    // The number of bits of the bitmap
     num_bits: usize,
 
+    // The number of hashes for bloom filter. We use double hashing and mix the result
+    // to achieve k hashes. The value doesn't really mean the number of hashing we actually compute.
+    // For more details, see this paper: http://www.eecs.harvard.edu/~michaelm/postscripts/rsa2008.pdf
     num_hashes: usize,
 
     version: IndexSchemaVersion,
 
+    // The seeding for hash function, for now we use Seahash lib, which need 4 seeds.
     seeds: [u64; 4],
 }
 
@@ -291,7 +468,7 @@ impl BloomFilter {
     ///     let not_exist = BloomFilter::is_supported_value(data_value) && !bloom.find(data_value)?;
     ///
     /// ```
-    pub fn find(&mut self, val: DataValue) -> Result<bool> {
+    pub fn find(&self, val: DataValue) -> Result<bool> {
         if !Self::is_supported_value(&val) {
             return Err(ErrorCode::BadArguments(format!(
                 "Unsupported data value: {} ",

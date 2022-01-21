@@ -58,3 +58,7 @@ make_literal!(u64, UInt64);
 pub fn lit<T: Literal>(n: T) -> Expression {
     n.to_literal()
 }
+
+pub fn lit_null() -> Expression {
+    Expression::create_literal(DataValue::Null)
+}
