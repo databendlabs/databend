@@ -22,7 +22,7 @@ use common_datavalues::chrono::Timelike;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
-use common_datavalues2::DateType;
+use common_datavalues2::Date16Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -314,7 +314,7 @@ impl NumberResultFunction<u8> for ToHour {
 
     // ToHour is NOT a monotonic function in general, unless the time range is within the same day.
     fn factor_function() -> Result<Box<dyn Function>> {
-        let func2 = CastFunction::create("toDate", DateType::arc().name()).unwrap();
+        let func2 = CastFunction::create("toDate", Date16Type::arc().name()).unwrap();
         let adapter = Function2Adapter::create(func2);
 
         Ok(adapter)

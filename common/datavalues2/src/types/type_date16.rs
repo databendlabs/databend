@@ -23,16 +23,16 @@ use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DateType {}
+pub struct Date16Type {}
 
-impl DateType {
+impl Date16Type {
     pub fn arc() -> DataTypePtr {
-        Arc::new(DateType {})
+        Arc::new(Date16Type {})
     }
 }
 
 #[typetag::serde]
-impl DataType for DateType {
+impl DataType for Date16Type {
     fn data_type_id(&self) -> TypeID {
         TypeID::Date16
     }
@@ -43,11 +43,11 @@ impl DataType for DateType {
     }
 
     fn name(&self) -> &str {
-        "Date"
+        "Date16"
     }
 
     fn aliases(&self) -> &[&str] {
-        &["Date16"]
+        &["Date"]
     }
 
     fn default_value(&self) -> DataValue {
@@ -90,7 +90,7 @@ impl DataType for DateType {
     }
 }
 
-impl std::fmt::Debug for DateType {
+impl std::fmt::Debug for Date16Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }

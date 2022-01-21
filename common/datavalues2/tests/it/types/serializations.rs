@@ -48,7 +48,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "datetime32",
-            data_type: DateTimeType::arc(None),
+            data_type: DateTime32Type::arc(None),
             value: DataValue::UInt64(1630320462),
             column: Series::from_data(vec![1630320462u32, 1637117572u32, 1]),
             val_str: "2021-08-30 10:47:42",
@@ -144,7 +144,7 @@ fn test_serializers() -> Result<()> {
                 Float64Type::arc(),
                 StringType::arc(),
                 BooleanType::arc(),
-                DateType::arc(),
+                Date16Type::arc(),
             ],
         );
         let serializer = data_type.create_serializer();

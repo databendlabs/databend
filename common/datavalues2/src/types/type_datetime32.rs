@@ -26,21 +26,21 @@ use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DateTimeType {
+pub struct DateTime32Type {
     tz: Option<String>,
 }
 
-impl DateTimeType {
+impl DateTime32Type {
     pub fn create(tz: Option<String>) -> Self {
-        DateTimeType { tz }
+        DateTime32Type { tz }
     }
     pub fn arc(tz: Option<String>) -> DataTypePtr {
-        Arc::new(DateTimeType { tz })
+        Arc::new(DateTime32Type { tz })
     }
 }
 
 #[typetag::serde]
-impl DataType for DateTimeType {
+impl DataType for DateTime32Type {
     fn data_type_id(&self) -> TypeID {
         TypeID::DateTime32
     }
@@ -51,11 +51,11 @@ impl DataType for DateTimeType {
     }
 
     fn name(&self) -> &str {
-        "DateTime"
+        "DateTime32"
     }
 
     fn aliases(&self) -> &[&str] {
-        &["DateTime32"]
+        &["DateTime"]
     }
 
     fn default_value(&self) -> DataValue {
@@ -105,7 +105,7 @@ impl DataType for DateTimeType {
     }
 }
 
-impl std::fmt::Debug for DateTimeType {
+impl std::fmt::Debug for DateTime32Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }

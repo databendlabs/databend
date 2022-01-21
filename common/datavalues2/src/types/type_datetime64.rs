@@ -120,6 +120,6 @@ impl DataType for DateTime64Type {
 
 impl std::fmt::Debug for DateTime64Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
+        write!(f, "{}({})", self.name(), self.precision())
     }
 }
