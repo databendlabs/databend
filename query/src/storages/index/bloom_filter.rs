@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use bincode;
+use bit_vec::BitVec;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::seahash::SeaHasher;
@@ -66,8 +67,8 @@ pub struct BloomFilterIndexer {
     pub inner: DataBlock,
 }
 
-const BLOOM_FILTER_MAX_NUM_BITS: usize = 2048;
-const BLOOM_FILTER_DEFAULT_FALSE_POSITIVE_RATE: f64 = 0.01;
+const BLOOM_FILTER_MAX_NUM_BITS: usize = 20480; // 2.5KB, maybe too big?
+const BLOOM_FILTER_DEFAULT_FALSE_POSITIVE_RATE: f64 = 0.05;
 
 impl BloomFilterIndexer {
     /// For every applicable column, we will create a bloom filter.
@@ -250,10 +251,7 @@ impl BloomFilterIndexer {
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct BloomFilter {
     // Container for bitmap
-    container: Vec<u64>,
-
-    // The number of bits of the bitmap
-    num_bits: usize,
+    container: BitVec,
 
     // The number of hashes for bloom filter. We use double hashing and mix the result
     // to achieve k hashes. The value doesn't really mean the number of hashing we actually compute.
@@ -262,7 +260,7 @@ pub struct BloomFilter {
 
     version: IndexSchemaVersion,
 
-    // The seeding for hash function, for now we use Seahash lib, which need 4 seeds.
+    // The seeding for hash function. For now we use Seahash lib, that needs 4 seeds.
     seeds: [u64; 4],
 }
 
@@ -293,14 +291,10 @@ impl BloomFilter {
 
     /// Create a bloom filter instance with specified bitmap length and number of hashes
     pub fn with_size(num_bits: usize, num_hashes: usize, seeds: [u64; 4]) -> Self {
-        // calculate the number of u64 we need
-        let num_u64 = (num_bits + 63) / 64;
-
         Self {
-            container: vec![0; num_u64],
+            container: BitVec::from_elem(num_bits, false),
             seeds,
             num_hashes,
-            num_bits,
             version: IndexSchemaVersion::V1,
         }
     }
@@ -337,7 +331,7 @@ impl BloomFilter {
 
     /// Returns the number of bits of the bloom filter.
     pub fn num_bits(&self) -> usize {
-        self.num_bits
+        self.container.len()
     }
 
     /// Returns the number of hashes of the bloom filter.
@@ -401,8 +395,8 @@ impl BloomFilter {
         for i in 0..self.num_hashes {
             let index = std::num::Wrapping(i as u64);
             let res = (h1 + index * h2 + index * index).0;
-            let bit_pos = (res % self.num_bits as u64) as usize;
-            self.container[bit_pos / 64] |= 1u64 << (bit_pos % 64);
+            let bit_pos = (res % self.container.len() as u64) as usize;
+            self.container.set(bit_pos, true);
         }
     }
 
@@ -492,11 +486,11 @@ impl BloomFilter {
         for i in 0..self.num_hashes {
             let index = std::num::Wrapping(i as u64);
             let res = (h1 + index * h2 + index * index).0;
-            let bit_pos = (res % self.num_bits as u64) as usize;
-
+            let bit_pos = (res % self.container.len() as u64) as usize;
             // If any bit is not 1 in bloom filter, it means the data never ever showed up before.
-            let flag = self.container[bit_pos / 64] & (1 << (bit_pos % 64));
-            if flag == 0 {
+            // unwrap should be fine because 'bit_pos' was mod by container.len()
+            let is_bit_set = self.container.get(bit_pos).unwrap();
+            if !is_bit_set {
                 return Ok(false);
             }
         }
