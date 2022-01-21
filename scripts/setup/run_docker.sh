@@ -5,7 +5,6 @@ set -e
 DOCKER_OPTIONS+=(-u root:root)
 DOCKER_OPTIONS+=(-v /var/run/docker.sock:/var/run/docker.sock)
 DOCKER_OPTIONS+=(--cap-add SYS_PTRACE --cap-add NET_RAW --cap-add NET_ADMIN)
-DOCKER_OPTIONS+=("-it")
 SOURCE_DIR="${PWD}"
 HUB="${HUB:-datafuselabs}"
 TAG="${TAG:-latest}"
