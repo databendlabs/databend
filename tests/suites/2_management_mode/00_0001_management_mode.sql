@@ -30,7 +30,6 @@ DROP STAGE test_stage;
 -- udf check.
 CREATE FUNCTION xy AS (x, y) -> (x + y) / 2;
 ALTER FUNCTION xy AS (x, y) -> (x + y) / 3;
-SHOW FUNCTION xy;
 DROP FUNCTION xy;
 
 
@@ -38,6 +37,3 @@ DROP FUNCTION xy;
 SUDO USE TENANT 'tenant2';
 SHOW DATABASES;
 SHOW TABLES;
-
--- check
-SHOW FUNCTION xy; -- {ErrorCode 2602}
