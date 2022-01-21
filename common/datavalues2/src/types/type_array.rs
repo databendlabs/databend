@@ -80,6 +80,11 @@ impl DataType for ArrayType {
             if let DataValue::Array(value) = v {
                 offsets.push(offsets.last().unwrap() + value.len() as i64);
                 values.extend_from_slice(value);
+            } else {
+                return Result::Err(ErrorCode::BadDataValueType(format!(
+                    "Unexpected type:{:?} to generate list column",
+                    v.value_type()
+                )));
             }
         }
 

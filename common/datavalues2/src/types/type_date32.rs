@@ -33,7 +33,7 @@ impl Date32Type32 {
 #[typetag::serde]
 impl DataType for Date32Type32 {
     fn data_type_id(&self) -> TypeID {
-        TypeID::Int32
+        TypeID::Date32
     }
 
     #[inline]
@@ -68,6 +68,7 @@ impl DataType for Date32Type32 {
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
         Box::new(DateSerializer::<i32>::default())
     }
+
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
         Box::new(DateDeserializer::<i32> {
             builder: MutablePrimitiveColumn::<i32>::with_capacity(capacity),
