@@ -219,9 +219,6 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
     let tenant = "tenant1";
 
     {
-        let span = tracing::span!(tracing::Level::DEBUG, "test_meta_node_add_database");
-        let _ent = span.enter();
-
         let (_nlog, all_tc) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
         let all = all_tc.iter().map(|tc| tc.meta_node()).collect::<Vec<_>>();
 
@@ -725,11 +722,11 @@ async fn start_meta_node_cluster(
     assert!(voters.contains(&0));
     assert!(!non_voters.contains(&0));
 
-    let mut res = vec![];
+    let mut test_contexts = vec![];
 
     let (_id, tc0) = start_meta_node_leader().await?;
     let leader = tc0.meta_node();
-    res.push(tc0);
+    test_contexts.push(tc0);
 
     // membership log, blank log and add node
     let mut log_index = 2;
@@ -744,14 +741,13 @@ async fn start_meta_node_cluster(
 
         // Adding a node
         log_index += 1;
-        // wait_for_log(&tc.meta_nodes[0], log_index).await?;
         tc.meta_node()
             .raft
             .wait(timeout())
             .log(Some(log_index), format!("add :{}", id))
             .await?;
 
-        res.push(tc);
+        test_contexts.push(tc);
     }
 
     for id in non_voters.iter() {
@@ -767,7 +763,7 @@ async fn start_meta_node_cluster(
             .await?;
         // wait_for_log(&tc.meta_nodes[0], log_index).await?;
 
-        res.push(tc);
+        test_contexts.push(tc);
     }
 
     if voters != btreeset! {0} {
@@ -779,22 +775,26 @@ async fn start_meta_node_cluster(
     {
         wait_for_state(&leader, State::Leader).await?;
 
-        for item in res.iter().take(voters.len()).skip(1) {
+        for item in test_contexts.iter().take(voters.len()).skip(1) {
             wait_for_state(&item.meta_node(), State::Follower).await?;
         }
-        for item in res.iter().skip(voters.len()).take(non_voters.len()) {
+        for item in test_contexts
+            .iter()
+            .skip(voters.len())
+            .take(non_voters.len())
+        {
             wait_for_state(&item.meta_node(), State::Learner).await?;
         }
     }
 
     tracing::info!("--- check node logs");
     {
-        for tc in &res {
+        for tc in &test_contexts {
             wait_for_log(&tc.meta_node(), log_index).await?;
         }
     }
 
-    Ok((log_index, res))
+    Ok((log_index, test_contexts))
 }
 
 async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
