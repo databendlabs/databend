@@ -21,7 +21,7 @@ runs:
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
       with:
-        sharedKey: unit-v1
+        sharedKey: unit-v2
 
     - name: Test
       uses: actions-rs/cargo@v1
