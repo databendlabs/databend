@@ -235,8 +235,6 @@ impl StateMachine {
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "debug", skip(self, entry), fields(log_id=%entry.log_id))]
     pub async fn apply(&self, entry: &Entry<LogEntry>) -> common_exception::Result<AppliedState> {
-        // TODO(xp): all update need to be done in a tx.
-
         tracing::debug!("apply: summary: {}", entry.summary());
         tracing::debug!("apply: payload: {:?}", entry.payload);
 
