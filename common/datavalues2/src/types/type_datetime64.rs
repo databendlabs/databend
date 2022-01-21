@@ -28,7 +28,7 @@ use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DateTime64Type {
     precision: usize,
     tz: Option<String>,
@@ -115,5 +115,11 @@ impl DataType for DateTime64Type {
             builder: MutablePrimitiveColumn::<u64>::with_capacity(capacity),
             tz: tz.parse::<Tz>().unwrap(),
         })
+    }
+}
+
+impl std::fmt::Debug for DateTime64Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}({})", self.name(), self.precision())
     }
 }

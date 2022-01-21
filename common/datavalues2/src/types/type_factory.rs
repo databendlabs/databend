@@ -45,9 +45,9 @@ static TYPE_FACTORY: Lazy<Arc<TypeFactory>> = Lazy::new(|| {
     type_factory.register(Float32Type::arc());
     type_factory.register(Float64Type::arc());
 
-    type_factory.register(DateType::arc());
+    type_factory.register(Date16Type::arc());
     type_factory.register(Date32Type::arc());
-    type_factory.register(DateTimeType::arc(None));
+    type_factory.register(DateTime32Type::arc(None));
     type_factory.register(DateTime64Type::arc(3, None));
 
     type_factory.add_array_wrapper();

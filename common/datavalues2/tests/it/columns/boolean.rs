@@ -42,12 +42,10 @@ fn test_boolean_column() {
 
     assert!(!data_column.null_at(1));
 
-    unsafe {
-        assert!(!data_column.get_unchecked(1).as_bool().unwrap());
-        assert!(data_column.get_unchecked(2).as_bool().unwrap());
-        assert!(!data_column.get_unchecked(3).as_bool().unwrap());
-        assert!(data_column.get_unchecked(4).as_bool().unwrap());
-    }
+    assert!(!data_column.get(1).as_bool().unwrap());
+    assert!(data_column.get(2).as_bool().unwrap());
+    assert!(!data_column.get(3).as_bool().unwrap());
+    assert!(data_column.get(4).as_bool().unwrap());
     let slice = data_column.slice(0, N / 2);
     assert!(slice.len() == N / 2);
 }

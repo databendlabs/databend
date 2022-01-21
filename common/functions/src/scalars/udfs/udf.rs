@@ -18,6 +18,7 @@ use crate::scalars::udfs::in_basic::InFunction;
 use crate::scalars::CrashMeFunction;
 use crate::scalars::CurrentUserFunction;
 use crate::scalars::DatabaseFunction;
+use crate::scalars::Function2Factory;
 use crate::scalars::SleepFunction;
 use crate::scalars::ToTypeNameFunction;
 use crate::scalars::UdfExampleFunction;
@@ -28,6 +29,12 @@ pub struct UdfFunction;
 
 impl UdfFunction {
     pub fn register(factory: &mut FunctionFactory) {
+        factory.register("exists", ExistsFunction::desc());
+        factory.register("in", InFunction::<false>::desc());
+        factory.register("not_in", InFunction::<true>::desc());
+    }
+
+    pub fn register_function2(factory: &mut Function2Factory) {
         factory.register("example", UdfExampleFunction::desc());
         factory.register("totypename", ToTypeNameFunction::desc());
         factory.register("database", DatabaseFunction::desc());
@@ -35,8 +42,5 @@ impl UdfFunction {
         factory.register("current_user", CurrentUserFunction::desc());
         factory.register("sleep", SleepFunction::desc());
         factory.register("crashme", CrashMeFunction::desc());
-        factory.register("exists", ExistsFunction::desc());
-        factory.register("in", InFunction::<false>::desc());
-        factory.register("not_in", InFunction::<true>::desc());
     }
 }

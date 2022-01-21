@@ -23,7 +23,7 @@ pub use crate::prelude::*;
 use crate::TypeDeserializer;
 use crate::TypeSerializer;
 
-#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct BooleanType {}
 
 impl BooleanType {
@@ -77,5 +77,11 @@ impl DataType for BooleanType {
         Box::new(BooleanDeserializer {
             builder: MutableBooleanColumn::with_capacity(capacity),
         })
+    }
+}
+
+impl std::fmt::Debug for BooleanType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }

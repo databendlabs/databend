@@ -88,6 +88,7 @@ impl Column for ConstColumn {
         })
     }
 
+    // just for resize
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
         debug_assert!(
             offsets.len() == self.len(),
@@ -101,7 +102,7 @@ impl Column for ConstColumn {
         self.column.replicate(&[self.length])
     }
 
-    unsafe fn get_unchecked(&self, _index: usize) -> DataValue {
-        self.column.get_unchecked(0)
+    fn get(&self, _index: usize) -> DataValue {
+        self.column.get(0)
     }
 }

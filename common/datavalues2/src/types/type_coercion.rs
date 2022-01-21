@@ -351,7 +351,7 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
         // one of is datetime
         // TODO datetime64
         if matches!(lhs_id, TypeID::DateTime32) || matches!(rhs_id, TypeID::DateTime32) {
-            return Ok(DateTimeType::arc(None));
+            return Ok(DateTime32Type::arc(None));
         }
         return Ok(Date32Type::arc());
     }

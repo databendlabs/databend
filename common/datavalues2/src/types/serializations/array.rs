@@ -53,7 +53,7 @@ impl TypeSerializer for ArraySerializer {
         let column: &ArrayColumn = Series::check_get(column)?;
         let mut result = Vec::with_capacity(column.len());
         for i in 0..column.len() {
-            let val = unsafe { column.get_unchecked(i) };
+            let val = column.get(i);
             let s = self.serialize_value(&val)?;
             result.push(s);
         }

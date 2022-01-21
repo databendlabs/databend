@@ -12,22 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions2;
+use crate::scalars::scalar_function2_test::ScalarFunction2Test;
 
 #[test]
 fn test_version_function() -> Result<()> {
-    let tests = vec![ScalarFunctionTest {
+    let tests = vec![ScalarFunction2Test {
         name: "version-function-passed",
-        nullable: false,
-        columns: vec![Series::new(["DatabendQuery v-dummy_version"]).into()],
-        expect: Series::new(["DatabendQuery v-dummy_version"]).into(),
+        columns: vec![Series::from_data(["DatabendQuery v-dummy_version"])],
+        expect: Series::from_data(["DatabendQuery v-dummy_version"]),
         error: "",
     }];
 
-    test_scalar_functions(VersionFunction::try_create("version")?, &tests)
+    test_scalar_functions2(VersionFunction::try_create("version")?, &tests)
 }
