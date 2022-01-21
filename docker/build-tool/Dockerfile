@@ -41,7 +41,8 @@ RUN curl https://sh.rustup.rs -sSf |\
     env CARGO_HOME=/opt/rust/cargo rustup install $RUST_VERSION && \
     env CARGO_HOME=/opt/rust/cargo rustup set profile minimal && \
     env CARGO_HOME=/opt/rust/cargo rustup component add rustfmt rust-src clippy miri --toolchain $RUST_VERSION && \
-    env CARGO_HOME=/opt/rust/cargo rustup default "$RUST_VERSION"
+    env CARGO_HOME=/opt/rust/cargo rustup default "$RUST_VERSION" && \
+    env CARGO_HOME=/opt/rust/cargo cargo install grcov
 
 
 RUN mkdir -p /home/rust/libs /home/rust/src /home/rust/.cargo && \

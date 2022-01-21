@@ -15,11 +15,12 @@ runs:
     - name: pull dev container on need
       shell: bash
       run: |
-        if [[ -z /tmp/dev_container/dev-container.tar ]]; then
-          echo "dev container cache not found"
-        else
+        mkdir -p /tmp/dev_container
+        if [[ -e /tmp/dev_container/dev-container.tar ]]; then
           echo "found dev container cache "
           docker load -i /tmp/dev_container/dev-container.tar
+        else
+          echo "dev container cache not found"
         fi
         docker pull datafuselabs/dev-container:latest
         echo "cache latest image"
