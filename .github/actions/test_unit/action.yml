@@ -34,8 +34,8 @@ runs:
         RUST_BACKTRACE: full
         # symbol-manging-version=v0 is a trick to reduce memory usage
         # ref: https://github.com/rust-lang/rust/issues/82406#issuecomment-787541615
-        RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests --cfg tokio_unstable -Z symbol-manging-version=v0'
-        RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Z symbol-manging-version=v0'
+        RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests --cfg tokio_unstable -Z symbol-mangling-version=v0'
+        RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Z symbol-mangling-version=v0'
 
     - name: Install grcov
       uses: actions-rs/cargo@v1
