@@ -23,7 +23,7 @@ use super::data_type::DataTypePtr;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct NullableType {
     inner: DataTypePtr,
     name: String,
@@ -128,5 +128,11 @@ impl DataType for NullableType {
         }
         let column = self.inner.create_column(&res)?;
         Ok(Arc::new(NullableColumn::new(column, bitmap.into())))
+    }
+}
+
+impl std::fmt::Debug for NullableType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }

@@ -15,17 +15,14 @@
 use std::fmt;
 use std::time::Duration;
 
-use common_datavalues::columns::DataColumn;
-use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataType;
-use common_datavalues::DataTypeAndNullable;
-use common_datavalues::DataValue;
+use common_datavalues2::DataValue;
+use common_datavalues2::Int8Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 #[derive(Clone)]
 pub struct SleepFunction {
@@ -33,72 +30,54 @@ pub struct SleepFunction {
 }
 
 impl SleepFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(SleepFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().num_arguments(1))
     }
 }
 
-impl Function for SleepFunction {
+impl Function2 for SleepFunction {
     fn name(&self) -> &str {
         "SleepFunction"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        if !args[0].is_numeric() {
+    fn return_type(
+        &self,
+        args: &[&common_datavalues2::DataTypePtr],
+    ) -> Result<common_datavalues2::DataTypePtr> {
+        if !args[0].data_type_id().is_numeric() {
             return Err(ErrorCode::BadArguments(format!(
                 "Illegal type {} of argument of function {}, expected numeric",
-                args[0], self.display_name
+                args[0].data_type_id(),
+                self.display_name
+            )));
+        }
+        Ok(Int8Type::arc())
+    }
+
+    fn eval(
+        &self,
+        columns: &common_datavalues2::ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<common_datavalues2::ColumnRef> {
+        let c = columns[0].column();
+        if c.len() != 1 {
+            return Err(ErrorCode::BadArguments(format!(
+                "The argument of function {} must be constant.",
+                self.display_name
             )));
         }
 
-        let dt = DataType::UInt8;
-        Ok(DataTypeAndNullable::create(&dt, false))
-    }
-
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        match columns[0].column() {
-            DataColumn::Array(_) => Err(ErrorCode::BadArguments(format!(
-                "The argument of function {} must be constant.",
-                self.display_name
-            ))),
-            DataColumn::Constant(value, rows) => {
-                let seconds = match value {
-                    DataValue::UInt8(Some(v)) => Duration::from_secs(*v as u64),
-                    DataValue::UInt16(Some(v)) => Duration::from_secs(*v as u64),
-                    DataValue::UInt32(Some(v)) => Duration::from_secs(*v as u64),
-                    DataValue::UInt64(Some(v)) => Duration::from_secs(*v as u64),
-                    DataValue::Int8(Some(v)) if *v > 0 => Duration::from_secs(*v as u64),
-                    DataValue::Int16(Some(v)) if *v > 0 => Duration::from_secs(*v as u64),
-                    DataValue::Int32(Some(v)) if *v > 0 => Duration::from_secs(*v as u64),
-                    DataValue::Int64(Some(v)) if *v > 0 => Duration::from_secs(*v as u64),
-                    DataValue::Float32(Some(v)) => Duration::from_secs_f32(*v),
-                    DataValue::Float64(Some(v)) => Duration::from_secs_f64(*v),
-                    v => {
-                        return Err(ErrorCode::BadArguments(format!(
-                            "Sleep must be between 0 and 3 seconds. Requested: {}",
-                            v
-                        )))
-                    }
-                };
-
-                if seconds.ge(&Duration::from_secs(3)) {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "The maximum sleep time is 3 seconds. Requested: {:?}",
-                        seconds
-                    )));
-                }
-
-                std::thread::sleep(seconds);
-                Ok(DataColumn::Constant(DataValue::UInt8(Some(0)), *rows))
-            }
-        }
+        let seconds = c.get_u64(0)?;
+        std::thread::sleep(Duration::from_secs(seconds));
+        let t = Int8Type::arc();
+        t.create_constant_column(&DataValue::UInt64(0), input_rows)
     }
 }
 

@@ -136,11 +136,11 @@ impl Column for ArrayColumn {
         Arc::new(self.clone())
     }
 
-    unsafe fn get_unchecked(&self, index: usize) -> DataValue {
+    fn get(&self, index: usize) -> DataValue {
         let offset = self.offsets[index] as usize;
         let length = self.size_at_index(index);
         let values = (offset..offset + length)
-            .map(|i| self.values.get_unchecked(i))
+            .map(|i| self.values.get(i))
             .collect();
         DataValue::Array(values)
     }

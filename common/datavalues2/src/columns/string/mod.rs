@@ -196,12 +196,12 @@ impl Column for StringColumn {
         Arc::new(self.clone())
     }
 
-    unsafe fn get_unchecked(&self, index: usize) -> DataValue {
+    fn get(&self, index: usize) -> DataValue {
         let start = self.offsets[index].to_usize();
         let end = self.offsets[index + 1].to_usize();
 
         // soundness: the invariant of the struct
-        let str = self.values.get_unchecked(start..end);
+        let str = unsafe { self.values.get_unchecked(start..end) };
         DataValue::String(str.to_vec())
     }
 }

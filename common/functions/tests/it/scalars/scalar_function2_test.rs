@@ -71,7 +71,7 @@ pub fn test_scalar_functions2_with_type(
             rows_size = c.column().len();
         }
 
-        match eval(&test_function, rows_size, &test.columns, &arguments_type) {
+        match test_eval_with_type(&test_function, rows_size, &test.columns, &arguments_type) {
             Ok(v) => {
                 let v = v.convert_full_column();
 
@@ -87,7 +87,33 @@ pub fn test_scalar_functions2_with_type(
 }
 
 #[allow(clippy::borrowed_box)]
-fn eval(
+pub fn test_eval(test_function: &Box<dyn Function2>, columns: &[ColumnRef]) -> Result<ColumnRef> {
+    let mut rows_size = 0;
+    let mut arguments = Vec::with_capacity(columns.len());
+    let mut arguments_type = Vec::with_capacity(columns.len());
+
+    for (index, arg_column) in columns.iter().enumerate() {
+        let f = ColumnWithField::new(
+            arg_column.clone(),
+            DataField::new(&format!("dummy_{}", index), arg_column.data_type()),
+        );
+
+        arguments_type.push(arg_column.data_type());
+
+        rows_size = arg_column.len();
+        arguments.push(f);
+    }
+
+    let mut types = Vec::with_capacity(columns.len());
+    for t in arguments_type.iter() {
+        types.push(t);
+    }
+
+    test_eval_with_type(test_function, rows_size, &arguments, &types)
+}
+
+#[allow(clippy::borrowed_box)]
+pub fn test_eval_with_type(
     test_function: &Box<dyn Function2>,
     rows_size: usize,
     arguments: &[ColumnWithField],

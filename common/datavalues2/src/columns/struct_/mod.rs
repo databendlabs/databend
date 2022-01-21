@@ -98,8 +98,8 @@ impl Column for StructColumn {
         })
     }
 
-    unsafe fn get_unchecked(&self, index: usize) -> DataValue {
-        let values = self.values.iter().map(|v| v.get_unchecked(index)).collect();
+    fn get(&self, index: usize) -> DataValue {
+        let values = self.values.iter().map(|v| v.get(index)).collect();
         DataValue::Struct(values)
     }
 

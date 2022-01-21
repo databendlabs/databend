@@ -42,8 +42,8 @@ fn test_boolean_column() {
 
     assert!(!data_column.null_at(1));
 
-    unsafe {
-        let nihao = data_column.get_unchecked(512).as_string().unwrap();
+    {
+        let nihao = data_column.get(512).as_string().unwrap();
         assert_eq!(nihao, "你好".as_bytes().to_vec());
     }
     let slice = data_column.slice(0, N / 2);

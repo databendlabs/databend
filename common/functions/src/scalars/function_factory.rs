@@ -33,7 +33,6 @@ use crate::scalars::MathsFunction;
 use crate::scalars::NullableFunction;
 use crate::scalars::OtherFunction;
 use crate::scalars::StringFunction;
-use crate::scalars::TupleClassFunction;
 use crate::scalars::UUIDFunction;
 use crate::scalars::UdfFunction;
 
@@ -165,7 +164,6 @@ static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     DateFunction::register(&mut function_factory);
     OtherFunction::register(&mut function_factory);
     MathsFunction::register(&mut function_factory);
-    TupleClassFunction::register(&mut function_factory);
     UUIDFunction::register(&mut function_factory);
 
     Arc::new(function_factory)

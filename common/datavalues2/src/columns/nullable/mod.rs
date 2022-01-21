@@ -132,7 +132,11 @@ impl Column for NullableColumn {
         })
     }
 
-    unsafe fn get_unchecked(&self, _index: usize) -> DataValue {
-        self.column.get_unchecked(0)
+    fn get(&self, index: usize) -> DataValue {
+        if self.validity.get_bit(index) {
+            self.column.get(index)
+        } else {
+            DataValue::Null
+        }
     }
 }

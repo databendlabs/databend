@@ -20,7 +20,7 @@ use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StringType {}
 
 impl StringType {
@@ -90,5 +90,11 @@ impl DataType for StringType {
                 values.into(),
             )))
         }
+    }
+}
+
+impl std::fmt::Debug for StringType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }

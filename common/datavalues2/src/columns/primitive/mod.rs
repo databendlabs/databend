@@ -211,8 +211,8 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
     }
 
     /// Note this doesn't do any bound checking, for performance reason.
-    unsafe fn get_unchecked(&self, index: usize) -> DataValue {
-        let v = self.value_unchecked(index);
+    fn get(&self, index: usize) -> DataValue {
+        let v = unsafe { self.value_unchecked(index) };
         v.into()
     }
 }

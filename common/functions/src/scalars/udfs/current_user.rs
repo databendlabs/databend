@@ -14,26 +14,23 @@
 
 use std::fmt;
 
-use common_datavalues::columns::DataColumn;
-use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataType;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::StringType;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 #[derive(Clone)]
 pub struct CurrentUserFunction {}
 
 impl CurrentUserFunction {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(CurrentUserFunction {}))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .context_function()
                 .num_arguments(1),
@@ -41,17 +38,23 @@ impl CurrentUserFunction {
     }
 }
 
-impl Function for CurrentUserFunction {
+impl Function2 for CurrentUserFunction {
     fn name(&self) -> &str {
         "CurrentUserFunction"
     }
 
-    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::String;
-        Ok(DataTypeAndNullable::create(&dt, false))
+    fn return_type(
+        &self,
+        _args: &[&common_datavalues2::DataTypePtr],
+    ) -> Result<common_datavalues2::DataTypePtr> {
+        Ok(StringType::arc())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+    fn eval(
+        &self,
+        columns: &common_datavalues2::ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<common_datavalues2::ColumnRef> {
         Ok(columns[0].column().clone())
     }
 }

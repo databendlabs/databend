@@ -101,7 +101,7 @@ fn test_serializers() -> Result<()> {
             name: "struct",
             data_type: Arc::new(StructType::create(
                 vec!["date".to_owned(), "integer".to_owned()],
-                vec![Date32Type32::arc(), Int8Type::arc()],
+                vec![Date32Type::arc(), Int8Type::arc()],
             )),
             value: DataValue::Struct(vec![DataValue::Int64(18869), DataValue::Int64(1)]),
             column: Arc::new(StructColumn::from_data(
@@ -111,7 +111,7 @@ fn test_serializers() -> Result<()> {
                 ],
                 Arc::new(StructType::create(
                     vec!["date".to_owned(), "integer".to_owned()],
-                    vec![Date32Type32::arc(), Int8Type::arc()],
+                    vec![Date32Type::arc(), Int8Type::arc()],
                 )),
             )),
             val_str: "('2021-08-30', 1)",

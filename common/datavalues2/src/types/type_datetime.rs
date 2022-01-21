@@ -25,7 +25,7 @@ use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DateTimeType {
     tz: Option<String>,
 }
@@ -102,5 +102,11 @@ impl DataType for DateTimeType {
             builder: MutablePrimitiveColumn::<u32>::with_capacity(capacity),
             tz: tz.parse::<Tz>().unwrap(),
         })
+    }
+}
+
+impl std::fmt::Debug for DateTimeType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }
