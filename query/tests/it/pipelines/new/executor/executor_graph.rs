@@ -100,7 +100,7 @@ async fn test_simple_pipeline_init_queue() -> Result<()> {
             format!("{:?}", create_simple_pipeline()?.init_schedule_queue()?),
             "ScheduleQueue { \
                 sync_queue: [\
-                    QueueItem { id: 0, name: \"SyncReceiverSource\" }\
+                    QueueItem { id: 2, name: \"SyncSenderSink\" }\
                 ], \
                 async_queue: [] \
             }"
@@ -119,8 +119,8 @@ async fn test_parallel_simple_pipeline_init_queue() -> Result<()> {
             ),
             "ScheduleQueue { \
                 sync_queue: [\
-                    QueueItem { id: 0, name: \"SyncReceiverSource\" }, \
-                    QueueItem { id: 1, name: \"SyncReceiverSource\" }\
+                    QueueItem { id: 4, name: \"SyncSenderSink\" }, \
+                    QueueItem { id: 5, name: \"SyncSenderSink\" }\
                 ], \
                 async_queue: [] \
             }"
@@ -135,7 +135,10 @@ async fn test_resize_pipeline_init_queue() -> Result<()> {
         assert_eq!(
             format!("{:?}", create_resize_pipeline()?.init_schedule_queue()?),
             "ScheduleQueue { \
-                sync_queue: [QueueItem { id: 0, name: \"SyncReceiverSource\" }], \
+                sync_queue: [\
+                    QueueItem { id: 7, name: \"SyncSenderSink\" }, \
+                    QueueItem { id: 8, name: \"SyncSenderSink\" }\
+                ], \
                 async_queue: [] \
             }"
         );
