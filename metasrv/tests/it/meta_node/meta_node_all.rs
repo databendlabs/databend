@@ -77,7 +77,7 @@ async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let (_nid0, tc) = start_meta_node_leader().await?;
-    let mn0 = tc.meta_nodes[0].clone();
+    let mn0 = tc.meta_node();
 
     let mut rx0 = mn0.raft.metrics();
 
@@ -111,10 +111,10 @@ async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
         let _ent = span.enter();
 
         let (_nid0, tc0) = start_meta_node_leader().await?;
-        let mn0 = tc0.meta_nodes[0].clone();
+        let mn0 = tc0.meta_node();
 
         let (_nid1, tc1) = start_meta_node_non_voter(mn0.clone(), 1).await?;
-        let mn1 = tc1.meta_nodes[0].clone();
+        let mn1 = tc1.meta_node();
 
         assert_upsert_kv_synced(vec![mn0.clone(), mn1.clone()], "metakey2").await?;
     }
@@ -223,10 +223,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
         let _ent = span.enter();
 
         let (_nlog, all_tc) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![3]).await?;
-        let all = all_tc
-            .iter()
-            .map(|tc| tc.meta_nodes[0].clone())
-            .collect::<Vec<_>>();
+        let all = all_tc.iter().map(|tc| tc.meta_node()).collect::<Vec<_>>();
 
         // ensure cluster works
         assert_upsert_kv_synced(all.clone(), "foo").await?;
@@ -349,7 +346,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     let (_, tc1) = start_meta_node_non_voter(mn.clone(), 1).await?;
     log_index += 1;
 
-    let mn1 = tc1.meta_nodes[0].clone();
+    let mn1 = tc1.meta_node();
 
     mn1.raft
         .wait(timeout())
@@ -585,10 +582,10 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let (_nid0, tc0) = start_meta_node_leader().await?;
-    let mn0 = tc0.meta_nodes[0].clone();
+    let mn0 = tc0.meta_node();
 
     let (_nid1, tc1) = start_meta_node_non_voter(mn0.clone(), 1).await?;
-    let mn1 = tc1.meta_nodes[0].clone();
+    let mn1 = tc1.meta_node();
 
     let sto0 = mn0.sto.clone();
     let sto1 = mn1.sto.clone();
@@ -658,13 +655,13 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let mut log_index: u64 = 0;
-    let (_id, mut tc) = start_meta_node_leader().await?;
+    let (_id, tc) = start_meta_node_leader().await?;
     // initial membeship, leader blank, add node
     log_index += 2;
 
     let want_hs;
     {
-        let leader = tc.meta_nodes.pop().unwrap();
+        let leader = tc.meta_node();
 
         leader
             .as_leader()
@@ -731,7 +728,7 @@ async fn start_meta_node_cluster(
     let mut res = vec![];
 
     let (_id, tc0) = start_meta_node_leader().await?;
-    let leader = tc0.meta_nodes[0].clone();
+    let leader = tc0.meta_node();
     res.push(tc0);
 
     // membership log, blank log and add node
@@ -748,7 +745,7 @@ async fn start_meta_node_cluster(
         // Adding a node
         log_index += 1;
         // wait_for_log(&tc.meta_nodes[0], log_index).await?;
-        tc.meta_nodes[0]
+        tc.meta_node()
             .raft
             .wait(timeout())
             .log(Some(log_index), format!("add :{}", id))
@@ -763,7 +760,7 @@ async fn start_meta_node_cluster(
         // Adding a node
         log_index += 1;
 
-        tc.meta_nodes[0]
+        tc.meta_node()
             .raft
             .wait(timeout())
             .log(Some(log_index), format!("add :{}", id))
@@ -783,17 +780,17 @@ async fn start_meta_node_cluster(
         wait_for_state(&leader, State::Leader).await?;
 
         for item in res.iter().take(voters.len()).skip(1) {
-            wait_for_state(&item.meta_nodes[0], State::Follower).await?;
+            wait_for_state(&item.meta_node(), State::Follower).await?;
         }
         for item in res.iter().skip(voters.len()).take(non_voters.len()) {
-            wait_for_state(&item.meta_nodes[0], State::Learner).await?;
+            wait_for_state(&item.meta_node(), State::Learner).await?;
         }
     }
 
     tracing::info!("--- check node logs");
     {
         for tc in &res {
-            wait_for_log(&tc.meta_nodes[0], log_index).await?;
+            wait_for_log(&tc.meta_node(), log_index).await?;
         }
     }
 
@@ -810,7 +807,7 @@ async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvTestContext)
 
     // boot up a single-node cluster
     let mn = MetaNode::boot(&tc.config.raft_config).await?;
-    tc.meta_nodes.push(mn.clone());
+    tc.meta_node = Some(mn.clone());
 
     {
         assert_metasrv_connection(&addr).await?;
@@ -839,7 +836,7 @@ async fn start_meta_node_non_voter(
     let mn = MetaNode::open_create_boot(&raft_config, None, Some(()), None).await?;
     assert!(!mn.is_opened());
 
-    tc.meta_nodes.push(mn.clone());
+    tc.meta_node = Some(mn.clone());
 
     {
         // add node to cluster as a non-voter
@@ -1001,9 +998,7 @@ fn timeout() -> Option<Duration> {
 }
 
 fn test_context_nodes(tcs: &[MetaSrvTestContext]) -> Vec<Arc<MetaNode>> {
-    tcs.iter()
-        .map(|tc| tc.meta_nodes[0].clone())
-        .collect::<Vec<_>>()
+    tcs.iter().map(|tc| tc.meta_node()).collect::<Vec<_>>()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
