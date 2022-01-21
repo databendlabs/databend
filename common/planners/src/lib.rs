@@ -119,6 +119,7 @@ pub use plan_expression_function::not;
 pub use plan_expression_function::sub;
 pub use plan_expression_function::sum;
 pub use plan_expression_literal::lit;
+pub use plan_expression_literal::lit_null;
 pub use plan_expression_monotonicity::ExpressionMonotonicityVisitor;
 pub use plan_expression_rewriter::ExpressionRewriter;
 pub use plan_expression_sort::sort;
