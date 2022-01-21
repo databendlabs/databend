@@ -20,9 +20,8 @@ use crate::prelude::*;
 
 /// A wrapper for a column.
 /// It can help to better access the data without cast into nullable/const column.
-pub struct ColumnViewer<'a, T: ScalarType> {
+pub struct ColumnViewer<'a, T: Scalar> {
     pub column: &'a T::ColumnType,
-    pub data: &'a [T],
     pub validity: Bitmap,
 
     // for not nullable column, it's 0. we only need keep one sign bit to tell `null_at` that it's not null.
@@ -34,14 +33,8 @@ pub struct ColumnViewer<'a, T: ScalarType> {
     size: usize,
 }
 
-pub trait GetDatas<E> {
-    fn get_data(&self) -> &[E];
-}
-
 impl<'a, T> ColumnViewer<'a, T>
-where
-    T: ScalarType + Default,
-    T::ColumnType: Clone + GetDatas<T> + 'static,
+where T: Scalar
 {
     pub fn create(column: &'a ColumnRef) -> Result<Self> {
         let null_mask = get_null_mask(column);
@@ -64,11 +57,9 @@ where
         };
 
         let column: &T::ColumnType = Series::check_get(column)?;
-        let data = column.get_data();
 
         Ok(Self {
             column,
-            data,
             validity,
             null_mask,
             non_const_mask,
@@ -87,8 +78,8 @@ where
     }
 
     #[inline]
-    pub fn value(&self, i: usize) -> &T {
-        &self.data[i & self.non_const_mask]
+    pub fn value(&self, i: usize) -> <T::ColumnType as ScalarColumn>::RefItem<'_> {
+        self.column.get_data(i & self.non_const_mask)
     }
 
     #[inline]

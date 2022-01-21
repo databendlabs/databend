@@ -13,15 +13,12 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 
-use crate::types::DataTypePtr;
-use crate::Column;
-use crate::ColumnRef;
+use crate::prelude::*;
 
-pub trait MutableColumn<Item, ColumnImpl: Column + 'static> {
+pub trait MutableColumn {
     fn data_type(&self) -> DataTypePtr;
     fn with_capacity(capacity: usize) -> Self;
     fn len(&self) -> usize;
@@ -30,13 +27,8 @@ pub trait MutableColumn<Item, ColumnImpl: Column + 'static> {
     }
     fn as_any(&self) -> &dyn Any;
     fn as_mut_any(&mut self) -> &mut dyn Any;
+    fn to_column(&mut self) -> ColumnRef;
 
-    fn as_column(&mut self) -> ColumnRef {
-        Arc::new(self.finish())
-    }
-
-    fn finish(&mut self) -> ColumnImpl;
-    fn append(&mut self, item: Item);
     fn append_default(&mut self);
 
     fn validity(&self) -> Option<&MutableBitmap> {

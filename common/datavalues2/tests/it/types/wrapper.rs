@@ -17,52 +17,52 @@ use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 #[test]
-fn test_primitive_wrapper() -> Result<()> {
+fn test_primitive_viewer() -> Result<()> {
     let column = Series::from_data(vec![1i8, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    let wrapper = ColumnViewer::<i8>::create(&column)?;
+    let viewer = ColumnViewer::<i8>::create(&column)?;
 
-    assert_eq!(wrapper.len(), 10);
-    assert!(!wrapper.null_at(0));
-    for i in 0..wrapper.len() {
-        assert_eq!(*wrapper.value(i), (i + 1) as i8);
+    assert_eq!(viewer.len(), 10);
+    assert!(!viewer.null_at(0));
+    for i in 0..viewer.len() {
+        assert_eq!(viewer.value(i), (i + 1) as i8);
     }
     Ok(())
 }
 
 #[test]
-fn test_nullable_wrapper() -> Result<()> {
+fn test_nullable_viewer() -> Result<()> {
     let column = Series::from_data(vec![Some(1i8), None, Some(3), Some(4), Some(5)]);
-    let wrapper = ColumnViewer::<i8>::create(&column)?;
+    let viewer = ColumnViewer::<i8>::create(&column)?;
 
-    assert_eq!(wrapper.len(), 5);
-    assert!(!wrapper.null_at(0));
-    assert!(wrapper.null_at(1));
+    assert_eq!(viewer.len(), 5);
+    assert!(!viewer.null_at(0));
+    assert!(viewer.null_at(1));
 
-    for i in 0..wrapper.len() {
-        if wrapper.null_at(i) {
-            assert_eq!(*wrapper.value(i), 0);
+    for i in 0..viewer.len() {
+        if viewer.null_at(i) {
+            assert_eq!(viewer.value(i), 0);
         } else {
-            assert_eq!(*wrapper.value(i), (i + 1) as i8);
+            assert_eq!(viewer.value(i), (i + 1) as i8);
         }
     }
     Ok(())
 }
 
 #[test]
-fn test_constant_wrapper() -> Result<()> {
+fn test_constant_viewer() -> Result<()> {
     let ty = Int16Type::arc();
     let column = ty.create_constant_column(&DataValue::Int64(123), 1024)?;
-    let wrapper = ColumnViewer::<i16>::create(&column)?;
+    let viewer = ColumnViewer::<i16>::create(&column)?;
 
-    assert_eq!(wrapper.len(), 1024);
-    assert!(!wrapper.null_at(0));
-    assert!(!wrapper.null_at(99));
+    assert_eq!(viewer.len(), 1024);
+    assert!(!viewer.null_at(0));
+    assert!(!viewer.null_at(99));
 
-    for i in 0..wrapper.len() {
-        if wrapper.null_at(i) {
-            assert_eq!(*wrapper.value(i), 0);
+    for i in 0..viewer.len() {
+        if viewer.null_at(i) {
+            assert_eq!(viewer.value(i), 0);
         } else {
-            assert_eq!(*wrapper.value(i), 123i16);
+            assert_eq!(viewer.value(i), 123i16);
         }
     }
     Ok(())

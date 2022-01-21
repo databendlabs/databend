@@ -57,12 +57,6 @@ impl Series {
     }
 }
 
-pub trait NewColumn<N> {
-    /// create non-nullable column by values
-    fn new_from_slice<P: AsRef<[N]>>(v: P) -> Self;
-    fn new_from_iter(it: impl Iterator<Item = N>) -> Self;
-}
-
 pub trait SeriesFrom<T, Phantom: ?Sized> {
     /// Initialize by name and values.
     fn from_data(_: T) -> ColumnRef;
@@ -72,7 +66,7 @@ macro_rules! impl_from {
     ($type:ty, $array:ident) => {
         impl<T: AsRef<$type>> SeriesFrom<T, $type> for Series {
             fn from_data(v: T) -> ColumnRef {
-                Arc::new($array::new_from_slice(v.as_ref()))
+                Arc::new($array::from_slice(v.as_ref()))
             }
         }
     };
@@ -86,7 +80,7 @@ macro_rules! impl_from_option {
                 let bitmap = MutableBitmap::from_iter(iter);
 
                 let iter = v.as_ref().iter().map(|v| v.unwrap_or($default));
-                let column = $array::new_from_iter(iter);
+                let column = $array::from_iterator(iter);
 
                 Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
             }
@@ -113,7 +107,7 @@ impl<'a, T: AsRef<[Option<&'a str>]>> SeriesFrom<T, [Option<&'a str>]> for Serie
 
 impl<'a, T: AsRef<[&'a [u8]]>> SeriesFrom<T, [&'a [u8]]> for Series {
     fn from_data(v: T) -> ColumnRef {
-        let column = StringColumn::new_from_iter(v.as_ref().iter());
+        let column = StringColumn::new_from_slice(v.as_ref().iter());
         Arc::new(column)
     }
 }
@@ -124,7 +118,7 @@ impl<'a, T: AsRef<[Option<&'a [u8]>]>> SeriesFrom<T, [Option<&'a [u8]>]> for Ser
         let bitmap = MutableBitmap::from_iter(iter);
 
         let iter = v.as_ref().iter().map(|v| v.unwrap_or(&[]));
-        let column = StringColumn::new_from_iter(iter);
+        let column = StringColumn::from_iterator(iter);
         Arc::new(NullableColumn::new(Arc::new(column), bitmap.into()))
     }
 }
@@ -140,8 +134,18 @@ impl_from!([i32], Int32Column);
 impl_from!([i64], Int64Column);
 impl_from!([f32], Float32Column);
 impl_from!([f64], Float64Column);
-impl_from!([Vec<u8>], StringColumn);
-impl_from!([String], StringColumn);
+
+impl<T: AsRef<[Vec<u8>]>> SeriesFrom<T, [Vec<u8>]> for Series {
+    fn from_data(v: T) -> ColumnRef {
+        Arc::new(StringColumn::new_from_slice(v.as_ref()))
+    }
+}
+
+impl<T: AsRef<[String]>> SeriesFrom<T, [String]> for Series {
+    fn from_data(v: T) -> ColumnRef {
+        Arc::new(StringColumn::new_from_slice(v.as_ref()))
+    }
+}
 
 impl_from_option!([Option<bool>], BooleanColumn, false);
 impl_from_option!([Option<u8>], UInt8Column, 0);

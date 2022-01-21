@@ -39,13 +39,13 @@ pub fn cast_from_date16(
 
     match data_type.data_type_id() {
         TypeID::String => {
-            let mut builder = MutableStringColumn::with_capacity(size);
+            let mut builder = ColumnBuilder::<Vec<u8>>::with_capacity(size);
 
             for v in c.iter() {
                 let s = datetime_to_string(Utc.timestamp(*v as i64 * 24 * 3600, 0_u32), DATE_FMT);
                 builder.append(s.as_bytes());
             }
-            Ok((builder.as_column(), None))
+            Ok((builder.build(size), None))
         }
 
         TypeID::DateTime32 => {
@@ -75,13 +75,13 @@ pub fn cast_from_date32(
 
     match data_type.data_type_id() {
         TypeID::String => {
-            let mut builder = MutableStringColumn::with_capacity(size);
+            let mut builder = ColumnBuilder::<Vec<u8>>::with_capacity(size);
 
             for v in c.iter() {
                 let s = datetime_to_string(Utc.timestamp(*v as i64 * 24 * 3600, 0_u32), DATE_FMT);
                 builder.append(s.as_bytes());
             }
-            Ok((builder.as_column(), None))
+            Ok((builder.build(size), None))
         }
 
         TypeID::DateTime32 => {

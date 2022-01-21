@@ -12,19 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::bitmap::MutableBitmap;
 
 use crate::columns::mutable::MutableColumn;
 use crate::types::BooleanType;
 use crate::types::DataTypePtr;
 use crate::BooleanColumn;
+use crate::ColumnRef;
+use crate::ScalarColumnBuilder;
 
 pub struct MutableBooleanColumn {
     values: MutableBitmap,
     data_type: DataTypePtr,
 }
 
-impl MutableColumn<bool, BooleanColumn> for MutableBooleanColumn {
+impl MutableColumn for MutableBooleanColumn {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -37,13 +41,6 @@ impl MutableColumn<bool, BooleanColumn> for MutableBooleanColumn {
         Self {
             values: MutableBitmap::with_capacity(capacity),
             data_type: BooleanType::arc(),
-        }
-    }
-
-    fn finish(&mut self) -> BooleanColumn {
-        self.shrink_to_fit();
-        BooleanColumn {
-            values: std::mem::take(&mut self.values).into(),
         }
     }
 
@@ -63,22 +60,18 @@ impl MutableColumn<bool, BooleanColumn> for MutableBooleanColumn {
         self.values.len()
     }
 
-    fn append(&mut self, item: bool) {
-        self.append_value(item)
+    fn to_column(&mut self) -> ColumnRef {
+        Arc::new(self.finish())
     }
 }
 
 impl Default for MutableBooleanColumn {
     fn default() -> Self {
-        Self::new()
+        Self::with_capacity(0)
     }
 }
 
 impl MutableBooleanColumn {
-    pub fn new() -> Self {
-        Self::with_capacity(0)
-    }
-
     pub fn from_data(values: MutableBitmap) -> Self {
         Self {
             values,
@@ -90,8 +83,16 @@ impl MutableBooleanColumn {
     pub fn append_value(&mut self, value: bool) {
         self.values.push(value);
     }
+}
 
-    pub fn finish(&mut self) -> BooleanColumn {
+impl ScalarColumnBuilder for MutableBooleanColumn {
+    type ColumnType = BooleanColumn;
+
+    fn push(&mut self, value: <Self::ColumnType as crate::ScalarColumn>::RefItem<'_>) {
+        self.values.push(value);
+    }
+
+    fn finish(&mut self) -> Self::ColumnType {
         self.shrink_to_fit();
         BooleanColumn {
             values: std::mem::take(&mut self.values).into(),

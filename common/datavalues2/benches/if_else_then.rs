@@ -99,9 +99,9 @@ fn databend_if_else_then(
         for row in 0..size {
             let valid = validity_predict.get_bit(row);
              if bools.get_bit(row) {
-                builder.append(*lhs_wrapper.value(row), valid & lhs_wrapper.valid_at(row));
+                builder.append(lhs_wrapper.value(row), valid & lhs_wrapper.valid_at(row));
             } else {
-                builder.append(*rhs_wrapper.value(row), valid & rhs_wrapper.valid_at(row));
+                builder.append(rhs_wrapper.value(row), valid & rhs_wrapper.valid_at(row));
             };
         }
 

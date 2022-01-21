@@ -16,6 +16,8 @@
 //! insipration for the crate*
 //!
 
+#![feature(generic_associated_types)]
+
 #[macro_use]
 mod macros;
 
@@ -28,6 +30,7 @@ pub mod data_schema;
 pub mod data_value;
 pub mod data_value_operator;
 pub mod prelude;
+pub mod scalars;
 pub mod types;
 
 /// third partry
@@ -41,5 +44,6 @@ pub use data_schema::*;
 pub use data_value::*;
 pub use data_value_operator::*;
 pub use prelude::*;
+pub use scalars::*;
 pub use types::*;
 pub use utils::*;

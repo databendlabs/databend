@@ -18,6 +18,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 
 use crate::columns::mutable::MutableColumn;
 use crate::types::DataTypePtr;
+use crate::ColumnRef;
 use crate::NullColumn;
 use crate::NullType;
 
@@ -26,7 +27,7 @@ pub struct MutableNullColumn {
     length: usize,
 }
 
-impl MutableColumn<bool, NullColumn> for MutableNullColumn {
+impl MutableColumn for MutableNullColumn {
     fn with_capacity(_capacity: usize) -> Self {
         Self::default()
     }
@@ -43,13 +44,6 @@ impl MutableColumn<bool, NullColumn> for MutableNullColumn {
         self
     }
 
-    fn finish(&mut self) -> NullColumn {
-        self.length = 0;
-        NullColumn {
-            length: self.length,
-        }
-    }
-
     fn append_default(&mut self) {
         self.length += 1;
     }
@@ -64,7 +58,11 @@ impl MutableColumn<bool, NullColumn> for MutableNullColumn {
         self.length
     }
 
-    fn append(&mut self, _item: bool) {
-        self.length += 1;
+    fn to_column(&mut self) -> ColumnRef {
+        let ret: ColumnRef = Arc::new(NullColumn {
+            length: self.length,
+        });
+        self.length = 0;
+        ret
     }
 }

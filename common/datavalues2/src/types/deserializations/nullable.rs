@@ -59,9 +59,7 @@ impl TypeDeserializer for NullableDeserializer {
     }
     fn finish_to_column(&mut self) -> ColumnRef {
         let inner_column = self.inner.finish_to_column();
-        Arc::new(NullableColumn::new(
-            inner_column,
-            std::mem::take(&mut self.bitmap).into(),
-        ))
+        let bitmap = std::mem::take(&mut self.bitmap);
+        Arc::new(NullableColumn::new(inner_column, bitmap.into()))
     }
 }

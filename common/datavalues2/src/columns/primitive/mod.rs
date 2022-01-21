@@ -29,7 +29,6 @@ use common_arrow::arrow::datatypes::TimeUnit;
 pub use iterator::*;
 pub use mutable::*;
 
-use super::viewer::GetDatas;
 use crate::prelude::*;
 
 /// PrimitiveColumn is generic struct which wrapped arrow's PrimitiveArray
@@ -203,7 +202,7 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
             }
             previous_offset = offset;
         });
-        builder.as_column()
+        builder.to_column()
     }
 
     fn convert_full_column(&self) -> ColumnRef {
@@ -217,10 +216,50 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
     }
 }
 
-impl<T: PrimitiveType> GetDatas<T> for PrimitiveColumn<T> {
-    fn get_data(&self) -> &[T] {
-        self.values()
+impl<T> ScalarColumn for PrimitiveColumn<T>
+where
+    T: Scalar<ColumnType = Self> + PrimitiveType,
+    for<'a> T: ScalarRef<'a, ScalarType = T, ColumnType = Self>,
+    for<'a> T: Scalar<RefType<'a> = T>,
+{
+    type Builder = MutablePrimitiveColumn<T>;
+    type OwnedItem = T;
+    type RefItem<'a> = T;
+
+    fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
+        self.values[idx]
     }
+
+    fn iter(&self) -> ScalarColumnIterator<Self> {
+        ScalarColumnIterator::new(self)
+    }
+
+    fn from_slice(data: &[Self::RefItem<'_>]) -> Self {
+        let values = Vec::<T>::from(data.as_ref());
+        PrimitiveColumn {
+            values: values.into(),
+        }
+    }
+
+    fn from_iterator<'a>(it: impl Iterator<Item = Self::RefItem<'a>>) -> Self {
+        let values: Vec<T> = it.collect();
+        PrimitiveColumn {
+            values: values.into(),
+        }
+    }
+
+    //  fn new_from_slice<P: AsRef<[T]>>(slice: P) -> Self {
+    //     let values = Vec::<T>::from(slice.as_ref());
+    //     PrimitiveColumn {
+    //         values: values.into(),
+    //     }
+    // }
+    // fn from_iterator(it: impl Iterator<Item = T>) -> Self {
+    //     let values: Vec<T> = it.collect();
+    //     PrimitiveColumn {
+    //         values: values.into(),
+    //     }
+    // }
 }
 
 pub type UInt8Column = PrimitiveColumn<u8>;

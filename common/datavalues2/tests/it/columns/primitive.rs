@@ -25,7 +25,7 @@ fn test_empty_primitive_column() {
 
 #[test]
 fn test_new_from_slice() {
-    let data_column: PrimitiveColumn<i32> = NewColumn::new_from_slice(&[1, 2]);
+    let data_column: PrimitiveColumn<i32> = Int32Column::from_slice(&[1, 2]);
     let mut iter = data_column.iter();
     assert_eq!(Some(&1), iter.next());
     assert_eq!(Some(&2), iter.next());
@@ -36,7 +36,7 @@ fn test_new_from_slice() {
 fn test_primitive_column() {
     const N: usize = 1024;
     let it = (0..N).map(|i| i as i32);
-    let data_column: PrimitiveColumn<i32> = NewColumn::new_from_iter(it);
+    let data_column: PrimitiveColumn<i32> = Int32Column::from_iterator(it);
     assert!(!data_column.is_empty());
     assert!(data_column.len() == N);
     assert!(!data_column.null_at(1));

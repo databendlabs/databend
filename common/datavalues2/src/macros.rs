@@ -40,7 +40,11 @@ macro_rules! with_match_scalar_types_error {(
     use common_datavalues2::PhysicalTypeID::*;
     use common_datavalues2::PrimitiveTypeID;
     use common_exception::ErrorCode;
+    type C = Vec<u8>;
     match $key_type {
+        PhysicalTypeID::Boolean => __with_ty__! { bool },
+       	PhysicalTypeID::String => __with_ty__! { C },
+
        	Primitive(PrimitiveTypeID::Int8) => __with_ty__! { i8 },
         Primitive(PrimitiveTypeID::Int16) => __with_ty__! { i16 },
         Primitive(PrimitiveTypeID::Int32) => __with_ty__! { i32 },

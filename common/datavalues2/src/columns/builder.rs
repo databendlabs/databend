@@ -18,45 +18,35 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::MutableBitmap;
 
 use crate::prelude::MutableColumn;
+use crate::prelude::Scalar;
 use crate::ColumnRef;
 use crate::ConstColumn;
-use crate::NewColumn;
 use crate::NullableColumn;
-use crate::ScalarType;
+use crate::ScalarColumn;
+use crate::ScalarColumnBuilder;
 
 pub type NullableColumnBuilder<T> = ColumnBuilderBase<true, T>;
 pub type ColumnBuilder<T> = ColumnBuilderBase<false, T>;
 
-pub struct ColumnBuilderBase<const NULLABLE: bool, T: ScalarType> {
-    builder: T::MutableColumnType,
+pub struct ColumnBuilderBase<const NULLABLE: bool, T: Scalar> {
+    builder: <T::ColumnType as ScalarColumn>::Builder,
     validity: MutableBitmap,
 }
 
 impl<const NULLABLE: bool, T> ColumnBuilderBase<NULLABLE, T>
-where T: ScalarType + Default
+where T: Scalar
 {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            builder: <T::MutableColumnType>::with_capacity(capacity),
+            builder: <<T::ColumnType as ScalarColumn>::Builder>::with_capacity(capacity),
             validity: MutableBitmap::with_capacity(capacity),
         }
     }
 
-    #[inline]
-    pub fn build(&mut self, length: usize) -> ColumnRef {
-        let column = self.build_nonull(length);
-        if NULLABLE {
-            return Arc::new(NullableColumn::new(
-                column,
-                std::mem::take(&mut self.validity).into(),
-            ));
-        }
-        column
-    }
-
     fn build_nonull(&mut self, length: usize) -> ColumnRef {
-        let col = self.builder.as_column();
-        if length != self.len() && self.len() == 1 {
+        let size = self.len();
+        let col = self.builder.to_column();
+        if length != size && size == 1 {
             return Arc::new(ConstColumn::new(col, length));
         }
         col
@@ -74,8 +64,15 @@ where T: ScalarType + Default
 }
 
 impl<T> ColumnBuilderBase<true, T>
-where T: ScalarType + Default
+where T: Scalar
 {
+    #[inline]
+    pub fn build(&mut self, length: usize) -> ColumnRef {
+        let validity = std::mem::take(&mut self.validity).into();
+        let column = self.build_nonull(length);
+        Arc::new(NullableColumn::new(column, validity))
+    }
+
     #[inline]
     pub fn append_null(&mut self) {
         self.builder.append_default();
@@ -83,22 +80,32 @@ where T: ScalarType + Default
     }
 
     #[inline]
-    pub fn append(&mut self, value: T, valid: bool) {
-        self.builder.append(value);
+    pub fn append(
+        &mut self,
+        value: <<T as Scalar>::ColumnType as ScalarColumn>::RefItem<'_>,
+        valid: bool,
+    ) {
+        self.builder.push(value);
         self.validity.push(valid);
     }
 }
 
 impl<T> ColumnBuilderBase<false, T>
-where T: ScalarType + Default
+where T: Scalar
 {
     #[inline]
-    pub fn append(&mut self, value: T) {
-        self.builder.append(value);
+    pub fn build(&mut self, length: usize) -> ColumnRef {
+        self.build_nonull(length)
     }
 
-    pub fn from_item_iter<I: Iterator<Item = T>>(iter: I) -> ColumnRef {
-        let column = <T::ColumnType as NewColumn<T>>::new_from_iter(iter);
-        Arc::new(column)
+    pub fn from_iterator<'a>(
+        it: impl Iterator<Item = <<T as Scalar>::ColumnType as ScalarColumn>::RefItem<'a>>,
+    ) -> <T as Scalar>::ColumnType {
+        <<T as Scalar>::ColumnType as ScalarColumn>::from_iterator(it)
+    }
+
+    #[inline]
+    pub fn append(&mut self, value: <<T as Scalar>::ColumnType as ScalarColumn>::RefItem<'_>) {
+        self.builder.push(value);
     }
 }

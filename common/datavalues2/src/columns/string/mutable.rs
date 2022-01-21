@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use crate::prelude::*;
 
 pub struct MutableStringColumn {
@@ -47,7 +49,7 @@ impl Default for MutableStringColumn {
     }
 }
 
-impl<'a> MutableColumn<&'a [u8], StringColumn> for MutableStringColumn {
+impl MutableColumn for MutableStringColumn {
     fn data_type(&self) -> DataTypePtr {
         StringType::arc()
     }
@@ -62,16 +64,6 @@ impl<'a> MutableColumn<&'a [u8], StringColumn> for MutableStringColumn {
 
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
         self
-    }
-
-    fn finish(&mut self) -> StringColumn {
-        self.last_size = 0;
-        unsafe {
-            StringColumn::from_data_unchecked(
-                std::mem::take(&mut self.offsets).into(),
-                std::mem::take(&mut self.values).into(),
-            )
-        }
     }
 
     fn append_default(&mut self) {
@@ -91,7 +83,29 @@ impl<'a> MutableColumn<&'a [u8], StringColumn> for MutableStringColumn {
         self.offsets.len() - 1
     }
 
-    fn append(&mut self, item: &'a [u8]) {
-        self.append_value(item);
+    fn to_column(&mut self) -> ColumnRef {
+        Arc::new(self.finish())
+    }
+}
+
+impl ScalarColumnBuilder for MutableStringColumn {
+    type ColumnType = StringColumn;
+
+    fn push(&mut self, value: &[u8]) {
+        self.last_size += value.len();
+        self.offsets.push(self.last_size as i64);
+        self.values.extend_from_slice(value);
+    }
+
+    fn finish(&mut self) -> Self::ColumnType {
+        self.shrink_to_fit();
+        unsafe {
+            let column = StringColumn::from_data_unchecked(
+                std::mem::take(&mut self.offsets).into(),
+                std::mem::take(&mut self.values).into(),
+            );
+            self.offsets.push(0);
+            column
+        }
     }
 }
