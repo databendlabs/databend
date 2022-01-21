@@ -126,6 +126,7 @@ fn test_bloom_f64_serialization() -> Result<()> {
     Ok(())
 }
 
+// create test data, all numerics are odd number, even numbers are reserved for testing.
 fn create_blocks() -> Vec<DataBlock> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("ColumnUInt8", DataType::UInt8, true),
@@ -151,41 +152,41 @@ fn create_blocks() -> Vec<DataBlock> {
     ]);
 
     let block1 = DataBlock::create_by_array(schema.clone(), vec![
-        Series::new(vec![12_u8, 46, 99, 6]),                      // UInt8
-        Series::new(vec![11_u16, 6, 240, 19]),                    // UInt16
-        Series::new(vec![213_u32, 1024, 966, 12133]),             // UInt32
-        Series::new(vec![20003_u64, 1231024, 90066, 21323721]),   // UInt64
-        Series::new(vec![-12_i8, 46, -99, 6]),                    // Int8
-        Series::new(vec![-111_i16, 6, -240, 19]),                 // Int16
-        Series::new(vec![-2103_i32, 100024, -90066, 62133]),      // Int32
-        Series::new(vec![-20003_i64, 81231024, -93266, -413721]), // Int64
-        Series::new(vec![-203.123_f32, 812.31024, -932.66, -0.413721]), // Float32
-        Series::new(vec![-2003.123_f64, 812.31024, -9302.66, -0.88413721]), // Float64
-        Series::new(vec![11222_u16, 60000, 24220, 119]),          // Date16
-        Series::new(vec![1222_u32, 60000, 24220, 119]),           // Date32
-        Series::new(vec![1222_u32, 60000, 24220, 119]),           // DateTime32
-        Series::new(vec![1212222_u64, 60000, 24220, 119]),        // DateTime64
-        Series::new(vec![-1212222_i64, 60000, 24220, 119]),       // IntervalDayTime
-        Series::new(vec!["Alice", "Bob", "Batman", "Superman"]),  // String
+        Series::new(vec![1_u8, 3, 5, 7]),
+        Series::new(vec![1_u16, 3, 5, 7]),
+        Series::new(vec![1_u32, 3, 5, 7]),
+        Series::new(vec![1_u64, 3, 5, 7]),
+        Series::new(vec![-1_i8, -3, -5, -7]),
+        Series::new(vec![-1_i16, -3, -5, -7]),
+        Series::new(vec![-1_i32, -3, -5, -7]),
+        Series::new(vec![-1_i64, -3, -5, -7]),
+        Series::new(vec![1.0_f32, 3.0, 5.0, 7.0]),
+        Series::new(vec![1.0_f64, 3.0, 5.0, 7.0]),
+        Series::new(vec![1_u16, 3, 5, 7]),
+        Series::new(vec![1_u32, 3, 5, 7]),
+        Series::new(vec![1_u32, 3, 5, 7]),
+        Series::new(vec![1_u64, 3, 5, 7]),
+        Series::new(vec![1_i64, 3, 5, 7]),
+        Series::new(vec!["Alice", "Bob", "Batman", "Superman"]),
     ]);
 
     let block2 = DataBlock::create_by_array(schema, vec![
-        Series::new(vec![11_u8, 47, 100, 0]),    // UInt8
-        Series::new(vec![10_u16, 61, 24, 29]),   // UInt16
-        Series::new(vec![2132_u32, 14, 96, 12]), // UInt32
-        Series::new(vec![200093_u64, 12310924, 900066, 201323721]), // UInt64
-        Series::new(vec![-121_i8, 46, -19, 96]), // Int8
-        Series::new(vec![-11_i16, 6, -2400, 191]), // Int16
-        Series::new(vec![-2003_i32, 100024, -90066, 62133]), // Int32
-        Series::new(vec![-203_i64, 812324, -9366, -1051721]), // Int64
-        Series::new(vec![-2.123_f32, 812.3124, -93.66, -0.4121]), // Float32
-        Series::new(vec![-23.1243_f64, 6112.31024, -966302.66, -12.88413]), // Float64
-        Series::new(vec![112_u16, 6111, 24220, 1119]), // Date16
-        Series::new(vec![12292_u32, 60000, 241220, 11009]), // Date32
-        Series::new(vec![12202_u32, 60000, 24220, 11239]), // DateTime32
-        Series::new(vec![1123123_u64, 60000, 24220, 1199]), // DateTime64
-        Series::new(vec![-1219992_i64, 60000, 24220, 1199]), // IntervalDayTime
-        Series::new(vec!["Iron man", "Thor", "Professor X", "Wolverine"]), // String
+        Series::new(vec![9_u8, 11, 13, 15]),
+        Series::new(vec![9_u16, 11, 13, 15]),
+        Series::new(vec![9_u32, 11, 13, 15]),
+        Series::new(vec![9_u64, 11, 13, 15]),
+        Series::new(vec![-9_i8, -11, -13, -15]),
+        Series::new(vec![-9_i16, -11, -13, -15]),
+        Series::new(vec![-9_i32, -11, -13, -15]),
+        Series::new(vec![-9_i64, -11, -13, -15]),
+        Series::new(vec![9.0_f32, 11.0, 13.0, 15.0]),
+        Series::new(vec![9.0_f64, 11.0, 13.0, 17.0]),
+        Series::new(vec![9_u16, 11, 13, 15]),
+        Series::new(vec![9_u32, 11, 13, 15]),
+        Series::new(vec![9_u32, 11, 13, 15]),
+        Series::new(vec![9_u64, 11, 13, 15]),
+        Series::new(vec![9_i64, 11, 13, 15]),
+        Series::new(vec!["Iron man", "Thor", "Professor X", "Wolverine"]),
     ]);
 
     vec![block1, block2]
@@ -248,27 +249,27 @@ fn test_bloom_indexer_logical_and_prune() -> Result<()> {
     let tests: Vec<Test> = vec![
         Test {
             // Both values exists in the data block
-            name: "ColumnFloat64 = -2003.123 and ColumnString = 'Batman'",
+            name: "ColumnFloat64 = 11 and ColumnString = 'Batman'",
             expr: col("ColumnFloat64")
-                .eq(lit(-2003.123_f64))
+                .eq(lit(11_f64))
                 .and(col("ColumnString").eq(lit("Batman".as_bytes()))),
             expected_eval_result: BloomFilterExprEvalResult::Unknown,
         },
         Test {
-            // ColumnFloat64 = -2003.123_f64 is false so expected result should be false
-            name: "ColumnFloat64 = -1003.123 and ColumnString = 'Batman'",
+            // The left is false and right is unknown so expected result should be false
+            name: "ColumnFloat64 = 2 and ColumnString = 'Batman'",
             expr: col("ColumnFloat64")
-                .eq(lit(-1003.123_f64))
+                .eq(lit(2_f64))
                 .and(col("ColumnString").eq(lit("Batman".as_bytes()))),
             expected_eval_result: BloomFilterExprEvalResult::False,
         },
         Test {
-            // Bloom filter doesn't support NULL, so we expect the result to be NotApplicable
-            name: "ColumnFloat64 = -2003.123 and ColumnString = NULL",
+            // The left is false and right is NotApplicable so expected result should be false
+            name: "ColumnFloat64 = 2 and ColumnString = NULL",
             expr: col("ColumnFloat64")
-                .eq(lit(-2003.123_f64))
+                .eq(lit(2_f64))
                 .and(col("ColumnString").eq(lit_null())),
-            expected_eval_result: BloomFilterExprEvalResult::NotApplicable,
+            expected_eval_result: BloomFilterExprEvalResult::False,
         },
     ];
 
@@ -293,33 +294,33 @@ fn test_bloom_indexer_logical_or_prune() -> Result<()> {
     let tests: Vec<Test> = vec![
         Test {
             // Neither value exists in the data block, should return false;
-            name: "ColumnDate32 = 24221 or ColumnString = 'not-exist'",
+            name: "ColumnDate32 = 2 or ColumnString = 'not-exist'",
             expr: col("ColumnDate32")
-                .eq(lit(24221_u32))
+                .eq(lit(2_u32))
                 .or(col("ColumnString").eq(lit("not-exist".as_bytes()))),
             expected_eval_result: BloomFilterExprEvalResult::False,
         },
         Test {
             // Both values exists in the data block, should return unknown.
-            name: "ColumnFloat64 = -2003.123 or ColumnString = 'Professor X'",
+            name: "ColumnInt64 = -1 or ColumnString = 'Professor X'",
             expr: col("ColumnFloat64")
-                .eq(lit(-2003.123_f64))
+                .eq(lit(-1_i64))
                 .or(col("ColumnString").eq(lit("Professor X".as_bytes()))),
             expected_eval_result: BloomFilterExprEvalResult::Unknown,
         },
         Test {
             // left is false and right is unknown, should return unknown.
-            name: "ColumnFloat64 = -1003.123 or ColumnString = 'Batman'",
+            name: "ColumnFloat64 = 3 or ColumnString = 'Batman'",
             expr: col("ColumnFloat64")
-                .eq(lit(-1003.123_f64))
+                .eq(lit(3_f64))
                 .or(col("ColumnString").eq(lit("Batman".as_bytes()))),
             expected_eval_result: BloomFilterExprEvalResult::Unknown,
         },
         Test {
             // Bloom filter doesn't support NULL, so we expect the result to be NotApplicable
-            name: "ColumnFloat64 = -2003.123 and ColumnString = NULL",
+            name: "ColumnFloat64 = 2 and ColumnString = NULL",
             expr: col("ColumnFloat64")
-                .eq(lit(-2003.123_f64))
+                .eq(lit(2_f64))
                 .or(col("ColumnString").eq(lit_null())),
             expected_eval_result: BloomFilterExprEvalResult::NotApplicable,
         },
