@@ -67,3 +67,40 @@ impl SourcePipeBuilder {
         self.outputs_port.push(output_port);
     }
 }
+
+pub struct TransformPipeBuilder {
+    processors: Vec<ProcessorPtr>,
+    inputs_port: Vec<Arc<InputPort>>,
+    outputs_port: Vec<Arc<OutputPort>>,
+}
+
+impl TransformPipeBuilder {
+    pub fn create() -> TransformPipeBuilder {
+        TransformPipeBuilder {
+            processors: vec![],
+            inputs_port: vec![],
+            outputs_port: vec![],
+        }
+    }
+
+    pub fn finalize(self) -> NewPipe {
+        assert_eq!(self.processors.len(), self.inputs_port.len());
+        assert_eq!(self.processors.len(), self.outputs_port.len());
+        NewPipe::SimplePipe {
+            processors: self.processors,
+            inputs_port: self.inputs_port,
+            outputs_port: self.outputs_port,
+        }
+    }
+
+    pub fn add_transform(
+        &mut self,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        proc: ProcessorPtr,
+    ) {
+        self.processors.push(proc);
+        self.inputs_port.push(input);
+        self.outputs_port.push(output);
+    }
+}

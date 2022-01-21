@@ -14,5 +14,7 @@
 
 mod transform;
 mod transform_dummy;
+mod transform_filter;
 
 pub use transform_dummy::TransformDummy;
+pub use transform_filter::TransformFilter;

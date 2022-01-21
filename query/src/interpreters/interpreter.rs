@@ -17,6 +17,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
+use crate::pipelines::new::NewPipeline;
 
 #[async_trait::async_trait]
 pub trait Interpreter: Sync + Send {
@@ -30,6 +31,10 @@ pub trait Interpreter: Sync + Send {
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream>;
+
+    fn execute_with_new_pipeline(&self) -> Result<NewPipeline> {
+        Err(ErrorCode::UnImplement(format!("Interpreter {} unimplemented new pipeline", self.name())))
+    }
 
     /// Do some start work for the interpreter.
     async fn start(&self) -> Result<()> {

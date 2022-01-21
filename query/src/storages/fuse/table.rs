@@ -29,6 +29,8 @@ use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::StreamExt;
+use common_ast::parser::ast::Query;
+use crate::pipelines::new::NewPipeline;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
@@ -66,7 +68,7 @@ impl Table for FuseTable {
         true
     }
 
-    #[tracing::instrument(level = "debug", name="fuse_table_read_partitions", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name = "fuse_table_read_partitions", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn read_partitions(
         &self,
         ctx: Arc<QueryContext>,
@@ -75,7 +77,7 @@ impl Table for FuseTable {
         self.do_read_partitions(ctx, push_downs).await
     }
 
-    #[tracing::instrument(level = "debug", name="fuse_table_read", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name = "fuse_table_read", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn read(
         &self,
         ctx: Arc<QueryContext>,
@@ -84,7 +86,7 @@ impl Table for FuseTable {
         self.do_read(ctx, &plan.push_downs).await
     }
 
-    #[tracing::instrument(level = "debug", name="fuse_table_append_data", skip(self, ctx, stream), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name = "fuse_table_append_data", skip(self, ctx, stream), fields(ctx.id = ctx.get_id().as_str()))]
     async fn append_data(
         &self,
         ctx: Arc<QueryContext>,

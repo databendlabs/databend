@@ -14,27 +14,31 @@
 //
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::mem::size_of;
 use std::sync::Arc;
+use common_datablocks::DataBlock;
 
 use common_datavalues::chrono::NaiveDateTime;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Utc;
-use common_datavalues::DataField;
+use common_datavalues::{DataField, DataSchemaRef};
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::TableIdent;
+use common_meta_types::{MetaId, TableIdent};
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::Expression;
+use common_planners::{Expression, TruncateTablePlan};
 use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
+use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::processors::SyncSource;
 
 use super::numbers_stream::NumbersStream;
 use crate::pipelines::transforms::get_sort_descriptions;
@@ -181,6 +185,21 @@ impl Table for NumbersTable {
             None,
         )?))
     }
+
+    fn read2(&self, ctx: Arc<QueryContext>, plan: &ReadDataSourcePlan, pipeline: &mut NewPipeline) -> Result<()> {
+        unimplemented!()
+    }
+}
+
+struct NumbersSource {}
+
+impl SyncSource for NumbersSource {
+    const NAME: &'static str = "numbers";
+
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
+        // TODO:
+        unimplemented!()
+    }
 }
 
 impl TableFunction for NumbersTable {
@@ -189,7 +208,7 @@ impl TableFunction for NumbersTable {
     }
 
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
-    where Self: 'a {
+        where Self: 'a {
         self
     }
 }

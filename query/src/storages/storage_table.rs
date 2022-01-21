@@ -30,6 +30,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
+use crate::pipelines::new::NewPipeline;
 
 use crate::sessions::QueryContext;
 
@@ -90,6 +91,10 @@ pub trait Table: Sync + Send {
         _ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream>;
+
+    fn read2(&self, ctx: Arc<QueryContext>, plan: &ReadDataSourcePlan, pipeline: &mut NewPipeline) -> Result<()> {
+        Err(ErrorCode::UnImplement(""))
+    }
 
     async fn append_data(
         &self,

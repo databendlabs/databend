@@ -16,24 +16,25 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::FilterPlan;
+use common_planners::{FilterPlan, SelectPlan};
 use common_planners::PlanNode;
 use common_planners::PlanVisitor;
 use common_planners::ReadDataSourcePlan;
 
 use crate::pipelines::new::pipe::SourcePipeBuilder;
+use crate::pipelines::new::pipe::TransformPipeBuilder;
 use crate::pipelines::new::pipeline::NewPipeline;
+use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::TableSource;
+use crate::pipelines::new::processors::TransformFilter;
 use crate::sessions::QueryContext;
 
-#[allow(dead_code)]
-struct QueryPipelineBuilder {
+pub struct QueryPipelineBuilder {
     ctx: Arc<QueryContext>,
     pipeline: NewPipeline,
 }
 
-#[allow(dead_code)]
 impl QueryPipelineBuilder {
     pub fn create(ctx: Arc<QueryContext>) -> QueryPipelineBuilder {
         QueryPipelineBuilder {
@@ -42,7 +43,8 @@ impl QueryPipelineBuilder {
         }
     }
 
-    pub fn finalize(self) -> Result<NewPipeline> {
+    pub fn finalize(mut self, plan: &SelectPlan) -> Result<NewPipeline> {
+        self.visit_select(plan)?;
         Ok(self.pipeline)
     }
 }
@@ -68,7 +70,24 @@ impl PlanVisitor for QueryPipelineBuilder {
 
     fn visit_filter(&mut self, plan: &FilterPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
-        // TODO:
+
+        let mut builder = TransformPipeBuilder::create();
+        for _index in 0..self.pipeline.pipe_len() {
+            let transform_input_port = InputPort::create();
+            let transform_output_port = OutputPort::create();
+            builder.add_transform(
+                transform_input_port.clone(),
+                transform_output_port.clone(),
+                TransformFilter::try_create(
+                    plan.schema(),
+                    plan.predicate.clone(),
+                    transform_input_port,
+                    transform_output_port,
+                )?,
+            );
+        }
+
+        self.pipeline.add_pipe(builder.finalize());
         Ok(())
     }
 
@@ -76,23 +95,26 @@ impl PlanVisitor for QueryPipelineBuilder {
         // Bind plan partitions to context.
         self.ctx.try_set_partitions(plan.parts.clone())?;
 
-        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-        let max_threads = std::cmp::min(max_threads, plan.parts.len());
+        // let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        // let max_threads = std::cmp::min(max_threads, plan.parts.len());
 
-        let mut source_builder = SourcePipeBuilder::create();
-        for _index in 0..std::cmp::max(max_threads, 1) {
-            let source_plan = plan.clone();
-            let source_ctx = self.ctx.clone();
+        // let mut source_builder = SourcePipeBuilder::create();
+        let table = self.ctx.build_table_from_source_plan(plan)?;
+        table.read2(self.ctx.clone(), plan, &mut self.pipeline);
 
-            let source_output_port = OutputPort::create();
-
-            source_builder.add_source(
-                TableSource::try_create(source_output_port.clone(), source_ctx, source_plan)?,
-                source_output_port,
-            );
-        }
-
-        self.pipeline.add_pipe(source_builder.finalize());
+        // for _index in 0..std::cmp::max(max_threads, 1) {
+        //     let source_ctx = self.ctx.clone();
+        //
+        //
+        //     // let source_output_port = OutputPort::create();
+        //     //
+        //     // source_builder.add_source(
+        //     //     TableSource::try_create(source_output_port.clone(), source_ctx, source_plan)?,
+        //     //     source_output_port,
+        //     // );
+        // }
+        //
+        // self.pipeline.add_pipe(source_builder.finalize());
         Ok(())
     }
 }
