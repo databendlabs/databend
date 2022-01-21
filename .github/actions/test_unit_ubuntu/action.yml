@@ -29,9 +29,7 @@ runs:
     - name: unit test
       shell: bash
       run: |
-        ./scripts/setup/run_docker.sh bash -c export RUSTFLAGS=${RUSTFLAGS} && export RUSTDOCFLAGS=${RUSTDOCFLAGS} && \
-        export RUST_LOG=${RUST_LOG} && export RUST_BACKTRACE=${RUST_BACKTRACE} && \
-        export RUST_TEST_THREADS=${RUST_TEST_THREADS} && cargo test --no-fail-fast --verbose
+        ./scripts/setup/run_docker.sh bash -c export RUST_LOG=${RUST_LOG} && export RUST_BACKTRACE=${RUST_BACKTRACE} && export RUST_TEST_THREADS=${RUST_TEST_THREADS} && cargo test --no-fail-fast --verbose
       env:
         RUST_TEST_THREADS: 2
         RUST_LOG: ERROR
