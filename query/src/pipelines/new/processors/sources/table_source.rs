@@ -42,7 +42,7 @@ impl TableSource {
         ctx: Arc<QueryContext>,
         source_plan: ReadDataSourcePlan,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(vec![output], TableSource {
+        AsyncSourcer::create(output, TableSource {
             initialized: false,
             ctx,
             source_plan,
