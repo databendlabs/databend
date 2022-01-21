@@ -13,15 +13,23 @@
 // limitations under the License.
 
 use std::io;
+use std::io::SeekFrom;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
 use bytes;
 use futures;
+use futures::executor::block_on;
+use futures::io::BufReader;
 use futures::ready;
 use futures::AsyncRead;
+use futures::AsyncReadExt;
+use futures::AsyncSeek;
 use pin_project::pin_project;
+
+use crate::error::Result;
 
 pub type Reader = Box<dyn AsyncRead + Unpin + Send>;
 
@@ -47,7 +55,7 @@ impl ReaderStream {
 }
 
 impl futures::Stream for ReaderStream {
-    type Item = Result<bytes::Bytes, io::Error>;
+    type Item = io::Result<bytes::Bytes>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.as_mut().project();
@@ -115,5 +123,112 @@ where F: FnMut(usize)
         };
 
         r
+    }
+}
+/// Create a buffered `SeekableReader`
+///
+/// ## Note
+///
+/// We will use 4MB buffer for now to avoid too much repeated requests.
+#[allow(dead_code)]
+pub async fn new_buffered_seekable_reader<'d, S>(
+    da: Arc<crate::DataAccessor<'d, S>>,
+    key: &str,
+) -> Result<BufReader<SeekableReader<'d, S>>>
+where
+    S: super::Read<S> + super::Stat<S>,
+{
+    let o = da.stat(key).await?;
+
+    // We will create a BufReader with a large buf so it only read big chunk from underlying storage.
+    Ok(BufReader::with_capacity(
+        4 * 1024 * 1024, // 4 MiB
+        SeekableReader::new(da, key, o.size),
+    ))
+}
+
+/// If we already know a file's total size, we can implement Seek for it.
+///
+/// - Every time we call `read` we will send a new http request to fetch data from cloud storage like s3.
+/// - Every time we call `seek` we will update the `pos` field just in memory.
+/// # NOTE
+///
+/// It's better to use SeekableReader as an inner reader inside BufReader.
+///
+/// # TODO
+///
+/// We need use update the metrics.
+pub struct SeekableReader<'d, S: super::Read<S>> {
+    da: Arc<crate::DataAccessor<'d, S>>,
+    key: String,
+    total: u64,
+
+    pos: u64,
+}
+
+impl<'d, S> SeekableReader<'d, S>
+where S: super::Read<S>
+{
+    pub fn new(da: Arc<crate::DataAccessor<'d, S>>, key: &str, total: u64) -> Self {
+        SeekableReader {
+            da,
+            key: key.to_string(),
+            total,
+
+            pos: 0,
+        }
+    }
+}
+
+impl<S> AsyncRead for SeekableReader<'_, S>
+where S: super::Read<S>
+{
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
+        let key = self.key.clone();
+        let da = self.da.clone();
+        let pos = self.pos;
+
+        let n = block_on(async {
+            let mut builder = da.read(key.as_str());
+            let r = builder
+                .offset(pos)
+                .size(buf.len() as u64)
+                .run()
+                .await
+                .map_err(io::Error::other)?;
+
+            Pin::new(r).read(buf).await
+        })?;
+
+        self.pos += n as u64;
+        Poll::Ready(Ok(n))
+    }
+}
+
+impl<S> AsyncSeek for SeekableReader<'_, S>
+where S: super::Read<S>
+{
+    fn poll_seek(
+        mut self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        off: SeekFrom,
+    ) -> Poll<io::Result<u64>> {
+        match off {
+            SeekFrom::Start(off) => {
+                self.pos = off;
+            }
+            SeekFrom::End(off) => {
+                self.pos = self.total.checked_add_signed(off).expect("overflow");
+            }
+            SeekFrom::Current(off) => {
+                self.pos = self.pos.checked_add_signed(off).expect("overflow");
+            }
+        }
+
+        Poll::Ready(Ok(self.pos))
     }
 }

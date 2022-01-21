@@ -80,11 +80,11 @@ impl<S: Send + Sync> Read<S> for Backend {
                 .map_err(|e| parse_io_error(&e, &path))?;
         }
 
-        if let Some(size) = args.size {
-            f.set_len(size)
-                .await
-                .map_err(|e| parse_io_error(&e, &path))?;
-        }
+        // if let Some(size) = args.size {
+        //     f.set_len(size)
+        //         .await
+        //         .map_err(|e| parse_io_error(&e, &path))?;
+        // }
 
         Ok(Box::new(f.compat()))
     }
