@@ -156,6 +156,18 @@ impl TypeID {
     }
 
     #[inline]
+    pub fn is_quoted(&self) -> bool {
+        matches!(
+            self,
+            TypeID::String
+                | TypeID::Date16
+                | TypeID::Date32
+                | TypeID::DateTime32
+                | TypeID::DateTime64
+        )
+    }
+
+    #[inline]
     pub fn numeric_byte_size(&self) -> Result<usize> {
         match self {
             TypeID::Int8 | TypeID::UInt8 => Ok(1),

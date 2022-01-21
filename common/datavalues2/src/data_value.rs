@@ -284,7 +284,7 @@ impl fmt::Display for DataValue {
                     Ok(())
                 }
             },
-            DataValue::Array(v, ..) => {
+            DataValue::Array(v) => {
                 write!(
                     f,
                     "[{}]",

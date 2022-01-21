@@ -80,6 +80,11 @@ impl DataType for ArrayType {
             if let DataValue::Array(value) = v {
                 offsets.push(offsets.last().unwrap() + value.len() as i64);
                 values.extend_from_slice(value);
+            } else {
+                return Result::Err(ErrorCode::BadDataValueType(format!(
+                    "Unexpected type:{:?} to generate list column",
+                    v.value_type()
+                )));
             }
         }
 
@@ -98,7 +103,10 @@ impl DataType for ArrayType {
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        todo!()
+        Box::new(ArraySerializer {
+            inner: self.inner.create_serializer(),
+            typ: self.inner.clone(),
+        })
     }
 
     fn create_deserializer(&self, _capacity: usize) -> Box<dyn TypeDeserializer> {
