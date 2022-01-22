@@ -14,26 +14,21 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
+use databend_query::sql::PlanParser;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::tests::parse_query;
 
 #[tokio::test]
 async fn test_use_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
-    if let PlanNode::UseDatabase(plan) = parse_query("USE default", &ctx)? {
-        let interpreter = UseDatabaseInterpreter::try_create(ctx, plan)?;
-        assert_eq!(interpreter.name(), "UseDatabaseInterpreter");
+    let plan = PlanParser::parse("USE default", ctx.clone()).await?;
+    let interpreter = InterpreterFactory::get(ctx, plan)?;
+    assert_eq!(interpreter.name(), "UseDatabaseInterpreter");
 
-        let mut stream = interpreter.execute(None).await?;
-        while let Some(_block) = stream.next().await {}
-    } else {
-        panic!()
-    }
+    let mut stream = interpreter.execute(None).await?;
+    while let Some(_block) = stream.next().await {}
 
     Ok(())
 }
@@ -42,15 +37,12 @@ async fn test_use_interpreter() -> Result<()> {
 async fn test_use_database_interpreter_error() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
-    if let PlanNode::UseDatabase(plan) = parse_query("USE xx", &ctx)? {
-        let interpreter = UseDatabaseInterpreter::try_create(ctx, plan)?;
+    let plan = PlanParser::parse("USE xx", ctx.clone()).await?;
+    let interpreter = InterpreterFactory::get(ctx, plan)?;
 
-        if let Err(e) = interpreter.execute(None).await {
-            let expect = "Code: 3, displayText = Cannot USE 'xx', because the 'xx' doesn't exist.";
-            assert_eq!(expect, format!("{}", e));
-        } else {
-            panic!();
-        }
+    if let Err(e) = interpreter.execute(None).await {
+        let expect = "Code: 1003, displayText = Cannot USE 'xx', because the 'xx' doesn't exist.";
+        assert_eq!(expect, format!("{}", e));
     }
 
     Ok(())

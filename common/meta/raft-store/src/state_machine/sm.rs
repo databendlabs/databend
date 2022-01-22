@@ -17,12 +17,12 @@ use std::fmt::Debug;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use async_raft::raft::Entry;
-use async_raft::raft::EntryPayload;
-use async_raft::raft::MembershipConfig;
-use common_exception::prelude::ErrorCode;
+use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use common_meta_sled_store::get_sled_db;
+use common_meta_sled_store::openraft;
+use common_meta_sled_store::openraft::EffectiveMembership;
+use common_meta_sled_store::openraft::MessageSummary;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::AsTxnKeySpace;
@@ -45,6 +45,8 @@ use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
 use common_tracing::tracing;
+use openraft::raft::Entry;
+use openraft::raft::EntryPayload;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
@@ -169,14 +171,14 @@ impl StateMachine {
     ) -> common_exception::Result<(
         impl Iterator<Item = sled::Result<(IVec, IVec)>>,
         LogId,
-        MembershipConfig,
         String,
     )> {
         let last_applied = self.get_last_applied()?;
-        let mem = self.get_membership()?;
 
         // NOTE: An initialize node/cluster always has the first log contains membership config.
-        let mem = mem.unwrap_or_default();
+
+        let last_applied =
+            last_applied.expect("not allowed to build snapshot with empty state machine");
 
         let snapshot_idx = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -188,7 +190,7 @@ impl StateMachine {
             last_applied.term, last_applied.index, snapshot_idx
         );
 
-        Ok((self.sm_tree.tree.iter(), last_applied, mem, snapshot_id))
+        Ok((self.sm_tree.tree.iter(), last_applied, snapshot_id))
     }
 
     /// Serialize a snapshot for transport.
@@ -231,9 +233,10 @@ impl StateMachine {
     /// If a duplicated log entry is detected by checking data.txid, no update
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self, entry), fields(log_id=%entry.log_id))]
     pub async fn apply(&self, entry: &Entry<LogEntry>) -> common_exception::Result<AppliedState> {
-        // TODO(xp): all update need to be done in a tx.
+        tracing::debug!("apply: summary: {}", entry.summary());
+        tracing::debug!("apply: payload: {:?}", entry.payload);
 
         let log_id = &entry.log_id;
 
@@ -245,8 +248,7 @@ impl StateMachine {
 
             match entry.payload {
                 EntryPayload::Blank => {}
-                EntryPayload::Normal(ref norm) => {
-                    let data = &norm.data;
+                EntryPayload::Normal(ref data) => {
                     if let Some(ref txid) = data.txid {
                         let (serial, resp) =
                             self.txn_get_client_last_resp(&txid.client, &txn_tree)?;
@@ -266,14 +268,16 @@ impl StateMachine {
                     }
                     return Ok(Some(resp));
                 }
-                EntryPayload::ConfigChange(ref mem) => {
+                EntryPayload::Membership(ref mem) => {
                     txn_sm_meta.insert(
                         &LastMembership,
-                        &StateMachineMetaValue::Membership(mem.membership.clone()),
+                        &StateMachineMetaValue::Membership(EffectiveMembership {
+                            log_id: *log_id,
+                            membership: mem.clone(),
+                        }),
                     )?;
                     return Ok(Some(AppliedState::None));
                 }
-                EntryPayload::SnapshotPointer(_) => {}
             };
 
             Ok(None)
@@ -616,12 +620,14 @@ impl StateMachine {
     /// Already applied log should be filtered out before passing into this function.
     /// This is the only entry to modify state machine.
     /// The `cmd` is always committed by raft before applying.
-    #[tracing::instrument(level = "debug", skip(self, txn_tree))]
+    #[tracing::instrument(level = "debug", skip(self, cmd, txn_tree))]
     pub fn apply_cmd(
         &self,
         cmd: &Cmd,
         txn_tree: &TransactionSledTree,
     ) -> common_exception::Result<AppliedState> {
+        tracing::debug!("apply_cmd: {:?}", cmd);
+
         match cmd {
             Cmd::IncrSeq { ref key } => self.apply_incr_seq_cmd(key, txn_tree),
 
@@ -850,7 +856,7 @@ impl StateMachine {
         Ok(value.1)
     }
 
-    pub fn get_membership(&self) -> common_exception::Result<Option<MembershipConfig>> {
+    pub fn get_membership(&self) -> common_exception::Result<Option<EffectiveMembership>> {
         let sm_meta = self.sm_meta();
         let mem = sm_meta
             .get(&StateMachineMetaKey::LastMembership)?
@@ -859,12 +865,11 @@ impl StateMachine {
         Ok(mem)
     }
 
-    pub fn get_last_applied(&self) -> common_exception::Result<LogId> {
+    pub fn get_last_applied(&self) -> common_exception::Result<Option<LogId>> {
         let sm_meta = self.sm_meta();
         let last_applied = sm_meta
             .get(&LastApplied)?
-            .map(|x| x.try_into().expect("LogId"))
-            .unwrap_or_default();
+            .map(|x| x.try_into().expect("LogId"));
 
         Ok(last_applied)
     }

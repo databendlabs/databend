@@ -135,23 +135,40 @@ impl TestFixture {
         catalog.create_table(create_table_plan.into()).await
     }
 
-    pub fn gen_sample_blocks(num: u32, start: i32) -> Vec<Result<DataBlock>> {
-        (0..num)
+    pub fn gen_sample_blocks(num: usize, start: i32) -> Vec<Result<DataBlock>> {
+        Self::gen_sample_blocks_ex(num, 3, start)
+    }
+
+    pub fn gen_sample_blocks_ex(
+        num_of_block: usize,
+        rows_perf_block: usize,
+        start: i32,
+    ) -> Vec<Result<DataBlock>> {
+        (0..num_of_block)
             .into_iter()
-            .map(|_v| {
+            .map(|idx| {
                 let schema =
                     DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
-                Ok(DataBlock::create_by_array(schema, vec![Series::new(vec![
-                    start,
-                    start + 1,
-                    start + 2,
-                ])]))
+                Ok(DataBlock::create_by_array(schema, vec![Series::new(
+                    std::iter::repeat_with(|| idx as i32 + start)
+                        .take(rows_perf_block)
+                        .collect::<Vec<i32>>(),
+                )]))
             })
             .collect()
     }
 
-    pub fn gen_sample_blocks_stream(num: u32, start: i32) -> SendableDataBlockStream {
+    pub fn gen_sample_blocks_stream(num: usize, start: i32) -> SendableDataBlockStream {
         let blocks = Self::gen_sample_blocks(num, start);
+        Box::pin(futures::stream::iter(blocks))
+    }
+
+    pub fn gen_sample_blocks_stream_ex(
+        num_of_block: usize,
+        rows_perf_block: usize,
+        val_start_from: i32,
+    ) -> SendableDataBlockStream {
+        let blocks = Self::gen_sample_blocks_ex(num_of_block, rows_perf_block, val_start_from);
         Box::pin(futures::stream::iter(blocks))
     }
 
@@ -253,12 +270,12 @@ pub async fn execute_command(query: &str, ctx: Arc<QueryContext>) -> Result<()> 
     Ok(())
 }
 
-pub async fn append_sample_data(num_blocks: u32, fixture: &TestFixture) -> Result<()> {
+pub async fn append_sample_data(num_blocks: usize, fixture: &TestFixture) -> Result<()> {
     append_sample_data_overwrite(num_blocks, false, fixture).await
 }
 
 pub async fn append_sample_data_overwrite(
-    num_blocks: u32,
+    num_blocks: usize,
     overwrite: bool,
     fixture: &TestFixture,
 ) -> Result<()> {

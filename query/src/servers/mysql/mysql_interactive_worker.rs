@@ -80,7 +80,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
 
     fn authenticate(
         &self,
-        auth_plugin: &str,
+        _auth_plugin: &str,
         username: &[u8],
         salt: &[u8],
         auth_data: &[u8],
@@ -88,7 +88,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         let username = String::from_utf8_lossy(username);
         let info = CertifiedInfo::create(&username, auth_data, &self.client_addr);
 
-        let authenticate = self.base.authenticate(auth_plugin, salt, info);
+        let authenticate = self.base.authenticate(salt, info);
         futures::executor::block_on(async move {
             match authenticate.await {
                 Ok(res) => res,
@@ -201,12 +201,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
 }
 
 impl<W: std::io::Write> InteractiveWorkerBase<W> {
-    async fn authenticate(
-        &self,
-        auth_plugin: &str,
-        salt: &[u8],
-        info: CertifiedInfo,
-    ) -> Result<bool> {
+    async fn authenticate(&self, salt: &[u8], info: CertifiedInfo) -> Result<bool> {
         let user_name = &info.user_name;
         let user_manager = self.session.get_user_manager();
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
@@ -216,49 +211,11 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             .get_user_with_client_ip(&ctx.get_tenant(), user_name, client_ip)
             .await?;
 
-        let input = &info.user_password;
-        let saved = &user_info.password;
-        let encode_password = Self::encoding_password(auth_plugin, salt, input, saved)?;
-
-        let authed = user_manager
-            .auth_user(
-                user_info.clone(),
-                CertifiedInfo::create(user_name, encode_password, client_ip),
-            )
-            .await?;
+        let authed = user_info.auth_info.auth_mysql(&info.user_password, salt)?;
         if authed {
             self.session.set_current_user(user_info);
         }
-
         Ok(authed)
-    }
-
-    fn encoding_password(
-        auth_plugin: &str,
-        salt: &[u8],
-        input: &[u8],
-        user_password: &[u8],
-    ) -> Result<Vec<u8>> {
-        match auth_plugin {
-            "mysql_native_password" if input.is_empty() => Ok(vec![]),
-            "mysql_native_password" => {
-                // SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1( password ) ) )
-                let mut m = sha1::Sha1::new();
-                m.update(salt);
-                m.update(user_password);
-
-                let result = m.digest().bytes();
-                if input.len() != result.len() {
-                    return Err(ErrorCode::SHA1CheckFailed("SHA1 check failed"));
-                }
-                let mut s = Vec::with_capacity(result.len());
-                for i in 0..result.len() {
-                    s.push(input[i] ^ result[i]);
-                }
-                Ok(s)
-            }
-            _ => Ok(input.to_vec()),
-        }
     }
 
     fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {
@@ -284,7 +241,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     fn do_close(&mut self, _: u32) {}
 
-    fn is_federated_server_setup_set_command(&mut self, query: &str) -> bool {
+    fn federated_server_setup_set_or_jdbc_command(&mut self, query: &str) -> bool {
         let expr = RegexSet::new(&[
             "(?i)^(SET NAMES(.*))",
             "(?i)^(SET character_set_results(.*))",
@@ -293,6 +250,8 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             "(?i)^(SET sql_mode(.*))",
             "(?i)^(SET @@(.*))",
             "(?i)^(SET SESSION TRANSACTION ISOLATION LEVEL(.*))",
+            // Just compatibility for jdbc
+            "(?i)^(/\\* mysql-connector-java(.*))",
         ])
         .unwrap();
         expr.is_match(query)
@@ -302,7 +261,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
         tracing::debug!("{}", query);
 
-        if self.is_federated_server_setup_set_command(query) {
+        if self.federated_server_setup_set_or_jdbc_command(query) {
             Ok((vec![DataBlock::empty()], String::from("")))
         } else {
             let context = self.session.create_context().await?;

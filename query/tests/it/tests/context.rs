@@ -16,9 +16,10 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_embedded::MetaEmbedded;
+use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::NodeInfo;
-use common_meta_types::PasswordType;
+use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
 use databend_query::catalogs::CatalogContext;
@@ -40,8 +41,10 @@ pub fn create_query_context() -> Result<Arc<QueryContext>> {
     let mut user_info = UserInfo::new(
         "root".to_string(),
         "127.0.0.1".to_string(),
-        Vec::from("pass"),
-        PasswordType::Sha256,
+        AuthInfo::Password {
+            hash_method: PasswordHashMethod::Sha256,
+            hash_value: Vec::from("pass"),
+        },
     );
     user_info.grants.grant_privileges(
         "root",
@@ -69,8 +72,10 @@ pub fn create_query_context_with_config(config: Config) -> Result<Arc<QueryConte
     let mut user_info = UserInfo::new(
         "root".to_string(),
         "127.0.0.1".to_string(),
-        Vec::from("pass"),
-        PasswordType::Sha256,
+        AuthInfo::Password {
+            hash_method: PasswordHashMethod::Sha256,
+            hash_value: Vec::from("pass"),
+        },
     );
     user_info.grants.grant_privileges(
         "root",

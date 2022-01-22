@@ -12,15 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::Result;
 use databend_query::optimizers::*;
+use databend_query::sql::PlanParser;
 
-#[test]
-fn test_simple() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_simple() -> Result<()> {
     let query = "select number from numbers(1000) order by number limit 10;";
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = crate::tests::parse_query(query, &ctx)?;
+    let plan = PlanParser::parse(query, ctx.clone()).await?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -29,19 +31,19 @@ fn test_simple() -> Result<()> {
     Limit: 10\
     \n  Projection: number:UInt64\
     \n    Sort: number:UInt64\
-    \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000], push_downs: [projections: [0], limit: 10, order_by: [number]]";
+    \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], limit: 10, order_by: [number]]";
 
     let actual = format!("{:?}", plan_node);
     assert_eq!(expect, actual);
     Ok(())
 }
 
-#[test]
-fn test_simple_with_offset() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_simple_with_offset() -> Result<()> {
     let query = "select number from numbers(1000) order by number limit 10 offset 5;";
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = crate::tests::parse_query(query, &ctx)?;
+    let plan = PlanParser::parse(query, ctx.clone()).await?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -50,20 +52,20 @@ fn test_simple_with_offset() -> Result<()> {
     Limit: 10, 5\
     \n  Projection: number:UInt64\
     \n    Sort: number:UInt64\
-    \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000], push_downs: [projections: [0], limit: 15, order_by: [number]]";
+    \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], limit: 15, order_by: [number]]";
 
     let actual = format!("{:?}", plan_node);
     assert_eq!(expect, actual);
     Ok(())
 }
 
-#[test]
-fn test_nested_projection() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_nested_projection() -> Result<()> {
     let query =
         "select number from (select * from numbers(1000) order by number limit 11) limit 10;";
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = crate::tests::parse_query(query, &ctx)?;
+    let plan = PlanParser::parse(query, ctx.clone()).await?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -74,20 +76,20 @@ fn test_nested_projection() -> Result<()> {
     \n    Limit: 11\
     \n      Projection: number:UInt64\
     \n        Sort: number:UInt64\
-    \n          ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000], push_downs: [projections: [0], limit: 11, order_by: [number]]";
+    \n          ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], limit: 11, order_by: [number]]";
 
     let actual = format!("{:?}", plan_node);
     assert_eq!(expect, actual);
     Ok(())
 }
 
-#[test]
-fn test_aggregate() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_aggregate() -> Result<()> {
     let query =
         "select sum(number) FROM numbers(1000) group by number % 10 order by sum(number) limit 5;";
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = crate::tests::parse_query(query, &ctx)?;
+    let plan = PlanParser::parse(query, ctx.clone()).await?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -99,15 +101,15 @@ fn test_aggregate() -> Result<()> {
     \n      AggregatorFinal: groupBy=[[(number % 10)]], aggr=[[sum(number)]]\
     \n        AggregatorPartial: groupBy=[[(number % 10)]], aggr=[[sum(number)]]\
     \n          Expression: (number % 10):UInt8, number:UInt64 (Before GroupBy)\
-    \n            ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000], push_downs: [projections: [0]]";
+    \n            ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]";
 
     let actual = format!("{:?}", plan_node);
     assert_eq!(expect, actual);
     Ok(())
 }
 
-#[test]
-fn test_monotonic_function() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_monotonic_function() -> Result<()> {
     struct Test {
         name: &'static str,
         query: &'static str,
@@ -122,7 +124,7 @@ fn test_monotonic_function() -> Result<()> {
             Projection: (number * number):UInt64\
             \n  Sort: (number + (number + 3)):UInt64\
             \n    Expression: (number * number):UInt64, (number + (number + 3)):UInt64 (Before OrderBy)\
-            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800], push_downs: [projections: [0]]",
+            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
         },
         // TODO: broken this by select statement analyzer.
         Test {
@@ -133,14 +135,14 @@ fn test_monotonic_function() -> Result<()> {
             \n  Projection: (number * number):UInt64\
             \n    Sort: ((number + number) + 3):UInt64\
             \n      Expression: (number * number):UInt64, ((number + number) + 3):UInt64 (Before OrderBy)\
-            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800], push_downs: [projections: [0], limit: 10, order_by: [((number + number) + 3)]]",
+            \n        ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], limit: 10, order_by: [((number + number) + 3)]]",
         },
         //TODO: add more function tests
     ];
 
     for test in tests {
         let ctx = crate::tests::create_query_context()?;
-        let plan = crate::tests::parse_query(test.query, &ctx)?;
+        let plan = PlanParser::parse(test.query, ctx.clone()).await?;
         let mut optimizer = Optimizers::without_scatters(ctx);
 
         let optimized_plan = optimizer.optimize(&plan)?;

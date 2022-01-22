@@ -67,6 +67,7 @@ pub struct LogEvent {
     pub scan_seeks: u64,
     pub scan_seek_cost_ms: u64,
     pub scan_partitions: u64,
+    pub total_partitions: u64,
     pub result_rows: u64,
     pub result_bytes: u64,
     pub cpu_usage: u32,
@@ -133,6 +134,7 @@ impl InterpreterQueryLog {
             Series::new(vec![event.scan_seeks as u64]),
             Series::new(vec![event.scan_seek_cost_ms as u64]),
             Series::new(vec![event.scan_partitions as u64]),
+            Series::new(vec![event.total_partitions as u64]),
             Series::new(vec![event.result_rows as u64]),
             Series::new(vec![event.result_bytes as u64]),
             Series::new(vec![event.cpu_usage]),
@@ -161,7 +163,7 @@ impl InterpreterQueryLog {
     pub async fn log_start(&self) -> Result<()> {
         // User.
         let handler_type = self.ctx.get_current_session().get_type();
-        let tenant_id = self.ctx.get_config().query.tenant_id;
+        let tenant_id = self.ctx.get_tenant();
         let cluster_id = self.ctx.get_config().query.cluster_id;
         let user = self.ctx.get_current_user()?;
         let sql_user = user.name;
@@ -191,6 +193,7 @@ impl InterpreterQueryLog {
         let scan_seeks = 0u64;
         let scan_seek_cost_ms = 0u64;
         let scan_partitions = 0u64;
+        let total_partitions = 0u64;
         let result_rows = 0u64;
         let result_bytes = 0u64;
         let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
@@ -225,6 +228,7 @@ impl InterpreterQueryLog {
             scan_seeks,
             scan_seek_cost_ms,
             scan_partitions,
+            total_partitions,
             result_rows,
             result_bytes,
             cpu_usage,
@@ -273,6 +277,7 @@ impl InterpreterQueryLog {
         let scan_seeks = dal_metrics.read_seeks as u64;
         let scan_seek_cost_ms = dal_metrics.read_seek_cost_ms as u64;
         let scan_partitions = dal_metrics.partitions_scanned as u64;
+        let total_partitions = dal_metrics.partitions_total as u64;
         let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
         let memory_usage = self.ctx.get_current_session().get_memory_usage() as u64;
 
@@ -311,6 +316,7 @@ impl InterpreterQueryLog {
             scan_seeks,
             scan_seek_cost_ms,
             scan_partitions,
+            total_partitions,
             result_rows,
             result_bytes,
             cpu_usage,

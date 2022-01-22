@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_planners::UseTenantPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -45,6 +46,8 @@ impl Interpreter for UseTenantInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        tracing::info!("SUDO USE tenant:{}", self.plan.tenant);
+
         self.ctx
             .set_current_tenant(self.plan.tenant.clone())
             .await?;

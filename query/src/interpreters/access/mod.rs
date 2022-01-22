@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod proxy_mode_access;
+mod management_mode_access;
 
-pub use proxy_mode_access::ProxyModeAccess;
+pub use management_mode_access::ManagementModeAccess;

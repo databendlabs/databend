@@ -39,7 +39,7 @@ fn test_plan_builds() -> Result<()> {
             expect: "\
             Projection: number:UInt64\
             \n  Expression: number:UInt64 ()\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]",
+            \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]",
             err : "",
         },
         TestCase {
@@ -51,7 +51,7 @@ fn test_plan_builds() -> Result<()> {
             expect: "\
             Projection: (4 + 5) as 4_5:Int64\
             \n  Expression: (4 + 5):Int64, ((4 + 5) + 2):Int64 ()\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]",
+            \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]",
             err : "",
         },
         TestCase {
@@ -61,7 +61,7 @@ fn test_plan_builds() -> Result<()> {
                 .build()),
             expect: "\
         Projection: number:UInt64\
-        \n  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]",
+        \n  ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]",
         err : "",
         },
         TestCase {
@@ -72,7 +72,7 @@ fn test_plan_builds() -> Result<()> {
                 .build()),
             expect:"Expression: number:UInt64, number as c2:UInt64 ()\
             \n  Expression: number:UInt64, number as c1:UInt64 ()\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]",
+            \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]",
             err : "",
         },
         TestCase {
@@ -84,7 +84,7 @@ fn test_plan_builds() -> Result<()> {
             expect:"\
             Projection: c1:UInt64\
             \n  Expression: number:UInt64, number as c1:UInt64 (Before Projection)\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]",
+            \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]",
             err : "",
         },
         TestCase {
@@ -98,7 +98,7 @@ fn test_plan_builds() -> Result<()> {
             Projection: c1:UInt64\
             \n  Expression: number:UInt64, number as c1:UInt64 (Before Projection)\
             \n    Filter: (c1 = 1)\
-            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]",
+            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]",
             err : "",
         },
     ];

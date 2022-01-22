@@ -251,6 +251,8 @@ impl PlanRewriter for ExprTransformImpl {
                 statistics: Statistics {
                     read_rows: 0,
                     read_bytes: 0,
+                    partitions_scanned: 0,
+                    partitions_total: 0,
                     is_exact: true,
                 },
                 description: format!("(Read from {} table)", plan.table_info.desc),

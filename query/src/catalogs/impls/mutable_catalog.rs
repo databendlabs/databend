@@ -38,7 +38,7 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
-use crate::catalogs::backends::MetaRemote;
+use crate::catalogs::backends::MetaBackend;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::CatalogContext;
 use crate::common::MetaClientProvider;
@@ -88,8 +88,8 @@ impl MutableCatalog {
 
             let meta_client_provider =
                 Arc::new(MetaClientProvider::new(conf.meta.to_grpc_client_config()));
-            let meta_remote = MetaRemote::create(meta_client_provider);
-            Arc::new(meta_remote)
+            let meta_backend = MetaBackend::create(meta_client_provider);
+            Arc::new(meta_backend)
         };
 
         let tenant = conf.query.tenant_id.clone();

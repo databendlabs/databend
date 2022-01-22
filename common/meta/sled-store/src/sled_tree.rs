@@ -342,7 +342,7 @@ impl SledTree {
         Ok(it)
     }
 
-    /// Get key-valuess in with the same prefix
+    /// Get key-values in with the same prefix
     pub fn scan_prefix<KV>(&self, prefix: &KV::K) -> common_exception::Result<Vec<(KV::K, KV::V)>>
     where KV: SledKeySpace {
         let mut res = vec![];

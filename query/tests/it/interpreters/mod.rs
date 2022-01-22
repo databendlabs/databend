@@ -30,7 +30,6 @@ mod interpreter_stage_create;
 mod interpreter_stage_drop;
 mod interpreter_table_create;
 mod interpreter_table_drop;
-mod interpreter_table_optimize;
 mod interpreter_table_truncate;
 mod interpreter_udf_alter;
 mod interpreter_udf_create;

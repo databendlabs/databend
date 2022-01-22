@@ -23,6 +23,17 @@ use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 
 #[async_trait]
+pub trait KVApiBuilder<T>
+where T: KVApi
+{
+    /// Create a KVApi
+    async fn build(&self) -> T;
+
+    /// Create a KVApi cluster
+    async fn build_cluster(&self) -> Vec<T>;
+}
+
+#[async_trait]
 pub trait KVApi: Send + Sync {
     async fn upsert_kv(&self, act: UpsertKVAction)
         -> common_exception::Result<UpsertKVActionReply>;

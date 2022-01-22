@@ -31,7 +31,6 @@ struct Test {
     left: Option<DataColumnWithField>,
     right: Option<DataColumnWithField>,
     expect_mono: Monotonicity,
-    error: &'static str,
 }
 
 fn create_f64(d: f64) -> Option<DataColumnWithField> {
@@ -71,18 +70,8 @@ fn verify_test(t: Test) -> Result<()> {
         }
     }
 
-    let mono = match ExpressionMonotonicityVisitor::check_expression(
-        schema,
-        &t.expr,
-        variables,
-        single_point,
-    ) {
-        Ok(mono) => mono,
-        Err(e) => {
-            assert_eq!(t.error, e.to_string(), "{}", t.name);
-            return Ok(());
-        }
-    };
+    let mono =
+        ExpressionMonotonicityVisitor::check_expression(schema, &t.expr, variables, single_point);
 
     assert_eq!(
         mono.is_monotonic, t.expect_mono.is_monotonic,
@@ -134,7 +123,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
     let test_suite = vec![
         Test {
             name: "f(x) = x + 12",
-            expr: Expression::create_binary_expression("+", vec![col("x"), lit(12i32)]),
+            expr: add(col("x"), lit(12i32)),
             column: "x",
             left: None,
             right: None,
@@ -145,14 +134,10 @@ fn test_arithmetic_plus_minus() -> Result<()> {
                 left: None,
                 right: None,
             },
-            error: "",
         },
         Test {
             name: "f(x) = -x + 12",
-            expr: Expression::create_binary_expression("+", vec![
-                Expression::create_unary_expression("negate", vec![col("x")]),
-                lit(12i32),
-            ]),
+            expr: add(neg(col("x")), lit(12)),
             column: "x",
             left: None,
             right: None,
@@ -163,11 +148,11 @@ fn test_arithmetic_plus_minus() -> Result<()> {
                 left: None,
                 right: None,
             },
-            error: "",
         },
         Test {
+            // Cannot find the column name 'y'.
             name: "f(x,y) = x + y",
-            expr: Expression::create_binary_expression("+", vec![col("x"), col("y")]),
+            expr: add(col("x"), col("y")),
             column: "x",
             left: None,
             right: None,
@@ -178,22 +163,13 @@ fn test_arithmetic_plus_minus() -> Result<()> {
                 left: None,
                 right: None,
             },
-            error: "Code: 6, displayText = Cannot find the column name '\"y\"'.",
         },
         Test {
             name: "f(x) = (-x + 12) - x + (1 - x)",
-            expr: Expression::create_binary_expression("+", vec![
-                Expression::create_binary_expression("-", vec![
-                    // -x + 12
-                    Expression::create_binary_expression("+", vec![
-                        Expression::create_unary_expression("negate", vec![col("x")]),
-                        lit(12i32),
-                    ]),
-                    col("x"),
-                ]),
-                // 1 - x
-                Expression::create_unary_expression("negate", vec![lit(1i64), col("x")]),
-            ]),
+            expr: add(
+                sub(add(neg(col("x")), lit(12)), col("x")),
+                sub(lit(1), col("x")),
+            ),
             column: "x",
             left: None,
             right: None,
@@ -204,25 +180,15 @@ fn test_arithmetic_plus_minus() -> Result<()> {
                 left: None,
                 right: None,
             },
-            error: "",
         },
         Test {
+            // Function '-' is not monotonic in the variables range.
             name: "f(x) = (x + 12) - x + (1 - x)",
-            expr: Expression::create_binary_expression("+", vec![
-                Expression::create_binary_expression("-", vec![
-                    // x + 12
-                    Expression::create_binary_expression("+", vec![col("x"), lit(12i32)]),
-                    col("x"),
-                ]),
-                // 1 - x
-                Expression::create_unary_expression("negate", vec![lit(1i64), col("x")]),
-            ]),
+            expr: add(sub(add(col("x"), lit(12)), col("x")), sub(lit(1), col("x"))),
             column: "x",
             left: None,
             right: None,
             expect_mono: Monotonicity::default(),
-            error:
-                "Code: 1000, displayText = Function '-' is not monotonic in the variables range.",
         },
     ];
 
@@ -248,7 +214,6 @@ fn test_arithmetic_mul_div() -> Result<()> {
                 left: None,
                 right: None,
             },
-            error: "",
         },
         Test {
             name: "f(x) = -1/x",
@@ -263,7 +228,6 @@ fn test_arithmetic_mul_div() -> Result<()> {
                 left: create_f64(-0.2),
                 right: create_f64(-0.1),
             },
-            error: "",
         },
         Test {
             name: "f(x) = x/10",
@@ -278,26 +242,24 @@ fn test_arithmetic_mul_div() -> Result<()> {
                 left: None,
                 right: None,
             },
-            error: "",
         },
         Test {
+            // Function '*' is not monotonic in the variables range.
             name: "f(x) = x * (x-12) where x in [10-1000]",
             expr: Expression::create_binary_expression("*", vec![
                 col("x"),
-                Expression::create_binary_expression("-", vec![col("x"), lit(12_i64)]),
+                sub(col("x"), lit(12_i64)),
             ]),
             column: "x",
             left: create_f64(10.0),
             right: create_f64(1000.0),
             expect_mono: Monotonicity::default(),
-            error:
-                "Code: 1000, displayText = Function '*' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = x * (x-12) where x in [12, 100]",
             expr: Expression::create_binary_expression("*", vec![
                 col("x"),
-                Expression::create_binary_expression("-", vec![col("x"), lit(12_i64)]),
+                sub(col("x"), lit(12_i64)),
             ]),
             column: "x",
             left: create_f64(12.0),
@@ -309,7 +271,6 @@ fn test_arithmetic_mul_div() -> Result<()> {
                 left: create_f64(0.0),
                 right: create_f64(8800.0),
             },
-            error: "",
         },
         Test {
             name: "f(x) = x/(1/x) where  x >= 1",
@@ -327,31 +288,29 @@ fn test_arithmetic_mul_div() -> Result<()> {
                 left: create_f64(1.0),
                 right: create_f64(4.0),
             },
-            error: "",
         },
         Test {
+            // Function '/' is not monotonic in the variables range.
             name: "f(x) = -x/(2/(x-2)) where  x in [0-10]",
             expr: Expression::create_binary_expression("/", vec![
-                Expression::create_unary_expression("negate", vec![col("x")]),
+                neg(col("x")),
                 Expression::create_binary_expression("/", vec![
                     lit(2_i8),
-                    Expression::create_binary_expression("-", vec![col("x"), lit(2_i8)]),
+                    sub(col("x"), lit(2_i8)),
                 ]),
             ]),
             column: "x",
             left: create_f64(0.0),
             right: create_f64(10.0),
             expect_mono: Monotonicity::default(),
-            error:
-                "Code: 1000, displayText = Function '/' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = -x/(2/(x-2)) where  x in [4-10]",
             expr: Expression::create_binary_expression("/", vec![
-                Expression::create_unary_expression("negate", vec![col("x")]),
+                neg(col("x")),
                 Expression::create_binary_expression("/", vec![
                     lit(2_i8),
-                    Expression::create_binary_expression("-", vec![col("x"), lit(2_i8)]),
+                    sub(col("x"), lit(2_i8)),
                 ]),
             ]),
             column: "x",
@@ -364,7 +323,6 @@ fn test_arithmetic_mul_div() -> Result<()> {
                 left: create_f64(-4.0),
                 right: create_f64(-40.0),
             },
-            error: "",
         },
     ];
 
@@ -378,16 +336,13 @@ fn test_arithmetic_mul_div() -> Result<()> {
 fn test_abs_function() -> Result<()> {
     let test_suite = vec![
         Test {
+            // Function 'abs' is not monotonic in the variables range.
             name: "f(x) = abs(x + 12)",
-            expr: Expression::create_scalar_function("abs", vec![
-                Expression::create_binary_expression("+", vec![col("x"), lit(12i32)]),
-            ]),
+            expr: Expression::create_scalar_function("abs", vec![add(col("x"), lit(12i32))]),
             column: "x",
             left: None,
             right: None,
             expect_mono: Monotonicity::default(),
-            error:
-                "Code: 1000, displayText = Function 'abs' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = abs(x) where  0 <= x <= 10",
@@ -402,7 +357,6 @@ fn test_abs_function() -> Result<()> {
                 left: create_f64(0.0),
                 right: create_f64(10.0),
             },
-            error: "",
         },
         Test {
             name: "f(x) = abs(x) where  -10 <= x <= -2",
@@ -417,23 +371,19 @@ fn test_abs_function() -> Result<()> {
                 left: create_f64(10.0),
                 right: create_f64(2.0),
             },
-            error: "",
         },
         Test {
-            name: "f(x) = abs(x) where -5 <= x <= 5", // should NOT be monotonic
+            // Function 'abs' is not monotonic in the variables range.
+            name: "f(x) = abs(x) where -5 <= x <= 5",
             expr: Expression::create_scalar_function("abs", vec![col("x")]),
             column: "x",
             left: create_f64(-5.0),
             right: create_f64(5.0),
             expect_mono: Monotonicity::default(),
-            error:
-                "Code: 1000, displayText = Function 'abs' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = abs(x + 12) where -12 <= x <= 1000",
-            expr: Expression::create_scalar_function("abs", vec![
-                Expression::create_binary_expression("+", vec![col("x"), lit(12i32)]),
-            ]),
+            expr: Expression::create_scalar_function("abs", vec![add(col("x"), lit(12i32))]),
             column: "x",
             left: create_f64(-12.0),
             right: create_f64(1000.0),
@@ -444,28 +394,22 @@ fn test_abs_function() -> Result<()> {
                 left: create_f64(0.0),
                 right: create_f64(1012.0),
             },
-            error: "",
         },
         Test {
-            name: "f(x) = abs(x + 12) where -14 <=  x <= 20", // should NOT be monotonic
-            expr: Expression::create_scalar_function("abs", vec![
-                Expression::create_binary_expression("+", vec![col("x"), lit(12i32)]),
-            ]),
+            // Function 'abs' is not monotonic in the variables range.
+            name: "f(x) = abs(x + 12) where -14 <=  x <= 20",
+            expr: Expression::create_scalar_function("abs", vec![add(col("x"), lit(12i32))]),
             column: "x",
             left: create_f64(-14.0),
             right: create_f64(20.0),
             expect_mono: Monotonicity::default(),
-            error:
-                "Code: 1000, displayText = Function 'abs' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = abs( (x - 7) + (x - 3) ) where 5 <= x <= 100",
-            expr: Expression::create_scalar_function("abs", vec![
-                Expression::create_binary_expression("+", vec![
-                    Expression::create_binary_expression("-", vec![col("x"), lit(7_i32)]),
-                    Expression::create_binary_expression("-", vec![col("x"), lit(3_i32)]),
-                ]),
-            ]),
+            expr: Expression::create_scalar_function("abs", vec![add(
+                sub(col("x"), lit(7_i32)),
+                sub(col("x"), lit(3_i32)),
+            )]),
             column: "x",
             left: create_f64(5.0),
             right: create_f64(100.0),
@@ -476,19 +420,13 @@ fn test_abs_function() -> Result<()> {
                 left: create_f64(0.0),
                 right: create_f64(190.0),
             },
-            error: "",
         },
         Test {
             name: "f(x) = abs( (-x + 8) - x) where -100 <= x <= 4",
-            expr: Expression::create_scalar_function("abs", vec![
-                Expression::create_binary_expression("-", vec![
-                    Expression::create_binary_expression("+", vec![
-                        Expression::create_unary_expression("negate", vec![col("x")]),
-                        lit(8_i64),
-                    ]),
-                    col("x"),
-                ]),
-            ]),
+            expr: Expression::create_scalar_function("abs", vec![sub(
+                add(neg(col("x")), lit(8)),
+                col("x"),
+            )]),
             column: "x",
             left: create_f64(-100.0),
             right: create_f64(4.0),
@@ -499,7 +437,6 @@ fn test_abs_function() -> Result<()> {
                 left: create_f64(208.0),
                 right: create_f64(0.0),
             },
-            error: "",
         },
     ];
 
@@ -514,9 +451,10 @@ fn test_dates_function() -> Result<()> {
     let test_suite = vec![
         Test {
             name: "f(x) = toStartOfWeek(x+12)",
-            expr: Expression::create_scalar_function("toStartOfWeek", vec![
-                Expression::create_binary_expression("+", vec![col("x"), lit(12i32)]),
-            ]),
+            expr: Expression::create_scalar_function("toStartOfWeek", vec![add(
+                col("x"),
+                lit(12i32),
+            )]),
             column: "x",
             left: None,
             right: None,
@@ -527,7 +465,6 @@ fn test_dates_function() -> Result<()> {
                 left: None,
                 right: None,
             },
-            error: "",
         },
         Test {
             name: "f(x) = toMonday(x)",
@@ -542,16 +479,15 @@ fn test_dates_function() -> Result<()> {
                 left: None,
                 right: None,
             },
-            error: "",
         },
         Test {
+            // Function 'toSecond' is not monotonic in the variables range.
             name: "f(x) = toSecond(x)",
             expr: Expression::create_scalar_function("toSecond", vec![col("x")]),
             column: "x",
             left: None,
             right: None,
             expect_mono: Monotonicity::default(),
-            error: "Code: 1000, displayText = Function 'toSecond' is not monotonic in the variables range.",
         },
         Test {
             name: "f(z) = toSecond(z)",
@@ -566,16 +502,15 @@ fn test_dates_function() -> Result<()> {
                 left: create_u8(0),
                 right: create_u8(59),
             },
-            error: "",
         },
         Test {
+            // Function 'toDayOfYear' is not monotonic in the variables range.
             name: "f(z) = toDayOfYear(z)",
             expr: Expression::create_scalar_function("toDayOfYear", vec![col("z")]),
             column: "z",
             left: create_datetime(1606752119),
             right: create_datetime(1638288059),
             expect_mono: Monotonicity::default(),
-            error: "Code: 1000, displayText = Function 'toDayOfYear' is not monotonic in the variables range.",
         },
         Test {
             name: "f(z) = toStartOfHour(z)",
@@ -590,7 +525,6 @@ fn test_dates_function() -> Result<()> {
                 left: None,
                 right: None,
             },
-            error: "",
         },
     ];
 
@@ -604,23 +538,19 @@ fn test_dates_function() -> Result<()> {
 fn test_single_point() -> Result<()> {
     let test_suite = vec![
         Test {
-            name: "f(x) = rand() + x",
-            expr: Expression::create_binary_expression("+", vec![
-                col("x"),
-                Expression::create_scalar_function("rand", vec![]),
-            ]),
+            // Function 'rand' is not monotonic in the variables range.
+            name: "f(x) = x + rand()",
+            expr: add(col("x"), Expression::create_scalar_function("rand", vec![])),
             column: "x",
             left: create_f64(1.0),
             right: create_f64(1.0),
             expect_mono: Monotonicity::default(),
-            error:
-                "Code: 1000, displayText = Function 'rand' is not monotonic in the variables range.",
         },
         Test {
-            name: "f(x) = x * (12-x)",
+            name: "f(x) = x * (12 - x)",
             expr: Expression::create_binary_expression("*", vec![
                 col("x"),
-                Expression::create_binary_expression("-", vec![lit(12_i64), col("x")]),
+                sub(lit(12_i64), col("x")),
             ]),
             column: "x",
             left: create_f64(1.0),
@@ -632,7 +562,6 @@ fn test_single_point() -> Result<()> {
                 left: create_f64(11.0),
                 right: create_f64(11.0),
             },
-            error: "",
         },
     ];
 

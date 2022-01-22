@@ -14,12 +14,10 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
+use databend_query::sql::PlanParser;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_explain_interpreter() -> Result<()> {
@@ -30,30 +28,27 @@ async fn test_explain_interpreter() -> Result<()> {
         WHERE (number + 1) = 4 HAVING (number + 1) = 4\
     ";
 
-    if let PlanNode::Explain(plan) = parse_query(TEST_QUERY, &ctx)? {
-        let executor = ExplainInterpreter::try_create(ctx, plan)?;
-        assert_eq!(executor.name(), "ExplainInterpreter");
+    let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+    let executor = InterpreterFactory::get(ctx, plan)?;
+    assert_eq!(executor.name(), "ExplainInterpreter");
 
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let block = &result[0];
-        assert_eq!(block.num_columns(), 1);
-        assert_eq!(block.column(0).len(), 4);
+    let stream = executor.execute(None).await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 1);
+    assert_eq!(block.column(0).len(), 4);
 
-        let expected = vec![
-            "+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+", 
-            "| explain                                                                                                                                                                              |",
-            "+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+", 
-            "| Projection: number:UInt64                                                                                                                                                            |", 
-            "|   Having: ((number + 1) = 4)                                                                                                                                                         |", 
-            "|     Filter: ((number + 1) = 4)                                                                                                                                                       |", 
-            "|       ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [((number + 1) = 4)]] |", 
-            "+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+",
+    let expected = vec![
+            "+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+",
+            "| explain                                                                                                                                                                                                    |",
+            "+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+",
+            "| Projection: number:UInt64                                                                                                                                                                                  |",
+            "|   Having: ((number + 1) = 4)                                                                                                                                                                               |",
+            "|     Filter: ((number + 1) = 4)                                                                                                                                                                             |",
+            "|       ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number + 1) = 4)]] |",
+            "+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+",
         ];
-        common_datablocks::assert_blocks_eq(expected, result.as_slice());
-    } else {
-        panic!()
-    }
+    common_datablocks::assert_blocks_eq(expected, result.as_slice());
 
     Ok(())
 }

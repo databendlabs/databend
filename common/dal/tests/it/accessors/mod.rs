@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+#[cfg(feature = "ut_mock_s3")]
 mod aws_s3;
 mod azure_blob;
 mod local;

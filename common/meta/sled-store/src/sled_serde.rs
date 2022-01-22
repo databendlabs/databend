@@ -16,11 +16,11 @@ use std::mem::size_of_val;
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
-use async_raft::raft::Entry;
-use async_raft::AppData;
 use byteorder::BigEndian;
 use byteorder::ByteOrder;
 use common_exception::ErrorCode;
+use openraft::raft::Entry;
+use openraft::AppData;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sled::IVec;

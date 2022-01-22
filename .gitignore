@@ -4,6 +4,8 @@
 # visual studio code files
 .vscode
 .dir-locals.el
+.bash_history
+.mysql_history
 
 # Rust
 target/
@@ -46,6 +48,8 @@ hfuzz_workspace/
 *.stderr-e
 *.stdout-e
 tests/perfs/*-result.json
+docker/build-tool/dev_setup.sh
+docker/build-tool/rust-toolchain.toml
 
 # python
 venv/

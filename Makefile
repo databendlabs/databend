@@ -155,14 +155,17 @@ run-codegen:
 
 perf-tool: build-perf-tool
 	docker buildx build . -f ./docker/perf-tool/Dockerfile  --platform linux/amd64 --allow network.host --builder host -t ${HUB}/perf-tool:${TAG} --push
-
+# used for the build of dev container
+dev-container:
+	cp ./rust-toolchain.toml ./docker/build-tool
+	docker build ./docker/build-tool -t ${HUB}/dev-container:${TAG} -f ./docker/build-tool/Dockerfile
 profile:
 	bash ./scripts/ci/ci-run-profile.sh
 
 clean:
 	cargo clean
 	rm -f ./nohup.out ./tests/suites/0_stateless/*.stdout-e
-	rm -rf ./_meta*/ ./_logs/ ./query/_logs/ ./metasrv/_logs/
-	rm -rf ./common/base/_logs/ ./common/meta/raft-store/_logs/ ./common/meta/sled-store/_logs/
+	rm -rf ./_meta*/ ./_logs*/ ./query/_logs*/ ./metasrv/_logs*/
+	rm -rf ./common/base/_logs*/ ./common/meta/raft-store/_logs*/ ./common/meta/sled-store/_logs*/
 
 .PHONY: setup test run build fmt lint docker clean

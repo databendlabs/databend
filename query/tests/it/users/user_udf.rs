@@ -28,13 +28,14 @@ async fn test_user_udf() -> Result<()> {
     let description = "this is a description";
     let isempty = "isempty";
     let isnotempty = "isnotempty";
+    let if_not_exists = false;
     let user_mgr = UserApiProvider::create_global(config).await?;
 
     // add isempty.
     {
         let udf =
             UserDefinedFunction::new(isempty, vec!["p".to_string()], "isnull(p)", description);
-        user_mgr.add_udf(tenant, udf).await?;
+        user_mgr.add_udf(tenant, udf, if_not_exists).await?;
     }
 
     // add isnotempty.
@@ -45,7 +46,7 @@ async fn test_user_udf() -> Result<()> {
             "not(isempty(p))",
             description,
         );
-        user_mgr.add_udf(tenant, udf).await?;
+        user_mgr.add_udf(tenant, udf, if_not_exists).await?;
     }
 
     // get all.

@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use anyerror::AnyError;
 use common_exception::ErrorCode;
 use common_exception::SerializedError;
+use common_meta_sled_store::openraft::error::ChangeMembershipError;
 use common_meta_types::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
-
-use crate::any_error::AnyError;
 
 /// Top level error MetaNode would return.
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -27,11 +27,8 @@ pub enum MetaError {
     #[error(transparent)]
     ForwardToLeader(#[from] ForwardToLeader),
 
-    #[error("MembershipChangeInProgress")]
-    MembershipChangeInProgress,
-
     #[error(transparent)]
-    InvalidMembership(#[from] InvalidMembership),
+    ChangeMembershipError(#[from] ChangeMembershipError),
 
     #[error(transparent)]
     ConnectionError(#[from] ConnectionError),
@@ -41,9 +38,6 @@ pub enum MetaError {
 
     #[error("{0}")]
     UnknownError(String),
-    // TODO(xp): RaftError needs impl Serialize etc.
-    // #[error(transparent)]
-    // RaftError(RaftError)
 }
 
 impl From<ErrorCode> for MetaError {

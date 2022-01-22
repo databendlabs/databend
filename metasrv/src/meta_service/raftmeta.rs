@@ -16,22 +16,19 @@ use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use async_raft::config::Config;
-use async_raft::Raft;
-use async_raft::RaftMetrics;
-use async_raft::SnapshotPolicy;
 use common_base::tokio;
 use common_base::tokio::sync::watch;
 use common_base::tokio::sync::Mutex;
 use common_base::tokio::sync::RwLockReadGuard;
 use common_base::tokio::task::JoinHandle;
-use common_exception::prelude::ErrorCode;
-use common_exception::prelude::ToErrorCode;
+use common_exception::ErrorCode;
+use common_exception::ToErrorCode;
 use common_meta_api::MetaApi;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_raft_store::state_machine::TableLookupKey;
 use common_meta_raft_store::state_machine::TableLookupValue;
+use common_meta_sled_store::openraft;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use common_meta_types::AppliedState;
@@ -47,6 +44,10 @@ use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
+use openraft::Config;
+use openraft::Raft;
+use openraft::RaftMetrics;
+use openraft::SnapshotPolicy;
 
 use crate::errors::ConnectionError;
 use crate::errors::ForwardToLeader;
@@ -64,8 +65,6 @@ pub type MetaRaft = Raft<LogEntry, AppliedState, Network, MetaRaftStore>;
 
 // MetaNode is the container of meta data related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
-    // metrics subscribes raft state changes. The most important field is the leader node id, to which all write operations should be forward.
-    pub metrics_rx: watch::Receiver<RaftMetrics>,
     pub sto: Arc<MetaRaftStore>,
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
@@ -111,7 +110,6 @@ impl MetaNodeBuilder {
         let (tx, rx) = watch::channel::<()>(());
 
         let mn = Arc::new(MetaNode {
-            metrics_rx: metrics_rx.clone(),
             sto: sto.clone(),
             raft,
             running_tx: tx,
@@ -179,17 +177,18 @@ impl MetaNode {
 
         let hb = config.heartbeat_interval;
 
-        Config::build("foo_cluster".into())
-            .heartbeat_interval(hb)
-            // Choose a rational value for election timeout.
-            .election_timeout_min(hb * 8)
-            .election_timeout_max(hb * 12)
-            .install_snapshot_timeout(config.install_snapshot_timeout)
-            .snapshot_policy(SnapshotPolicy::LogsSinceLast(
-                config.snapshot_logs_since_last,
-            ))
-            .validate()
-            .expect("building raft Config from databend-metasrv config")
+        Config {
+            cluster_name: "foo_cluster".to_string(),
+            heartbeat_interval: hb,
+            election_timeout_min: hb * 8,
+            election_timeout_max: hb * 12,
+            install_snapshot_timeout: config.install_snapshot_timeout,
+            snapshot_policy: SnapshotPolicy::LogsSinceLast(config.snapshot_logs_since_last),
+            max_applied_log_to_keep: config.max_applied_log_to_keep,
+            ..Default::default()
+        }
+        .validate()
+        .expect("building raft Config from databend-metasrv config")
     }
 
     /// Start the grpc service for raft communication and meta operation API.
@@ -466,14 +465,14 @@ impl MetaNode {
     }
 
     /// When a leader is established, it is the leader's responsibility to setup replication from itself to non-voters, AKA learners.
-    /// async-raft does not persist the node set of non-voters, thus we need to do it manually.
+    /// openraft does not persist the node set of non-voters, thus we need to do it manually.
     /// This fn should be called once a node found it becomes leader.
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn add_configured_non_voters(&self) -> common_exception::Result<()> {
         // TODO after leader established, add non-voter through apis
         let node_ids = self.sto.list_non_voters().await;
         for i in node_ids.iter() {
-            let x = self.raft.add_non_voter(*i).await;
+            let x = self.raft.add_learner(*i, true).await;
 
             tracing::info!("add_non_voter result: {:?}", x);
             if x.is_ok() {
@@ -533,11 +532,13 @@ impl MetaNode {
         Ok(res)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self, req), fields(target=%req.forward_to_leader))]
     pub async fn handle_forwardable_request(
         &self,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, MetaError> {
+        tracing::debug!("handle_forwardable_request: {:?}", req);
+
         let forward = req.forward_to_leader;
 
         let l = self.as_leader().await;
@@ -643,8 +644,10 @@ impl MetaNode {
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "info", skip(self, req))]
     pub async fn write(&self, req: LogEntry) -> Result<AppliedState, MetaError> {
+        tracing::debug!("req: {:?}", req);
+
         let res = self
             .handle_forwardable_request(ForwardRequest {
                 forward_to_leader: 1,
@@ -663,7 +666,7 @@ impl MetaNode {
     pub async fn get_leader(&self) -> NodeId {
         // fast path: there is a known leader
 
-        if let Some(l) = self.metrics_rx.borrow().current_leader {
+        if let Some(l) = self.raft.metrics().borrow().current_leader {
             return l;
         }
 
@@ -671,7 +674,7 @@ impl MetaNode {
 
         // Need to clone before calling changed() on it.
         // Otherwise other thread waiting on changed() may not receive the change event.
-        let mut rx = self.metrics_rx.clone();
+        let mut rx = self.raft.metrics();
 
         loop {
             // NOTE:

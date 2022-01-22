@@ -14,27 +14,22 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
+use databend_query::sql::PlanParser;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::tests::parse_query;
 
 #[tokio::test]
 async fn test_drop_database_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
-    if let PlanNode::DropDatabase(plan) = parse_query("drop database default", &ctx)? {
-        let executor = DropDatabaseInterpreter::try_create(ctx, plan.clone())?;
-        assert_eq!(executor.name(), "DropDatabaseInterpreter");
-        let stream = executor.execute(None).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let expected = vec!["++", "++"];
-        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-    } else {
-        panic!()
-    }
+    let plan = PlanParser::parse("drop database default", ctx.clone()).await?;
+    let executor = InterpreterFactory::get(ctx, plan.clone())?;
+    assert_eq!(executor.name(), "DropDatabaseInterpreter");
+    let stream = executor.execute(None).await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let expected = vec!["++", "++"];
+    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
     Ok(())
 }

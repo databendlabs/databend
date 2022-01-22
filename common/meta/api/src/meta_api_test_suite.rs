@@ -143,7 +143,7 @@ impl MetaApiTestSuite {
             tracing::debug!("=== get absent database res: {:?}", res);
             assert!(res.is_err());
             let res = res.unwrap_err();
-            assert_eq!(3, res.code());
+            assert_eq!(1003, res.code());
             assert_eq!("absent".to_string(), res.message());
         }
 
@@ -324,6 +324,50 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
+    pub async fn database_list_in_diff_tenant<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        tracing::info!("--- prepare db1 and db2");
+        let tenant1 = "tenant1";
+        let tenant2 = "tenant2";
+        {
+            let res = self.create_database(mt, tenant1, "db1").await?;
+            assert_eq!(1, res.database_id);
+
+            let res = self.create_database(mt, tenant1, "db2").await?;
+            assert_eq!(2, res.database_id);
+        }
+
+        {
+            let res = self.create_database(mt, tenant2, "db3").await?;
+            assert_eq!(3, res.database_id);
+        }
+
+        tracing::info!("--- get_databases by tenant1");
+        {
+            let dbs = mt
+                .list_databases(ListDatabaseReq {
+                    tenant: tenant1.to_string(),
+                })
+                .await?;
+            let want: Vec<u64> = vec![1, 2];
+            let got = dbs.iter().map(|x| x.database_id).collect::<Vec<_>>();
+            assert_eq!(want, got)
+        }
+
+        tracing::info!("--- get_databases by tenant2");
+        {
+            let dbs = mt
+                .list_databases(ListDatabaseReq {
+                    tenant: tenant2.to_string(),
+                })
+                .await?;
+            let want: Vec<u64> = vec![3];
+            let got = dbs.iter().map(|x| x.database_id).collect::<Vec<_>>();
+            assert_eq!(want, got)
+        }
+
+        Ok(())
+    }
+
     pub async fn table_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
@@ -426,7 +470,7 @@ impl MetaApiTestSuite {
 
                 let status = res.err().unwrap();
                 assert_eq!(
-                    format!("Code: 4003, displayText = table exists: {}.", tbl_name),
+                    format!("Code: 2302, displayText = table exists: {}.", tbl_name),
                     status.to_string()
                 );
 
@@ -500,7 +544,7 @@ impl MetaApiTestSuite {
                     let res = mt.get_table((tenant, db_name, tbl_name).into()).await;
                     let status = res.err().unwrap();
                     assert_eq!(
-                        format!("Code: 25, displayText = Unknown table: '{:}'.", tbl_name),
+                        format!("Code: 1025, displayText = Unknown table: '{:}'.", tbl_name),
                         status.to_string(),
                         "get dropped table {}",
                         tbl_name
@@ -669,7 +713,7 @@ impl MetaApiTestSuite {
             let err = res.unwrap_err();
             assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
             assert_eq!("nonexistent", err.message());
-            assert_eq!("Code: 3, displayText = nonexistent.", format!("{}", err));
+            assert_eq!("Code: 1003, displayText = nonexistent.", format!("{}", err));
         }
 
         Ok(())

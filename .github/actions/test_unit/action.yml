@@ -10,6 +10,11 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Set Swap Space to 10GB
+      uses: pierotofy/set-swap-space@v1.0
+      with:
+        swap-size-gb: 10
+
     - name: Maximize build space
       uses: ./.github/actions/cleanup
 
@@ -17,13 +22,6 @@ runs:
       with:
         version: '3.x'
         repo-token: ${{ inputs.github_token }}
-
-    - uses: actions-rs/toolchain@v1
-      with:
-        target: ${{ matrix.config.target }}
-        toolchain: nightly
-        override: true
-        components: rustfmt, clippy
 
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
@@ -34,7 +32,7 @@ runs:
       uses: actions-rs/cargo@v1
       with:
         command: test
-        args: --all-features --no-fail-fast
+        args: --no-fail-fast
       env:
         RUST_TEST_THREADS: 2
         RUST_LOG: ERROR
@@ -64,8 +62,8 @@ runs:
       with:
         path: |
           _local_fs/
-          _logs/
-          _meta/
-          metasrv/_logs/
-          query/_logs/
-          store/_logs/
+          _logs*/
+          _meta*/
+          metasrv/_logs*/
+          query/_logs*/
+          store/_logs*/
