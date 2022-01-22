@@ -24,10 +24,43 @@ use common_meta_types::UpsertKVAction;
 use common_tracing::tracing;
 
 use crate::KVApi;
+use crate::KVApiBuilder;
 
 pub struct KVApiTestSuite {}
 
 impl KVApiTestSuite {
+    #[tracing::instrument(level = "info", skip(self, builder))]
+    pub async fn test_all<KV, B>(&self, builder: B) -> anyhow::Result<()>
+    where
+        KV: KVApi,
+        B: KVApiBuilder<KV>,
+    {
+        self.kv_write_read(&builder.build().await).await?;
+        self.kv_delete(&builder.build().await).await?;
+        self.kv_update(&builder.build().await).await?;
+        self.kv_timeout(&builder.build().await).await?;
+        self.kv_meta(&builder.build().await).await?;
+        self.kv_list(&builder.build().await).await?;
+        self.kv_mget(&builder.build().await).await?;
+
+        {
+            let cluster = builder.build_cluster().await;
+            self.kv_write_read_across_nodes(&cluster[0], &cluster[1])
+                .await?;
+        }
+
+        {
+            let cluster = builder.build_cluster().await;
+            self.kv_write_read_across_nodes(&cluster[1], &cluster[2])
+                .await?;
+        }
+
+        Ok(())
+    }
+}
+
+impl KVApiTestSuite {
+    #[tracing::instrument(level = "info", skip(self, kv))]
     pub async fn kv_write_read<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         {
             // write
@@ -88,22 +121,22 @@ impl KVApiTestSuite {
         Ok(())
     }
 
-    pub async fn kv_delete<KV: KVApi>(&self, client: &KV) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "info", skip(self, kv))]
+    pub async fn kv_delete<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         let test_key = "test_key";
-        client
-            .upsert_kv(UpsertKVAction::new(
-                test_key,
-                MatchSeq::Any,
-                Operation::Update(b"v1".to_vec()),
-                None,
-            ))
-            .await?;
+        kv.upsert_kv(UpsertKVAction::new(
+            test_key,
+            MatchSeq::Any,
+            Operation::Update(b"v1".to_vec()),
+            None,
+        ))
+        .await?;
 
-        let current = client.get_kv(test_key).await?;
+        let current = kv.get_kv(test_key).await?;
         if let Some(SeqV { seq, .. }) = current {
             // seq mismatch
             let wrong_seq = Some(seq + 1);
-            let res = client
+            let res = kv
                 .upsert_kv(UpsertKVAction::new(
                     test_key,
                     wrong_seq.into(),
@@ -115,7 +148,7 @@ impl KVApiTestSuite {
             assert_eq!(res.prev, res.result);
 
             // seq match
-            let res = client
+            let res = kv
                 .upsert_kv(UpsertKVAction::new(
                     test_key,
                     MatchSeq::Exact(seq),
@@ -126,14 +159,14 @@ impl KVApiTestSuite {
             assert!(res.result.is_none());
 
             // read nothing
-            let r = client.get_kv(test_key).await?;
+            let r = kv.get_kv(test_key).await?;
             assert!(r.is_none());
         } else {
             panic!("expecting a value, but got nothing");
         }
 
         // key not exist
-        let res = client
+        let res = kv
             .upsert_kv(UpsertKVAction::new(
                 "not exists",
                 MatchSeq::Any,
@@ -145,16 +178,15 @@ impl KVApiTestSuite {
         assert_eq!(None, res.result);
 
         // do not care seq
-        client
-            .upsert_kv(UpsertKVAction::new(
-                test_key,
-                MatchSeq::Any,
-                Operation::Update(b"v2".to_vec()),
-                None,
-            ))
-            .await?;
+        kv.upsert_kv(UpsertKVAction::new(
+            test_key,
+            MatchSeq::Any,
+            Operation::Update(b"v2".to_vec()),
+            None,
+        ))
+        .await?;
 
-        let res = client
+        let res = kv
             .upsert_kv(UpsertKVAction::new(
                 test_key,
                 MatchSeq::Any,
@@ -170,10 +202,11 @@ impl KVApiTestSuite {
         Ok(())
     }
 
-    pub async fn kv_update<KV: KVApi>(&self, client: &KV) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "info", skip(self, kv))]
+    pub async fn kv_update<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         let test_key = "test_key_for_update";
 
-        let r = client
+        let r = kv
             .upsert_kv(UpsertKVAction::new(
                 test_key,
                 MatchSeq::GE(1),
@@ -183,7 +216,7 @@ impl KVApiTestSuite {
             .await?;
         assert_eq!((None, None), (r.prev, r.result), "not changed");
 
-        let r = client
+        let r = kv
             .upsert_kv(UpsertKVAction::new(
                 test_key,
                 MatchSeq::Any,
@@ -195,7 +228,7 @@ impl KVApiTestSuite {
         let seq = r.result.unwrap().seq;
 
         // unmatched seq
-        let r = client
+        let r = kv
             .upsert_kv(UpsertKVAction::new(
                 test_key,
                 MatchSeq::Exact(seq + 1),
@@ -207,7 +240,7 @@ impl KVApiTestSuite {
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.result);
 
         // matched seq
-        let r = client
+        let r = kv
             .upsert_kv(UpsertKVAction::new(
                 test_key,
                 MatchSeq::Exact(seq),
@@ -219,7 +252,7 @@ impl KVApiTestSuite {
         assert_eq!(Some(SeqV::with_meta(2, None, b"v2".to_vec())), r.result);
 
         // blind update
-        let r = client
+        let r = kv
             .upsert_kv(UpsertKVAction::new(
                 test_key,
                 MatchSeq::GE(1),
@@ -231,14 +264,18 @@ impl KVApiTestSuite {
         assert_eq!(Some(SeqV::with_meta(3, None, b"v3".to_vec())), r.result);
 
         // value updated
-        let kv = client.get_kv(test_key).await?;
-        assert!(kv.is_some());
-        let kv = kv.unwrap();
-        assert_eq!(kv, SeqV::with_meta(kv.seq, None, b"v3".to_vec()));
+        let key_value = kv.get_kv(test_key).await?;
+        assert!(key_value.is_some());
+        let key_value = key_value.unwrap();
+        assert_eq!(
+            key_value,
+            SeqV::with_meta(key_value.seq, None, b"v3".to_vec())
+        );
         Ok(())
     }
 
-    pub async fn kv_timeout<KV: KVApi>(&self, client: &KV) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "info", skip(self, kv))]
+    pub async fn kv_timeout<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         // - Test get  expired and non-expired.
         // - Test mget expired and non-expired.
         // - Test list expired and non-expired.
@@ -249,27 +286,26 @@ impl KVApiTestSuite {
             .unwrap()
             .as_secs();
 
-        client
-            .upsert_kv(UpsertKVAction::new(
-                "k1",
-                MatchSeq::Any,
-                Operation::Update(b"v1".to_vec()),
-                Some(KVMeta {
-                    expire_at: Some(now + 1),
-                }),
-            ))
-            .await?;
+        kv.upsert_kv(UpsertKVAction::new(
+            "k1",
+            MatchSeq::Any,
+            Operation::Update(b"v1".to_vec()),
+            Some(KVMeta {
+                expire_at: Some(now + 1),
+            }),
+        ))
+        .await?;
 
         tracing::info!("---get unexpired");
         {
-            let res = client.get_kv("k1").await?;
+            let res = kv.get_kv("k1").await?;
             assert!(res.is_some(), "got unexpired");
         }
 
         tracing::info!("---get expired");
         {
             tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
-            let res = client.get_kv("k1").await?;
+            let res = kv.get_kv("k1").await?;
             tracing::debug!("got k1:{:?}", res);
             assert!(res.is_none(), "got expired");
         }
@@ -281,31 +317,27 @@ impl KVApiTestSuite {
 
         tracing::info!("--- expired entry act as if it does not exist, an ADD op should apply");
         {
-            client
-                .upsert_kv(UpsertKVAction::new(
-                    "k1",
-                    MatchSeq::Exact(0),
-                    Operation::Update(b"v1".to_vec()),
-                    Some(KVMeta {
-                        expire_at: Some(now - 1),
-                    }),
-                ))
-                .await?;
-            client
-                .upsert_kv(UpsertKVAction::new(
-                    "k2",
-                    MatchSeq::Exact(0),
-                    Operation::Update(b"v2".to_vec()),
-                    Some(KVMeta {
-                        expire_at: Some(now + 2),
-                    }),
-                ))
-                .await?;
+            kv.upsert_kv(UpsertKVAction::new(
+                "k1",
+                MatchSeq::Exact(0),
+                Operation::Update(b"v1".to_vec()),
+                Some(KVMeta {
+                    expire_at: Some(now - 1),
+                }),
+            ))
+            .await?;
+            kv.upsert_kv(UpsertKVAction::new(
+                "k2",
+                MatchSeq::Exact(0),
+                Operation::Update(b"v2".to_vec()),
+                Some(KVMeta {
+                    expire_at: Some(now + 2),
+                }),
+            ))
+            .await?;
 
             tracing::info!("--- mget should not return expired");
-            let res = client
-                .mget_kv(&["k1".to_string(), "k2".to_string()])
-                .await?;
+            let res = kv.mget_kv(&["k1".to_string(), "k2".to_string()]).await?;
             assert_eq!(res, vec![
                 None,
                 Some(SeqV::with_meta(
@@ -320,7 +352,7 @@ impl KVApiTestSuite {
 
         tracing::info!("--- list should not return expired");
         {
-            let res = client.prefix_list_kv("k").await?;
+            let res = kv.prefix_list_kv("k").await?;
             let res_vec = res.iter().map(|(key, _)| key.clone()).collect::<Vec<_>>();
 
             assert_eq!(res_vec, vec!["k2".to_string(),]);
@@ -328,25 +360,25 @@ impl KVApiTestSuite {
 
         tracing::info!("--- update expire");
         {
-            client
-                .upsert_kv(UpsertKVAction::new(
-                    "k2",
-                    MatchSeq::Exact(3),
-                    Operation::Update(b"v2".to_vec()),
-                    Some(KVMeta {
-                        expire_at: Some(now - 1),
-                    }),
-                ))
-                .await?;
+            kv.upsert_kv(UpsertKVAction::new(
+                "k2",
+                MatchSeq::Exact(3),
+                Operation::Update(b"v2".to_vec()),
+                Some(KVMeta {
+                    expire_at: Some(now - 1),
+                }),
+            ))
+            .await?;
 
-            let res = client.get_kv("k2").await?;
+            let res = kv.get_kv("k2").await?;
             assert!(res.is_none(), "k2 expired");
         }
 
         Ok(())
     }
 
-    pub async fn kv_meta<KV: KVApi>(&self, client: &KV) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "info", skip(self, kv))]
+    pub async fn kv_meta<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         let test_key = "test_key_for_update_meta";
 
         let now = SystemTime::now()
@@ -354,7 +386,7 @@ impl KVApiTestSuite {
             .unwrap()
             .as_secs();
 
-        let r = client
+        let r = kv
             .upsert_kv(UpsertKVAction::new(
                 test_key,
                 MatchSeq::Any,
@@ -367,7 +399,7 @@ impl KVApiTestSuite {
 
         tracing::info!("--- mismatching seq does nothing");
 
-        let r = client
+        let r = kv
             .upsert_kv(UpsertKVAction::new(
                 test_key,
                 MatchSeq::Exact(seq + 1),
@@ -382,7 +414,7 @@ impl KVApiTestSuite {
 
         tracing::info!("--- matching seq only update meta");
 
-        let r = client
+        let r = kv
             .upsert_kv(UpsertKVAction::new(
                 test_key,
                 MatchSeq::Exact(seq),
@@ -405,8 +437,8 @@ impl KVApiTestSuite {
         );
 
         tracing::info!("--- get returns the value with meta and seq updated");
-        let kv = client.get_kv(test_key).await?;
-        assert!(kv.is_some());
+        let key_value = kv.get_kv(test_key).await?;
+        assert!(key_value.is_some());
         assert_eq!(
             SeqV::with_meta(
                 seq + 1,
@@ -415,48 +447,46 @@ impl KVApiTestSuite {
                 }),
                 b"v1".to_vec()
             ),
-            kv.unwrap(),
+            key_value.unwrap(),
         );
 
         Ok(())
     }
 
-    pub async fn kv_list<KV: KVApi>(&self, client: &KV) -> anyhow::Result<()> {
+    #[tracing::instrument(level = "info", skip(self, kv))]
+    pub async fn kv_list<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         let mut values = vec![];
         {
-            client
-                .upsert_kv(UpsertKVAction::new(
-                    "t",
-                    MatchSeq::Any,
-                    Operation::Update("".as_bytes().to_vec()),
-                    None,
-                ))
-                .await?;
+            kv.upsert_kv(UpsertKVAction::new(
+                "t",
+                MatchSeq::Any,
+                Operation::Update("".as_bytes().to_vec()),
+                None,
+            ))
+            .await?;
 
             for i in 0..9 {
                 let key = format!("__users/{}", i);
                 let val = format!("val_{}", i);
                 values.push(val.clone());
-                client
-                    .upsert_kv(UpsertKVAction::new(
-                        &key,
-                        MatchSeq::Any,
-                        Operation::Update(val.as_bytes().to_vec()),
-                        None,
-                    ))
-                    .await?;
-            }
-            client
-                .upsert_kv(UpsertKVAction::new(
-                    "v",
+                kv.upsert_kv(UpsertKVAction::new(
+                    &key,
                     MatchSeq::Any,
-                    Operation::Update(b"".to_vec()),
+                    Operation::Update(val.as_bytes().to_vec()),
                     None,
                 ))
                 .await?;
+            }
+            kv.upsert_kv(UpsertKVAction::new(
+                "v",
+                MatchSeq::Any,
+                Operation::Update(b"".to_vec()),
+                None,
+            ))
+            .await?;
         }
 
-        let res = client.prefix_list_kv("__users/").await?;
+        let res = kv.prefix_list_kv("__users/").await?;
         assert_eq!(
             res.iter()
                 .map(|(_key, val)| val.data.clone())
@@ -469,34 +499,31 @@ impl KVApiTestSuite {
         Ok(())
     }
 
-    pub async fn kv_mget<KV: KVApi>(&self, client: &KV) -> anyhow::Result<()> {
-        client
-            .upsert_kv(UpsertKVAction::new(
-                "k1",
-                MatchSeq::Any,
-                Operation::Update(b"v1".to_vec()),
-                None,
-            ))
-            .await?;
-        client
-            .upsert_kv(UpsertKVAction::new(
-                "k2",
-                MatchSeq::Any,
-                Operation::Update(b"v2".to_vec()),
-                None,
-            ))
-            .await?;
+    #[tracing::instrument(level = "info", skip(self, kv))]
+    pub async fn kv_mget<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        kv.upsert_kv(UpsertKVAction::new(
+            "k1",
+            MatchSeq::Any,
+            Operation::Update(b"v1".to_vec()),
+            None,
+        ))
+        .await?;
+        kv.upsert_kv(UpsertKVAction::new(
+            "k2",
+            MatchSeq::Any,
+            Operation::Update(b"v2".to_vec()),
+            None,
+        ))
+        .await?;
 
-        let res = client
-            .mget_kv(&["k1".to_string(), "k2".to_string()])
-            .await?;
+        let res = kv.mget_kv(&["k1".to_string(), "k2".to_string()]).await?;
         assert_eq!(res, vec![
             Some(SeqV::with_meta(1, None, b"v1".to_vec(),)),
             // NOTE, the sequence number is increased globally (inside the namespace of generic kv)
             Some(SeqV::with_meta(2, None, b"v2".to_vec(),)),
         ]);
 
-        let res = client
+        let res = kv
             .mget_kv(&["k1".to_string(), "key_no exist".to_string()])
             .await?;
         assert_eq!(res, vec![Some(SeqV::new(1, b"v1".to_vec())), None]);
@@ -507,7 +534,8 @@ impl KVApiTestSuite {
 
 /// Test that write and read should be forwarded to leader
 impl KVApiTestSuite {
-    pub async fn kv_write_read_cross_nodes<KV: KVApi>(
+    #[tracing::instrument(level = "info", skip(self, kv1, kv2))]
+    pub async fn kv_write_read_across_nodes<KV: KVApi>(
         &self,
         kv1: &KV,
         kv2: &KV,
