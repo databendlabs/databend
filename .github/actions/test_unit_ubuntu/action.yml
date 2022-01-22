@@ -15,17 +15,17 @@ runs:
     - name: pull dev container on need
       shell: bash
       run: |
-        mkdir -p /tmp/dev_container
-        if [[ -e /tmp/dev_container/dev-container.tar ]]; then
-          echo "found dev container cache "
-          docker load -i /tmp/dev_container/dev-container.tar
-        else
-          echo "dev container cache not found"
-        fi
+#        mkdir -p /tmp/dev_container
+#        if [[ -e /tmp/dev_container/dev-container.tar ]]; then
+#          echo "found dev container cache "
+#          docker load -i /tmp/dev_container/dev-container.tar
+#        else
+#          echo "dev container cache not found"
+#        fi
         docker pull datafuselabs/dev-container:latest
-        echo "cache latest image"
-        mkdir -p /tmp/dev_container
-        docker save datafuselabs/dev-container:latest > /tmp/dev_container/dev-container.tar
+#        echo "cache latest image"
+#        mkdir -p /tmp/dev_container
+#        docker save datafuselabs/dev-container:latest > /tmp/dev_container/dev-container.tar
     - name: unit test
       shell: bash
       run: |

@@ -46,7 +46,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
   test_unit_ubuntu:
-    runs-on: [datebend-unit-test, linux, x64]
+    runs-on: [datebend-unit-test, self-hosted, Linux, x64]
     steps:
       - uses: actions/checkout@v2
       - uses: ./.github/actions/test_unit_ubuntu
