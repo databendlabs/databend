@@ -19,6 +19,7 @@ runs:
     - name: unit test
       shell: bash
       run: |
+        sudo chown -R runner /home/runner/databend-storage/
         mkdir -p ${CARGO_GIT_DIR}
         mkdir -p ${CARGO_REGISTRY_DIR}
         mkdir -p ${CARGO_TARGET_DIR}
