@@ -83,7 +83,7 @@ pub struct MetaSrvTestContext {
     // logging_guard: (WorkerGuard, DefaultGuard),
     pub config: configs::Config,
 
-    pub meta_nodes: Vec<Arc<MetaNode>>,
+    pub meta_node: Option<Arc<MetaNode>>,
 
     pub grpc_srv: Option<Box<GrpcServer>>,
 }
@@ -134,9 +134,13 @@ impl MetaSrvTestContext {
 
         MetaSrvTestContext {
             config,
-            meta_nodes: vec![],
+            meta_node: None,
             grpc_srv: None,
         }
+    }
+
+    pub fn meta_node(&self) -> Arc<MetaNode> {
+        self.meta_node.clone().unwrap()
     }
 
     pub async fn grpc_client(&self) -> anyhow::Result<MetaGrpcClient> {

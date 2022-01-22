@@ -887,6 +887,15 @@ dependencies = [
 [[package]]
 name = "bincode"
 version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "bincode"
+version = "1.3.3"
 source = "git+https://github.com/datafuse-extras/bincode?rev=fd3f9ff#fd3f9fff35b5c682ea15a9b997c7114303685b64"
 dependencies = [
  "serde",
@@ -929,6 +938,9 @@ name = "bit-vec"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bitflags"
@@ -1581,6 +1593,7 @@ dependencies = [
  "ordered-float 2.10.0",
  "pretty_assertions",
  "regex",
+ "seahash",
  "serde",
  "serde_json",
  "simdutf8",
@@ -1613,7 +1626,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "backtrace",
- "bincode",
+ "bincode 1.3.3 (git+https://github.com/datafuse-extras/bincode?rev=fd3f9ff)",
  "common-arrow",
  "octocrab",
  "paste",
@@ -1696,7 +1709,7 @@ dependencies = [
 name = "common-io"
 version = "0.1.0"
 dependencies = [
- "bincode",
+ "bincode 1.3.3 (git+https://github.com/datafuse-extras/bincode?rev=fd3f9ff)",
  "bytes",
  "common-exception",
  "rand",
@@ -2442,6 +2455,8 @@ dependencies = [
  "async-recursion",
  "async-stream",
  "async-trait",
+ "bincode 1.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bit-vec",
  "bumpalo",
  "byteorder",
  "bytes",
@@ -6196,6 +6211,12 @@ dependencies = [
  "ring",
  "untrusted",
 ]
+
+[[package]]
+name = "seahash"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
 
 [[package]]
 name = "security-framework"

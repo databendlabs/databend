@@ -65,8 +65,6 @@ pub type MetaRaft = Raft<LogEntry, AppliedState, Network, MetaRaftStore>;
 
 // MetaNode is the container of meta data related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
-    // metrics subscribes raft state changes. The most important field is the leader node id, to which all write operations should be forward.
-    pub metrics_rx: watch::Receiver<RaftMetrics>,
     pub sto: Arc<MetaRaftStore>,
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
@@ -112,7 +110,6 @@ impl MetaNodeBuilder {
         let (tx, rx) = watch::channel::<()>(());
 
         let mn = Arc::new(MetaNode {
-            metrics_rx: metrics_rx.clone(),
             sto: sto.clone(),
             raft,
             running_tx: tx,
@@ -669,7 +666,7 @@ impl MetaNode {
     pub async fn get_leader(&self) -> NodeId {
         // fast path: there is a known leader
 
-        if let Some(l) = self.metrics_rx.borrow().current_leader {
+        if let Some(l) = self.raft.metrics().borrow().current_leader {
             return l;
         }
 
@@ -677,7 +674,7 @@ impl MetaNode {
 
         // Need to clone before calling changed() on it.
         // Otherwise other thread waiting on changed() may not receive the change event.
-        let mut rx = self.metrics_rx.clone();
+        let mut rx = self.raft.metrics();
 
         loop {
             // NOTE:
