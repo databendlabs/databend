@@ -28,7 +28,6 @@ pub use port_trigger::UpdateTrigger;
 pub use processor::Processor;
 pub use processor::Processors;
 pub use resize_processor::ResizeProcessor;
-pub use sinks::SyncSenderSink;
 pub use transforms::TransformDummy;
 pub use transforms::TransformFilter;
 
@@ -36,3 +35,7 @@ pub use sources::SyncSource;
 pub use sources::SyncSourcer;
 pub use sources::TableSource;
 pub use sources::SyncReceiverSource;
+
+pub use sinks::Sink;
+pub use sinks::Sinker;
+pub use sinks::SyncSenderSink;

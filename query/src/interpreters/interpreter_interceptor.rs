@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use common_datavalues::DataSchemaRef;
 
 use common_exception::Result;
 use common_planners::PlanNode;
@@ -23,6 +24,7 @@ use crate::interpreters::access::ManagementModeAccess;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
+use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 
 pub struct InterceptorInterpreter {
@@ -62,6 +64,10 @@ impl Interpreter for InterceptorInterpreter {
         let metric_stream =
             ProgressStream::try_create(result_stream, self.ctx.get_result_progress())?;
         Ok(Box::pin(metric_stream))
+    }
+
+    fn execute_with_new_pipeline(&self) -> Result<NewPipeline> {
+        self.inner.execute_with_new_pipeline()
     }
 
     async fn start(&self) -> Result<()> {

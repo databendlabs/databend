@@ -60,7 +60,7 @@ impl PipelineExecutor {
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn execute_with_single_worker(&self, worker_num: usize) -> Result<()> {
+    pub unsafe fn execute(&self, worker_num: usize) -> Result<()> {
         let workers_notify = self.workers_notify.clone();
         let mut context = ExecutorWorkerContext::create(worker_num, workers_notify);
 

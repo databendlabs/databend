@@ -72,7 +72,7 @@ impl PlanVisitor for QueryPipelineBuilder {
         self.visit_plan_node(&plan.input)?;
 
         let mut builder = TransformPipeBuilder::create();
-        for _index in 0..self.pipeline.pipe_len() {
+        for _index in 0..self.pipeline.output_len() {
             let transform_input_port = InputPort::create();
             let transform_output_port = OutputPort::create();
             builder.add_transform(
@@ -94,27 +94,7 @@ impl PlanVisitor for QueryPipelineBuilder {
     fn visit_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<()> {
         // Bind plan partitions to context.
         self.ctx.try_set_partitions(plan.parts.clone())?;
-
-        // let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-        // let max_threads = std::cmp::min(max_threads, plan.parts.len());
-
-        // let mut source_builder = SourcePipeBuilder::create();
         let table = self.ctx.build_table_from_source_plan(plan)?;
-        table.read2(self.ctx.clone(), plan, &mut self.pipeline);
-
-        // for _index in 0..std::cmp::max(max_threads, 1) {
-        //     let source_ctx = self.ctx.clone();
-        //
-        //
-        //     // let source_output_port = OutputPort::create();
-        //     //
-        //     // source_builder.add_source(
-        //     //     TableSource::try_create(source_output_port.clone(), source_ctx, source_plan)?,
-        //     //     source_output_port,
-        //     // );
-        // }
-        //
-        // self.pipeline.add_pipe(source_builder.finalize());
-        Ok(())
+        table.read2(self.ctx.clone(), plan, &mut self.pipeline)
     }
 }

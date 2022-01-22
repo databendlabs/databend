@@ -32,7 +32,14 @@ pub enum NewPipe {
 }
 
 impl NewPipe {
-    pub fn size(&self) -> usize {
+    pub fn input_size(&self) -> usize {
+        match self {
+            NewPipe::SimplePipe { inputs_port, .. } => inputs_port.len(),
+            NewPipe::ResizePipe { inputs_port, .. } => inputs_port.len(),
+        }
+    }
+
+    pub fn output_size(&self) -> usize {
         match self {
             NewPipe::SimplePipe { outputs_port, .. } => outputs_port.len(),
             NewPipe::ResizePipe { outputs_port, .. } => outputs_port.len(),
@@ -62,9 +69,37 @@ impl SourcePipeBuilder {
         }
     }
 
-    pub fn add_source(&mut self, source: ProcessorPtr, output_port: Arc<OutputPort>) {
+    pub fn add_source(&mut self, output_port: Arc<OutputPort>, source: ProcessorPtr) {
         self.processors.push(source);
         self.outputs_port.push(output_port);
+    }
+}
+
+pub struct SinkPipeBuilder {
+    processors: Vec<ProcessorPtr>,
+    inputs_port: Vec<Arc<InputPort>>,
+}
+
+impl SinkPipeBuilder {
+    pub fn create() -> SinkPipeBuilder {
+        SinkPipeBuilder {
+            processors: vec![],
+            inputs_port: vec![],
+        }
+    }
+
+    pub fn finalize(self) -> NewPipe {
+        assert_eq!(self.processors.len(), self.inputs_port.len());
+        NewPipe::SimplePipe {
+            processors: self.processors,
+            inputs_port: self.inputs_port,
+            outputs_port: vec![],
+        }
+    }
+
+    pub fn add_sink(&mut self, inputs_port: Arc<InputPort>, sink: ProcessorPtr) {
+        self.processors.push(sink);
+        self.inputs_port.push(inputs_port);
     }
 }
 

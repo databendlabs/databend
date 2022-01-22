@@ -32,7 +32,7 @@ impl Settings {
         ("flight_client_timeout", u64, 60, "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds"),
         ("parallel_read_threads", u64, 1, "The maximum number of parallelism for reading data. By default, it is 1."),
         ("storage_read_buffer_size", u64, 1024 * 1024, "The size of buffer in bytes for buffered reader of dal, default value is 1MB"),
-        ("enable_new_processor_framework", u64, 0, "Enable new processor framework for the query"),
+        ("enable_new_processor_framework", u64, 0, "Enable new processor framework for the query")
     }
 
     pub fn try_create() -> Result<Arc<Settings>> {

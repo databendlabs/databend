@@ -32,10 +32,10 @@ impl NewPipeline {
         self.pipes.push(pipe);
     }
 
-    pub fn pipe_len(&self) -> usize {
+    pub fn output_len(&self) -> usize {
         match self.pipes.last() {
             None => 0,
-            Some(NewPipe::SimplePipe { processors, .. }) => processors.len(),
+            Some(NewPipe::SimplePipe { outputs_port, .. }) => outputs_port.len(),
             Some(NewPipe::ResizePipe { outputs_port, .. }) => outputs_port.len(),
         }
     }
@@ -43,8 +43,9 @@ impl NewPipeline {
     pub fn resize(&mut self, new_size: usize) -> Result<()> {
         match self.pipes.last() {
             None => Err(ErrorCode::LogicalError("")),
+            Some(pipe) if pipe.output_size() == 0 => Err(ErrorCode::LogicalError("")),
             Some(pipe) => {
-                let processor = ResizeProcessor::create(pipe.size(), new_size);
+                let processor = ResizeProcessor::create(pipe.output_size(), new_size);
                 let inputs_port = processor.get_inputs().to_vec();
                 let outputs_port = processor.get_outputs().to_vec();
                 self.pipes.push(NewPipe::ResizePipe {

@@ -37,8 +37,10 @@ use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::processors::SyncSource;
+use crate::pipelines::new::{NewPipeline, SourcePipeBuilder};
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::{SyncSource, SyncSourcer};
 
 use super::numbers_stream::NumbersStream;
 use crate::pipelines::transforms::get_sort_descriptions;
@@ -187,18 +189,39 @@ impl Table for NumbersTable {
     }
 
     fn read2(&self, ctx: Arc<QueryContext>, plan: &ReadDataSourcePlan, pipeline: &mut NewPipeline) -> Result<()> {
-        unimplemented!()
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = std::cmp::min(max_threads, plan.parts.len());
+
+        let mut source_builder = SourcePipeBuilder::create();
+        for _index in 0..std::cmp::max(max_threads, 1) {
+            let source_ctx = ctx.clone();
+
+            let source_output_port = OutputPort::create();
+
+            source_builder.add_source(
+                source_output_port.clone(),
+                NumbersSource::create(source_output_port, source_ctx)?,
+            );
+        }
+
+        pipeline.add_pipe(source_builder.finalize());
+        Ok(())
     }
 }
 
 struct NumbersSource {}
 
+impl NumbersSource {
+    pub fn create(output: Arc<OutputPort>, ctx: Arc<QueryContext>) -> Result<ProcessorPtr> {
+        SyncSourcer::create(output, NumbersSource {})
+    }
+}
+
 impl SyncSource for NumbersSource {
     const NAME: &'static str = "numbers";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        // TODO:
-        unimplemented!()
+        Err(ErrorCode::UnImplement(""))
     }
 }
 

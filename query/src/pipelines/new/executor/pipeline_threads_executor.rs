@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::thread::JoinHandle;
 
 use common_base::Thread;
 use common_exception::ErrorCode;
@@ -24,8 +25,9 @@ use crate::pipelines::new::pipeline::NewPipeline;
 #[allow(dead_code)]
 pub struct PipelineThreadsExecutor {
     base: Option<Arc<PipelineExecutor>>,
-
     pipeline: Option<NewPipeline>,
+    is_finished: bool,
+    join_handles: Vec<JoinHandle<Result<()>>>,
 }
 
 #[allow(dead_code)]
@@ -34,10 +36,12 @@ impl PipelineThreadsExecutor {
         Ok(PipelineThreadsExecutor {
             base: None,
             pipeline: Some(pipeline),
+            is_finished: false,
+            join_handles: vec![],
         })
     }
 
-    pub fn start(&mut self, workers: usize) -> Result<()> {
+    pub fn execute(&mut self, workers: usize) -> Result<()> {
         if self.base.is_some() {
             return Err(ErrorCode::AlreadyStarted(
                 "PipelineThreadsExecutor is already started.",
@@ -50,18 +54,34 @@ impl PipelineThreadsExecutor {
         }
     }
 
+    pub fn finish(&mut self) -> Result<()> {
+        if !self.is_finished {
+            self.is_finished = true;
+
+            if let Some(executor) = &self.base {
+                executor.finish();
+            }
+
+            while let Some(join_handle) = self.join_handles.pop() {
+                // flatten error.
+                match join_handle.join() {
+                    Ok(Ok(_)) => Ok(()),
+                    Ok(Err(cause)) => Err(cause),
+                    Err(cause) => Err(ErrorCode::LogicalError(format!("{:?}", cause))),
+                }?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn start_workers(&mut self, workers: usize, pipeline: NewPipeline) -> Result<()> {
         let executor = PipelineExecutor::create(pipeline, workers)?;
 
         self.base = Some(executor.clone());
         for worker_num in 0..workers {
             let worker = executor.clone();
-            Thread::spawn(move || unsafe {
-                if let Err(cause) = worker.execute_with_single_worker(worker_num) {
-                    // TODO:
-                    println!("Executor error : {:?}", cause);
-                }
-            });
+            self.join_handles.push(Thread::spawn(move || unsafe { worker.execute(worker_num) }));
         }
 
         Ok(())
