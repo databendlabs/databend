@@ -21,12 +21,13 @@ use std::task::Poll;
 
 use bytes;
 use futures;
-use futures::executor::block_on;
 use futures::io::BufReader;
+use futures::pin_mut;
 use futures::ready;
 use futures::AsyncRead;
 use futures::AsyncReadExt;
 use futures::AsyncSeek;
+use futures::Future;
 use pin_project::pin_project;
 
 use crate::error::Result;
@@ -185,14 +186,14 @@ where S: super::Read<S>
 {
     fn poll_read(
         mut self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
+        cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
         let key = self.key.clone();
         let da = self.da.clone();
         let pos = self.pos;
 
-        let n = block_on(async {
+        let n = async {
             let mut builder = da.read(key.as_str());
             let r = builder
                 .offset(pos)
@@ -202,7 +203,11 @@ where S: super::Read<S>
                 .map_err(io::Error::other)?;
 
             Pin::new(r).read(buf).await
-        })?;
+        };
+
+        pin_mut!(n);
+
+        let n = ready!(n.poll(cx))?;
 
         self.pos += n as u64;
         Poll::Ready(Ok(n))
