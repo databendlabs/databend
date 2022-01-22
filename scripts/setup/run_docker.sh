@@ -18,9 +18,10 @@ START_COMMAND=("/bin/bash" "-lc" "groupadd --gid $(id -g) -f databendgroup \
   && chown -R databendbuild:databendgroup /opt/rust/cargo \
   && chown -R databendbuild:databendgroup /tmp \
   && sudo -EHs -u databendbuild bash -c 'cd /source && \
-   export LC_NUMERIC='en_US.UTF-8' && export LC_ALL=en_US.UTF-8 && \
+   export LC_NUMERIC='en_US.UTF-8' && export LC_ALL=en_US.UTF-8 && mkdir -p /tmp/databend/target && \
     export DATABEND_DEV_CONTAINER=TRUE && export RUST_BACKTRACE=full && env CARGO_HOME=/opt/rust/cargo \
     PATH=/home/rust/.cargo/bin:/opt/rust/cargo/bin:/usr/local/musl/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    CARGO_TARGET_DIR=/tmp/databend/target \
     $*'")
 
 [[ -f .git ]] && [[ ! -d .git ]] && DOCKER_OPTIONS+=(-v "$(git rev-parse --git-common-dir):$(git rev-parse --git-common-dir)")
@@ -28,14 +29,16 @@ START_COMMAND=("/bin/bash" "-lc" "groupadd --gid $(id -g) -f databendgroup \
 
 # to get rid of confliction between host cargo directory and docker registry, we should use tmp directory instead of $HOME/.cargo directory
 mkdir -p /tmp/dev/.cargo/git
+mkdir -p /tmp/dev/target/
 mkdir -p /tmp/dev/.cargo/registry
 CARGO_GIT_DIR=/tmp/dev/.cargo/git
 CARGO_REGISTRY_DIR=/tmp/dev/.cargo/registry
-
+CARGO_TARGET_DIR=/tmp/dev/target
 docker run --rm \
 	"${DOCKER_OPTIONS[@]}" \
 	-v "${SOURCE_DIR}":"${SOURCE_DIR_MOUNT_DEST}" \
 	-v "${CARGO_GIT_DIR}":"/opt/rust/cargo/git" \
 	-v "${CARGO_REGISTRY_DIR}":"/opt/rust/cargo/registry" \
+	-v "${CARGO_TARGET_DIR}":"/tmp/databend/target" \
 	"${HUB}"/dev-container:"${TAG}" \
 	"${START_COMMAND[@]}"
