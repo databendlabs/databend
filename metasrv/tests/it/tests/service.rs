@@ -170,7 +170,7 @@ impl MetaSrvTestContext {
         panic!("can not connect to raft server: {:?}", self.config);
     }
 
-    pub async fn assert_meta_connection(&self) -> anyhow::Result<()> {
+    pub async fn assert_raft_server_connection(&self) -> anyhow::Result<()> {
         let mut client = self.raft_client().await?;
 
         let req = tonic::Request::new(GetRequest {
@@ -180,18 +180,6 @@ impl MetaSrvTestContext {
         assert_eq!("", rst.value, "connected");
         Ok(())
     }
-}
-
-pub async fn assert_metasrv_connection(addr: &str) -> anyhow::Result<()> {
-    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-
-    let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
-    let req = tonic::Request::new(GetRequest {
-        key: "ensure-connection".into(),
-    });
-    let rst = client.get(req).await?.into_inner();
-    assert_eq!("", rst.value, "connected");
-    Ok(())
 }
 
 /// 1. Open a temp sled::Db for all tests.

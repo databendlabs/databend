@@ -43,16 +43,18 @@ impl KVApiTestSuite {
         self.kv_list(&builder.build().await).await?;
         self.kv_mget(&builder.build().await).await?;
 
-        {
-            let cluster = builder.build_cluster().await;
-            self.kv_write_read_across_nodes(&cluster[0], &cluster[1])
-                .await?;
-        }
+        // Run cross node test on every 2 adjacent nodes
 
-        {
+        let mut i = 0;
+        loop {
             let cluster = builder.build_cluster().await;
-            self.kv_write_read_across_nodes(&cluster[1], &cluster[2])
+            self.kv_write_read_across_nodes(&cluster[i], &cluster[i + 1])
                 .await?;
+
+            if i + 1 == cluster.len() - 1 {
+                break;
+            }
+            i += 1;
         }
 
         Ok(())
