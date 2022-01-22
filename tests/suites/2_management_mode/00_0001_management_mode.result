@@ -4,5 +4,5 @@ tenant1_db
 tenant1_tbl	CREATE TABLE `tenant1_tbl` (\n  `a` Int32,\n) ENGINE=FUSE
 2022-01-18 08:29:09.191 +0000	tenant1_tbl
 a	Int32	YES
-xy	x, y	(x+y)/3	
+xy	0	0	(x+y)/3	
 system

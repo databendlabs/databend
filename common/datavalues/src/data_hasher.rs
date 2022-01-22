@@ -18,14 +18,17 @@ use std::hash::Hasher;
 
 use ahash::AHasher;
 use ahash::RandomState as AhashRandomState;
+use seahash::SeaHasher;
 
 /// TODO:
 /// This is very slow because it involves lots of copy to keep the origin state
-/// We should have our custom none-state hashe functions
-#[derive(Clone, Debug)]
+/// We should have our custom none-state hash functions
+/// Tracked work item: https://github.com/datafuselabs/databend/issues/3897
+#[derive(Clone)]
 pub enum DFHasher {
     SipHasher(DefaultHasher),
     AhashHasher(AHasher),
+    SeaHasher64(SeaHasher, [u64; 4]),
 }
 
 macro_rules! apply_fn {
@@ -33,6 +36,7 @@ macro_rules! apply_fn {
         match $self {
             DFHasher::SipHasher(v) => v.$func(),
             DFHasher::AhashHasher(v) => v.$func(),
+            DFHasher::SeaHasher64(v, _) => v.$func(),
         }
     }};
 
@@ -40,6 +44,7 @@ macro_rules! apply_fn {
         match $self {
             DFHasher::SipHasher(v) => v.$func($arg),
             DFHasher::AhashHasher(v) => v.$func($arg),
+            DFHasher::SeaHasher64(v, _) => v.$func($arg),
         }
     }};
 }
@@ -52,6 +57,10 @@ impl DFHasher {
             DFHasher::AhashHasher(_) => {
                 let state = AhashRandomState::new();
                 DFHasher::AhashHasher(state.build_hasher())
+            }
+            DFHasher::SeaHasher64(_, seeds) => {
+                let hasher = SeaHasher::with_seeds(seeds[0], seeds[1], seeds[2], seeds[3]);
+                DFHasher::SeaHasher64(hasher, *seeds)
             }
         }
     }

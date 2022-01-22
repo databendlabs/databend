@@ -44,7 +44,7 @@ mod source_example {
     impl ExampleSyncSource {
         pub fn create(
             data_blocks: Vec<DataBlock>,
-            outputs: Vec<Arc<OutputPort>>,
+            outputs: Arc<OutputPort>,
         ) -> Result<ProcessorPtr> {
             SyncSourcer::create(outputs, ExampleSyncSource {
                 pos: 0,
@@ -73,9 +73,9 @@ mod source_example {
     impl ExampleAsyncSource {
         pub fn create(
             data_blocks: Vec<DataBlock>,
-            outputs: Vec<Arc<OutputPort>>,
+            output: Arc<OutputPort>,
         ) -> Result<ProcessorPtr> {
-            AsyncSourcer::create(outputs, ExampleAsyncSource {
+            AsyncSourcer::create(output, ExampleAsyncSource {
                 pos: 0,
                 data_blocks,
             })
