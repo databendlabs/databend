@@ -235,7 +235,7 @@ where
     }
 
     fn from_slice(data: &[Self::RefItem<'_>]) -> Self {
-        let values = Vec::<T>::from(data.as_ref());
+        let values = Vec::<T>::from(data);
         PrimitiveColumn {
             values: values.into(),
         }
@@ -248,18 +248,12 @@ where
         }
     }
 
-    //  fn new_from_slice<P: AsRef<[T]>>(slice: P) -> Self {
-    //     let values = Vec::<T>::from(slice.as_ref());
-    //     PrimitiveColumn {
-    //         values: values.into(),
-    //     }
-    // }
-    // fn from_iterator(it: impl Iterator<Item = T>) -> Self {
-    //     let values: Vec<T> = it.collect();
-    //     PrimitiveColumn {
-    //         values: values.into(),
-    //     }
-    // }
+    fn from_owned_iterator(it: impl Iterator<Item = Self::OwnedItem>) -> Self {
+        let values: Vec<T> = it.collect();
+        PrimitiveColumn {
+            values: values.into(),
+        }
+    }
 }
 
 pub type UInt8Column = PrimitiveColumn<u8>;

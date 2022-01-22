@@ -18,7 +18,7 @@ use crate::prelude::*;
 
 /// ScalarColumn is a sub trait of Column
 
-// This is inspired by `https://github.com/skyzh/type-exercise-in-rust`
+// This is idea from `https://github.com/skyzh/type-exercise-in-rust`
 // Thanks Mr Chi.
 pub trait ScalarColumn: Column + Send + Sync + Sized + 'static
 where for<'a> Self::OwnedItem: Scalar<RefType<'a> = Self::RefItem<'a>>
@@ -45,6 +45,14 @@ where for<'a> Self::OwnedItem: Scalar<RefType<'a> = Self::RefItem<'a>>
         let mut builder = Self::Builder::with_capacity(get_iter_capacity(&it));
         for item in it {
             builder.push(item);
+        }
+        builder.finish()
+    }
+
+    fn from_owned_iterator(it: impl Iterator<Item = Self::OwnedItem>) -> Self {
+        let mut builder = Self::Builder::with_capacity(get_iter_capacity(&it));
+        for item in it {
+            builder.push(item.as_scalar_ref());
         }
         builder.finish()
     }

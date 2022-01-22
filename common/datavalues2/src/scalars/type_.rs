@@ -17,9 +17,10 @@ use crate::prelude::*;
 
 /// Owned scalar value
 /// primitive types, bool, Vec<u8> ...
-pub trait Scalar: Sized + Default {
-    type ColumnType: ScalarColumn + 'static;
-
+pub trait Scalar: 'static + Sized + Default
+where for<'a> Self::ColumnType: ScalarColumn<RefItem<'a> = Self::RefType<'a>>
+{
+    type ColumnType: ScalarColumn<OwnedItem = Self>;
     type RefType<'a>: ScalarRef<'a, ScalarType = Self, ColumnType = Self::ColumnType>
     where Self: 'a;
 
@@ -93,7 +94,7 @@ impl Scalar for Vec<u8> {
     type RefType<'a> = &'a [u8];
 
     fn as_scalar_ref(&self) -> &[u8] {
-        &self
+        self
     }
 }
 

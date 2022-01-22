@@ -50,13 +50,13 @@ pub fn cast_from_date16(
 
         TypeID::DateTime32 => {
             let it = c.iter().map(|v| *v as u32 * 24 * 3600);
-            let result = Arc::new(UInt32Column::new_from_iter(it));
+            let result = Arc::new(UInt32Column::from_iterator(it));
             Ok((result, None))
         }
 
         TypeID::DateTime64 => {
             let it = c.iter().map(|v| *v as u64 * 24 * 3600 * 1_000_000_000);
-            let result = Arc::new(UInt64Column::new_from_iter(it));
+            let result = Arc::new(UInt64Column::from_iterator(it));
             Ok((result, None))
         }
 
@@ -86,13 +86,13 @@ pub fn cast_from_date32(
 
         TypeID::DateTime32 => {
             let it = c.iter().map(|v| *v as u32 * 24 * 3600);
-            let result = Arc::new(UInt32Column::new_from_iter(it));
+            let result = Arc::new(UInt32Column::from_iterator(it));
             Ok((result, None))
         }
 
         TypeID::DateTime64 => {
             let it = c.iter().map(|v| *v as u64 * 24 * 3600 * 1_000_000_000);
-            let result = Arc::new(UInt64Column::new_from_iter(it));
+            let result = Arc::new(UInt64Column::from_iterator(it));
             Ok((result, None))
         }
 
@@ -111,30 +111,30 @@ pub fn cast_from_datetime32(
 
     match data_type.data_type_id() {
         TypeID::String => {
-            let mut builder = MutableStringColumn::with_capacity(size);
+            let mut builder = ColumnBuilder::<Vec<u8>>::with_capacity(size);
 
             for v in c.iter() {
                 let s = datetime_to_string(Utc.timestamp(*v as i64, 0_u32), TIME_FMT);
                 builder.append(s.as_bytes());
             }
-            Ok((builder.as_column(), None))
+            Ok((builder.build(size), None))
         }
 
         TypeID::Date16 => {
             let it = c.iter().map(|v| (*v as i64 / 24 / 3600) as u16);
-            let result = Arc::new(UInt16Column::new_from_iter(it));
+            let result = Arc::new(UInt16Column::from_iterator(it));
             Ok((result, None))
         }
 
         TypeID::Date32 => {
             let it = c.iter().map(|v| (*v as i64 / 24 / 3600) as i32);
-            let result = Arc::new(Int32Column::new_from_iter(it));
+            let result = Arc::new(Int32Column::from_iterator(it));
             Ok((result, None))
         }
 
         TypeID::DateTime64 => {
             let it = c.iter().map(|v| *v as u64 * 1_000_000_000);
-            let result = Arc::new(UInt64Column::new_from_iter(it));
+            let result = Arc::new(UInt64Column::from_iterator(it));
             Ok((result, None))
         }
 
@@ -158,9 +158,9 @@ pub fn cast_from_datetime64(
             let mut builder = MutableStringColumn::with_capacity(size);
             for v in c.iter() {
                 let s = datetime_to_string(date_time64.utc_timestamp(*v), TIME64_FMT);
-                builder.append(s.as_bytes());
+                builder.append_value(s.as_bytes());
             }
-            Ok((builder.as_column(), None))
+            Ok((builder.to_column(), None))
         }
 
         TypeID::Date16 => {
@@ -169,7 +169,7 @@ pub fn cast_from_datetime64(
             let it = c
                 .iter()
                 .map(|v| (date_time64.seconds(*v) / 24 / 3600) as u16);
-            let result = Arc::new(UInt16Column::new_from_iter(it));
+            let result = Arc::new(UInt16Column::from_iterator(it));
             Ok((result, None))
         }
 
@@ -177,13 +177,13 @@ pub fn cast_from_datetime64(
             let it = c
                 .iter()
                 .map(|v| (date_time64.seconds(*v) / 24 / 3600) as i32);
-            let result = Arc::new(Int32Column::new_from_iter(it));
+            let result = Arc::new(Int32Column::from_iterator(it));
             Ok((result, None))
         }
 
         TypeID::DateTime32 => {
             let it = c.iter().map(|v| date_time64.seconds(*v) as u32);
-            let result = Arc::new(UInt32Column::new_from_iter(it));
+            let result = Arc::new(UInt32Column::from_iterator(it));
             Ok((result, None))
         }
 

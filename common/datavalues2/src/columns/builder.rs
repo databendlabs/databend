@@ -80,11 +80,7 @@ where T: Scalar
     }
 
     #[inline]
-    pub fn append(
-        &mut self,
-        value: <<T as Scalar>::ColumnType as ScalarColumn>::RefItem<'_>,
-        valid: bool,
-    ) {
+    pub fn append(&mut self, value: <T as Scalar>::RefType<'_>, valid: bool) {
         self.builder.push(value);
         self.validity.push(valid);
     }
@@ -99,13 +95,13 @@ where T: Scalar
     }
 
     pub fn from_iterator<'a>(
-        it: impl Iterator<Item = <<T as Scalar>::ColumnType as ScalarColumn>::RefItem<'a>>,
+        it: impl Iterator<Item = <T as Scalar>::RefType<'a>>,
     ) -> <T as Scalar>::ColumnType {
         <<T as Scalar>::ColumnType as ScalarColumn>::from_iterator(it)
     }
 
     #[inline]
-    pub fn append(&mut self, value: <<T as Scalar>::ColumnType as ScalarColumn>::RefItem<'_>) {
+    pub fn append(&mut self, value: <T as Scalar>::RefType<'_>) {
         self.builder.push(value);
     }
 }

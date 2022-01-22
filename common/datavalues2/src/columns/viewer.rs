@@ -33,9 +33,7 @@ pub struct ColumnViewer<'a, T: Scalar> {
     size: usize,
 }
 
-impl<'a, T> ColumnViewer<'a, T>
-where T: Scalar
-{
+impl<'a, T: Scalar> ColumnViewer<'a, T> {
     pub fn create(column: &'a ColumnRef) -> Result<Self> {
         let null_mask = get_null_mask(column);
         let non_const_mask = non_const_mask(column);
@@ -78,7 +76,7 @@ where T: Scalar
     }
 
     #[inline]
-    pub fn value(&self, i: usize) -> <T::ColumnType as ScalarColumn>::RefItem<'_> {
+    pub fn value(&self, i: usize) -> <T as Scalar>::RefType<'a> {
         self.column.get_data(i & self.non_const_mask)
     }
 
@@ -113,5 +111,37 @@ fn non_const_mask(column: &ColumnRef) -> usize {
         usize::MAX
     } else {
         0
+    }
+}
+
+pub struct ColumnViewerIter<'a, T: Scalar> {
+    pub viewer: ColumnViewer<'a, T>,
+    pub size: usize,
+    pub pos: usize,
+}
+
+impl<'a, T: Scalar> ColumnViewerIter<'a, T> {
+    pub fn create(col: &'a ColumnRef) -> Result<Self> {
+        let viewer = ColumnViewer::create(col)?;
+        let size = viewer.len();
+        Ok(Self {
+            viewer,
+            size,
+            pos: 0,
+        })
+    }
+}
+
+impl<'a, T: Scalar> Iterator for ColumnViewerIter<'a, T> {
+    type Item = T::RefType<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pos >= self.size {
+            None
+        } else {
+            let item = self.viewer.value(self.pos);
+            self.pos += 1;
+            Some(item)
+        }
     }
 }

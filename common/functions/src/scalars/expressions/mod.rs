@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod binary;
 mod cast;
 mod cast_from_datetimes;
 mod cast_from_string;
 mod cast_with_type;
 mod expression;
 
+pub use binary::ScalarBinaryExpression;
 pub use cast::CastFunction;
 pub use cast_with_type::cast_with_type;
 pub use expression::ToCastFunction;

@@ -22,7 +22,6 @@ use crate::types::create_primitive_datatype;
 use crate::PrimitiveColumn;
 use crate::PrimitiveType;
 use crate::Scalar;
-use crate::ScalarColumn;
 use crate::ScalarColumnBuilder;
 use crate::ScalarRef;
 
@@ -120,7 +119,7 @@ where
 {
     type ColumnType = PrimitiveColumn<T>;
 
-    fn push(&mut self, value: <Self::ColumnType as ScalarColumn>::RefItem<'_>) {
+    fn push(&mut self, value: <T as Scalar>::RefType<'_>) {
         self.values.push(value);
     }
 
