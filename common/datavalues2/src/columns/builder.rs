@@ -94,6 +94,11 @@ where T: Scalar
         self.build_nonull(length)
     }
 
+    #[inline]
+    pub fn build_column(&mut self) -> <T as Scalar>::ColumnType {
+        self.builder.finish()
+    }
+
     pub fn from_iterator<'a>(
         it: impl Iterator<Item = <T as Scalar>::RefType<'a>>,
     ) -> <T as Scalar>::ColumnType {

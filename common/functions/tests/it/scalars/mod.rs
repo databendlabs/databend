@@ -17,7 +17,6 @@ mod comparisons;
 mod conditionals;
 mod dates;
 mod expressions;
-mod function_column;
 mod hashes;
 mod helpers;
 mod logics;

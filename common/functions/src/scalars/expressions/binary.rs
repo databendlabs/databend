@@ -18,38 +18,12 @@ use common_datavalues2::prelude::*;
 use common_exception::Result;
 
 /// An common struct to caculate binary expression scalar op.
-pub struct ScalarBinaryExpression<L: ScalarColumn, R: ScalarColumn, O: ScalarColumn, F> {
+pub struct ScalarBinaryExpression<L: Scalar, R: Scalar, O: Scalar, F> {
     func: F,
     _phantom: PhantomData<(L, R, O)>,
 }
 
-impl<'a, L: ScalarColumn, R: ScalarColumn, O: ScalarColumn, F> ScalarBinaryExpression<L, R, O, F>
-where F: Fn(L::RefItem<'a>, R::RefItem<'a>) -> O::OwnedItem
-{
-    /// Create a binary expression from generic columns  and a lambda function.
-    pub fn new(func: F) -> Self {
-        Self {
-            func,
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Evaluate the expression with the given array.
-    pub fn eval(&self, l: &'a ColumnRef, r: &'a ColumnRef) -> Result<O> {
-        let left = ColumnViewerIter::<L::OwnedItem>::create(l)?;
-        let right = ColumnViewerIter::<R::OwnedItem>::create(r)?;
-
-        let it = left.zip(right).map(|(a, b)| (self.func)(a, b));
-        Ok(O::from_owned_iterator(it))
-    }
-}
-
-pub struct ScalarBinaryExpressionV2<L: Scalar, R: Scalar, O: Scalar, F> {
-    func: F,
-    _phantom: PhantomData<(L, R, O)>,
-}
-
-impl<'a, L: Scalar, R: Scalar, O: Scalar, F> ScalarBinaryExpressionV2<L, R, O, F>
+impl<'a, L: Scalar, R: Scalar, O: Scalar, F> ScalarBinaryExpression<L, R, O, F>
 where F: Fn(L::RefType<'a>, R::RefType<'a>) -> O
 {
     /// Create a binary expression from generic columns  and a lambda function.
@@ -70,6 +44,33 @@ where F: Fn(L::RefType<'a>, R::RefType<'a>) -> O
     }
 }
 
+// not used for now
+pub struct ScalarBinaryExpressionVc<L: ScalarColumn, R: ScalarColumn, O: ScalarColumn, F> {
+    func: F,
+    _phantom: PhantomData<(L, R, O)>,
+}
+
+impl<'a, L: ScalarColumn, R: ScalarColumn, O: ScalarColumn, F> ScalarBinaryExpressionVc<L, R, O, F>
+where F: Fn(L::RefItem<'a>, R::RefItem<'a>) -> O::OwnedItem
+{
+    /// Create a binary expression from generic columns  and a lambda function.
+    pub fn new(func: F) -> Self {
+        Self {
+            func,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Evaluate the expression with the given array.
+    pub fn eval(&self, l: &'a ColumnRef, r: &'a ColumnRef) -> Result<O> {
+        let left = ColumnViewerIter::<L::OwnedItem>::create(l)?;
+        let right = ColumnViewerIter::<R::OwnedItem>::create(r)?;
+
+        let it = left.zip(right).map(|(a, b)| (self.func)(a, b));
+        Ok(O::from_owned_iterator(it))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::sync::Arc;
@@ -77,7 +78,7 @@ mod test {
     use common_datavalues2::prelude::*;
 
     use super::ScalarBinaryExpression;
-    use super::ScalarBinaryExpressionV2;
+    use super::ScalarBinaryExpressionVc;
 
     #[test]
     fn test_contains() {
@@ -87,13 +88,13 @@ mod test {
         let expected = Series::from_data(vec![true, true, false]);
 
         let binary_expression =
-            ScalarBinaryExpression::<StringColumn, StringColumn, BooleanColumn, _>::new(
+            ScalarBinaryExpressionVc::<StringColumn, StringColumn, BooleanColumn, _>::new(
                 |a, b| -> bool { a.windows(b.len()).position(|window| window == b).is_some() },
             );
         let result_v1 = binary_expression.eval(&l, &r).unwrap();
 
         let binary_expression =
-            ScalarBinaryExpressionV2::<Vec<u8>, Vec<u8>, bool, _>::new(|a, b| -> bool {
+            ScalarBinaryExpression::<Vec<u8>, Vec<u8>, bool, _>::new(|a, b| -> bool {
                 a.windows(b.len()).position(|window| window == b).is_some()
             });
         let result_v2 = binary_expression.eval(&l, &r).unwrap();

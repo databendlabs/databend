@@ -23,6 +23,7 @@ use once_cell::sync::Lazy;
 use super::function2::Function2;
 use super::function_factory::ArithmeticDescription;
 use super::function_factory::FunctionFeatures;
+use super::ComparisonFunction;
 use super::TupleClassFunction;
 use super::UdfFunction;
 use crate::scalars::ToCastFunction;
@@ -59,6 +60,7 @@ static FUNCTION2_FACTORY: Lazy<Arc<Function2Factory>> = Lazy::new(|| {
 
     ToCastFunction::register(&mut function_factory);
     TupleClassFunction::register(&mut function_factory);
+    ComparisonFunction::register(&mut function_factory);
     UdfFunction::register_function2(&mut function_factory);
 
     Arc::new(function_factory)

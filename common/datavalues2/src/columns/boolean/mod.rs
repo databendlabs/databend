@@ -55,12 +55,8 @@ impl BooleanColumn {
         )
     }
 
-    pub fn from_arrow_data(values: Bitmap, validity: Option<Bitmap>) -> Self {
-        Self::from_arrow_array(&BooleanArray::from_data(
-            ArrowType::Boolean,
-            values,
-            validity,
-        ))
+    pub fn from_arrow_data(values: Bitmap) -> Self {
+        Self::from_arrow_array(&BooleanArray::from_data(ArrowType::Boolean, values, None))
     }
 
     pub fn values(&self) -> &Bitmap {

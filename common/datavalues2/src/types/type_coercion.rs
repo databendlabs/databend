@@ -322,11 +322,11 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
     //  one of is nothing
     {
         if lhs_id == TypeID::Null {
-            return Ok(rhs_type.clone());
+            return Ok(wrap_nullable(rhs_type));
         }
 
         if rhs_id == TypeID::Null {
-            return Ok(lhs_type.clone());
+            return Ok(wrap_nullable(lhs_type));
         }
     }
 
