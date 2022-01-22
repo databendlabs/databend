@@ -28,12 +28,12 @@ START_COMMAND=("/bin/bash" "-lc" "groupadd --gid $(id -g) -f databendgroup \
 [[ -n "${SSH_AUTH_SOCK}" ]] && DOCKER_OPTIONS+=(-v "${SSH_AUTH_SOCK}:${SSH_AUTH_SOCK}" -e SSH_AUTH_SOCK)
 
 # to get rid of confliction between host cargo directory and docker registry, we should use tmp directory instead of $HOME/.cargo directory
-mkdir -p /tmp/dev/.cargo/git
-mkdir -p /tmp/dev/target/
-mkdir -p /tmp/dev/.cargo/registry
-CARGO_GIT_DIR=/tmp/dev/.cargo/git
-CARGO_REGISTRY_DIR=/tmp/dev/.cargo/registry
-CARGO_TARGET_DIR=/tmp/dev/target
+CARGO_GIT_DIR="${CARGO_GIT_DIR:-/tmp/dev/.cargo/git}"
+CARGO_REGISTRY_DIR="${CARGO_REGISTRY_DIR:-/tmp/dev/.cargo/registry}"
+CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/dev/target}"
+mkdir -p "${CARGO_GIT_DIR}"
+mkdir -p "${CARGO_REGISTRY_DIR}"
+mkdir -p "${CARGO_TARGET_DIR}"
 docker run --rm \
 	"${DOCKER_OPTIONS[@]}" \
 	-v "${SOURCE_DIR}":"${SOURCE_DIR_MOUNT_DEST}" \

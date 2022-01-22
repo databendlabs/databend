@@ -19,8 +19,14 @@ runs:
     - name: unit test
       shell: bash
       run: |
+        mkdir -p ${CARGO_GIT_DIR}
+        mkdir -p ${CARGO_REGISTRY_DIR}
+        mkdir -p ${CARGO_TARGET_DIR}
         ./scripts/setup/run_docker.sh cargo test --no-fail-fast
       env:
+        CARGO_GIT_DIR: '/home/runner/databend-storage/.cargo/git'
+        CARGO_REGISTRY_DIR: '/home/runner/databend-storage/.cargo/registry'
+        CARGO_TARGET_DIR: '/home/runner/databend-storage/target'
         RUST_LOG: ERROR
         RUST_BACKTRACE: full
         RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests --cfg tokio_unstable'
