@@ -19,7 +19,7 @@ use common_containers::ItemManager;
 use common_containers::Pool;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::MessageSummary;
-use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
+use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::LogEntry;
 use common_meta_types::NodeId;
 use common_tracing::tracing;
@@ -72,14 +72,14 @@ impl Network {
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(id=self.sto.id))]
-    pub async fn make_client(&self, target: &NodeId) -> anyhow::Result<MetaServiceClient<Channel>> {
+    pub async fn make_client(&self, target: &NodeId) -> anyhow::Result<RaftServiceClient<Channel>> {
         let addr = self.sto.get_node_addr(target).await?;
         let addr = format!("http://{}", addr);
 
         tracing::debug!("connect: target={}: {}", target, addr);
 
         let channel = self.conn_pool.get(&addr).await?;
-        let client = MetaServiceClient::new(channel);
+        let client = RaftServiceClient::new(channel);
 
         tracing::info!("connected: target={}: {}", target, addr);
 
