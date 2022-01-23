@@ -124,16 +124,6 @@ impl TryInto<MetaGrpcReadReq> for Request<RaftRequest> {
     }
 }
 
-impl tonic::IntoRequest<RaftRequest> for MetaGrpcReadReq {
-    fn into_request(self) -> Request<RaftRequest> {
-        let raft_req = RaftRequest {
-            data: serde_json::to_string(&self).expect("fail to serialize"),
-        };
-
-        tonic::Request::new(raft_req)
-    }
-}
-
 impl TryInto<Request<RaftRequest>> for &MetaGrpcReadReq {
     type Error = ErrorCode;
 
