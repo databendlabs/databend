@@ -221,7 +221,8 @@ impl SyncSource for NumbersSource {
     const NAME: &'static str = "numbers";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        Err(ErrorCode::UnImplement(""))
+        Ok(None)
+        // Err(ErrorCode::UnImplement(""))
     }
 }
 

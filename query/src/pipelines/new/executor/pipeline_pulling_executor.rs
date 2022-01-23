@@ -35,7 +35,7 @@ impl PipelinePullingExecutor {
         }
 
         if pipeline.output_len() == 0 {
-            return Err(ErrorCode::PipelineUnInitialized(""));,
+            return Err(ErrorCode::PipelineUnInitialized(""));
         }
 
         let (tx, rx) = std::sync::mpsc::sync_channel(2);
