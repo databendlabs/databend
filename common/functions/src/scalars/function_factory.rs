@@ -23,7 +23,6 @@ use once_cell::sync::Lazy;
 use super::Function2Adapter;
 use super::Function2Factory;
 use crate::scalars::ArithmeticFunction;
-use crate::scalars::ComparisonFunction;
 use crate::scalars::ConditionalFunction;
 use crate::scalars::DateFunction;
 use crate::scalars::Function;
@@ -154,7 +153,6 @@ static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     let mut function_factory = FunctionFactory::create();
 
     ArithmeticFunction::register(&mut function_factory);
-    ComparisonFunction::register(&mut function_factory);
     LogicFunction::register(&mut function_factory);
     NullableFunction::register(&mut function_factory);
     StringFunction::register(&mut function_factory);

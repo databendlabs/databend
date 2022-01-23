@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::bitmap::MutableBitmap;
 
 use crate::columns::mutable::MutableColumn;
@@ -19,6 +21,9 @@ use crate::prelude::DataTypePtr;
 use crate::types::create_primitive_datatype;
 use crate::PrimitiveColumn;
 use crate::PrimitiveType;
+use crate::Scalar;
+use crate::ScalarColumnBuilder;
+use crate::ScalarRef;
 
 #[derive(Debug)]
 pub struct MutablePrimitiveColumn<T>
@@ -28,7 +33,7 @@ where T: PrimitiveType
     values: Vec<T>,
 }
 
-impl<T> MutableColumn<T, PrimitiveColumn<T>> for MutablePrimitiveColumn<T>
+impl<T> MutableColumn for MutablePrimitiveColumn<T>
 where T: PrimitiveType
 {
     fn data_type(&self) -> DataTypePtr {
@@ -51,13 +56,6 @@ where T: PrimitiveType
         self
     }
 
-    fn finish(&mut self) -> PrimitiveColumn<T> {
-        self.shrink_to_fit();
-        PrimitiveColumn::<T> {
-            values: std::mem::take(&mut self.values).into(),
-        }
-    }
-
     fn append_default(&mut self) {
         self.append_value(T::default());
     }
@@ -74,8 +72,11 @@ where T: PrimitiveType
         self.values.len()
     }
 
-    fn append(&mut self, item: T) {
-        self.append_value(item);
+    fn to_column(&mut self) -> crate::ColumnRef {
+        self.shrink_to_fit();
+        Arc::new(PrimitiveColumn::<T> {
+            values: std::mem::take(&mut self.values).into(),
+        })
     }
 }
 
@@ -106,5 +107,26 @@ where T: PrimitiveType
 
     pub fn values(&self) -> &Vec<T> {
         &self.values
+    }
+}
+
+impl<T> ScalarColumnBuilder for MutablePrimitiveColumn<T>
+where
+    T: PrimitiveType,
+    T: Scalar<ColumnType = PrimitiveColumn<T>>,
+    for<'a> T: ScalarRef<'a, ScalarType = T, ColumnType = PrimitiveColumn<T>>,
+    for<'a> T: Scalar<RefType<'a> = T>,
+{
+    type ColumnType = PrimitiveColumn<T>;
+
+    fn push(&mut self, value: <T as Scalar>::RefType<'_>) {
+        self.values.push(value);
+    }
+
+    fn finish(&mut self) -> Self::ColumnType {
+        self.shrink_to_fit();
+        PrimitiveColumn::<T> {
+            values: std::mem::take(&mut self.values).into(),
+        }
     }
 }

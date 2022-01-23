@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 
 use crate::prelude::*;
@@ -33,9 +34,7 @@ pub struct BooleanColumn {
 
 impl From<BooleanArray> for BooleanColumn {
     fn from(array: BooleanArray) -> Self {
-        Self {
-            values: array.values().clone(),
-        }
+        Self::new(array)
     }
 }
 
@@ -56,12 +55,8 @@ impl BooleanColumn {
         )
     }
 
-    pub fn from_arrow_data(values: Bitmap, validity: Option<Bitmap>) -> Self {
-        Self::from_arrow_array(&BooleanArray::from_data(
-            ArrowType::Boolean,
-            values,
-            validity,
-        ))
+    pub fn from_arrow_data(values: Bitmap) -> Self {
+        Self::from_arrow_array(&BooleanArray::from_data(ArrowType::Boolean, values, None))
     }
 
     pub fn values(&self) -> &Bitmap {
@@ -126,7 +121,7 @@ impl Column for BooleanColumn {
             previous_offset = offset;
         });
 
-        builder.as_column()
+        builder.to_column()
     }
 
     fn convert_full_column(&self) -> ColumnRef {
@@ -135,5 +130,40 @@ impl Column for BooleanColumn {
 
     fn get(&self, index: usize) -> DataValue {
         DataValue::Boolean(self.values.get_bit(index))
+    }
+}
+
+impl ScalarColumn for BooleanColumn {
+    type Builder = MutableBooleanColumn;
+    type OwnedItem = bool;
+    type RefItem<'a> = bool;
+
+    fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
+        self.values.get_bit(idx)
+    }
+
+    fn iter(&self) -> ScalarColumnIterator<Self> {
+        ScalarColumnIterator::new(self)
+    }
+
+    fn from_slice(data: &[Self::RefItem<'_>]) -> Self {
+        let bitmap = MutableBitmap::from_iter(data.as_ref().iter().cloned());
+        BooleanColumn {
+            values: bitmap.into(),
+        }
+    }
+
+    fn from_iterator<'a>(it: impl Iterator<Item = Self::RefItem<'a>>) -> Self {
+        let bitmap = MutableBitmap::from_iter(it);
+        BooleanColumn {
+            values: bitmap.into(),
+        }
+    }
+
+    fn from_owned_iterator(it: impl Iterator<Item = Self::OwnedItem>) -> Self {
+        let bitmap = MutableBitmap::from_iter(it);
+        BooleanColumn {
+            values: bitmap.into(),
+        }
     }
 }

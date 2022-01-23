@@ -19,6 +19,7 @@ use common_arrow::arrow::array::MutableBinaryArray;
 pub use crate::columns::*;
 pub use crate::data_value::DFTryFrom;
 pub use crate::macros::*;
+pub use crate::scalars::*;
 pub use crate::types::*;
 pub use crate::utils::*;
 // common structs
@@ -30,3 +31,5 @@ pub use crate::DataValue;
 
 pub type MutableLargeBinaryArray = MutableBinaryArray<i64>;
 pub type LargeBinaryArray = BinaryArray<i64>;
+
+pub type Vu8 = Vec<u8>;

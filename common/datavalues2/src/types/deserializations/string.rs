@@ -68,6 +68,6 @@ impl TypeDeserializer for StringDeserializer {
     }
 
     fn finish_to_column(&mut self) -> ColumnRef {
-        self.builder.as_column()
+        self.builder.to_column()
     }
 }

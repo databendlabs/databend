@@ -189,7 +189,7 @@ impl Column for StringColumn {
             }
             previous_offset = offset;
         });
-        builder.as_column()
+        builder.to_column()
     }
 
     fn convert_full_column(&self) -> ColumnRef {
@@ -203,5 +203,23 @@ impl Column for StringColumn {
         // soundness: the invariant of the struct
         let str = unsafe { self.values.get_unchecked(start..end) };
         DataValue::String(str.to_vec())
+    }
+}
+
+impl ScalarColumn for StringColumn {
+    type Builder = MutableStringColumn;
+    type OwnedItem = Vec<u8>;
+    type RefItem<'a> = &'a [u8];
+
+    fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
+        let start = self.offsets[idx].to_usize();
+        let end = self.offsets[idx + 1].to_usize();
+
+        // soundness: the invariant of the struct
+        unsafe { self.values.get_unchecked(start..end) }
+    }
+
+    fn iter(&self) -> ScalarColumnIterator<Self> {
+        ScalarColumnIterator::new(self)
     }
 }

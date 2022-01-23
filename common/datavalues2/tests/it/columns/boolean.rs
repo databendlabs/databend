@@ -25,7 +25,7 @@ fn test_empty_boolean_column() {
 
 #[test]
 fn test_new_from_slice() {
-    let data_column: BooleanColumn = NewColumn::new_from_slice(&[true, false]);
+    let data_column: BooleanColumn = BooleanColumn::from_slice(&[true, false]);
     let mut iter = data_column.iter();
     assert_eq!(Some(true), iter.next());
     assert_eq!(Some(false), iter.next());
@@ -36,7 +36,7 @@ fn test_new_from_slice() {
 fn test_boolean_column() {
     const N: usize = 1024;
     let it = (0..N).map(|i| i % 2 == 0);
-    let data_column: BooleanColumn = NewColumn::new_from_iter(it);
+    let data_column: BooleanColumn = BooleanColumn::from_iterator(it);
     assert!(!data_column.is_empty());
     assert!(data_column.len() == N);
 

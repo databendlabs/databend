@@ -17,9 +17,6 @@ use num::NumCast;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::prelude::*;
-use crate::Column;
-use crate::DataType;
 use crate::DataValue;
 
 pub trait PrimitiveType:
@@ -73,42 +70,3 @@ impl_integer!(i64, i64);
 pub trait FloatType: PrimitiveType {}
 impl FloatType for f32 {}
 impl FloatType for f64 {}
-
-pub trait ScalarType: Sized {
-    type Type: DataType;
-    type ColumnType: Column + NewColumn<Self> + 'static;
-    type MutableColumnType: MutableColumn<Self, Self::ColumnType>;
-}
-
-macro_rules! impl_primitive_scalar_type {
-    ($native:ident) => {
-        impl ScalarType for $native {
-            type Type = PrimitiveDataType<$native>;
-            type ColumnType = PrimitiveColumn<$native>;
-            type MutableColumnType = MutablePrimitiveColumn<$native>;
-        }
-    };
-}
-
-impl_primitive_scalar_type!(u8);
-impl_primitive_scalar_type!(u16);
-impl_primitive_scalar_type!(u32);
-impl_primitive_scalar_type!(u64);
-impl_primitive_scalar_type!(i8);
-impl_primitive_scalar_type!(i16);
-impl_primitive_scalar_type!(i32);
-impl_primitive_scalar_type!(i64);
-impl_primitive_scalar_type!(f32);
-impl_primitive_scalar_type!(f64);
-
-impl ScalarType for bool {
-    type Type = BooleanType;
-    type ColumnType = BooleanColumn;
-    type MutableColumnType = MutableBooleanColumn;
-}
-
-impl ScalarType for &[u8] {
-    type Type = StringType;
-    type ColumnType = StringColumn;
-    type MutableColumnType = MutableStringColumn;
-}

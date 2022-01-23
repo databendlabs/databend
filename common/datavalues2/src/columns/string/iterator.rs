@@ -55,6 +55,12 @@ impl<'a> StringColumn {
     }
 }
 
+pub trait NewColumn<N> {
+    /// create non-nullable column by values
+    fn new_from_slice<P: AsRef<[N]>>(v: P) -> Self;
+    fn new_from_iter(it: impl Iterator<Item = N>) -> Self;
+}
+
 impl<S> NewColumn<S> for StringColumn
 where S: AsRef<[u8]>
 {

@@ -44,6 +44,21 @@ fn test_builder() -> Result<()> {
             inject_null: false,
         },
         Test {
+            name: "test_bool",
+            column: Series::from_data(&[true, false, true, true, false]),
+            inject_null: false,
+        },
+        Test {
+            name: "test_string",
+            column: Series::from_data(&["1", "2", "3", "$"]),
+            inject_null: false,
+        },
+        Test {
+            name: "test_string_nullable",
+            column: Series::from_data(&["1", "2", "3", "$"]),
+            inject_null: false,
+        },
+        Test {
             name: "test_f64_nullable",
             column: Series::from_data(&[1.0f64, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]),
             inject_null: true,
@@ -57,8 +72,8 @@ fn test_builder() -> Result<()> {
         },
     ];
 
-    fn get_column<T: ScalarType + Copy + Default>(column: &ColumnRef) -> Result<ColumnRef>
-    where T::ColumnType: Clone + GetDatas<T> + 'static {
+    fn get_column<T: Scalar>(column: &ColumnRef) -> Result<ColumnRef>
+    where T::ColumnType: Clone + 'static {
         let size = column.len();
 
         if column.is_nullable() {
@@ -66,7 +81,7 @@ fn test_builder() -> Result<()> {
             let viewer = ColumnViewer::<T>::create(column)?;
 
             for row in 0..size {
-                builder.append(*viewer.value(row), viewer.valid_at(row));
+                builder.append(viewer.value(row), viewer.valid_at(row));
             }
             let result = builder.build(size);
             Ok(result)
@@ -75,7 +90,7 @@ fn test_builder() -> Result<()> {
             let viewer = ColumnViewer::<T>::create(column)?;
 
             for row in 0..size {
-                builder.append(*viewer.value(row));
+                builder.append(viewer.value(row));
             }
             let result = builder.build(size);
             Ok(result)

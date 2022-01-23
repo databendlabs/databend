@@ -13,28 +13,11 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::utils::BitmapIter;
-use common_arrow::arrow::bitmap::MutableBitmap;
 
 use crate::prelude::*;
 
 impl<'a> BooleanColumn {
     pub fn iter(&'a self) -> BitmapIter<'a> {
         self.values.iter()
-    }
-}
-
-impl NewColumn<bool> for BooleanColumn {
-    fn new_from_slice<P: AsRef<[bool]>>(slice: P) -> Self {
-        let bitmap = MutableBitmap::from_iter(slice.as_ref().iter().cloned());
-        BooleanColumn {
-            values: bitmap.into(),
-        }
-    }
-
-    fn new_from_iter(it: impl Iterator<Item = bool>) -> Self {
-        let bitmap = MutableBitmap::from_iter(it);
-        BooleanColumn {
-            values: bitmap.into(),
-        }
     }
 }
