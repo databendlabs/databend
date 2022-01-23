@@ -20,12 +20,13 @@ use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::ResizeProcessor;
 
 pub struct NewPipeline {
+    max_threads: usize,
     pub pipes: Vec<NewPipe>,
 }
 
 impl NewPipeline {
     pub fn create() -> NewPipeline {
-        NewPipeline { pipes: Vec::new() }
+        NewPipeline { max_threads: 0, pipes: Vec::new() }
     }
 
     pub fn add_pipe(&mut self, pipe: NewPipe) {
@@ -38,6 +39,19 @@ impl NewPipeline {
             Some(NewPipe::SimplePipe { outputs_port, .. }) => outputs_port.len(),
             Some(NewPipe::ResizePipe { outputs_port, .. }) => outputs_port.len(),
         }
+    }
+
+    pub fn set_max_threads(&mut self, max_threads: usize) {
+        let mut max_pipe_size = 0;
+        for pipe in &self.pipes {
+            max_pipe_size = std::cmp::max(max_pipe_size, pipe.size());
+        }
+
+        self.max_threads = std::cmp::min(max_pipe_size, max_threads);
+    }
+
+    pub fn get_max_threads(&self) -> usize {
+        self.max_threads
     }
 
     pub fn resize(&mut self, new_size: usize) -> Result<()> {

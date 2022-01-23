@@ -312,7 +312,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let settings = context.get_settings();
         let query_result = match settings.get_enable_new_processor_framework()? == 0 {
             true => Self::execute_with_stream(&interpreter).await,
-            false => Self::execute_with_pipeline(&interpreter).await
+            false => Self::execute_with_pipeline(&interpreter, context).await
         };
 
         // Write finish query log.
@@ -333,12 +333,14 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         data_stream.collect::<Result<Vec<DataBlock>>>().await
     }
 
-    async fn execute_with_pipeline(interpreter: &Arc<dyn Interpreter>) -> Result<Vec<DataBlock>> {
-        let pipeline = interpreter.execute_with_new_pipeline()?;
+    async fn execute_with_pipeline(interpreter: &Arc<dyn Interpreter>, context: &QueryContext) -> Result<Vec<DataBlock>> {
+        let mut pipeline = interpreter.execute_with_new_pipeline()?;
+        pipeline.set_max_threads(context.get_settings().get_max_threads()? as usize);
         let mut executor = PipelinePullingExecutor::try_create(pipeline)?;
 
+        executor.start()?;
         let mut data_blocks = vec![];
-        while let Some(data_block) = executor.pull_data()? {
+        while let Some(data_block) = executor.pull_data() {
             data_blocks.push(data_block);
         }
 

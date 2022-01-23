@@ -32,6 +32,13 @@ pub enum NewPipe {
 }
 
 impl NewPipe {
+    pub fn size(&self) -> usize {
+        match self {
+            NewPipe::ResizePipe { .. } => 1,
+            NewPipe::SimplePipe { processors, .. } => processors.len(),
+        }
+    }
+
     pub fn input_size(&self) -> usize {
         match self {
             NewPipe::SimplePipe { inputs_port, .. } => inputs_port.len(),

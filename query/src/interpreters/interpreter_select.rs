@@ -68,7 +68,6 @@ impl Interpreter for SelectInterpreter {
 
     #[tracing::instrument(level = "debug", name = "select_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     fn execute_with_new_pipeline(&self) -> Result<NewPipeline> {
-        println!("execute_with_new_pipeline");
         QueryPipelineBuilder::create(self.ctx.clone()).finalize(&self.select)
     }
 }
