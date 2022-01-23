@@ -102,7 +102,7 @@ impl Column for NullColumn {
         Arc::new(self.clone())
     }
 
-    unsafe fn get_unchecked(&self, _index: usize) -> DataValue {
+    fn get(&self, _index: usize) -> DataValue {
         DataValue::Null
     }
 }

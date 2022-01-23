@@ -23,7 +23,7 @@ use super::data_type::DataTypePtr;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StructType {
     names: Vec<String>,
     types: Vec<DataTypePtr>,
@@ -111,5 +111,11 @@ impl DataType for StructType {
 
     fn create_column(&self, _data: &[DataValue]) -> common_exception::Result<ColumnRef> {
         todo!()
+    }
+}
+
+impl std::fmt::Debug for StructType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }

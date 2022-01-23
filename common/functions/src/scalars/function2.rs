@@ -143,7 +143,12 @@ impl Function for Function2Adapter {
                 .collect::<Vec<_>>();
 
             let col = self.inner.eval(&columns, 1)?;
-            let col: ColumnRef = Arc::new(ConstColumn::new(col, input_rows));
+            let col = if col.is_const() && col.len() == 1 {
+                col.replicate(&[input_rows])
+            } else {
+                Arc::new(ConstColumn::new(col, input_rows))
+            };
+
             let column = convert2_old_column(&col);
             return Ok(column);
         }

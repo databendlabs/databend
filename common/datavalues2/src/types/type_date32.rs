@@ -22,7 +22,7 @@ use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct Date32Type {}
 
 impl Date32Type {
@@ -84,5 +84,11 @@ impl DataType for Date32Type {
         Box::new(DateDeserializer::<i32> {
             builder: MutablePrimitiveColumn::<i32>::with_capacity(capacity),
         })
+    }
+}
+
+impl std::fmt::Debug for Date32Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }

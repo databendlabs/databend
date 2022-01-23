@@ -133,7 +133,7 @@ impl Column for BooleanColumn {
         Arc::new(self.clone())
     }
 
-    unsafe fn get_unchecked(&self, index: usize) -> DataValue {
+    fn get(&self, index: usize) -> DataValue {
         DataValue::Boolean(self.values.get_bit(index))
     }
 }

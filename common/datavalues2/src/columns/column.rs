@@ -77,26 +77,26 @@ pub trait Column: Send + Sync {
 
     /// # Safety
     /// Assumes that the `index` is smaller than size.
-    unsafe fn get_unchecked(&self, index: usize) -> DataValue;
+    fn get(&self, index: usize) -> DataValue;
 
     /// # Safety
     /// Assumes that the `index` is smaller than size.
-    unsafe fn get_u64_unchecked(&self, index: usize) -> Result<u64> {
-        let value = self.get_unchecked(index);
+    fn get_u64(&self, index: usize) -> Result<u64> {
+        let value = self.get(index);
         DFTryFrom::try_from(&value)
     }
 
     /// # Safety
     /// Assumes that the `index` is smaller than size.
-    unsafe fn get_i64_unchecked(&self, index: usize) -> Result<i64> {
-        let value = self.get_unchecked(index);
+    fn get_i64(&self, index: usize) -> Result<i64> {
+        let value = self.get(index);
         DFTryFrom::try_from(&value)
     }
 
     /// # Safety
     /// Assumes that the `index` is smaller than size.
-    unsafe fn get_string_unchecked(&self, index: usize) -> Result<Vec<u8>> {
-        let value = self.get_unchecked(index);
+    fn get_string(&self, index: usize) -> Result<Vec<u8>> {
+        let value = self.get(index);
         DFTryFrom::try_from(value)
     }
 }

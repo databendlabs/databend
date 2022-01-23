@@ -24,7 +24,7 @@ use super::data_type::DataTypePtr;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct ArrayType {
     name: String,
     inner: DataTypePtr,
@@ -123,5 +123,11 @@ impl DataType for ArrayType {
 
     fn create_deserializer(&self, _capacity: usize) -> Box<dyn TypeDeserializer> {
         todo!()
+    }
+}
+
+impl std::fmt::Debug for ArrayType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }

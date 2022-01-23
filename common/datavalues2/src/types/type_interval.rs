@@ -21,7 +21,7 @@ use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct IntervalType {}
 
 #[typetag::serde]
@@ -36,7 +36,7 @@ impl DataType for IntervalType {
     }
 
     fn name(&self) -> &str {
-        "interval"
+        "Interval"
     }
 
     fn default_value(&self) -> DataValue {
@@ -70,5 +70,11 @@ impl DataType for IntervalType {
         Box::new(DateDeserializer::<i64> {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
         })
+    }
+}
+
+impl std::fmt::Debug for IntervalType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }

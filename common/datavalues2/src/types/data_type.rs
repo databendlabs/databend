@@ -23,9 +23,9 @@ use dyn_clone::DynClone;
 
 use super::type_array::ArrayType;
 use super::type_boolean::BooleanType;
-use super::type_date::DateType;
+use super::type_date16::Date16Type;
 use super::type_date32::Date32Type;
-use super::type_datetime::DateTimeType;
+use super::type_datetime32::DateTime32Type;
 use super::type_datetime64::DateTime64Type;
 use super::type_id::TypeID;
 use super::type_nullable::NullableType;
@@ -120,8 +120,8 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
             Arc::new(StringType::default())
         }
 
-        ArrowType::Timestamp(_, tz) => Arc::new(DateTimeType::create(tz.clone())),
-        ArrowType::Date32 => Arc::new(DateType::default()),
+        ArrowType::Timestamp(_, tz) => Arc::new(DateTime32Type::create(tz.clone())),
+        ArrowType::Date32 => Arc::new(Date16Type::default()),
         ArrowType::Date64 => Arc::new(Date32Type::default()),
 
         ArrowType::Struct(fields) => {
@@ -143,9 +143,9 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
         if let Some(custom_name) = m.get("ARROW:extension:databend_name") {
             let metatada = m.get("ARROW:extension:databend_metadata").cloned();
             match custom_name.as_str() {
-                "Date" | "Date16" => return Arc::new(DateType::default()),
+                "Date" | "Date16" => return Arc::new(Date16Type::default()),
                 "Date32" => return Arc::new(Date32Type::default()),
-                "DateTime" | "DateTime32" => return DateTimeType::arc(metatada),
+                "DateTime" | "DateTime32" => return DateTime32Type::arc(metatada),
                 "DateTime64" => return DateTime64Type::arc(3, metatada),
                 _ => {}
             }

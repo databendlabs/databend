@@ -22,7 +22,7 @@ use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Default, Clone, Copy, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, Copy, serde::Deserialize, serde::Serialize)]
 
 pub struct PrimitiveDataType<
     T: PrimitiveType + Clone + Copy + std::fmt::Debug + Into<DataValue> + serde::Serialize,
@@ -119,6 +119,12 @@ macro_rules! impl_numeric {
                 Box::new(NumberDeserializer::<$ty> {
                     builder: MutablePrimitiveColumn::<$ty>::with_capacity(capacity),
                 })
+            }
+        }
+
+        impl std::fmt::Debug for PrimitiveDataType<$ty> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.name())
             }
         }
     };

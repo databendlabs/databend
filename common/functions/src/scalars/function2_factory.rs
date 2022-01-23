@@ -23,6 +23,8 @@ use once_cell::sync::Lazy;
 use super::function2::Function2;
 use super::function_factory::ArithmeticDescription;
 use super::function_factory::FunctionFeatures;
+use super::TupleClassFunction;
+use super::UdfFunction;
 use crate::scalars::ToCastFunction;
 
 pub type Factory2Creator = Box<dyn Fn(&str) -> Result<Box<dyn Function2>> + Send + Sync>;
@@ -56,6 +58,9 @@ static FUNCTION2_FACTORY: Lazy<Arc<Function2Factory>> = Lazy::new(|| {
     let mut function_factory = Function2Factory::create();
 
     ToCastFunction::register(&mut function_factory);
+    TupleClassFunction::register(&mut function_factory);
+    UdfFunction::register_function2(&mut function_factory);
+
     Arc::new(function_factory)
 });
 

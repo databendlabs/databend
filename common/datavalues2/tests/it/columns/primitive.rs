@@ -41,9 +41,7 @@ fn test_primitive_column() {
     assert!(data_column.len() == N);
     assert!(!data_column.null_at(1));
 
-    unsafe {
-        assert!(data_column.get_unchecked(512).as_i64().unwrap() == 512);
-    }
+    assert!(data_column.get_i64(512).unwrap() == 512);
 
     let slice = data_column.slice(0, N / 2);
     assert!(slice.len() == N / 2);

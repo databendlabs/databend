@@ -193,6 +193,10 @@ impl DataValue {
             ))),
         }
     }
+
+    pub fn as_const_column(&self, data_type: &DataTypePtr, size: usize) -> Result<ColumnRef> {
+        data_type.create_constant_column(self, size)
+    }
 }
 
 // Did not use std::convert:TryFrom

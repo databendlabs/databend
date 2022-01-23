@@ -15,34 +15,26 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use chrono_tz::Tz;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
 
 use super::data_type::DataType;
-use super::data_type::ARROW_EXTENSION_META;
-use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DateTimeType {
-    tz: Option<String>,
-}
+#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
+pub struct Date16Type {}
 
-impl DateTimeType {
-    pub fn create(tz: Option<String>) -> Self {
-        DateTimeType { tz }
-    }
-    pub fn arc(tz: Option<String>) -> DataTypePtr {
-        Arc::new(DateTimeType { tz })
+impl Date16Type {
+    pub fn arc() -> DataTypePtr {
+        Arc::new(Date16Type {})
     }
 }
 
 #[typetag::serde]
-impl DataType for DateTimeType {
+impl DataType for Date16Type {
     fn data_type_id(&self) -> TypeID {
-        TypeID::DateTime32
+        TypeID::Date16
     }
 
     #[inline]
@@ -51,11 +43,11 @@ impl DataType for DateTimeType {
     }
 
     fn name(&self) -> &str {
-        "DateTime"
+        "Date16"
     }
 
     fn aliases(&self) -> &[&str] {
-        &["DateTime32"]
+        &["Date"]
     }
 
     fn default_value(&self) -> DataValue {
@@ -65,7 +57,7 @@ impl DataType for DateTimeType {
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
         let value = data.as_u64()?;
 
-        let column = Series::from_data(&[value as u32]);
+        let column = Series::from_data(&[value as u16]);
         Ok(Arc::new(ConstColumn::new(column, size)))
     }
 
@@ -74,33 +66,32 @@ impl DataType for DateTimeType {
             .iter()
             .map(|v| v.as_u64())
             .collect::<Result<Vec<_>>>()?;
-
-        let value = value.iter().map(|v| *v as u32).collect::<Vec<_>>();
-        Ok(Series::from_data(&value))
+        let value = value.iter().map(|v| *v as u16).collect::<Vec<_>>();
+        Ok(Series::from_data(value))
     }
 
     fn arrow_type(&self) -> ArrowType {
-        ArrowType::UInt32
+        ArrowType::UInt16
     }
 
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         let mut mp = BTreeMap::new();
-        mp.insert(ARROW_EXTENSION_NAME.to_string(), "DateTime32".to_string());
-        if let Some(tz) = &self.tz {
-            mp.insert(ARROW_EXTENSION_META.to_string(), tz.to_string());
-        }
+        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Date16".to_string());
         Some(mp)
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(DateTimeSerializer::<u32>::default())
+        Box::new(DateSerializer::<u16>::default())
     }
-
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
-        let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
-        Box::new(DateTimeDeserializer::<u32> {
-            builder: MutablePrimitiveColumn::<u32>::with_capacity(capacity),
-            tz: tz.parse::<Tz>().unwrap(),
+        Box::new(DateDeserializer::<u16> {
+            builder: MutablePrimitiveColumn::<u16>::with_capacity(capacity),
         })
+    }
+}
+
+impl std::fmt::Debug for Date16Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }

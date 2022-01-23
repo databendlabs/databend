@@ -45,7 +45,7 @@ fn test_create_constant() -> Result<()> {
         },
         Test {
             name: "datetime32",
-            data_type: DateTimeType::arc(None),
+            data_type: DateTime32Type::arc(None),
             value: DataValue::UInt64(1630320462),
             size: 2,
             column_expected: Series::from_data(vec![1630320462u32, 1630320462]),
@@ -66,7 +66,7 @@ fn test_create_constant() -> Result<()> {
         },
         Test {
             name: "date16",
-            data_type: DateType::arc(),
+            data_type: Date16Type::arc(),
             value: DataValue::Int64(18869),
             size: 5,
             column_expected: Series::from_data(vec![18869u16, 18869, 18869, 18869, 18869]),
