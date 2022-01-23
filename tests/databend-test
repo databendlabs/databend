@@ -250,11 +250,12 @@ def run_tests_array(all_tests_with_params):
                     if args.mode == 'cluster' and os.path.isfile(
                             cluster_result_file):
                         result_file = cluster_result_file
-                        stdout_file = os.path.join(suite_tmp_dir,
-                                                   name) + file_suffix + '_cluster.stdout'
-                        stderr_file = os.path.join(suite_tmp_dir,
-                                               name) + file_suffix + '_cluster.stderr'
-
+                        stdout_file = os.path.join(
+                            suite_tmp_dir,
+                            name) + file_suffix + '_cluster.stdout'
+                        stderr_file = os.path.join(
+                            suite_tmp_dir,
+                            name) + file_suffix + '_cluster.stderr'
 
                     proc, stdout, stderr, total_time = run_single_test(
                         args, ext, client_options, case_file, stdout_file,

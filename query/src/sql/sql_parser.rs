@@ -84,7 +84,6 @@ use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowSettings;
 use crate::sql::statements::DfShowTables;
-use crate::sql::statements::DfShowUDF;
 use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
@@ -227,8 +226,6 @@ impl<'a> DfParser<'a> {
                             self.parse_show_grants()
                         } else if self.consume_token("FUNCTIONS") {
                             self.parse_show_functions()
-                        } else if self.consume_token("FUNCTION") {
-                            self.parse_show_udf()
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
@@ -1011,13 +1008,6 @@ impl<'a> DfParser<'a> {
             udf_name,
         };
         Ok(DfStatement::DropUDF(drop_udf))
-    }
-
-    fn parse_show_udf(&mut self) -> Result<DfStatement, ParserError> {
-        let udf_name = self.parser.parse_literal_string()?;
-        let show_udf = DfShowUDF { udf_name };
-
-        Ok(DfStatement::ShowUDF(show_udf))
     }
 
     fn parse_create_table(&mut self) -> Result<DfStatement, ParserError> {

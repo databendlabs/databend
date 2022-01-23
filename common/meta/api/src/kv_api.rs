@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
+use std::ops::Deref;
 
 use async_trait::async_trait;
 use common_meta_types::GetKVActionReply;
@@ -21,6 +21,17 @@ use common_meta_types::MGetKVActionReply;
 use common_meta_types::PrefixListReply;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
+
+#[async_trait]
+pub trait KVApiBuilder<T>
+where T: KVApi
+{
+    /// Create a KVApi
+    async fn build(&self) -> T;
+
+    /// Create a KVApi cluster
+    async fn build_cluster(&self) -> Vec<T>;
+}
 
 #[async_trait]
 pub trait KVApi: Send + Sync {
@@ -36,23 +47,23 @@ pub trait KVApi: Send + Sync {
 }
 
 #[async_trait]
-impl KVApi for Arc<dyn KVApi> {
+impl<U: KVApi, T: Deref<Target = U> + Send + Sync> KVApi for T {
     async fn upsert_kv(
         &self,
         act: UpsertKVAction,
     ) -> common_exception::Result<UpsertKVActionReply> {
-        self.as_ref().upsert_kv(act).await
+        self.deref().upsert_kv(act).await
     }
 
     async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply> {
-        self.as_ref().get_kv(key).await
+        self.deref().get_kv(key).await
     }
 
     async fn mget_kv(&self, key: &[String]) -> common_exception::Result<MGetKVActionReply> {
-        self.as_ref().mget_kv(key).await
+        self.deref().mget_kv(key).await
     }
 
     async fn prefix_list_kv(&self, prefix: &str) -> common_exception::Result<PrefixListReply> {
-        self.as_ref().prefix_list_kv(prefix).await
+        self.deref().prefix_list_kv(prefix).await
     }
 }

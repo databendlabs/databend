@@ -51,7 +51,6 @@ use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowSettings;
 use crate::sql::statements::DfShowTables;
-use crate::sql::statements::DfShowUDF;
 use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
@@ -124,7 +123,6 @@ pub enum DfStatement {
     // UDF
     CreateUDF(DfCreateUDF),
     DropUDF(DfDropUDF),
-    ShowUDF(DfShowUDF),
     AlterUDF(DfAlterUDF),
 }
 

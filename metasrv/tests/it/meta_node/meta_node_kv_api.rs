@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,42 +19,45 @@ use async_trait::async_trait;
 use common_base::tokio;
 use common_meta_api::KVApiBuilder;
 use common_meta_api::KVApiTestSuite;
-use common_meta_grpc::MetaGrpcClient;
-use common_tracing::tracing_futures::Instrument;
+use common_tracing::tracing::Instrument;
+use databend_meta::meta_service::MetaNode;
+use maplit::btreeset;
 
 use crate::init_meta_ut;
-use crate::tests::service::start_metasrv_cluster;
+use crate::meta_node::meta_node_all::start_meta_node_cluster;
+use crate::meta_node::meta_node_all::start_meta_node_leader;
 use crate::tests::service::MetaSrvTestContext;
-use crate::tests::start_metasrv;
 
-struct Builder {
+struct MetaNodeUnitTestBuilder {
     pub test_contexts: Arc<Mutex<Vec<MetaSrvTestContext>>>,
 }
 
 #[async_trait]
-impl KVApiBuilder<MetaGrpcClient> for Builder {
-    async fn build(&self) -> MetaGrpcClient {
-        let (tc, addr) = start_metasrv().await.unwrap();
+impl KVApiBuilder<Arc<MetaNode>> for MetaNodeUnitTestBuilder {
+    async fn build(&self) -> Arc<MetaNode> {
+        let (_id, tc) = start_meta_node_leader().await.unwrap();
 
-        let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx", None, None)
-            .await
-            .unwrap();
+        let meta_node = tc.meta_node();
 
         {
             let mut tcs = self.test_contexts.lock().unwrap();
             tcs.push(tc);
         }
 
-        client
+        meta_node
     }
 
-    async fn build_cluster(&self) -> Vec<MetaGrpcClient> {
-        let tcs = start_metasrv_cluster(&[0, 1, 2]).await.unwrap();
+    async fn build_cluster(&self) -> Vec<Arc<MetaNode>> {
+        let (_log_index, tcs) = start_meta_node_cluster(btreeset! {0,1,2}, btreeset! {3,4})
+            .await
+            .unwrap();
 
         let cluster = vec![
-            tcs[0].grpc_client().await.unwrap(),
-            tcs[1].grpc_client().await.unwrap(),
-            tcs[2].grpc_client().await.unwrap(),
+            tcs[0].meta_node(),
+            tcs[1].meta_node(),
+            tcs[2].meta_node(),
+            tcs[3].meta_node(),
+            tcs[4].meta_node(),
         ];
 
         {
@@ -67,10 +70,10 @@ impl KVApiBuilder<MetaGrpcClient> for Builder {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_metasrv_kv_api() -> anyhow::Result<()> {
+async fn test_meta_node_kv_api() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
 
-    let builder = Builder {
+    let builder = MetaNodeUnitTestBuilder {
         test_contexts: Arc::new(Mutex::new(vec![])),
     };
 

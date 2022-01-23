@@ -25,6 +25,14 @@ use crate::pipelines::new::processors::Processor;
 pub trait Sink: Send {
     const NAME: &'static str;
 
+    fn on_start(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn on_finish(&mut self) -> Result<()> {
+        Ok(())
+    }
+
     fn consume(&mut self, data_block: DataBlock) -> Result<()>;
 }
 
@@ -32,6 +40,8 @@ pub struct Sinker<T: Sink + 'static> {
     inner: T,
     input: Arc<InputPort>,
     input_data: Option<DataBlock>,
+    called_on_start: bool,
+    called_on_finish: bool,
 }
 
 impl<T: Sink + 'static> Sinker<T> {
@@ -40,6 +50,8 @@ impl<T: Sink + 'static> Sinker<T> {
             inner,
             input,
             input_data: None,
+            called_on_start: false,
+            called_on_finish: false,
         }))
     }
 }
@@ -51,12 +63,19 @@ impl<T: Sink + 'static> Processor for Sinker<T> {
     }
 
     fn event(&mut self) -> Result<Event> {
+        if !self.called_on_start {
+            return Ok(Event::Sync);
+        }
+
         if self.input_data.is_some() {
             return Ok(Event::Sync);
         }
 
         if self.input.is_finished() {
-            return Ok(Event::Finished);
+            return match !self.called_on_finish {
+                true => Ok(Event::Sync),
+                false => Ok(Event::Finished),
+            };
         }
 
         match self.input.has_data() {
@@ -72,8 +91,14 @@ impl<T: Sink + 'static> Processor for Sinker<T> {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(data) = self.input_data.take() {
-            self.inner.consume(data)?;
+        if !self.called_on_start {
+            self.called_on_start = true;
+            self.inner.on_start()?;
+        } else if let Some(data_block) = self.input_data.take() {
+            self.inner.consume(data_block)?;
+        } else if !self.called_on_finish {
+            self.called_on_finish = true;
+            self.inner.on_finish()?;
         }
 
         Ok(())

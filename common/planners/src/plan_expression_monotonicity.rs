@@ -173,9 +173,11 @@ impl ExpressionMonotonicityVisitor {
         expr: &Expression,
         variables: HashMap<String, (Option<DataColumnWithField>, Option<DataColumnWithField>)>,
         single_point: bool,
-    ) -> Result<Monotonicity> {
+    ) -> Monotonicity {
         let visitor = Self::create(schema, variables, single_point);
-        visitor.visit(expr)?.finalize()
+        visitor.visit(expr).map_or(Monotonicity::default(), |v| {
+            v.finalize().unwrap_or_else(|_| Monotonicity::default())
+        })
     }
 
     /// Extract sort column from sort expression. It checks the monotonicity information
@@ -197,8 +199,7 @@ impl ExpressionMonotonicityVisitor {
         {
             let mut variables = HashMap::new();
             variables.insert(column_name.to_owned(), (left, right));
-            let mono = Self::check_expression(schema, origin_expr, variables, false)
-                .unwrap_or_else(|_| Monotonicity::default());
+            let mono = Self::check_expression(schema, origin_expr, variables, false);
             if !mono.is_monotonic {
                 return Ok(sort_expr.clone());
             }
