@@ -28,6 +28,11 @@ pub use crate::DataSchema;
 pub use crate::DataSchemaRef;
 pub use crate::DataSchemaRefExt;
 pub use crate::DataValue;
+//operators
+pub use crate::DataValueBinaryOperator;
+pub use crate::DataValueComparisonOperator;
+pub use crate::DataValueLogicOperator;
+pub use crate::DataValueUnaryOperator;
 
 pub type MutableLargeBinaryArray = MutableBinaryArray<i64>;
 pub type LargeBinaryArray = BinaryArray<i64>;
