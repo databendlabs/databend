@@ -31,3 +31,5 @@ pub use crate::DataValue;
 
 pub type MutableLargeBinaryArray = MutableBinaryArray<i64>;
 pub type LargeBinaryArray = BinaryArray<i64>;
+
+pub type Vu8 = Vec<u8>;

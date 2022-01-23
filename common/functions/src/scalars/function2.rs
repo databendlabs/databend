@@ -15,10 +15,15 @@
 use std::fmt;
 use std::sync::Arc;
 
+use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataField as OldDataField;
+use common_datavalues::DataType;
 use common_datavalues::DataTypeAndNullable;
+use common_datavalues::DataValue as OldDataValue;
 use common_datavalues2::column_convert::convert2_new_column;
 use common_datavalues2::column_convert::convert2_old_column;
+use common_datavalues2::remove_nullable;
+use common_datavalues2::wrap_nullable;
 use common_datavalues2::ColumnRef;
 use common_datavalues2::ColumnWithField;
 use common_datavalues2::ColumnsWithField;
@@ -26,6 +31,7 @@ use common_datavalues2::ConstColumn;
 use common_datavalues2::DataField;
 use common_datavalues2::DataTypePtr;
 use common_datavalues2::Series;
+use common_datavalues2::TypeID;
 use common_exception::Result;
 use dyn_clone::DynClone;
 
@@ -103,8 +109,26 @@ impl Function for Function2Adapter {
             types.push(t.data_type());
         }
 
-        let ty = self.inner.return_type(&types)?;
-        let new_typ = DataField::new("xx", ty);
+        let typ = if self.passthrough_null() {
+            // one is null, result is null
+            if types.iter().any(|v| v.data_type_id() == TypeID::Null) {
+                return Ok(DataTypeAndNullable::create(&DataType::Null, true));
+            }
+            let has_nullable = types.iter().any(|v| v.is_nullable());
+            let types = types.iter().map(|v| remove_nullable(v)).collect::<Vec<_>>();
+            let types = types.iter().collect::<Vec<_>>();
+            let typ = self.inner.return_type(&types)?;
+
+            if has_nullable {
+                wrap_nullable(&typ)
+            } else {
+                typ
+            }
+        } else {
+            self.inner.return_type(&types)?
+        };
+
+        let new_typ = DataField::new("xx", typ);
         let old_f: OldDataField = new_typ.into();
 
         Ok(DataTypeAndNullable::create(
@@ -117,17 +141,35 @@ impl Function for Function2Adapter {
         &self,
         columns: &common_datavalues::prelude::DataColumnsWithField,
         input_rows: usize,
-    ) -> Result<common_datavalues::prelude::DataColumn> {
+    ) -> Result<DataColumn> {
         let columns: Vec<ColumnWithField> =
             columns.iter().map(convert2_new_column).collect::<Vec<_>>();
 
         // unwrap nullable
-        // TODO after moving all functions to datavalues2
-        // if self.passthrough_null() {
-        //     if columns.iter().all(|v| v.data_type().is_nullable()) {
+        if self.passthrough_null() {
+            // one is null, result is null
+            if columns
+                .iter()
+                .any(|v| v.data_type().data_type_id() == TypeID::Null)
+            {
+                return Ok(DataColumn::Constant(OldDataValue::Null, input_rows));
+            }
 
-        //     }
-        // }
+            if columns.iter().any(|v| v.data_type().is_nullable()) {
+                let columns = columns
+                    .iter()
+                    .map(|v| {
+                        let ty = remove_nullable(v.data_type());
+                        let f = v.field();
+                        ColumnWithField::new(v.column().clone(), DataField::new(f.name(), ty))
+                    })
+                    .collect::<Vec<_>>();
+
+                let col = self.inner.eval(&columns, input_rows)?;
+                let column = convert2_old_column(&col);
+                return Ok(column);
+            }
+        }
 
         // is there nullable constant? Did not consider this case
         // unwrap constant
