@@ -321,6 +321,7 @@ impl DfQueryStatement {
         let mut new_data_fields = Vec::with_capacity(exprs.len());
 
         for expr in exprs {
+            tracing::info!("Expr: {:?}", expr);
             new_data_fields.push(expr.to_data_field(schema)?);
         }
 

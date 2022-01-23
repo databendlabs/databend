@@ -128,8 +128,8 @@ async fn test_plan_parser() -> Result<()> {
             sql: "select number + 1, number + 3 from numbers(10) group by number + 2, number + 1",
             expect: "",
             // TODO: better message
-            error: "Code: 1006, displayText = Unable to get field named \"number\". Valid fields: [\"(number + 2)\", \"(number + 1)\"] (while in select before projection).",
-            // error: "Code: 26, displayText = Column `number` is not under aggregate function and not in GROUP BY: While processing [(number + 1), (number + 3)].",
+            //error: "Code: 1006, displayText = Unable to get field named \"number\". Valid fields: [\"(number + 2)\", \"(number + 1)\"] (while in select before projection).",
+            error: "Code: 1006, displayText = Column `number`is not under aggregate function and not in GROUP BY: While processing  [`(number + 2)`, `(number + 1)`] (while in select before projection).",
         },
         Test {
             name: "select-count",

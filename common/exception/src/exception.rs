@@ -75,10 +75,14 @@ impl ErrorCode {
     pub fn add_message_back(self, msg: impl AsRef<str>) -> Self {
         Self {
             code: self.code(),
-            display_text: format!("{}{}", self.display_text, msg.as_ref()),
+            display_text: format!("{}{}", self.rewirte_err_msg_for_groupby(&self.display_text), msg.as_ref()),
             cause: self.cause,
             backtrace: self.backtrace,
         }
+    }
+
+    pub fn rewirte_err_msg_for_groupby(&self, display_text: &String) -> String{
+        display_text.replace("\"", "`").replace("Unable to get field named", "Column").replace(". Valid fields:","is not under aggregate function and not in GROUP BY: While processing ")
     }
 
     pub fn backtrace(&self) -> Option<ErrorCodeBacktrace> {
