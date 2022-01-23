@@ -41,7 +41,7 @@ t this stage, we rely on background tasks to merge the data properly.
     
   Segment are generated for those blocks, which tracks all the block
   meta information. also, statistics of each block are aggregated and kept 
-  int the segments.
+  in the segments.
 
   Segments are stored in object storage as well.
  
