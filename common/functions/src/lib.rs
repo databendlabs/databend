@@ -17,6 +17,8 @@
 pub mod aggregates;
 pub mod scalars;
 
+mod macros;
+
 use aggregates::AggregateFunctionFactory;
 use scalars::Function2Factory;
 use scalars::FunctionFactory;

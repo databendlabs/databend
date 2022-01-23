@@ -27,6 +27,7 @@ use crate::scalars::ExportSetFunction;
 use crate::scalars::FieldFunction;
 use crate::scalars::FindInSetFunction;
 use crate::scalars::FormatFunction;
+use crate::scalars::Function2Factory;
 use crate::scalars::HexFunction;
 use crate::scalars::InsertFunction;
 use crate::scalars::InstrFunction;
@@ -60,22 +61,34 @@ use crate::scalars::UpperFunction;
 pub struct StringFunction;
 
 impl StringFunction {
+    pub fn register2(factory: &mut Function2Factory) {
+        factory.register("to_base64", Base64EncodeFunction::desc());
+        factory.register("from_base64", Base64DecodeFunction::desc());
+
+        factory.register("rtrim", RTrimFunction::desc());
+        factory.register("trim", TrimFunction::desc());
+        factory.register("ltrim", LTrimFunction::desc());
+        factory.register("quote", QuoteFunction::desc());
+        factory.register("lower", LowerFunction::desc());
+        factory.register("lcase", LowerFunction::desc());
+        factory.register("upper", UpperFunction::desc());
+        factory.register("ucase", UpperFunction::desc());
+        factory.register("reverse", ReverseFunction::desc());
+        factory.register("soundex", SoundexFunction::desc());
+    }
+
     pub fn register(factory: &mut FunctionFactory) {
+        factory.register("bit_length", BitLengthFunction::desc());
+        factory.register("bin", BinFunction::desc());
+        factory.register("ascii", AsciiFunction::desc());
+        factory.register("hex", HexFunction::desc());
+        factory.register("oct", OctFunction::desc());
+        factory.register("repeat", RepeatFunction::desc());
         factory.register("mid", SubstringFunction::desc());
         factory.register("substr", SubstringFunction::desc());
         factory.register("substring", SubstringFunction::desc());
         factory.register("substring_index", SubstringIndexFunction::desc());
-        factory.register("oct", OctFunction::desc());
-        factory.register("repeat", RepeatFunction::desc());
-        factory.register("ltrim", LTrimFunction::desc());
-        factory.register("rtrim", RTrimFunction::desc());
-        factory.register("trim", TrimFunction::desc());
-        factory.register("hex", HexFunction::desc());
         factory.register("unhex", UnhexFunction::desc());
-        factory.register("quote", QuoteFunction::desc());
-        factory.register("ascii", AsciiFunction::desc());
-        factory.register("to_base64", Base64EncodeFunction::desc());
-        factory.register("from_base64", Base64DecodeFunction::desc());
         factory.register("locate", LocateFunction::desc());
         factory.register("position", PositionFunction::desc());
         factory.register("instr", InstrFunction::desc());
@@ -83,9 +96,8 @@ impl StringFunction {
         factory.register("field", FieldFunction::desc());
         factory.register("octet_length", OctetLengthFunction::desc());
         factory.register("concat", ConcatFunction::desc());
-        factory.register("bit_length", BitLengthFunction::desc());
+
         factory.register("replace", ReplaceFunction::desc());
-        factory.register("reverse", ReverseFunction::desc());
         factory.register("strcmp", StrcmpFunction::desc());
         factory.register("left", LeftFunction::desc());
         factory.register("right", RightFunction::desc());
@@ -97,16 +109,10 @@ impl StringFunction {
         factory.register("char_length", CharLengthFunction::desc());
         factory.register("character_length", CharLengthFunction::desc());
         factory.register("ord", OrdFunction::desc());
-        factory.register("bin", BinFunction::desc());
         factory.register("export_set", ExportSetFunction::desc());
-        factory.register("soundex", SoundexFunction::desc());
         factory.register("find_in_set", FindInSetFunction::desc());
         factory.register("length", LengthFunction::desc());
         factory.register("format", FormatFunction::desc());
-        factory.register("lower", LowerFunction::desc());
-        factory.register("lcase", LowerFunction::desc());
-        factory.register("upper", UpperFunction::desc());
-        factory.register("ucase", UpperFunction::desc());
         factory.register("char", CharFunction::desc());
     }
 }

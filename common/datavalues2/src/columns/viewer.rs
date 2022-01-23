@@ -121,7 +121,7 @@ pub struct ColumnViewerIter<'a, T: Scalar> {
 }
 
 impl<'a, T: Scalar> ColumnViewerIter<'a, T> {
-    pub fn create(col: &'a ColumnRef) -> Result<Self> {
+    pub fn try_create(col: &'a ColumnRef) -> Result<Self> {
         let viewer = ColumnViewer::create(col)?;
         let size = viewer.len();
         Ok(Self {

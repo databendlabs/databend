@@ -157,7 +157,6 @@ static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     NullableFunction::register(&mut function_factory);
     StringFunction::register(&mut function_factory);
     UdfFunction::register(&mut function_factory);
-    HashesFunction::register(&mut function_factory);
     ConditionalFunction::register(&mut function_factory);
     DateFunction::register(&mut function_factory);
     OtherFunction::register(&mut function_factory);

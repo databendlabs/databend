@@ -36,8 +36,8 @@ where F: Fn(L::RefType<'a>, R::RefType<'a>) -> O
 
     /// Evaluate the expression with the given array.
     pub fn eval(&self, l: &'a ColumnRef, r: &'a ColumnRef) -> Result<<O as Scalar>::ColumnType> {
-        let left = ColumnViewerIter::<L>::create(l)?;
-        let right = ColumnViewerIter::<R>::create(r)?;
+        let left = ColumnViewerIter::<L>::try_create(l)?;
+        let right = ColumnViewerIter::<R>::try_create(r)?;
 
         let it = left.zip(right).map(|(a, b)| (self.func)(a, b));
         Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
@@ -63,8 +63,8 @@ where F: Fn(L::RefItem<'a>, R::RefItem<'a>) -> O::OwnedItem
 
     /// Evaluate the expression with the given array.
     pub fn eval(&self, l: &'a ColumnRef, r: &'a ColumnRef) -> Result<O> {
-        let left = ColumnViewerIter::<L::OwnedItem>::create(l)?;
-        let right = ColumnViewerIter::<R::OwnedItem>::create(r)?;
+        let left = ColumnViewerIter::<L::OwnedItem>::try_create(l)?;
+        let right = ColumnViewerIter::<R::OwnedItem>::try_create(r)?;
 
         let it = left.zip(right).map(|(a, b)| (self.func)(a, b));
         Ok(O::from_owned_iterator(it))
