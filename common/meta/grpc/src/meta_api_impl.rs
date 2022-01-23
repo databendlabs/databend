@@ -58,14 +58,14 @@ impl MetaApi for MetaGrpcClient {
         &self,
         req: GetDatabaseReq,
     ) -> common_exception::Result<Arc<DatabaseInfo>> {
-        self.do_get(req).await
+        self.do_read(req).await
     }
 
     async fn list_databases(
         &self,
         req: ListDatabaseReq,
     ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
-        self.do_get(req).await
+        self.do_read(req).await
     }
 
     async fn create_table(
@@ -80,21 +80,21 @@ impl MetaApi for MetaGrpcClient {
     }
 
     async fn get_table(&self, req: GetTableReq) -> common_exception::Result<Arc<TableInfo>> {
-        self.do_get(req).await
+        self.do_read(req).await
     }
 
     async fn list_tables(
         &self,
         req: ListTableReq,
     ) -> common_exception::Result<Vec<Arc<TableInfo>>> {
-        self.do_get(req).await
+        self.do_read(req).await
     }
 
     async fn get_table_by_id(
         &self,
         table_id: MetaId,
     ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
-        let x: TableInfo = self.do_get(GetTableExtReq { tbl_id: table_id }).await?;
+        let x: TableInfo = self.do_read(GetTableExtReq { tbl_id: table_id }).await?;
         Ok((x.ident, Arc::new(x.meta)))
     }
 

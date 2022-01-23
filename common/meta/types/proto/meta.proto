@@ -42,7 +42,7 @@ message HandshakeResponse {
   bytes payload = 2;
 }
 
-service MetaService {
+service RaftService {
 
   rpc Write(RaftRequest) returns (RaftReply) {}
   rpc Get(GetRequest) returns (GetReply) {}
@@ -63,5 +63,5 @@ service Meta {
 
   // message
   rpc WriteMsg(RaftRequest) returns (RaftReply);
-  rpc ReadMsg(GetRequest) returns (GetReply);
+  rpc ReadMsg(RaftRequest) returns (RaftReply);
 }

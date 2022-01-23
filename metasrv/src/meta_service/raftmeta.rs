@@ -29,8 +29,8 @@ use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_raft_store::state_machine::TableLookupKey;
 use common_meta_raft_store::state_machine::TableLookupValue;
 use common_meta_sled_store::openraft;
-use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
-use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
+use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
+use common_meta_types::protobuf::raft_service_server::RaftServiceServer;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::ForwardRequest;
@@ -55,7 +55,7 @@ use crate::errors::MetaError;
 use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
-use crate::meta_service::MetaServiceImpl;
+use crate::meta_service::RaftServiceImpl;
 use crate::network::Network;
 use crate::store::MetaRaftStore;
 use crate::Opened;
@@ -196,8 +196,8 @@ impl MetaNode {
     pub async fn start_grpc(mn: Arc<MetaNode>, addr: &str) -> common_exception::Result<()> {
         let mut rx = mn.running_rx.clone();
 
-        let meta_srv_impl = MetaServiceImpl::create(mn.clone());
-        let meta_srv = MetaServiceServer::new(meta_srv_impl);
+        let meta_srv_impl = RaftServiceImpl::create(mn.clone());
+        let meta_srv = RaftServiceServer::new(meta_srv_impl);
 
         let addr_str = addr.to_string();
         let addr = addr.parse::<std::net::SocketAddr>()?;
@@ -403,7 +403,7 @@ impl MetaNode {
             let addrs = &conf.join;
             #[allow(clippy::never_loop)]
             for addr in addrs {
-                let mut client = MetaServiceClient::connect(format!("http://{}", addr))
+                let mut client = RaftServiceClient::connect(format!("http://{}", addr))
                     .await
                     .map_err(|e| ErrorCode::CannotConnectNode(e.to_string()))?;
 
@@ -704,7 +704,7 @@ impl MetaNode {
             .await
             .map_err(|e| MetaError::UnknownError(e.to_string()))?;
 
-        let mut client = MetaServiceClient::connect(format!("http://{}", addr))
+        let mut client = RaftServiceClient::connect(format!("http://{}", addr))
             .await
             .map_err(|e| ConnectionError::new(e, format!("address: {}", addr)))?;
 
