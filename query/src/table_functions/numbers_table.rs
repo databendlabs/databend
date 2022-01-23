@@ -14,6 +14,7 @@
 //
 
 use std::any::Any;
+use std::cmp::max;
 use std::collections::HashMap;
 use std::mem::size_of;
 use std::sync::Arc;
@@ -26,6 +27,7 @@ use common_datavalues::{DataField, DataSchemaRef};
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
+use common_datavalues::prelude::{DFUInt64Array, IntoSeries};
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::{MetaId, TableIdent};
@@ -189,18 +191,18 @@ impl Table for NumbersTable {
     }
 
     fn read2(&self, ctx: Arc<QueryContext>, plan: &ReadDataSourcePlan, pipeline: &mut NewPipeline) -> Result<()> {
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let max_threads = std::cmp::min(max_threads, plan.parts.len());
-
         let mut source_builder = SourcePipeBuilder::create();
-        for _index in 0..std::cmp::max(max_threads, 1) {
-            let source_ctx = ctx.clone();
 
+        for part_index in 0..plan.parts.len() {
+            let source_ctx = ctx.clone();
             let source_output_port = OutputPort::create();
 
             source_builder.add_source(
                 source_output_port.clone(),
-                NumbersSource::create(source_output_port, source_ctx)?,
+                NumbersSource::create(
+                    source_output_port, source_ctx,
+                    &plan.parts[part_index].name, self.schema(),
+                )?,
             );
         }
 
@@ -209,11 +211,22 @@ impl Table for NumbersTable {
     }
 }
 
-struct NumbersSource {}
+struct NumbersSource {
+    begin: u64,
+    end: u64,
+    step: u64,
+    schema: DataSchemaRef,
+}
 
 impl NumbersSource {
-    pub fn create(output: Arc<OutputPort>, ctx: Arc<QueryContext>) -> Result<ProcessorPtr> {
-        SyncSourcer::create(output, NumbersSource {})
+    pub fn create(output: Arc<OutputPort>, ctx: Arc<QueryContext>, name: &str, schema: DataSchemaRef) -> Result<ProcessorPtr> {
+        let settings = ctx.get_settings();
+        let step = settings.get_max_block_size()?;
+
+        let names: Vec<_> = name.split('-').collect();
+        let (begin, end) = (names[1].parse::<u64>()?, names[2].parse::<u64>()?);
+
+        SyncSourcer::create(output, NumbersSource { schema, begin, end, step })
     }
 }
 
@@ -221,8 +234,19 @@ impl SyncSource for NumbersSource {
     const NAME: &'static str = "numbers";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        Ok(None)
-        // Err(ErrorCode::UnImplement(""))
+        let source_remain_size = self.end - self.begin;
+
+        match source_remain_size {
+            0 => Ok(None),
+            remain_size => {
+                let step = std::cmp::min(remain_size, self.step);
+                let column_data = (self.begin..self.begin + step).collect();
+
+                self.begin += step;
+                let series = DFUInt64Array::new_from_vec(column_data).into_series();
+                Ok(Some(DataBlock::create_by_array(self.schema.clone(), vec![series])))
+            }
+        }
     }
 }
 
