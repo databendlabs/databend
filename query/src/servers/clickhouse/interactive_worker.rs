@@ -25,6 +25,7 @@ use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
 use crate::servers::clickhouse::writers::to_clickhouse_err;
 use crate::servers::clickhouse::writers::QueryWriter;
 use crate::sessions::SessionRef;
+use crate::users::auth::auth_mgr::Credential;
 
 pub struct InteractiveWorker {
     session: SessionRef,
@@ -102,25 +103,21 @@ impl ClickHouseSession for InteractiveWorker {
         // TODO: push async up to clickhouse server lib
         futures::executor::block_on(async move {
             // Here we don't handle the create context error.
-            let ctx = self.session.create_context().await.unwrap();
-            let tenant = ctx.get_tenant();
             let client_ip = client_addr.split(':').collect::<Vec<_>>()[0];
-            let (authed, user_info) = match user_manager
-                .get_user_with_client_ip(&tenant, user, client_ip)
-                .await
-            {
-                Ok(user_info) => (
-                    user_info.auth_info.auth_password_plaintext(password),
-                    Some(user_info),
-                ),
-                Err(err) => (Err(err), None),
+            let credential = Credential::Password {
+                name: user.to_string(),
+                password: password.to_owned(),
+                hostname: Some(client_ip.to_string()),
             };
-            match authed {
-                Ok(res) => {
-                    if res {
-                        self.session.set_current_user(user_info.unwrap());
-                    }
-                    res
+            let user_info_auth = self
+                .session
+                .get_sessions_manager()
+                .get_auth_manager()
+                .auth(&credential);
+            match user_info_auth {
+                Ok(user_info) => {
+                    self.session.set_current_user(user_info.unwrap());
+                    true
                 }
                 Err(failure) => {
                     tracing::error!(

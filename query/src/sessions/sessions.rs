@@ -62,7 +62,7 @@ impl SessionManager {
 
         // User manager and init the default users.
         let user = UserApiProvider::create_global(conf.clone()).await?;
-        let auth_manager = AuthMgr::create(conf.clone()).await?;
+        let auth_manager = AuthMgr::create(conf.clone(), user.clone()).await?;
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
 
         let max_active_sessions = conf.query.max_active_sessions as usize;
@@ -89,6 +89,10 @@ impl SessionManager {
 
     pub fn get_http_query_manager(self: &Arc<Self>) -> Arc<HttpQueryManager> {
         self.http_query_manager.clone()
+    }
+
+    pub fn get_auth_manager(self: &Arc<Self>) -> Arc<AuthMgr> {
+        self.auth_manager.clone()
     }
 
     /// Get the user api provider.
