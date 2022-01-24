@@ -122,8 +122,8 @@ const config = {
                         ]
                     },
                     {
-                        to: '/learn/category/howto', label: 'Learn', position: 'left', items:[
-                            {label: 'Howto', to: '/learn/category/howto'},
+                        to: '/learn/category/lessons', label: 'Learn', position: 'left', items:[
+                            {label: 'Lessons', to: '/learn/category/lessons'},
                         ]
                     },
                     {

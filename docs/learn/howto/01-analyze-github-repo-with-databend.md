@@ -1,9 +1,10 @@
 
-# Databend support  Github Engine
+# Analyzing github repo with Databend
 
-Use Databend analyse Github repo only two steps.
+Use Databend analyzing Github repo step by step.
 
 ## Step 1 
+
 If you already have databend ,skip it .
 ```
 $ curl -fsS https://repo.databend.rs/databend/install-bendctl.sh | bash
@@ -16,7 +17,7 @@ $ bendctl cluster create
 ```
 mysql -h 127.0.0.1 -P 3307 -uroot
 
-mysql> create database datafuselabs engine=github(token='xxx');
+mysql> create database datafuselabs engine=github(token='<your-github-personal-access-token>');
 Query OK, 0 rows affected (1.21 sec)
 Read 0 rows, 0 B in 1.203 sec., 0 rows/sec., 0 B/sec.
 
@@ -150,10 +151,3 @@ Read 3910 rows, 558.35 KB in 46.175 sec., 84.68 rows/sec., 12.09 KB/sec.
 ``` 
 
 **Enjoy your journey.** 
-
-## Next steps
-- [Streaming Load](/user/data-loading/http-streaming-load)
-
-## Learn more
-- [Databend CLI](/user/cli/)
-- [Deploy Databend](/user)

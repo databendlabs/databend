@@ -1,11 +1,12 @@
 ---
-title: Deploy Databend on EC2 use S3
+title: Analyze OnTime datasets with Databend on AWS EC2 and S3
 draft: true
 ---
 
-Complie Databend Deploy on EC2 use S3
+Analyzing `OnTime` datasets on AWS EC2 and S3 with Databend step by step.
 
-## 1. Deploy environment
+
+## Step 1. Deploy environment
 - EC2 size : c5a.4xlarge
   >EC2 region: <your S3 bucket region\> 
   >
@@ -13,14 +14,12 @@ Complie Databend Deploy on EC2 use S3
 
 - Os Type: ubuntu 20 x64
 
-prepare install package:
+- Prepare install package:
+   > $sudo apt-get install unzip make mysql-client-core-8.0
 
-```shell
-$sudo apt-get install unzip make mysql-client-core-8.0
-```
+## Step 2. Deploy Databend
 
-## 2. Deploy Databend
-### 2.1 Complie Databend
+### 2.1 Compile Databend
 
 ```shell
 $git clone https://github.com/datafuselabs/databend.git
@@ -34,7 +33,7 @@ $export PATH=$PATH:~/.cargo/bin
 $make build-native
 ```
 
-Finally, the databend-related binary file at ./target/release/{databend-meta, databend-query}
+Finally, the databend-related binary files are at ./target/release/{databend-meta, databend-query}
 
 ### 2.2 Start Databend
 
@@ -51,15 +50,16 @@ echo "Starting standalone DatabendQuery(release)"
 ./scripts/ci/deploy/databend-query-standalone.sh release
 ```
 
-### 2.3 Test databend
+### 2.3 Test Databend
 
 ```shell
 mysql -h 127.0.0.1 -P3307 -uroot
 ```
 Check connect is ok .
 
-## 3. Load Ontime
-### 3.1 Create ontime table
+## Step 3. Load OnTime datasets
+
+### 3.1 Create OnTime table
 
 ```shell
 wget --no-check-certificate https://repo.databend.rs/t_ontime/create_table.sql
@@ -67,7 +67,7 @@ wget --no-check-certificate https://repo.databend.rs/t_ontime/create_table.sql
 cat create_table.sql |mysql -h 127.0.0.1 -P3307 -uroot
 ```
 
-3.2 Load Data
+### 3.2 Load Data into OnTime table
 
 ```shell
 wget --no-check-certificate https://repo.databend.rs/t_ontime/t_ontime.csv.zip
@@ -78,8 +78,10 @@ ls *.csv|xargs -I{}  curl -H "insert_sql:insert into ontime format CSV" -H "csv_
 
 ```
 
-## 4. Queries
-Execute Query
+## Step 4. Queries
+
+Execute Query and set settings:
+
 ```shell
 mysql -h 127.0.0.1 -P3307 -uroot 
 mysql>set parallel_read_threads=4;
@@ -87,7 +89,7 @@ mysql>select count(*) from ontime;
 mysql>select Year, count(*) from ontime group by Year;
 ```
 
-Benchmark Queries gist
+All Queries:
 
 | Number      | Query | 
 | ----------- | ----------- |
@@ -105,12 +107,3 @@ Benchmark Queries gist
 | Q12  | SELECT OriginCityName, DestCityName, count(*) AS c FROM ontime GROUP BY OriginCityName, DestCityName ORDER BY c DESC LIMIT 10;     |
 | Q13  |SELECT OriginCityName, count(*) AS c FROM ontime GROUP BY OriginCityName ORDER BY c DESC LIMIT 10;      |
 | Q14  | select count(*) from ontime     |
-
-## Next steps
-
-- [Streaming Load](/user/data-loading/http-streaming-load)
-
-## Learn more
-
-- [Databend CLI](/user/cli/)
-- [Get Started](/user)
