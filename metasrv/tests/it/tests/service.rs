@@ -20,7 +20,7 @@ use common_base::GlobalSequence;
 use common_base::Stoppable;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_sled_store::openraft::NodeId;
-use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
+use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::protobuf::GetRequest;
 use common_tracing::tracing;
 use databend_meta::api::GrpcServer;
@@ -83,7 +83,7 @@ pub struct MetaSrvTestContext {
     // logging_guard: (WorkerGuard, DefaultGuard),
     pub config: configs::Config,
 
-    pub meta_nodes: Vec<Arc<MetaNode>>,
+    pub meta_node: Option<Arc<MetaNode>>,
 
     pub grpc_srv: Option<Box<GrpcServer>>,
 }
@@ -134,9 +134,13 @@ impl MetaSrvTestContext {
 
         MetaSrvTestContext {
             config,
-            meta_nodes: vec![],
+            meta_node: None,
             grpc_srv: None,
         }
+    }
+
+    pub fn meta_node(&self) -> Arc<MetaNode> {
+        self.meta_node.clone().unwrap()
     }
 
     pub async fn grpc_client(&self) -> anyhow::Result<MetaGrpcClient> {
@@ -148,12 +152,12 @@ impl MetaSrvTestContext {
 
     pub async fn raft_client(
         &self,
-    ) -> anyhow::Result<MetaServiceClient<tonic::transport::Channel>> {
+    ) -> anyhow::Result<RaftServiceClient<tonic::transport::Channel>> {
         let addr = self.config.raft_config.raft_api_addr();
 
         // retry 3 times until server starts listening.
         for _ in 0..4 {
-            let client = MetaServiceClient::connect(format!("http://{}", addr)).await;
+            let client = RaftServiceClient::connect(format!("http://{}", addr)).await;
             match client {
                 Ok(x) => return Ok(x),
                 Err(err) => {
@@ -166,7 +170,7 @@ impl MetaSrvTestContext {
         panic!("can not connect to raft server: {:?}", self.config);
     }
 
-    pub async fn assert_meta_connection(&self) -> anyhow::Result<()> {
+    pub async fn assert_raft_server_connection(&self) -> anyhow::Result<()> {
         let mut client = self.raft_client().await?;
 
         let req = tonic::Request::new(GetRequest {
@@ -176,18 +180,6 @@ impl MetaSrvTestContext {
         assert_eq!("", rst.value, "connected");
         Ok(())
     }
-}
-
-pub async fn assert_metasrv_connection(addr: &str) -> anyhow::Result<()> {
-    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-
-    let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
-    let req = tonic::Request::new(GetRequest {
-        key: "ensure-connection".into(),
-    });
-    let rst = client.get(req).await?.into_inner();
-    assert_eq!("", rst.value, "connected");
-    Ok(())
 }
 
 /// 1. Open a temp sled::Db for all tests.

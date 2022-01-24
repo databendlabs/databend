@@ -17,7 +17,6 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_meta_types::protobuf::GetRequest;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
@@ -56,6 +55,7 @@ pub enum MetaGrpcWriteReq {
     CreateTable(CreateTableReq),
     DropTable(DropTableReq),
     CommitTable(UpsertTableOptionReq),
+
     UpsertKV(UpsertKVAction),
 }
 
@@ -63,9 +63,11 @@ pub enum MetaGrpcWriteReq {
 pub enum MetaGrpcReadReq {
     GetDatabase(GetDatabaseReq),
     ListDatabases(ListDatabaseReq),
+
     GetTable(GetTableReq),
     GetTableExt(GetTableExtReq),
     ListTables(ListTableReq),
+
     GetKV(GetKVAction),
     MGetKV(MGetKVAction),
     PrefixListKV(PrefixListReq),
@@ -109,35 +111,25 @@ impl TryInto<Request<RaftRequest>> for &MetaGrpcWriteReq {
     }
 }
 
-impl TryInto<MetaGrpcReadReq> for Request<GetRequest> {
+impl TryInto<MetaGrpcReadReq> for Request<RaftRequest> {
     type Error = tonic::Status;
 
     fn try_into(self) -> Result<MetaGrpcReadReq, Self::Error> {
-        let get_req = self.into_inner();
+        let raft_req = self.into_inner();
 
-        let json_str = get_req.key.as_str();
+        let json_str = raft_req.data.as_str();
         let action = serde_json::from_str::<MetaGrpcReadReq>(json_str)
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
         Ok(action)
     }
 }
 
-impl tonic::IntoRequest<GetRequest> for MetaGrpcReadReq {
-    fn into_request(self) -> Request<GetRequest> {
-        let get_req = GetRequest {
-            key: serde_json::to_string(&self).expect("fail to serialize"),
-        };
-
-        tonic::Request::new(get_req)
-    }
-}
-
-impl TryInto<Request<GetRequest>> for &MetaGrpcReadReq {
+impl TryInto<Request<RaftRequest>> for &MetaGrpcReadReq {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<Request<GetRequest>, Self::Error> {
-        let get_req = GetRequest {
-            key: serde_json::to_string(&self)?,
+    fn try_into(self) -> Result<Request<RaftRequest>, Self::Error> {
+        let get_req = RaftRequest {
+            data: serde_json::to_string(&self)?,
         };
 
         let request = tonic::Request::new(get_req);

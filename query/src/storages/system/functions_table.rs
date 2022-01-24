@@ -23,6 +23,7 @@ use common_functions::scalars::FunctionFactory;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::UserDefinedFunction;
 use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -38,7 +39,10 @@ impl FunctionsTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("name", DataType::String, false),
+            DataField::new("is_builtin", DataType::Boolean, false),
             DataField::new("is_aggregate", DataType::Boolean, false),
+            DataField::new("definition", DataType::String, false),
+            DataField::new("description", DataType::String, false),
         ]);
 
         let table_info = TableInfo {
@@ -54,6 +58,12 @@ impl FunctionsTable {
         };
         FunctionsTable { table_info }
     }
+
+    async fn get_udfs(ctx: Arc<QueryContext>) -> Result<Vec<UserDefinedFunction>> {
+        let tenant = ctx.get_tenant();
+        let user_mgr = ctx.get_user_manager();
+        user_mgr.get_udfs(&tenant).await
+    }
 }
 
 #[async_trait::async_trait]
@@ -68,27 +78,59 @@ impl Table for FunctionsTable {
 
     async fn read(
         &self,
-        _ctx: Arc<QueryContext>,
+        ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let function_factory = FunctionFactory::instance();
         let aggregate_function_factory = AggregateFunctionFactory::instance();
         let func_names = function_factory.registered_names();
         let aggr_func_names = aggregate_function_factory.registered_names();
+        let udfs = FunctionsTable::get_udfs(ctx).await?;
 
         let names: Vec<&[u8]> = func_names
             .iter()
             .chain(aggr_func_names.iter())
+            .chain(udfs.iter().map(|udf| &udf.name))
             .map(|x| x.as_bytes())
             .collect();
+        let builtin_func_len = func_names.len() + aggr_func_names.len();
+
+        let is_builtin = (0..names.len())
+            .map(|i| i < builtin_func_len)
+            .collect::<Vec<bool>>();
 
         let is_aggregate = (0..names.len())
-            .map(|i| i >= func_names.len())
+            .map(|i| i >= func_names.len() && i < builtin_func_len)
             .collect::<Vec<bool>>();
+
+        let definitions = (0..names.len())
+            .map(|i| {
+                if i < builtin_func_len {
+                    ""
+                } else {
+                    udfs.get(i - builtin_func_len)
+                        .map_or("", |udf| udf.definition.as_str())
+                }
+            })
+            .collect::<Vec<&str>>();
+
+        let descriptions = (0..names.len())
+            .map(|i| {
+                if i < builtin_func_len {
+                    ""
+                } else {
+                    udfs.get(i - builtin_func_len)
+                        .map_or("", |udf| udf.description.as_str())
+                }
+            })
+            .collect::<Vec<&str>>();
 
         let block = DataBlock::create_by_array(self.table_info.schema(), vec![
             Series::new(names),
+            Series::new(is_builtin),
             Series::new(is_aggregate),
+            Series::new(definitions),
+            Series::new(descriptions),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(

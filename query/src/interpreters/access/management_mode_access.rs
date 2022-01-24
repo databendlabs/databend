@@ -54,7 +54,6 @@ impl ManagementModeAccess {
                 | PlanNode::UseTenant(_)
                 | PlanNode::CreateUDF(_)
                 | PlanNode::DropUDF(_)
-                | PlanNode::ShowUDF(_)
                 | PlanNode::UseDatabase(_)
                 | PlanNode::Select(_) // Allow select from system.* tables, like show tables;
                 | PlanNode::AlterUDF(_) => Ok(()),

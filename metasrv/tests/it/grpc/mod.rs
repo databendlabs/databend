@@ -14,7 +14,6 @@
 
 pub mod metasrv_grpc_api;
 pub mod metasrv_grpc_kv_api;
-pub mod metasrv_grpc_kv_api_cross_node;
 pub mod metasrv_grpc_kv_api_restart_cluster;
 pub mod metasrv_grpc_meta_api;
 pub mod metasrv_grpc_meta_api_follower_follower;

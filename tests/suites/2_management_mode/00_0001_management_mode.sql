@@ -30,7 +30,7 @@ DROP STAGE test_stage;
 -- udf check.
 CREATE FUNCTION xy AS (x, y) -> (x + y) / 2;
 ALTER FUNCTION xy AS (x, y) -> (x + y) / 3;
-SHOW FUNCTION xy;
+SHOW FUNCTIONS LIKE 'xy';
 DROP FUNCTION xy;
 
 
@@ -40,4 +40,4 @@ SHOW DATABASES;
 SHOW TABLES;
 
 -- check
-SHOW FUNCTION xy; -- {ErrorCode 2602}
+SHOW FUNCTIONS LIKE 'xy';

@@ -12,4 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta_node_all;
+pub(crate) mod meta_node_all;
+pub(crate) mod meta_node_kv_api;

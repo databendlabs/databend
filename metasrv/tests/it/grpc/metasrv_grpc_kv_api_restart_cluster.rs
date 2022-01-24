@@ -86,7 +86,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
         for mut tc in tcs {
             // TODO(xp): remove this field, or split MetaSrvTestContext into two struct:
             //           one for metasrv and one for meta_node
-            assert!(tc.meta_nodes.is_empty());
+            assert!(tc.meta_node.is_none());
 
             let mut srv = tc.grpc_srv.take().unwrap();
             srv.stop(None).await?;
@@ -199,7 +199,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
     let stopped_tcs = {
         let mut stopped_tcs = vec![];
         for mut tc in tcs {
-            assert!(tc.meta_nodes.is_empty());
+            assert!(tc.meta_node.is_none());
 
             let mut srv = tc.grpc_srv.take().unwrap();
             srv.stop(None).await?;
