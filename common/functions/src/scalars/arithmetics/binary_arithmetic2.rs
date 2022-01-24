@@ -14,28 +14,36 @@
 
 use std::fmt;
 use std::ops::Add;
+use std::sync::Arc;
 
 use common_datavalues2::prelude::*;
 use common_exception::Result;
 use num::traits::AsPrimitive;
 use num_traits::WrappingAdd;
 
+use crate::scalars::Arithmetic2Description;
 use crate::scalars::Function2;
+use crate::scalars::ScalarBinaryExpression;
 use crate::scalars::ScalarBinaryFunction;
-use crate::scalars::ScalarExpression;
 
 #[derive(Clone)]
-pub struct BinaryArithmeticFunction2 {
+pub struct BinaryArithmeticFunction2<L: Scalar, R: Scalar, O: Scalar, F> {
     op: DataValueBinaryOperator,
     result_type: DataTypePtr,
-    binary: Box<dyn ScalarExpression>,
+    binary: ScalarBinaryExpression<L, R, O, F>,
 }
 
-impl BinaryArithmeticFunction2 {
+impl<L, R, O, F> BinaryArithmeticFunction2<L, R, O, F>
+where
+    L: Scalar + Send + Sync + Clone,
+    R: Scalar + Send + Sync + Clone,
+    O: Scalar + Send + Sync + Clone,
+    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone + 'static,
+{
     pub fn try_create_func(
         op: DataValueBinaryOperator,
         result_type: DataTypePtr,
-        binary: Box<dyn ScalarExpression>,
+        binary: ScalarBinaryExpression<L, R, O, F>,
     ) -> Result<Box<dyn Function2>> {
         Ok(Box::new(Self {
             op,
@@ -45,7 +53,13 @@ impl BinaryArithmeticFunction2 {
     }
 }
 
-impl Function2 for BinaryArithmeticFunction2 {
+impl<L, R, O, F> Function2 for BinaryArithmeticFunction2<L, R, O, F>
+where
+    L: Scalar + Send + Sync + Clone,
+    R: Scalar + Send + Sync + Clone,
+    O: Scalar + Send + Sync + Clone,
+    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone,
+{
     fn name(&self) -> &str {
         "BinaryArithmeticFunction2"
     }
@@ -54,12 +68,19 @@ impl Function2 for BinaryArithmeticFunction2 {
         Ok(self.result_type.clone())
     }
 
-    fn eval(&self, _columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        todo!()
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        let col = self.binary.eval(columns[0].column(), columns[1].column())?;
+        Ok(Arc::new(col))
     }
 }
 
-impl fmt::Display for BinaryArithmeticFunction2 {
+impl<L, R, O, F> fmt::Display for BinaryArithmeticFunction2<L, R, O, F>
+where
+    L: Scalar + Send + Sync + Clone,
+    R: Scalar + Send + Sync + Clone,
+    O: Scalar + Send + Sync + Clone,
+    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.op)
     }
@@ -92,5 +113,20 @@ where
         l.to_owned_scalar()
             .as_()
             .wrapping_add(&r.to_owned_scalar().as_())
+    }
+}
+
+pub struct ArithmeticPlusFunction2;
+
+impl ArithmeticPlusFunction2 {
+    pub fn try_create_func(
+        _display_name: &str,
+        _args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function2>> {
+        todo!()
+    }
+
+    pub fn desc() -> Arithmetic2Description {
+        todo!()
     }
 }

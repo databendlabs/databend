@@ -21,7 +21,6 @@ use common_exception::Result;
 use once_cell::sync::Lazy;
 
 use super::function2::Function2;
-use super::function_factory::ArithmeticDescription;
 use super::function_factory::FunctionFeatures;
 use super::ComparisonFunction;
 use super::ConditionalFunction;
@@ -34,6 +33,10 @@ use crate::scalars::DateFunction;
 use crate::scalars::ToCastFunction;
 
 pub type Factory2Creator = Box<dyn Fn(&str) -> Result<Box<dyn Function2>> + Send + Sync>;
+
+// Temporary adaptation for arithmetic.
+pub type Arithmetic2Creator =
+    Box<dyn Fn(&str, &[&DataTypePtr]) -> Result<Box<dyn Function2>> + Send + Sync>;
 
 pub struct Function2Description {
     features: FunctionFeatures,
@@ -55,9 +58,28 @@ impl Function2Description {
     }
 }
 
+pub struct Arithmetic2Description {
+    pub features: FunctionFeatures,
+    pub arithmetic_creator: Arithmetic2Creator,
+}
+
+impl Arithmetic2Description {
+    pub fn creator(creator: Arithmetic2Creator) -> Arithmetic2Description {
+        Arithmetic2Description {
+            arithmetic_creator: creator,
+            features: FunctionFeatures::default(),
+        }
+    }
+
+    pub fn features(mut self, features: FunctionFeatures) -> Arithmetic2Description {
+        self.features = features;
+        self
+    }
+}
+
 pub struct Function2Factory {
     case_insensitive_desc: HashMap<String, Function2Description>,
-    case_insensitive_arithmetic_desc: HashMap<String, ArithmeticDescription>,
+    case_insensitive_arithmetic_desc: HashMap<String, Arithmetic2Description>,
 }
 
 static FUNCTION2_FACTORY: Lazy<Arc<Function2Factory>> = Lazy::new(|| {
@@ -93,7 +115,7 @@ impl Function2Factory {
         case_insensitive_desc.insert(name.to_lowercase(), desc);
     }
 
-    pub fn register_arithmetic(&mut self, name: &str, desc: ArithmeticDescription) {
+    pub fn register_arithmetic(&mut self, name: &str, desc: Arithmetic2Description) {
         let case_insensitive_arithmetic_desc = &mut self.case_insensitive_arithmetic_desc;
         case_insensitive_arithmetic_desc.insert(name.to_lowercase(), desc);
     }

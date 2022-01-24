@@ -13,16 +13,11 @@
 // limitations under the License.
 
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 use common_datavalues2::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use dyn_clone::DynClone;
 
-pub trait ScalarBinaryFunction<L: Scalar, R: Scalar, O: Scalar>:
-    Clone + Sync + Send + 'static
-{
+pub trait ScalarBinaryFunction<L: Scalar, R: Scalar, O: Scalar> {
     fn eval(&self, l: L::RefType<'_>, r: R::RefType<'_>) -> O;
 }
 
@@ -53,25 +48,3 @@ where F: ScalarBinaryFunction<L, R, O>
         Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
     }
 }
-
-// A trait over all expressions -- unary, binary, etc.
-pub trait ScalarExpression: DynClone + Sync + Send + 'static {
-    /// Evaluate an expression with run-time number of [`ColumnRef`]s.
-    fn eval(&self, data: &[&ColumnRef]) -> Result<ColumnRef>;
-}
-
-impl<L: Scalar, R: Scalar, O: Scalar, F> ScalarExpression for ScalarBinaryExpression<L, R, O, F>
-where F: ScalarBinaryFunction<L, R, O>
-{
-    fn eval(&self, data: &[&ColumnRef]) -> Result<ColumnRef> {
-        if data.len() != 2 {
-            return Err(ErrorCode::BadArguments(
-                "Expect two inputs for ScalarBinaryExpression",
-            ));
-        }
-        let result = self.eval(data[0], data[1])?;
-        Ok(Arc::new(result) as ColumnRef)
-    }
-}
-
-dyn_clone::clone_trait_object!(ScalarExpression);
