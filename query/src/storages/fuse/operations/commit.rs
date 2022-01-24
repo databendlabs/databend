@@ -25,6 +25,7 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
+use common_tracing::tracing;
 use uuid::Uuid;
 
 use crate::catalogs::Catalog;
@@ -65,11 +66,17 @@ impl FuseTable {
                 Err(e) if e.code() == ErrorCode::table_version_mismatched_code() => {
                     match backoff.next_backoff() {
                         Some(d) => {
-                            common_base::tokio::time::sleep(d).await;
-                            let catalog = ctx.get_catalog();
-
-                            let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
                             let name = tbl.table_info.name.clone();
+                            tracing::error!(
+                                "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
+                                d.as_millis(),
+                                name.as_str(),
+                                tbl.table_info.ident
+                            );
+                            common_base::tokio::time::sleep(d).await;
+
+                            let catalog = ctx.get_catalog();
+                            let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
                             let table_info: TableInfo = TableInfo {
                                 ident,
                                 desc: "".to_owned(),
@@ -79,7 +86,7 @@ impl FuseTable {
                             latest = catalog.get_table_by_info(&table_info)?;
                             tbl = latest.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
                                 ErrorCode::LogicalError(format!(
-                                    "unexpected engine, assuming FUSE, but got {}",
+                                    "expects table engine FUSE, but got {}",
                                     latest.engine()
                                 ))
                             })?;
@@ -88,9 +95,11 @@ impl FuseTable {
                         }
                         None => {
                             break Err(ErrorCode::OCCRetryFailure(format!(
-                                "Can not fulfill the tx after retries({} times, {} ms), aborted",
+                                "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
                                 times,
                                 Instant::now().duration_since(begin).as_millis(),
+                                tbl.table_info.name.as_str(),
+                                tbl.table_info.ident,
                             )));
                         }
                     }
