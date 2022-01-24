@@ -32,7 +32,7 @@ pub use mutable::*;
 use crate::prelude::*;
 
 /// PrimitiveColumn is generic struct which wrapped arrow's PrimitiveArray
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PrimitiveColumn<T: PrimitiveType> {
     values: Buffer<T>,
 }
@@ -268,3 +268,11 @@ pub type Int64Column = PrimitiveColumn<i64>;
 
 pub type Float32Column = PrimitiveColumn<f32>;
 pub type Float64Column = PrimitiveColumn<f64>;
+
+impl<T: PrimitiveType> std::fmt::Debug for PrimitiveColumn<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let iter = self.iter();
+        let head = "PrimitiveColumn";
+        display_fmt(iter, head, self.len(), self.data_type_id(), f)
+    }
+}

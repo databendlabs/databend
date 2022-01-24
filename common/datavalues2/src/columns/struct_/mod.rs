@@ -116,3 +116,16 @@ impl Column for StructColumn {
         Arc::new(self.clone())
     }
 }
+
+impl std::fmt::Debug for StructColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut data = Vec::new();
+        for idx in 0..self.len() {
+            let x = self.get(idx);
+            data.push(format!("{:?}", x));
+        }
+        let head = "StructColumn";
+        let iter = data.iter();
+        display_fmt(iter, head, self.len(), self.data_type_id(), f)
+    }
+}

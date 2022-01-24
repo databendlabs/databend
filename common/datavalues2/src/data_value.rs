@@ -312,7 +312,7 @@ impl fmt::Debug for DataValue {
             DataValue::UInt64(v) => write!(f, "{}", v),
             DataValue::Float64(v) => write!(f, "{}", v),
             DataValue::String(_) => write!(f, "{}", self),
-            DataValue::Array(_) => write!(f, "[{}]", self),
+            DataValue::Array(_) => write!(f, "{}", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }
     }

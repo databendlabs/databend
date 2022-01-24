@@ -27,7 +27,7 @@ mod mutable;
 pub use iterator::*;
 pub use mutable::*;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct BooleanColumn {
     values: Bitmap,
 }
@@ -165,5 +165,13 @@ impl ScalarColumn for BooleanColumn {
         BooleanColumn {
             values: bitmap.into(),
         }
+    }
+}
+
+impl std::fmt::Debug for BooleanColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let iter = self.iter().map(|x| if x { "true" } else { "false" });
+        let head = "BooleanColumn";
+        display_fmt(iter, head, self.len(), self.data_type_id(), f)
     }
 }

@@ -29,7 +29,7 @@ pub use mutable::*;
 use crate::prelude::*;
 
 // TODO adaptive offset
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct StringColumn {
     offsets: Buffer<i64>,
     values: Buffer<u8>,
@@ -222,5 +222,13 @@ impl ScalarColumn for StringColumn {
 
     fn iter(&self) -> ScalarColumnIterator<Self> {
         ScalarColumnIterator::new(self)
+    }
+}
+
+impl std::fmt::Debug for StringColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let iter = self.iter().map(String::from_utf8_lossy);
+        let head = "StringColumn";
+        display_fmt(iter, head, self.len(), self.data_type_id(), f)
     }
 }

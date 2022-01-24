@@ -23,7 +23,7 @@ use crate::prelude::*;
 mod mutable;
 
 pub use mutable::*;
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct NullColumn {
     length: usize,
 }
@@ -104,5 +104,18 @@ impl Column for NullColumn {
 
     fn get(&self, _index: usize) -> DataValue {
         DataValue::Null
+    }
+}
+
+impl std::fmt::Debug for NullColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let data = if self.len() > 0 {
+            vec!["NULL...".to_string()]
+        } else {
+            vec![]
+        };
+        let iter = data.iter();
+        let head = "NullColumn";
+        display_fmt(iter, head, self.len(), self.data_type_id(), f)
     }
 }
