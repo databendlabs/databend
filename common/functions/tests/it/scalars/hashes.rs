@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::Hash;
+use std::hash::Hasher;
+
 use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::Blake3HashFunction;
@@ -21,6 +24,7 @@ use common_functions::scalars::Sha2HashFunction;
 use common_functions::scalars::SipHash64Function;
 use common_functions::scalars::XxHash32Function;
 use common_functions::scalars::XxHash64Function;
+use twox_hash::XxHash32;
 
 use super::scalar_function2_test::test_scalar_functions2;
 use super::scalar_function2_test::ScalarFunction2Test;
@@ -255,4 +259,19 @@ fn test_xxhash64_function() -> Result<()> {
     }];
 
     test_scalar_functions2(XxHash64Function::try_create("xxhash64")?, &tests)
+}
+
+#[test]
+fn test_hash() {
+    let str = "testing";
+    let mut h = XxHash32::default();
+    h.write(str.as_bytes());
+    let a = h.finish();
+
+    let mut h = XxHash32::default();
+    let c = str.as_bytes();
+    Hash::hash_slice(c, &mut h);
+    let b = h.finish();
+
+    assert!(a == b);
 }

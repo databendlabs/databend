@@ -70,39 +70,3 @@ where F: Fn(L::RefItem<'a>, R::RefItem<'a>) -> O::OwnedItem
         Ok(O::from_owned_iterator(it))
     }
 }
-
-#[cfg(test)]
-mod test {
-    use std::sync::Arc;
-
-    use common_datavalues2::prelude::*;
-
-    use super::ScalarBinaryExpression;
-    use super::ScalarBinaryExpressionVc;
-
-    #[test]
-    fn test_contains() {
-        //create two string columns
-        let l = Series::from_data(vec!["11", "22", "33"]);
-        let r = Series::from_data(vec!["1", "2", "43"]);
-        let expected = Series::from_data(vec![true, true, false]);
-
-        let binary_expression =
-            ScalarBinaryExpressionVc::<StringColumn, StringColumn, BooleanColumn, _>::new(
-                |a, b| -> bool { a.windows(b.len()).position(|window| window == b).is_some() },
-            );
-        let result_v1 = binary_expression.eval(&l, &r).unwrap();
-
-        let binary_expression =
-            ScalarBinaryExpression::<Vec<u8>, Vec<u8>, bool, _>::new(|a, b| -> bool {
-                a.windows(b.len()).position(|window| window == b).is_some()
-            });
-        let result_v2 = binary_expression.eval(&l, &r).unwrap();
-
-        assert!(result_v1.values() == result_v2.values());
-
-        let r1 = Arc::new(result_v1) as ColumnRef;
-        let r2 = Arc::new(result_v2) as ColumnRef;
-        assert!(r1 == expected && r1 == r2);
-    }
-}

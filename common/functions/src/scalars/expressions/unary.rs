@@ -41,24 +41,3 @@ where F: Fn(L::RefType<'a>) -> O
         Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
     }
 }
-
-#[cfg(test)]
-mod test {
-    use std::sync::Arc;
-
-    use common_datavalues2::prelude::*;
-
-    use crate::scalars::ScalarUnaryExpression;
-
-    #[test]
-    fn test_contains() {
-        //create two string columns
-        let l = Series::from_data(vec!["11", "22", "333"]);
-        let expected = Series::from_data(vec![2i32, 2, 3]);
-        let unary_expression =
-            ScalarUnaryExpression::<Vec<u8>, i32, _>::new(|a| -> i32 { a.len() as i32 });
-        let result = unary_expression.eval(&l).unwrap();
-        let result = Arc::new(result) as ColumnRef;
-        assert!(result == expected);
-    }
-}

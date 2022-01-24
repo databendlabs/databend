@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
@@ -154,4 +156,42 @@ fn test_datetime_cast_function() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[test]
+fn test_binary_contains() {
+    //create two string columns
+    let l = Series::from_data(vec!["11", "22", "33"]);
+    let r = Series::from_data(vec!["1", "2", "43"]);
+    let expected = Series::from_data(vec![true, true, false]);
+
+    let binary_expression =
+        ScalarBinaryExpressionVc::<StringColumn, StringColumn, BooleanColumn, _>::new(
+            |a, b| -> bool { a.windows(b.len()).any(|window| window == b) },
+        );
+    let result_v1 = binary_expression.eval(&l, &r).unwrap();
+
+    let binary_expression =
+        ScalarBinaryExpression::<Vec<u8>, Vec<u8>, bool, _>::new(|a, b| -> bool {
+            a.windows(b.len()).any(|window| window == b)
+        });
+    let result_v2 = binary_expression.eval(&l, &r).unwrap();
+
+    assert!(result_v1.values() == result_v2.values());
+
+    let r1 = Arc::new(result_v1) as ColumnRef;
+    let r2 = Arc::new(result_v2) as ColumnRef;
+    assert!(r1 == expected && r1 == r2);
+}
+
+#[test]
+fn test_unary_size() {
+    //create two string columns
+    let l = Series::from_data(vec!["11", "22", "333"]);
+    let expected = Series::from_data(vec![2i32, 2, 3]);
+    let unary_expression =
+        ScalarUnaryExpression::<Vec<u8>, i32, _>::new(|a| -> i32 { a.len() as i32 });
+    let result = unary_expression.eval(&l).unwrap();
+    let result = Arc::new(result) as ColumnRef;
+    assert!(result == expected);
 }

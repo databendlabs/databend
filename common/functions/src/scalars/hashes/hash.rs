@@ -45,26 +45,3 @@ impl HashesFunction {
         factory.register("siphash", SipHash64Function::desc());
     }
 }
-
-#[cfg(test)]
-mod test {
-    use std::hash::Hash;
-    use std::hash::Hasher;
-
-    use twox_hash::XxHash32;
-
-    #[test]
-    fn test_hash() {
-        let str = "testing";
-        let mut h = XxHash32::default();
-        h.write(str.as_bytes());
-        let a = h.finish();
-
-        let mut h = XxHash32::default();
-        let c = str.as_bytes();
-        Hash::hash_slice(c, &mut h);
-        let b = h.finish();
-
-        assert!(a == b);
-    }
-}
