@@ -86,10 +86,19 @@ impl BloomFilterIndexer {
         [seed0, seed1, seed2, seed3]
     }
 
-    /// Create a bloom filter block from input data blocks.
+    /// Create a bloom filter block from input data.
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
+    #[allow(dead_code)]
     pub fn from_data(blocks: &[DataBlock]) -> Result<Self> {
+        let seeds = Self::create_seeds();
+        Self::from_data_and_seeds(blocks, seeds)
+    }
+
+    /// Create a bloom filter block from input data blocks and seeds.
+    ///
+    /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
+    pub fn from_data_and_seeds(blocks: &[DataBlock], seeds: [u64; 4]) -> Result<Self> {
         if blocks.is_empty() {
             return Err(ErrorCode::BadArguments("data blocks is empty"));
         }
@@ -108,7 +117,6 @@ impl BloomFilterIndexer {
                 bloom_fields.push(bloom_field);
 
                 // create bloom filter per column
-                let seeds = Self::create_seeds();
                 let mut bloom_filter = BloomFilter::with_rate_and_max_bits(
                     total_num_rows,
                     BLOOM_FILTER_DEFAULT_FALSE_POSITIVE_RATE,
@@ -242,6 +250,15 @@ impl BloomFilterIndexer {
             _ => Ok(BloomFilterExprEvalResult::NotApplicable),
         }
     }
+
+    /// Find and returns the bloom filter by name
+    pub fn try_get_bloom(&self, column_name: &str) -> Result<BloomFilter> {
+        let bloom_column = Self::to_bloom_column_name(column_name);
+        let val = self.inner.first(&bloom_column)?;
+        let bloom_bytes = val.as_string()?;
+        let bloom_filter = BloomFilter::from_vec(bloom_bytes.as_ref())?;
+        Ok(bloom_filter)
+    }
 }
 
 /// A bloom filter implementation for data column and values.
@@ -337,6 +354,29 @@ impl BloomFilter {
     /// Returns the number of hashes of the bloom filter.
     pub fn num_hashes(&self) -> usize {
         self.num_hashes
+    }
+
+    /// Returns the reference of bitmap container
+    pub fn bitmap(&self) -> &BitVec<u32> {
+        &self.container
+    }
+
+    /// Returns true if the bitmap contains the other's bitmap.
+    /// Notice: this function doesn't do any schema check, but only bits comparison.
+    pub fn contains(&self, other: &BloomFilter) -> bool {
+        if self.num_bits() != other.num_bits() {
+            return false;
+        }
+
+        let mut copy = self.container.clone();
+        !copy.or(other.bitmap())
+    }
+
+    /// Clone and return an empty bloom filter with same number of bits, seeds and hashes.
+    /// All bits are set to false/zero, e.g. the hashed bits are not cloned.
+    #[must_use]
+    pub fn clone_empty(&self) -> Self {
+        Self::with_size(self.num_bits(), self.num_hashes(), self.seeds)
     }
 
     /// Returns whether the data type is supported by bloom filter.

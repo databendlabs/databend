@@ -22,11 +22,12 @@ use databend_query::storages::index::BloomFilterIndexer;
 use pretty_assertions::assert_eq;
 
 fn create_seeds() -> [u64; 4] {
-    let seed0: u64 = rand::random();
-    let seed1: u64 = rand::random();
-    let seed2: u64 = rand::random();
-    let seed3: u64 = rand::random();
-    [seed0, seed1, seed2, seed3]
+    [
+        0x16f11fe89b0d677c,
+        0xb480a793d8e6c86c,
+        0x6fe2e5aaf078ebc9,
+        0x14f994a4c5259381,
+    ]
 }
 
 #[test]
@@ -126,6 +127,67 @@ fn test_bloom_f64_serialization() -> Result<()> {
     Ok(())
 }
 
+// A helper function to create a bloom filter, with the same bits and hashes as other.
+fn create_bloom(data_type: DataType, series: Series, other: &BloomFilter) -> Result<BloomFilter> {
+    let mut bloom = other.clone_empty();
+    let schema = DataSchemaRefExt::create(vec![DataField::new("num", data_type, true)]);
+    let block = DataBlock::create_by_array(schema, vec![series]);
+    let col = block.column(0);
+    bloom.add(col)?;
+    Ok(bloom)
+}
+
+#[test]
+fn test_bloom_uint8_existence() -> Result<()> {
+    // Build the table and bloom filters, get the bloom filter for column 'ColumnUInt8'
+    let table = create_blocks();
+    let indexer = BloomFilterIndexer::from_data_and_seeds(table.as_ref(), create_seeds())?;
+    let bloom = indexer.try_get_bloom("ColumnUInt8")?;
+
+    // Existence case: numbers 1, 3, 5, 7, 9, 11, 13, 15 should exist in the bloom filter.
+    for num in [1_u8, 3, 5, 7, 9, 11, 13, 15] {
+        let single_value_bloom = create_bloom(DataType::UInt8, Series::new(vec![num]), &bloom)?;
+
+        assert!(bloom.contains(&single_value_bloom));
+    }
+    Ok(())
+}
+
+#[test]
+fn test_bloom_f64_existence() -> Result<()> {
+    // Build the table and bloom filters, get the bloom filter for column 'ColumnUInt8'
+    let table = create_blocks();
+    let indexer = BloomFilterIndexer::from_data_and_seeds(table.as_ref(), create_seeds())?;
+    let bloom = indexer.try_get_bloom("ColumnFloat64")?;
+
+    // Existence case: numbers 1, 3, 5, 7, 9, 11, 13, 15 should exist in the bloom filter.
+    for num in [1.0_f64, 3.0, 5.0, 7.0, 9.0, 11.0, 13.0, 15.0] {
+        let single_value_bloom = create_bloom(DataType::Float64, Series::new(vec![num]), &bloom)?;
+
+        assert!(bloom.contains(&single_value_bloom));
+    }
+    Ok(())
+}
+
+#[test]
+fn test_bloom_hash_collision() -> Result<()> {
+    // Build the table and bloom filters, get the bloom filter for column 'ColumnUInt8'
+    let table = create_blocks();
+    let indexer = BloomFilterIndexer::from_data_and_seeds(table.as_ref(), create_seeds())?;
+    let bloom = indexer.try_get_bloom("ColumnUInt8")?;
+
+    // Values [2, 4, 6, 8] doesn't exist and doesn't cause collision, so bloom.contains should return false
+    for num in [2_u8, 4, 6, 8] {
+        let single_value_bloom = create_bloom(DataType::UInt8, Series::new(vec![num]), &bloom)?;
+        assert!(!bloom.contains(&single_value_bloom), "{}", num);
+    }
+
+    // When hash collision happens, although number 32 doesn't exist in data_blocks, the hash bits say yes.
+    let single_value_bloom = create_bloom(DataType::UInt8, Series::new(vec![32_u8]), &bloom)?;
+    assert!(bloom.contains(&single_value_bloom));
+    Ok(())
+}
+
 // create test data, all numerics are odd number, even numbers are reserved for testing.
 fn create_blocks() -> Vec<DataBlock> {
     let schema = DataSchemaRefExt::create(vec![
@@ -180,7 +242,7 @@ fn create_blocks() -> Vec<DataBlock> {
         Series::new(vec![-9_i32, -11, -13, -15]),
         Series::new(vec![-9_i64, -11, -13, -15]),
         Series::new(vec![9.0_f32, 11.0, 13.0, 15.0]),
-        Series::new(vec![9.0_f64, 11.0, 13.0, 17.0]),
+        Series::new(vec![9.0_f64, 11.0, 13.0, 15.0]),
         Series::new(vec![9_u16, 11, 13, 15]),
         Series::new(vec![9_u32, 11, 13, 15]),
         Series::new(vec![9_u32, 11, 13, 15]),
@@ -193,8 +255,6 @@ fn create_blocks() -> Vec<DataBlock> {
 }
 
 #[test]
-#[ignore]
-// This test is not stable
 fn test_bloom_indexer_single_column_prune() -> Result<()> {
     struct Test {
         name: &'static str,
@@ -204,8 +264,8 @@ fn test_bloom_indexer_single_column_prune() -> Result<()> {
 
     let tests: Vec<Test> = vec![
         Test {
-            name: "ColumnUInt8 = 32",
-            expr: col("ColumnUInt8").eq(lit(32u8)),
+            name: "ColumnUInt8 = 34",
+            expr: col("ColumnUInt8").eq(lit(34u8)),
             expected_eval_result: BloomFilterExprEvalResult::False,
         },
         Test {
@@ -219,7 +279,7 @@ fn test_bloom_indexer_single_column_prune() -> Result<()> {
             expected_eval_result: BloomFilterExprEvalResult::False,
         },
         Test {
-            name: "ColumnUInt32 = 21323722",
+            name: "ColumnUInt64 = 21323722",
             expr: col("ColumnUInt64").eq(lit(21323722_u64)),
             expected_eval_result: BloomFilterExprEvalResult::False,
         },
@@ -231,7 +291,7 @@ fn test_bloom_indexer_single_column_prune() -> Result<()> {
     ];
 
     let data_blocks = create_blocks();
-    let indexer = BloomFilterIndexer::from_data(data_blocks.as_ref())?;
+    let indexer = BloomFilterIndexer::from_data_and_seeds(data_blocks.as_ref(), create_seeds())?;
 
     for test in tests {
         let res = indexer.eval(&test.expr)?;
@@ -241,8 +301,6 @@ fn test_bloom_indexer_single_column_prune() -> Result<()> {
 }
 
 #[test]
-#[ignore]
-// This test is not stable
 fn test_bloom_indexer_logical_and_prune() -> Result<()> {
     struct Test {
         name: &'static str,
@@ -278,7 +336,7 @@ fn test_bloom_indexer_logical_and_prune() -> Result<()> {
     ];
 
     let data_blocks = create_blocks();
-    let indexer = BloomFilterIndexer::from_data(data_blocks.as_ref())?;
+    let indexer = BloomFilterIndexer::from_data_and_seeds(data_blocks.as_ref(), create_seeds())?;
 
     for test in tests {
         let res = indexer.eval(&test.expr)?;
@@ -288,8 +346,6 @@ fn test_bloom_indexer_logical_and_prune() -> Result<()> {
 }
 
 #[test]
-#[ignore]
-// This test is not stable
 fn test_bloom_indexer_logical_or_prune() -> Result<()> {
     struct Test {
         name: &'static str,
@@ -333,7 +389,7 @@ fn test_bloom_indexer_logical_or_prune() -> Result<()> {
     ];
 
     let data_blocks = create_blocks();
-    let indexer = BloomFilterIndexer::from_data(data_blocks.as_ref())?;
+    let indexer = BloomFilterIndexer::from_data_and_seeds(data_blocks.as_ref(), create_seeds())?;
 
     for test in tests {
         let res = indexer.eval(&test.expr)?;

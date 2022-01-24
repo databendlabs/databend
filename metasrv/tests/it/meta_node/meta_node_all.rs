@@ -22,7 +22,7 @@ use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::LogIdOptionExt;
 use common_meta_sled_store::openraft::RaftMetrics;
 use common_meta_sled_store::openraft::State;
-use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
+use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::DatabaseMeta;
@@ -393,7 +393,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     {
         let to_addr = tc1.config.raft_config.raft_api_addr();
 
-        let mut client = MetaServiceClient::connect(format!("http://{}", to_addr)).await?;
+        let mut client = RaftServiceClient::connect(format!("http://{}", to_addr)).await?;
         let admin_req = join_req(node_id, tc3.config.raft_config.raft_api_addr(), 1);
         client.forward(admin_req).await?;
     }
@@ -925,7 +925,7 @@ async fn test_meta_node_incr_seq() -> anyhow::Result<()> {
     let _mn = MetaNode::boot(&tc.config.raft_config).await?;
     tc.assert_raft_server_connection().await?;
 
-    let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
+    let mut client = RaftServiceClient::connect(format!("http://{}", addr)).await?;
 
     let cases = common_meta_raft_store::state_machine::testing::cases_incr_seq();
 
@@ -934,10 +934,10 @@ async fn test_meta_node_incr_seq() -> anyhow::Result<()> {
             txid: txid.clone(),
             cmd: Cmd::IncrSeq { key: k.to_string() },
         };
-        let raft_mes = client.write(req).await?.into_inner();
+        let raft_reply = client.write(req).await?.into_inner();
 
-        let rst: Result<AppliedState, RetryableError> = raft_mes.into();
-        let resp: AppliedState = rst?;
+        let res: Result<AppliedState, RetryableError> = raft_reply.into();
+        let resp: AppliedState = res?;
         match resp {
             AppliedState::Seq { seq } => {
                 assert_eq!(*want, seq, "{}", name);
