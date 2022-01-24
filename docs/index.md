@@ -109,4 +109,4 @@ curl --location --request POST '127.0.0.1:8001/v1/statement/' --header 'Content-
 
 ## Learn more
 
-- [Deploy Databend on ec2 use s3](/learn/lessons/analyze-ontime-with-databend-on-ec2-and-s3)
+- [Deploy Databend on AWS EC2 and S3](/learn/lessons/analyze-ontime-with-databend-on-ec2-and-s3)
