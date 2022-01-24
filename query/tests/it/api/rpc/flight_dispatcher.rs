@@ -69,7 +69,7 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
             .await?;
 
         let stream = stream_ticket(&query_id, &stage_id, &stream_id);
-        let receiver = flight_dispatcher.get_stream(&stream)?;
+        let (receiver, _data_scheme) = flight_dispatcher.get_stream(&stream)?;
         let receiver_stream = ReceiverStream::new(receiver);
         let collect_data_blocks = receiver_stream.collect::<Result<Vec<_>>>();
 
@@ -114,7 +114,7 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
             .await?;
 
         let stream_1 = stream_ticket(&query_id, &stage_id, "stream_1");
-        let receiver = flight_dispatcher.get_stream(&stream_1)?;
+        let (receiver, _data_scheme) = flight_dispatcher.get_stream(&stream_1)?;
         let receiver_stream = ReceiverStream::new(receiver);
         let collect_data_blocks = receiver_stream.collect::<Result<Vec<_>>>();
 
@@ -131,7 +131,7 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
         assert_blocks_eq(expect, &collect_data_blocks.await?);
 
         let stream_2 = stream_ticket(&query_id, &stage_id, "stream_2");
-        let receiver = flight_dispatcher.get_stream(&stream_2)?;
+        let (receiver, _data_scheme) = flight_dispatcher.get_stream(&stream_2)?;
         let receiver_stream = ReceiverStream::new(receiver);
         let collect_data_blocks = receiver_stream.collect::<Result<Vec<_>>>();
 
