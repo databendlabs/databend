@@ -151,9 +151,68 @@ impl IntoColumn for ArrayRef {
     }
 }
 
+pub fn display_helper<T: std::fmt::Display, I: IntoIterator<Item = T>>(iter: I) -> Vec<String> {
+    iter.into_iter().map(|x| x.to_string()).collect::<Vec<_>>()
+}
+
+pub fn display_fmt<T: std::fmt::Display, I: IntoIterator<Item = T>>(
+    iter: I,
+    head: &str,
+    len: usize,
+    typeid: TypeID,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    let result = display_helper(iter);
+    write!(
+        f,
+        "{} \t typeid: {:?}\t len: {}\t data: [{}]",
+        head,
+        typeid,
+        len,
+        result.join(", ")
+    )
+}
+
+macro_rules! fmt_dyn {
+    ($column:expr, $ty:ty, $f:expr) => {{
+        let mut f = |x: &$ty| x.fmt($f);
+        let column = $column.as_any().downcast_ref::<$ty>().unwrap();
+        f(column)?
+    }};
+}
+
 impl std::fmt::Debug for dyn Column + '_ {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let array = self.as_arrow_array();
-        std::fmt::Debug::fmt(&array, f)
+        let dt = self.data_type().data_type_id();
+        with_match_primitive_type!(dt, |$T| {
+            fmt_dyn!(&self, PrimitiveColumn<$T>, f)
+        }, {
+            use crate::types::type_id::TypeID::*;
+            match dt {
+                Null => {
+                    fmt_dyn!(self, NullColumn, f)
+                }
+                Nullable => {
+                    fmt_dyn!(self, NullableColumn, f)
+                },
+                Boolean => {
+                    fmt_dyn!(self, BooleanColumn, f)
+                },
+                String => {
+                    fmt_dyn!(self, StringColumn, f)
+                },
+                Array => {
+                    fmt_dyn!(self, ArrayColumn, f)
+                },
+                Struct => {
+                    fmt_dyn!(self, StructColumn, f)
+                },
+                _ => {
+                    unimplemented!()
+                }
+            }
+        });
+
+        Ok(())
     }
 }

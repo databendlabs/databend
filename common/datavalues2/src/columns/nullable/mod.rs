@@ -140,3 +140,25 @@ impl Column for NullableColumn {
         }
     }
 }
+
+impl std::fmt::Debug for NullableColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut data = Vec::new();
+        for idx in 0..self.len() {
+            if self.validity.get_bit(idx) {
+                let val = self.column.get(idx);
+                data.push(format!("{:?}", val));
+            } else {
+                data.push("NULL".to_string());
+            }
+        }
+        let head = "NullableColumn";
+        display_fmt(
+            data.iter(),
+            head,
+            self.len(),
+            self.inner().data_type_id(),
+            f,
+        )
+    }
+}
