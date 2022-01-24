@@ -79,7 +79,11 @@ impl FuseTable {
                             })?;
                             continue;
                         }
-                        None => break Err(ErrorCode::OCCRetryFailure("")),
+                        None => {
+                            break Err(ErrorCode::OCCRetryFailure(
+                                "Can not fulfill the tx after retries, tx aborted.",
+                            ));
+                        }
                     }
                 }
                 Err(e) => break Err(e),
@@ -121,7 +125,7 @@ impl FuseTable {
         let da = ctx.get_storage_accessor()?;
         da.put(&snapshot_loc, bytes).await?;
 
-        Self::commit_to_meta_server(&self.get_table_info().ident, ctx, snapshot_loc).await?;
+        Self::commit_to_meta_server(ctx, &self.get_table_info().ident, snapshot_loc).await?;
         ctx.get_dal_context().inc_write_rows(rows_written as usize);
         Ok(())
     }
@@ -158,8 +162,8 @@ impl FuseTable {
     }
 
     async fn commit_to_meta_server(
-        tbl_id: &TableIdent,
         ctx: &QueryContext,
+        tbl_id: &TableIdent,
         new_snapshot_location: String,
     ) -> Result<UpsertTableOptionReply> {
         let table_id = tbl_id.table_id;
