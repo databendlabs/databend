@@ -40,14 +40,6 @@ where T: PrimitiveType
         self.data_type.clone()
     }
 
-    fn with_capacity(capacity: usize) -> Self {
-        let data_type = create_primitive_datatype::<T>();
-        MutablePrimitiveColumn {
-            data_type,
-            values: Vec::<T>::with_capacity(capacity),
-        }
-    }
-
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -84,7 +76,7 @@ impl<T> Default for MutablePrimitiveColumn<T>
 where T: PrimitiveType
 {
     fn default() -> Self {
-        Self::new()
+        Self::with_capacity(0)
     }
 }
 
@@ -93,10 +85,6 @@ where T: PrimitiveType
 impl<T> MutablePrimitiveColumn<T>
 where T: PrimitiveType
 {
-    pub fn new() -> Self {
-        Self::with_capacity(0)
-    }
-
     pub fn from_data(data_type: DataTypePtr, values: Vec<T>) -> Self {
         Self { data_type, values }
     }
@@ -108,6 +96,14 @@ where T: PrimitiveType
     pub fn values(&self) -> &Vec<T> {
         &self.values
     }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        let data_type = create_primitive_datatype::<T>();
+        MutablePrimitiveColumn {
+            data_type,
+            values: Vec::<T>::with_capacity(capacity),
+        }
+    }
 }
 
 impl<T> ScalarColumnBuilder for MutablePrimitiveColumn<T>
@@ -118,6 +114,14 @@ where
     for<'a> T: Scalar<RefType<'a> = T>,
 {
     type ColumnType = PrimitiveColumn<T>;
+
+    fn with_capacity(capacity: usize) -> Self {
+        let data_type = create_primitive_datatype::<T>();
+        MutablePrimitiveColumn {
+            data_type,
+            values: Vec::<T>::with_capacity(capacity),
+        }
+    }
 
     fn push(&mut self, value: <T as Scalar>::RefType<'_>) {
         self.values.push(value);

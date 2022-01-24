@@ -17,14 +17,18 @@ use std::marker::PhantomData;
 use common_datavalues2::prelude::*;
 use common_exception::Result;
 
-/// An common struct to caculate binary expression scalar op.
+pub trait ScalarBinaryFunction<L: Scalar, R: Scalar, O: Scalar> {
+    fn eval(&self, l: L::RefType<'_>, r: R::RefType<'_>) -> O;
+}
+
+/// A common struct to caculate binary expression scalar op.
 pub struct ScalarBinaryExpression<L: Scalar, R: Scalar, O: Scalar, F> {
     func: F,
     _phantom: PhantomData<(L, R, O)>,
 }
 
 impl<'a, L: Scalar, R: Scalar, O: Scalar, F> ScalarBinaryExpression<L, R, O, F>
-where F: Fn(L::RefType<'a>, R::RefType<'a>) -> O
+where F: ScalarBinaryFunction<L, R, O>
 {
     /// Create a binary expression from generic columns  and a lambda function.
     pub fn new(func: F) -> Self {
@@ -39,34 +43,7 @@ where F: Fn(L::RefType<'a>, R::RefType<'a>) -> O
         let left = ColumnViewerIter::<L>::try_create(l)?;
         let right = ColumnViewerIter::<R>::try_create(r)?;
 
-        let it = left.zip(right).map(|(a, b)| (self.func)(a, b));
+        let it = left.zip(right).map(|(a, b)| self.func.eval(a, b));
         Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
-    }
-}
-
-// not used for now
-pub struct ScalarBinaryExpressionVc<L: ScalarColumn, R: ScalarColumn, O: ScalarColumn, F> {
-    func: F,
-    _phantom: PhantomData<(L, R, O)>,
-}
-
-impl<'a, L: ScalarColumn, R: ScalarColumn, O: ScalarColumn, F> ScalarBinaryExpressionVc<L, R, O, F>
-where F: Fn(L::RefItem<'a>, R::RefItem<'a>) -> O::OwnedItem
-{
-    /// Create a binary expression from generic columns  and a lambda function.
-    pub fn new(func: F) -> Self {
-        Self {
-            func,
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Evaluate the expression with the given array.
-    pub fn eval(&self, l: &'a ColumnRef, r: &'a ColumnRef) -> Result<O> {
-        let left = ColumnViewerIter::<L::OwnedItem>::try_create(l)?;
-        let right = ColumnViewerIter::<R::OwnedItem>::try_create(r)?;
-
-        let it = left.zip(right).map(|(a, b)| (self.func)(a, b));
-        Ok(O::from_owned_iterator(it))
     }
 }

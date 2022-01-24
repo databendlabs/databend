@@ -17,19 +17,23 @@ use std::marker::PhantomData;
 use common_datavalues2::prelude::*;
 use common_exception::Result;
 
-/// An common struct to caculate Unary expression scalar op.
+pub trait ScalarUnaryFunction<L: Scalar, O: Scalar> {
+    fn eval(&self, l: L::RefType<'_>) -> O;
+}
+
+/// A common struct to caculate Unary expression scalar op.
 pub struct ScalarUnaryExpression<L: Scalar, O: Scalar, F> {
-    func: F,
+    f: F,
     _phantom: PhantomData<(L, O)>,
 }
 
 impl<'a, L: Scalar, O: Scalar, F> ScalarUnaryExpression<L, O, F>
-where F: Fn(L::RefType<'a>) -> O
+where F: ScalarUnaryFunction<L, O>
 {
     /// Create a Unary expression from generic columns  and a lambda function.
-    pub fn new(func: F) -> Self {
+    pub fn new(f: F) -> Self {
         Self {
-            func,
+            f,
             _phantom: PhantomData,
         }
     }
@@ -37,7 +41,7 @@ where F: Fn(L::RefType<'a>) -> O
     /// Evaluate the expression with the given array.
     pub fn eval(&self, l: &'a ColumnRef) -> Result<<O as Scalar>::ColumnType> {
         let left = ColumnViewerIter::<L>::try_create(l)?;
-        let it = left.map(|a| (self.func)(a));
+        let it = left.map(|a| (self.f).eval(a));
         Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
     }
 }

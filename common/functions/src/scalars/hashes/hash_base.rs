@@ -28,6 +28,7 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
 use crate::scalars::Function2Description;
 use crate::scalars::ScalarUnaryExpression;
+use crate::scalars::ScalarUnaryFunction;
 
 /// H ---> Hasher
 /// R ---> Result Type
@@ -36,6 +37,25 @@ pub struct BaseHashFunction<H, R> {
     display_name: String,
     h: PhantomData<H>,
     r: PhantomData<R>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct HashFunction<H> {
+    h: PhantomData<H>,
+}
+
+impl<S, O, H> ScalarUnaryFunction<S, O> for HashFunction<H>
+where
+    S: Scalar,
+    O: Scalar + FromPrimitive,
+    H: Hasher + Default,
+    for<'a> <S as Scalar>::RefType<'a>: DFHash,
+{
+    fn eval(&self, l: S::RefType<'_>) -> O {
+        let mut h = H::default();
+        l.hash(&mut h);
+        O::from_u64(h.finish()).unwrap()
+    }
 }
 
 impl<H, R> BaseHashFunction<H, R>
@@ -55,21 +75,6 @@ where
         let mut features = FunctionFeatures::default().num_arguments(1);
         features = features.deterministic();
         Function2Description::creator(Box::new(Self::try_create)).features(features)
-    }
-
-    fn exec<S>(column: &ColumnRef) -> Result<ColumnRef>
-    where
-        S: Scalar,
-        for<'a> <S as Scalar>::RefType<'a>: DFHash,
-    {
-        let unary = ScalarUnaryExpression::<S, R, _>::new(|a| {
-            let mut h = H::default();
-            a.hash(&mut h);
-            R::from_u64(h.finish()).unwrap()
-        });
-
-        let col = unary.eval(column)?;
-        Ok(Arc::new(col))
     }
 }
 
@@ -94,8 +99,10 @@ where
         columns: &common_datavalues2::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues2::ColumnRef> {
-        with_match_scalar_types_error!(columns[0].data_type().data_type_id().to_physical_type(), |$T| {
-             Self::exec::<$T>(columns[0].column())
+        with_match_scalar_types_error!(columns[0].data_type().data_type_id().to_physical_type(), |$S| {
+            let unary = ScalarUnaryExpression::<$S, R, _>::new(HashFunction::<H>::default());
+            let col = unary.eval(columns[0].column())?;
+            Ok(Arc::new(col))
         })
     }
 }

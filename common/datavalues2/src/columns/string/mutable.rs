@@ -54,10 +54,6 @@ impl MutableColumn for MutableStringColumn {
         StringType::arc()
     }
 
-    fn with_capacity(capacity: usize) -> Self {
-        Self::with_values_capacity(capacity * 3, capacity)
-    }
-
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -90,6 +86,10 @@ impl MutableColumn for MutableStringColumn {
 
 impl ScalarColumnBuilder for MutableStringColumn {
     type ColumnType = StringColumn;
+
+    fn with_capacity(capacity: usize) -> Self {
+        Self::with_values_capacity(capacity * 3, capacity)
+    }
 
     fn push(&mut self, value: &[u8]) {
         self.last_size += value.len();
