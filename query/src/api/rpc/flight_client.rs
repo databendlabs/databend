@@ -19,6 +19,7 @@ use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::tokio::time::Duration;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
@@ -44,11 +45,12 @@ impl FlightClient {
     pub async fn fetch_stream(
         &mut self,
         ticket: FlightTicket,
+        schema: DataSchemaRef,
         timeout: u64,
     ) -> Result<SendableDataBlockStream> {
         let ticket = ticket.try_into()?;
         let inner = self.do_get(ticket, timeout).await?;
-        Ok(Box::pin(FlightDataStream::from_remote(inner)))
+        Ok(Box::pin(FlightDataStream::from_remote(schema, inner)))
     }
 
     pub async fn execute_action(&mut self, action: FlightAction, timeout: u64) -> Result<()> {

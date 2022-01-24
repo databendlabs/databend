@@ -16,6 +16,7 @@ use std::convert::TryInto;
 
 use common_arrow::arrow::io::flight::serialize_batch;
 use common_arrow::arrow::io::ipc::write::WriteOptions;
+use common_arrow::arrow::io::ipc::IpcField;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_base::tokio::macros::support::Pin;
 use common_base::tokio::macros::support::Poll;
@@ -27,13 +28,18 @@ use tonic::Status;
 
 pub struct FlightDataStream {
     input: Receiver<common_exception::Result<DataBlock>>,
+    ipc_fields: Vec<IpcField>,
     options: WriteOptions,
 }
 
 impl FlightDataStream {
-    pub fn create(input: Receiver<common_exception::Result<DataBlock>>) -> FlightDataStream {
+    pub fn create(
+        input: Receiver<common_exception::Result<DataBlock>>,
+        ipc_fields: Vec<IpcField>,
+    ) -> FlightDataStream {
         FlightDataStream {
             input,
+            ipc_fields,
             options: WriteOptions { compression: None },
         }
     }
@@ -49,7 +55,8 @@ impl Stream for FlightDataStream {
             Some(Ok(block)) => match block.try_into() {
                 Err(error) => Some(Err(Status::from(error))),
                 Ok(record_batch) => {
-                    let (dicts, values) = serialize_batch(&record_batch, &[], &self.options);
+                    let (dicts, values) =
+                        serialize_batch(&record_batch, &self.ipc_fields, &self.options);
 
                     match dicts.is_empty() {
                         true => Some(Ok(values)),

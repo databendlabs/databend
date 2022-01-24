@@ -16,6 +16,8 @@ use std::convert::TryInto;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use common_arrow::arrow::io::flight::serialize_schema;
+use common_arrow::arrow::io::ipc::write::default_ipc_fields;
 use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::ActionType;
 use common_arrow::arrow_format::flight::data::Criteria;
@@ -106,10 +108,15 @@ impl FlightService for DatabendQueryFlightService {
 
         match ticket {
             FlightTicket::StreamTicket(steam_ticket) => {
-                let receiver = self.dispatcher.get_stream(&steam_ticket)?;
+                let (receiver, data_schema) = self.dispatcher.get_stream(&steam_ticket)?;
+                let arrow_schema = data_schema.to_arrow();
+                let ipc_fields = default_ipc_fields(arrow_schema.fields());
+
+                serialize_schema(&arrow_schema, &ipc_fields);
 
                 Ok(RawResponse::new(
-                    Box::pin(FlightDataStream::create(receiver)) as FlightStream<FlightData>,
+                    Box::pin(FlightDataStream::create(receiver, ipc_fields))
+                        as FlightStream<FlightData>,
                 ))
             }
         }

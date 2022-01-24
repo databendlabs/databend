@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
@@ -29,6 +30,7 @@ use crate::sessions::QueryContext;
 pub struct RemoteTransform {
     ticket: FlightTicket,
     fetch_node_name: String,
+    schema: DataSchemaRef,
     pub ctx: Arc<QueryContext>,
 }
 
@@ -37,10 +39,12 @@ impl RemoteTransform {
         ticket: FlightTicket,
         context: Arc<QueryContext>,
         fetch_node_name: String,
+        schema: DataSchemaRef,
     ) -> Result<RemoteTransform> {
         Ok(RemoteTransform {
             ticket,
             fetch_node_name,
+            schema,
             ctx: context,
         })
     }
@@ -84,11 +88,14 @@ impl Processor for RemoteTransform {
             self.fetch_node_name
         );
 
+        let data_schema = self.schema.clone();
         let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
 
         let fetch_ticket = self.ticket.clone();
         let mut flight_client = self.flight_client().await?;
-        let fetch_stream = flight_client.fetch_stream(fetch_ticket, timeout).await?;
+        let fetch_stream = flight_client
+            .fetch_stream(fetch_ticket, data_schema, timeout)
+            .await?;
         Ok(Box::pin(self.ctx.try_create_abortable(fetch_stream)?))
     }
 }

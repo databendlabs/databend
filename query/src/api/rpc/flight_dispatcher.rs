@@ -74,7 +74,10 @@ impl DatabendQueryFlightDispatcher {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    pub fn get_stream(&self, ticket: &StreamTicket) -> Result<mpsc::Receiver<Result<DataBlock>>> {
+    pub fn get_stream(
+        &self,
+        ticket: &StreamTicket,
+    ) -> Result<(mpsc::Receiver<Result<DataBlock>>, DataSchemaRef)> {
         let stage_name = format!("{}/{}", ticket.query_id, ticket.stage_id);
         if let Some(notify) = self.stages_notify.write().remove(&stage_name) {
             notify.notify_waiters();
@@ -82,7 +85,7 @@ impl DatabendQueryFlightDispatcher {
 
         let stream_name = format!("{}/{}", stage_name, ticket.stream);
         match self.streams.write().remove(&stream_name) {
-            Some(stream_info) => Ok(stream_info.rx),
+            Some(stream_info) => Ok((stream_info.rx, stream_info.schema)),
             None => Err(ErrorCode::NotFoundStream("Stream is not found")),
         }
     }
