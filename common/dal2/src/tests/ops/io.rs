@@ -14,7 +14,6 @@
 
 use std::io::SeekFrom;
 use std::str::from_utf8;
-use std::sync::Arc;
 
 use futures::io::copy;
 use futures::io::Cursor;
@@ -66,7 +65,7 @@ async fn test_seekable_reader() {
         .unwrap();
     assert_eq!(x, 13);
 
-    let mut r = new_buffered_seekable_reader(Arc::new(f), "/tmp/x")
+    let mut r = new_buffered_seekable_reader(f, "/tmp/x")
         .await
         .expect("new buffered seekable reader");
 

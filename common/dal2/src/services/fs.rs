@@ -66,7 +66,7 @@ impl Backend {
 #[async_trait]
 impl<S: Send + Sync> Read<S> for Backend {
     async fn read(&self, args: &ReadBuilder<S>) -> Result<Reader> {
-        let path = PathBuf::from(&self.root).join(args.path);
+        let path = PathBuf::from(&self.root).join(&args.path);
 
         let mut f = fs::OpenOptions::new()
             .read(true)
@@ -88,7 +88,7 @@ impl<S: Send + Sync> Read<S> for Backend {
 #[async_trait]
 impl<S: Send + Sync> Write<S> for Backend {
     async fn write(&self, mut r: Reader, args: &WriteBuilder<S>) -> Result<usize> {
-        let path = PathBuf::from(&self.root).join(args.path);
+        let path = PathBuf::from(&self.root).join(&args.path);
 
         let mut f = fs::OpenOptions::new()
             .create(true)

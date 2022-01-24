@@ -15,7 +15,6 @@
 use std::io;
 use std::io::SeekFrom;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
@@ -25,9 +24,9 @@ use futures::io::BufReader;
 use futures::pin_mut;
 use futures::ready;
 use futures::AsyncRead;
-use futures::AsyncReadExt;
 use futures::AsyncSeek;
 use futures::Future;
+use futures::FutureExt;
 use pin_project::pin_project;
 
 use crate::error::Result;
@@ -132,8 +131,8 @@ where F: FnMut(usize)
 ///
 /// We will use 4MB buffer for now to avoid too much repeated requests.
 #[allow(dead_code)]
-pub async fn new_buffered_seekable_reader<'d, S>(
-    da: Arc<crate::DataAccessor<'d, S>>,
+pub async fn new_buffered_seekable_reader<'d, S: 'd>(
+    da: crate::DataAccessor<S>,
     key: &str,
 ) -> Result<BufReader<SeekableReader<'d, S>>>
 where
@@ -160,62 +159,80 @@ where
 ///
 /// We need use update the metrics.
 pub struct SeekableReader<'d, S: super::Read<S>> {
-    da: Arc<crate::DataAccessor<'d, S>>,
+    da: crate::DataAccessor<S>,
     key: String,
     total: u64,
 
     pos: u64,
+    state: SeekableReaderState<'d>,
+}
+
+enum SeekableReaderState<'d> {
+    Idle,
+    Starting(Pin<Box<dyn Future<Output = Result<Reader>> + Send + 'd>>),
+    Reading(Reader),
 }
 
 impl<'d, S> SeekableReader<'d, S>
-where S: super::Read<S>
+where S: super::Read<S> + 'd
 {
-    pub fn new(da: Arc<crate::DataAccessor<'d, S>>, key: &str, total: u64) -> Self {
+    pub fn new(da: crate::DataAccessor<S>, key: &str, total: u64) -> Self {
         SeekableReader {
             da,
             key: key.to_string(),
             total,
 
             pos: 0,
+            state: SeekableReaderState::Idle,
         }
     }
 }
 
-impl<S> AsyncRead for SeekableReader<'_, S>
-where S: super::Read<S>
+impl<'d, S> AsyncRead for SeekableReader<'d, S>
+where S: super::Read<S> + 'd
 {
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        let key = self.key.clone();
-        let da = self.da.clone();
-        let pos = self.pos;
+        loop {
+            match self.state {
+                SeekableReaderState::Idle => {
+                    let da = self.da.clone();
+                    let key = self.key.clone();
+                    let pos = self.pos;
+                    let length = buf.len() as u64;
 
-        let n = async {
-            let mut builder = da.read(key.as_str());
-            let r = builder
-                .offset(pos)
-                .size(buf.len() as u64)
-                .run()
-                .await
-                .map_err(io::Error::other)?;
+                    let f = async move {
+                        let mut builder = da.read(key.as_str());
 
-            Pin::new(r).read(buf).await
-        };
+                        let r = builder.offset(pos).size(length).run().await?;
 
-        pin_mut!(n);
+                        Ok(r)
+                    };
 
-        let n = ready!(n.poll(cx))?;
+                    self.state = SeekableReaderState::Starting(f.boxed());
+                }
+                SeekableReaderState::Starting(ref mut fut) => {
+                    let r = ready!(fut.as_mut().poll(cx)).map_err(io::Error::other)?;
 
-        self.pos += n as u64;
-        Poll::Ready(Ok(n))
+                    self.state = SeekableReaderState::Reading(r);
+                }
+                SeekableReaderState::Reading(ref mut r) => {
+                    pin_mut!(r);
+
+                    let n = ready!(r.poll_read(cx, buf))?;
+                    self.pos += n as u64;
+                    return Poll::Ready(Ok(n));
+                }
+            }
+        }
     }
 }
 
-impl<S> AsyncSeek for SeekableReader<'_, S>
-where S: super::Read<S>
+impl<'d, S> AsyncSeek for SeekableReader<'d, S>
+where S: super::Read<S> + 'd
 {
     fn poll_seek(
         mut self: Pin<&mut Self>,
@@ -233,6 +250,8 @@ where S: super::Read<S>
                 self.pos = self.pos.checked_add_signed(off).expect("overflow");
             }
         }
+
+        self.state = SeekableReaderState::Idle;
 
         Poll::Ready(Ok(self.pos))
     }
