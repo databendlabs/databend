@@ -114,7 +114,7 @@ impl<'a> MetaLeader<'a> {
     pub async fn join(&self, req: JoinRequest) -> Result<(), MetaError> {
         let node_id = req.node_id;
         let addr = req.address;
-        let metrics = self.meta_node.metrics_rx.borrow().clone();
+        let metrics = self.meta_node.raft.metrics().borrow().clone();
         let membership = metrics.membership_config.membership.clone();
 
         if membership.contains(&node_id) {

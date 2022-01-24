@@ -29,7 +29,7 @@ pub struct SyncReceiverSource {
 
 impl SyncReceiverSource {
     pub fn create(rx: Receiver<Result<DataBlock>>, out: Arc<OutputPort>) -> Result<ProcessorPtr> {
-        SyncSourcer::create(vec![out], SyncReceiverSource { receiver: rx })
+        SyncSourcer::create(out, SyncReceiverSource { receiver: rx })
     }
 }
 

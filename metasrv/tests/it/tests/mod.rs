@@ -17,7 +17,6 @@
 pub mod service;
 pub mod tls_constants;
 
-pub use service::assert_metasrv_connection;
 pub use service::next_port;
 pub use service::start_metasrv;
 pub use service::start_metasrv_with_context;

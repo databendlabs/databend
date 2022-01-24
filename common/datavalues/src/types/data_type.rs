@@ -57,6 +57,11 @@ pub enum DataType {
     /// Option<String> indicates the timezone, if it's None, it's UTC
     DateTime64(u32, Option<String>),
 
+    /// Interval represents the time interval, e.g. the elapsed time between two date or datetime.
+    /// Interval(YearMonth) represents the elapsed number of months.
+    /// Interval(DayTime) represents the elapsed number of microseconds.
+    ///
+    /// Underneath Interval is stored as int64, so it supports negative values.
     Interval(IntervalUnit),
 
     List(Box<DataField>),
