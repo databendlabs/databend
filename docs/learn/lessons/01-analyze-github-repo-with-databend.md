@@ -19,7 +19,6 @@ mysql -h 127.0.0.1 -P 3307 -uroot
 
 mysql> create database datafuselabs engine=github(token='<your-github-personal-access-token>');
 Query OK, 0 rows affected (1.21 sec)
-Read 0 rows, 0 B in 1.203 sec., 0 rows/sec., 0 B/sec.
 
 mysql> use datafuselabs;
 Reading table information for completion of table and column names
@@ -68,7 +67,6 @@ mysql> show tables;
 | 2021-12-19 11:20:37.818 +0000 | weekly_prs                      |
 +-------------------------------+---------------------------------+
 36 rows in set (0.01 sec)
-Read 52 rows, 4.99 KB in 0.007 sec., 7.83 thousand rows/sec., 752.15 KB/sec.
 
 mysql> show create table databend_issues;
 +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -88,7 +86,6 @@ mysql> show create table databend_issues;
 ) ENGINE=GITHUB |
 +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 1 row in set (0.01 sec)
-Read 0 rows, 0 B in 0.004 sec., 0 rows/sec., 0 B/sec.
 ```
 
 
@@ -101,7 +98,6 @@ mysql> select count(*) from databend_issues;
 |     3910 |
 +----------+
 1 row in set (47.00 sec)
-Read 3910 rows, 558.35 KB in 46.996 sec., 83.2 rows/sec., 11.88 KB/sec.
 ```
 
 Q2: Get the top 10 users who submitted issues
@@ -122,10 +118,9 @@ mysql> select user, count(*) as c from databend_issues group by user order by c 
 | Xuanwo          |   62 |
 +-----------------+------+
 10 rows in set (44.04 sec)
-Read 3910 rows, 558.35 KB in 44.031 sec., 88.8 rows/sec., 12.68 KB/sec.
 ```
 
-Q3:  Qet the number of issue per month in 2021
+Q3:  Get the number of issue per month in 2021
 
 ```
 mysql> select tomonth(created_at) as m ,count(*) as c from databend_issues where  created_at>='2021-01-01 00:00:00' and created_at<'2022-01-01 00:00:00' group by m order by m;
@@ -146,8 +141,20 @@ mysql> select tomonth(created_at) as m ,count(*) as c from databend_issues where
 |   12 |  508 |
 +------+------+
 12 rows in set (46.18 sec)
-Read 3910 rows, 558.35 KB in 46.175 sec., 84.68 rows/sec., 12.09 KB/sec.
-
 ``` 
+
+Q4: Finding Comments in all Issue/Pull Request using regular expressions:
+
+```
+mysql> select * from databend_comments where body like '%expression%';
++------------+-----------+--------------------------------------------------------------------------------------------------------------------+
+| comment_id | user      | body                                                                                                               |
++------------+-----------+--------------------------------------------------------------------------------------------------------------------+
+|  826041283 | jyizheng  | Are you going to work on the PR of aggr expression valid check?                                                    |
+|  840934322 | BohuTANG  | It seems that here need an expression action for having                                                            |
+|  966089481 | junli1026 | Maybe I should move the optimization to plan_expression_common, just rewrite the expression at the very beginning. |
+|  998761335 | sundy-li  | We need support lambda expression at first...                                                                      |
++------------+-----------+--------------------------------------------------------------------------------------------------------------------+
+```
 
 **Enjoy your journey.** 
