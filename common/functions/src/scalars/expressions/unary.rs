@@ -42,9 +42,13 @@ where F: Fn(L::RefType<'a>) -> O
     }
 }
 
+#[cfg(test)]
 mod test {
+    use std::sync::Arc;
 
+    use common_datavalues2::prelude::*;
 
+    use crate::scalars::ScalarUnaryExpression;
 
     #[test]
     fn test_contains() {

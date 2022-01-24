@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+
 use super::column::ScalarColumn;
 use crate::prelude::*;
 
 /// Owned scalar value
 /// primitive types, bool, Vec<u8> ...
-pub trait Scalar: 'static + Sized + Default
+pub trait Scalar: 'static + Sized + Default + Any
 where for<'a> Self::ColumnType: ScalarColumn<RefItem<'a> = Self::RefType<'a>>
 {
     type ColumnType: ScalarColumn<OwnedItem = Self>;

@@ -28,7 +28,7 @@ macro_rules! for_all_scalar_types {
             { f32 },
             { f64 },
             { bool },
-            { Vec<u8> }
+            { Vu8 }
         }
     };
 }
@@ -48,6 +48,26 @@ macro_rules! for_all_primitive_types{
             { u64 },
             { f32 },
             { f64 }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! for_all_primitive_boolean_types{
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { i8 },
+            { i16 },
+            { i32 },
+            { i64 },
+            { u8 },
+            { u16 },
+            { u32 },
+            { u64 },
+            { f32 },
+            { f64 },
+            { bool }
         }
     };
 }

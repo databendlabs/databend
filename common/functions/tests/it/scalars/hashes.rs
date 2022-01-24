@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::Blake3HashFunction;
 use common_functions::scalars::Md5HashFunction;
 use common_functions::scalars::Sha1HashFunction;
 use common_functions::scalars::Sha2HashFunction;
-use common_functions::scalars::SipHashFunction;
+use common_functions::scalars::SipHash64Function;
 use common_functions::scalars::XxHash32Function;
 use common_functions::scalars::XxHash64Function;
 
@@ -130,7 +130,7 @@ fn test_siphash_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions2(SipHashFunction::try_create("siphash")?, &tests)
+    test_scalar_functions2(SipHash64Function::try_create("siphash")?, &tests)
 }
 
 #[test]
@@ -194,7 +194,7 @@ fn test_sha2hash_function() -> Result<()> {
             name: "InvalidSha",
             columns: vec![Series::from_data(["abc"]), Series::from_data([1_u32])],
             expect: Series::from_data([Option::<&str>::None]),
-            error: "",
+            error: "Expected [0, 224, 256, 384, 512] as sha2 encode options, but got 1",
         },
         ScalarFunction2Test {
             name: "Sha Length as Const Field",
@@ -208,10 +208,10 @@ fn test_sha2hash_function() -> Result<()> {
         ScalarFunction2Test {
             name: "Sha Length with null value",
             columns: vec![
-                Series::from_data(["abc"]),
-                Series::from_data([224_u16]),
+                Series::from_data([Option::<&str>::None]),
+                Series::from_data([Option::<u16>::None]),
             ],
-            expect: Series::from_data(["23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7"]),
+            expect: Series::from_data([Option::<&str>::None]),
             error: "",
         },
     ];

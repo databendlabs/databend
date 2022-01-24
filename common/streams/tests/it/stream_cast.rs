@@ -16,7 +16,7 @@ use common_base::tokio;
 use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_functions::scalars::CastFunction;
-use common_functions::scalars::Function2Adapter;
+use common_functions::scalars::Function2Convertor;
 use common_streams::*;
 use futures::stream::StreamExt;
 
@@ -63,8 +63,8 @@ async fn test_cast_stream() {
     let stream = DataBlockStream::create(input_schema.clone(), None, vec![block0, block1]);
 
     // cast from String to UInt8 and String to UInt16
-    let to_uint8 = Function2Adapter::create(CastFunction::create("cast", "UInt8").unwrap());
-    let to_uint16 = Function2Adapter::create(CastFunction::create("cast", "UInt16").unwrap());
+    let to_uint8 = Function2Convertor::create(CastFunction::create("cast", "UInt8").unwrap());
+    let to_uint16 = Function2Convertor::create(CastFunction::create("cast", "UInt16").unwrap());
 
     let functions = vec![to_uint8, to_uint16];
     let mut cast_stream =

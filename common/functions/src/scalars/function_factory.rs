@@ -20,13 +20,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
-use super::Function2Adapter;
+use super::Function2Convertor;
 use super::Function2Factory;
 use crate::scalars::ArithmeticFunction;
 use crate::scalars::ConditionalFunction;
 use crate::scalars::DateFunction;
 use crate::scalars::Function;
-use crate::scalars::HashesFunction;
 use crate::scalars::LogicFunction;
 use crate::scalars::MathsFunction;
 use crate::scalars::NullableFunction;
@@ -198,7 +197,7 @@ impl FunctionFactory {
 
         let factory2 = Function2Factory::instance();
         if let Ok(v) = factory2.get(origin_name, &[]) {
-            let adapter = Function2Adapter::create(v);
+            let adapter = Function2Convertor::create(v);
             return Ok(adapter);
         }
 

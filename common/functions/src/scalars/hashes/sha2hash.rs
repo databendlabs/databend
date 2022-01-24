@@ -56,7 +56,14 @@ impl Function2 for Sha2HashFunction {
     ) -> Result<common_datavalues2::DataTypePtr> {
         if args[0].data_type_id() != TypeID::String {
             return Err(ErrorCode::IllegalDataType(format!(
-                "Expected string arg, but got {:?}",
+                "Expected first arg as string type, but got {:?}",
+                args[0]
+            )));
+        }
+
+        if !args[1].data_type_id().is_numeric() {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Expected second arg as integer type, but got {:?}",
                 args[0]
             )));
         }
@@ -68,8 +75,8 @@ impl Function2 for Sha2HashFunction {
         columns: &common_datavalues2::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues2::ColumnRef> {
-        let const_col: Result<&ConstColumn> = Series::check_get(columns[0].column());
-        let col_iter = ColumnViewerIter::<Vu8>::try_create(columns[1].column())?;
+        let col_iter = ColumnViewerIter::<Vu8>::try_create(columns[0].column())?;
+        let const_col: Result<&ConstColumn> = Series::check_get(columns[1].column());
 
         if let Ok(col) = const_col {
             let l = col.get_u64(0)?;
@@ -117,7 +124,7 @@ impl Function2 for Sha2HashFunction {
 
             Ok(Arc::new(col))
         } else {
-            let l = cast_column_field(&columns[1], &Int16Type::arc())?;
+            let l = cast_column_field(&columns[1], &UInt16Type::arc())?;
             let l_iter = ColumnViewerIter::<u16>::try_create(&l)?;
 
             let mut col_builder = MutableStringColumn::with_capacity(l.len());

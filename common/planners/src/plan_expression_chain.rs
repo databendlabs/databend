@@ -16,7 +16,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
-use common_functions::scalars::Function2Adapter;
+use common_functions::scalars::Function2Convertor;
 use common_functions::scalars::FunctionFactory;
 
 use crate::ActionAlias;
@@ -201,9 +201,9 @@ impl ExpressionChain {
                 let type_name = format!("{}", data_type);
 
                 let func = if *is_nullable {
-                    Function2Adapter::create(CastFunction::create_try(&func_name, &type_name)?)
+                    Function2Convertor::create(CastFunction::create_try(&func_name, &type_name)?)
                 } else {
-                    Function2Adapter::create(CastFunction::create(&func_name, &type_name)?)
+                    Function2Convertor::create(CastFunction::create(&func_name, &type_name)?)
                 };
 
                 let function = ActionFunction {

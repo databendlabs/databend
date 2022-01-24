@@ -151,6 +151,6 @@ impl<'a> DFHash for bool {
 impl<'a> DFHash for &'a [u8] {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        Hash::hash(self, state);
+        Hash::hash_slice(self, state);
     }
 }

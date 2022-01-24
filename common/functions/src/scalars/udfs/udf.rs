@@ -34,7 +34,7 @@ impl UdfFunction {
         factory.register("not_in", InFunction::<true>::desc());
     }
 
-    pub fn register_function2(factory: &mut Function2Factory) {
+    pub fn register2(factory: &mut Function2Factory) {
         factory.register("example", UdfExampleFunction::desc());
         factory.register("totypename", ToTypeNameFunction::desc());
         factory.register("database", DatabaseFunction::desc());
