@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::AggregateFunction2Factory;
 use crate::aggregates::aggregate_arg_min_max::aggregate_arg_max_function_desc;
 use crate::aggregates::aggregate_arg_min_max::aggregate_arg_min_function_desc;
 use crate::aggregates::aggregate_avg::aggregate_avg_function_desc;
@@ -52,4 +53,8 @@ impl Aggregators {
         factory.register_combinator("if", AggregateIfCombinator::combinator_desc());
         factory.register_combinator("distinct", AggregateDistinctCombinator::combinator_desc());
     }
+
+    pub fn register2(_factory: &mut AggregateFunction2Factory) {}
+
+    pub fn register_combinator2(_factory: &mut AggregateFunction2Factory) {}
 }

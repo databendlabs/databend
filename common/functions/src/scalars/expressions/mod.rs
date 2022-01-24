@@ -21,10 +21,9 @@ mod cast_with_type;
 mod expression;
 mod unary;
 
-pub use binary::ScalarBinaryExpression;
-pub use binary::ScalarBinaryExpressionVc;
+pub use binary::*;
 pub use cast::CastFunction;
 pub use cast_with_type::cast_column_field;
 pub use cast_with_type::cast_with_type;
 pub use expression::ToCastFunction;
-pub use unary::ScalarUnaryExpression;
+pub use unary::*;

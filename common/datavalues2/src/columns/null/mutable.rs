@@ -28,10 +28,6 @@ pub struct MutableNullColumn {
 }
 
 impl MutableColumn for MutableNullColumn {
-    fn with_capacity(_capacity: usize) -> Self {
-        Self::default()
-    }
-
     fn data_type(&self) -> DataTypePtr {
         Arc::new(NullType {})
     }

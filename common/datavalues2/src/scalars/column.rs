@@ -60,6 +60,9 @@ where for<'a> Self::OwnedItem: Scalar<RefType<'a> = Self::RefItem<'a>>
 
 pub trait ScalarColumnBuilder: MutableColumn {
     type ColumnType: ScalarColumn<Builder = Self>;
+
+    fn with_capacity(capacity: usize) -> Self;
+
     /// Append a value to builder.
     fn push(&mut self, value: <Self::ColumnType as ScalarColumn>::RefItem<'_>);
 

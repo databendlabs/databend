@@ -37,13 +37,6 @@ impl MutableColumn for MutableBooleanColumn {
         self
     }
 
-    fn with_capacity(capacity: usize) -> Self {
-        Self {
-            values: MutableBitmap::with_capacity(capacity),
-            data_type: BooleanType::arc(),
-        }
-    }
-
     fn data_type(&self) -> DataTypePtr {
         self.data_type.clone()
     }
@@ -87,6 +80,13 @@ impl MutableBooleanColumn {
 
 impl ScalarColumnBuilder for MutableBooleanColumn {
     type ColumnType = BooleanColumn;
+
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            values: MutableBitmap::with_capacity(capacity),
+            data_type: BooleanType::arc(),
+        }
+    }
 
     fn push(&mut self, value: <Self::ColumnType as crate::ScalarColumn>::RefItem<'_>) {
         self.values.push(value);

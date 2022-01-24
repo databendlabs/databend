@@ -20,7 +20,6 @@ use crate::prelude::*;
 
 pub trait MutableColumn {
     fn data_type(&self) -> DataTypePtr;
-    fn with_capacity(capacity: usize) -> Self;
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
         self.len() == 0

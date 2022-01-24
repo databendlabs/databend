@@ -18,6 +18,7 @@ mod aggregate_combinator_distinct;
 mod aggregate_combinator_if;
 mod aggregate_count;
 mod aggregate_function;
+
 mod aggregate_function_factory;
 mod aggregate_function_state;
 mod aggregate_min_max;
@@ -50,3 +51,7 @@ pub use aggregate_stddev_pop::AggregateStddevPopFunction;
 pub use aggregate_sum::AggregateSumFunction;
 pub use aggregator::Aggregators;
 pub use aggregator_common::*;
+
+mod aggregate_function2;
+mod aggregate_function2_factory;
+pub use aggregate_function2_factory::AggregateFunction2Factory;

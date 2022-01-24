@@ -165,32 +165,35 @@ fn test_binary_contains() {
     let r = Series::from_data(vec!["1", "2", "43"]);
     let expected = Series::from_data(vec![true, true, false]);
 
-    let binary_expression =
-        ScalarBinaryExpressionVc::<StringColumn, StringColumn, BooleanColumn, _>::new(
-            |a, b| -> bool { a.windows(b.len()).any(|window| window == b) },
-        );
-    let result_v1 = binary_expression.eval(&l, &r).unwrap();
+    struct Contains {}
 
-    let binary_expression =
-        ScalarBinaryExpression::<Vec<u8>, Vec<u8>, bool, _>::new(|a, b| -> bool {
+    impl ScalarBinaryFunction<Vu8, Vu8, bool> for Contains {
+        fn eval(&self, a: &'_ [u8], b: &'_ [u8]) -> bool {
             a.windows(b.len()).any(|window| window == b)
-        });
-    let result_v2 = binary_expression.eval(&l, &r).unwrap();
+        }
+    }
 
-    assert!(result_v1.values() == result_v2.values());
+    let binary_expression = ScalarBinaryExpression::<Vec<u8>, Vec<u8>, bool, _>::new(Contains {});
+    let result = binary_expression.eval(&l, &r).unwrap();
 
-    let r1 = Arc::new(result_v1) as ColumnRef;
-    let r2 = Arc::new(result_v2) as ColumnRef;
-    assert!(r1 == expected && r1 == r2);
+    let r = Arc::new(result) as ColumnRef;
+    assert!(r == expected);
 }
 
 #[test]
 fn test_unary_size() {
+    struct LenFunc {}
+
+    impl ScalarUnaryFunction<Vu8, i32> for LenFunc {
+        fn eval(&self, l: &[u8]) -> i32 {
+            l.len() as i32
+        }
+    }
+
     //create two string columns
     let l = Series::from_data(vec!["11", "22", "333"]);
     let expected = Series::from_data(vec![2i32, 2, 3]);
-    let unary_expression =
-        ScalarUnaryExpression::<Vec<u8>, i32, _>::new(|a| -> i32 { a.len() as i32 });
+    let unary_expression = ScalarUnaryExpression::<Vec<u8>, i32, _>::new(LenFunc {});
     let result = unary_expression.eval(&l).unwrap();
     let result = Arc::new(result) as ColumnRef;
     assert!(result == expected);
