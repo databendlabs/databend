@@ -19,7 +19,7 @@ use crate::prelude::*;
 
 /// Owned scalar value
 /// primitive types, bool, Vec<u8> ...
-pub trait Scalar: 'static + Sized + Default + Any
+pub trait Scalar: 'static + Sized + Default + Any + Clone + Send + Sync
 where for<'a> Self::ColumnType: ScalarColumn<RefItem<'a> = Self::RefType<'a>>
 {
     type ColumnType: ScalarColumn<OwnedItem = Self>;

@@ -21,6 +21,7 @@ mod arithmetic_mul;
 mod arithmetic_negate;
 mod arithmetic_plus;
 mod binary_arithmetic;
+mod binary_arithmetic2;
 mod interval;
 mod macros;
 mod unary_arithmetic;
