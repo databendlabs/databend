@@ -183,7 +183,7 @@ impl Backend {
 #[async_trait]
 impl<S: Send + Sync> Read<S> for Backend {
     async fn read(&self, args: &ReadBuilder<S>) -> Result<Reader> {
-        let p = self.get_abs_path(args.path);
+        let p = self.get_abs_path(&args.path);
 
         // TODO: Handle range header here.
         let resp = self
@@ -202,7 +202,7 @@ impl<S: Send + Sync> Read<S> for Backend {
 #[async_trait]
 impl<S: Send + Sync> Write<S> for Backend {
     async fn write(&self, r: Reader, args: &WriteBuilder<S>) -> Result<usize> {
-        let p = self.get_abs_path(args.path);
+        let p = self.get_abs_path(&args.path);
 
         let _ = self
             .client

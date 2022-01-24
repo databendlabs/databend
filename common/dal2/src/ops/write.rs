@@ -28,20 +28,24 @@ pub trait Write<S: Send + Sync>: Send + Sync {
     }
 }
 
-pub struct WriteBuilder<'p, S> {
+pub struct WriteBuilder<S> {
     s: Arc<S>,
 
-    pub path: &'p str,
+    pub path: String,
     pub size: u64,
 }
 
-impl<'p, S> WriteBuilder<'p, S> {
-    pub fn new(s: Arc<S>, path: &'p str, size: u64) -> Self {
-        Self { s, path, size }
+impl<S> WriteBuilder<S> {
+    pub fn new(s: Arc<S>, path: &str, size: u64) -> Self {
+        Self {
+            s,
+            path: path.to_string(),
+            size,
+        }
     }
 }
 
-impl<'p, S: Write<S>> WriteBuilder<'p, S> {
+impl<S: Write<S>> WriteBuilder<S> {
     pub async fn run(&mut self, r: Reader) -> Result<usize> {
         self.s.write(r, self).await
     }
