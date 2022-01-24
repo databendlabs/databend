@@ -81,6 +81,7 @@ impl VecHash for DFStringArray {
     fn vec_hash(&self, hasher: DFHasher) -> Result<DFUInt64Array> {
         Ok(self.apply_cast_numeric(|v| {
             let mut h = hasher.clone_initial();
+            // Hash::hash_slice(v,&mut h);
             v.hash(&mut h);
             h.finish()
         }))
