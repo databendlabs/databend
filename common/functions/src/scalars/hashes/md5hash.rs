@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::Column;
+use common_datavalues2::StringColumn;
+use common_exception::ErrorCode;
+use common_exception::Result;
 
 use crate::scalars::strings::String2StringFunction;
 use crate::scalars::strings::StringOperator;
@@ -22,14 +25,15 @@ pub struct Md5 {}
 
 impl StringOperator for Md5 {
     #[inline]
-    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
+    fn try_apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> Result<usize> {
         let buffer = &mut buffer[0..32];
         // TODO md5 lib doesn't allow encode into buffer...
-        hex::encode_to_slice(md5::compute(s).as_ref(), buffer).unwrap();
-        32
+        hex::encode_to_slice(md5::compute(s).as_ref(), buffer)
+            .map_err(|e| ErrorCode::StrParseError(e.to_string()))?;
+        Ok(32)
     }
 
-    fn estimate_bytes(&self, array: &DFStringArray) -> usize {
+    fn estimate_bytes(&self, array: &StringColumn) -> usize {
         array.len() * 32
     }
 }

@@ -13,6 +13,104 @@
 // limitations under the License.
 
 #[macro_export]
+macro_rules! for_all_scalar_types {
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { i8 },
+            { i16 },
+            { i32 },
+            { i64 },
+            { u8 },
+            { u16 },
+            { u32 },
+            { u64 },
+            { f32 },
+            { f64 },
+            { bool },
+            { Vu8 }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! for_all_primitive_types{
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { i8 },
+            { i16 },
+            { i32 },
+            { i64 },
+            { u8 },
+            { u16 },
+            { u32 },
+            { u64 },
+            { f32 },
+            { f64 }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! for_all_primitive_boolean_types{
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { i8 },
+            { i16 },
+            { i32 },
+            { i64 },
+            { u8 },
+            { u16 },
+            { u32 },
+            { u64 },
+            { f32 },
+            { f64 },
+            { bool }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! for_all_scalar_varints{
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { i8, UInt8 },
+            { i16, UInt16 },
+            { i32, UInt32 },
+            { i64, UInt64 },
+            { u8, UInt8 },
+            { u16, UInt16 },
+            { u32, UInt32 },
+            { u64, UInt64 },
+            { f32, Float32 },
+            { f64, Float64 },
+            { bool, Boolean },
+            { Vu8, String }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! for_all_integer_types{
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { i8 },
+            { i16 },
+            { i32 },
+            { i64 },
+            { u8 },
+            { u16 },
+            { u32 },
+            { u64 }
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! with_match_physical_primitive_type {(
     $key_type:expr, | $_:tt $T:ident | $($body:tt)*
 ) => ({

@@ -19,7 +19,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
-use common_functions::scalars::Function2Adapter;
+use common_functions::scalars::Function2Convertor;
 use common_meta_types::TableInfo;
 use common_streams::CastStream;
 use common_streams::SendableDataBlockStream;
@@ -97,7 +97,7 @@ impl Processor for SinkTransform {
                 };
 
                 let cast_function =
-                    Function2Adapter::create(CastFunction::create("cast", &name).unwrap());
+                    Function2Convertor::create(CastFunction::create("cast", &name).unwrap());
                 functions.push(cast_function);
             }
             input_stream = Box::pin(CastStream::try_create(

@@ -15,6 +15,8 @@
 use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::Function2;
+use common_functions::scalars::Function2Adapter;
+use pretty_assertions::assert_eq;
 
 pub struct ScalarFunction2Test {
     pub name: &'static str,
@@ -75,7 +77,7 @@ pub fn test_scalar_functions2_with_type(
             Ok(v) => {
                 let v = v.convert_full_column();
 
-                assert!(test.expect == v);
+                assert_eq!(test.expect, v, "{}", test.name);
             }
             Err(cause) => {
                 assert_eq!(test.error, cause.message(), "{}", test.name);
@@ -119,6 +121,7 @@ pub fn test_eval_with_type(
     arguments: &[ColumnWithField],
     arguments_type: &[&DataTypePtr],
 ) -> Result<ColumnRef> {
-    test_function.return_type(arguments_type)?;
-    test_function.eval(arguments, rows_size)
+    let adaptor = Function2Adapter::create(test_function.clone());
+    adaptor.return_type(arguments_type)?;
+    adaptor.eval(arguments, rows_size)
 }

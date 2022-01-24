@@ -61,7 +61,16 @@ pub fn equal(lhs: &dyn Column, rhs: &dyn Column) -> bool {
             let lhs: &NullableColumn = lhs.as_any().downcast_ref().unwrap();
             let rhs: &NullableColumn = rhs.as_any().downcast_ref().unwrap();
 
-            lhs.validity() == rhs.validity() && lhs.inner() == rhs.inner()
+            if lhs.validity() != rhs.validity() {
+                return false;
+            }
+
+            for row in 0..lhs.len() {
+                if lhs.get(row) != rhs.get(row) {
+                    return false;
+                }
+            }
+            true
         }
         Boolean => {
             let lhs: &BooleanColumn = lhs.as_any().downcast_ref().unwrap();

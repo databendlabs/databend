@@ -30,7 +30,7 @@ use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::CastFunction;
 use crate::scalars::Function;
-use crate::scalars::Function2Adapter;
+use crate::scalars::Function2Convertor;
 use crate::scalars::Monotonicity;
 use crate::scalars::RoundFunction;
 
@@ -315,7 +315,7 @@ impl NumberResultFunction<u8> for ToHour {
     // ToHour is NOT a monotonic function in general, unless the time range is within the same day.
     fn factor_function() -> Result<Box<dyn Function>> {
         let func2 = CastFunction::create("toDate", Date16Type::arc().name()).unwrap();
-        let adapter = Function2Adapter::create(func2);
+        let adapter = Function2Convertor::create(func2);
 
         Ok(adapter)
     }

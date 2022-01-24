@@ -163,6 +163,26 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
     }
 }
 
+pub trait ToDataType {
+    fn to_data_type() -> DataTypePtr;
+}
+
+macro_rules! impl_to_data_type {
+    ([], $( { $S: ident, $TY: ident} ),*) => {
+        $(
+            paste::paste!{
+                impl ToDataType for $S {
+                    fn to_data_type() -> DataTypePtr {
+                        [<$TY Type>]::arc()
+                    }
+                }
+            }
+        )*
+    }
+}
+
+for_all_scalar_varints! { impl_to_data_type }
+
 pub fn wrap_nullable(data_type: &DataTypePtr) -> DataTypePtr {
     if !data_type.can_inside_nullable() {
         return data_type.clone();

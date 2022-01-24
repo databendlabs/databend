@@ -12,57 +12,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::LowerFunction;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions2;
+use crate::scalars::scalar_function2_test::ScalarFunction2Test;
 
 #[test]
 fn test_lower_function() -> Result<()> {
     let tests = vec![
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "lower-abc-passed",
-            nullable: false,
-            columns: vec![Series::new(vec!["Abc"]).into()],
-            expect: DataColumn::Constant(DataValue::String(Some("abc".as_bytes().to_vec())), 1),
+            columns: vec![Series::from_data(vec!["Abc"])],
+            expect: Series::from_data(vec!["abc"]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "lower-utf8-passed",
-            nullable: false,
-            columns: vec![Series::new(vec!["Dobrý den"]).into()],
-            expect: DataColumn::Constant(
-                DataValue::String(Some("dobrý den".as_bytes().to_vec())),
-                1,
-            ),
+            columns: vec![Series::from_data(vec!["Dobrý den"])],
+            expect: Series::from_data(vec!["dobrý den"]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "lcase-utf8-passed",
-            nullable: false,
-            columns: vec![Series::new(vec!["Dobrý den"]).into()],
-            expect: DataColumn::Constant(
-                DataValue::String(Some("dobrý den".as_bytes().to_vec())),
-                1,
-            ),
+            columns: vec![Series::from_data(vec!["Dobrý den"])],
+            expect: Series::from_data(vec!["dobrý den"]),
             error: "",
         },
     ];
 
-    test_scalar_functions(LowerFunction::try_create("lower")?, &tests)
+    test_scalar_functions2(LowerFunction::try_create("lower")?, &tests)
 }
 
 #[test]
 fn test_lower_nullable() -> Result<()> {
-    let tests = vec![ScalarFunctionTest {
+    let tests = vec![ScalarFunction2Test {
         name: "lcase-null-passed",
-        nullable: true,
-        columns: vec![Series::new(vec![Option::<Vec<u8>>::None]).into()],
-        expect: DataColumn::Constant(DataValue::String(None), 1),
+        columns: vec![Series::from_data(vec![Option::<Vec<u8>>::None])],
+        expect: Series::from_data(vec![Option::<Vec<u8>>::None]),
         error: "",
     }];
 
-    test_scalar_functions(LowerFunction::try_create("lcase")?, &tests)
+    test_scalar_functions2(LowerFunction::try_create("lcase")?, &tests)
 }

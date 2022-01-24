@@ -14,6 +14,7 @@
 
 mod iterator;
 mod mutable;
+mod transform;
 
 use std::sync::Arc;
 

@@ -141,8 +141,8 @@ where F: Fn(bool) -> bool {
 
     let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
 
-    let lhs = ColumnViewerIter::<Vu8>::create(lhs)?;
-    let rhs = ColumnViewerIter::<Vu8>::create(rhs)?;
+    let lhs = ColumnViewerIter::<Vu8>::try_create(lhs)?;
+    let rhs = ColumnViewerIter::<Vu8>::try_create(rhs)?;
 
     for (lhs_value, rhs_value) in lhs.zip(rhs) {
         let pattern = if let Some(pattern) = map.get(rhs_value) {
@@ -171,7 +171,7 @@ where F: Fn(bool) -> bool {
 #[inline]
 pub fn a_like_binary_scalar<F>(lhs: &ColumnRef, rhs: &[u8], op: F) -> Result<BooleanColumn>
 where F: Fn(bool) -> bool {
-    let iter = ColumnViewerIter::<Vu8>::create(lhs)?;
+    let iter = ColumnViewerIter::<Vu8>::try_create(lhs)?;
     let column = match check_pattern_type(rhs, false) {
         PatternType::OrdinalStr => BooleanColumn::from_iterator(iter.map(|x| x == rhs)),
         PatternType::EndOfPercent => {
