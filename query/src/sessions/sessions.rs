@@ -44,7 +44,7 @@ pub struct SessionManager {
     pub(in crate::sessions) discovery: Arc<ClusterDiscovery>,
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
     pub(in crate::sessions) user: Arc<UserApiProvider>,
-    pub(in crate::sessions) auth_manager: AuthMgr,
+    pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
 
     pub(in crate::sessions) max_sessions: usize,
@@ -62,7 +62,7 @@ impl SessionManager {
 
         // User manager and init the default users.
         let user = UserApiProvider::create_global(conf.clone()).await?;
-        let auth_manager = AuthMgr::create(conf.clone(), user.clone()).await?;
+        let auth_manager = Arc::new(AuthMgr::create(conf.clone(), user.clone()).await?);
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
 
         let max_active_sessions = conf.query.max_active_sessions as usize;

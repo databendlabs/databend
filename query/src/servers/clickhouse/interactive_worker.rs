@@ -99,7 +99,6 @@ impl ClickHouseSession for InteractiveWorker {
     }
 
     fn authenticate(&self, user: &str, password: &[u8], client_addr: &str) -> bool {
-        let user_manager = self.session.get_user_manager();
         // TODO: push async up to clickhouse server lib
         futures::executor::block_on(async move {
             // Here we don't handle the create context error.
@@ -113,10 +112,11 @@ impl ClickHouseSession for InteractiveWorker {
                 .session
                 .get_sessions_manager()
                 .get_auth_manager()
-                .auth(&credential);
+                .auth(&credential)
+                .await;
             match user_info_auth {
                 Ok(user_info) => {
-                    self.session.set_current_user(user_info.unwrap());
+                    self.session.set_current_user(user_info);
                     true
                 }
                 Err(failure) => {

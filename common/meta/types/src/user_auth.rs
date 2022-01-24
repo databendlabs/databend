@@ -171,7 +171,7 @@ impl AuthInfo {
                 hash_value: p,
                 hash_method: t,
             } => t.to_string(p),
-            AuthInfo::None | JWT_AUTH_STR => "".to_string(),
+            AuthInfo::None | AuthInfo::JWT => "".to_string(),
         }
     }
     pub fn get_password(&self) -> Option<Vec<u8>> {

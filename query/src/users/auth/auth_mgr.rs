@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use common_arrow::arrow::compute::temporal::hour;
-use common_clickhouse_srv::types::get_username_from_url;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
@@ -37,10 +35,14 @@ impl AuthMgr {
         })
     }
 
-    pub fn auth(self, credential: &Credential) -> Result<UserInfo> {
+    pub async fn auth(&self, credential: &Credential) -> Result<UserInfo> {
         match credential {
             Credential::JWT { token: t } => {
-                unimplemented!()
+                let user_name = match &self.jwt {
+                    Some(j) => j.get_user(t.as_str())?,
+                    None => return Err(ErrorCode::AuthenticateFailure("jwt auth not configured.")),
+                };
+                self.users.get_user(&self.tenant, &user_name, "%").await
             }
             Credential::Password {
                 name: n,
@@ -49,17 +51,26 @@ impl AuthMgr {
             } => {
                 let user = self
                     .users
-                    .get_user_with_client_ip(&self.tenant, name, &h.unwrap_or("%".to_string()))
+                    .get_user_with_client_ip(
+                        &self.tenant,
+                        n,
+                        h.as_ref().unwrap_or(&"%".to_string()),
+                    )
                     .await?;
                 match &user.auth_info {
-                    AuthInfo::None => Ok(true),
+                    AuthInfo::None => Ok(user),
                     AuthInfo::Password {
                         hash_value: h,
                         hash_method: t,
-                    } => Ok(*h == t.hash(&p)),
+                    } => {
+                        if *h == t.hash(&p) {
+                            Ok(user)
+                        } else {
+                            Err(ErrorCode::AuthenticateFailure("wrong password"))
+                        }
+                    }
                     _ => Err(ErrorCode::AuthenticateFailure("wrong auth type")),
                 }
-                Ok(user)
             }
         }
     }
