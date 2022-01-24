@@ -14,6 +14,7 @@
 //
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
@@ -48,8 +49,13 @@ impl FuseTable {
         // TODO : configuration of backoff strategy
         let mut backoff = ExponentialBackoff::default();
         let tid = self.table_info.ident.table_id;
+
         let mut tbl = self;
         let mut latest: Arc<dyn Table>;
+
+        let mut times = 0;
+        let begin = Instant::now();
+
         loop {
             match tbl
                 .try_commit(ctx.as_ref(), &operation_log, overwrite)
@@ -73,16 +79,19 @@ impl FuseTable {
                             latest = catalog.get_table_by_info(&table_info)?;
                             tbl = latest.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
                                 ErrorCode::LogicalError(format!(
-                                    "unexpected engine, assuming FUSE, but got {} ",
+                                    "unexpected engine, assuming FUSE, but got {}",
                                     latest.engine()
                                 ))
                             })?;
+                            times += 1;
                             continue;
                         }
                         None => {
-                            break Err(ErrorCode::OCCRetryFailure(
-                                "Can not fulfill the tx after retries, tx aborted.",
-                            ));
+                            break Err(ErrorCode::OCCRetryFailure(format!(
+                                "Can not fulfill the tx after retries({} times, {} ms), aborted",
+                                times,
+                                Instant::now().duration_since(begin).as_millis(),
+                            )));
                         }
                     }
                 }
