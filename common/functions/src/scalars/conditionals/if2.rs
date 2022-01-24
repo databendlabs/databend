@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues2::Series;
+use common_datavalues2::TypeID;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
+use common_exception::ErrorCode;
+use common_datavalues2::with_match_primitive_type;
 use crate::scalars::{Function2, Function2Description};
 use crate::scalars::function_factory::FunctionFeatures;
 
@@ -40,16 +45,74 @@ impl Function2 for IfFunction2 {
         "IfFunction"
     }
 
-    fn get_monotonicity(&self, _args: &[crate::scalars::Monotonicity]) -> common_exception::Result<crate::scalars::Monotonicity> {
-        unimplemented!()
+    fn return_type(&self, args: &[&common_datavalues2::DataTypePtr]) -> Result<DataTypePtr> {
+        let dt = UInt8Type::arc();
+        Ok(dt)
     }
 
-    fn return_type(&self, args: &[&common_datavalues2::DataTypePtr]) -> common_exception::Result<common_datavalues2::DataTypePtr> {
-        unimplemented!()
+    fn eval(&self, columns: &common_datavalues2::ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        let predicate = columns[0].column();
+        let lhs = columns[1].column();
+        let rhs = columns[2].column();
+
+        if lhs.data_type() != rhs.data_type() {
+            return Err(ErrorCode::BadDataValueType(
+                "lhs and rhs must have the same data type".to_string(),
+            ));
+        }
+
+        let type_id = lhs.data_type_id();
+        
+        match type_id {
+            TypeID::UInt8 => {
+                let predicate_wrapper = ColumnViewer::<bool>::create(predicate)?;
+                let lhs_wrapper = ColumnViewer::<u8>::create(lhs)?;
+                let rhs_wrapper = ColumnViewer::<u8>::create(rhs)?;
+                let size = lhs_wrapper.len();
+        
+                let mut builder = NullableColumnBuilder::<u8>::with_capacity(size);
+        
+                for row in 0..size {
+                    let predicate = predicate_wrapper.value(row);
+                    let valid = predicate_wrapper.valid_at(row);
+                     if predicate {
+                        builder.append(lhs_wrapper.value(row), valid & lhs_wrapper.valid_at(row));
+                    } else {
+                        builder.append(rhs_wrapper.value(row), valid & rhs_wrapper.valid_at(row));
+                    };
+                }
+        
+                Ok(builder.build(size))
+            },
+            _ => {
+                unimplemented!()
+            }
+        }
+        // with_match_primitive_type!(type_id, |$T| {
+        //     let lhs_wrapper = ColumnViewer::<$T>::create(lhs)?;
+        //     let rhs_wrapper = ColumnViewer::<$T>::create(rhs)?;
+        //     let size = lhs_wrapper.len();
+
+        //     let mut builder = NullableColumnBuilder::<$T>::with_capacity(size);
+
+        //     for row in 0..size {
+        //         let valid = validity_predict.get_bit(row);
+        //         if bools.get_bit(row) {
+        //             builder.append(lhs_wrapper.value(row), valid & lhs_wrapper.valid_at(row));
+        //         } else {
+        //             builder.append(rhs_wrapper.value(row), valid & rhs_wrapper.valid_at(row));
+        //         };
+        //     }
+
+        //     Ok(builder.build(size))
+        // }, {
+
+        // });
+        // unimplemented!()
     }
 
-    fn eval(&self, _columns: &common_datavalues2::ColumnsWithField, _input_rows: usize) -> common_exception::Result<common_datavalues2::ColumnRef> {
-        unimplemented!()
+    fn passthrough_null(&self) -> bool {
+        false
     }
 }
 

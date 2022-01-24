@@ -21,16 +21,28 @@ use crate::scalars::scalar_function2_test::ScalarFunction2Test;
 
 #[test]
 fn test_if_function() -> Result<()> {
-    let tests = vec![ScalarFunction2Test {
+    let tests = vec![
+        ScalarFunction2Test {
         name: "if-passed",
         columns: vec![
             Series::from_data([true, false, false, true]).into(),
-            Series::from_data([1i32, 2, 3, 4]).into(),
-            Series::from_data([2.5_f64, 2.5_f64, 2.5_f64, 2.5_f64]).into(),
+            Series::from_data([1u8, 2, 3, 4]).into(),
+            Series::from_data([2u8, 3u8, 2u8, 2u8]).into(),
         ],
-        expect: Series::from_data(vec![1f64, 2.5, 2.5, 4f64]).into(),
+        expect: Series::from_data(vec![Some(1u8), Some(3), Some(2), Some(4u8)]).into(),
         error: "",
-    }];
+    },
+    ScalarFunction2Test {
+        name: "if-null-in-predicate",
+        columns: vec![
+            Series::from_data([Some(true), None, Some(false), Some(true)]).into(),
+            Series::from_data([1u8, 2, 3, 4]).into(),
+            Series::from_data([2u8, 3u8, 2u8, 2u8]).into(),
+        ],
+        expect: Series::from_data(vec![Some(1u8), None, Some(2), Some(4u8)]).into(),
+        error: "",
+    },
+    ];
 
     test_scalar_functions2(IfFunction2::try_create("if")?, &tests)
 }
