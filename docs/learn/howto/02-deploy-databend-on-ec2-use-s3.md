@@ -74,7 +74,8 @@ wget --no-check-certificate https://repo.databend.rs/t_ontime/t_ontime.csv.zip
 
 unzip t_ontime.csv.zip
 
-ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -H \"csv_header:0\" -H \"field_delimitor:'\t'\"  -F  \"upload=@{}\"  -XPUT http://localhost:8001/v1/streaming_load |bash
+ls *.csv|xargs -I{}  curl -H "insert_sql:insert into ontime format CSV" -H "csv_header:0" -H "field_delimitor:'\t'"  -F  "upload=@{}"  -XPUT http://localhost:8001/v1/streaming_load
+
 ```
 
 ## 4. Queries
@@ -112,4 +113,4 @@ Benchmark Queries gist
 ## Learn more
 
 - [Databend CLI](/user/cli/)
-- [Deploy Databend](/user/self-hosted/get-started/deploy-databend)
+- [Get Started](/user)

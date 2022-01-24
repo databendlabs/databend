@@ -122,7 +122,9 @@ const config = {
                         ]
                     },
                     {
-                        to: '/learn/', label: 'Learn', position: 'left'
+                        to: '/learn/category/howto', label: 'Learn', position: 'left', items:[
+                            {label: 'Howto', to: '/learn/category/howto'},
+                        ]
                     },
                     {
                         label: 'Dev Guide', position: 'left', items: [
