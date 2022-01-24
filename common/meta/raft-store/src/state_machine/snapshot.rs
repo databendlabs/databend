@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_raft::SnapshotMeta;
+use common_meta_sled_store::openraft;
+use openraft::SnapshotMeta;
 use serde::Deserialize;
 use serde::Serialize;
 

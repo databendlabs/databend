@@ -14,12 +14,11 @@
 
 use std::collections::BTreeSet;
 
-use async_raft::error::ResponseError;
-use async_raft::raft::ClientWriteRequest;
-use async_raft::ChangeConfigError;
-use async_raft::ClientWriteError;
 use common_meta_api::KVApi;
 use common_meta_api::MetaApi;
+use common_meta_sled_store::openraft;
+use common_meta_sled_store::openraft::error::ClientWriteError;
+use common_meta_sled_store::openraft::raft::EntryPayload;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::ForwardRequest;
@@ -28,9 +27,9 @@ use common_meta_types::LogEntry;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_tracing::tracing;
+use openraft::raft::ClientWriteRequest;
 
 use crate::errors::ForwardToLeader;
-use crate::errors::InvalidMembership;
 use crate::errors::MetaError;
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
@@ -49,11 +48,13 @@ impl<'a> MetaLeader<'a> {
         MetaLeader { meta_node }
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self, req), fields(target=%req.forward_to_leader))]
     pub async fn handle_forwardable_req(
         &self,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, MetaError> {
+        tracing::debug!("handle_forwardable_req: {:?}", req);
+
         match req.body {
             ForwardRequestBody::Join(join_req) => {
                 self.join(join_req).await?;
@@ -113,12 +114,17 @@ impl<'a> MetaLeader<'a> {
     pub async fn join(&self, req: JoinRequest) -> Result<(), MetaError> {
         let node_id = req.node_id;
         let addr = req.address;
-        let metrics = self.meta_node.metrics_rx.borrow().clone();
-        let mut membership = metrics.membership_config.members.clone();
+        let metrics = self.meta_node.raft.metrics().borrow().clone();
+        let membership = metrics.membership_config.membership.clone();
 
         if membership.contains(&node_id) {
             return Ok(());
         }
+
+        // TODO(xp): deal with joint config
+        assert!(membership.get_ith_config(1).is_none());
+
+        let mut membership = membership.get_ith_config(0).unwrap().clone();
 
         membership.insert(node_id);
 
@@ -140,7 +146,11 @@ impl<'a> MetaLeader<'a> {
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn change_membership(&self, membership: BTreeSet<NodeId>) -> Result<(), MetaError> {
-        let res = self.meta_node.raft.change_membership(membership).await;
+        let res = self
+            .meta_node
+            .raft
+            .change_membership(membership, true)
+            .await;
 
         let err = match res {
             Ok(_) => return Ok(()),
@@ -148,26 +158,14 @@ impl<'a> MetaLeader<'a> {
         };
 
         match err {
-            ResponseError::ChangeConfig(e) => match e {
-                // TODO(xp): enable MetaNode::RaftError when RaftError impl Serialized
-                ChangeConfigError::RaftError(raft_error) => {
-                    Err(MetaError::UnknownError(raft_error.to_string()))
-                }
-                ChangeConfigError::ConfigChangeInProgress => {
-                    Err(MetaError::MembershipChangeInProgress)
-                }
-                ChangeConfigError::InoperableConfig => {
-                    Err(MetaError::InvalidMembership(InvalidMembership {}))
-                }
-                ChangeConfigError::NodeNotLeader(leader) => {
-                    Err(MetaError::ForwardToLeader(ForwardToLeader { leader }))
-                }
-                ChangeConfigError::Noop => Ok(()),
-                _ => Err(MetaError::UnknownError("uncovered error".to_string())),
-            },
+            ClientWriteError::ChangeMembershipError(e) => Err(MetaError::ChangeMembershipError(e)),
             // TODO(xp): enable MetaNode::RaftError when RaftError impl Serialized
-            ResponseError::Raft(raft_error) => Err(MetaError::UnknownError(raft_error.to_string())),
-            _ => Err(MetaError::UnknownError("uncovered error".to_string())),
+            ClientWriteError::Fatal(fatal) => Err(MetaError::UnknownError(fatal.to_string())),
+            ClientWriteError::ForwardToLeader(to_leader) => {
+                Err(MetaError::ForwardToLeader(ForwardToLeader {
+                    leader: to_leader.leader_id,
+                }))
+            }
         }
     }
 
@@ -181,7 +179,7 @@ impl<'a> MetaLeader<'a> {
         let write_rst = self
             .meta_node
             .raft
-            .client_write(ClientWriteRequest::new(entry))
+            .client_write(ClientWriteRequest::new(EntryPayload::Normal(entry)))
             .await;
 
         tracing::debug!("raft.client_write rst: {:?}", write_rst);
@@ -190,12 +188,15 @@ impl<'a> MetaLeader<'a> {
             Ok(resp) => Ok(resp.data),
             Err(cli_write_err) => match cli_write_err {
                 // fatal error
-                ClientWriteError::RaftError(raft_err) => {
-                    Err(MetaError::UnknownError(raft_err.to_string()))
-                }
+                ClientWriteError::Fatal(fatal) => Err(MetaError::UnknownError(fatal.to_string())),
                 // retryable error
-                ClientWriteError::ForwardToLeader(_, leader) => {
-                    Err(MetaError::ForwardToLeader(ForwardToLeader { leader }))
+                ClientWriteError::ForwardToLeader(to_leader) => {
+                    Err(MetaError::ForwardToLeader(ForwardToLeader {
+                        leader: to_leader.leader_id,
+                    }))
+                }
+                ClientWriteError::ChangeMembershipError(_) => {
+                    unreachable!("there should not be a ChangeMembershipError for client_write")
                 }
             },
         }

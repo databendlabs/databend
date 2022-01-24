@@ -20,7 +20,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::user_grant::UserGrantSet;
-use crate::PasswordType;
+use crate::AuthInfo;
 use crate::UserIdentity;
 use crate::UserQuota;
 
@@ -31,9 +31,7 @@ pub struct UserInfo {
 
     pub hostname: String,
 
-    pub password: Vec<u8>,
-
-    pub password_type: PasswordType,
+    pub auth_info: AuthInfo,
 
     pub grants: UserGrantSet,
 
@@ -41,12 +39,7 @@ pub struct UserInfo {
 }
 
 impl UserInfo {
-    pub fn new(
-        name: String,
-        hostname: String,
-        password: Vec<u8>,
-        password_type: PasswordType,
-    ) -> Self {
+    pub fn new(name: String, hostname: String, auth_info: AuthInfo) -> Self {
         // Default is no privileges.
         let grants = UserGrantSet::default();
         let quota = UserQuota::no_limit();
@@ -54,11 +47,14 @@ impl UserInfo {
         UserInfo {
             name,
             hostname,
-            password,
-            password_type,
+            auth_info,
             grants,
             quota,
         }
+    }
+
+    pub fn new_no_auth(name: String, hostname: String) -> Self {
+        UserInfo::new(name, hostname, AuthInfo::None)
     }
 
     pub fn identity(&self) -> UserIdentity {

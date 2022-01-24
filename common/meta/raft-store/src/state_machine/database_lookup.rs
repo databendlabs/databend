@@ -13,12 +13,8 @@
 // limitations under the License.
 
 use std::fmt;
-use std::io::Cursor;
 
-use bytes::BytesMut;
 use common_exception::ErrorCode;
-use common_io::prelude::BinaryRead;
-use common_io::prelude::BinaryWriteBuf;
 use common_meta_sled_store::sled::IVec;
 use common_meta_sled_store::SledOrderedSerde;
 use serde::Deserialize;
@@ -49,19 +45,13 @@ impl DatabaseLookupKey {
 
 impl SledOrderedSerde for DatabaseLookupKey {
     fn ser(&self) -> Result<IVec, ErrorCode> {
-        let mut buf = BytesMut::new();
-
-        buf.write_string(format!(
-            "{}{}{}",
-            self.tenant, self.delimiter, self.database_name
-        ))?;
-        Ok(IVec::from(buf.to_vec()))
+        let k = format!("{}{}{}", self.tenant, self.delimiter, self.database_name);
+        Ok(IVec::from(k.as_str()))
     }
 
     fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
     where Self: Sized {
-        let mut buf_read = Cursor::new(v);
-        let db_lookup_key = buf_read.read_string()?;
+        let db_lookup_key = String::from_utf8(v.as_ref().to_vec())?;
 
         let db_lookup_key: Vec<&str> = db_lookup_key
             .split(DB_LOOKUP_KEY_DELIMITER as char)
@@ -91,20 +81,5 @@ pub struct DatabaseLookupValue(pub u64);
 impl fmt::Display for DatabaseLookupValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use common_meta_sled_store::SledOrderedSerde;
-
-    use crate::state_machine::DatabaseLookupKey;
-
-    #[test]
-    fn test_db_lookup_key_serde() {
-        let k = DatabaseLookupKey::new("tenant1".to_string(), "db1".to_string());
-        let ser_k = k.ser().unwrap();
-        let de_k = DatabaseLookupKey::de(ser_k).unwrap();
-        assert_eq!(k, de_k);
     }
 }

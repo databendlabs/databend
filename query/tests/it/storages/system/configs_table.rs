@@ -76,7 +76,7 @@ async fn test_configs_table() -> Result<()> {
         "| mysql_handler_host                   | 127.0.0.1        | query   |             |",
         "| mysql_handler_port                   | 3307             | query   |             |",
         "| num_cpus                             | 8                | query   |             |",
-        "| proxy_mode                           | false            | query   |             |",
+        "| management_mode                      | false            | query   |             |",
         "| rpc_tls_meta_server_root_ca_cert     |                  | meta    |             |",
         "| rpc_tls_meta_service_domain_name     | localhost        | meta    |             |",
         "| rpc_tls_query_server_root_ca_cert    |                  | query   |             |",

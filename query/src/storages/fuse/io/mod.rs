@@ -19,6 +19,7 @@ mod locations;
 mod meta_readers;
 
 pub use block_reader::BlockReader;
+pub use block_stream_writer::BlockRegulator;
 pub use block_stream_writer::BlockStreamWriter;
 pub use block_stream_writer::SegmentInfoStream;
 pub use locations::gen_segment_info_location;

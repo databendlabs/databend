@@ -14,8 +14,9 @@
 
 use common_base::tokio;
 use common_exception::Result;
+use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
-use common_meta_types::PasswordType;
+use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
@@ -36,15 +37,20 @@ async fn test_user_manager() -> Result<()> {
     let pwd = "test-pwd";
     let user_mgr = UserApiProvider::create_global(config).await?;
 
+    let auth_info = AuthInfo::Password {
+        hash_value: Vec::from(pwd),
+        hash_method: PasswordHashMethod::PlainText,
+    };
+
     // add user hostname.
     {
-        let user_info = User::new(user, hostname, pwd, PasswordType::PlainText);
+        let user_info = User::new(user, hostname, auth_info.clone());
         user_mgr.add_user(tenant, user_info.into()).await?;
     }
 
     // add user hostname2.
     {
-        let user_info = User::new(user, hostname2, pwd, PasswordType::PlainText);
+        let user_info = User::new(user, hostname2, auth_info.clone());
         user_mgr.add_user(tenant, user_info.into()).await?;
     }
 
@@ -52,21 +58,21 @@ async fn test_user_manager() -> Result<()> {
     {
         let users = user_mgr.get_users(tenant).await?;
         assert_eq!(2, users.len());
-        assert_eq!(pwd.as_bytes(), users[0].password);
+        assert_eq!(pwd.as_bytes(), users[0].auth_info.get_password().unwrap());
     }
 
     // get user hostname.
     {
         let user = user_mgr.get_user(tenant, user, hostname).await?;
         assert_eq!(hostname, user.hostname);
-        assert_eq!(pwd.as_bytes(), user.password);
+        assert_eq!(pwd.as_bytes(), user.auth_info.get_password().unwrap());
     }
 
     // get user hostname2.
     {
         let user = user_mgr.get_user(tenant, user, hostname2).await?;
         assert_eq!(hostname2, user.hostname);
-        assert_eq!(pwd.as_bytes(), user.password);
+        assert_eq!(pwd.as_bytes(), user.auth_info.get_password().unwrap());
     }
 
     // drop.
@@ -90,7 +96,7 @@ async fn test_user_manager() -> Result<()> {
 
     // grant privileges
     {
-        let user_info = User::new(user, hostname, pwd, PasswordType::PlainText);
+        let user_info = User::new(user, hostname, auth_info.clone());
         user_mgr.add_user(tenant, user_info.into()).await?;
         let old_user = user_mgr.get_user(tenant, user, hostname).await?;
         assert_eq!(old_user.grants, UserGrantSet::empty());
@@ -118,7 +124,7 @@ async fn test_user_manager() -> Result<()> {
 
     // revoke privileges
     {
-        let user_info = User::new(user, hostname, pwd, PasswordType::PlainText);
+        let user_info = User::new(user, hostname, auth_info.clone());
         user_mgr.add_user(tenant, user_info.into()).await?;
         user_mgr
             .grant_user_privileges(
@@ -151,47 +157,52 @@ async fn test_user_manager() -> Result<()> {
         let user = "test";
         let hostname = "localhost";
         let pwd = "test";
-        let user_info = User::new(user, hostname, pwd, PasswordType::PlainText);
+        let auth_info = AuthInfo::Password {
+            hash_value: Vec::from(pwd),
+            hash_method: PasswordHashMethod::PlainText,
+        };
+        let user_info = User::new(user, hostname, auth_info.clone());
         user_mgr.add_user(tenant, user_info.into()).await?;
 
         let old_user = user_mgr.get_user(tenant, user, hostname).await?;
-        assert_eq!(old_user.password, Vec::from(pwd));
+        assert_eq!(old_user.auth_info.get_password().unwrap(), Vec::from(pwd));
 
+        // alter both password & password_type
         let new_pwd = "test1";
+        let auth_info = AuthInfo::Password {
+            hash_value: Vec::from(new_pwd),
+            hash_method: PasswordHashMethod::Sha256,
+        };
         user_mgr
-            .update_user(
-                tenant,
-                user,
-                hostname,
-                Some(PasswordType::Sha256),
-                Some(Vec::from(new_pwd)),
-            )
+            .update_user(tenant, user, hostname, auth_info)
             .await?;
         let new_user = user_mgr.get_user(tenant, user, hostname).await?;
-        assert_eq!(new_user.password, Vec::from(new_pwd));
-        assert_eq!(new_user.password_type, PasswordType::Sha256);
+        assert_eq!(
+            new_user.auth_info.get_password().unwrap(),
+            Vec::from(new_pwd)
+        );
+        assert_eq!(
+            new_user.auth_info.get_password_type().unwrap(),
+            PasswordHashMethod::Sha256
+        );
 
+        // alter password only
         let new_new_pwd = "test2";
+        let auth_info = AuthInfo::Password {
+            hash_value: Vec::from(new_new_pwd),
+            hash_method: PasswordHashMethod::Sha256,
+        };
         user_mgr
-            .update_user(
-                tenant,
-                user,
-                hostname,
-                Some(PasswordType::Sha256),
-                Some(Vec::from(new_new_pwd)),
-            )
+            .update_user(tenant, user, hostname, auth_info.clone())
             .await?;
         let new_new_user = user_mgr.get_user(tenant, user, hostname).await?;
-        assert_eq!(new_new_user.password, Vec::from(new_new_pwd));
+        assert_eq!(
+            new_new_user.auth_info.get_password().unwrap(),
+            Vec::from(new_new_pwd)
+        );
 
         let not_exist = user_mgr
-            .update_user(
-                tenant,
-                "user",
-                hostname,
-                Some(PasswordType::Sha256),
-                Some(Vec::from(new_new_pwd)),
-            )
+            .update_user(tenant, "user", hostname, auth_info.clone())
             .await;
         // ErrorCode::UnknownUser
         assert_eq!(not_exist.err().unwrap().code(), 2201)

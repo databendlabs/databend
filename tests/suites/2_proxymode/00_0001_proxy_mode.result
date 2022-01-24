@@ -1,4 +1,0 @@
-tenant1_db	CREATE DATABASE `tenant1_db`
-tenant1_tbl	CREATE TABLE `tenant1_tbl` (\n  `a` Int32,\n) ENGINE=FUSE
-a	Int32	YES
-xy	x, y	(x+y)/3	

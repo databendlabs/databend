@@ -19,7 +19,6 @@ use common_meta_types::Compression;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
 use common_meta_types::Format;
-use common_meta_types::PasswordType;
 use common_meta_types::StageParams;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
@@ -27,6 +26,7 @@ use common_meta_types::UserPrivilegeType;
 use common_planners::Optimization;
 use databend_query::sql::statements::DfAlterUDF;
 use databend_query::sql::statements::DfAlterUser;
+use databend_query::sql::statements::DfAuthOption;
 use databend_query::sql::statements::DfCopy;
 use databend_query::sql::statements::DfCreateDatabase;
 use databend_query::sql::statements::DfCreateStage;
@@ -49,7 +49,6 @@ use databend_query::sql::statements::DfShowCreateTable;
 use databend_query::sql::statements::DfShowDatabases;
 use databend_query::sql::statements::DfShowGrants;
 use databend_query::sql::statements::DfShowTables;
-use databend_query::sql::statements::DfShowUDF;
 use databend_query::sql::statements::DfTruncateTable;
 use databend_query::sql::statements::DfUseDatabase;
 use databend_query::sql::statements::DfUseTenant;
@@ -72,14 +71,27 @@ fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
 }
 
 fn expect_parse_err(sql: &str, expected: String) -> Result<()> {
-    let err = DfParser::parse_sql(sql).unwrap_err();
-    assert_eq!(err.message(), expected);
+    let result = DfParser::parse_sql(sql);
+    assert!(result.is_err(), "'{}' SHOULD BE '{}'", sql, expected);
+    assert_eq!(
+        result.unwrap_err().message(),
+        expected,
+        "'{}' SHOULD BE '{}'",
+        sql,
+        expected
+    );
     Ok(())
 }
 
 fn expect_parse_err_contains(sql: &str, expected: String) -> Result<()> {
-    let err = DfParser::parse_sql(sql).unwrap_err();
-    assert!(err.message().contains(&expected));
+    let result = DfParser::parse_sql(sql);
+    assert!(result.is_err(), "'{}' SHOULD CONTAINS '{}'", sql, expected);
+    assert!(
+        result.unwrap_err().message().contains(&expected),
+        "'{}' SHOULD CONTAINS '{}'",
+        sql,
+        expected
+    );
     Ok(())
 }
 
@@ -562,11 +574,7 @@ fn copy_test() -> Result<()> {
                 "csv_header".into() => "1".into(),
                 "field_delimitor".into() => ",".into(),
          }
-        }
-        ),
-
-
-
+        }),
     )?;
 
     Ok(())
@@ -678,115 +686,70 @@ fn show_create_test() -> Result<()> {
     Ok(())
 }
 
+fn create_user_auth_test(
+    auth_clause: &str,
+    auth_type: Option<String>,
+    auth_string: Option<String>,
+) -> Result<()> {
+    expect_parse_ok(
+        &format!("CREATE USER 'test'@'localhost' {}", auth_clause),
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            auth_options: DfAuthOption {
+                auth_type,
+                by_value: auth_string,
+            },
+        }),
+    )
+}
+
+fn create_user_auth_test_normal(plugin_name: &str) -> Result<()> {
+    let password = "password";
+    let sql = format!("IDENTIFIED with {} BY '{}'", plugin_name, password);
+    create_user_auth_test(
+        &sql,
+        Some(plugin_name.to_string()),
+        Some(password.to_string()),
+    )
+}
+
 #[test]
 fn create_user_test() -> Result<()> {
-    expect_parse_ok(
-        "CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'",
-        DfStatement::CreateUser(DfCreateUser {
-            if_not_exists: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            password_type: PasswordType::Sha256,
-            password: String::from("password"),
-        }),
-    )?;
+    // normal
+    create_user_auth_test_normal("plaintext_password")?;
+    create_user_auth_test_normal("sha256_password")?;
+    create_user_auth_test_normal("double_sha1_password")?;
 
-    expect_parse_ok(
-        "CREATE USER 'test'@'localhost' IDENTIFIED WITH plaintext_password BY 'password'",
-        DfStatement::CreateUser(DfCreateUser {
-            if_not_exists: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            password_type: PasswordType::PlainText,
-            password: String::from("password"),
-        }),
+    create_user_auth_test(
+        "IDENTIFIED BY 'password'",
+        None,
+        Some("password".to_string()),
     )?;
-
-    expect_parse_ok(
-        "CREATE USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY 'password'",
-        DfStatement::CreateUser(DfCreateUser {
-            if_not_exists: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            password_type: PasswordType::Sha256,
-            password: String::from("password"),
-        }),
+    create_user_auth_test(
+        "IDENTIFIED WITH no_password",
+        Some("no_password".to_string()),
+        None,
     )?;
+    create_user_auth_test("NOT IDENTIFIED", Some("no_password".to_string()), None)?;
+    create_user_auth_test("", None, None)?;
 
+    // username contains '@'
     expect_parse_ok(
-        "CREATE USER 'test'@'localhost' IDENTIFIED WITH double_sha1_password BY 'password'",
-        DfStatement::CreateUser(DfCreateUser {
-            if_not_exists: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            password_type: PasswordType::DoubleSha1,
-            password: String::from("password"),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "CREATE USER 'test'@'localhost' IDENTIFIED WITH no_password",
-        DfStatement::CreateUser(DfCreateUser {
-            if_not_exists: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            password_type: PasswordType::None,
-            password: String::from(""),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "CREATE USER IF NOT EXISTS 'test'@'localhost' IDENTIFIED WITH sha256_password BY 'password'",
-        DfStatement::CreateUser(DfCreateUser {
-            if_not_exists: true,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            password_type: PasswordType::Sha256,
-            password: String::from("password"),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "CREATE USER 'test@localhost' IDENTIFIED WITH sha256_password BY 'password'",
+        "CREATE USER 'test@localhost'",
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
             name: String::from("test@localhost"),
             hostname: String::from("%"),
-            password_type: PasswordType::Sha256,
-            password: String::from("password"),
+            auth_options: DfAuthOption::default(),
         }),
     )?;
 
-    expect_parse_ok(
-        "CREATE USER 'test'@'localhost' NOT IDENTIFIED",
-        DfStatement::CreateUser(DfCreateUser {
-            if_not_exists: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            password_type: PasswordType::None,
-            password: String::from(""),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "CREATE USER 'test'@'localhost'",
-        DfStatement::CreateUser(DfCreateUser {
-            if_not_exists: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            password_type: PasswordType::None,
-            password: String::from(""),
-        }),
-    )?;
-
+    // errors
     expect_parse_err(
         "CREATE USER 'test'@'localhost' IDENTIFIED WITH no_password BY 'password'",
         String::from("sql parser error: Expected end of statement, found: BY"),
-    )?;
-
-    expect_parse_err(
-        "CREATE USER 'test'@'localhost' IDENTIFIED WITH sha256_password",
-        String::from("sql parser error: Expected keyword BY"),
     )?;
 
     expect_parse_err(
@@ -794,25 +757,57 @@ fn create_user_test() -> Result<()> {
         String::from("sql parser error: Expected literal string, found: EOF"),
     )?;
 
-    expect_parse_err(
-        "CREATE USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY ''",
-        String::from("sql parser error: Missing password"),
-    )?;
     Ok(())
 }
 
-#[test]
-fn alter_user_test() -> Result<()> {
+fn alter_user_auth_test(
+    auth_clause: &str,
+    auth_type: Option<String>,
+    auth_string: Option<String>,
+) -> Result<()> {
     expect_parse_ok(
-        "ALTER USER 'test'@'localhost' IDENTIFIED BY 'password'",
+        &format!("ALTER USER 'test'@'localhost' {}", auth_clause),
         DfStatement::AlterUser(DfAlterUser {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_password_type: PasswordType::Sha256,
-            new_password: String::from("password"),
+            auth_option: DfAuthOption {
+                auth_type,
+                by_value: auth_string,
+            },
         }),
+    )
+}
+
+fn alter_user_auth_test_normal(plugin_name: &str) -> Result<()> {
+    let password = "password";
+    let sql = format!("IDENTIFIED with {} BY '{}'", plugin_name, password);
+    alter_user_auth_test(
+        &sql,
+        Some(plugin_name.to_string()),
+        Some(password.to_string()),
+    )
+}
+
+#[test]
+fn alter_user_test() -> Result<()> {
+    let password = "password".to_string();
+
+    alter_user_auth_test_normal("plaintext_password")?;
+    alter_user_auth_test_normal("sha256_password")?;
+    alter_user_auth_test_normal("double_sha1_password")?;
+
+    alter_user_auth_test(
+        "IDENTIFIED WITH no_password",
+        Some("no_password".to_string()),
+        None,
     )?;
+
+    alter_user_auth_test("IDENTIFIED BY 'password'", None, Some(password.clone()))?;
+
+    alter_user_auth_test("NOT IDENTIFIED", Some("no_password".to_string()), None)?;
+
+    alter_user_auth_test("", None, None)?;
 
     expect_parse_ok(
         "ALTER USER USER() IDENTIFIED BY 'password'",
@@ -820,52 +815,10 @@ fn alter_user_test() -> Result<()> {
             if_current_user: true,
             name: String::from(""),
             hostname: String::from(""),
-            new_password_type: PasswordType::Sha256,
-            new_password: String::from("password"),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "ALTER USER 'test'@'localhost' IDENTIFIED WITH plaintext_password BY 'password'",
-        DfStatement::AlterUser(DfAlterUser {
-            if_current_user: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            new_password_type: PasswordType::PlainText,
-            new_password: String::from("password"),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "ALTER USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY 'password'",
-        DfStatement::AlterUser(DfAlterUser {
-            if_current_user: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            new_password_type: PasswordType::Sha256,
-            new_password: String::from("password"),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "ALTER USER 'test'@'localhost' IDENTIFIED WITH double_sha1_password BY 'password'",
-        DfStatement::AlterUser(DfAlterUser {
-            if_current_user: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            new_password_type: PasswordType::DoubleSha1,
-            new_password: String::from("password"),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "ALTER USER 'test'@'localhost' IDENTIFIED WITH no_password",
-        DfStatement::AlterUser(DfAlterUser {
-            if_current_user: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            new_password_type: PasswordType::None,
-            new_password: String::from(""),
+            auth_option: DfAuthOption {
+                auth_type: None,
+                by_value: Some(password),
+            },
         }),
     )?;
 
@@ -875,30 +828,10 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test@localhost"),
             hostname: String::from("%"),
-            new_password_type: PasswordType::Sha256,
-            new_password: String::from("password"),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "ALTER USER 'test'@'localhost' NOT IDENTIFIED",
-        DfStatement::AlterUser(DfAlterUser {
-            if_current_user: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            new_password_type: PasswordType::None,
-            new_password: String::from(""),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "ALTER USER 'test'@'localhost'",
-        DfStatement::AlterUser(DfAlterUser {
-            if_current_user: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
-            new_password_type: PasswordType::None,
-            new_password: String::from(""),
+            auth_option: DfAuthOption {
+                auth_type: Some("sha256_password".to_string()),
+                by_value: Some("password".to_string()),
+            },
         }),
     )?;
 
@@ -908,19 +841,10 @@ fn alter_user_test() -> Result<()> {
     )?;
 
     expect_parse_err(
-        "ALTER USER 'test'@'localhost' IDENTIFIED WITH sha256_password",
-        String::from("sql parser error: Expected keyword BY"),
-    )?;
-
-    expect_parse_err(
         "ALTER USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY",
         String::from("sql parser error: Expected literal string, found: EOF"),
     )?;
 
-    expect_parse_err(
-        "ALTER USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY ''",
-        String::from("sql parser error: Missing password"),
-    )?;
     Ok(())
 }
 
@@ -1476,18 +1400,6 @@ fn test_drop_udf() -> Result<()> {
         "DROP FUNCTION IF EXISTS test_udf",
         DfStatement::DropUDF(DfDropUDF {
             if_exists: true,
-            udf_name: "test_udf".to_string(),
-        }),
-    )?;
-
-    Ok(())
-}
-
-#[test]
-fn test_show_udf() -> Result<()> {
-    expect_parse_ok(
-        "SHOW FUNCTION test_udf",
-        DfStatement::ShowUDF(DfShowUDF {
             udf_name: "test_udf".to_string(),
         }),
     )?;

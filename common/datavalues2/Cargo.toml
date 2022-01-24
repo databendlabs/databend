@@ -1,0 +1,34 @@
+[package]
+name = "common-datavalues2"
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+doctest = false
+test = false
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+common-arrow = { path = "../arrow" }
+common-exception = { path = "../exception" }
+common-io = { path = "../io" }
+common-macros = { path = "../macros" }
+common-mem-allocator = { path = "../mem-allocator" }
+
+# Github dependencies
+
+# Crates.io dependencies
+num = "0.4.0"
+serde = { version = "1.0.133", features = ["derive"] }
+lexical-core = "0.8.2"
+chrono = "0.4.19"
+chrono-tz = "0.6.1"
+dyn-clone = "1.0.4"
+typetag = "0.1.8"
+itertools = "0.10.3"
+
+[dev-dependencies]
+pretty_assertions = "1.0.0"

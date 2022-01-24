@@ -17,11 +17,6 @@ use std::convert::TryInto;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use async_raft::raft::Entry;
-use async_raft::raft::EntryNormal;
-use async_raft::raft::EntryPayload;
-use async_raft::raft::MembershipConfig;
-use async_raft::LogId;
 use common_base::tokio;
 use common_exception::ErrorCode;
 use common_meta_api::KVApi;
@@ -30,6 +25,7 @@ use common_meta_raft_store::state_machine::testing::pretty_snapshot_iter;
 use common_meta_raft_store::state_machine::testing::snapshot_logs;
 use common_meta_raft_store::state_machine::SerializableSnapshot;
 use common_meta_raft_store::state_machine::StateMachine;
+use common_meta_sled_store::openraft;
 use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
@@ -42,13 +38,16 @@ use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
-use maplit::btreeset;
 use maplit::hashmap;
+use openraft::raft::Entry;
+use openraft::raft::EntryPayload;
+use openraft::LogId;
 use pretty_assertions::assert_eq;
 
 use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
 
+mod database_lookup;
 mod meta_api_impl;
 mod placement;
 
@@ -108,11 +107,9 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
         let resp = sm
             .apply(&Entry {
                 log_id: LogId { term: 0, index: 5 },
-                payload: EntryPayload::Normal(EntryNormal {
-                    data: LogEntry {
-                        txid: txid.clone(),
-                        cmd: Cmd::IncrSeq { key: k.to_string() },
-                    },
+                payload: EntryPayload::Normal(LogEntry {
+                    txid: txid.clone(),
+                    cmd: Cmd::IncrSeq { key: k.to_string() },
                 }),
             })
             .await?;
@@ -736,17 +733,10 @@ async fn test_state_machine_snapshot() -> anyhow::Result<()> {
         sm.apply(l).await?;
     }
 
-    let (it, last, mem, id) = sm.snapshot()?;
+    let (it, last, id) = sm.snapshot()?;
 
     assert_eq!(LogId { term: 1, index: 9 }, last);
     assert!(id.starts_with(&format!("{}-{}-", 1, 9)));
-    assert_eq!(
-        MembershipConfig {
-            members: btreeset![4, 5, 6],
-            members_after_consensus: None,
-        },
-        mem
-    );
 
     let res = pretty_snapshot_iter(it);
     assert_eq!(want, res);
@@ -754,7 +744,7 @@ async fn test_state_machine_snapshot() -> anyhow::Result<()> {
     // test serialized snapshot
 
     {
-        let (it, _last, _mem, _id) = sm.snapshot()?;
+        let (it, _last, _id) = sm.snapshot()?;
 
         let data = StateMachine::serialize_snapshot(it)?;
 

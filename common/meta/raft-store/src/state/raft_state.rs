@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_raft::storage::HardState;
 use common_exception::ErrorCode;
+use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_types::NodeId;
 use common_tracing::tracing;
+use openraft::storage::HardState;
 
 use crate::config::RaftConfig;
 use crate::sled_key_spaces::RaftStateKV;

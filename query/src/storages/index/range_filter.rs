@@ -77,11 +77,14 @@ impl RangeFilter {
     }
 
     pub fn eval(&self, stats: &BlockStatistics) -> Result<bool> {
-        let columns = self
-            .stat_columns
-            .iter()
-            .map(|c| c.apply_stat_value(stats, self.origin.clone())?.to_array())
-            .collect::<Result<Vec<_>>>()?;
+        let mut columns = Vec::with_capacity(self.stat_columns.len());
+        for col in self.stat_columns.iter() {
+            let val_opt = col.apply_stat_value(stats, self.origin.clone())?;
+            if val_opt.is_none() {
+                return Ok(true);
+            }
+            columns.push(val_opt.unwrap().to_array()?);
+        }
         let data_block = DataBlock::create_by_array(self.schema.clone(), columns);
         let executed_data_block = self.executor.execute(&data_block)?;
 
@@ -193,7 +196,7 @@ impl StatColumn {
         &self,
         stats: &BlockStatistics,
         schema: DataSchemaRef,
-    ) -> Result<DataValue> {
+    ) -> Result<Option<DataValue>> {
         if self.stat_type == StatType::Nulls {
             // The len of column_fields is 1.
             let (k, _) = self.column_fields.iter().next().unwrap();
@@ -203,7 +206,7 @@ impl StatColumn {
                     k
                 ))
             })?;
-            return Ok(DataValue::UInt64(Some(stat.null_count)));
+            return Ok(Some(DataValue::UInt64(Some(stat.null_count))));
         }
 
         let mut single_point = true;
@@ -236,11 +239,9 @@ impl StatColumn {
             &self.expr,
             variables,
             single_point,
-        )?;
+        );
         if !monotonicity.is_monotonic {
-            return Err(ErrorCode::UnknownException(
-                "Expression is not monotonic in the block",
-            ));
+            return Ok(None);
         }
 
         let column_with_field_opt = match self.stat_type {
@@ -261,14 +262,7 @@ impl StatColumn {
             _ => unreachable!(),
         };
 
-        column_with_field_opt
-            .ok_or_else(|| {
-                ErrorCode::UnknownException(
-                    "Cannot get data value from column, because column is none",
-                )
-            })?
-            .column()
-            .try_get(0)
+        Ok(column_with_field_opt.map(|v| v.column().try_get(0).unwrap()))
     }
 }
 

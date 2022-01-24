@@ -30,7 +30,7 @@ fn test_having_plan() -> Result<()> {
     let expect = "\
     Projection: number:UInt64\
     \n  Having: (number = 1)\
-    \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
+    \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]";
     let actual = format!("{:?}", plan);
 
     assert_eq!(expect, actual);

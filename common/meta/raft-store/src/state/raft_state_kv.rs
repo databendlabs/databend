@@ -14,11 +14,12 @@
 
 use std::fmt;
 
-use async_raft::storage::HardState;
 use common_exception::ErrorCode;
+use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::SledOrderedSerde;
 use common_meta_types::NodeId;
+use openraft::storage::HardState;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;

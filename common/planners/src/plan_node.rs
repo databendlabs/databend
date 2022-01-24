@@ -22,7 +22,6 @@ use crate::plan_user_stage_create::CreateUserStagePlan;
 use crate::plan_user_udf_alter::AlterUDFPlan;
 use crate::plan_user_udf_create::CreateUDFPlan;
 use crate::plan_user_udf_drop::DropUDFPlan;
-use crate::plan_user_udf_show::ShowUDFPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
@@ -110,7 +109,6 @@ pub enum PlanNode {
     ShowGrants(ShowGrantsPlan),
     CreateUDF(CreateUDFPlan),
     DropUDF(DropUDFPlan),
-    ShowUDF(ShowUDFPlan),
     AlterUDF(AlterUDFPlan),
 }
 
@@ -162,7 +160,6 @@ impl PlanNode {
             PlanNode::ShowCreateDatabase(v) => v.schema(),
             PlanNode::CreateUDF(v) => v.schema(),
             PlanNode::DropUDF(v) => v.schema(),
-            PlanNode::ShowUDF(v) => v.schema(),
             PlanNode::AlterUDF(v) => v.schema(),
         }
     }
@@ -213,7 +210,6 @@ impl PlanNode {
             PlanNode::ShowCreateDatabase(_) => "ShowCreateDatabasePlan",
             PlanNode::CreateUDF(_) => "CreateUDFPlan",
             PlanNode::DropUDF(_) => "DropUDFPlan",
-            PlanNode::ShowUDF(_) => "ShowUDF",
             PlanNode::AlterUDF(_) => "AlterUDF",
         }
     }

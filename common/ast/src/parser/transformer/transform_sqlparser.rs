@@ -18,6 +18,7 @@ use sqlparser::ast::BinaryOperator as SqlparserBinaryOperator;
 use sqlparser::ast::DataType as SqlparserDataType;
 use sqlparser::ast::Expr as SqlparserExpr;
 use sqlparser::ast::FunctionArg;
+use sqlparser::ast::FunctionArgExpr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::JoinConstraint;
 use sqlparser::ast::JoinOperator as SqlparserJoinOperator;
@@ -601,7 +602,6 @@ impl TransformerSqlparser {
                 table: None,
                 column: Identifier::from(ident),
             }),
-            SqlparserExpr::Wildcard => Ok(Expr::Wildcard),
             SqlparserExpr::CompoundIdentifier(idents) => {
                 if idents.len() == 3 {
                     Ok(Expr::ColumnRef {
@@ -709,7 +709,7 @@ impl TransformerSqlparser {
                     .args
                     .iter()
                     .map(|arg| match arg {
-                        FunctionArg::Unnamed(expr) => self.transform_expr(expr),
+                        FunctionArg::Unnamed(expr) => self.transform_function_arg(expr),
                         FunctionArg::Named { .. } => Err(ErrorCode::SyntaxException(std::format!(
                             "Unsupported SQL statement: {}",
                             self.orig_stmt
@@ -819,6 +819,17 @@ impl TransformerSqlparser {
             SqlparserDataType::Interval => Ok(TypeName::Interval),
             SqlparserDataType::Text => Ok(TypeName::Text),
             _ => Err(ErrorCode::SyntaxException(std::format!(
+                "Unsupported SQL statement: {}",
+                self.orig_stmt
+            ))),
+        }
+    }
+
+    fn transform_function_arg(&self, arg_expr: &FunctionArgExpr) -> Result<Expr> {
+        match arg_expr {
+            FunctionArgExpr::Expr(expr) => self.transform_expr(expr),
+            FunctionArgExpr::Wildcard => Ok(Expr::Wildcard),
+            FunctionArgExpr::QualifiedWildcard(_) => Err(ErrorCode::SyntaxException(std::format!(
                 "Unsupported SQL statement: {}",
                 self.orig_stmt
             ))),

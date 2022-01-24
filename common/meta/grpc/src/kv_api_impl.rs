@@ -34,7 +34,7 @@ impl KVApi for MetaGrpcClient {
     }
 
     async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply> {
-        self.do_get(GetKVAction {
+        self.do_read(GetKVAction {
             key: key.to_string(),
         })
         .await
@@ -42,10 +42,10 @@ impl KVApi for MetaGrpcClient {
 
     async fn mget_kv(&self, keys: &[String]) -> common_exception::Result<MGetKVActionReply> {
         let keys = keys.to_vec();
-        self.do_get(MGetKVAction { keys }).await
+        self.do_read(MGetKVAction { keys }).await
     }
 
     async fn prefix_list_kv(&self, prefix: &str) -> common_exception::Result<PrefixListReply> {
-        self.do_get(PrefixListReq(prefix.to_string())).await
+        self.do_read(PrefixListReq(prefix.to_string())).await
     }
 }

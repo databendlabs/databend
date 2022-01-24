@@ -16,15 +16,14 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_meta_types::PasswordType;
+use common_meta_types::AuthInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct AlterUserPlan {
-    pub if_current_user: bool,
     pub name: String,
     pub hostname: String,
-    pub new_password: Vec<u8>,
-    pub new_password_type: PasswordType,
+    // None means no change to make
+    pub auth_info: Option<AuthInfo>,
 }
 
 impl AlterUserPlan {
