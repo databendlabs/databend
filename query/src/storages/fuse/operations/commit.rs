@@ -45,14 +45,14 @@ impl FuseTable {
         operation_log: TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
-        // FIXME: configuration of backoff strategy
+        // TODO : configuration of backoff strategy
         let mut backoff = ExponentialBackoff::default();
         let tid = self.table_info.ident.table_id;
         let mut tbl = self;
-        let mut latest;
+        let mut latest: Arc<dyn Table>;
         loop {
             match tbl
-                .do_commit_internal(ctx.as_ref(), &operation_log, overwrite)
+                .try_commit(ctx.as_ref(), &operation_log, overwrite)
                 .await
             {
                 Ok(_) => break Ok(()),
@@ -62,13 +62,7 @@ impl FuseTable {
                             common_base::tokio::time::sleep(d).await;
                             let catalog = ctx.get_catalog();
 
-                            // cannot use `catatlog.get_tablecatalog.get_table(tenant, db_name, table_name)`,
-                            // since database name is unknown.
-                            //
-                            // where is the get table by id?
                             let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
-
-                            // TODO docs about the table name
                             let name = tbl.table_info.name.clone();
                             let table_info: TableInfo = TableInfo {
                                 ident,
@@ -77,7 +71,12 @@ impl FuseTable {
                                 meta: meta.as_ref().clone(),
                             };
                             latest = catalog.get_table_by_info(&table_info)?;
-                            tbl = latest.as_any().downcast_ref::<FuseTable>().unwrap();
+                            tbl = latest.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+                                ErrorCode::LogicalError(format!(
+                                    "unexpected engine, assuming FUSE, but got {} ",
+                                    latest.engine()
+                                ))
+                            })?;
                             continue;
                         }
                         None => break Err(ErrorCode::OCCRetryFailure("")),
@@ -89,7 +88,7 @@ impl FuseTable {
     }
 
     #[inline]
-    pub async fn do_commit_internal(
+    pub async fn try_commit(
         &self,
         ctx: &QueryContext,
         operation_log: &TableOperationLog,
