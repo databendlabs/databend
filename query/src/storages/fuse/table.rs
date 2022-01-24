@@ -101,7 +101,7 @@ impl Table for FuseTable {
 
     async fn commit_insertion(
         &self,
-        _ctx: Arc<QueryContext>,
+        ctx: Arc<QueryContext>,
         operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
@@ -110,7 +110,7 @@ impl Table for FuseTable {
             .iter()
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        self.do_commit(_ctx, append_log_entries, overwrite).await
+        self.do_commit(ctx, append_log_entries, overwrite).await
     }
 
     async fn truncate(
