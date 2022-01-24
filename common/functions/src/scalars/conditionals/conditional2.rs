@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod arithmetics;
-mod comparisons;
-mod conditionals;
-mod conditionals2;
-mod dates;
-mod expressions;
-mod hashes;
-mod helpers;
-mod logics;
-mod maths;
-mod nullables;
-mod others;
-mod scalar_function2_test;
-mod scalar_function_test;
-mod strings;
-mod tuples;
-mod udfs;
-mod uuids;
+use crate::scalars::Function2Factory;
+use crate::scalars::IfFunction2;
+
+#[derive(Clone)]
+pub struct ConditionalFunction2;
+
+impl ConditionalFunction2 {
+    pub fn register2(factory: &mut Function2Factory) {
+        factory.register("if2", IfFunction2::desc());
+    }
+}

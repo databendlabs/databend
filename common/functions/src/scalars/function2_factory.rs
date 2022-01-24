@@ -28,6 +28,7 @@ use super::HashesFunction;
 use super::StringFunction;
 use super::TupleClassFunction;
 use super::UdfFunction;
+use super::ConditionalFunction2;
 use crate::scalars::ToCastFunction;
 
 pub type Factory2Creator = Box<dyn Fn(&str) -> Result<Box<dyn Function2>> + Send + Sync>;
@@ -66,6 +67,7 @@ static FUNCTION2_FACTORY: Lazy<Arc<Function2Factory>> = Lazy::new(|| {
     UdfFunction::register2(&mut function_factory);
     StringFunction::register2(&mut function_factory);
     HashesFunction::register2(&mut function_factory);
+    ConditionalFunction2::register2(&mut function_factory);
 
     Arc::new(function_factory)
 });
