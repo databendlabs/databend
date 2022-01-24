@@ -14,6 +14,7 @@
 
 use common_base::tokio;
 use common_exception::Result;
+use databend_query::servers::http::v1::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::statement_handler;
 use databend_query::servers::http::v1::QueryResponse;
 use poem::http::Method;
@@ -67,10 +68,10 @@ async fn test_sql(
     database: Option<&str>,
 ) -> Result<(StatusCode, QueryResponse)> {
     let path = "/v1/statement";
-    let sessions = SessionManagerBuilder::create().build()?;
+    let session_manager = SessionManagerBuilder::create().build()?;
     let cluster_router = Route::new()
         .at(path, post(statement_handler))
-        .data(sessions);
+        .with(HTTPSessionMiddleware { session_manager });
     let uri = match database {
         Some(db) => format!("{}?db={:}", path, db),
         None => path.into(),

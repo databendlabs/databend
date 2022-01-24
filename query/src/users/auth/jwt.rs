@@ -22,7 +22,7 @@ type CustomClaims = HashMap<String, serde_json::Value>;
 
 impl JwtAuthenticator {
     pub async fn try_create(cfg: Config) -> Result<Option<Self>> {
-        if cfg.query.jwt_key_file == "" {
+        if cfg.query.jwt_key_file.is_empty() {
             return Ok(None);
         }
         let key_store = jwk::JwkKeyStore::new(cfg.query.jwt_key_file).await?;
@@ -32,14 +32,14 @@ impl JwtAuthenticator {
     pub fn get_user(&self, token: &str) -> Result<String> {
         let pub_key = self.key_store.get_key(None)?;
         match &pub_key {
-            PubKey::RSA256(pk) => match pk.verify_token::<CustomClaims>(&token, None) {
+            PubKey::RSA256(pk) => match pk.verify_token::<CustomClaims>(token, None) {
                 Ok(c) => match c.subject {
                     None => Err(ErrorCode::AuthenticateFailure(
                         "missing  field `subject` in jwt",
                     )),
                     Some(subject) => Ok(subject),
                 },
-                Err(err) => return Err(ErrorCode::AuthenticateFailure(err.to_string())),
+                Err(err) => Err(ErrorCode::AuthenticateFailure(err.to_string())),
             },
         }
     }
@@ -149,9 +149,9 @@ mod jwk {
                 },
                 None => {
                     if keys.len() != 1 {
-                        Err(ErrorCode::AuthenticateFailure(format!(
-                            "must specify key_id for jwt when multi keys exists "
-                        )))
+                        Err(ErrorCode::AuthenticateFailure(
+                            "must specify key_id for jwt when multi keys exists ",
+                        ))
                     } else {
                         Ok((*keys.iter().next().unwrap().1).clone())
                     }

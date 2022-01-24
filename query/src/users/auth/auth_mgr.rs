@@ -16,12 +16,12 @@ pub struct AuthMgr {
 }
 
 pub enum Credential {
-    JWT {
+    Jwt {
         token: String,
     },
     Password {
         name: String,
-        password: Vec<u8>,
+        password: Option<Vec<u8>>,
         hostname: Option<String>,
     },
 }
@@ -35,9 +35,13 @@ impl AuthMgr {
         })
     }
 
+    pub async fn no_auth(&self) -> Result<UserInfo> {
+        self.users.get_user(&self.tenant, "root", "127.0.0.1").await
+    }
+
     pub async fn auth(&self, credential: &Credential) -> Result<UserInfo> {
         match credential {
-            Credential::JWT { token: t } => {
+            Credential::Jwt { token: t } => {
                 let user_name = match &self.jwt {
                     Some(j) => j.get_user(t.as_str())?,
                     None => return Err(ErrorCode::AuthenticateFailure("jwt auth not configured.")),
@@ -62,13 +66,16 @@ impl AuthMgr {
                     AuthInfo::Password {
                         hash_value: h,
                         hash_method: t,
-                    } => {
-                        if *h == t.hash(&p) {
-                            Ok(user)
-                        } else {
-                            Err(ErrorCode::AuthenticateFailure("wrong password"))
+                    } => match p {
+                        None => Err(ErrorCode::AuthenticateFailure("password required")),
+                        Some(p) => {
+                            if *h == t.hash(p) {
+                                Ok(user)
+                            } else {
+                                Err(ErrorCode::AuthenticateFailure("wrong password"))
+                            }
                         }
-                    }
+                    },
                     _ => Err(ErrorCode::AuthenticateFailure("wrong auth type")),
                 }
             }

@@ -105,7 +105,7 @@ impl ClickHouseSession for InteractiveWorker {
             let client_ip = client_addr.split(':').collect::<Vec<_>>()[0];
             let credential = Credential::Password {
                 name: user.to_string(),
-                password: password.to_owned(),
+                password: Some(password.to_owned()),
                 hostname: Some(client_ip.to_string()),
             };
             let user_info_auth = self
