@@ -22,7 +22,7 @@ use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
 use crate::scalars::Function2Description;
-use crate::with_match_primitive_type2;
+use crate::with_match_scalar_type;
 
 #[derive(Clone, Debug)]
 pub struct IfFunction {
@@ -138,7 +138,7 @@ impl Function2 for IfFunction {
             }};
         }
 
-        with_match_primitive_type2!(type_id, |$T| {
+        with_match_scalar_type!(type_id, |$T| {
             primitive_build!($T)
         }, {
             unimplemented!()

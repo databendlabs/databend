@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #[macro_export]
-macro_rules! with_match_primitive_type2 {
+macro_rules! with_match_scalar_type {
     (
     $key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt
 ) => {{
