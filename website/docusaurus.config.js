@@ -127,7 +127,9 @@ const config = {
                         ]
                     },
                     {
-                        label: 'Dev Guide', position: 'left', items: [
+                        label: 'Dev Guide', position: 'left',
+                        to: '/dev',
+                        items: [
                             {label: 'Contributing', to: '/dev/category/contributing'},
                             {label: 'Development', to: '/dev/category/development'},
                             {label: 'Roadmap', to: '/dev/roadmap'},

@@ -46,6 +46,9 @@ run-debug: build-debug
 	bash ./scripts/ci/deploy/databend-query-standalone.sh
 
 build:
+	bash ./scripts/build/build-debug.sh
+
+build-release:
 	bash ./scripts/build/build-release.sh
 ifeq ($(shell uname),Linux) # Macs don't have objcopy
 	# Reduce binary size by compressing binaries.
@@ -58,7 +61,7 @@ build-native:
 	bash ./scripts/build/build-native.sh
 
 build-debug:
-	bash ./scripts/build/build-debug.sh
+	echo "Please use 'make build' instead"
 
 cross-compile-debug:
 	cross build --target aarch64-unknown-linux-gnu
