@@ -15,7 +15,6 @@
 mod arithmetics;
 mod comparisons;
 mod conditionals;
-mod conditionals2;
 mod dates;
 mod expressions;
 mod hashes;

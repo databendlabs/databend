@@ -1660,7 +1660,6 @@ dependencies = [
  "common-datavalues2",
  "common-exception",
  "common-io",
- "common-tracing",
  "crc32fast",
  "dyn-clone",
  "float-cmp",

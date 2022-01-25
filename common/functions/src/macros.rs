@@ -35,6 +35,8 @@ macro_rules! with_match_primitive_type2 {
             UInt64 => __with_ty__! { u64 },
             Float32 => __with_ty__! { f32 },
             Float64 => __with_ty__! { f64 },
+            String => __with_ty__! { Vu8 },
+            Boolean => __with_ty__! { bool },
 
             _ => $nbody,
         }

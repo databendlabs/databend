@@ -17,9 +17,3 @@ mod r#if;
 
 pub use conditional::ConditionalFunction;
 pub use r#if::IfFunction;
-
-mod conditional2;
-mod if2;
-
-pub use conditional2::ConditionalFunction2;
-pub use if2::IfFunction2;
