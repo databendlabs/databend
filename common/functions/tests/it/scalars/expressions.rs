@@ -160,7 +160,7 @@ fn test_datetime_cast_function() -> Result<()> {
 
 #[test]
 fn test_binary_contains() {
-    //create two string columns
+    //create two string columns apply l.contains(r)
     let l = Series::from_data(vec!["11", "22", "33"]);
     let r = Series::from_data(vec!["1", "2", "43"]);
     let expected = Series::from_data(vec![true, true, false]);
@@ -190,7 +190,6 @@ fn test_unary_size() {
         }
     }
 
-    //create two string columns
     let l = Series::from_data(vec!["11", "22", "333"]);
     let expected = Series::from_data(vec![2i32, 2, 3]);
     let unary_expression = ScalarUnaryExpression::<Vec<u8>, i32, _>::new(LenFunc {});

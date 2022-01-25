@@ -17,15 +17,14 @@ use std::fmt;
 use std::sync::Arc;
 
 use bytes::BytesMut;
-use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_io::prelude::*;
 
+use super::aggregate_function::AggregateFunction;
+use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::StateAddr;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
-use crate::aggregates::AggregateFunction;
 
 pub struct AggregateCountState {
     count: u64,
@@ -50,6 +49,18 @@ impl AggregateCountFunction {
         }))
     }
 
+    pub fn try_create_own(
+        display_name: &str,
+        _params: Vec<DataValue>,
+        arguments: Vec<DataField>,
+    ) -> Result<Self> {
+        assert_variadic_arguments(display_name, arguments.len(), (0, 1))?;
+        Ok(AggregateCountFunction {
+            display_name: display_name.to_string(),
+            arguments,
+        })
+    }
+
     pub fn desc() -> AggregateFunctionDescription {
         AggregateFunctionDescription::creator(Box::new(Self::try_create))
     }
@@ -60,12 +71,8 @@ impl AggregateFunction for AggregateCountFunction {
         "AggregateCountFunction"
     }
 
-    fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::UInt64)
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
+    fn return_type(&self) -> Result<DataTypePtr> {
+        Ok(u64::to_data_type())
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -76,13 +83,20 @@ impl AggregateFunction for AggregateCountFunction {
         Layout::new::<AggregateCountState>()
     }
 
-    fn accumulate(&self, place: StateAddr, arrays: &[Series], input_rows: usize) -> Result<()> {
+    fn accumulate(
+        &self,
+        place: StateAddr,
+        _columns: &[ColumnRef],
+        validity: Option<&common_arrow::arrow::bitmap::Bitmap>,
+        input_rows: usize,
+    ) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        if self.arguments.is_empty() {
-            state.count += input_rows as u64;
-        } else {
-            state.count += (input_rows - arrays[0].null_count()) as u64;
-        }
+        let nulls = match validity {
+            Some(b) => b.null_count(),
+            None => 0,
+        };
+
+        state.count += (input_rows - nulls) as u64;
         Ok(())
     }
 
@@ -90,35 +104,14 @@ impl AggregateFunction for AggregateCountFunction {
         &self,
         places: &[StateAddr],
         offset: usize,
-        arrays: &[Series],
+        _columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<()> {
-        if self.arguments.is_empty() {
-            for place in places.iter() {
-                let place = place.next(offset);
-                let state = place.get::<AggregateCountState>();
-                state.count += 1;
-            }
-            return Ok(());
+        for place in places.iter() {
+            let place = place.next(offset);
+            let state = place.get::<AggregateCountState>();
+            state.count += 1;
         }
-
-        match arrays[0].get_array_ref().validity() {
-            None => {
-                for place in places.iter() {
-                    let place = place.next(offset);
-                    let state = place.get::<AggregateCountState>();
-                    state.count += 1;
-                }
-            }
-            Some(nullable_marks) => {
-                for (row, place) in places.iter().enumerate() {
-                    let place = place.next(offset);
-                    let state = place.get::<AggregateCountState>();
-                    state.count += nullable_marks.get_bit(row) as u64;
-                }
-            }
-        }
-
         Ok(())
     }
 
@@ -142,16 +135,10 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
-        let mut array = array
-            .as_mut_any()
-            .downcast_mut::<MutablePrimitiveArrayBuilder<u64, true>>()
-            .ok_or_else(|| {
-                ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
-            })?;
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
+        let builder: &mut MutablePrimitiveColumn<u64> = Series::check_get_mutable_column(array)?;
         let state = place.get::<AggregateCountState>();
-        array.push(state.count);
+        builder.append_value(state.count);
         Ok(())
     }
 }

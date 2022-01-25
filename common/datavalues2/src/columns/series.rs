@@ -49,6 +49,18 @@ impl Series {
         arr
     }
 
+    pub fn check_get_mutable_column<T: 'static + MutableColumn>(
+        column: &mut dyn MutableColumn,
+    ) -> Result<&mut T> {
+        let arr = column.as_mut_any().downcast_mut().ok_or_else(|| {
+            ErrorCode::UnknownColumn(format!(
+                "downcast column error, expected column: {:?}",
+                std::any::type_name::<T>(),
+            ))
+        });
+        arr
+    }
+
     pub fn check_get_scalar_column<T: Scalar>(
         column: &ColumnRef,
     ) -> Result<&<T as Scalar>::ColumnType> {

@@ -1618,6 +1618,7 @@ dependencies = [
  "lexical-core 0.8.2",
  "num",
  "once_cell",
+ "ordered-float 2.10.0",
  "paste",
  "pprof",
  "pretty_assertions",
