@@ -28,19 +28,19 @@ pub trait Read<S: Send + Sync>: Send + Sync {
     }
 }
 
-pub struct ReadBuilder<'p, S> {
+pub struct ReadBuilder<S> {
     s: Arc<S>,
 
-    pub path: &'p str,
+    pub path: String,
     pub offset: Option<u64>,
     pub size: Option<u64>,
 }
 
-impl<'p, S> ReadBuilder<'p, S> {
-    pub fn new(s: Arc<S>, path: &'p str) -> Self {
+impl<S> ReadBuilder<S> {
+    pub fn new(s: Arc<S>, path: &str) -> Self {
         Self {
             s,
-            path,
+            path: path.to_string(),
             offset: None,
             size: None,
         }
@@ -59,7 +59,7 @@ impl<'p, S> ReadBuilder<'p, S> {
     }
 }
 
-impl<'p, S: Read<S>> ReadBuilder<'p, S> {
+impl<S: Read<S>> ReadBuilder<S> {
     pub async fn run(&mut self) -> Result<Reader> {
         self.s.read(self).await
     }
