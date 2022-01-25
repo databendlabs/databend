@@ -21,7 +21,6 @@ mod simple_date;
 mod week_date;
 
 pub use date::DateFunction;
-pub use interval_function::IntervalArithmeticFunction;
 pub use interval_function::IntervalFunctionFactory;
 pub use interval_function::MonthsArithmeticFunction;
 pub use interval_function::SecondsArithmeticFunction;

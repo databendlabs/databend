@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_datavalues2::arithmetics_type::ResultTypeOfBinary;
 use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_date_type_error;
 use common_datavalues2::with_match_primitive_type;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -175,9 +176,36 @@ impl ArithmeticPlusFunction2 {
         if left_type.is_interval() || right_type.is_interval() {
             todo!()
         }
-        if left_type.is_date_or_date_time() || right_type.is_date_or_date_time() {
-            todo!()
+
+        // Only support one of argument types is date type.
+        if left_type.is_date_or_date_time() {
+            return with_match_date_type_error!(left_type, |$T| {
+                with_match_primitive_type!(right_type, |$D| {
+                    BinaryArithmeticFunction2::<$T, $D, $T, _>::try_create_func(
+                        op,
+                        args[0].clone(),
+                        AddFunction::default(),
+                    )
+                },{
+                    error_fn()
+                })
+            });
         }
+
+        if right_type.is_date_or_date_time() {
+            return with_match_primitive_type!(left_type, |$T| {
+                with_match_date_type_error!(right_type, |$D| {
+                    BinaryArithmeticFunction2::<$T, $D, $D, _>::try_create_func(
+                        op,
+                        args[1].clone(),
+                        AddFunction::default(),
+                    )
+                })
+            },{
+                error_fn()
+            });
+        }
+
         if !left_type.is_numeric() || !right_type.is_numeric() {
             return error_fn();
         }

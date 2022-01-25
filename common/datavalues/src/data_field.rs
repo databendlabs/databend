@@ -150,6 +150,7 @@ impl DataField {
             DataType::Date32 => Some("Date32"),
             DataType::DateTime32(_) => Some("DateTime32"),
             DataType::DateTime64(_, _) => Some("DateTime64"),
+            DataType::Interval(_) => Some("Interval"),
             _ => None,
         };
 
