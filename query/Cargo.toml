@@ -24,7 +24,7 @@ tokio-console = ["common-tracing/console", "common-base/tracing"]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
 common-base = { path = "../common/base" }
-common-cache = { path = "../common/cache"}
+common-cache = { path = "../common/cache" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 common-dal = { path = "../common/dal" }
 common-datablocks = { path = "../common/datablocks" }
@@ -40,7 +40,7 @@ common-meta-api = { path = "../common/meta/api" }
 common-meta-embedded = { path = "../common/meta/embedded" }
 common-meta-grpc = { path = "../common/meta/grpc" }
 common-meta-sled-store = { path = "../common/meta/sled-store" }
-common-meta-raft-store = { path="../common/meta/raft-store" }
+common-meta-raft-store = { path = "../common/meta/raft-store" }
 common-meta-types = { path = "../common/meta/types" }
 common-macros = { path = "../common/macros" }
 common-metrics = { path = "../common/metrics" }
@@ -50,7 +50,7 @@ common-tracing = { path = "../common/tracing" }
 common-ast = { path = "../common/ast" }
 
 # Github dependencies
-msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "e4c8f3d" }
+msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "70aa0b2" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "c33837e" }
 
 # Crates.io dependencies
