@@ -169,19 +169,18 @@ macro_rules! with_match_primitive_type {
                 $body
             };
         }
-        use crate::prelude::TypeID::*;
 
         match $key_type {
-            Int8 => __with_ty__! { i8 },
-            Int16 => __with_ty__! { i16 },
-            Int32 => __with_ty__! { i32 },
-            Int64 => __with_ty__! { i64 },
-            UInt8 => __with_ty__! { u8 },
-            UInt16 => __with_ty__! { u16 },
-            UInt32 => __with_ty__! { u32 },
-            UInt64 => __with_ty__! { u64 },
-            Float32 => __with_ty__! { f32 },
-            Float64 => __with_ty__! { f64 },
+            TypeID::Int8 => __with_ty__! { i8 },
+            TypeID::Int16 => __with_ty__! { i16 },
+            TypeID::Int32 => __with_ty__! { i32 },
+            TypeID::Int64 => __with_ty__! { i64 },
+            TypeID::UInt8 => __with_ty__! { u8 },
+            TypeID::UInt16 => __with_ty__! { u16 },
+            TypeID::UInt32 => __with_ty__! { u32 },
+            TypeID::UInt64 => __with_ty__! { u64 },
+            TypeID::Float32 => __with_ty__! { f32 },
+            TypeID::Float64 => __with_ty__! { f64 },
 
             _ => $nbody,
         }

@@ -22,11 +22,13 @@ use once_cell::sync::Lazy;
 
 use super::function2::Function2;
 use super::function_factory::FunctionFeatures;
+use super::ArithmeticFunction2;
 use super::ComparisonFunction;
 use super::ConditionalFunction;
 use super::HashesFunction;
 use super::LogicFunction;
 use super::StringFunction;
+use super::ToCastFunction;
 use super::TupleClassFunction;
 use super::UdfFunction;
 use crate::scalars::DateFunction;
@@ -85,6 +87,7 @@ pub struct Function2Factory {
 static FUNCTION2_FACTORY: Lazy<Arc<Function2Factory>> = Lazy::new(|| {
     let mut function_factory = Function2Factory::create();
 
+    ArithmeticFunction2::register(&mut function_factory);
     ToCastFunction::register(&mut function_factory);
     TupleClassFunction::register(&mut function_factory);
     ComparisonFunction::register(&mut function_factory);

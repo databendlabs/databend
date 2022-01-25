@@ -36,4 +36,5 @@ pub use arithmetic_mul::ArithmeticMulFunction;
 pub use arithmetic_negate::ArithmeticNegateFunction;
 pub use arithmetic_plus::ArithmeticPlusFunction;
 pub use binary_arithmetic::BinaryArithmeticFunction;
+pub use binary_arithmetic2::ArithmeticFunction2;
 pub use unary_arithmetic::UnaryArithmeticFunction;
