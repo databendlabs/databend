@@ -17,6 +17,7 @@ common-datavalues = { path = "../datavalues" }
 common-datavalues2 = { path = "../datavalues2" }
 common-exception = { path = "../exception" }
 common-io = { path = "../io" }
+common-tracing = { path = "../tracing" }
 
 # Github dependencies
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "c33837e" }

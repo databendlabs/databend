@@ -20,6 +20,6 @@ pub struct ConditionalFunction;
 
 impl ConditionalFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("if", IfFunction::desc());
+        // factory.register("if", IfFunction::desc());
     }
 }

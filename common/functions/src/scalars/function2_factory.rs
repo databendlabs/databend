@@ -24,11 +24,11 @@ use super::function2::Function2;
 use super::function_factory::ArithmeticDescription;
 use super::function_factory::FunctionFeatures;
 use super::ComparisonFunction;
+use super::ConditionalFunction2;
 use super::HashesFunction;
 use super::StringFunction;
 use super::TupleClassFunction;
 use super::UdfFunction;
-use super::ConditionalFunction2;
 use crate::scalars::ToCastFunction;
 
 pub type Factory2Creator = Box<dyn Fn(&str) -> Result<Box<dyn Function2>> + Send + Sync>;

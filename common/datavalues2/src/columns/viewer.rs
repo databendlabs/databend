@@ -54,7 +54,12 @@ impl<'a, T: Scalar> ColumnViewer<'a, T> {
             }
         };
 
-        let column: &T::ColumnType = Series::check_get_scalar_column::<T>(column)?;
+        let column: &T::ColumnType = if column.is_const() {
+            let column = column.as_any().downcast_ref::<ConstColumn>().unwrap();
+            Series::check_get_scalar_column::<T>(column.inner())?
+        } else {
+            Series::check_get_scalar_column::<T>(column)?
+        };
 
         Ok(Self {
             column,

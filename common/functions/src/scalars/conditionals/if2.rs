@@ -11,15 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::sync::Arc;
 
-use common_datavalues2::Series;
-use common_datavalues2::TypeID;
 use common_datavalues2::prelude::*;
+use common_datavalues2::remove_nullable;
+use common_datavalues2::type_coercion::compare_coercion;
 use common_exception::Result;
-use common_exception::ErrorCode;
-use common_datavalues2::with_match_primitive_type;
-use crate::scalars::{Function2, Function2Description};
+
+use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
+use crate::with_match_primitive_type2;
 
 #[derive(Clone, Debug)]
 pub struct IfFunction2 {
@@ -29,7 +32,7 @@ pub struct IfFunction2 {
 impl IfFunction2 {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(IfFunction2 {
-            display_name: display_name.to_string()
+            display_name: display_name.to_string(),
         }))
     }
 
@@ -45,70 +48,107 @@ impl Function2 for IfFunction2 {
         "IfFunction"
     }
 
-    fn return_type(&self, args: &[&common_datavalues2::DataTypePtr]) -> Result<DataTypePtr> {
-        let dt = UInt8Type::arc();
-        Ok(dt)
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        let l_dt = remove_nullable(args[1]);
+        let r_dt = remove_nullable(args[2]);
+
+        let mut least_supertype = compare_coercion(&l_dt, &r_dt)?;
+        if (args[0].is_nullable() || args[1].is_nullable() || args[2].is_nullable())
+            && !least_supertype.is_nullable()
+        {
+            least_supertype = Arc::new(NullableType::create(least_supertype));
+        }
+
+        Ok(least_supertype)
     }
 
-    fn eval(&self, columns: &common_datavalues2::ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        let predicate = columns[0].column();
-        let lhs = columns[1].column();
-        let rhs = columns[2].column();
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        // if predicate / lhs / rhs is nullable, then it will return NullableColumn or Non-NullableColumn
+        let mut nullable = false;
 
-        if lhs.data_type() != rhs.data_type() {
-            return Err(ErrorCode::BadDataValueType(
-                "lhs and rhs must have the same data type".to_string(),
-            ));
+        let predicate: ColumnRef;
+        if columns[0].data_type().is_nullable() {
+            nullable = true;
+            let boolean_dt: DataTypePtr = Arc::new(NullableType::create(BooleanType::arc()));
+            predicate = cast_column_field(&columns[0], &boolean_dt)?;
+        } else {
+            let boolean_dt = BooleanType::arc();
+            predicate = cast_column_field(&columns[0], &boolean_dt)?;
         }
 
-        let type_id = lhs.data_type_id();
-        
-        match type_id {
-            TypeID::UInt8 => {
-                let predicate_wrapper = ColumnViewer::<bool>::create(predicate)?;
-                let lhs_wrapper = ColumnViewer::<u8>::create(lhs)?;
-                let rhs_wrapper = ColumnViewer::<u8>::create(rhs)?;
+        let lhs = &columns[1];
+        let rhs = &columns[2];
+        let l_dt = remove_nullable(lhs.data_type());
+        let r_dt = remove_nullable(rhs.data_type());
+
+        let mut least_supertype = compare_coercion(&l_dt, &r_dt)?;
+
+        if (lhs.data_type().is_nullable() || rhs.data_type().is_nullable())
+            && !least_supertype.is_nullable()
+        {
+            least_supertype = Arc::new(NullableType::create(least_supertype));
+        }
+        if least_supertype.is_nullable() {
+            nullable = true;
+        }
+        let lhs = cast_column_field(lhs, &least_supertype)?;
+        let rhs = cast_column_field(rhs, &least_supertype)?;
+
+        let type_id = remove_nullable(&lhs.data_type()).data_type_id();
+
+        macro_rules! primitive_build {
+            (
+             $T:ident
+        ) => {{
+                let predicate_wrapper = ColumnViewer::<bool>::create(&predicate)?;
+                let lhs_wrapper = ColumnViewer::<$T>::create(&lhs)?;
+                let rhs_wrapper = ColumnViewer::<$T>::create(&rhs)?;
                 let size = lhs_wrapper.len();
-        
-                let mut builder = NullableColumnBuilder::<u8>::with_capacity(size);
-        
-                for row in 0..size {
-                    let predicate = predicate_wrapper.value(row);
-                    let valid = predicate_wrapper.valid_at(row);
-                     if predicate {
-                        builder.append(lhs_wrapper.value(row), valid & lhs_wrapper.valid_at(row));
-                    } else {
-                        builder.append(rhs_wrapper.value(row), valid & rhs_wrapper.valid_at(row));
-                    };
+
+                if nullable {
+                    let mut builder = NullableColumnBuilder::<$T>::with_capacity(size);
+
+                    for row in 0..size {
+                        let predicate = predicate_wrapper.value(row);
+                        let valid = predicate_wrapper.valid_at(row);
+                        if predicate {
+                            builder
+                                .append(lhs_wrapper.value(row), valid & lhs_wrapper.valid_at(row));
+                        } else {
+                            builder
+                                .append(rhs_wrapper.value(row), valid & rhs_wrapper.valid_at(row));
+                        };
+                    }
+
+                    Ok(builder.build(size))
+                } else {
+                    let mut builder = ColumnBuilder::<$T>::with_capacity(size);
+
+                    for row in 0..size {
+                        let predicate = predicate_wrapper.value(row);
+                        if predicate {
+                            builder.append(lhs_wrapper.value(row));
+                        } else {
+                            builder.append(rhs_wrapper.value(row));
+                        };
+                    }
+
+                    Ok(builder.build(size))
                 }
-        
-                Ok(builder.build(size))
-            },
-            _ => {
-                unimplemented!()
-            }
+            }};
         }
-        // with_match_primitive_type!(type_id, |$T| {
-        //     let lhs_wrapper = ColumnViewer::<$T>::create(lhs)?;
-        //     let rhs_wrapper = ColumnViewer::<$T>::create(rhs)?;
-        //     let size = lhs_wrapper.len();
 
-        //     let mut builder = NullableColumnBuilder::<$T>::with_capacity(size);
-
-        //     for row in 0..size {
-        //         let valid = validity_predict.get_bit(row);
-        //         if bools.get_bit(row) {
-        //             builder.append(lhs_wrapper.value(row), valid & lhs_wrapper.valid_at(row));
-        //         } else {
-        //             builder.append(rhs_wrapper.value(row), valid & rhs_wrapper.valid_at(row));
-        //         };
-        //     }
-
-        //     Ok(builder.build(size))
-        // }, {
-
-        // });
-        // unimplemented!()
+        with_match_primitive_type2!(type_id, |$T| {
+            primitive_build!($T)
+        }, {
+            match type_id {
+                TypeID::String => primitive_build!(Vu8),
+                TypeID::Boolean => primitive_build!(bool),
+                _ => {
+                    unimplemented!()
+                }
+            }
+        })
     }
 
     fn passthrough_null(&self) -> bool {
