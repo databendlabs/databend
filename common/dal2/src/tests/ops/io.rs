@@ -23,6 +23,7 @@ use futures::StreamExt;
 
 use crate::ops::io::new_buffered_seekable_reader;
 use crate::ops::io::CallbackReader;
+use crate::ops::io::HeaderRange;
 use crate::ops::ReaderStream;
 use crate::services::fs;
 use crate::DataAccessor;
@@ -76,4 +77,16 @@ async fn test_seekable_reader() {
     let n = r.read_to_end(&mut bs).await.expect("read_to_end");
     assert_eq!("lo, world!", from_utf8(&bs).unwrap());
     assert_eq!(n, 10);
+}
+
+#[test]
+fn test_header_range() {
+    let h = HeaderRange::new(None, Some(1024));
+    assert_eq!(h.to_string(), "bytes=0-1023");
+
+    let h = HeaderRange::new(Some(1024), None);
+    assert_eq!(h.to_string(), "bytes=1024-");
+
+    let h = HeaderRange::new(Some(1024), Some(1024));
+    assert_eq!(h.to_string(), "bytes=1024-2047");
 }

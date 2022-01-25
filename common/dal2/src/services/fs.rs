@@ -20,6 +20,7 @@ use async_compat::CompatExt;
 use async_trait::async_trait;
 use tokio::fs;
 use tokio::io;
+use tokio::io::AsyncReadExt;
 use tokio::io::AsyncSeekExt;
 
 use crate::error::Error;
@@ -80,8 +81,12 @@ impl<S: Send + Sync> Read<S> for Backend {
                 .map_err(|e| parse_io_error(&e, &path))?;
         }
 
-        // TODO: we need to respect input size.
-        Ok(Box::new(f.compat()))
+        let f: Reader = match args.size {
+            Some(size) => Box::new(f.take(size).compat()),
+            None => Box::new(f.compat()),
+        };
+
+        Ok(f)
     }
 }
 
