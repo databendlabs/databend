@@ -15,8 +15,12 @@
 use std::fs::File;
 use std::io::Read;
 
+use base64::encode_config;
+use base64::URL_SAFE_NO_PAD;
 use common_base::tokio;
 use common_exception::Result;
+use common_meta_types::AuthInfo;
+use common_meta_types::UserInfo;
 use databend_query::servers::http::v1::make_final_uri;
 use databend_query::servers::http::v1::make_page_uri;
 use databend_query::servers::http::v1::make_state_uri;
@@ -26,7 +30,15 @@ use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateName;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
+use headers::Header;
+use httpmock::MockServer;
 use hyper::header;
+use jwt_simple::algorithms::RS256KeyPair;
+use jwt_simple::algorithms::RSAKeyPairLike;
+use jwt_simple::claims::JWTClaims;
+use jwt_simple::claims::NoCustomClaims;
+use jwt_simple::prelude::Clock;
+use jwt_simple::prelude::Duration;
 use poem::http::Method;
 use poem::http::StatusCode;
 use poem::Endpoint;
@@ -93,7 +105,7 @@ async fn test_async() -> Result<()> {
     let sql = "select sleep(2)";
     let json = serde_json::json!({"sql": sql.to_string()});
 
-    let (status, result) = post_json_to_router(&ep, &json, 0).await?;
+    let (status, result) = post_json_to_endpoint(&ep, &json, 0).await?;
     assert_eq!(status, StatusCode::OK);
     let query_id = result.id;
     let next_uri = make_page_uri(&query_id, 0);
@@ -155,7 +167,7 @@ async fn test_multi_page() -> Result<()> {
     let sql = format!("select * from numbers({})", max_block_size * num_parts);
 
     let json = serde_json::json!({"sql": sql.to_string()});
-    let (status, result) = post_json_to_router(&ep, &json, 3).await?;
+    let (status, result) = post_json_to_endpoint(&ep, &json, 3).await?;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(result.data.len(), max_block_size);
     let query_id = result.id;
@@ -191,7 +203,7 @@ async fn test_insert() -> Result<()> {
 
     for (sql, data_len) in sqls {
         let json = serde_json::json!({"sql": sql.to_string()});
-        let (status, result) = post_json_to_router(&route, &json, 3).await?;
+        let (status, result) = post_json_to_endpoint(&route, &json, 3).await?;
         assert_eq!(status, StatusCode::OK);
         assert!(result.error.is_none(), "{:?}", result.error);
         assert_eq!(result.data.len(), data_len);
@@ -235,7 +247,7 @@ async fn get_uri_checked(ep: &EndpointType, uri: &str) -> Result<(StatusCode, Qu
     check_response(response).await
 }
 
-async fn post_sql(sql: &'static str, wait_time: i32) -> Result<(StatusCode, QueryResponse)> {
+async fn post_sql(sql: &str, wait_time: i32) -> Result<(StatusCode, QueryResponse)> {
     let json = serde_json::json!({"sql": sql.to_string()});
     post_json(&json, wait_time).await
 }
@@ -252,10 +264,19 @@ async fn post_json(
     wait_time: i32,
 ) -> Result<(StatusCode, QueryResponse)> {
     let ep = create_endpoint();
-    post_json_to_router(&ep, json, wait_time).await
+    post_json_to_endpoint(&ep, json, wait_time).await
 }
 
-async fn post_json_to_router(
+async fn post_sql_to_endpoint(
+    ep: &EndpointType,
+    sql: &str,
+    wait_time: i32,
+) -> Result<(StatusCode, QueryResponse)> {
+    let json = serde_json::json!({"sql": sql.to_string()});
+    post_json_to_endpoint(ep, &json, wait_time).await
+}
+
+async fn post_json_to_endpoint(
     ep: &EndpointType,
     json: &serde_json::Value,
     wait_time: i32,
@@ -277,6 +298,117 @@ async fn post_json_to_router(
         .unwrap();
 
     check_response(response).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_auth_basic() -> Result<()> {
+    let user_name = "user1";
+    let password = "password";
+
+    let ep = create_endpoint();
+    let sql = format!("create user {} identified by {}", user_name, password);
+    post_sql_to_endpoint(&ep, &sql, 1).await?;
+
+    let basic = headers::Authorization::basic(user_name, password);
+    test_auth_post(&ep, user_name, basic).await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_auth_jwt() -> Result<()> {
+    let user_name = "user1";
+
+    let kid = "test_kid";
+    let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
+    let rsa_components = key_pair.public_key().to_components();
+    let e = encode_config(rsa_components.e, URL_SAFE_NO_PAD);
+    let n = encode_config(rsa_components.n, URL_SAFE_NO_PAD);
+    let j =
+        serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
+
+    let server = MockServer::start();
+    let path = "/jwks.json";
+    let mock = server.mock(|when, then| {
+        when.method(httpmock::Method::GET).path(path);
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(j);
+    });
+    let jwks_url = format!("http://{}{}", server.address(), path);
+
+    let session_manager = SessionManagerBuilder::create()
+        .jwt_key_file(jwks_url)
+        .build()
+        .unwrap();
+
+    let user_info = UserInfo {
+        name: user_name.to_string(),
+        hostname: "%".to_string(),
+        auth_info: AuthInfo::JWT,
+        grants: Default::default(),
+        quota: Default::default(),
+    };
+
+    session_manager
+        .get_user_manager()
+        .add_user("", user_info)
+        .await?;
+
+    let ep = Route::new()
+        .nest("/v1/query", query_route())
+        .with(HTTPSessionMiddleware { session_manager });
+
+    let now = Some(Clock::now_since_epoch());
+    let claims = JWTClaims {
+        issued_at: now,
+        expires_at: Some(now.unwrap() + Duration::from_secs(10)),
+        invalid_before: now,
+        audiences: None,
+        issuer: None,
+        jwt_id: None,
+        subject: Some(user_name.to_string()),
+        nonce: None,
+        custom: NoCustomClaims {},
+    };
+
+    let token = key_pair.sign(claims)?;
+    let bear = headers::Authorization::bearer(&token).unwrap();
+    test_auth_post(&ep, user_name, bear).await?;
+    mock.assert();
+    Ok(())
+}
+
+async fn test_auth_post(ep: &EndpointType, user_name: &str, header: impl Header) -> Result<()> {
+    let sql = "select current_user()";
+
+    let json = serde_json::json!({"sql": sql.to_string()});
+
+    let path = "/v1/query";
+    let uri = format!("{}?wait_time={}", path, 3);
+    let content_type = "application/json";
+    let body = serde_json::to_vec(&json)?;
+
+    let response = ep
+        .call(
+            Request::builder()
+                .uri(uri.parse().unwrap())
+                .method(Method::POST)
+                .header(header::CONTENT_TYPE, content_type)
+                .typed_header(header)
+                .body(body),
+        )
+        .await
+        .unwrap();
+
+    let (_, resp) = check_response(response).await?;
+    let v = resp.data;
+    assert_eq!(v.len(), 1);
+    assert_eq!(v[0].len(), 1);
+    assert_eq!(
+        v[0][0],
+        serde_json::Value::String(format!("'{}'@'%'", user_name))
+    );
+    Ok(())
 }
 
 // need to support local_addr, but axum_server do not have local_addr callback
