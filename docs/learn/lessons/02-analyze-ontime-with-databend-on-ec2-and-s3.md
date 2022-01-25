@@ -101,9 +101,9 @@ All Queries:
 | Q6   |SELECT IATA_CODE_Reporting_Airline AS Carrier, avg(cast(DepDelay>10 as Int8))*1000 AS c3 FROM ontime WHERE Year>=2000 AND Year <=2008 GROUP BY Carrier ORDER BY c3 DESC;| 
 | Q7   |SELECT IATA_CODE_Reporting_Airline AS Carrier, avg(DepDelay) * 1000 AS c3 FROM ontime WHERE Year >= 2000 AND Year <= 2008 GROUP BY Carrier; | 
 | Q8   |SELECT Year, avg(DepDelay) FROM ontime GROUP BY Year;      |
-| Q9   |select Year, count(*) as c1 from ontime group by Year;      | 
+| Q9   |SELECT Year, count(*) as c1 FROM ontime GROUP BY Year;      | 
 | Q10  |SELECT avg(cnt) FROM (SELECT Year,Month,count(*) AS cnt FROM ontime WHERE DepDel15=1 GROUP BY Year,Month) a;      |
-| Q11  |select avg(c1) from (select Year,Month,count(*) as c1 from ontime group by Year,Month) a;      |
+| Q11  |SELECT avg(c1) FROM (SELECT Year,Month,count(*) AS c1 FROM ontime GROUP BY Year,Month) a;      |
 | Q12  |SELECT OriginCityName, DestCityName, count(*) AS c FROM ontime GROUP BY OriginCityName, DestCityName ORDER BY c DESC LIMIT 10;     |
 | Q13  |SELECT OriginCityName, count(*) AS c FROM ontime GROUP BY OriginCityName ORDER BY c DESC LIMIT 10;      |
-| Q14  |SELECT count(*) from ontime;     |
+| Q14  |SELECT count(*) FROM ontime;     |
