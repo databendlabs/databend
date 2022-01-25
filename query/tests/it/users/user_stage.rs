@@ -31,6 +31,7 @@ async fn test_user_stage() -> Result<()> {
     let comments = "this is a comment";
     let stage_name1 = "stage1";
     let stage_name2 = "stage2";
+    let if_not_exists = false;
     let user_mgr = UserApiProvider::create_global(config).await?;
 
     // add 1.
@@ -44,7 +45,9 @@ async fn test_user_stage() -> Result<()> {
             }),
             FileFormat::default(),
         );
-        user_mgr.add_stage(tenant, stage_info).await?;
+        user_mgr
+            .add_stage(tenant, stage_info, if_not_exists)
+            .await?;
     }
 
     // add 2.
@@ -58,7 +61,9 @@ async fn test_user_stage() -> Result<()> {
             }),
             FileFormat::default(),
         );
-        user_mgr.add_stage(tenant, stage_info).await?;
+        user_mgr
+            .add_stage(tenant, stage_info, if_not_exists)
+            .await?;
     }
 
     // get all.

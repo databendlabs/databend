@@ -19,10 +19,10 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DateConverter;
-use common_exception::exception::ABORT_QUERY;
-use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::ABORT_QUERY;
+use common_exception::ABORT_SESSION;
 use common_tracing::tracing;
 use msql_srv::*;
 

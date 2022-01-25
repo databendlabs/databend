@@ -9,7 +9,7 @@ SELECT abs(-1);
 SELECT abs(-10086);
 SELECT abs('-233.0');
 SELECT abs('blah') = 0;
-SELECT abs(TRUE); -- {ErrorCode 7}
+SELECT abs(TRUE); -- {ErrorCode 1007}
 SELECT abs(NULL);
 SELECT abs(value) FROM math_sample_numbers;
 SELECT abs(value) + abs(-1) FROM math_sample_numbers;
@@ -24,7 +24,7 @@ SELECT log(1, NULL);
 SELECT log(NULL, 1);
 SELECT log('10', 100);
 SELECT ln(NULL);
-SELECT ln(1, 2); -- {ErrorCode 28}
+SELECT ln(1, 2); -- {ErrorCode 1028}
 SELECT log10(NULL);
 SELECT log10(100);
 SELECT log2(2);

@@ -20,6 +20,7 @@ use sqlparser::ast::DataType;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Function;
 use sqlparser::ast::FunctionArg;
+use sqlparser::ast::FunctionArgExpr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::Query;
 use sqlparser::ast::UnaryOperator;
@@ -51,7 +52,6 @@ pub trait ExprVisitor: Sized + Send {
             Expr::IsNotNull(expr) => self.visit_simple_function(expr, "isnotnull").await,
             Expr::UnaryOp { op, expr } => self.visit_unary_expr(op, expr).await,
             Expr::BinaryOp { left, op, right } => self.visit_binary_expr(left, op, right).await,
-            Expr::Wildcard => self.visit_wildcard(),
             Expr::Exists(subquery) => self.visit_exists(subquery),
             Expr::Subquery(subquery) => self.visit_subquery(subquery),
             Expr::Function(function) => self.visit_function(function).await,
@@ -76,6 +76,7 @@ pub trait ExprVisitor: Sized + Send {
                 high,
             } => self.visit_between(expr, negated, low, high).await,
             Expr::Tuple(exprs) => self.visit_tuple(exprs).await,
+            Expr::InList { expr, list, .. } => self.visit_inlist(expr, list).await,
             other => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
@@ -84,6 +85,14 @@ pub trait ExprVisitor: Sized + Send {
     }
 
     async fn post_visit(&mut self, _expr: &Expr) -> Result<()> {
+        Ok(())
+    }
+
+    async fn visit_inlist(&mut self, expr: &Expr, list: &[Expr]) -> Result<()> {
+        ExprTraverser::accept(expr, self).await?;
+        for expr in list {
+            ExprTraverser::accept(expr, self).await?;
+        }
         Ok(())
     }
 
@@ -127,11 +136,22 @@ pub trait ExprVisitor: Sized + Send {
         Ok(())
     }
 
+    async fn visit_function_arg(&mut self, arg_expr: &FunctionArgExpr) -> Result<()> {
+        match arg_expr {
+            FunctionArgExpr::Expr(expr) => ExprTraverser::accept(expr, self).await,
+            FunctionArgExpr::Wildcard => self.visit_wildcard(),
+            FunctionArgExpr::QualifiedWildcard(_) => Err(ErrorCode::SyntaxException(std::format!(
+                "Unsupported QualifiedWildcard: {}",
+                arg_expr
+            ))),
+        }
+    }
+
     async fn visit_function(&mut self, function: &Function) -> Result<()> {
         for function_arg in &function.args {
             match function_arg {
-                FunctionArg::Named { arg, .. } => ExprTraverser::accept(arg, self).await?,
-                FunctionArg::Unnamed(expr) => ExprTraverser::accept(expr, self).await?,
+                FunctionArg::Named { arg, .. } => self.visit_function_arg(arg).await?,
+                FunctionArg::Unnamed(arg) => self.visit_function_arg(arg).await?,
             };
         }
 

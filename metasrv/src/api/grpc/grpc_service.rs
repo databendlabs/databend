@@ -20,8 +20,6 @@ use common_grpc::GrpcToken;
 use common_meta_grpc::MetaGrpcReadReq;
 use common_meta_grpc::MetaGrpcWriteReq;
 use common_meta_types::protobuf::meta_server::Meta;
-use common_meta_types::protobuf::GetReply;
-use common_meta_types::protobuf::GetRequest;
 use common_meta_types::protobuf::HandshakeRequest;
 use common_meta_types::protobuf::HandshakeResponse;
 use common_meta_types::protobuf::RaftReply;
@@ -57,12 +55,12 @@ impl MetaGrpcImpl {
             .get_bin("auth-token-bin")
             .and_then(|v| v.to_bytes().ok())
             .and_then(|b| String::from_utf8(b.to_vec()).ok())
-            .ok_or_else(|| Status::internal("Error auth-token-bin is empty"))?;
+            .ok_or_else(|| Status::unauthenticated("Error auth-token-bin is empty"))?;
 
         let claim = self
             .token
             .try_verify_token(token)
-            .map_err(|e| Status::internal(e.to_string()))?;
+            .map_err(|e| Status::unauthenticated(e.to_string()))?;
         Ok(claim)
     }
 }
@@ -125,7 +123,7 @@ impl Meta for MetaGrpcImpl {
         Ok(Response::new(body))
     }
 
-    async fn read_msg(&self, request: Request<GetRequest>) -> Result<Response<GetReply>, Status> {
+    async fn read_msg(&self, request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
         self.check_token(request.metadata())?;
         common_tracing::extract_remote_span_as_parent(&request);
 
@@ -133,9 +131,9 @@ impl Meta for MetaGrpcImpl {
         tracing::info!("Receive read_action: {:?}", action);
 
         let body = self.action_handler.execute_read(action).await?;
-        let r = GetReply {
-            ok: true,
-            value: body,
+        let r = RaftReply {
+            data: body,
+            error: "".to_string(),
         };
         Ok(Response::new(r))
     }

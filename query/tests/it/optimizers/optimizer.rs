@@ -40,15 +40,17 @@ pub fn generate_partitions(workers: u64, total: u64) -> Partitions {
     partitions
 }
 
+use common_base::tokio;
 use common_exception::Result;
 use databend_query::optimizers::Optimizers;
+use databend_query::sql::PlanParser;
 
-#[test]
-fn test_literal_false_filter() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_literal_false_filter() -> Result<()> {
     let query = "select * from numbers_mt(10) where 1 + 2 = 2";
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = crate::tests::parse_query(query, &ctx)?;
+    let plan = PlanParser::parse(query, ctx.clone()).await?;
     let mut optimizer = Optimizers::without_scatters(ctx);
     let optimized = optimizer.optimize(&plan)?;
     let actual = format!("{:?}", optimized);
@@ -56,14 +58,14 @@ fn test_literal_false_filter() -> Result<()> {
     let expect = "\
         Projection: number:UInt64\
         \n  Filter: false\
-        \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0], filters: [((1 + 2) = 2)]]";
+        \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [((1 + 2) = 2)]]";
 
     assert_eq!(actual, expect);
     Ok(())
 }
 
-#[test]
-fn test_skip_read_data_source() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_skip_read_data_source() -> Result<()> {
     struct Test {
         name: &'static str,
         query: &'static str,
@@ -77,7 +79,7 @@ fn test_skip_read_data_source() -> Result<()> {
                 expect:"\
                 Projection: number:UInt64\
                 \n  Filter: false\
-                \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0], filters: [((1 + 2) = 2)]]",
+                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [((1 + 2) = 2)]]",
             },
             Test {
                 name: "Limit with zero should skip the scan",
@@ -86,7 +88,7 @@ fn test_skip_read_data_source() -> Result<()> {
                 Limit: 0\
                 \n  Projection: number:UInt64\
                 \n    Filter: true\
-                \n      ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0], filters: [true]]",
+                \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [true]]",
             },
             Test {
                 name: "Having with 'having 1+1=3' should skip the scan",
@@ -97,13 +99,13 @@ fn test_skip_read_data_source() -> Result<()> {
                 \n    AggregatorFinal: groupBy=[[(number % 10)]], aggr=[[avg(number)]]\
                 \n      AggregatorPartial: groupBy=[[(number % 10)]], aggr=[[avg(number)]]\
                 \n        Expression: (number % 10):UInt8, number:UInt64 (Before GroupBy)\
-                \n          ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0]]",
+                \n          ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0]]",
             },
         ];
 
     for test in tests {
         let ctx = crate::tests::create_query_context()?;
-        let plan = crate::tests::parse_query(test.query, &ctx)?;
+        let plan = PlanParser::parse(test.query, ctx.clone()).await?;
         let mut optimizer = Optimizers::without_scatters(ctx);
 
         let optimized_plan = optimizer.optimize(&plan)?;

@@ -60,7 +60,7 @@ fn test_expression_plan() -> Result<()> {
         input: Arc::new(plan),
     });
     let expect ="Filter: (((((((number + 1) = 4) and (number != 4)) and (number < 4)) and (number <= 4)) and (number > 4)) and (not (number >= 4)))\
-    \n  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
+    \n  ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]";
     let actual = format!("{:?}", explain);
     assert_eq!(expect, actual);
     Ok(())

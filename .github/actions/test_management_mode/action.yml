@@ -1,0 +1,48 @@
+name: 'Test Management Mode'
+description: 'Running stateless tests in management-mode'
+inputs:
+  profile:
+    description: 'The profile for this test'
+    required: true
+    default: 'debug'
+runs:
+  using: "composite"
+  steps:
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
+
+    - name: Add rust target
+      shell: bash
+      run: rustup target add ${{ matrix.config.target }}
+
+    # If you need to reset the cache version, increment the number after `v`
+    - uses: Swatinem/rust-cache@v1
+      with:
+        sharedKey: stateless-v1
+
+    - uses: actions/download-artifact@v2
+      with:
+        name: ${{ inputs.profile }}-${{ github.sha }}-${{ matrix.config.os }}-${{ matrix.config.target }}
+        path: ./target/debug
+
+    - name: Install mysql client for macos-11
+      shell: bash
+      if: ${{ matrix.config.os == 'macos-11' }}
+      run: |
+        brew install mysql
+
+    - name: Install python dependences
+      shell: bash
+      run: |
+        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector
+
+    - name: Set up file as executable
+      shell: bash
+      run: |
+        chmod +x ./target/debug/databend-*
+
+    - name: Run Stateless Tests with Management Mode
+      shell: bash
+      if: matrix.config.os != 'ubuntu-latest'
+      run: |
+        bash ./scripts/ci/ci-run-stateless-tests-management-mode.sh

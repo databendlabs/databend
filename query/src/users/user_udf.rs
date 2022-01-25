@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
 
@@ -20,12 +21,23 @@ use crate::users::UserApiProvider;
 /// UDF operations.
 impl UserApiProvider {
     // Add a new UDF.
-    pub async fn add_udf(&self, tenant: &str, info: UserDefinedFunction) -> Result<u64> {
+    pub async fn add_udf(
+        &self,
+        tenant: &str,
+        info: UserDefinedFunction,
+        if_not_exists: bool,
+    ) -> Result<u64> {
         let udf_api_client = self.get_udf_api_client(tenant);
         let add_udf = udf_api_client.add_udf(info);
         match add_udf.await {
             Ok(res) => Ok(res),
-            Err(failure) => Err(failure.add_message_back("(while add UDF).")),
+            Err(e) => {
+                if if_not_exists && e.code() == ErrorCode::udf_already_exists_code() {
+                    Ok(u64::MIN)
+                } else {
+                    Err(e)
+                }
+            }
         }
     }
 
@@ -35,7 +47,7 @@ impl UserApiProvider {
         let update_udf = udf_api_client.update_udf(info, None);
         match update_udf.await {
             Ok(res) => Ok(res),
-            Err(failure) => Err(failure.add_message_back("(while update UDF).")),
+            Err(e) => Err(e.add_message_back("(while update UDF).")),
         }
     }
 
@@ -52,22 +64,22 @@ impl UserApiProvider {
         let get_udfs = udf_api_client.get_udfs();
 
         match get_udfs.await {
-            Err(failure) => Err(failure.add_message_back("(while get UDFs).")),
+            Err(e) => Err(e.add_message_back("(while get UDFs).")),
             Ok(seq_udfs_info) => Ok(seq_udfs_info),
         }
     }
 
     // Drop a UDF by name.
-    pub async fn drop_udf(&self, tenant: &str, udf_name: &str, if_exist: bool) -> Result<()> {
+    pub async fn drop_udf(&self, tenant: &str, udf_name: &str, if_exists: bool) -> Result<()> {
         let udf_api_client = self.get_udf_api_client(tenant);
         let drop_udf = udf_api_client.drop_udf(udf_name, None);
         match drop_udf.await {
             Ok(res) => Ok(res),
-            Err(failure) => {
-                if if_exist {
+            Err(e) => {
+                if if_exists {
                     Ok(())
                 } else {
-                    Err(failure.add_message_back("(while drop UDF)"))
+                    Err(e.add_message_back("(while drop UDF)"))
                 }
             }
         }

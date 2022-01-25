@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#![feature(io_error_other)]
+#![feature(mixed_integer_ops)]
 
 mod dal;
 mod ops;
@@ -20,3 +22,10 @@ pub mod error;
 pub mod services;
 
 pub use dal::DataAccessor;
+
+#[cfg(test)]
+mod tests {
+    mod ops {
+        mod io;
+    }
+}

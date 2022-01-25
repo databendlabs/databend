@@ -14,11 +14,9 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
+use databend_query::sql::PlanParser;
 use futures::stream::StreamExt;
-
-use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_table_interpreter() -> Result<()> {
@@ -31,27 +29,24 @@ async fn test_create_table_interpreter() -> Result<()> {
         ) Engine = Null\
     ";
 
-        if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY, &ctx)? {
-            let interpreter = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let mut stream = interpreter.execute(None).await?;
-            while let Some(_block) = stream.next().await {}
+        let plan = PlanParser::parse(TEST_CREATE_QUERY, ctx.clone()).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let mut stream = interpreter.execute(None).await?;
+        while let Some(_block) = stream.next().await {}
 
-            let schema = plan.schema();
+        let schema = plan.schema();
 
-            let field_a = schema.field_with_name("a").unwrap();
-            assert_eq!(
-                format!("{:?}", field_a),
-                r#"DataField { name: "a", data_type: Int64, nullable: false, default_expr: "{\"Literal\":{\"value\":{\"UInt8\":3},\"column_name\":null,\"data_type\":\"UInt8\"}}" }"#
-            );
+        let field_a = schema.field_with_name("a").unwrap();
+        assert_eq!(
+            format!("{:?}", field_a),
+            r#"DataField { name: "a", data_type: Int64, nullable: false, default_expr: "{\"Literal\":{\"value\":{\"UInt8\":3},\"column_name\":null,\"data_type\":\"UInt8\"}}" }"#
+        );
 
-            let field_b = schema.field_with_name("b").unwrap();
-            assert_eq!(
-                format!("{:?}", field_b),
-                r#"DataField { name: "b", data_type: Int32, nullable: true, default_expr: "{\"BinaryExpression\":{\"left\":{\"Column\":\"a\"},\"op\":\"+\",\"right\":{\"Literal\":{\"value\":{\"UInt8\":3},\"column_name\":null,\"data_type\":\"UInt8\"}}}}" }"#
-            );
-        } else {
-            panic!()
-        }
+        let field_b = schema.field_with_name("b").unwrap();
+        assert_eq!(
+            format!("{:?}", field_b),
+            r#"DataField { name: "b", data_type: Int32, nullable: true, default_expr: "{\"BinaryExpression\":{\"left\":{\"Column\":\"a\"},\"op\":\"+\",\"right\":{\"Literal\":{\"value\":{\"UInt8\":3},\"column_name\":null,\"data_type\":\"UInt8\"}}}}" }"#
+        );
     }
 
     {
@@ -61,41 +56,39 @@ async fn test_create_table_interpreter() -> Result<()> {
             ) Engine = Null\
         ";
 
-        if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY, &ctx)? {
-            let executor = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let _ = executor.execute(None).await?;
-        }
+        let plan = PlanParser::parse(TEST_CREATE_QUERY, ctx.clone()).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let _ = executor.execute(None).await?;
+    }
 
+    {
         static TEST_CREATE_QUERY_SELECT: &str =
             "CREATE TABLE default.test_b(a varchar, x int) select b, a from default.test_a";
 
-        if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY_SELECT, &ctx)? {
-            let interpreter = CreateTableInterpreter::try_create(ctx, plan.clone())?;
-            let mut stream = interpreter.execute(None).await?;
-            while let Some(_block) = stream.next().await {}
+        let plan = PlanParser::parse(TEST_CREATE_QUERY_SELECT, ctx.clone()).await?;
+        let interpreter = InterpreterFactory::get(ctx, plan.clone())?;
+        let mut stream = interpreter.execute(None).await?;
+        while let Some(_block) = stream.next().await {}
 
-            let schema = plan.schema();
+        let schema = plan.schema();
 
-            let field_a = schema.field_with_name("a").unwrap();
-            assert_eq!(
-                format!("{:?}", field_a),
-                r#"DataField { name: "a", data_type: String, nullable: true }"#
-            );
+        let field_a = schema.field_with_name("a").unwrap();
+        assert_eq!(
+            format!("{:?}", field_a),
+            r#"DataField { name: "a", data_type: String, nullable: true }"#
+        );
 
-            let field_x = schema.field_with_name("x").unwrap();
-            assert_eq!(
-                format!("{:?}", field_x),
-                r#"DataField { name: "x", data_type: Int32, nullable: true }"#
-            );
+        let field_x = schema.field_with_name("x").unwrap();
+        assert_eq!(
+            format!("{:?}", field_x),
+            r#"DataField { name: "x", data_type: Int32, nullable: true }"#
+        );
 
-            let field_b = schema.field_with_name("b").unwrap();
-            assert_eq!(
-                format!("{:?}", field_b),
-                r#"DataField { name: "b", data_type: Int32, nullable: true }"#
-            );
-        } else {
-            panic!()
-        }
+        let field_b = schema.field_with_name("b").unwrap();
+        assert_eq!(
+            format!("{:?}", field_b),
+            r#"DataField { name: "b", data_type: Int32, nullable: true }"#
+        );
     }
 
     Ok(())

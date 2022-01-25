@@ -6,11 +6,14 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lib]
+doctest = false
+
 [dependencies]
 async-compat = "0.2.1"
 async-trait = "0.1.52"
 bytes = "1.1.0"
-futures = "0.3.19"
+futures = { version="0.3.19", features = ["alloc"]}
 tokio = { version = "1.15.0", features = ["full"] }
 thiserror = "1.0.30"
 aws-config = "0.4.0"

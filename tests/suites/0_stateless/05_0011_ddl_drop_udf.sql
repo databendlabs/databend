@@ -5,4 +5,4 @@ DROP FUNCTION isnotempty;
 
 DROP FUNCTION IF EXISTS isnotempty;
 
-DROP FUNCTION isnotempty; -- {ErrorCode 4071}
+DROP FUNCTION isnotempty; -- {ErrorCode 2602}

@@ -53,10 +53,21 @@ impl FlightDataStream {
                     }
 
                     let arrow_schema = Arc::new(schema.to_arrow());
-                    Ok(
-                        deserialize_batch(&flight_data, arrow_schema, true, &Default::default())
-                            .map(create_data_block)?,
+                    let ipc_fields = common_arrow::arrow::io::ipc::write::default_ipc_fields(
+                        &arrow_schema.fields,
+                    );
+                    let ipc_schema = common_arrow::arrow::io::ipc::IpcSchema {
+                        fields: ipc_fields,
+                        is_little_endian: true,
+                    };
+
+                    Ok(deserialize_batch(
+                        &flight_data,
+                        arrow_schema,
+                        &ipc_schema,
+                        &Default::default(),
                     )
+                    .map(create_data_block)?)
                 }
             }
         })
@@ -66,7 +77,7 @@ impl FlightDataStream {
     #[inline]
     #[allow(dead_code)]
     pub fn from_receiver(
-        schema_ref: DataSchemaRef,
+        schema: DataSchemaRef,
         inner: Receiver<Result<FlightData, ErrorCode>>,
     ) -> impl Stream<Item = Result<DataBlock, ErrorCode>> {
         ReceiverStream::new(inner).map(move |flight_data| match flight_data {
@@ -83,13 +94,18 @@ impl FlightDataStream {
                     DataBlock::create(Arc::new(schema), columns)
                 }
 
-                Ok(deserialize_batch(
-                    &flight_data,
-                    Arc::new(schema_ref.to_arrow()),
-                    true,
-                    &Default::default(),
+                let arrow_schema = Arc::new(schema.to_arrow());
+                let ipc_fields =
+                    common_arrow::arrow::io::ipc::write::default_ipc_fields(&arrow_schema.fields);
+                let ipc_schema = common_arrow::arrow::io::ipc::IpcSchema {
+                    fields: ipc_fields,
+                    is_little_endian: true,
+                };
+
+                Ok(
+                    deserialize_batch(&flight_data, arrow_schema, &ipc_schema, &Default::default())
+                        .map(create_data_block)?,
                 )
-                .map(create_data_block)?)
             }
         })
     }

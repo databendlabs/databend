@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
@@ -76,11 +77,14 @@ impl RangeFilter {
     }
 
     pub fn eval(&self, stats: &BlockStatistics) -> Result<bool> {
-        let columns = self
-            .stat_columns
-            .iter()
-            .map(|c| c.apply_stat_value(stats, self.origin.clone())?.to_array())
-            .collect::<Result<Vec<_>>>()?;
+        let mut columns = Vec::with_capacity(self.stat_columns.len());
+        for col in self.stat_columns.iter() {
+            let val_opt = col.apply_stat_value(stats, self.origin.clone())?;
+            if val_opt.is_none() {
+                return Ok(true);
+            }
+            columns.push(val_opt.unwrap().to_array()?);
+        }
         let data_block = DataBlock::create_by_array(self.schema.clone(), columns);
         let executed_data_block = self.executor.execute(&data_block)?;
 
@@ -154,9 +158,12 @@ impl fmt::Display for StatType {
     }
 }
 
+pub type StatColumns = Vec<StatColumn>;
+pub type ColumnFields = HashMap<u32, DataField>;
+
 #[derive(Debug, Clone)]
 pub struct StatColumn {
-    column_fields: HashMap<u32, DataField>,
+    column_fields: ColumnFields,
     stat_type: StatType,
     stat_field: DataField,
     expr: Expression,
@@ -164,7 +171,7 @@ pub struct StatColumn {
 
 impl StatColumn {
     fn create(
-        column_fields: HashMap<u32, DataField>,
+        column_fields: ColumnFields,
         stat_type: StatType,
         field: &DataField,
         expr: Expression,
@@ -189,7 +196,7 @@ impl StatColumn {
         &self,
         stats: &BlockStatistics,
         schema: DataSchemaRef,
-    ) -> Result<DataValue> {
+    ) -> Result<Option<DataValue>> {
         if self.stat_type == StatType::Nulls {
             // The len of column_fields is 1.
             let (k, _) = self.column_fields.iter().next().unwrap();
@@ -199,7 +206,7 @@ impl StatColumn {
                     k
                 ))
             })?;
-            return Ok(DataValue::UInt64(Some(stat.null_count)));
+            return Ok(Some(DataValue::UInt64(Some(stat.null_count))));
         }
 
         let mut single_point = true;
@@ -232,11 +239,9 @@ impl StatColumn {
             &self.expr,
             variables,
             single_point,
-        )?;
+        );
         if !monotonicity.is_monotonic {
-            return Err(ErrorCode::UnknownException(
-                "Expression is not monotonic in the block",
-            ));
+            return Ok(None);
         }
 
         let column_with_field_opt = match self.stat_type {
@@ -257,24 +262,14 @@ impl StatColumn {
             _ => unreachable!(),
         };
 
-        column_with_field_opt
-            .ok_or_else(|| {
-                ErrorCode::UnknownException(
-                    "Cannot get data value from column, because column is none",
-                )
-            })?
-            .column()
-            .try_get(0)
+        Ok(column_with_field_opt.map(|v| v.column().try_get(0).unwrap()))
     }
 }
-
-pub type StatColumns = Vec<StatColumn>;
 
 struct VerifiableExprBuilder<'a> {
     op: &'a str,
     args: Expressions,
-    column_fields: HashMap<u32, DataField>,
-    field: DataField,
+    fields: Vec<(DataField, ColumnFields)>,
     stat_columns: &'a mut StatColumns,
 }
 
@@ -289,7 +284,7 @@ impl<'a> VerifiableExprBuilder<'a> {
             1 => {
                 let cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[0])?;
                 match cols.len() {
-                    1 => (exprs, cols, op),
+                    1 => (exprs, vec![cols], op),
                     _ => {
                         return Err(ErrorCode::UnknownException(
                             "Multi-column expressions are not currently supported",
@@ -301,15 +296,41 @@ impl<'a> VerifiableExprBuilder<'a> {
                 let lhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[0])?;
                 let rhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[1])?;
                 match (lhs_cols.len(), rhs_cols.len()) {
-                    (a, 0) if a > 0 => (vec![exprs[0].clone(), exprs[1].clone()], lhs_cols, op),
-                    (0, a) if a > 0 => {
+                    (0, 0) => {
+                        return Err(ErrorCode::UnknownException(
+                            "Constant expression donot need to be handled",
+                        ))
+                    }
+                    (_, 0) => (vec![exprs[0].clone(), exprs[1].clone()], vec![lhs_cols], op),
+                    (0, _) => {
                         let op = inverse_operator(op)?;
-                        (vec![exprs[1].clone(), exprs[0].clone()], rhs_cols, op)
+                        (vec![exprs[1].clone(), exprs[0].clone()], vec![rhs_cols], op)
                     }
                     _ => {
-                        return Err(ErrorCode::UnknownException(
-                            "Multi-column expressions are not currently supported",
-                        ));
+                        if !lhs_cols.is_disjoint(&rhs_cols) {
+                            return Err(ErrorCode::UnknownException(
+                                "Unsupported condition for left and right have same columns",
+                            ));
+                        }
+
+                        if !matches!(op, "=" | "<" | "<=" | ">" | ">=") {
+                            return Err(ErrorCode::UnknownException(format!(
+                                "Unsupported operator '{:?}' for multi-column expression",
+                                op
+                            )));
+                        }
+
+                        if !check_maybe_monotonic(&exprs[1])? {
+                            return Err(ErrorCode::UnknownException(
+                                "Only support the monotonic expression",
+                            ));
+                        }
+
+                        (
+                            vec![exprs[0].clone(), exprs[1].clone()],
+                            vec![lhs_cols, rhs_cols],
+                            op,
+                        )
                     }
                 }
             }
@@ -326,21 +347,22 @@ impl<'a> VerifiableExprBuilder<'a> {
             ));
         }
 
-        let mut column_fields = HashMap::with_capacity(cols.len());
-        for col in cols {
-            let (index, column_field) = schema
-                .column_with_name(col.as_str())
-                .ok_or_else(|| ErrorCode::UnknownException("Unable to find the column name"))?;
-            column_fields.insert(index as u32, column_field.clone());
-        }
+        let mut fields = Vec::with_capacity(cols.len());
 
-        let field = args[0].to_data_field(schema)?;
+        let left_cols = get_column_fields(schema, cols[0].clone())?;
+        let left_field = args[0].to_data_field(schema)?;
+        fields.push((left_field, left_cols));
+
+        if cols.len() > 1 {
+            let right_cols = get_column_fields(schema, cols[1].clone())?;
+            let right_field = args[1].to_data_field(schema)?;
+            fields.push((right_field, right_cols));
+        }
 
         Ok(Self {
             op,
             args,
-            column_fields,
-            field,
+            fields,
             stat_columns,
         })
     }
@@ -349,45 +371,88 @@ impl<'a> VerifiableExprBuilder<'a> {
         // TODO: support in/not in.
         match self.op {
             "isnull" => {
-                let nulls_expr = self.nulls_column_expr()?;
+                let nulls_expr = self.nulls_column_expr(0)?;
                 let scalar_expr = lit(0u64);
                 Ok(nulls_expr.gt(scalar_expr))
             }
             "isnotnull" => {
-                let min_expr = self.min_column_expr()?;
+                let left_min = self.min_column_expr(0)?;
                 Ok(Expression::create_scalar_function("isNotNull", vec![
-                    min_expr,
+                    left_min,
                 ]))
             }
             "=" => {
-                let min_expr = self.min_column_expr()?;
-                let max_expr = self.max_column_expr()?;
-                Ok(min_expr
-                    .lt_eq(self.args[1].clone())
-                    .and(max_expr.gt_eq(self.args[1].clone())))
+                // left = right => min_left <= max_right and max_left >= min_right
+                let left_min = self.min_column_expr(0)?;
+                let left_max = self.max_column_expr(0)?;
+
+                let right_min = if self.fields.len() == 1 {
+                    self.args[1].clone()
+                } else {
+                    self.min_column_expr(1)?
+                };
+                let right_max = if self.fields.len() == 1 {
+                    self.args[1].clone()
+                } else {
+                    self.max_column_expr(1)?
+                };
+
+                Ok(left_min.lt_eq(right_max).and(left_max.gt_eq(right_min)))
             }
             "!=" => {
-                let min_expr = self.min_column_expr()?;
-                let max_expr = self.max_column_expr()?;
-                Ok(min_expr
+                let left_min = self.min_column_expr(0)?;
+                let left_max = self.max_column_expr(0)?;
+                Ok(left_min
                     .not_eq(self.args[1].clone())
-                    .or(max_expr.not_eq(self.args[1].clone())))
+                    .or(left_max.not_eq(self.args[1].clone())))
             }
             ">" => {
-                let max_expr = self.max_column_expr()?;
-                Ok(max_expr.gt(self.args[1].clone()))
+                // left > right => max_left > min_right
+                let left_max = self.max_column_expr(0)?;
+
+                let right_min = if self.fields.len() == 1 {
+                    self.args[1].clone()
+                } else {
+                    self.min_column_expr(1)?
+                };
+
+                Ok(left_max.gt(right_min))
             }
             ">=" => {
-                let max_expr = self.max_column_expr()?;
-                Ok(max_expr.gt_eq(self.args[1].clone()))
+                // left >= right => max_left >= min_right
+                let left_max = self.max_column_expr(0)?;
+
+                let right_min = if self.fields.len() == 1 {
+                    self.args[1].clone()
+                } else {
+                    self.min_column_expr(1)?
+                };
+
+                Ok(left_max.gt_eq(right_min))
             }
             "<" => {
-                let min_expr = self.min_column_expr()?;
-                Ok(min_expr.lt(self.args[1].clone()))
+                // left < right => min_left < max_right
+                let left_min = self.min_column_expr(0)?;
+
+                let right_max = if self.fields.len() == 1 {
+                    self.args[1].clone()
+                } else {
+                    self.max_column_expr(1)?
+                };
+
+                Ok(left_min.lt(right_max))
             }
             "<=" => {
-                let min_expr = self.min_column_expr()?;
-                Ok(min_expr.lt_eq(self.args[1].clone()))
+                // left <= right => min_left <= max_right
+                let left_min = self.min_column_expr(0)?;
+
+                let right_max = if self.fields.len() == 1 {
+                    self.args[1].clone()
+                } else {
+                    self.max_column_expr(1)?
+                };
+
+                Ok(left_min.lt_eq(right_max))
             }
             "like" => {
                 if let Expression::Literal {
@@ -399,11 +464,11 @@ impl<'a> VerifiableExprBuilder<'a> {
                     let left = left_bound_for_like_pattern(v);
                     if !left.is_empty() {
                         let right = right_bound_for_like_pattern(left.clone());
-                        let max_expr = self.max_column_expr()?;
+                        let max_expr = self.max_column_expr(0)?;
                         if right.is_empty() {
                             return Ok(max_expr.gt_eq(lit(left)));
                         } else {
-                            let min_expr = self.min_column_expr()?;
+                            let min_expr = self.min_column_expr(0)?;
                             return Ok(max_expr.gt_eq(lit(left)).and(min_expr.lt(lit(right))));
                         }
                     }
@@ -423,8 +488,8 @@ impl<'a> VerifiableExprBuilder<'a> {
                         // e.g. col not like 'abc' => min_col != 'abc' or max_col != 'abc'
                         PatternType::OrdinalStr => {
                             let const_arg = left_bound_for_like_pattern(v);
-                            let max_expr = self.max_column_expr()?;
-                            let min_expr = self.min_column_expr()?;
+                            let max_expr = self.max_column_expr(0)?;
+                            let min_expr = self.min_column_expr(0)?;
                             return Ok(min_expr
                                 .not_eq(lit(const_arg.clone()))
                                 .or(max_expr.not_eq(lit(const_arg))));
@@ -434,11 +499,11 @@ impl<'a> VerifiableExprBuilder<'a> {
                             let left = left_bound_for_like_pattern(v);
                             if !left.is_empty() {
                                 let right = right_bound_for_like_pattern(left.clone());
-                                let min_expr = self.min_column_expr()?;
+                                let min_expr = self.min_column_expr(0)?;
                                 if right.is_empty() {
                                     return Ok(min_expr.lt(lit(left)));
                                 } else {
-                                    let max_expr = self.max_column_expr()?;
+                                    let max_expr = self.max_column_expr(0)?;
                                     return Ok(min_expr
                                         .lt(lit(left))
                                         .or(max_expr.gt_eq(lit(right))));
@@ -459,33 +524,34 @@ impl<'a> VerifiableExprBuilder<'a> {
         }
     }
 
-    fn stat_column_expr(&mut self, stat_type: StatType) -> Result<Expression> {
+    fn stat_column_expr(&mut self, stat_type: StatType, index: usize) -> Result<Expression> {
+        let (data_field, column_fields) = self.fields[index].clone();
         let stat_col = StatColumn::create(
-            self.column_fields.clone(),
+            column_fields,
             stat_type,
-            &self.field,
-            self.args[0].clone(),
+            &data_field,
+            self.args[index].clone(),
         );
         if !self
             .stat_columns
             .iter()
-            .any(|c| c.stat_type == stat_type && c.stat_field.name() == self.field.name())
+            .any(|c| c.stat_type == stat_type && c.stat_field.name() == data_field.name())
         {
             self.stat_columns.push(stat_col.clone());
         }
         Ok(Expression::Column(stat_col.stat_field.name().to_owned()))
     }
 
-    fn min_column_expr(&mut self) -> Result<Expression> {
-        self.stat_column_expr(StatType::Min)
+    fn min_column_expr(&mut self, index: usize) -> Result<Expression> {
+        self.stat_column_expr(StatType::Min, index)
     }
 
-    fn max_column_expr(&mut self) -> Result<Expression> {
-        self.stat_column_expr(StatType::Max)
+    fn max_column_expr(&mut self, index: usize) -> Result<Expression> {
+        self.stat_column_expr(StatType::Max, index)
     }
 
-    fn nulls_column_expr(&mut self) -> Result<Expression> {
-        self.stat_column_expr(StatType::Nulls)
+    fn nulls_column_expr(&mut self, index: usize) -> Result<Expression> {
+        self.stat_column_expr(StatType::Nulls, index)
     }
 }
 
@@ -560,4 +626,15 @@ fn check_maybe_monotonic(expr: &Expression) -> Result<bool> {
         Expression::Cast { expr, .. } => check_maybe_monotonic(expr),
         _ => Ok(false),
     }
+}
+
+fn get_column_fields(schema: &DataSchemaRef, cols: HashSet<String>) -> Result<ColumnFields> {
+    let mut column_fields = HashMap::with_capacity(cols.len());
+    for col in &cols {
+        let (index, field) = schema
+            .column_with_name(col.as_str())
+            .ok_or_else(|| ErrorCode::UnknownException("Unable to find the column name"))?;
+        column_fields.insert(index as u32, field.clone());
+    }
+    Ok(column_fields)
 }

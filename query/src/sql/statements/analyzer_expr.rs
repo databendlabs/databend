@@ -28,6 +28,7 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
 use common_planners::Expression;
 use sqlparser::ast::Expr;
+use sqlparser::ast::FunctionArgExpr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::Query;
 use sqlparser::ast::UnaryOperator;
@@ -66,6 +67,7 @@ impl ExpressionAnalyzer {
                 ExprRPNItem::Subquery(v) => self.analyze_scalar_subquery(v, &mut stack).await?,
                 ExprRPNItem::Cast(v) => self.analyze_cast(v, &mut stack)?,
                 ExprRPNItem::Between(negated) => self.analyze_between(*negated, &mut stack)?,
+                ExprRPNItem::InList(v) => self.analyze_inlist(v, &mut stack)?,
             }
         }
 
@@ -77,8 +79,47 @@ impl ExpressionAnalyzer {
         }
     }
 
+    pub async fn analyze_function_arg(&self, arg_expr: &FunctionArgExpr) -> Result<Expression> {
+        match arg_expr {
+            FunctionArgExpr::Expr(expr) => self.analyze(expr).await,
+            FunctionArgExpr::Wildcard => Ok(Expression::Wildcard),
+            FunctionArgExpr::QualifiedWildcard(_) => Err(ErrorCode::SyntaxException(std::format!(
+                "Unsupported arg statement: {}",
+                arg_expr
+            ))),
+        }
+    }
+
     fn analyze_value(value: &Value, args: &mut Vec<Expression>) -> Result<()> {
         args.push(ValueExprAnalyzer::analyze(value)?);
+        Ok(())
+    }
+
+    fn analyze_inlist(&self, info: &InListInfo, args: &mut Vec<Expression>) -> Result<()> {
+        let mut list = Vec::with_capacity(info.list_size);
+        for _index in 0..info.list_size {
+            match args.pop() {
+                None => {
+                    return Err(ErrorCode::LogicalError("It's a bug."));
+                }
+                Some(arg) => {
+                    list.insert(0, arg);
+                }
+            }
+        }
+
+        let expr = args
+            .pop()
+            .ok_or_else(|| ErrorCode::LogicalError("It's a bug."))?;
+        list.insert(0, expr);
+
+        let op = if info.negated {
+            "NOT_IN".to_string()
+        } else {
+            "IN".to_string()
+        };
+
+        args.push(Expression::ScalarFunction { op, args: list });
         Ok(())
     }
 
@@ -334,6 +375,11 @@ struct FunctionExprInfo {
     parameters: Vec<Value>,
 }
 
+struct InListInfo {
+    list_size: usize,
+    negated: bool,
+}
+
 enum ExprRPNItem {
     Value(Value),
     Identifier(Ident),
@@ -344,6 +390,7 @@ enum ExprRPNItem {
     Subquery(Box<Query>),
     Cast(common_datavalues::DataType),
     Between(bool),
+    InList(InListInfo),
 }
 
 impl ExprRPNItem {
@@ -426,9 +473,6 @@ impl ExprRPNBuilder {
             Expr::BinaryOp { op, .. } => {
                 self.rpn.push(ExprRPNItem::binary_operator(op.to_string()));
             }
-            Expr::Wildcard => {
-                self.rpn.push(ExprRPNItem::Wildcard);
-            }
             Expr::Exists(subquery) => {
                 self.rpn.push(ExprRPNItem::Exists(subquery.clone()));
             }
@@ -488,6 +532,14 @@ impl ExprRPNBuilder {
                         .push(ExprRPNItem::function(String::from("tuple"), len));
                 }
             }
+            Expr::InList {
+                expr: _,
+                list,
+                negated,
+            } => self.rpn.push(ExprRPNItem::InList(InListInfo {
+                list_size: list.len(),
+                negated: *negated,
+            })),
             _ => (),
         }
 
@@ -527,5 +579,10 @@ impl ExprVisitor for ExprRPNBuilder {
 
     async fn post_visit(&mut self, expr: &Expr) -> Result<()> {
         self.process_expr(expr)
+    }
+
+    fn visit_wildcard(&mut self) -> Result<()> {
+        self.rpn.push(ExprRPNItem::Wildcard);
+        Ok(())
     }
 }

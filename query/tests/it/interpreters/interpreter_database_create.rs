@@ -14,12 +14,10 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::interpreters::*;
+use databend_query::sql::PlanParser;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_database_interpreter() -> Result<()> {
@@ -27,14 +25,11 @@ async fn test_create_database_interpreter() -> Result<()> {
 
     let ctx = crate::tests::create_query_context()?;
 
-    if let PlanNode::CreateDatabase(plan) = parse_query("create database db1", &ctx)? {
-        let executor = CreateDatabaseInterpreter::try_create(ctx, plan.clone())?;
-        assert_eq!(executor.name(), "CreateDatabaseInterpreter");
-        let mut stream = executor.execute(None).await?;
-        while let Some(_block) = stream.next().await {}
-    } else {
-        panic!()
-    }
+    let plan = PlanParser::parse("create database db1", ctx.clone()).await?;
+    let executor = InterpreterFactory::get(ctx, plan.clone())?;
+    assert_eq!(executor.name(), "CreateDatabaseInterpreter");
+    let mut stream = executor.execute(None).await?;
+    while let Some(_block) = stream.next().await {}
 
     Ok(())
 }

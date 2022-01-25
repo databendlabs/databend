@@ -22,7 +22,6 @@ pull_request_rules:
     actions:
       queue:
         name: shared_queue
-        priority: high
 
   - name: put other pr to queue
     conditions:
@@ -33,7 +32,6 @@ pull_request_rules:
     actions:
       queue:
         name: shared_queue
-        priority: medium
 
 
   # if there is a conflict in a approved PR, ping the author.

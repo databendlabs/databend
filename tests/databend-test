@@ -65,7 +65,6 @@ def run_single_test(args, ext, client_options, case_file, stdout_file,
         pattern = "sed '/^\s*--/d' {test} | {client} {options} > {stdout} 2>&1"
 
     command = pattern.format(**params)
-
     proc = Popen(command, shell=True, env=os.environ)
     start_time = datetime.now()
     while (datetime.now() -
@@ -251,6 +250,12 @@ def run_tests_array(all_tests_with_params):
                     if args.mode == 'cluster' and os.path.isfile(
                             cluster_result_file):
                         result_file = cluster_result_file
+                        stdout_file = os.path.join(
+                            suite_tmp_dir,
+                            name) + file_suffix + '_cluster.stdout'
+                        stderr_file = os.path.join(
+                            suite_tmp_dir,
+                            name) + file_suffix + '_cluster.stderr'
 
                     proc, stdout, stderr, total_time = run_single_test(
                         args, ext, client_options, case_file, stdout_file,
@@ -619,7 +624,8 @@ if __name__ == '__main__':
     )
 
     args = parser.parse_args()
-
+    if os.getenv("DATABEND_DEV_CONTAINER") is not None:
+        args.client = 'stdbuf -i0 -o0 -e0 {}'.format(args.client)
     if args.suites is None and os.path.isdir('suites'):
         args.suites = 'suites'
     if args.suites is None:

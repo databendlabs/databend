@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::Result;
+use databend_query::sql::PlanParser;
 use pretty_assertions::assert_eq;
 
-use crate::tests::parse_query;
-
-#[test]
-fn test_plan_parser() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_plan_parser() -> Result<()> {
     struct Test {
         name: &'static str,
         sql: &'static str,
@@ -114,13 +114,13 @@ fn test_plan_parser() -> Result<()> {
         Test {
             name: "cast-passed",
             sql: "select cast('1' as int)",
-            expect: "Projection: cast('1' as Int32):Int32\n  Expression: cast(1 as Int32):Int32 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
+            expect: "Projection: cast('1' as Int32):Int32\n  Expression: cast(1 as Int32):Int32 (Before Projection)\n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
             error: "",
         },
         Test {
             name: "database-passed",
             sql: "select database()",
-            expect: "Projection: database():String\n  Expression: database(default):String (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
+            expect: "Projection: database():String\n  Expression: database(default):String (Before Projection)\n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
             error: "",
         },
         Test {
@@ -128,25 +128,25 @@ fn test_plan_parser() -> Result<()> {
             sql: "select number + 1, number + 3 from numbers(10) group by number + 2, number + 1",
             expect: "",
             // TODO: better message
-            error: "Code: 6, displayText = Unable to get field named \"number\". Valid fields: [\"(number + 2)\", \"(number + 1)\"] (while in select before projection).",
+            error: "Code: 1006, displayText = Unable to get field named \"number\". Valid fields: [\"(number + 2)\", \"(number + 1)\"] (while in select before projection).",
             // error: "Code: 26, displayText = Column `number` is not under aggregate function and not in GROUP BY: While processing [(number + 1), (number + 3)].",
         },
         Test {
             name: "select-count",
             sql: "SELECT COUNT() FROM numbers(10)",
-            expect: "Projection: COUNT():UInt64\n  AggregatorFinal: groupBy=[[]], aggr=[[COUNT()]]\n    AggregatorPartial: groupBy=[[]], aggr=[[COUNT()]]\n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+            expect: "Projection: COUNT():UInt64\n  AggregatorFinal: groupBy=[[]], aggr=[[COUNT()]]\n    AggregatorPartial: groupBy=[[]], aggr=[[COUNT()]]\n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
             error: "",
         },
         Test {
             name: "unsupported-function",
             sql: "select unsupported()",
             expect: "",
-            error: "Code: 4071, displayText = Unknown UDF unsupported (while in analyze select projection).",
+            error: "Code: 2602, displayText = Unknown UDF unsupported (while in analyze select projection).",
         },
         Test {
             name: "interval-passed",
             sql: "SELECT INTERVAL '1' year, INTERVAL '1' month, INTERVAL '1' day, INTERVAL '1' hour, INTERVAL '1' minute, INTERVAL '1' second",
-            expect: "Projection: 12:Interval(YearMonth), 1:Interval(YearMonth), 86400000:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime)\n  Expression: 12:Interval(YearMonth), 1:Interval(YearMonth), 86400000:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime) (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
+            expect: "Projection: 12:Interval(YearMonth), 1:Interval(YearMonth), 86400000:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime)\n  Expression: 12:Interval(YearMonth), 1:Interval(YearMonth), 86400000:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime) (Before Projection)\n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
             error: "",
         },
         // Test {
@@ -165,19 +165,19 @@ fn test_plan_parser() -> Result<()> {
             name: "insert-simple",
             sql: "insert into t(col1, col2) values(1,2), (3,4)",
             expect: "",
-            error: "Code: 25, displayText = Unknown table: 't'.",
+            error: "Code: 1025, displayText = Unknown table: 't'.",
         },
         Test {
             name: "insert-value-other-than-simple-expression",
             sql: "insert into t(col1, col2) values(1 + 0, 1 + 1), (3,4)",
             expect: "",
-            error: "Code: 25, displayText = Unknown table: 't'.",
+            error: "Code: 1025, displayText = Unknown table: 't'.",
         },
         Test {
             name: "insert-subquery-not-supported",
             sql: "insert into t select * from t",
             expect: "",
-            error: "Code: 25, displayText = Unknown table: 't'.",
+            error: "Code: 1025, displayText = Unknown table: 't'.",
         },
         Test {
             name: "select-full",
@@ -192,14 +192,14 @@ fn test_plan_parser() -> Result<()> {
             \n            AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]\
             \n              Expression: (number % 3):UInt8, (number + 1):UInt64 (Before GroupBy)\
             \n                Filter: (number > 1)\
-            \n                  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [(number > 1)]]",
+            \n                  ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(number > 1)]]",
             error: "",
         },
         Test {
             name: "unimplemented-cte",
             sql: "with t as ( select sum(number) n from numbers_mt(1000) )select * from t",
             expect: "",
-            error: "Code: 5, displayText = sql parser error: CTE is not yet implement.",
+            error: "Code: 1005, displayText = sql parser error: CTE is not yet implement.",
         },
         Test {
             name: "kleene-logic-null",
@@ -207,7 +207,7 @@ fn test_plan_parser() -> Result<()> {
             expect: "\
             Projection: number:UInt64\
             \n  Filter: NULL\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [NULL]]",
+            \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [NULL]]",
             error: "",
         },
         Test {
@@ -216,7 +216,7 @@ fn test_plan_parser() -> Result<()> {
             expect: "\
             Projection: number:UInt64\
             \n  Filter: (NULL AND true)\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [(NULL AND true)]]",
+            \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(NULL AND true)]]",
             error: "",
         },
         Test {
@@ -224,7 +224,7 @@ fn test_plan_parser() -> Result<()> {
             sql: "show metrics",
             expect: "\
             Projection: metric:String, kind:String, labels:String, value:String\
-            \n  ReadDataSource: scan partitions: [1], scan schema: [metric:String, kind:String, labels:String, value:String], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0, 1, 2, 3]]",
+            \n  ReadDataSource: scan schema: [metric:String, kind:String, labels:String, value:String], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0, 1, 2, 3]]",
             error: "",
         },
         Test {
@@ -232,14 +232,14 @@ fn test_plan_parser() -> Result<()> {
             sql: "show processlist",
             expect: "\
             Projection: id:String, type:String, host:String, user:String, state:String, database:String, extra_info:String, memory_usage:Int64, dal_metrics_read_bytes:UInt64, dal_metrics_write_bytes:UInt64, scan_progress_read_rows:UInt64, scan_progress_read_bytes:UInt64\
-            \n  ReadDataSource: scan partitions: [1], scan schema: [id:String, type:String, host:String;N, user:String;N, state:String, database:String, extra_info:String;N, memory_usage:Int64;N, dal_metrics_read_bytes:UInt64;N, dal_metrics_write_bytes:UInt64;N, scan_progress_read_rows:UInt64;N, scan_progress_read_bytes:UInt64;N], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]]",
+            \n  ReadDataSource: scan schema: [id:String, type:String, host:String;N, user:String;N, state:String, database:String, extra_info:String;N, memory_usage:Int64;N, dal_metrics_read_bytes:UInt64;N, dal_metrics_write_bytes:UInt64;N, scan_progress_read_rows:UInt64;N, scan_progress_read_bytes:UInt64;N], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]]",
             error: "",
         },
     ];
 
     let ctx = crate::tests::create_query_context()?;
     for t in tests {
-        match parse_query(t.sql, &ctx) {
+        match PlanParser::parse(t.sql, ctx.clone()).await {
             Ok(v) => {
                 assert_eq!(t.expect, format!("{:?}", v), "{}", t.name);
             }
