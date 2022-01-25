@@ -12,72 +12,89 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-use std::ops::Add;
 use std::ops::Mul;
-use std::ops::Sub;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::arithmetics_type::ResultTypeOfBinary;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use num::cast::AsPrimitive;
-use num_traits::WrappingAdd;
+use num::traits::AsPrimitive;
 use num_traits::WrappingMul;
-use num_traits::WrappingSub;
 
-use super::arithmetic::ArithmeticTrait;
-use crate::binary_arithmetic;
-use crate::impl_binary_arith;
-use crate::impl_wrapping_binary_arith;
-use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::BinaryArithmeticFunction;
-use crate::scalars::Function;
+use crate::scalars::Arithmetic2Description;
+use crate::scalars::BinaryArithmeticFunction2;
+use crate::scalars::Function2;
 use crate::scalars::Monotonicity;
-use crate::with_match_primitive_type;
+use crate::scalars::ScalarBinaryFunction;
 
-impl_wrapping_binary_arith!(ArithmeticWrappingMul, wrapping_mul);
+#[derive(Clone, Debug, Default)]
+struct MulFunction {}
 
-impl_binary_arith!(ArithmeticMul, *);
+impl<L, R, O> ScalarBinaryFunction<L, R, O> for MulFunction
+where
+    L: PrimitiveType + AsPrimitive<O>,
+    R: PrimitiveType + AsPrimitive<O>,
+    O: PrimitiveType + Mul<Output = O>,
+{
+    fn eval(&self, l: L::RefType<'_>, r: R::RefType<'_>) -> O {
+        l.to_owned_scalar().as_() * r.to_owned_scalar().as_()
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct WrappingMulFunction {}
+
+impl<L, R, O> ScalarBinaryFunction<L, R, O> for WrappingMulFunction
+where
+    L: PrimitiveType + AsPrimitive<O>,
+    R: PrimitiveType + AsPrimitive<O>,
+    O: IntegerType + WrappingMul<Output = O>,
+{
+    fn eval(&self, l: L::RefType<'_>, r: R::RefType<'_>) -> O {
+        l.to_owned_scalar()
+            .as_()
+            .wrapping_mul(&r.to_owned_scalar().as_())
+    }
+}
 
 pub struct ArithmeticMulFunction;
 
 impl ArithmeticMulFunction {
     pub fn try_create_func(
         _display_name: &str,
-        args: &[DataTypeAndNullable],
-    ) -> Result<Box<dyn Function>> {
-        let left_type = &args[0].data_type();
-        let right_type = &args[1].data_type();
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function2>> {
         let op = DataValueBinaryOperator::Mul;
+        let left_type = args[0].data_type_id();
+        let right_type = args[1].data_type_id();
 
-        let error_fn = || -> Result<Box<dyn Function>> {
+        let error_fn = || -> Result<Box<dyn Function2>> {
             Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
                 left_type, op, right_type
             )))
         };
 
-        if !left_type.is_numeric() || !right_type.is_numeric() {
-            return error_fn();
-        };
-
         with_match_primitive_type!(left_type, |$T| {
             with_match_primitive_type!(right_type, |$D| {
-                let result_type = <($T, $D) as ResultTypeOfBinary>::AddMul::data_type();
-                match result_type {
-                    DataType::UInt64 => BinaryArithmeticFunction::<ArithmeticWrappingMul<$T, $D, u64>>::try_create_func(
+                let result_type = <($T, $D) as ResultTypeOfBinary>::AddMul::to_data_type();
+                match result_type.data_type_id() {
+                    TypeID::UInt64 => BinaryArithmeticFunction2::<$T, $D, u64, _>::try_create_func(
                         op,
                         result_type,
+                        WrappingMulFunction::default(),
                     ),
-                    DataType::Int64 => BinaryArithmeticFunction::<ArithmeticWrappingMul<$T, $D, i64>>::try_create_func(
+                    TypeID::Int64 => BinaryArithmeticFunction2::<$T, $D, i64, _>::try_create_func(
                         op,
                         result_type,
+                        WrappingMulFunction::default(),
                     ),
-                    _ => BinaryArithmeticFunction::<ArithmeticMul<$T, $D, <($T, $D) as ResultTypeOfBinary>::AddMul>>::try_create_func(
+                    _ => BinaryArithmeticFunction2::<$T, $D, <($T, $D) as ResultTypeOfBinary>::AddMul, _>::try_create_func(
                         op,
                         result_type,
+                        MulFunction::default(),
                     ),
                 }
             }, {
@@ -88,8 +105,8 @@ impl ArithmeticMulFunction {
         })
     }
 
-    pub fn desc() -> ArithmeticDescription {
-        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> Arithmetic2Description {
+        Arithmetic2Description::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()

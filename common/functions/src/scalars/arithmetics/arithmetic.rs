@@ -16,13 +16,8 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionFactory;
-use crate::scalars::ArithmeticDivFunction;
 use crate::scalars::ArithmeticIntDivFunction;
-use crate::scalars::ArithmeticMinusFunction;
 use crate::scalars::ArithmeticModuloFunction;
-use crate::scalars::ArithmeticMulFunction;
-use crate::scalars::ArithmeticNegateFunction;
-use crate::scalars::ArithmeticPlusFunction;
 
 pub trait ArithmeticTrait {
     fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn>;
@@ -33,15 +28,6 @@ pub struct ArithmeticFunction;
 
 impl ArithmeticFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register_arithmetic("+", ArithmeticPlusFunction::desc());
-        factory.register_arithmetic("plus", ArithmeticPlusFunction::desc());
-        factory.register_arithmetic("-", ArithmeticMinusFunction::desc());
-        factory.register_arithmetic("minus", ArithmeticMinusFunction::desc());
-        factory.register_arithmetic("negate", ArithmeticNegateFunction::desc());
-        factory.register_arithmetic("*", ArithmeticMulFunction::desc());
-        factory.register_arithmetic("multiply", ArithmeticMulFunction::desc());
-        factory.register_arithmetic("/", ArithmeticDivFunction::desc());
-        factory.register_arithmetic("divide", ArithmeticDivFunction::desc());
         factory.register_arithmetic("%", ArithmeticModuloFunction::desc());
         factory.register_arithmetic("modulo", ArithmeticModuloFunction::desc());
         factory.register_arithmetic("div", ArithmeticIntDivFunction::desc());

@@ -22,6 +22,7 @@ pub trait ScalarUnaryFunction<L: Scalar, O: Scalar> {
 }
 
 /// A common struct to caculate Unary expression scalar op.
+#[derive(Clone)]
 pub struct ScalarUnaryExpression<L: Scalar, O: Scalar, F> {
     f: F,
     _phantom: PhantomData<(L, O)>,
