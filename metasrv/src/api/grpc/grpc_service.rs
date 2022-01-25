@@ -19,7 +19,7 @@ use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
 use common_meta_grpc::MetaGrpcReadReq;
 use common_meta_grpc::MetaGrpcWriteReq;
-use common_meta_types::protobuf::meta_server::Meta;
+use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::HandshakeRequest;
 use common_meta_types::protobuf::HandshakeResponse;
 use common_meta_types::protobuf::RaftReply;
@@ -37,12 +37,12 @@ use crate::executor::ActionHandler;
 use crate::meta_service::meta_service_impl::GrpcStream;
 use crate::meta_service::MetaNode;
 
-pub struct MetaGrpcImpl {
+pub struct MetaServiceImpl {
     token: GrpcToken,
     action_handler: ActionHandler,
 }
 
-impl MetaGrpcImpl {
+impl MetaServiceImpl {
     pub fn create(meta_node: Arc<MetaNode>) -> Self {
         Self {
             token: GrpcToken::create(),
@@ -66,7 +66,7 @@ impl MetaGrpcImpl {
 }
 
 #[async_trait::async_trait]
-impl Meta for MetaGrpcImpl {
+impl MetaService for MetaServiceImpl {
     // rpc handshake related type
     type HandshakeStream = GrpcStream<HandshakeResponse>;
 
