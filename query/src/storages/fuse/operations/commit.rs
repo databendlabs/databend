@@ -14,10 +14,11 @@
 //
 
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use backoff::backoff::Backoff;
-use backoff::ExponentialBackoff;
+use backoff::ExponentialBackoffBuilder;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -47,15 +48,37 @@ impl FuseTable {
         operation_log: TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
-        // TODO : configuration of backoff strategy
-        let mut backoff = ExponentialBackoff::default();
         let tid = self.table_info.ident.table_id;
 
         let mut tbl = self;
         let mut latest: Arc<dyn Table>;
 
-        let mut times = 0;
-        let begin = Instant::now();
+        let mut retry_times = 0;
+
+        let settings = ctx.get_settings();
+
+        // The initial retry delay in millisecond. By default,  it is 5 ms.
+        let init_delay = Duration::from_millis(settings.get_storage_occ_backoff_init_delay_ms()?);
+
+        // The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing.
+        // By default, it is 20 seconds.
+        let max_delay = Duration::from_millis(settings.get_storage_occ_backoff_max_delay_ms()?);
+
+        // The maximum elapsed time after the occ starts, beyond which there will be no more retries.
+        // By default, it is 2 minutes
+        let max_elapsed = Duration::from_millis(settings.get_storage_occ_backoff_max_elapsed_ms()?);
+
+        // see https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/ for more
+        // informations. (The strategy that crate backoff implements is “Equal Jitter”)
+
+        // To simplify the settings, using fixed common values for randomization_factor and multiplier
+        let mut backoff = ExponentialBackoffBuilder::new()
+            .with_initial_interval(init_delay)
+            .with_max_interval(max_delay)
+            .with_randomization_factor(0.5)
+            .with_multiplier(2.0)
+            .with_max_elapsed_time(Some(max_elapsed))
+            .build();
 
         loop {
             match tbl
@@ -90,14 +113,14 @@ impl FuseTable {
                                     latest.engine()
                                 ))
                             })?;
-                            times += 1;
+                            retry_times += 1;
                             continue;
                         }
                         None => {
                             break Err(ErrorCode::OCCRetryFailure(format!(
                                 "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
-                                times,
-                                Instant::now().duration_since(begin).as_millis(),
+                                retry_times,
+                                Instant::now().duration_since(backoff.start_time).as_millis(),
                                 tbl.table_info.name.as_str(),
                                 tbl.table_info.ident,
                             )));
