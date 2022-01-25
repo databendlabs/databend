@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+mod commit;
 mod optimize;
 mod part_info;
 mod purge_drop;
