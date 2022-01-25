@@ -125,6 +125,7 @@ where F: FnMut(usize)
         r
     }
 }
+
 /// Create a buffered `SeekableReader`
 ///
 /// ## Note
@@ -254,5 +255,29 @@ where S: super::Read<S> + 'd
         self.state = SeekableReaderState::Idle;
 
         Poll::Ready(Ok(self.pos))
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct HeaderRange(Option<u64>, Option<u64>);
+
+impl HeaderRange {
+    pub fn new(offset: Option<u64>, size: Option<u64>) -> Self {
+        HeaderRange(offset, size)
+    }
+}
+
+impl ToString for HeaderRange {
+    // # NOTE
+    //
+    // - `bytes=-1023` means get the suffix of the file, we must set the start to 0.
+    // - `bytes=0-1023` means get the first 1024 bytes, we must set the end to 1023.
+    fn to_string(&self) -> String {
+        match (self.0, self.1) {
+            (Some(offset), None) => format!("bytes={}-", offset),
+            (None, Some(size)) => format!("bytes=0-{}", size - 1),
+            (Some(offset), Some(size)) => format!("bytes={}-{}", offset, offset + size - 1),
+            _ => panic!("invalid range"),
+        }
     }
 }

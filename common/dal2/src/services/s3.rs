@@ -27,6 +27,7 @@ use futures::TryStreamExt;
 use crate::credential::Credential;
 use crate::error::Error;
 use crate::error::Result;
+use crate::ops::io::HeaderRange;
 use crate::ops::Delete;
 use crate::ops::Object;
 use crate::ops::Read;
@@ -185,15 +186,18 @@ impl<S: Send + Sync> Read<S> for Backend {
     async fn read(&self, args: &ReadBuilder<S>) -> Result<Reader> {
         let p = self.get_abs_path(&args.path);
 
-        // TODO: Handle range header here.
-        let resp = self
+        let mut req = self
             .client
             .get_object()
             .bucket(&self.bucket.clone())
-            .key(&p)
-            .send()
-            .await
-            .unwrap(); // TODO: we need a better way to handle errors here.
+            .key(&p);
+
+        if args.offset.is_some() || args.size.is_some() {
+            req = req.range(HeaderRange::new(args.offset, args.size).to_string());
+        }
+
+        // TODO: we need a better way to handle errors here.
+        let resp = req.send().await.unwrap();
 
         Ok(Box::new(S3Stream(resp.body).into_async_read()))
     }
