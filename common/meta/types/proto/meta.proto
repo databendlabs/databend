@@ -54,10 +54,10 @@ service RaftService {
 
   rpc AppendEntries(RaftRequest) returns (RaftReply);
   rpc InstallSnapshot(RaftRequest) returns (RaftReply);
-  rpc vote(RaftRequest) returns (RaftReply);
+  rpc Vote(RaftRequest) returns (RaftReply);
 }
 
-service Meta {
+service MetaService {
   // handshake
   rpc Handshake(stream HandshakeRequest) returns (stream HandshakeResponse);
 
