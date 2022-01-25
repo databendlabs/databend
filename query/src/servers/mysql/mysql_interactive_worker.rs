@@ -16,7 +16,6 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::tokio;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -24,9 +23,9 @@ use common_io::prelude::*;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use metrics::histogram;
+use msql_srv::AsyncMysqlShim;
 use msql_srv::ErrorKind;
 use msql_srv::InitWriter;
-use msql_srv::MysqlShim;
 use msql_srv::ParamParser;
 use msql_srv::QueryResultWriter;
 use msql_srv::StatementMetaWriter;
@@ -55,7 +54,8 @@ pub struct InteractiveWorker<W: std::io::Write> {
     client_addr: String,
 }
 
-impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
+#[async_trait::async_trait]
+impl<W: std::io::Write + Send> AsyncMysqlShim<W> for InteractiveWorker<W> {
     type Error = ErrorCode;
 
     fn version(&self) -> &str {
@@ -108,26 +108,10 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         })
     }
 
-    fn on_prepare(&mut self, query: &str, writer: StatementMetaWriter<W>) -> Result<()> {
-        if self.session.is_aborting() {
-            writer.error(
-                ErrorKind::ER_ABORTING_CONNECTION,
-                "Aborting this connection. because we are try aborting server.".as_bytes(),
-            )?;
-
-            return Err(ErrorCode::AbortedSession(
-                "Aborting this connection. because we are try aborting server.",
-            ));
-        }
-
-        self.base.do_prepare(query, writer)
-    }
-
-    fn on_execute(
-        &mut self,
-        id: u32,
-        param: ParamParser,
-        writer: QueryResultWriter<W>,
+    async fn on_prepare<'a>(
+        &'a mut self,
+        query: &'a str,
+        writer: StatementMetaWriter<'a, W>,
     ) -> Result<()> {
         if self.session.is_aborting() {
             writer.error(
@@ -140,14 +124,39 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        self.base.do_execute(id, param, writer)
+        self.base.do_prepare(query, writer).await
     }
 
-    fn on_close(&mut self, id: u32) {
-        self.base.do_close(id);
+    async fn on_execute<'a>(
+        &'a mut self,
+        id: u32,
+        param: ParamParser<'a>,
+        writer: QueryResultWriter<'a, W>,
+    ) -> Result<()> {
+        if self.session.is_aborting() {
+            writer.error(
+                ErrorKind::ER_ABORTING_CONNECTION,
+                "Aborting this connection. because we are try aborting server.".as_bytes(),
+            )?;
+
+            return Err(ErrorCode::AbortedSession(
+                "Aborting this connection. because we are try aborting server.",
+            ));
+        }
+
+        self.base.do_execute(id, param, writer).await
     }
 
-    fn on_query(&mut self, query: &str, writer: QueryResultWriter<W>) -> Result<()> {
+    async fn on_close<'a>(&'a mut self, id: u32)
+    where W: 'async_trait {
+        self.base.do_close(id).await;
+    }
+
+    async fn on_query<'a>(
+        &'a mut self,
+        query: &'a str,
+        writer: QueryResultWriter<'a, W>,
+    ) -> Result<()> {
         if self.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
@@ -161,30 +170,29 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
 
         let mut writer = DFQueryResultWriter::create(writer);
 
-        match InteractiveWorkerBase::<W>::build_runtime() {
-            Ok(runtime) => {
-                let instant = Instant::now();
-                let blocks = runtime.block_on(self.base.do_query(query));
+        let instant = Instant::now();
+        let blocks = self.base.do_query(query).await;
 
-                let mut write_result = writer.write(blocks);
+        let mut write_result = writer.write(blocks);
 
-                if let Err(cause) = write_result {
-                    let suffix = format!("(while in query {})", query);
-                    write_result = Err(cause.add_message_back(suffix));
-                }
-
-                histogram!(
-                    super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
-                    instant.elapsed()
-                );
-
-                write_result
-            }
-            Err(error) => writer.write(Err(error)),
+        if let Err(cause) = write_result {
+            let suffix = format!("(while in query {})", query);
+            write_result = Err(cause.add_message_back(suffix));
         }
+
+        histogram!(
+            super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
+            instant.elapsed()
+        );
+
+        write_result
     }
 
-    fn on_init(&mut self, database_name: &str, writer: InitWriter<W>) -> Result<()> {
+    async fn on_init<'a>(
+        &'a mut self,
+        database_name: &'a str,
+        writer: InitWriter<'a, W>,
+    ) -> Result<()> {
         if self.session.is_aborting() {
             writer.error(
                 ErrorKind::ER_ABORTING_CONNECTION,
@@ -196,7 +204,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             ));
         }
 
-        DFInitResultWriter::create(writer).write(self.base.do_init(database_name))
+        DFInitResultWriter::create(writer).write(self.base.do_init(database_name).await)
     }
 }
 
@@ -218,7 +226,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         Ok(authed)
     }
 
-    fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {
+    async fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,
             "Prepare is not support in Databend.".as_bytes(),
@@ -226,7 +234,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         Ok(())
     }
 
-    fn do_execute(
+    async fn do_execute(
         &mut self,
         _: u32,
         _: ParamParser<'_>,
@@ -239,7 +247,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         Ok(())
     }
 
-    fn do_close(&mut self, _: u32) {}
+    async fn do_close(&mut self, _: u32) {}
 
     fn federated_server_setup_set_or_jdbc_command(&mut self, query: &str) -> bool {
         let expr = RegexSet::new(&[
@@ -337,24 +345,14 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         )
     }
 
-    fn do_init(&mut self, database_name: &str) -> Result<()> {
+    async fn do_init(&mut self, database_name: &str) -> Result<()> {
         let init_query = format!("USE `{}`;", database_name);
-        let do_query = self.do_query(&init_query);
 
-        match Self::build_runtime() {
+        let do_query = self.do_query(&init_query).await;
+        match do_query {
+            Ok(_) => Ok(()),
             Err(error_code) => Err(error_code),
-            Ok(runtime) => match runtime.block_on(do_query) {
-                Ok(_) => Ok(()),
-                Err(error_code) => Err(error_code),
-            },
         }
-    }
-
-    fn build_runtime() -> Result<tokio::runtime::Runtime> {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .map_err(|tokio_error| ErrorCode::TokioError(format!("{}", tokio_error)))
     }
 }
 
