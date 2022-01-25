@@ -73,6 +73,7 @@ impl Arithmetic2Description {
         }
     }
 
+    #[must_use]
     pub fn features(mut self, features: FunctionFeatures) -> Arithmetic2Description {
         self.features = features;
         self
@@ -123,7 +124,7 @@ impl Function2Factory {
         case_insensitive_arithmetic_desc.insert(name.to_lowercase(), desc);
     }
 
-    pub fn get(&self, name: impl AsRef<str>, _args: &[&DataTypePtr]) -> Result<Box<dyn Function2>> {
+    pub fn get(&self, name: impl AsRef<str>, args: &[&DataTypePtr]) -> Result<Box<dyn Function2>> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
         match self.case_insensitive_desc.get(&lowercase_name) {
@@ -133,7 +134,7 @@ impl Function2Factory {
                     "Unsupported Function: {}",
                     origin_name
                 ))),
-                _ => todo!(),
+                Some(desc) => (desc.arithmetic_creator)(origin_name, args),
             },
             Some(desc) => (desc.function_creator)(origin_name),
         }

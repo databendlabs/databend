@@ -29,6 +29,7 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Arithmetic2Description;
 use crate::scalars::Function2;
 use crate::scalars::Function2Factory;
+use crate::scalars::Monotonicity;
 use crate::scalars::ScalarBinaryExpression;
 use crate::scalars::ScalarBinaryFunction;
 use crate::scalars::DEFAULT_CAST_OPTIONS;
@@ -95,6 +96,20 @@ where
         }
         Ok(result)
     }
+
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+        if args.len() != 2 {
+            return Err(ErrorCode::BadArguments(format!(
+                "Invalid argument lengths {} for get_monotonicity",
+                args.len()
+            )));
+        }
+
+        match self.op {
+            DataValueBinaryOperator::Plus => ArithmeticPlusFunction2::get_monotonicity(args),
+            _ => Ok(Monotonicity::default()),
+        }
+    }
 }
 
 impl<L, R, O, F> fmt::Display for BinaryArithmeticFunction2<L, R, O, F>
@@ -157,7 +172,12 @@ impl ArithmeticPlusFunction2 {
             )))
         };
 
-        // todo: add support for date types
+        if left_type.is_interval() || right_type.is_interval() {
+            todo!()
+        }
+        if left_type.is_date_or_date_time() || right_type.is_date_or_date_time() {
+            todo!()
+        }
         if !left_type.is_numeric() || !right_type.is_numeric() {
             return error_fn();
         }
@@ -197,5 +217,43 @@ impl ArithmeticPlusFunction2 {
                 .monotonicity()
                 .num_arguments(2),
         )
+    }
+
+    pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+        // For expression f(x) + g(x), only when both f(x) and g(x) are monotonic and have
+        // same 'is_positive' can we get a monotonic expression.
+        let f_x = &args[0];
+        let g_x = &args[1];
+
+        // if either one is non-monotonic, return non-monotonic
+        if !f_x.is_monotonic || !g_x.is_monotonic {
+            return Ok(Monotonicity::default());
+        }
+
+        // if f(x) is a constant value, return the monotonicity of g(x)
+        if f_x.is_constant {
+            return Ok(Monotonicity::create(
+                g_x.is_monotonic,
+                g_x.is_positive,
+                g_x.is_constant,
+            ));
+        }
+
+        // if g(x) is a constant value, return the monotonicity of f(x)
+        if g_x.is_constant {
+            return Ok(Monotonicity::create(
+                f_x.is_monotonic,
+                f_x.is_positive,
+                f_x.is_constant,
+            ));
+        }
+
+        // Now we have f(x) and g(x) both are non-constant.
+        // When both are monotonic, but have different 'is_positive', we can't determine the monotonicity
+        if f_x.is_positive != g_x.is_positive {
+            return Ok(Monotonicity::default());
+        }
+
+        Ok(Monotonicity::create(true, f_x.is_positive, false))
     }
 }

@@ -15,7 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_datavalues::prelude::DataField as OldDataField;
 use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::DataField;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
@@ -191,8 +193,17 @@ impl FunctionFactory {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
 
+        let new_args = args
+            .iter()
+            .map(|arg| OldDataField::new("xx", arg.data_type().clone(), arg.is_nullable()))
+            .collect::<Vec<_>>();
+        let mut types = vec![];
+        let fs: Vec<DataField> = new_args.iter().map(|f| f.clone().into()).collect();
+        for t in fs.iter() {
+            types.push(t.data_type());
+        }
         let factory2 = Function2Factory::instance();
-        if let Ok(v) = factory2.get(origin_name, &[]) {
+        if let Ok(v) = factory2.get(origin_name, &types) {
             let adapter = Function2Convertor::create(v);
             return Ok(adapter);
         }
