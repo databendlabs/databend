@@ -63,8 +63,6 @@ build-native:
 build-debug:
 	echo "Please use 'make build' instead"
 
-release: build-release
-
 cross-compile-debug:
 	cross build --target aarch64-unknown-linux-gnu
 
