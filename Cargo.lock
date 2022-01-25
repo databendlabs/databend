@@ -4362,7 +4362,7 @@ dependencies = [
 [[package]]
 name = "msql-srv"
 version = "0.9.6"
-source = "git+https://github.com/datafuse-extras/msql-srv?rev=0763d62#0763d62a1834cbc4e9b606fc111de8fae181128c"
+source = "git+https://github.com/datafuse-extras/msql-srv?rev=70aa0b2#70aa0b2a7a2096be67a2da5961f10dbe4f7f1d95"
 dependencies = [
  "async-trait",
  "byteorder",
