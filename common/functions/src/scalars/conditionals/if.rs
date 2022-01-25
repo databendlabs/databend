@@ -141,11 +141,7 @@ impl Function2 for IfFunction {
         with_match_primitive_type2!(type_id, |$T| {
             primitive_build!($T)
         }, {
-
-
-                    unimplemented!()
-
-
+            unimplemented!()
         })
     }
 
