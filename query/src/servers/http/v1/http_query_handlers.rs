@@ -257,7 +257,10 @@ pub fn query_route() -> Route {
         .at("/", post(query_handler))
         .at("/:id", get(query_state_handler))
         .at("/:id/page/:page_no", get(query_page_handler))
-        .at("/:id/kill", get(query_cancel_handler))
+        .at(
+            "/:id/kill",
+            get(query_cancel_handler).post(query_cancel_handler),
+        )
 }
 
 fn query_id_not_found(query_id: String) -> PoemError {
