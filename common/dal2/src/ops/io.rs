@@ -20,11 +20,11 @@ use std::task::Poll;
 
 use bytes;
 use futures;
-use futures::io::BufReader;
 use futures::pin_mut;
 use futures::ready;
 use futures::AsyncRead;
 use futures::AsyncSeek;
+use futures::AsyncWrite;
 use futures::Future;
 use futures::FutureExt;
 use pin_project::pin_project;
@@ -32,6 +32,7 @@ use pin_project::pin_project;
 use crate::error::Result;
 
 pub type Reader = Box<dyn AsyncRead + Unpin + Send>;
+pub type Writer = Box<dyn AsyncWrite + Unpin + Send>;
 
 const CAPACITY: usize = 4096;
 
@@ -126,28 +127,6 @@ where F: FnMut(usize)
     }
 }
 
-/// Create a buffered `SeekableReader`
-///
-/// ## Note
-///
-/// We will use 4MB buffer for now to avoid too much repeated requests.
-#[allow(dead_code)]
-pub async fn new_buffered_seekable_reader<'d, S: 'd>(
-    da: crate::DataAccessor<S>,
-    key: &str,
-) -> Result<BufReader<SeekableReader<'d, S>>>
-where
-    S: super::Read<S> + super::Stat<S>,
-{
-    let o = da.stat(key).await?;
-
-    // We will create a BufReader with a large buf so it only read big chunk from underlying storage.
-    Ok(BufReader::with_capacity(
-        4 * 1024 * 1024, // 4 MiB
-        SeekableReader::new(da, key, o.size),
-    ))
-}
-
 /// If we already know a file's total size, we can implement Seek for it.
 ///
 /// - Every time we call `read` we will send a new http request to fetch data from cloud storage like s3.
@@ -159,25 +138,23 @@ where
 /// # TODO
 ///
 /// We need use update the metrics.
-pub struct SeekableReader<'d, S: super::Read<S>> {
-    da: crate::DataAccessor<S>,
+pub struct SeekableReader {
+    da: crate::Operator,
     key: String,
     total: u64,
 
     pos: u64,
-    state: SeekableReaderState<'d>,
+    state: SeekableReaderState,
 }
 
-enum SeekableReaderState<'d> {
+enum SeekableReaderState {
     Idle,
-    Starting(Pin<Box<dyn Future<Output = Result<Reader>> + Send + 'd>>),
+    Starting(Pin<Box<dyn Future<Output = Result<Reader>> + Send>>),
     Reading(Reader),
 }
 
-impl<'d, S> SeekableReader<'d, S>
-where S: super::Read<S> + 'd
-{
-    pub fn new(da: crate::DataAccessor<S>, key: &str, total: u64) -> Self {
+impl SeekableReader {
+    pub fn new(da: crate::Operator, key: &str, total: u64) -> Self {
         SeekableReader {
             da,
             key: key.to_string(),
@@ -189,9 +166,7 @@ where S: super::Read<S> + 'd
     }
 }
 
-impl<'d, S> AsyncRead for SeekableReader<'d, S>
-where S: super::Read<S> + 'd
-{
+impl AsyncRead for SeekableReader {
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -232,9 +207,7 @@ where S: super::Read<S> + 'd
     }
 }
 
-impl<'d, S> AsyncSeek for SeekableReader<'d, S>
-where S: super::Read<S> + 'd
-{
+impl AsyncSeek for SeekableReader {
     fn poll_seek(
         mut self: Pin<&mut Self>,
         _cx: &mut Context<'_>,

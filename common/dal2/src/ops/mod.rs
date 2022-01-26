@@ -20,12 +20,11 @@ mod write;
 
 pub mod io;
 
-pub use delete::Delete;
+pub use delete::OpDelete;
 pub use io::Reader;
 pub use io::ReaderStream;
+pub use io::Writer;
 pub use object::Object;
-pub use read::Read;
-pub use read::ReadBuilder;
-pub use stat::Stat;
-pub use write::Write;
-pub use write::WriteBuilder;
+pub use read::OpRead;
+pub use stat::OpStat;
+pub use write::OpWrite;

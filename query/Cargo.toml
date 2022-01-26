@@ -27,6 +27,7 @@ common-base = { path = "../common/base" }
 common-cache = { path = "../common/cache" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 common-dal = { path = "../common/dal" }
+common-dal2 = { path = "../common/dal2" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }

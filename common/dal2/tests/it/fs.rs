@@ -15,13 +15,13 @@
 use std::str;
 
 use common_dal2::services::fs;
-use common_dal2::DataAccessor;
+use common_dal2::Operator;
 use futures::io::AsyncReadExt;
 use futures::io::Cursor;
 
 #[tokio::test]
 async fn normal() {
-    let f = DataAccessor::new(fs::Backend::build().finish());
+    let f = Operator::new(fs::Backend::build().finish());
 
     // Test write
     let x = f
@@ -38,9 +38,9 @@ async fn normal() {
     assert_eq!("Hello, world!", str::from_utf8(&buf).unwrap());
 
     // Test stat
-    let o = f.stat("/tmp/x").await.unwrap();
+    let o = f.stat("/tmp/x").run().await.unwrap();
     assert_eq!(13, o.size);
 
     // Test delete
-    f.delete("/tmp/x").await.unwrap();
+    f.delete("/tmp/x").run().await.unwrap();
 }

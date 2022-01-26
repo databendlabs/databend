@@ -16,17 +16,18 @@ use std::io::SeekFrom;
 use std::str::from_utf8;
 
 use futures::io::copy;
+use futures::io::BufReader;
 use futures::io::Cursor;
 use futures::AsyncReadExt;
 use futures::AsyncSeekExt;
 use futures::StreamExt;
 
-use crate::ops::io::new_buffered_seekable_reader;
 use crate::ops::io::CallbackReader;
 use crate::ops::io::HeaderRange;
+use crate::ops::io::SeekableReader;
 use crate::ops::ReaderStream;
 use crate::services::fs;
-use crate::DataAccessor;
+use crate::Operator;
 
 #[tokio::test]
 async fn reader_stream() {
@@ -56,7 +57,7 @@ async fn callback_reader() {
 
 #[tokio::test]
 async fn test_seekable_reader() {
-    let f = DataAccessor::new(fs::Backend::build().finish());
+    let f = Operator::new(fs::Backend::build().finish());
 
     // Create a test file.
     let x = f
@@ -66,9 +67,13 @@ async fn test_seekable_reader() {
         .unwrap();
     assert_eq!(x, 13);
 
-    let mut r = new_buffered_seekable_reader(f, "/tmp/x")
-        .await
-        .expect("new buffered seekable reader");
+    let o = f.stat("/tmp/x").run().await.unwrap();
+    assert_eq!(o.size, 13);
+
+    let mut r = BufReader::with_capacity(
+        4 * 1024 * 1024, // 4 MiB
+        SeekableReader::new(f, "tmp/x", o.size),
+    );
 
     let n = r.seek(SeekFrom::Current(3)).await.expect("seek");
     assert_eq!(n, 3);

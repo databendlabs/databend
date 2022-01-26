@@ -35,3 +35,4 @@ tokio-stream = { version = "0.1.8", features = ["net"] }
 
 [dev-dependencies]
 common-dal =  {path = "../dal"}
+common-dal2 =  {path = "../dal2"}
