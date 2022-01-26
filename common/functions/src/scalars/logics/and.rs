@@ -12,35 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_datavalues2::BooleanType;
-use common_datavalues2::ColumnBuilder;
-use common_datavalues2::ColumnRef;
-use common_datavalues2::ColumnViewer;
-use common_datavalues2::ColumnsWithField;
-use common_datavalues2::DataTypePtr;
-use common_datavalues2::NullType;
-use common_datavalues2::NullableColumnBuilder;
-use common_datavalues2::NullableType;
-use common_datavalues2::TypeID;
 use common_exception::Result;
 
-use crate::scalars::cast_column_field;
+use super::logic::LogicOperator;
+use super::LogicFunction;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
 use crate::scalars::Function2Description;
 
 #[derive(Clone)]
-pub struct LogicAndFunction {
-    _display_name: String,
-}
+pub struct LogicAndFunction;
 
 impl LogicAndFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
-        Ok(Box::new(Self {
-            _display_name: display_name.to_string(),
-        }))
+    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function2>> {
+        LogicFunction::try_create(LogicOperator::And)
     }
 
     pub fn desc() -> Function2Description {
@@ -48,69 +33,12 @@ impl LogicAndFunction {
         features = features.deterministic();
         Function2Description::creator(Box::new(Self::try_create)).features(features)
     }
-}
 
-impl Function2 for LogicAndFunction {
-    fn name(&self) -> &str {
-        "LogicAndFunction"
+    pub fn eval_with_null(lhs: bool, rhs: bool, l_valid: bool, r_valid: bool) -> (bool, bool) {
+        (lhs & rhs, l_valid & r_valid)
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if args[0].data_type_id() == TypeID::Null || args[1].data_type_id() == TypeID::Null {
-            Ok(NullType::arc())
-        } else if args[0].is_nullable() || args[1].is_nullable() {
-            Ok(Arc::new(NullableType::create(BooleanType::arc())))
-        } else {
-            Ok(BooleanType::arc())
-        }
-    }
-
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
-        let mut nullable = false;
-        if columns[0].data_type().is_nullable() || columns[1].data_type().is_nullable() {
-            nullable = true;
-        }
-
-        let dt = if nullable {
-            Arc::new(NullableType::create(BooleanType::arc()))
-        } else {
-            BooleanType::arc()
-        };
-
-        let lhs = cast_column_field(&columns[0], &dt)?;
-        let rhs = cast_column_field(&columns[1], &dt)?;
-
-        if nullable {
-            let lhs_viewer = ColumnViewer::<bool>::create(&lhs)?;
-            let rhs_viewer = ColumnViewer::<bool>::create(&rhs)?;
-
-            let mut builder = NullableColumnBuilder::<bool>::with_capacity(input_rows);
-
-            for idx in 0..input_rows {
-                builder.append(
-                    lhs_viewer.value(idx) & rhs_viewer.value(idx),
-                    lhs_viewer.valid_at(idx) & rhs_viewer.valid_at(idx),
-                );
-            }
-
-            Ok(builder.build(input_rows))
-        } else {
-            let lhs_viewer = ColumnViewer::<bool>::create(&lhs)?;
-            let rhs_viewer = ColumnViewer::<bool>::create(&rhs)?;
-
-            let mut builder = ColumnBuilder::<bool>::with_capacity(input_rows);
-
-            for idx in 0..input_rows {
-                builder.append(lhs_viewer.value(idx) & rhs_viewer.value(idx));
-            }
-
-            Ok(builder.build(input_rows))
-        }
-    }
-}
-
-impl std::fmt::Display for LogicAndFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+    pub fn eval(lhs: bool, rhs: bool) -> bool {
+        lhs & rhs
     }
 }
