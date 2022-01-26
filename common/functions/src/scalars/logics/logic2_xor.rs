@@ -11,10 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::sync::Arc;
+
+use common_datavalues2::BooleanType;
+use common_datavalues2::ColumnBuilder;
+use common_datavalues2::ColumnRef;
+use common_datavalues2::ColumnViewer;
+use common_datavalues2::ColumnsWithField;
+use common_datavalues2::DataTypePtr;
+use common_datavalues2::NullableColumnBuilder;
+use common_datavalues2::NullableType;
 use common_exception::Result;
 
 use super::logic2::LogicFunction2;
-
+use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
 use crate::scalars::Function2Description;
@@ -43,19 +53,56 @@ impl Function2 for LogicXorFunction2 {
         "LogicXorFunction"
     }
 
-    fn return_type(
-        &self,
-        args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
-        unimplemented!()
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        if args[0].is_nullable() || args[1].is_nullable() {
+            Ok(Arc::new(NullableType::create(BooleanType::arc())))
+        } else {
+            Ok(BooleanType::arc())
+        }
     }
 
-    fn eval(
-        &self,
-        _columns: &common_datavalues2::ColumnsWithField,
-        _input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
-        unimplemented!()
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        let mut nullable = false;
+        if columns[0].data_type().is_nullable() || columns[1].data_type().is_nullable() {
+            nullable = true;
+        }
+
+        let dt: DataTypePtr;
+        if nullable {
+            dt = Arc::new(NullableType::create(BooleanType::arc()));
+        } else {
+            dt = BooleanType::arc();
+        }
+
+        let lhs = cast_column_field(&columns[0], &dt)?;
+        let rhs = cast_column_field(&columns[1], &dt)?;
+
+        if nullable {
+            let lhs_viewer = ColumnViewer::<bool>::create(&lhs)?;
+            let rhs_viewer = ColumnViewer::<bool>::create(&rhs)?;
+
+            let mut builder = NullableColumnBuilder::<bool>::with_capacity(input_rows);
+
+            for idx in 0..input_rows {
+                builder.append(
+                    lhs_viewer.value(idx) ^ rhs_viewer.value(idx),
+                    lhs_viewer.valid_at(idx) & rhs_viewer.valid_at(idx),
+                );
+            }
+
+            Ok(builder.build(input_rows))
+        } else {
+            let lhs_viewer = ColumnViewer::<bool>::create(&lhs)?;
+            let rhs_viewer = ColumnViewer::<bool>::create(&rhs)?;
+
+            let mut builder = ColumnBuilder::<bool>::with_capacity(input_rows);
+
+            for idx in 0..input_rows {
+                builder.append(lhs_viewer.value(idx) ^ rhs_viewer.value(idx));
+            }
+
+            Ok(builder.build(input_rows))
+        }
     }
 }
 

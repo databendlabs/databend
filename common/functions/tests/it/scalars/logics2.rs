@@ -35,7 +35,7 @@ fn test_logic_not_function() -> Result<()> {
         },
         ScalarFunction2Test {
             name: "not-null",
-            columns: vec![Series::from_data(vec![None, Some(true), Some(true)]).into()],
+            columns: vec![Series::from_data(vec![None, Some(true), Some(false)]).into()],
             expect: Series::from_data(vec![None, Some(false), Some(true)]).into(),
             error: "",
         },
@@ -68,7 +68,7 @@ fn test_logic_and_function() -> Result<()> {
                 Series::from_data(vec![true, false, true, true]),
             ],
             expect: Series::from_data(vec![None, Some(false), Some(true), Some(false)]),
-            error: "", 
+            error: "",
         },
         ScalarFunction2Test {
             name: "and-null",

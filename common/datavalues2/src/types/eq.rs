@@ -49,7 +49,7 @@ pub fn equal(lhs: &dyn DataType, rhs: &dyn DataType) -> bool {
         Boolean | UInt8 | UInt16 | UInt32 | UInt64 | Int8 | Int16 | Int32 | Int64 | Float32
         | Float64 | String | Date16 | Date32 | Interval | DateTime32 | DateTime64 | Null => true,
 
-         Nullable => {
+        Nullable => {
             let lhs: &NullableType = lhs.as_any().downcast_ref().unwrap();
             let rhs: &NullableType = rhs.as_any().downcast_ref().unwrap();
 
