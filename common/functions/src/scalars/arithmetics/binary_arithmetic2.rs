@@ -21,6 +21,7 @@ use common_exception::Result;
 
 use crate::scalars::cast_with_type;
 use crate::scalars::ArithmeticDivFunction;
+use crate::scalars::ArithmeticIntDivFunction;
 use crate::scalars::ArithmeticMinusFunction;
 use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticNegateFunction;
@@ -46,6 +47,7 @@ impl ArithmeticFunction2 {
         factory.register_arithmetic("multiply", ArithmeticMulFunction::desc());
         factory.register_arithmetic("/", ArithmeticDivFunction::desc());
         factory.register_arithmetic("divide", ArithmeticDivFunction::desc());
+        factory.register_arithmetic("div", ArithmeticIntDivFunction::desc());
     }
 }
 
@@ -115,7 +117,6 @@ where
             DataValueBinaryOperator::Minus => ArithmeticMinusFunction::get_monotonicity(args),
             DataValueBinaryOperator::Mul => ArithmeticMulFunction::get_monotonicity(args),
             DataValueBinaryOperator::Div => ArithmeticDivFunction::get_monotonicity(args),
-            //DataValueBinaryOperator::IntDiv => ArithmeticIntDivFunction::get_monotonicity(args),
             _ => Ok(Monotonicity::default()),
         }
     }

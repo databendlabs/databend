@@ -14,7 +14,6 @@
 
 use std::ops::Neg;
 
-use common_datavalues2::arithmetics_type::ResultTypeOfUnary;
 use common_datavalues2::prelude::*;
 use common_datavalues2::with_match_primitive_type;
 use common_exception::ErrorCode;

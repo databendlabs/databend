@@ -14,7 +14,6 @@
 
 use std::ops::Add;
 
-use common_datavalues2::arithmetics_type::ResultTypeOfBinary;
 use common_datavalues2::prelude::*;
 use common_datavalues2::with_match_date_type_error;
 use common_datavalues2::with_match_primitive_type;

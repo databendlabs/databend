@@ -14,7 +14,6 @@
 
 use std::ops::Mul;
 
-use common_datavalues2::arithmetics_type::ResultTypeOfBinary;
 use common_datavalues2::prelude::*;
 use common_datavalues2::with_match_primitive_type;
 use common_exception::ErrorCode;

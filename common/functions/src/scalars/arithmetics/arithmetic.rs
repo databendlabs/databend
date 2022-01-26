@@ -16,7 +16,6 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionFactory;
-use crate::scalars::ArithmeticIntDivFunction;
 use crate::scalars::ArithmeticModuloFunction;
 
 pub trait ArithmeticTrait {
@@ -30,6 +29,6 @@ impl ArithmeticFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register_arithmetic("%", ArithmeticModuloFunction::desc());
         factory.register_arithmetic("modulo", ArithmeticModuloFunction::desc());
-        factory.register_arithmetic("div", ArithmeticIntDivFunction::desc());
+        //factory.register_arithmetic("div", IntDivFunctionImpl::desc());
     }
 }
