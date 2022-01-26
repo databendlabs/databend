@@ -174,6 +174,7 @@ impl AuthInfo {
             AuthInfo::None | AuthInfo::JWT => "".to_string(),
         }
     }
+
     pub fn get_password(&self) -> Option<Vec<u8>> {
         match self {
             AuthInfo::Password {
