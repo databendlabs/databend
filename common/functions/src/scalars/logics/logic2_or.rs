@@ -11,18 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use crate::scalars::function_factory::FunctionFeatures;
 use common_exception::Result;
 
-use crate::scalars::{Function2Description, Function2};
-use super::logic2::LogicOperator;
-
 use super::logic2::LogicFunction2;
-pub struct LogicOrFunction2;
+
+use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
+
+#[derive(Clone)]
+pub struct LogicOrFunction2 {
+    _display_name: String,
+}
 
 impl LogicOrFunction2 {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function2>> {
-        LogicFunction2::try_create(LogicOperator::Or)
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+        Ok(Box::new(Self {
+            _display_name: display_name.to_string(),
+        }))
     }
 
     pub fn desc() -> Function2Description {
@@ -31,3 +37,31 @@ impl LogicOrFunction2 {
         Function2Description::creator(Box::new(Self::try_create)).features(features)
     }
 }
+
+impl Function2 for LogicOrFunction2 {
+    fn name(&self) -> &str {
+        "LogicOrFunction"
+    }
+
+    fn return_type(
+        &self,
+        args: &[&common_datavalues2::DataTypePtr],
+    ) -> Result<common_datavalues2::DataTypePtr> {
+        unimplemented!()
+    }
+
+    fn eval(
+        &self,
+        _columns: &common_datavalues2::ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<common_datavalues2::ColumnRef> {
+        unimplemented!()
+    }
+}
+
+impl std::fmt::Display for LogicOrFunction2 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+

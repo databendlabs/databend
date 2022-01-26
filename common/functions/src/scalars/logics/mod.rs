@@ -24,12 +24,12 @@ pub use logic_or::LogicOrFunction;
 
 mod logic2;
 mod logic2_and;
+mod logic2_not;
 mod logic2_or;
 mod logic2_xor;
-mod logic2_not;
 
 pub use logic2::LogicFunction2;
 pub use logic2_and::LogicAndFunction2;
-pub use logic2_or::LogicOrFunction2;
 pub use logic2_not::LogicNotFunction2;
+pub use logic2_or::LogicOrFunction2;
 pub use logic2_xor::LogicXorFunction2;

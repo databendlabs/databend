@@ -20,13 +20,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
-use super::LogicFunction2;
 use super::function2::Function2;
 use super::function_factory::ArithmeticDescription;
 use super::function_factory::FunctionFeatures;
 use super::ComparisonFunction;
 use super::ConditionalFunction;
 use super::HashesFunction;
+use super::LogicFunction2;
 use super::StringFunction;
 use super::TupleClassFunction;
 use super::UdfFunction;
