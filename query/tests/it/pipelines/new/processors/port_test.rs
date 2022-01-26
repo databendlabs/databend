@@ -19,7 +19,8 @@ use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use databend_query::pipelines::new::processors::connect;
-use databend_query::pipelines::new::processors::port::InputPort;
+use super::processors::port::InputPort;
+// use databend_query::pipelines::new::processors::port::InputPort;
 use databend_query::pipelines::new::processors::port::OutputPort;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

@@ -45,6 +45,7 @@ impl SharedStatus {
         })
     }
 
+    #[inline(always)]
     pub fn swap(
         &self,
         data: *mut SharedData,
@@ -76,6 +77,7 @@ impl SharedStatus {
         }
     }
 
+    #[inline(always)]
     pub fn set_flags(&self, set_flags: usize, unset_flags: usize) -> usize {
         let mut expected = std::ptr::null_mut();
         let mut desired = set_flags as *mut SharedData;
@@ -100,6 +102,7 @@ impl SharedStatus {
         }
     }
 
+    #[inline(always)]
     pub fn get_flags(&self) -> usize {
         self.data.load(Ordering::Relaxed) as usize & FLAGS_MASK
     }
@@ -118,6 +121,7 @@ impl InputPort {
         })
     }
 
+    #[inline(always)]
     pub fn finish(&self) {
         unsafe {
             let flags = self.shared.set_flags(IS_FINISHED, IS_FINISHED);
@@ -128,10 +132,12 @@ impl InputPort {
         }
     }
 
+    #[inline(always)]
     pub fn is_finished(&self) -> bool {
         (self.shared.get_flags() & IS_FINISHED) != 0
     }
 
+    #[inline(always)]
     pub fn set_need_data(&self) {
         unsafe {
             let flags = self.shared.set_flags(NEED_DATA, NEED_DATA);
@@ -141,14 +147,17 @@ impl InputPort {
         }
     }
 
+    #[inline(always)]
     pub fn set_not_need_data(&self) {
         self.shared.set_flags(0, NEED_DATA);
     }
 
+    #[inline(always)]
     pub fn has_data(&self) -> bool {
         (self.shared.get_flags() & HAS_DATA) != 0
     }
 
+    #[inline(always)]
     pub fn pull_data(&self) -> Option<Result<DataBlock>> {
         unsafe {
             UpdateTrigger::update_input(&self.update_trigger);
@@ -188,6 +197,7 @@ impl OutputPort {
         })
     }
 
+    #[inline(always)]
     pub fn push_data(&self, data: Result<DataBlock>) {
         unsafe {
             UpdateTrigger::update_output(&self.update_trigger);
@@ -197,6 +207,7 @@ impl OutputPort {
         }
     }
 
+    #[inline(always)]
     pub fn finish(&self) {
         unsafe {
             let flags = self.shared.set_flags(IS_FINISHED, IS_FINISHED);
@@ -207,10 +218,12 @@ impl OutputPort {
         }
     }
 
+    #[inline(always)]
     pub fn is_finished(&self) -> bool {
         (self.shared.get_flags() & IS_FINISHED) != 0
     }
 
+    #[inline(always)]
     pub fn can_push(&self) -> bool {
         let flags = self.shared.get_flags();
         ((flags & NEED_DATA) == NEED_DATA) && ((flags & HAS_DATA) == 0)

@@ -38,7 +38,7 @@ impl PipelinePullingExecutor {
             return Err(ErrorCode::PipelineUnInitialized(""));
         }
 
-        let (tx, rx) = std::sync::mpsc::sync_channel(2);
+        let (tx, rx) = std::sync::mpsc::sync_channel(pipeline.output_len());
         let mut pipe_builder = SinkPipeBuilder::create();
 
         for _index in 0..pipeline.output_len() {

@@ -30,6 +30,7 @@ pub use processor::Processors;
 pub use resize_processor::ResizeProcessor;
 pub use transforms::TransformDummy;
 pub use transforms::TransformFilter;
+pub use transforms::TransformAggregatorPartial;
 
 pub use sources::SyncSource;
 pub use sources::SyncSourcer;
