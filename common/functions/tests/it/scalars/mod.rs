@@ -20,6 +20,7 @@ mod expressions;
 mod hashes;
 mod helpers;
 mod logics;
+mod logics2;
 mod maths;
 mod nullables;
 mod others;

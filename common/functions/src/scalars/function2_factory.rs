@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
+use super::LogicFunction2;
 use super::function2::Function2;
 use super::function_factory::ArithmeticDescription;
 use super::function_factory::FunctionFeatures;
@@ -68,6 +69,7 @@ static FUNCTION2_FACTORY: Lazy<Arc<Function2Factory>> = Lazy::new(|| {
     StringFunction::register2(&mut function_factory);
     HashesFunction::register2(&mut function_factory);
     ConditionalFunction::register(&mut function_factory);
+    LogicFunction2::register(&mut function_factory);
 
     Arc::new(function_factory)
 });
