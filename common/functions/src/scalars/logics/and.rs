@@ -20,12 +20,12 @@ use common_datavalues2::ColumnRef;
 use common_datavalues2::ColumnViewer;
 use common_datavalues2::ColumnsWithField;
 use common_datavalues2::DataTypePtr;
+use common_datavalues2::NullType;
 use common_datavalues2::NullableColumnBuilder;
 use common_datavalues2::NullableType;
+use common_datavalues2::TypeID;
 use common_exception::Result;
-use sha2::digest::generic_array::sequence::Lengthen;
 
-use super::logic::LogicFunction;
 use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
@@ -56,7 +56,9 @@ impl Function2 for LogicAndFunction {
     }
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if args[0].is_nullable() || args[1].is_nullable() {
+        if args[0].data_type_id() == TypeID::Null || args[1].data_type_id() == TypeID::Null {
+            Ok(NullType::arc())
+        } else if args[0].is_nullable() || args[1].is_nullable() {
             Ok(Arc::new(NullableType::create(BooleanType::arc())))
         } else {
             Ok(BooleanType::arc())
@@ -69,12 +71,11 @@ impl Function2 for LogicAndFunction {
             nullable = true;
         }
 
-        let dt: DataTypePtr;
-        if nullable {
-            dt = Arc::new(NullableType::create(BooleanType::arc()));
+        let dt = if nullable {
+            Arc::new(NullableType::create(BooleanType::arc()))
         } else {
-            dt = BooleanType::arc();
-        }
+            BooleanType::arc()
+        };
 
         let lhs = cast_column_field(&columns[0], &dt)?;
         let rhs = cast_column_field(&columns[1], &dt)?;

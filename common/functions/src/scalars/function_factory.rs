@@ -25,7 +25,6 @@ use super::Function2Factory;
 use crate::scalars::ArithmeticFunction;
 use crate::scalars::DateFunction;
 use crate::scalars::Function;
-use crate::scalars::LogicFunction;
 use crate::scalars::MathsFunction;
 use crate::scalars::NullableFunction;
 use crate::scalars::OtherFunction;

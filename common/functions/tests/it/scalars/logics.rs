@@ -29,14 +29,14 @@ fn test_logic_not_function() -> Result<()> {
     let tests = vec![
         ScalarFunction2Test {
             name: "not",
-            columns: vec![Series::from_data(vec![true, false]).into()],
-            expect: Series::from_data(vec![false, true]).into(),
+            columns: vec![Series::from_data(vec![true, false])],
+            expect: Series::from_data(vec![false, true]),
             error: "",
         },
         ScalarFunction2Test {
             name: "not-null",
-            columns: vec![Series::from_data(vec![None, Some(true), Some(false)]).into()],
-            expect: Series::from_data(vec![None, Some(false), Some(true)]).into(),
+            columns: vec![Series::from_data(vec![None, Some(true), Some(false)])],
+            expect: Series::from_data(vec![None, Some(false), Some(true)]),
             error: "",
         },
         ScalarFunction2Test {

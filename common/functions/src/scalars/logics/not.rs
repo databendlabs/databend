@@ -19,11 +19,12 @@ use common_datavalues2::ColumnRef;
 use common_datavalues2::ColumnViewer;
 use common_datavalues2::ColumnsWithField;
 use common_datavalues2::DataTypePtr;
+use common_datavalues2::NullType;
 use common_datavalues2::NullableColumnBuilder;
 use common_datavalues2::NullableType;
+use common_datavalues2::TypeID;
 use common_exception::Result;
 
-use super::logic::LogicFunction;
 use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
@@ -52,33 +53,27 @@ impl Function2 for LogicNotFunction {
         "LogicNotFunction"
     }
 
-    fn return_type(
-        &self,
-        args: &[&DataTypePtr],
-    ) -> Result<DataTypePtr> {
-        if args[0].is_nullable(){
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        if args[0].data_type_id() == TypeID::Null {
+            Ok(NullType::arc())
+        } else if args[0].is_nullable() {
             Ok(Arc::new(NullableType::create(BooleanType::arc())))
         } else {
             Ok(BooleanType::arc())
         }
     }
 
-    fn eval(
-        &self,
-        columns: &ColumnsWithField,
-        input_rows: usize,
-    ) -> Result<ColumnRef> {
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
         let mut nullable = false;
-        if columns[0].data_type().is_nullable(){
+        if columns[0].data_type().is_nullable() {
             nullable = true;
         }
 
-        let dt: DataTypePtr;
-        if nullable {
-            dt = Arc::new(NullableType::create(BooleanType::arc()));
+        let dt = if nullable {
+            Arc::new(NullableType::create(BooleanType::arc()))
         } else {
-            dt = BooleanType::arc();
-        }
+            BooleanType::arc()
+        };
 
         let col = cast_column_field(&columns[0], &dt)?;
 
