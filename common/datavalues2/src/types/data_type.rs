@@ -129,16 +129,15 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
 }
 
 pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
-    if let Some(m) = f.metadata() {
-        if let Some(custom_name) = m.get("ARROW:extension:databend_name") {
-            let metatada = m.get("ARROW:extension:databend_metadata").cloned();
-            match custom_name.as_str() {
-                "Date" | "Date16" => return Arc::new(DateType::default()),
-                "Date32" => return Arc::new(Date32Type32::default()),
-                "DateTime" | "DateTime32" => return DateTimeType::arc(metatada),
-                "DateTime64" => return DateTime64Type::arc(metatada),
-                _ => {}
-            }
+    let m = f.metadata();
+    if let Some(custom_name) = m.get("ARROW:extension:databend_name") {
+        let metatada = m.get("ARROW:extension:databend_metadata").cloned();
+        match custom_name.as_str() {
+            "Date" | "Date16" => return Arc::new(DateType::default()),
+            "Date32" => return Arc::new(Date32Type32::default()),
+            "DateTime" | "DateTime32" => return DateTimeType::arc(metatada),
+            "DateTime64" => return DateTime64Type::arc(metatada),
+            _ => {}
         }
     }
 
