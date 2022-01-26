@@ -15,13 +15,14 @@
 use std::net::Shutdown;
 
 use common_base::tokio::net::TcpStream;
+use common_base::Runtime;
 use common_base::Thread;
+use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_exception::ABORT_SESSION;
 use common_tracing::tracing;
-use msql_srv::MysqlIntermediary;
+use msql_srv::AsyncMysqlIntermediary;
 
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
 use crate::sessions::SessionRef;
@@ -32,24 +33,21 @@ impl MySQLConnection {
     pub fn run_on_stream(session: SessionRef, stream: TcpStream) -> Result<()> {
         let blocking_stream = Self::convert_stream(stream)?;
         MySQLConnection::attach_session(&session, &blocking_stream)?;
+
+        let non_blocking_stream = TcpStream::from_std(blocking_stream)?;
+        let query_executor = Runtime::with_worker_threads(1)?;
+
         Thread::spawn(move || {
-            MySQLConnection::session_executor(session, blocking_stream);
+            let join_handle = query_executor.spawn(async move {
+                let client_addr = non_blocking_stream.peer_addr().unwrap().to_string();
+                let interactive_worker = InteractiveWorker::create(session, client_addr);
+                AsyncMysqlIntermediary::run_on(interactive_worker, non_blocking_stream).await
+            });
+
+            let _ = futures::executor::block_on(join_handle);
         });
 
         Ok(())
-    }
-
-    fn session_executor(session: SessionRef, blocking_stream: std::net::TcpStream) {
-        let client_addr = blocking_stream.peer_addr().unwrap().to_string();
-        let interactive_worker = InteractiveWorker::create(session, client_addr);
-        if let Err(error) = MysqlIntermediary::run_on_tcp(interactive_worker, blocking_stream) {
-            if error.code() != ABORT_SESSION {
-                tracing::error!(
-                    "Unexpected error occurred during query execution: {:?}",
-                    error
-                );
-            }
-        };
     }
 
     fn attach_session(session: &SessionRef, blocking_stream: &std::net::TcpStream) -> Result<()> {

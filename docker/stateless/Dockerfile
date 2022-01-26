@@ -3,7 +3,7 @@ FROM rust:1.48.0-buster AS builder
 COPY ./ /app
 WORKDIR /app
 RUN make setup
-RUN make build
+RUN make build-release
 
 FROM ubuntu:20.04
 COPY --from=builder /app/target/release/databend-query /databend-query

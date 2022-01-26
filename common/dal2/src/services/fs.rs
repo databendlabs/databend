@@ -20,6 +20,7 @@ use async_compat::CompatExt;
 use async_trait::async_trait;
 use tokio::fs;
 use tokio::io;
+use tokio::io::AsyncReadExt;
 use tokio::io::AsyncSeekExt;
 
 use crate::error::Error;
@@ -66,7 +67,7 @@ impl Backend {
 #[async_trait]
 impl<S: Send + Sync> Read<S> for Backend {
     async fn read(&self, args: &ReadBuilder<S>) -> Result<Reader> {
-        let path = PathBuf::from(&self.root).join(args.path);
+        let path = PathBuf::from(&self.root).join(&args.path);
 
         let mut f = fs::OpenOptions::new()
             .read(true)
@@ -80,20 +81,19 @@ impl<S: Send + Sync> Read<S> for Backend {
                 .map_err(|e| parse_io_error(&e, &path))?;
         }
 
-        if let Some(size) = args.size {
-            f.set_len(size)
-                .await
-                .map_err(|e| parse_io_error(&e, &path))?;
-        }
+        let f: Reader = match args.size {
+            Some(size) => Box::new(f.take(size).compat()),
+            None => Box::new(f.compat()),
+        };
 
-        Ok(Box::new(f.compat()))
+        Ok(f)
     }
 }
 
 #[async_trait]
 impl<S: Send + Sync> Write<S> for Backend {
     async fn write(&self, mut r: Reader, args: &WriteBuilder<S>) -> Result<usize> {
-        let path = PathBuf::from(&self.root).join(args.path);
+        let path = PathBuf::from(&self.root).join(&args.path);
 
         let mut f = fs::OpenOptions::new()
             .create(true)

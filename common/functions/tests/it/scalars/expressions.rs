@@ -160,11 +160,7 @@ fn test_datetime_cast_function() -> Result<()> {
 
 #[test]
 fn test_binary_contains() {
-    //create two string columns apply l.contains(r)
-    let l = Series::from_data(vec!["11", "22", "33"]);
-    let r = Series::from_data(vec!["1", "2", "43"]);
-    let expected = Series::from_data(vec![true, true, false]);
-
+    //create two string columns
     struct Contains {}
 
     impl ScalarBinaryFunction<Vu8, Vu8, bool> for Contains {
@@ -174,10 +170,15 @@ fn test_binary_contains() {
     }
 
     let binary_expression = ScalarBinaryExpression::<Vec<u8>, Vec<u8>, bool, _>::new(Contains {});
-    let result = binary_expression.eval(&l, &r).unwrap();
 
-    let r = Arc::new(result) as ColumnRef;
-    assert!(r == expected);
+    for _ in 0..10 {
+        let l = Series::from_data(vec!["11", "22", "33"]);
+        let r = Series::from_data(vec!["1", "2", "43"]);
+        let expected = Series::from_data(vec![true, true, false]);
+        let result = binary_expression.eval(&l, &r).unwrap();
+        let result = Arc::new(result) as ColumnRef;
+        assert!(result == expected);
+    }
 }
 
 #[test]

@@ -36,7 +36,7 @@ pub struct ScalarBinaryExpression<L: Scalar, R: Scalar, O: Scalar, F> {
     _phantom: PhantomData<(L, R, O)>,
 }
 
-impl<'a, L: Scalar, R: Scalar, O: Scalar, F> ScalarBinaryExpression<L, R, O, F>
+impl<L: Scalar, R: Scalar, O: Scalar, F> ScalarBinaryExpression<L, R, O, F>
 where F: ScalarBinaryFunction<L, R, O>
 {
     /// Create a binary expression from generic columns  and a lambda function.
@@ -48,7 +48,7 @@ where F: ScalarBinaryFunction<L, R, O>
     }
 
     /// Evaluate the expression with the given array.
-    pub fn eval(&self, l: &'a ColumnRef, r: &'a ColumnRef) -> Result<<O as Scalar>::ColumnType> {
+    pub fn eval(&self, l: &ColumnRef, r: &ColumnRef) -> Result<<O as Scalar>::ColumnType> {
         let left = ColumnViewerIter::<L>::try_create(l)?;
         let right = ColumnViewerIter::<R>::try_create(r)?;
 

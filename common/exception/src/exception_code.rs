@@ -150,8 +150,10 @@ build_exceptions! {
 
     ConcurrentSnapshotInstall(2007),
     UnknownTableId(2008),
-    TableVersionMissMatch(2009),
-    UnknownDatabaseId(1010),
+    TableVersionMismatched(2009),
+    UnknownDatabaseId(2010),
+    OCCRetryFailure(2011),
+
 
     // KVSrv server error
     MetaSrvError(2101),

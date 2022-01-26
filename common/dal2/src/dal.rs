@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use crate::error::Result;
@@ -24,48 +23,50 @@ use crate::ops::Stat;
 use crate::ops::Write;
 use crate::ops::WriteBuilder;
 
-pub struct DataAccessor<'d, S> {
+pub struct DataAccessor<S> {
     s: Arc<S>,
-    phantom: PhantomData<&'d ()>,
 }
 
-impl<'d, S> DataAccessor<'d, S> {
-    pub fn new(s: S) -> DataAccessor<'d, S> {
-        DataAccessor {
-            s: Arc::new(s),
-            phantom: PhantomData::default(),
-        }
+impl<S> DataAccessor<S> {
+    pub fn new(s: S) -> DataAccessor<S> {
+        DataAccessor { s: Arc::new(s) }
     }
 }
 
-impl<'d, S> DataAccessor<'d, S>
+impl<S> DataAccessor<S>
 where S: Read<S>
 {
-    pub fn read(&self, path: &'d str) -> ReadBuilder<S> {
+    pub fn read(&self, path: &str) -> ReadBuilder<S> {
         ReadBuilder::new(self.s.clone(), path)
     }
 }
 
-impl<'d, S> DataAccessor<'d, S>
+impl<S> DataAccessor<S>
 where S: Write<S>
 {
-    pub fn write(&self, path: &'d str, size: u64) -> WriteBuilder<S> {
+    pub fn write(&self, path: &str, size: u64) -> WriteBuilder<S> {
         WriteBuilder::new(self.s.clone(), path, size)
     }
 }
 
-impl<'d, S> DataAccessor<'d, S>
+impl<S> DataAccessor<S>
 where S: Stat<S>
 {
-    pub async fn stat(&self, path: &'d str) -> Result<Object> {
+    pub async fn stat(&self, path: &str) -> Result<Object> {
         self.s.stat(path).await
     }
 }
 
-impl<'d, S> DataAccessor<'d, S>
+impl<S> DataAccessor<S>
 where S: Delete<S>
 {
-    pub async fn delete(&self, path: &'d str) -> Result<()> {
+    pub async fn delete(&self, path: &str) -> Result<()> {
         self.s.delete(path).await
+    }
+}
+
+impl<S> Clone for DataAccessor<S> {
+    fn clone(&self) -> Self {
+        DataAccessor { s: self.s.clone() }
     }
 }

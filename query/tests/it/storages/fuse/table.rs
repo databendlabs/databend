@@ -150,6 +150,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
     Ok(())
 }
 
+// TODO move this to test/it/storages/fuse/operations
 #[tokio::test]
 async fn test_fuse_table_truncate() -> Result<()> {
     let fixture = TestFixture::new().await;
@@ -216,6 +217,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     Ok(())
 }
 
+// TODO move this to test/it/storages/fuse/operations
 #[tokio::test]
 async fn test_fuse_table_optimize() -> Result<()> {
     let fixture = TestFixture::new().await;
