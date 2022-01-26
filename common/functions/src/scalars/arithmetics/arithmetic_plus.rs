@@ -68,8 +68,8 @@ impl ArithmeticPlusFunction {
         args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function2>> {
         let op = DataValueBinaryOperator::Plus;
-        let left_type = args[0].data_type_id();
-        let right_type = args[1].data_type_id();
+        let left_type = remove_nullable(args[0]).data_type_id();
+        let right_type = remove_nullable(args[1]).data_type_id();
 
         let error_fn = || -> Result<Box<dyn Function2>> {
             Err(ErrorCode::BadDataValueType(format!(

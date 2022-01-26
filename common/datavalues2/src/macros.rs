@@ -77,10 +77,10 @@ macro_rules! for_all_scalar_varints{
     ($macro:tt $(, $x:tt)*) => {
         $macro! {
             [$($x),*],
-            { i8, UInt8 },
-            { i16, UInt16 },
-            { i32, UInt32 },
-            { i64, UInt64 },
+            { i8, Int8 },
+            { i16, Int16 },
+            { i32, Int32 },
+            { i64, Int64 },
             { u8, UInt8 },
             { u16, UInt16 },
             { u32, UInt32 },

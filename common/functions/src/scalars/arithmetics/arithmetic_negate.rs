@@ -62,7 +62,7 @@ impl ArithmeticNegateFunction {
         _display_name: &str,
         args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function2>> {
-        let arg_type = args[0].data_type_id();
+        let arg_type = remove_nullable(args[0]).data_type_id();
         let op = DataValueUnaryOperator::Negate;
         let error_fn = || -> Result<Box<dyn Function2>> {
             Err(ErrorCode::BadDataValueType(format!(
