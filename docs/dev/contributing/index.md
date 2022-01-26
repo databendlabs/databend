@@ -17,17 +17,6 @@ Once the code been merged, your name will be stoned in the `system.contributors`
 `SELECT * FROM system.contributors`
 :::
 
-## Contributing
-
-To contribute to Databend, ensure that you have the latest version of the codebase, run the following:
-
-```shell
-$ git clone https://github.com/datafuselabs/databend
-$ cd databend
-$ make setup
-$ make test
-```
-
 ## Coding Guidelines
 
 For detailed guidance on how to contribute to the codebase refer to [Coding Guidelines](coding-guidelines.md).
@@ -50,6 +39,7 @@ To submit your pull request:
 8. Watch out the replies from the @datafuse-bots, she will be your guide.
 
 ## Code of Conduct
+
 Please refer to the [Code of Conduct](/dev/policies/code-of-conduct), which describes the expectations for interactions within the community.
 
 ## Issues

@@ -521,7 +521,7 @@ impl MetaApiTestSuite {
                         .await;
 
                     let got = got.unwrap_err();
-                    assert_eq!(ErrorCode::TableVersionMissMatch("").code(), got.code());
+                    assert_eq!(ErrorCode::TableVersionMismatched("").code(), got.code());
 
                     // table is not affected.
                     let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();

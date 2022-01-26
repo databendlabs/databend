@@ -33,7 +33,10 @@ impl Settings {
         ("min_distributed_rows", u64, 100000000, "Minimum distributed read rows. In cluster mode, when read rows exceeds this value, the local table converted to distributed query."),
         ("min_distributed_bytes", u64, 500 * 1024 * 1024, "Minimum distributed read bytes. In cluster mode, when read bytes exceeds this value, the local table converted to distributed query."),
         ("parallel_read_threads", u64, 1, "The maximum number of parallelism for reading data. By default, it is 1."),
-        ("storage_read_buffer_size", u64, 1024 * 1024, "The size of buffer in bytes for buffered reader of dal, default value is 1MB")
+        ("storage_read_buffer_size", u64, 1024 * 1024, "The size of buffer in bytes for buffered reader of dal. By default, it is 1MB."),
+        ("storage_occ_backoff_init_delay_ms", u64, 5, "The initial retry delay in millisecond. By default,  it is 5 ms."),
+        ("storage_occ_backoff_max_delay_ms", u64, 20 * 1000, "The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing. By default, it is 20 seconds."),
+        ("storage_occ_backoff_max_elapsed_ms", u64, 120 * 1000, "The maximum elapsed time after the occ starts, beyond which there will be no more retries. By default, it is 2 minutes")
     }
 
     pub fn try_create() -> Result<Arc<Settings>> {
