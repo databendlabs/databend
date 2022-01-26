@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use common_datavalues2::prelude::*;
 use common_datavalues2::remove_nullable;
-use common_datavalues2::type_coercion::compare_coercion;
+use common_datavalues2::type_coercion::aggregate_types;
 use common_exception::Result;
 
 use crate::scalars::cast_column_field;
@@ -49,10 +49,9 @@ impl Function2 for IfFunction {
     }
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        let l_dt = remove_nullable(args[1]);
-        let r_dt = remove_nullable(args[2]);
+        let dts = vec![args[1].clone(), args[2].clone()];
 
-        let mut least_supertype = compare_coercion(&l_dt, &r_dt)?;
+        let mut least_supertype = aggregate_types(dts.as_slice())?;
         if (args[0].is_nullable() || args[1].is_nullable() || args[2].is_nullable())
             && !least_supertype.is_nullable()
         {
@@ -78,10 +77,9 @@ impl Function2 for IfFunction {
 
         let lhs = &columns[1];
         let rhs = &columns[2];
-        let l_dt = remove_nullable(lhs.data_type());
-        let r_dt = remove_nullable(rhs.data_type());
+        let dts = vec![lhs.data_type().clone(), rhs.data_type().clone()];
 
-        let mut least_supertype = compare_coercion(&l_dt, &r_dt)?;
+        let mut least_supertype = aggregate_types(dts.as_slice())?;
 
         if (lhs.data_type().is_nullable() || rhs.data_type().is_nullable())
             && !least_supertype.is_nullable()
@@ -91,12 +89,13 @@ impl Function2 for IfFunction {
         if least_supertype.is_nullable() {
             nullable = true;
         }
+
         let lhs = cast_column_field(lhs, &least_supertype)?;
         let rhs = cast_column_field(rhs, &least_supertype)?;
 
         let type_id = remove_nullable(&lhs.data_type()).data_type_id();
 
-        macro_rules! primitive_build {
+        macro_rules! scalar_build {
             (
              $T:ident
         ) => {{
@@ -139,7 +138,7 @@ impl Function2 for IfFunction {
         }
 
         with_match_scalar_type!(type_id, |$T| {
-            primitive_build!($T)
+            scalar_build!($T)
         }, {
             unimplemented!()
         })
