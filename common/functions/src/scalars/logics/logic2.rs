@@ -69,7 +69,10 @@ impl Function2 for LogicFunction2 {
     }
 
     fn passthrough_null(&self) -> bool {
-        false
+        match self.op {
+            LogicOperator::Or => false,
+            _ => true
+        }
     }
 }
 
