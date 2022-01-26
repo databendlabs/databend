@@ -2468,6 +2468,7 @@ dependencies = [
  "common-dal",
  "common-datablocks",
  "common-datavalues",
+ "common-datavalues2",
  "common-exception",
  "common-functions",
  "common-grpc",

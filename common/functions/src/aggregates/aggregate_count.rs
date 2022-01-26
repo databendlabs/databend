@@ -30,6 +30,7 @@ pub struct AggregateCountState {
     count: u64,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct AggregateCountFunction {
     display_name: String,

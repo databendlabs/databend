@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
 use crate::types::BooleanType;
@@ -55,6 +56,11 @@ impl MutableColumn for MutableBooleanColumn {
 
     fn to_column(&mut self) -> ColumnRef {
         Arc::new(self.finish())
+    }
+
+    fn append_data_value(&mut self, value: crate::DataValue) -> Result<()> {
+        self.append_value(value.as_bool()?);
+        Ok(())
     }
 }
 

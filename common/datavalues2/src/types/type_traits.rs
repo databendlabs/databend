@@ -17,10 +17,18 @@ use num::NumCast;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+use crate::DFTryFrom;
 use crate::DataValue;
 
 pub trait PrimitiveType:
-    NativeArithmetics + NumCast + PartialOrd + Into<DataValue> + Default + Serialize + DeserializeOwned
+    NativeArithmetics
+    + DFTryFrom<DataValue>
+    + NumCast
+    + PartialOrd
+    + Into<DataValue>
+    + Default
+    + Serialize
+    + DeserializeOwned
 {
     type LargestType: PrimitiveType;
     const SIGN: bool;

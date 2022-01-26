@@ -21,20 +21,18 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues2::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::aggregate_function2::AggregateFunction;
-use super::aggregate_function2_factory::AggregateFunctionCreator;
-use super::aggregate_function2_factory::AggregateFunctionDescription;
-use super::aggregate_function2_factory::Combinator2Description;
+use super::aggregate_function::AggregateFunction;
+use super::aggregate_function_factory::AggregateFunctionCreator;
+use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_function_factory::CombinatorDescription;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 use crate::aggregates::AggregateCountFunction;
-use crate::aggregates::AggregateFunction;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 struct DataGroupValues(Vec<DataGroupValue>);
@@ -101,8 +99,8 @@ impl AggregateDistinctCombinator {
         }))
     }
 
-    pub fn combinator_desc() -> Combinator2Description {
-        Combinator2Description::creator(Box::new(Self::try_create))
+    pub fn combinator_desc() -> CombinatorDescription {
+        CombinatorDescription::creator(Box::new(Self::try_create))
     }
 }
 
@@ -220,8 +218,9 @@ impl AggregateFunction for AggregateDistinctCombinator {
 
         // faster path for count
         if self.nested.name() == "AggregateFunctionCount" {
-            let mut builder: &MutablePrimitiveColumn<u64> = Series::check_get_mutable(array)?;
-            builder.push(state.set.len() as u64);
+            let mut builder: &mut MutablePrimitiveColumn<u64> =
+                Series::check_get_mutable_column(array)?;
+            builder.append_value(state.set.len() as u64);
             Ok(())
         } else {
             if state.set.is_empty() {

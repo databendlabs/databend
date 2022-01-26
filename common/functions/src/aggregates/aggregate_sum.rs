@@ -20,7 +20,7 @@ use std::sync::Arc;
 use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -175,7 +175,7 @@ pub fn try_create_aggregate_sum_function(
     assert_unary_arguments(display_name, arguments.len())?;
 
     let data_type = arguments[0].data_type();
-    with_match_primitive_type!(data_type.data_type_id(), |$T| {
+    with_match_primitive_type_id!(data_type.data_type_id(), |$T| {
         AggregateSumFunction::<$T, <$T as PrimitiveType>::LargestType>::try_create(
              display_name,
              arguments,
@@ -195,7 +195,7 @@ pub fn aggregate_sum_function_desc() -> AggregateFunctionDescription {
     AggregateFunctionDescription::creator(Box::new(try_create_aggregate_sum_function))
 }
 
-fn sum_primitive<T, SumT>(column: &ColumnRef, validity: Option<&Bitmap>) -> Result<SumT>
+pub fn sum_primitive<T, SumT>(column: &ColumnRef, validity: Option<&Bitmap>) -> Result<SumT>
 where
     T: PrimitiveType + AsPrimitive<SumT>,
     SumT: PrimitiveType + std::ops::AddAssign,

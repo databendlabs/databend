@@ -24,7 +24,7 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::aggregates::AggregateFunctionV1Ref;
 use once_cell::sync::Lazy;
 
 use crate::plan_expression_common::ExpressionDataTypeVisitor;
@@ -309,7 +309,7 @@ impl Expression {
         visitor.visit(self)?.finalize()
     }
 
-    pub fn to_aggregate_function(&self, schema: &DataSchemaRef) -> Result<AggregateFunctionRef> {
+    pub fn to_aggregate_function(&self, schema: &DataSchemaRef) -> Result<AggregateFunctionV1Ref> {
         match self {
             Expression::AggregateFunction {
                 op,

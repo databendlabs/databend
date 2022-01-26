@@ -160,7 +160,7 @@ macro_rules! with_match_scalar_types_error {(
 })}
 
 #[macro_export]
-macro_rules! with_match_primitive_type {
+macro_rules! with_match_primitive_type_id {
     (
     $key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt
 ) => {{
@@ -187,55 +187,15 @@ macro_rules! with_match_primitive_type {
     }};
 }
 
-#[macro_export]
-macro_rules! match_data_type_apply_macro_ca {
-    ($self:expr, $macro:ident, $macro_string:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
-
-        match $self.data_type() {
-            TypeID::String => $macro_string!($self.string().unwrap() $(, $opt_args)*),
-            TypeID::Boolean => $macro_bool!($self.bool().unwrap() $(, $opt_args)*),
-            TypeID::UInt8 => $macro!($self.u8().unwrap() $(, $opt_args)*),
-            TypeID::UInt16 => $macro!($self.u16().unwrap() $(, $opt_args)*),
-            TypeID::UInt32 => $macro!($self.u32().unwrap() $(, $opt_args)*),
-            TypeID::UInt64 => $macro!($self.u64().unwrap() $(, $opt_args)*),
-            TypeID::Int8 => $macro!($self.i8().unwrap() $(, $opt_args)*),
-            TypeID::Int16 => $macro!($self.i16().unwrap() $(, $opt_args)*),
-            TypeID::Int32 => $macro!($self.i32().unwrap() $(, $opt_args)*),
-            TypeID::Int64 => $macro!($self.i64().unwrap() $(, $opt_args)*),
-            TypeID::Float32 => $macro!($self.f32().unwrap() $(, $opt_args)*),
-            TypeID::Float64 => $macro!($self.f64().unwrap() $(, $opt_args)*),
-            TypeID::Date16 => $macro!($self.u16().unwrap() $(, $opt_args)*),
-            TypeID::Date32 => $macro!($self.i32().unwrap() $(, $opt_args)*),
-            _ => unimplemented!(),
-        }
-    }};
-}
-
-// doesn't include Bool and String
-#[macro_export]
-macro_rules! apply_method_numeric_series {
-    ($self:ident, $method:ident, $($args:expr),*) => {
-        match $self.data_type() {
-            TypeID::UInt8 => $self.u8().unwrap().$method($($args),*),
-            TypeID::UInt16 => $self.u16().unwrap().$method($($args),*),
-            TypeID::UInt32 => $self.u32().unwrap().$method($($args),*),
-            TypeID::UInt64 => $self.u64().unwrap().$method($($args),*),
-            TypeID::Int8 => $self.i8().unwrap().$method($($args),*),
-            TypeID::Int16 => $self.i16().unwrap().$method($($args),*),
-            TypeID::Int32 => $self.i32().unwrap().$method($($args),*),
-            TypeID::Int64 => $self.i64().unwrap().$method($($args),*),
-            TypeID::Float32 => $self.f32().unwrap().$method($($args),*),
-            TypeID::Float64 => $self.f64().unwrap().$method($($args),*),
-            TypeID::Date16 => $self.u16().unwrap().$method($($args),*),
-            TypeID::Date32 => $self.i32().unwrap().$method($($args),*),
-
-            _ => unimplemented!(),
-        }
-    }
-}
-
 macro_rules! try_cast_data_value_to_std {
     ($NATIVE: ident, $AS_FN: ident) => {
+        impl DFTryFrom<DataValue> for $NATIVE {
+            fn try_from(value: DataValue) -> Result<Self> {
+                let v = value.$AS_FN()?;
+                Ok(v as $NATIVE)
+            }
+        }
+
         impl DFTryFrom<&DataValue> for $NATIVE {
             fn try_from(value: &DataValue) -> Result<Self> {
                 let v = value.$AS_FN()?;

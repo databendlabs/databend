@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
 use crate::types::DataTypePtr;
@@ -60,5 +61,10 @@ impl MutableColumn for MutableNullColumn {
         });
         self.length = 0;
         ret
+    }
+
+    fn append_data_value(&mut self, _value: crate::DataValue) -> Result<()> {
+        self.length += 1;
+        Ok(())
     }
 }

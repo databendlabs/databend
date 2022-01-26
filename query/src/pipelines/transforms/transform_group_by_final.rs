@@ -22,6 +22,9 @@ use bumpalo::Bump;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethodKind;
 use common_datavalues::prelude::*;
+use common_datavalues2::column_convert::convert2_old_column;
+use common_datavalues2::prelude::MutableColumn;
+use common_datavalues2::type_convert::create_mutable_builder;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::StateAddr;
@@ -179,10 +182,10 @@ impl Processor for GroupByFinalTransform {
                 // Collect the merge states.
                 let groups = groups_locker.read();
 
-                let mut aggr_values: Vec<Box<dyn MutableArrayBuilder>> = {
+                let mut aggr_values: Vec<Box<dyn MutableColumn>> = {
                     let mut values = vec![];
                     for func in &funcs {
-                        let array = create_mutable_array(func.return_type()?);
+                        let array = create_mutable_builder(func.return_type()?);
                         values.push(array)
                     }
                     values
@@ -195,7 +198,7 @@ impl Processor for GroupByFinalTransform {
                     let place: StateAddr = (*place).into();
                     for (idx, func) in funcs.iter().enumerate() {
                         let arg_place = place.next(offsets_aggregate_states[idx]);
-                        let array: &mut dyn MutableArrayBuilder = aggr_values[idx].borrow_mut();
+                        let array: &mut dyn MutableColumn = aggr_values[idx].borrow_mut();
                         func.merge_result(arg_place, array)?;
                     }
                 }
@@ -203,7 +206,9 @@ impl Processor for GroupByFinalTransform {
                 // Build final state block.
                 let mut columns: Vec<Series> = Vec::with_capacity(aggr_funcs_len + group_expr_len);
                 for mut array in aggr_values {
-                    columns.push(array.as_series());
+                    let col = array.to_column();
+                    let old_c = convert2_old_column(&col);
+                    columns.push(old_c.to_array()?);
                 }
 
                 {

@@ -19,7 +19,8 @@ use std::sync::Arc;
 use bytes::BytesMut;
 use common_arrow::arrow;
 use common_arrow::arrow::array::*;
-use common_datavalues::prelude::*;
+use common_arrow::arrow::bitmap::Bitmap;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -55,8 +56,8 @@ impl AggregateIfCombinator {
             )));
         }
 
-        match arguments[argument_len - 1].data_type() {
-            DataType::Boolean => {}
+        match arguments[argument_len - 1].data_type().data_type_id() {
+            TypeID::Boolean => {}
             other => {
                 return Err(ErrorCode::BadArguments(format!(
                     "The type of the last argument for {} must be boolean type, but got {:?}",
@@ -86,12 +87,8 @@ impl AggregateFunction for AggregateIfCombinator {
         &self.name
     }
 
-    fn return_type(&self) -> Result<DataType> {
+    fn return_type(&self) -> Result<DataTypePtr> {
         self.nested.return_type()
-    }
-
-    fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
-        self.nested.nullable(input_schema)
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -102,35 +99,36 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.state_layout()
     }
 
-    fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
-        if arrays.is_empty() {
+    fn accumulate(
+        &self,
+        place: StateAddr,
+        columns: &[ColumnRef],
+        validity: Option<&Bitmap>,
+        input_rows: usize,
+    ) -> Result<()> {
+        if columns.is_empty() {
             return Ok(());
         };
 
-        let predicate_array = arrays[self.argument_len - 1].cast_with_type(&DataType::Boolean)?;
-        let predicate = predicate_array.bool()?;
-
-        let (column_array, rows_size) = self.filter_array(arrays, predicate)?;
-        self.nested
-            .accumulate(place, column_array.as_slice(), rows_size)
+        let predicate: &BooleanColumn = Series::check_get(&columns[self.argument_len - 1])?;
+        let bitmap = combine_validities(validity, Some(predicate.values()));
+        self.nested.accumulate(place, columns, bitmap, input_rows)
     }
 
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
         offset: usize,
-        arrays: &[Series],
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<()> {
-        if arrays.is_empty() {
+        if columns.is_empty() {
             // TODO: maybe is error?
             return Ok(());
         };
+        let predicate: &BooleanColumn = Series::check_get(&columns[self.argument_len - 1])?;
 
-        let predicate_array = arrays[self.argument_len - 1].cast_with_type(&DataType::Boolean)?;
-        let predicate = predicate_array.bool()?;
-
-        let (column_array, row_size) = self.filter_array(arrays, predicate)?;
+        let (column_array, row_size) = self.filter_column(columns, predicate)?;
         let new_places = Self::filter_place(places, predicate, row_size);
 
         let new_places_slice = new_places.as_slice();
@@ -151,7 +149,7 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.merge(place, rhs)
     }
 
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
         self.nested.merge_result(place, array)
     }
 }
@@ -163,65 +161,16 @@ impl fmt::Display for AggregateIfCombinator {
 }
 
 impl AggregateIfCombinator {
-    fn filter_place(places: &[StateAddr], predicate: &DFBooleanArray, rows: usize) -> StateAddrs {
+    fn filter_place(places: &[StateAddr], predicate: &BooleanColumn, rows: usize) -> StateAddrs {
         let mut new_places = Vec::with_capacity(rows);
-        let arrow_filter_array = predicate.inner();
+        let arrow_filter_column = predicate.inner();
 
         for (index, place) in places.iter().enumerate() {
-            if !arrow_filter_array.is_null(index) && arrow_filter_array.value(index) {
+            if !arrow_filter_column.is_null(index) && arrow_filter_column.value(index) {
                 new_places.push(*place);
             }
         }
 
         new_places
-    }
-
-    #[inline]
-    fn filter_array(
-        &self,
-        array: &[Series],
-        predicate: &DFBooleanArray,
-    ) -> Result<(Vec<Series>, usize)> {
-        let arrow_filter_array = predicate.inner();
-        let bitmap = arrow_filter_array.values();
-
-        let mut column_array = Vec::with_capacity(self.argument_len - 1);
-        let row_size = match array.len() - 1 {
-            0 => {
-                // if it has no args, only return the row_count
-                if predicate.null_count() > 0 {
-                    // this greatly simplifies subsequent filtering code
-                    // now we only have a boolean mask to deal with
-                    let boolean_bm = arrow_filter_array.validity();
-                    let res = combine_validities(Some(&bitmap.clone()), boolean_bm);
-                    res.map_or(0, |v| v.len() - v.null_count())
-                } else {
-                    bitmap.len() - bitmap.null_count()
-                }
-            }
-            1 => {
-                // single array handle
-                let data = arrow::compute::filter::filter(
-                    array[0].get_array_ref().as_ref(),
-                    arrow_filter_array,
-                )?;
-                let data: ArrayRef = Arc::from(data);
-                column_array.push(data.into_series());
-                column_array[0].len()
-            }
-            _ => {
-                // multi array handle
-                let mut args_array = Vec::with_capacity(self.argument_len - 1);
-                for column in array.iter().take(self.argument_len - 1) {
-                    args_array.push(column.clone());
-                }
-                let data = DataArrayFilter::filter_batch_array(args_array, predicate)?;
-                data.into_iter()
-                    .for_each(|column| column_array.push(column));
-                column_array[0].len()
-            }
-        };
-
-        Ok((column_array, row_size))
     }
 }

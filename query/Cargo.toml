@@ -29,6 +29,7 @@ common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 common-dal = { path = "../common/dal" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
+common-datavalues2 = { path = "../common/datavalues2" }
 common-exception = { path = "../common/exception" }
 common-grpc = { path = "../common/grpc" }
 common-functions = { path = "../common/functions" }

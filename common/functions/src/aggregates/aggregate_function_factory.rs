@@ -15,11 +15,15 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_datavalues::prelude::DataField as OldDataField;
+use common_datavalues::prelude::DataValue as OldDataValue;
 use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
+use super::AggConvertor;
+use super::AggregateFunctionV1Ref;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::Aggregators;
 
@@ -107,6 +111,19 @@ impl AggregateFunctionFactory {
     }
 
     pub fn get(
+        &self,
+        name: impl AsRef<str>,
+        params: Vec<OldDataValue>,
+        arguments: Vec<OldDataField>,
+    ) -> Result<AggregateFunctionV1Ref> {
+        let params = params.iter().map(|v| v.clone().into()).collect();
+        let arguments = arguments.iter().map(|v| v.clone().into()).collect();
+
+        let f = self.get_new(name, params, arguments)?;
+        Ok(AggConvertor::create(f))
+    }
+
+    pub fn get_new(
         &self,
         name: impl AsRef<str>,
         params: Vec<DataValue>,
