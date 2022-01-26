@@ -119,7 +119,7 @@ fn test_logic_or_function() -> Result<()> {
                 Arc::new(NullColumn::new(4)),
                 Series::from_data(vec![Some(true), None, None, Some(false)]),
             ],
-            expect: Series::from_data(vec![Some(true), None, None, Some(false)]),
+            expect: Series::from_data(vec![Some(true), None, None, None]),
             error: "",
         },
     ];
