@@ -33,6 +33,7 @@ mod aggregator_common;
 
 #[macro_use]
 mod macros;
+pub mod aggregate_min_max;
 
 // pub use aggregate_arg_min_max::AggregateArgMinMaxFunction;
 // pub use aggregate_avg::AggregateAvgFunction;

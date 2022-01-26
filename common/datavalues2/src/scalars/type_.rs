@@ -28,6 +28,9 @@ where for<'a> Self::ColumnType: ScalarColumn<RefItem<'a> = Self::RefType<'a>>
 
     /// Get a reference of the current value.
     fn as_scalar_ref(&self) -> Self::RefType<'_>;
+
+    /// Upcast GAT type's lifetime.
+    fn upcast_gat<'short, 'long: 'short>(long: Self::RefType<'long>) -> Self::RefType<'short>;
 }
 
 pub trait ScalarRef<'a>: std::fmt::Debug + Clone + Copy + Send + 'a {
@@ -47,6 +50,10 @@ macro_rules! impl_primitive_scalar_type {
 
             fn as_scalar_ref(&self) -> $native {
                 *self
+            }
+
+            fn upcast_gat<'short, 'long: 'short>(long: $native) -> $native {
+                long
             }
         }
 
@@ -80,6 +87,10 @@ impl Scalar for bool {
     fn as_scalar_ref(&self) -> bool {
         *self
     }
+
+    fn upcast_gat<'short, 'long: 'short>(long: bool) -> bool {
+        long
+    }
 }
 
 impl<'a> ScalarRef<'a> for bool {
@@ -97,6 +108,10 @@ impl Scalar for Vec<u8> {
 
     fn as_scalar_ref(&self) -> &[u8] {
         self
+    }
+
+    fn upcast_gat<'short, 'long: 'short>(long: &'long [u8]) -> &'short [u8] {
+        long
     }
 }
 
