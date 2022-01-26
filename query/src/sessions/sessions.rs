@@ -36,6 +36,7 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 use crate::storages::cache::CacheManager;
+use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::UserApiProvider;
 
 pub struct SessionManager {
@@ -43,6 +44,7 @@ pub struct SessionManager {
     pub(in crate::sessions) discovery: Arc<ClusterDiscovery>,
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
     pub(in crate::sessions) user: Arc<UserApiProvider>,
+    pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
 
     pub(in crate::sessions) max_sessions: usize,
@@ -60,6 +62,7 @@ impl SessionManager {
 
         // User manager and init the default users.
         let user = UserApiProvider::create_global(conf.clone()).await?;
+        let auth_manager = Arc::new(AuthMgr::create(conf.clone(), user.clone()).await?);
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
 
         let max_active_sessions = conf.query.max_active_sessions as usize;
@@ -69,6 +72,7 @@ impl SessionManager {
             discovery,
             user,
             http_query_manager,
+            auth_manager,
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
             storage_cache_manager: Arc::new(storage_cache_mgr),
@@ -85,6 +89,10 @@ impl SessionManager {
 
     pub fn get_http_query_manager(self: &Arc<Self>) -> Arc<HttpQueryManager> {
         self.http_query_manager.clone()
+    }
+
+    pub fn get_auth_manager(self: &Arc<Self>) -> Arc<AuthMgr> {
+        self.auth_manager.clone()
     }
 
     /// Get the user api provider.

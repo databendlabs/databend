@@ -15,6 +15,7 @@
 pub mod block_to_json;
 mod http_query_handlers;
 mod load;
+pub mod middleware;
 mod query;
 mod statement;
 
