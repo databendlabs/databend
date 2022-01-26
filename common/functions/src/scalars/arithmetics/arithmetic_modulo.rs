@@ -12,96 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::marker::PhantomData;
 use std::ops::Rem;
+use std::sync::Arc;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use num::cast::AsPrimitive;
+use num_traits::AsPrimitive;
 
-use super::arithmetic::ArithmeticTrait;
 use super::utils::rem_scalar;
-use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::BinaryArithmeticFunction;
-use crate::scalars::Function;
-use crate::try_binary_arithmetic;
-use crate::with_match_primitive_type;
-
-#[derive(Clone)]
-pub struct ArithmeticModule<T, D, M, R> {
-    t: PhantomData<T>,
-    d: PhantomData<D>,
-    m: PhantomData<M>,
-    r: PhantomData<R>,
-}
-
-impl<T, D, M, R> ArithmeticTrait for ArithmeticModule<T, D, M, R>
-where
-    T: DFPrimitiveType + AsPrimitive<M>,
-    D: DFPrimitiveType + AsPrimitive<M> + num::One,
-    R: DFPrimitiveType,
-    M: DFPrimitiveType + num::Zero + AsPrimitive<R> + Rem<Output = M>,
-    u8: AsPrimitive<R>,
-    u16: AsPrimitive<R>,
-    u32: AsPrimitive<R>,
-    u64: AsPrimitive<R>,
-    DFPrimitiveArray<R>: IntoSeries,
-    R: Into<DataValue>,
-{
-    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
-        let need_check = R::data_type().is_integer();
-        try_binary_arithmetic! {
-            columns[0].column(),
-            columns[1].column(),
-            M,
-            |l: M, r:M| {
-                if std::intrinsics::unlikely(need_check && r == M::zero()) {
-                    return Err(ErrorCode::BadArguments("Division by zero"));
-                }
-                Ok(AsPrimitive::<R>::as_(l % r))
-            },
-            |lhs: &DFPrimitiveArray<T>, r: M| {
-                if need_check && r == M::zero() {
-                    return Err(ErrorCode::BadArguments("Division by zero"));
-                }
-                Ok(rem_scalar(lhs, &r).into())
-            }
-        }
-    }
-}
+use crate::scalars::ArithmeticDescription;
+use crate::scalars::Function2;
 
 pub struct ArithmeticModuloFunction;
 
 impl ArithmeticModuloFunction {
     pub fn try_create_func(
         _display_name: &str,
-        args: &[DataTypeAndNullable],
-    ) -> Result<Box<dyn Function>> {
-        let left_type = &args[0].data_type();
-        let right_type = &args[1].data_type();
-        let op = DataValueBinaryOperator::Modulo;
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function2>> {
+        let left_type = remove_nullable(args[0]).data_type_id();
+        let right_type = remove_nullable(args[1]).data_type_id();
 
-        let error_fn = || -> Result<Box<dyn Function>> {
+        let error_fn = || -> Result<Box<dyn Function2>> {
             Err(ErrorCode::BadDataValueType(format!(
-                "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
-                left_type, op, right_type
+                "DataValue Error: Unsupported arithmetic ({:?}) modulo ({:?})",
+                left_type, right_type
             )))
-        };
-
-        if !left_type.is_numeric() || !right_type.is_numeric() {
-            return error_fn();
         };
 
         with_match_primitive_type!(left_type, |$T| {
             with_match_primitive_type!(right_type, |$D| {
-                let result_type = <($T, $D) as ResultTypeOfBinary>::Modulo::data_type();
-                BinaryArithmeticFunction::<ArithmeticModule<$T, $D, <($T, $D) as ResultTypeOfBinary>::LeastSuper, <($T, $D) as ResultTypeOfBinary>::Modulo>>::try_create_func(
-                    op,
-                    result_type,
-                )
+                Ok(Box::new(
+                        ModuloFunctionImpl::<$T, $D, <($T, $D) as ResultTypeOfBinary>::LeastSuper, <($T, $D) as ResultTypeOfBinary>::Modulo>::default()
+                ))
             }, {
                 error_fn()
             })
@@ -113,5 +61,87 @@ impl ArithmeticModuloFunction {
     pub fn desc() -> ArithmeticDescription {
         ArithmeticDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct ModuloFunctionImpl<L, R, M, O> {
+    l: PhantomData<L>,
+    r: PhantomData<R>,
+    m: PhantomData<M>,
+    o: PhantomData<O>,
+}
+
+impl<L, R, M, O> Function2 for ModuloFunctionImpl<L, R, M, O>
+where
+    L: PrimitiveType + AsPrimitive<M>,
+    R: PrimitiveType + AsPrimitive<M>,
+    M: PrimitiveType + AsPrimitive<O> + Rem<Output = M> + num::Zero + ToDataType,
+    O: PrimitiveType + ToDataType,
+    u8: AsPrimitive<O>,
+    u16: AsPrimitive<O>,
+    u32: AsPrimitive<O>,
+    u64: AsPrimitive<O>,
+{
+    fn name(&self) -> &str {
+        "ModuloFunctionImpl"
+    }
+
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        Ok(O::to_data_type())
+    }
+
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        let lhs = columns[0].column();
+        let rhs = columns[1].column();
+
+        let left = ColumnViewerIter::<L>::try_create(lhs)?;
+        let right = ColumnViewerIter::<R>::try_create(rhs)?;
+
+        match (lhs.is_const(), rhs.is_const()) {
+            (true, true) => {
+                let l = left.viewer.value(0).to_owned_scalar().as_();
+                let r = right.viewer.value(0).to_owned_scalar().as_();
+                if r == M::zero() {
+                    return Err(ErrorCode::BadArguments("Division by zero"));
+                }
+                (AsPrimitive::<O>::as_(l % r))
+                    .into()
+                    .as_const_column(&O::to_data_type(), left.size)
+            }
+            (false, true) => {
+                let r = right.viewer.value(0).to_owned_scalar().as_();
+                if r == M::zero() {
+                    return Err(ErrorCode::BadArguments("Division by zero"));
+                }
+                let col = rem_scalar::<L, M, O>(left, &r)?;
+                Ok(Arc::new(col))
+            }
+            _ => {
+                let mut col_builder = MutablePrimitiveColumn::<O>::with_capacity(left.size);
+                for (l, r) in left.zip(right) {
+                    let l = l.to_owned_scalar().as_();
+                    let r = r.to_owned_scalar().as_();
+                    if std::intrinsics::unlikely(r == M::zero()) {
+                        return Err(ErrorCode::BadArguments("Division by zero"));
+                    }
+                    let o = AsPrimitive::<O>::as_(l % r);
+                    col_builder.append_value(o);
+                }
+                Ok(col_builder.to_column())
+            }
+        }
+    }
+}
+
+impl<L, R, M, O> fmt::Display for ModuloFunctionImpl<L, R, M, O>
+where
+    L: PrimitiveType + AsPrimitive<M>,
+    R: PrimitiveType + AsPrimitive<M>,
+    M: PrimitiveType + AsPrimitive<O> + Rem<Output = M> + num::Zero,
+    O: PrimitiveType + ToDataType,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "div")
     }
 }

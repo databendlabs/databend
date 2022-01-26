@@ -21,9 +21,7 @@ mod arithmetic_mul;
 mod arithmetic_negate;
 mod arithmetic_plus;
 mod binary_arithmetic;
-mod binary_arithmetic2;
 mod interval;
-mod macros;
 mod unary_arithmetic;
 mod utils;
 
@@ -36,6 +34,4 @@ pub use arithmetic_mul::ArithmeticMulFunction;
 pub use arithmetic_negate::ArithmeticNegateFunction;
 pub use arithmetic_plus::ArithmeticPlusFunction;
 pub use binary_arithmetic::BinaryArithmeticFunction;
-pub use binary_arithmetic2::ArithmeticFunction2;
-pub use binary_arithmetic2::BinaryArithmeticFunction2;
 pub use unary_arithmetic::UnaryArithmeticFunction;

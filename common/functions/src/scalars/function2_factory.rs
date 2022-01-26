@@ -22,7 +22,7 @@ use once_cell::sync::Lazy;
 
 use super::function2::Function2;
 use super::function_factory::FunctionFeatures;
-use super::ArithmeticFunction2;
+use super::ArithmeticFunction;
 use super::ComparisonFunction;
 use super::ConditionalFunction;
 use super::HashesFunction;
@@ -37,7 +37,7 @@ use crate::scalars::ToCastFunction;
 pub type Factory2Creator = Box<dyn Fn(&str) -> Result<Box<dyn Function2>> + Send + Sync>;
 
 // Temporary adaptation for arithmetic.
-pub type Arithmetic2Creator =
+pub type ArithmeticCreator =
     Box<dyn Fn(&str, &[&DataTypePtr]) -> Result<Box<dyn Function2>> + Send + Sync>;
 
 pub struct Function2Description {
@@ -60,21 +60,21 @@ impl Function2Description {
     }
 }
 
-pub struct Arithmetic2Description {
+pub struct ArithmeticDescription {
     pub features: FunctionFeatures,
-    pub arithmetic_creator: Arithmetic2Creator,
+    pub arithmetic_creator: ArithmeticCreator,
 }
 
-impl Arithmetic2Description {
-    pub fn creator(creator: Arithmetic2Creator) -> Arithmetic2Description {
-        Arithmetic2Description {
+impl ArithmeticDescription {
+    pub fn creator(creator: ArithmeticCreator) -> ArithmeticDescription {
+        ArithmeticDescription {
             arithmetic_creator: creator,
             features: FunctionFeatures::default(),
         }
     }
 
     #[must_use]
-    pub fn features(mut self, features: FunctionFeatures) -> Arithmetic2Description {
+    pub fn features(mut self, features: FunctionFeatures) -> ArithmeticDescription {
         self.features = features;
         self
     }
@@ -82,13 +82,13 @@ impl Arithmetic2Description {
 
 pub struct Function2Factory {
     case_insensitive_desc: HashMap<String, Function2Description>,
-    case_insensitive_arithmetic_desc: HashMap<String, Arithmetic2Description>,
+    case_insensitive_arithmetic_desc: HashMap<String, ArithmeticDescription>,
 }
 
 static FUNCTION2_FACTORY: Lazy<Arc<Function2Factory>> = Lazy::new(|| {
     let mut function_factory = Function2Factory::create();
 
-    ArithmeticFunction2::register(&mut function_factory);
+    ArithmeticFunction::register(&mut function_factory);
     ToCastFunction::register(&mut function_factory);
     TupleClassFunction::register(&mut function_factory);
     ComparisonFunction::register(&mut function_factory);
@@ -119,7 +119,7 @@ impl Function2Factory {
         case_insensitive_desc.insert(name.to_lowercase(), desc);
     }
 
-    pub fn register_arithmetic(&mut self, name: &str, desc: Arithmetic2Description) {
+    pub fn register_arithmetic(&mut self, name: &str, desc: ArithmeticDescription) {
         let case_insensitive_arithmetic_desc = &mut self.case_insensitive_arithmetic_desc;
         case_insensitive_arithmetic_desc.insert(name.to_lowercase(), desc);
     }

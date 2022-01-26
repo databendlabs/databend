@@ -22,7 +22,7 @@ use num::traits::AsPrimitive;
 use num_traits::WrappingNeg;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Arithmetic2Description;
+use crate::scalars::ArithmeticDescription;
 use crate::scalars::Function2;
 use crate::scalars::Monotonicity;
 use crate::scalars::ScalarUnaryFunction;
@@ -104,8 +104,8 @@ impl ArithmeticNegateFunction {
         })
     }
 
-    pub fn desc() -> Arithmetic2Description {
-        Arithmetic2Description::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> ArithmeticDescription {
+        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()

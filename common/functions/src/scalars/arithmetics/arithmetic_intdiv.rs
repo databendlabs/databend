@@ -22,7 +22,7 @@ use common_exception::Result;
 use num_traits::AsPrimitive;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Arithmetic2Description;
+use crate::scalars::ArithmeticDescription;
 use crate::scalars::Function2;
 
 pub struct ArithmeticIntDivFunction;
@@ -53,8 +53,8 @@ impl ArithmeticIntDivFunction {
         })
     }
 
-    pub fn desc() -> Arithmetic2Description {
-        Arithmetic2Description::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> ArithmeticDescription {
+        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()

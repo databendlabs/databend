@@ -23,8 +23,8 @@ use num::traits::AsPrimitive;
 use num_traits::WrappingAdd;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Arithmetic2Description;
-use crate::scalars::BinaryArithmeticFunction2;
+use crate::scalars::ArithmeticDescription;
+use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function2;
 use crate::scalars::Monotonicity;
 use crate::scalars::ScalarBinaryFunction;
@@ -85,7 +85,7 @@ impl ArithmeticPlusFunction {
         if left_type.is_date_or_date_time() {
             return with_match_date_type_error!(left_type, |$T| {
                 with_match_primitive_type!(right_type, |$D| {
-                    BinaryArithmeticFunction2::<$T, $D, $T, _>::try_create_func(
+                    BinaryArithmeticFunction::<$T, $D, $T, _>::try_create_func(
                         op,
                         args[0].clone(),
                         AddFunction::default(),
@@ -99,7 +99,7 @@ impl ArithmeticPlusFunction {
         if right_type.is_date_or_date_time() {
             return with_match_primitive_type!(left_type, |$T| {
                 with_match_date_type_error!(right_type, |$D| {
-                    BinaryArithmeticFunction2::<$T, $D, $D, _>::try_create_func(
+                    BinaryArithmeticFunction::<$T, $D, $D, _>::try_create_func(
                         op,
                         args[1].clone(),
                         AddFunction::default(),
@@ -114,17 +114,17 @@ impl ArithmeticPlusFunction {
             with_match_primitive_type!(right_type, |$D| {
                 let result_type = <($T, $D) as ResultTypeOfBinary>::AddMul::to_data_type();
                 match result_type.data_type_id() {
-                    TypeID::UInt64 => BinaryArithmeticFunction2::<$T, $D, u64, _>::try_create_func(
+                    TypeID::UInt64 => BinaryArithmeticFunction::<$T, $D, u64, _>::try_create_func(
                         op,
                         result_type,
                         WrappingAddFunction::default(),
                     ),
-                    TypeID::Int64 => BinaryArithmeticFunction2::<$T, $D, i64, _>::try_create_func(
+                    TypeID::Int64 => BinaryArithmeticFunction::<$T, $D, i64, _>::try_create_func(
                         op,
                         result_type,
                         WrappingAddFunction::default(),
                     ),
-                    _ => BinaryArithmeticFunction2::<$T, $D, <($T, $D) as ResultTypeOfBinary>::AddMul, _>::try_create_func(
+                    _ => BinaryArithmeticFunction::<$T, $D, <($T, $D) as ResultTypeOfBinary>::AddMul, _>::try_create_func(
                         op,
                         result_type,
                         AddFunction::default(),
@@ -138,8 +138,8 @@ impl ArithmeticPlusFunction {
         })
     }
 
-    pub fn desc() -> Arithmetic2Description {
-        Arithmetic2Description::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> ArithmeticDescription {
+        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()

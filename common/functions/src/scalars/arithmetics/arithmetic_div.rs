@@ -20,8 +20,8 @@ use num::traits::AsPrimitive;
 
 use super::arithmetic_mul::arithmetic_mul_div_monotonicity;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Arithmetic2Description;
-use crate::scalars::BinaryArithmeticFunction2;
+use crate::scalars::ArithmeticDescription;
+use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function2;
 use crate::scalars::Monotonicity;
 use crate::scalars::ScalarBinaryFunction;
@@ -59,7 +59,7 @@ impl ArithmeticDivFunction {
 
         with_match_primitive_type!(left_type, |$T| {
             with_match_primitive_type!(right_type, |$D| {
-                BinaryArithmeticFunction2::<$T, $D, f64, _>::try_create_func(
+                BinaryArithmeticFunction::<$T, $D, f64, _>::try_create_func(
                     op,
                     Float64Type::arc(),
                     DivFunction::default(),
@@ -72,8 +72,8 @@ impl ArithmeticDivFunction {
         })
     }
 
-    pub fn desc() -> Arithmetic2Description {
-        Arithmetic2Description::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> ArithmeticDescription {
+        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()
