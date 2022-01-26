@@ -17,20 +17,14 @@
 #![feature(associated_type_defaults)]
 
 mod accessor;
+pub use accessor::Accessor;
+pub use accessor::Reader;
+
 mod operator;
+pub use operator::Operator;
 
 pub mod credential;
 pub mod error;
 pub mod ops;
 pub mod services;
-
-pub use accessor::Accessor;
-pub use operator::Operator;
-pub use ops::io::SeekableReader;
-
-#[cfg(test)]
-mod tests {
-    mod ops {
-        mod io;
-    }
-}
+pub mod wraps;

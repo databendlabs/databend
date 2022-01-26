@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::io::Reader;
 use crate::error::Result;
 use crate::Operator;
+use crate::Reader;
 
 pub struct OpWrite {
     op: Operator,

@@ -23,9 +23,11 @@ use futures::io::Cursor;
 async fn normal() {
     let f = Operator::new(fs::Backend::build().finish());
 
+    let path = format!("/tmp/{}", uuid::Uuid::new_v4());
+
     // Test write
     let x = f
-        .write("/tmp/x", 13)
+        .write(&path, 13)
         .run(Box::new(Cursor::new("Hello, world!")))
         .await
         .unwrap();
@@ -33,14 +35,14 @@ async fn normal() {
 
     // Test read
     let mut buf: Vec<u8> = Vec::new();
-    let mut x = f.read("/tmp/x").run().await.unwrap();
+    let mut x = f.read(&path).run().await.unwrap();
     x.read_to_end(&mut buf).await.unwrap();
     assert_eq!("Hello, world!", str::from_utf8(&buf).unwrap());
 
     // Test stat
-    let o = f.stat("/tmp/x").run().await.unwrap();
+    let o = f.stat(&path).run().await.unwrap();
     assert_eq!(13, o.size);
 
     // Test delete
-    f.delete("/tmp/x").run().await.unwrap();
+    f.delete(&path).run().await.unwrap();
 }

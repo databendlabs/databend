@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod header;
-pub use header::HeaderRange;
+mod callback;
+pub use callback::CallbackReader;
 
-mod object;
-pub use object::Object;
+mod seekable;
+pub use seekable::SeekableReader;
 
-// Supported operations
-mod read;
-pub use read::OpRead;
-
-mod write;
-pub use write::OpWrite;
-
-mod stat;
-pub use stat::OpStat;
-
-mod delete;
-pub use delete::OpDelete;
+mod stream;
+pub use stream::ReaderStream;

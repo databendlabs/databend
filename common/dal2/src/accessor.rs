@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use async_trait::async_trait;
+use futures::AsyncRead;
 
 use crate::error::Result;
-use crate::ops::io::Reader;
 use crate::ops::Object;
 use crate::ops::OpDelete;
 use crate::ops::OpRead;
 use crate::ops::OpStat;
 use crate::ops::OpWrite;
+
+pub type Reader = Box<dyn AsyncRead + Unpin + Send>;
 
 #[async_trait]
 pub trait Accessor: Send + Sync {

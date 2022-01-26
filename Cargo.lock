@@ -1547,6 +1547,7 @@ dependencies = [
  "pin-project",
  "thiserror",
  "tokio",
+ "uuid 0.8.2",
 ]
 
 [[package]]

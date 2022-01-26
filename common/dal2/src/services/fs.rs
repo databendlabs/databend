@@ -31,8 +31,8 @@ use crate::ops::OpDelete;
 use crate::ops::OpRead;
 use crate::ops::OpStat;
 use crate::ops::OpWrite;
-use crate::ops::Reader;
 use crate::Accessor;
+use crate::Reader;
 
 #[derive(Default)]
 pub struct Builder {

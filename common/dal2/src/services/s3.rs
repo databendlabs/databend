@@ -28,15 +28,15 @@ use futures::TryStreamExt;
 use crate::credential::Credential;
 use crate::error::Error;
 use crate::error::Result;
-use crate::ops::io::HeaderRange;
+use crate::ops::HeaderRange;
 use crate::ops::Object;
 use crate::ops::OpDelete;
 use crate::ops::OpRead;
 use crate::ops::OpStat;
 use crate::ops::OpWrite;
-use crate::ops::Reader;
-use crate::ops::ReaderStream;
+use crate::wraps::ReaderStream;
 use crate::Accessor;
+use crate::Reader;
 
 /// # TODO
 ///

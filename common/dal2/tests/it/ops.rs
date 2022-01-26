@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod header;
-pub use header::HeaderRange;
+use common_dal2::ops::HeaderRange;
 
-mod object;
-pub use object::Object;
+#[test]
+fn test_header_range() {
+    let h = HeaderRange::new(None, Some(1024));
+    assert_eq!(h.to_string(), "bytes=0-1023");
 
-// Supported operations
-mod read;
-pub use read::OpRead;
+    let h = HeaderRange::new(Some(1024), None);
+    assert_eq!(h.to_string(), "bytes=1024-");
 
-mod write;
-pub use write::OpWrite;
-
-mod stat;
-pub use stat::OpStat;
-
-mod delete;
-pub use delete::OpDelete;
+    let h = HeaderRange::new(Some(1024), Some(1024));
+    assert_eq!(h.to_string(), "bytes=1024-2047");
+}

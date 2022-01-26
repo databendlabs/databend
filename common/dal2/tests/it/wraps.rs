@@ -15,19 +15,17 @@
 use std::io::SeekFrom;
 use std::str::from_utf8;
 
+use common_dal2::services::fs;
+use common_dal2::wraps::CallbackReader;
+use common_dal2::wraps::ReaderStream;
+use common_dal2::wraps::SeekableReader;
+use common_dal2::Operator;
 use futures::io::copy;
 use futures::io::BufReader;
 use futures::io::Cursor;
 use futures::AsyncReadExt;
 use futures::AsyncSeekExt;
 use futures::StreamExt;
-
-use crate::ops::io::CallbackReader;
-use crate::ops::io::HeaderRange;
-use crate::ops::io::SeekableReader;
-use crate::ops::ReaderStream;
-use crate::services::fs;
-use crate::Operator;
 
 #[tokio::test]
 async fn reader_stream() {
@@ -59,20 +57,22 @@ async fn callback_reader() {
 async fn test_seekable_reader() {
     let f = Operator::new(fs::Backend::build().finish());
 
+    let path = format!("/tmp/{}", uuid::Uuid::new_v4());
+
     // Create a test file.
     let x = f
-        .write("/tmp/x", 13)
+        .write(&path, 13)
         .run(Box::new(Cursor::new("Hello, world!")))
         .await
         .unwrap();
     assert_eq!(x, 13);
 
-    let o = f.stat("/tmp/x").run().await.unwrap();
+    let o = f.stat(&path).run().await.unwrap();
     assert_eq!(o.size, 13);
 
     let mut r = BufReader::with_capacity(
         4 * 1024 * 1024, // 4 MiB
-        SeekableReader::new(f, "tmp/x", o.size),
+        SeekableReader::new(f, &path, o.size),
     );
 
     let n = r.seek(SeekFrom::Current(3)).await.expect("seek");
@@ -82,16 +82,4 @@ async fn test_seekable_reader() {
     let n = r.read_to_end(&mut bs).await.expect("read_to_end");
     assert_eq!("lo, world!", from_utf8(&bs).unwrap());
     assert_eq!(n, 10);
-}
-
-#[test]
-fn test_header_range() {
-    let h = HeaderRange::new(None, Some(1024));
-    assert_eq!(h.to_string(), "bytes=0-1023");
-
-    let h = HeaderRange::new(Some(1024), None);
-    assert_eq!(h.to_string(), "bytes=1024-");
-
-    let h = HeaderRange::new(Some(1024), Some(1024));
-    assert_eq!(h.to_string(), "bytes=1024-2047");
 }
