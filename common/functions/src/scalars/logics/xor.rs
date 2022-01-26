@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use std::sync::Arc;
 
 use common_datavalues2::BooleanType;
@@ -23,20 +22,19 @@ use common_datavalues2::DataTypePtr;
 use common_datavalues2::NullableColumnBuilder;
 use common_datavalues2::NullableType;
 use common_exception::Result;
-use sha2::digest::generic_array::sequence::Lengthen;
 
-use super::logic2::LogicFunction2;
+use super::logic::LogicFunction;
 use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
 use crate::scalars::Function2Description;
 
 #[derive(Clone)]
-pub struct LogicAndFunction2 {
+pub struct LogicXorFunction {
     _display_name: String,
 }
 
-impl LogicAndFunction2 {
+impl LogicXorFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(Self {
             _display_name: display_name.to_string(),
@@ -50,9 +48,9 @@ impl LogicAndFunction2 {
     }
 }
 
-impl Function2 for LogicAndFunction2 {
+impl Function2 for LogicXorFunction {
     fn name(&self) -> &str {
-        "LogicAndFunction"
+        "LogicXorFunction"
     }
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
@@ -87,7 +85,7 @@ impl Function2 for LogicAndFunction2 {
 
             for idx in 0..input_rows {
                 builder.append(
-                    lhs_viewer.value(idx) & rhs_viewer.value(idx),
+                    lhs_viewer.value(idx) ^ rhs_viewer.value(idx),
                     lhs_viewer.valid_at(idx) & rhs_viewer.valid_at(idx),
                 );
             }
@@ -100,7 +98,7 @@ impl Function2 for LogicAndFunction2 {
             let mut builder = ColumnBuilder::<bool>::with_capacity(input_rows);
 
             for idx in 0..input_rows {
-                builder.append(lhs_viewer.value(idx) & rhs_viewer.value(idx));
+                builder.append(lhs_viewer.value(idx) ^ rhs_viewer.value(idx));
             }
 
             Ok(builder.build(input_rows))
@@ -108,7 +106,7 @@ impl Function2 for LogicAndFunction2 {
     }
 }
 
-impl std::fmt::Display for LogicAndFunction2 {
+impl std::fmt::Display for LogicXorFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
     }

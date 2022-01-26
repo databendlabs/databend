@@ -23,18 +23,18 @@ use common_datavalues2::NullableColumnBuilder;
 use common_datavalues2::NullableType;
 use common_exception::Result;
 
-use super::logic2::LogicFunction2;
+use super::logic::LogicFunction;
 use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
 use crate::scalars::Function2Description;
 
 #[derive(Clone)]
-pub struct LogicXorFunction2 {
+pub struct LogicOrFunction {
     _display_name: String,
 }
 
-impl LogicXorFunction2 {
+impl LogicOrFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(Self {
             _display_name: display_name.to_string(),
@@ -42,15 +42,15 @@ impl LogicXorFunction2 {
     }
 
     pub fn desc() -> Function2Description {
-        let mut features = FunctionFeatures::default().num_arguments(2);
+        let mut features = FunctionFeatures::default().num_arguments(1);
         features = features.deterministic();
         Function2Description::creator(Box::new(Self::try_create)).features(features)
     }
 }
 
-impl Function2 for LogicXorFunction2 {
+impl Function2 for LogicOrFunction {
     fn name(&self) -> &str {
-        "LogicXorFunction"
+        "LogicOrFunction"
     }
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
@@ -84,10 +84,9 @@ impl Function2 for LogicXorFunction2 {
             let mut builder = NullableColumnBuilder::<bool>::with_capacity(input_rows);
 
             for idx in 0..input_rows {
-                builder.append(
-                    lhs_viewer.value(idx) ^ rhs_viewer.value(idx),
-                    lhs_viewer.valid_at(idx) & rhs_viewer.valid_at(idx),
-                );
+                // as least one is true, then it will be valid
+                let val = lhs_viewer.value(idx) || rhs_viewer.value(idx);
+                builder.append(val, val);
             }
 
             Ok(builder.build(input_rows))
@@ -98,15 +97,19 @@ impl Function2 for LogicXorFunction2 {
             let mut builder = ColumnBuilder::<bool>::with_capacity(input_rows);
 
             for idx in 0..input_rows {
-                builder.append(lhs_viewer.value(idx) ^ rhs_viewer.value(idx));
+                builder.append(lhs_viewer.value(idx) || rhs_viewer.value(idx));
             }
 
             Ok(builder.build(input_rows))
         }
     }
+
+    fn passthrough_null(&self) -> bool {
+        false
+    }
 }
 
-impl std::fmt::Display for LogicXorFunction2 {
+impl std::fmt::Display for LogicOrFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
     }

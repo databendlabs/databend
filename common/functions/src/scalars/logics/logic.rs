@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,57 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
+use std::sync::Arc;
 
-use common_datavalues::columns::DataColumn;
-use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataType;
-use common_datavalues::DataTypeAndNullable;
-use common_datavalues::DataValueLogicOperator;
+use common_datavalues2::BooleanType;
+use common_datavalues2::ColumnRef;
+use common_datavalues2::ColumnsWithField;
+use common_datavalues2::DataTypePtr;
+use common_datavalues2::NullableType;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionFactory;
-use crate::scalars::Function;
-use crate::scalars::LogicAndFunction;
-use crate::scalars::LogicNotFunction;
-use crate::scalars::LogicOrFunction;
+use super::xor::LogicXorFunction;
+use super::LogicAndFunction;
+use super::LogicNotFunction;
+use super::LogicOrFunction;
+use crate::scalars::Function2;
+use crate::scalars::Function2Factory;
 
 #[derive(Clone)]
-pub struct LogicFunction {
-    op: DataValueLogicOperator,
-}
+pub struct LogicFunction;
 
 impl LogicFunction {
-    pub fn register(factory: &mut FunctionFactory) {
+    pub fn register(factory: &mut Function2Factory) {
         factory.register("and", LogicAndFunction::desc());
         factory.register("or", LogicOrFunction::desc());
         factory.register("not", LogicNotFunction::desc());
-    }
-
-    pub fn try_create_func(op: DataValueLogicOperator) -> Result<Box<dyn Function>> {
-        Ok(Box::new(LogicFunction { op }))
-    }
-}
-
-impl Function for LogicFunction {
-    fn name(&self) -> &str {
-        "LogicFunction"
-    }
-
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::Boolean;
-        Ok(DataTypeAndNullable::create(&dt, nullable))
-    }
-
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let columns: Vec<DataColumn> = columns.iter().map(|c| c.column().clone()).collect();
-        columns[0].logic(self.op.clone(), &columns[1..])
-    }
-}
-
-impl fmt::Display for LogicFunction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.op)
+        factory.register("xor", LogicXorFunction::desc());
     }
 }

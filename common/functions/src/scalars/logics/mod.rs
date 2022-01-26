@@ -13,23 +13,13 @@
 // limitations under the License.
 
 mod logic;
-mod logic_and;
-mod logic_not;
-mod logic_or;
+mod and;
+mod not;
+mod or;
+mod xor;
 
 pub use logic::LogicFunction;
-pub use logic_and::LogicAndFunction;
-pub use logic_not::LogicNotFunction;
-pub use logic_or::LogicOrFunction;
-
-mod logic2;
-mod logic2_and;
-mod logic2_not;
-mod logic2_or;
-mod logic2_xor;
-
-pub use logic2::LogicFunction2;
-pub use logic2_and::LogicAndFunction2;
-pub use logic2_not::LogicNotFunction2;
-pub use logic2_or::LogicOrFunction2;
-pub use logic2_xor::LogicXorFunction2;
+pub use and::LogicAndFunction;
+pub use not::LogicNotFunction;
+pub use or::LogicOrFunction;
+pub use xor::LogicXorFunction;
