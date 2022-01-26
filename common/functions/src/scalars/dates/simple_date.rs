@@ -15,17 +15,17 @@
 use std::fmt;
 use std::marker::PhantomData;
 use std::ops::Sub;
+use std::sync::Arc;
 
-use common_datavalues::chrono::Date;
-use common_datavalues::chrono::NaiveDate;
-use common_datavalues::chrono::Utc;
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::chrono::Date;
+use common_datavalues2::chrono::NaiveDate;
+use common_datavalues2::chrono::Utc;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function2_factory::Function2Description;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
 
 #[derive(Clone, Debug)]
 pub struct SimpleFunction<T> {
@@ -87,42 +87,46 @@ impl NoArgDateFunction for Tomorrow {
 impl<T> SimpleFunction<T>
 where T: NoArgDateFunction + Clone + Sync + Send + 'static
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(SimpleFunction::<T> {
             display_name: display_name.to_string(),
             t: PhantomData,
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
+    pub fn desc() -> Function2Description {
         let mut features = FunctionFeatures::default();
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();
         }
 
-        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
+        Function2Description::creator(Box::new(Self::try_create)).features(features)
     }
 }
 
-impl<T> Function for SimpleFunction<T>
+impl<T> Function2 for SimpleFunction<T>
 where T: NoArgDateFunction + Clone + Sync + Send + 'static
 {
     fn name(&self) -> &str {
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::Date16;
-        Ok(DataTypeAndNullable::create(&dt, false))
+    fn return_type(
+        &self,
+        _args: &[&common_datavalues2::DataTypePtr],
+    ) -> Result<common_datavalues2::DataTypePtr> {
+        Ok(Date16Type::arc())
     }
 
-    fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+    fn eval(
+        &self,
+        _columns: &common_datavalues2::ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<common_datavalues2::ColumnRef> {
         let value = T::execute();
-        Ok(DataColumn::Constant(
-            DataValue::UInt16(Some(value)),
-            input_rows,
-        ))
+        let column = Series::from_data(&[value as u16]);
+        Ok(Arc::new(ConstColumn::new(column, input_rows)))
     }
 }
 

@@ -43,6 +43,7 @@ use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
+use crate::scalars::Function2Factory;
 
 #[derive(Clone)]
 pub struct DateFunction {}
@@ -108,9 +109,6 @@ impl DateFunction {
     }
 
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("today", TodayFunction::desc());
-        factory.register("yesterday", YesterdayFunction::desc());
-        factory.register("tomorrow", TomorrowFunction::desc());
         factory.register("now", NowFunction::desc());
         factory.register("toYYYYMM", ToYYYYMMFunction::desc());
         factory.register("toYYYYMMDD", ToYYYYMMDDFunction::desc());
@@ -177,5 +175,11 @@ impl DateFunction {
             "subtractSeconds",
             Self::seconds_arithmetic_function_creator(-1),
         );
+    }
+
+    pub fn register2(factory: &mut Function2Factory) {
+        factory.register("today", TodayFunction::desc());
+        factory.register("yesterday", YesterdayFunction::desc());
+        factory.register("tomorrow", TomorrowFunction::desc());
     }
 }
