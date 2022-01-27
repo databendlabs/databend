@@ -126,8 +126,6 @@ pub struct FunctionFactory {
 static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     let mut function_factory = FunctionFactory::create();
 
-    ArithmeticFunction::register(&mut function_factory);
-    LogicFunction::register(&mut function_factory);
     NullableFunction::register(&mut function_factory);
     StringFunction::register(&mut function_factory);
     UdfFunction::register(&mut function_factory);

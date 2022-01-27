@@ -32,7 +32,6 @@ use super::ToCastFunction;
 use super::TupleClassFunction;
 use super::UdfFunction;
 use crate::scalars::DateFunction;
-use crate::scalars::ToCastFunction;
 
 pub type Factory2Creator = Box<dyn Fn(&str) -> Result<Box<dyn Function2>> + Send + Sync>;
 

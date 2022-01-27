@@ -99,16 +99,6 @@ where
         let right = ColumnViewerIter::<R>::try_create(rhs)?;
 
         match (lhs.is_const(), rhs.is_const()) {
-            (true, true) => {
-                let l = left.viewer.value(0).to_owned_scalar().as_();
-                let r = right.viewer.value(0).to_owned_scalar().as_();
-                if r == M::zero() {
-                    return Err(ErrorCode::BadArguments("Division by zero"));
-                }
-                (AsPrimitive::<O>::as_(l % r))
-                    .into()
-                    .as_const_column(&O::to_data_type(), left.size)
-            }
             (false, true) => {
                 let r = right.viewer.value(0).to_owned_scalar().as_();
                 if r == M::zero() {
