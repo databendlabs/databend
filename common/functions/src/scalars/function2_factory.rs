@@ -26,6 +26,7 @@ use super::function_factory::FunctionFeatures;
 use super::ComparisonFunction;
 use super::ConditionalFunction;
 use super::HashesFunction;
+use super::LogicFunction;
 use super::StringFunction;
 use super::TupleClassFunction;
 use super::UdfFunction;
@@ -69,6 +70,7 @@ static FUNCTION2_FACTORY: Lazy<Arc<Function2Factory>> = Lazy::new(|| {
     StringFunction::register2(&mut function_factory);
     HashesFunction::register2(&mut function_factory);
     ConditionalFunction::register(&mut function_factory);
+    LogicFunction::register(&mut function_factory);
     DateFunction::register2(&mut function_factory);
 
     Arc::new(function_factory)

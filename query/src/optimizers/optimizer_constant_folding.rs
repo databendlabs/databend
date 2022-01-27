@@ -256,13 +256,16 @@ impl PlanRewriter for ConstantFoldingImpl {
                 unsafe {
                     let origin_name = origin_expr.column_name();
                     match op.to_lowercase().as_str() {
-                        "and" => (&mut *self.0).remove_const_cond(
-                            &self.1,
-                            origin_name,
-                            &left,
-                            &right,
-                            true,
-                        ),
+                        // TODO(Veeupup) it will optimize `null` to `false`,
+                        // ex. When `select null AND 1`, it will return `0` rather than `NULL`
+                        // it will be fixed in another pr.
+                        // "and" => (&mut *self.0).remove_const_cond(
+                        //     &self.1,
+                        //     origin_name,
+                        //     &left,
+                        //     &right,
+                        //     true,
+                        // ),
                         "or" => (&mut *self.0).remove_const_cond(
                             &self.1,
                             origin_name,
