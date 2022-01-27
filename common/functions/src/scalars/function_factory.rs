@@ -245,9 +245,12 @@ impl FunctionFactory {
     }
 
     pub fn registered_names(&self) -> Vec<String> {
+        let function2_factory = Function2Factory::instance();
+        let func_names = function2_factory.registered_names();
         self.case_insensitive_desc
             .keys()
             .chain(self.case_insensitive_arithmetic_desc.keys())
+            .chain(func_names.iter())
             .cloned()
             .collect::<Vec<_>>()
     }
