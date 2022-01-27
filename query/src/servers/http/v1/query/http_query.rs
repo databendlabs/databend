@@ -57,15 +57,13 @@ pub struct HttpQuery {
     data: Arc<TokioMutex<ResultDataManager>>,
 }
 
-pub type HttpQueryRef = Arc<HttpQuery>;
-
 impl HttpQuery {
     pub(crate) async fn try_create(
         id: String,
         request: HttpQueryRequest,
         session_manager: &Arc<SessionManager>,
         user_info: &UserInfo,
-    ) -> Result<HttpQueryRef> {
+    ) -> Result<Arc<HttpQuery>> {
         //TODO(youngsofun): support config/set channel size
         let (block_tx, block_rx) = mpsc::channel(10);
 

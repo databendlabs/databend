@@ -19,10 +19,10 @@ use common_base::tokio::sync::RwLock;
 use common_exception::Result;
 
 use crate::configs::Config;
-use crate::servers::http::v1::query::http_query::HttpQueryRef;
+use crate::servers::http::v1::query::http_query::HttpQuery;
 
 pub struct HttpQueryManager {
-    pub(crate) queries: Arc<RwLock<HashMap<String, HttpQueryRef>>>,
+    pub(crate) queries: Arc<RwLock<HashMap<String, Arc<HttpQuery>>>>,
 }
 
 impl HttpQueryManager {
@@ -36,12 +36,17 @@ impl HttpQueryManager {
         uuid::Uuid::new_v4().to_string()
     }
 
-    pub(crate) async fn get_query_by_id(self: &Arc<Self>, query_id: &str) -> Option<HttpQueryRef> {
+    pub(crate) async fn get(self: &Arc<Self>, query_id: &str) -> Option<Arc<HttpQuery>> {
         let queries = self.queries.read().await;
         queries.get(query_id).map(|q| q.to_owned())
     }
 
-    pub(crate) async fn remove_query_by_id(self: &Arc<Self>, query_id: &str) {
+    pub(crate) async fn add(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
+        let mut queries = self.queries.write().await;
+        queries.insert(query_id.to_string(), query);
+    }
+
+    pub(crate) async fn remove(self: &Arc<Self>, query_id: &str) {
         let mut queries = self.queries.write().await;
         queries.remove(query_id);
     }

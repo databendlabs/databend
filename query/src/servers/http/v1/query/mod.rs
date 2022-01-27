@@ -25,7 +25,6 @@ pub use execute_state::HttpQueryHandle;
 pub use execute_state::HttpQueryRequest;
 pub use execute_state::HttpSessionConf;
 pub use http_query::HttpQuery;
-pub use http_query::HttpQueryRef;
 pub use http_query::HttpQueryResponseInternal;
 pub use http_query::ResponseInitialState;
 pub use http_query::ResponseState;
