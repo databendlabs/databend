@@ -18,6 +18,7 @@ use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterTablePlan;
 use crate::AlterUDFPlan;
 use crate::AlterUserPlan;
 use crate::CopyPlan;
@@ -151,6 +152,7 @@ pub trait PlanVisitor {
             PlanNode::CreateUDF(plan) => self.visit_create_udf(plan),
             PlanNode::DropUDF(plan) => self.visit_drop_udf(plan),
             PlanNode::AlterUDF(plan) => self.visit_alter_udf(plan),
+            PlanNode::AlterTable(plan) => self.visit_alter_table(plan),
         }
     }
 
@@ -366,6 +368,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_alter_udf(&mut self, _: &AlterUDFPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_alter_table(&mut self, _: &AlterTablePlan) -> Result<()> {
         Ok(())
     }
 }

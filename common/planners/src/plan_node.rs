@@ -24,6 +24,7 @@ use crate::plan_user_udf_create::CreateUDFPlan;
 use crate::plan_user_udf_drop::DropUDFPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterTablePlan;
 use crate::AlterUserPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
@@ -110,6 +111,7 @@ pub enum PlanNode {
     CreateUDF(CreateUDFPlan),
     DropUDF(DropUDFPlan),
     AlterUDF(AlterUDFPlan),
+    AlterTable(AlterTablePlan),
 }
 
 impl PlanNode {
@@ -161,6 +163,7 @@ impl PlanNode {
             PlanNode::CreateUDF(v) => v.schema(),
             PlanNode::DropUDF(v) => v.schema(),
             PlanNode::AlterUDF(v) => v.schema(),
+            PlanNode::AlterTable(v) => v.schema(),
         }
     }
 
@@ -211,6 +214,7 @@ impl PlanNode {
             PlanNode::CreateUDF(_) => "CreateUDFPlan",
             PlanNode::DropUDF(_) => "DropUDFPlan",
             PlanNode::AlterUDF(_) => "AlterUDF",
+            PlanNode::AlterTable(_) => "AlterTable",
         }
     }
 

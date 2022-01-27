@@ -52,6 +52,7 @@ use sqlparser::tokenizer::Word;
 
 use super::statements::DfCopy;
 use super::statements::DfDescribeStage;
+use crate::sql::statements::DfAlterTable;
 use crate::sql::statements::DfAlterUDF;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfAuthOption;
@@ -551,14 +552,30 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_alter(&mut self) -> Result<DfStatement, ParserError> {
-        match self.parser.next_token() {
+        match self.parser.peek_token() {
             Token::Word(w) => match w.keyword {
-                Keyword::USER => self.parse_alter_user(),
-                Keyword::FUNCTION => self.parse_alter_udf(),
+                Keyword::USER => {
+                    self.parser.next_token();
+                    self.parse_alter_user()
+                }
+                Keyword::FUNCTION => {
+                    self.parser.next_token();
+                    self.parse_alter_udf()
+                }
+                Keyword::TABLE => self.parse_alter_table(),
                 _ => self.expected("keyword USER or FUNCTION", Token::Word(w)),
             },
             unexpected => self.expected("alter statement", unexpected),
         }
+    }
+
+    fn parse_alter_table(&mut self) -> Result<DfStatement, ParserError> {
+        // self.parser.prev_token();
+        dbg!("parse alter table");
+        let native_query = self.parser.parse_alter()?;
+        Ok(DfStatement::AlterTable(DfAlterTable::try_from(
+            native_query,
+        )?))
     }
 
     fn parse_create_database(&mut self) -> Result<DfStatement, ParserError> {

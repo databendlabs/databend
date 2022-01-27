@@ -21,6 +21,7 @@ use nom::IResult;
 
 use super::statements::DfCopy;
 use super::statements::DfDescribeStage;
+use crate::sql::statements::DfAlterTable;
 use crate::sql::statements::DfAlterUDF;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCreateDatabase;
@@ -80,6 +81,7 @@ pub enum DfStatement {
     DropTable(DfDropTable),
     TruncateTable(DfTruncateTable),
     OptimizeTable(DfOptimizeTable),
+    AlterTable(DfAlterTable),
 
     // Settings.
     ShowSettings(DfShowSettings),

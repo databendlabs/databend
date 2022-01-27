@@ -25,6 +25,7 @@ use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterTablePlan;
 use crate::AlterUDFPlan;
 use crate::AlterUserPlan;
 use crate::CopyPlan;
@@ -139,6 +140,7 @@ pub trait PlanRewriter: Sized {
             PlanNode::CreateUDF(plan) => self.rewrite_create_udf(plan),
             PlanNode::DropUDF(plan) => self.rewrite_drop_udf(plan),
             PlanNode::AlterUDF(plan) => self.rewrite_alter_udf(plan),
+            PlanNode::AlterTable(plan) => self.rewrite_alter_table(plan),
         }
     }
 
@@ -403,6 +405,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_alter_udf(&mut self, plan: &AlterUDFPlan) -> Result<PlanNode> {
         Ok(PlanNode::AlterUDF(plan.clone()))
+    }
+
+    fn rewrite_alter_table(&mut self, plan: &AlterTablePlan) -> Result<PlanNode> {
+        Ok(PlanNode::AlterTable(plan.clone()))
     }
 }
 
