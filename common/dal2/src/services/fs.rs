@@ -46,10 +46,10 @@ impl Builder {
         self
     }
 
-    pub fn finish(self) -> Arc<dyn Accessor> {
+    pub fn finish(&mut self) -> Arc<dyn Accessor> {
         Arc::new(Backend {
             // Make `/` as the default of root.
-            root: self.root.unwrap_or_else(|| "/".to_string()),
+            root: self.root.clone().unwrap_or_else(|| "/".to_string()),
         })
     }
 }
