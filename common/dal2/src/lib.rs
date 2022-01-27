@@ -26,5 +26,5 @@ pub use operator::Operator;
 pub mod credential;
 pub mod error;
 pub mod ops;
+pub mod readers;
 pub mod services;
-pub mod wraps;

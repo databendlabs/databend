@@ -34,7 +34,7 @@ use crate::ops::OpDelete;
 use crate::ops::OpRead;
 use crate::ops::OpStat;
 use crate::ops::OpWrite;
-use crate::wraps::ReaderStream;
+use crate::readers::ReaderStream;
 use crate::Accessor;
 use crate::Reader;
 

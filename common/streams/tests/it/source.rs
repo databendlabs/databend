@@ -16,8 +16,8 @@ use std::fs::File;
 use std::io::Write;
 
 use common_base::tokio;
+use common_dal2::readers::SeekableReader;
 use common_dal2::services::fs;
-use common_dal2::wraps::SeekableReader;
 use common_dal2::Operator;
 use common_datablocks::assert_blocks_eq;
 use common_datablocks::DataBlock;

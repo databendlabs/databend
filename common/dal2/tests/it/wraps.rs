@@ -15,10 +15,10 @@
 use std::io::SeekFrom;
 use std::str::from_utf8;
 
+use common_dal2::readers::CallbackReader;
+use common_dal2::readers::ReaderStream;
+use common_dal2::readers::SeekableReader;
 use common_dal2::services::fs;
-use common_dal2::wraps::CallbackReader;
-use common_dal2::wraps::ReaderStream;
-use common_dal2::wraps::SeekableReader;
 use common_dal2::Operator;
 use futures::io::copy;
 use futures::io::BufReader;

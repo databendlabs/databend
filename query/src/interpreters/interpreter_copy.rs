@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_dal2::credential::Credential;
+use common_dal2::readers::SeekableReader;
 use common_dal2::services::s3;
-use common_dal2::wraps::SeekableReader;
 use common_dal2::Operator as DalOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
