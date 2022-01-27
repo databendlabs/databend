@@ -36,6 +36,7 @@ mod interpreter_show_create_table;
 mod interpreter_show_grants;
 mod interpreter_stage_create;
 mod interpreter_stage_drop;
+mod interpreter_table_alter;
 mod interpreter_table_create;
 mod interpreter_table_drop;
 mod interpreter_table_optimize;

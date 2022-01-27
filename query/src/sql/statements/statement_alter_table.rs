@@ -63,7 +63,7 @@ impl AnalyzableStatement for DfAlterTable {
                 new_column_name: new_column_name.to_string(),
             }),
             // TODO error message
-            _ => Err(ErrorCode::UnImplement("")),
+            _ => Err(ErrorCode::UnImplement("not implemented yet")),
         }?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::AlterTable(
