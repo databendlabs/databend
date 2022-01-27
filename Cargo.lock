@@ -1547,6 +1547,7 @@ dependencies = [
  "pin-project",
  "thiserror",
  "tokio",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -1914,7 +1915,7 @@ dependencies = [
  "async-trait",
  "common-arrow",
  "common-base",
- "common-dal",
+ "common-dal2",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -2456,6 +2457,7 @@ dependencies = [
  "common-cache",
  "common-clickhouse-srv",
  "common-dal",
+ "common-dal2",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
