@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,68 +19,80 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_macros::MallocSizeOf;
 
-#[derive(Clone, Debug, MallocSizeOf)]
-pub struct SettingItem {
+#[derive(Clone, Debug)]
+pub struct SettingValue {
     value: DataValue,
     desc: &'static str,
 }
 
-#[derive(Clone, Debug, MallocSizeOf)]
+#[derive(Clone, Debug)]
 pub struct Settings {
-    // DataValue is of DataValue::Struct([name, value, default_value, description])
-    settings: Arc<RwLock<HashMap<&'static str, SettingItem>>>,
+    settings: Arc<RwLock<HashMap<&'static str, SettingValue>>>,
 }
 
 impl Settings {
-    pub fn create() -> Result<Self> {
-        let settings = Arc::new(RwLock::new(HashMap::default()));
-        let mut map = settings.write();
+    pub fn try_create() -> Result<Self> {
+        let map = Arc::new(RwLock::new(HashMap::default()));
+        let mut settings = map.write();
 
         // max_block_size.
-        map.insert("max_block_size", SettingItem {
-            value: DataValue::Int64(Some(10000)),
+        settings.insert("max_block_size", SettingValue {
+            value: DataValue::UInt64(Some(10000)),
             desc: "Maximum block size for reading",
         });
         // max_threads.
-        map.insert("max_threads", SettingItem {
-            value: DataValue::Int64(Some(16)),
+        settings.insert("max_threads", SettingValue {
+            value: DataValue::UInt64(Some(16)),
             desc: "The maximum number of threads to execute the request. By default, it is determined automatically.",
         });
 
         Ok(Settings {
-            settings: settings.clone(),
+            settings: map.clone(),
         })
     }
 
-    pub fn get_max_block_size(&self) -> Result<i64> {
+    // Get max_block_size.
+    pub fn get_max_block_size(&self) -> Result<u64> {
         let key = "max_block_size";
-        self.try_get_int(key)
+        self.try_get_u64(key)
     }
 
-    pub fn set_max_block_size(&self, val: i64, global: bool) -> Result<()> {
+    // Set max_block_size.
+    pub fn set_max_block_size(&self, val: u64, global: bool) -> Result<()> {
         let key = "max_block_size";
-        self.try_set_int(key, val, global)
+        self.try_set_u64(key, val, global)
     }
 
-    // Get int value from settings map.
-    fn try_get_int(&self, key: &str) -> Result<i64> {
+    // Get max_threads.
+    pub fn get_max_threads(&self) -> Result<u64> {
+        let key = "max_threads";
+        self.try_get_u64(key)
+    }
+
+    // Set max_threads.
+    pub fn set_max_threads(&self, val: u64, global: bool) -> Result<()> {
+        let key = "max_threads";
+        self.try_set_u64(key, val, global)
+    }
+
+    // Get u64 value from settings map.
+    fn try_get_u64(&self, key: &str) -> Result<u64> {
         let settings = self.settings.read();
-        let val = settings
+        let setting = settings
             .get(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
 
-        val.value.as_i64()
+        setting.value.as_u64()
     }
 
-    // Set int value to settings map, if global also write to meta.
-    fn try_set_int(&self, key: &str, val: i64, global: bool) -> Result<()> {
+    // Set u64 value to settings map, if global also write to meta.
+    fn try_set_u64(&self, key: &str, val: u64, global: bool) -> Result<()> {
         let mut settings = self.settings.write();
-        let mut item = settings
+        let mut setting = settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
-        item.value = DataValue::Int64(Some(val));
+        setting.value = DataValue::UInt64(Some(val));
 
         if global {
             // TODO(bohu): Write value to meta service.
