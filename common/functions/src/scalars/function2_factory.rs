@@ -30,6 +30,7 @@ use super::LogicFunction;
 use super::StringFunction;
 use super::TupleClassFunction;
 use super::UdfFunction;
+use crate::scalars::DateFunction;
 use crate::scalars::ToCastFunction;
 
 pub type Factory2Creator = Box<dyn Fn(&str) -> Result<Box<dyn Function2>> + Send + Sync>;
@@ -70,6 +71,7 @@ static FUNCTION2_FACTORY: Lazy<Arc<Function2Factory>> = Lazy::new(|| {
     HashesFunction::register2(&mut function_factory);
     ConditionalFunction::register(&mut function_factory);
     LogicFunction::register(&mut function_factory);
+    DateFunction::register2(&mut function_factory);
 
     Arc::new(function_factory)
 });
