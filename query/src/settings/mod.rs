@@ -12,26 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(hash_raw_entry)]
-#![feature(core_intrinsics)]
-#![feature(arbitrary_self_types)]
-#![feature(bool_to_option)]
+#[allow(clippy::module_inception)]
+mod settings;
 
-pub mod api;
-pub mod catalogs;
-pub mod clusters;
-pub mod common;
-pub mod configs;
-pub mod databases;
-pub mod functions;
-pub mod interpreters;
-pub mod metrics;
-pub mod optimizers;
-pub mod pipelines;
-pub mod servers;
-pub mod sessions;
-pub mod settings;
-pub mod sql;
-pub mod storages;
-pub mod table_functions;
-pub mod users;
+pub use settings::Settings;
