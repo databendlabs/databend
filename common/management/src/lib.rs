@@ -14,6 +14,7 @@
 
 mod cluster;
 mod role;
+mod setting;
 mod stage;
 mod udf;
 mod user;
@@ -22,6 +23,8 @@ pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
 pub use role::RoleMgr;
 pub use role::RoleMgrApi;
+pub use setting::SettingApi;
+pub use setting::SettingMgr;
 pub use stage::StageMgr;
 pub use stage::StageMgrApi;
 pub use udf::UdfMgr;

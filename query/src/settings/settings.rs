@@ -19,11 +19,13 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_meta_types::UserSetting;
 
 #[derive(Clone, Debug)]
 pub struct SettingValue {
-    value: DataValue,
+    is_global: bool,
     desc: &'static str,
+    user_setting: UserSetting,
 }
 
 #[derive(Clone, Debug)]
@@ -38,14 +40,18 @@ impl Settings {
 
         // max_block_size.
         settings.insert("max_block_size", SettingValue {
-            value: DataValue::UInt64(Some(10000)),
+            is_global: false,
             desc: "Maximum block size for reading",
+            user_setting: UserSetting::create("max_block_size", DataValue::UInt64(Some(1000))),
         });
         // max_threads.
         settings.insert("max_threads", SettingValue {
-            value: DataValue::UInt64(Some(16)),
+            is_global: false,
             desc: "The maximum number of threads to execute the request. By default, it is determined automatically.",
+            user_setting: UserSetting::create("max_threads", DataValue::UInt64(Some(16))),
         });
+
+        // TODO(bohu): get settings from meta service and set is_global to ture.
 
         Ok(Settings {
             settings: map.clone(),
@@ -71,9 +77,9 @@ impl Settings {
     }
 
     // Set max_threads.
-    pub fn set_max_threads(&self, val: u64, global: bool) -> Result<()> {
+    pub fn set_max_threads(&self, val: u64, is_global: bool) -> Result<()> {
         let key = "max_threads";
-        self.try_set_u64(key, val, global)
+        self.try_set_u64(key, val, is_global)
     }
 
     // Get u64 value from settings map.
@@ -83,18 +89,19 @@ impl Settings {
             .get(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
 
-        setting.value.as_u64()
+        setting.user_setting.value.as_u64()
     }
 
     // Set u64 value to settings map, if global also write to meta.
-    fn try_set_u64(&self, key: &str, val: u64, global: bool) -> Result<()> {
+    fn try_set_u64(&self, key: &str, val: u64, is_global: bool) -> Result<()> {
         let mut settings = self.settings.write();
         let mut setting = settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
-        setting.value = DataValue::UInt64(Some(val));
+        setting.is_global = is_global;
+        setting.user_setting.value = DataValue::UInt64(Some(val));
 
-        if global {
+        if is_global {
             // TODO(bohu): Write value to meta service.
         }
         Ok(())

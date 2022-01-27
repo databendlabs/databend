@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod role_mgr;
-mod user;
-mod user_api;
-mod user_mgr;
-mod user_stage;
-mod user_udf;
+use common_exception::Result;
+use common_meta_types::UserSetting;
 
-pub mod auth;
-mod user_setting;
+#[async_trait::async_trait]
+pub trait SettingApi: Sync + Send {
+    // Add a setting to /tenant/cluster/setting-name.
+    async fn set_setting(&self, setting: UserSetting) -> Result<u64>;
 
-pub use user::CertifiedInfo;
-pub use user::User;
-pub use user_api::UserApiProvider;
+    // Get all the settings for tenant/cluster.
+    async fn get_settings(&self) -> Result<Vec<UserSetting>>;
+
+    // Drop the setting by name.
+    async fn drop_setting(&self, name: &str, seq: Option<u64>) -> Result<()>;
+}
