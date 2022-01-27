@@ -115,22 +115,50 @@ impl LogicFunction {
 
             let mut builder = NullableColumnBuilder::<bool>::with_capacity(input_rows);
 
-            let func = match self.op {
-                LogicOperator::And => LogicAndFunction::eval_with_null,
-                LogicOperator::Or => LogicOrFunction::eval_with_null,
-                LogicOperator::Xor => LogicXorFunction::eval_with_null,
+            macro_rules! calcute_with_null {
+                ($input_rows:expr, $lhs_viewer: expr, $rhs_viewer: expr, $builder: expr, $func: expr) => {
+                    for idx in 0..$input_rows {
+                        let (val, valid) = $func(
+                            $lhs_viewer.value(idx),
+                            $rhs_viewer.value(idx),
+                            $lhs_viewer.valid_at(idx),
+                            $rhs_viewer.valid_at(idx),
+                        );
+                        $builder.append(val, valid);
+                    }
+                };
+            }
+
+            match self.op {
+                LogicOperator::And => calcute_with_null!(
+                    input_rows,
+                    lhs_viewer,
+                    rhs_viewer,
+                    builder,
+                    |lhs: bool, rhs: bool, l_valid: bool, r_valid: bool| -> (bool, bool) {
+                        (lhs & rhs, l_valid & r_valid)
+                    }
+                ),
+                LogicOperator::Or => calcute_with_null!(
+                    input_rows,
+                    lhs_viewer,
+                    rhs_viewer,
+                    builder,
+                    |lhs: bool, rhs: bool, _l_valid: bool, _r_valid: bool| -> (bool, bool) {
+                        (lhs || rhs, lhs || rhs)
+                    }
+                ),
+                LogicOperator::Xor => calcute_with_null!(
+                    input_rows,
+                    lhs_viewer,
+                    rhs_viewer,
+                    builder,
+                    |lhs: bool, rhs: bool, l_valid: bool, r_valid: bool| -> (bool, bool) {
+                        (lhs ^ rhs, l_valid & r_valid)
+                    }
+                ),
                 LogicOperator::Not => return Err(ErrorCode::LogicalError("never happen")),
             };
-
-            for idx in 0..input_rows {
-                let (val, valid) = func(
-                    lhs_viewer.value(idx),
-                    rhs_viewer.value(idx),
-                    lhs_viewer.valid_at(idx),
-                    rhs_viewer.valid_at(idx),
-                );
-                builder.append(val, valid);
-            }
 
             Ok(builder.build(input_rows))
         } else {
@@ -139,16 +167,38 @@ impl LogicFunction {
 
             let mut builder = ColumnBuilder::<bool>::with_capacity(input_rows);
 
-            let func = match self.op {
-                LogicOperator::And => LogicAndFunction::eval,
-                LogicOperator::Or => LogicOrFunction::eval,
-                LogicOperator::Xor => LogicXorFunction::eval,
+            macro_rules! calcute {
+                ($input_rows:expr, $lhs_viewer: expr, $rhs_viewer: expr, $builder: expr, $func: expr) => {
+                    for idx in 0..$input_rows {
+                        $builder.append($func($lhs_viewer.value(idx), $rhs_viewer.value(idx)));
+                    }
+                };
+            }
+
+            match self.op {
+                LogicOperator::And => calcute!(
+                    input_rows,
+                    lhs_viewer,
+                    rhs_viewer,
+                    builder,
+                    |lhs: bool, rhs: bool| -> bool { lhs & rhs }
+                ),
+                LogicOperator::Or => calcute!(
+                    input_rows,
+                    lhs_viewer,
+                    rhs_viewer,
+                    builder,
+                    |lhs: bool, rhs: bool| -> bool { lhs || rhs }
+                ),
+                LogicOperator::Xor => calcute!(
+                    input_rows,
+                    lhs_viewer,
+                    rhs_viewer,
+                    builder,
+                    |lhs: bool, rhs: bool| -> bool { lhs ^ rhs }
+                ),
                 LogicOperator::Not => return Err(ErrorCode::LogicalError("never happen")),
             };
-
-            for idx in 0..input_rows {
-                builder.append(func(lhs_viewer.value(idx), rhs_viewer.value(idx)));
-            }
 
             Ok(builder.build(input_rows))
         }

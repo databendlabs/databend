@@ -33,12 +33,4 @@ impl LogicOrFunction {
         features = features.deterministic();
         Function2Description::creator(Box::new(Self::try_create)).features(features)
     }
-
-    pub fn eval_with_null(lhs: bool, rhs: bool, _l_valid: bool, _r_valid: bool) -> (bool, bool) {
-        (lhs || rhs, lhs || rhs)
-    }
-
-    pub fn eval(lhs: bool, rhs: bool) -> bool {
-        lhs || rhs
-    }
 }

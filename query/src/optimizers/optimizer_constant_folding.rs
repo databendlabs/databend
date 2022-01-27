@@ -256,8 +256,9 @@ impl PlanRewriter for ConstantFoldingImpl {
                 unsafe {
                     let origin_name = origin_expr.column_name();
                     match op.to_lowercase().as_str() {
-                        // TODO(Veeupup) remove useless `AND` constant folding code
-                        // this will make `select null and 1` to return `0`, rather than `NULL`
+                        // TODO(Veeupup) it will optimize `null` to `false`,
+                        // ex. When `select null AND 1`, it will return `0` rather than `NULL`
+                        // it will be fixed in another pr.
                         // "and" => (&mut *self.0).remove_const_cond(
                         //     &self.1,
                         //     origin_name,
