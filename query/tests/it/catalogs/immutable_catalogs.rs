@@ -26,11 +26,9 @@ use crate::tests::create_catalog;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_immutable_catalogs_database() -> Result<()> {
     let conf = Config::default();
-    let catalog = ImmutableCatalog::try_create_with_config(&conf)
-        .await
-        .unwrap();
+    let catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
     // get system database
-    let database = catalog.get_database("test", "system").await.unwrap();
+    let database = catalog.get_database("test", "system").await?;
     assert_eq!(database.name(), "system");
     // get default database
     let db_2 = catalog.get_database("", "default").await;
@@ -60,12 +58,12 @@ async fn test_immutable_catalogs_database() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_immutable_catalogs_table() -> Result<()> {
-    let catalog = create_catalog().unwrap();
-    let db_list_1 = catalog.list_tables("test", "system").await.unwrap();
+    let catalog = create_catalog()?;
+    let db_list_1 = catalog.list_tables("test", "system").await?;
     assert_eq!(db_list_1.len(), 15);
     let table_list_2 = catalog.list_tables("test", "default").await;
     assert!(table_list_2.is_err());
-    let db_list_3 = catalog.list_tables("", "default").await.unwrap();
+    let db_list_3 = catalog.list_tables("", "default").await?;
     assert_eq!(db_list_3.len(), 0);
     Ok(())
 }
