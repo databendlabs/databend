@@ -161,6 +161,7 @@ impl FunctionFactory {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
 
+        // TODO: remove the codes, and create a new Function2Adapter for arithmetics.
         let new_args = args
             .iter()
             .map(|arg| OldDataField::new("xx", arg.data_type().clone(), arg.is_nullable()))
