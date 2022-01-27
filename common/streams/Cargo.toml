@@ -32,7 +32,3 @@ futures = "0.3.19"
 pin-project-lite = "0.2.8"
 tempfile = "3.2.0"
 tokio-stream = { version = "0.1.8", features = ["net"] }
-
-[dev-dependencies]
-common-dal =  {path = "../dal"}
-common-dal2 =  {path = "../dal2"}
