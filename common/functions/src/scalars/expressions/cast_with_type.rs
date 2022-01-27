@@ -35,7 +35,7 @@ pub struct CastOptions {
     pub parsing_mode: ParsingMode,
 }
 
-const DEFAULT_CAST_OPTIONS: CastOptions = CastOptions {
+pub const DEFAULT_CAST_OPTIONS: CastOptions = CastOptions {
     exception_mode: ExceptionMode::Throw,
     parsing_mode: ParsingMode::Strict,
 };
