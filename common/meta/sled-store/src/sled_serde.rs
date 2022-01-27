@@ -28,7 +28,7 @@ use sled::IVec;
 use crate::SledValueToKey;
 
 /// Serialize/deserialize(ser/de) to/from sled values.
-pub trait SledSerde: Serialize + DeserializeOwned + Sized {
+pub trait SledSerde: Serialize + DeserializeOwned {
     /// (ser)ialize a value to `sled::IVec`.
     fn ser(&self) -> Result<IVec, ErrorCode> {
         let x = serde_json::to_vec(self)?;
@@ -36,8 +36,7 @@ pub trait SledSerde: Serialize + DeserializeOwned + Sized {
     }
 
     /// (de)serialize a value from `sled::IVec`.
-    fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, ErrorCode>
-    where Self: Sized {
+    fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, ErrorCode> {
         let s = serde_json::from_slice(v.as_ref())?;
         Ok(s)
     }
@@ -50,13 +49,12 @@ pub trait SledSerde: Serialize + DeserializeOwned + Sized {
 /// While BigEndian encoding preserve the order.
 ///
 /// A type that is used as a sled db key should be serialized with order preserved, such as log index.
-pub trait SledOrderedSerde: Serialize + DeserializeOwned + Sized {
+pub trait SledOrderedSerde: Serialize + DeserializeOwned {
     /// (ser)ialize a value to `sled::IVec`.
     fn ser(&self) -> Result<IVec, ErrorCode>;
 
     /// (de)serialize a value from `sled::IVec`.
-    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
-    where Self: Sized;
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>;
 }
 
 /// Serialize/deserialize(ser/de) to/from range to sled IVec range.
@@ -72,8 +70,7 @@ where
 
     // TODO(xp): do we need this?
     // /// (de)serialize a value from `sled::IVec`.
-    // fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, ErrorCode>
-    //     where Self: Sized;
+    // fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, ErrorCode>;
 }
 
 /// Impl ser/de for range of value that can be ser/de to `sled::IVec`
@@ -122,8 +119,7 @@ impl SledOrderedSerde for u64 {
     }
 
     /// (de)serialize a value from `sled::IVec`.
-    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
-    where Self: Sized {
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode> {
         let res = BigEndian::read_u64(v.as_ref());
         Ok(res)
     }
@@ -135,10 +131,9 @@ impl SledOrderedSerde for String {
         Ok(IVec::from(self.as_str()))
     }
 
-    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
-    where Self: Sized {
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode> {
         Ok(String::from_utf8(v.as_ref().to_vec())?)
     }
 }
 
-impl<T> SledSerde for T where T: Serialize + DeserializeOwned + Sized {}
+impl<T> SledSerde for T where T: Serialize + DeserializeOwned {}
