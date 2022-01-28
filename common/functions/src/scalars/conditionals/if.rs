@@ -109,13 +109,10 @@ impl Function2 for IfFunction {
 
                     for row in 0..size {
                         let predicate = predicate_wrapper.value(row);
-                        let valid = predicate_wrapper.valid_at(row);
                         if predicate {
-                            builder
-                                .append(lhs_wrapper.value(row), valid & lhs_wrapper.valid_at(row));
+                            builder.append(lhs_wrapper.value(row), lhs_wrapper.valid_at(row));
                         } else {
-                            builder
-                                .append(rhs_wrapper.value(row), valid & rhs_wrapper.valid_at(row));
+                            builder.append(rhs_wrapper.value(row), rhs_wrapper.valid_at(row));
                         };
                     }
 

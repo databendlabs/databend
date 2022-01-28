@@ -57,20 +57,20 @@ fn test_if_function() -> Result<()> {
             name: "if-null-in-predicate",
             columns: vec![
                 Series::from_data([Some(true), None, Some(false), Some(true)]),
-                Series::from_data([1u8, 2, 3, 4]),
+                Series::from_data([Some(1u8), Some(2u8), Some(3u8), None]),
                 Series::from_data([2i32, 3, 2, 2]),
             ],
-            expect: Series::from_data(vec![Some(1i32), None, Some(2i32), Some(4i32)]), // nullable becase predicate is nullable
+            expect: Series::from_data(vec![Some(1i32), Some(3i32), Some(2i32), None]), // nullable becase predicate is nullable
             error: "",
         },
         ScalarFunction2Test {
             name: "if-nullable-and-nonnullable",
             columns: vec![
-                Series::from_data([Some(true), None, Some(false), Some(false)]),
-                Series::from_data([1u8, 2, 3, 4]),
-                Series::from_data([Some(2i32), Some(3), None, Some(2)]),
+                Series::from_data([Some(1u8), None, None, Some(2)]),
+                Series::from_data([Some(2u8), Some(2), Some(2), Some(2)]),
+                Series::from_data([Some(3i32), Some(3i32), None, None]),
             ],
-            expect: Series::from_data(vec![Some(1i32), None, None, Some(2i32)]), // nullable becase predicate and rhs are nullable
+            expect: Series::from_data(vec![Some(2i32), Some(3i32), None, Some(2i32)]), // nullable becase predicate and rhs are nullable
             error: "",
         },
         ScalarFunction2Test {
@@ -80,7 +80,7 @@ fn test_if_function() -> Result<()> {
                 Series::from_data([Some(1u8), Some(2), Some(3), Some(4)]),
                 Series::from_data([Some(2i32), Some(3), None, Some(2)]),
             ],
-            expect: Series::from_data(vec![Some(1i32), None, None, Some(2i32)]), // nullable becase all column are nullable
+            expect: Series::from_data(vec![Some(1i32), Some(3i32), None, Some(2i32)]), // nullable becase all column are nullable
             error: "",
         },
         ScalarFunction2Test {
@@ -91,6 +91,16 @@ fn test_if_function() -> Result<()> {
                 Arc::new(NullColumn::new(4)),
             ],
             expect: Series::from_data(vec![Some(1u8), None, None, Some(4)]),
+            error: "",
+        },
+        ScalarFunction2Test {
+            name: "if-null",
+            columns: vec![
+                Arc::new(NullColumn::new(4)),
+                Series::from_data([0u8, 0, 0, 0]),
+                Series::from_data([1u8, 2, 3, 4]),
+            ],
+            expect: Series::from_data(vec![1u8, 2, 3, 4]),
             error: "",
         },
     ];
