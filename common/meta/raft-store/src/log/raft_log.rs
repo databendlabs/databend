@@ -35,7 +35,7 @@ const TREE_RAFT_LOG: &str = "raft_log";
 /// RaftLog stores the logs of a raft node.
 /// It is part of MetaStore.
 pub struct RaftLog {
-    pub(crate) inner: SledTree,
+    pub inner: SledTree,
 }
 
 impl RaftLog {
