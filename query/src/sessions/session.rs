@@ -27,9 +27,9 @@ use futures::channel::*;
 
 use crate::catalogs::DatabaseCatalog;
 use crate::configs::Config;
-use crate::sessions::context_shared::QueryContextShared;
-use crate::sessions::MutableStatus;
 use crate::sessions::QueryContext;
+use crate::sessions::QueryContextShared;
+use crate::sessions::SessionContext;
 use crate::sessions::SessionManager;
 use crate::sessions::Settings;
 use crate::users::UserApiProvider;
@@ -41,9 +41,9 @@ pub struct Session {
     #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) config: Config,
     #[ignore_malloc_size_of = "insignificant"]
-    pub(in crate::sessions) sessions: Arc<SessionManager>,
+    pub(in crate::sessions) session_mgr: Arc<SessionManager>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
-    pub(in crate::sessions) mutable_state: Arc<MutableStatus>,
+    pub(in crate::sessions) session_ctx: Arc<SessionContext>,
 }
 
 impl Session {
@@ -51,15 +51,15 @@ impl Session {
         config: Config,
         id: String,
         typ: String,
-        sessions: Arc<SessionManager>,
+        session_mgr: Arc<SessionManager>,
     ) -> Result<Arc<Session>> {
         Ok(Arc::new(Session {
             id,
             typ,
             config,
-            sessions,
+            session_mgr,
             ref_count: Arc::new(AtomicUsize::new(0)),
-            mutable_state: Arc::new(MutableStatus::try_create()?),
+            session_ctx: Arc::new(SessionContext::try_create()?),
         }))
     }
 
@@ -72,14 +72,14 @@ impl Session {
     }
 
     pub fn is_aborting(self: &Arc<Self>) -> bool {
-        self.mutable_state.get_abort()
+        self.session_ctx.get_abort()
     }
 
     pub fn kill(self: &Arc<Self>) {
-        let mutable_state = self.mutable_state.clone();
-        mutable_state.set_abort(true);
-        if mutable_state.context_shared_is_none() {
-            if let Some(io_shutdown) = mutable_state.take_io_shutdown_tx() {
+        let session_ctx = self.session_ctx.clone();
+        session_ctx.set_abort(true);
+        if session_ctx.context_shared_is_none() {
+            if let Some(io_shutdown) = session_ctx.take_io_shutdown_tx() {
                 let (tx, rx) = oneshot::channel();
                 if io_shutdown.send(tx).is_ok() {
                     // We ignore this error because the receiver is return cancelled error.
@@ -95,9 +95,9 @@ impl Session {
     }
 
     pub fn force_kill_query(self: &Arc<Self>) {
-        let mutable_state = self.mutable_state.clone();
+        let session_ctx = self.session_ctx.clone();
 
-        if let Some(context_shared) = mutable_state.take_context_shared() {
+        if let Some(context_shared) = session_ctx.take_context_shared() {
             context_shared.kill(/* shutdown executing query */);
         }
     }
@@ -105,24 +105,24 @@ impl Session {
     /// Create a query context for query.
     /// For a query, execution environment(e.g cluster) should be immutable.
     /// We can bind the environment to the context in create_context method.
-    pub async fn create_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
-        let context_shared = self.mutable_state.get_context_shared();
+    pub async fn create_query_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
+        let query_ctx = self.session_ctx.get_context_shared();
 
-        Ok(match context_shared.as_ref() {
+        Ok(match query_ctx.as_ref() {
             Some(shared) => QueryContext::create_from_shared(shared.clone()),
             None => {
                 let config = self.config.clone();
-                let discovery = self.sessions.get_cluster_discovery();
+                let discovery = self.session_mgr.get_cluster_discovery();
 
                 let session = self.clone();
                 let cluster = discovery.discover().await?;
                 let shared = QueryContextShared::try_create(config, session, cluster)?;
 
-                let ctx_shared = self.mutable_state.get_context_shared();
-                match ctx_shared.as_ref() {
+                let query_ctx = self.session_ctx.get_context_shared();
+                match query_ctx.as_ref() {
                     Some(shared) => QueryContext::create_from_shared(shared.clone()),
                     None => {
-                        self.mutable_state.set_context_shared(Some(shared.clone()));
+                        self.session_ctx.set_context_shared(Some(shared.clone()));
                         QueryContext::create_from_shared(shared)
                     }
                 }
@@ -133,8 +133,8 @@ impl Session {
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
     where F: FnOnce() + Send + 'static {
         let (tx, rx) = futures::channel::oneshot::channel();
-        self.mutable_state.set_client_host(host);
-        self.mutable_state.set_io_shutdown_tx(Some(tx));
+        self.session_ctx.set_client_host(host);
+        self.session_ctx.set_io_shutdown_tx(Some(tx));
 
         common_base::tokio::spawn(async move {
             if let Ok(tx) = rx.await {
@@ -145,29 +145,29 @@ impl Session {
     }
 
     pub fn set_current_database(self: &Arc<Self>, database_name: String) {
-        self.mutable_state.set_current_database(database_name);
+        self.session_ctx.set_current_database(database_name);
     }
 
     pub fn get_current_database(self: &Arc<Self>) -> String {
-        self.mutable_state.get_current_database()
+        self.session_ctx.get_current_database()
     }
 
     pub fn get_current_tenant(self: &Arc<Self>) -> String {
-        self.mutable_state.get_current_tenant()
+        self.session_ctx.get_current_tenant()
     }
 
     pub fn set_current_tenant(self: &Arc<Self>, tenant: String) {
-        self.mutable_state.set_current_tenant(tenant);
+        self.session_ctx.set_current_tenant(tenant);
     }
 
     pub fn get_current_user(self: &Arc<Self>) -> Result<UserInfo> {
-        self.mutable_state
+        self.session_ctx
             .get_current_user()
             .ok_or_else(|| ErrorCode::AuthenticateFailure("unauthenticated"))
     }
 
     pub fn set_current_user(self: &Arc<Self>, user: UserInfo) {
-        self.mutable_state.set_current_user(user)
+        self.session_ctx.set_current_user(user)
     }
 
     pub fn validate_privilege(
@@ -193,19 +193,19 @@ impl Session {
     }
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
-        self.mutable_state.get_settings()
+        self.session_ctx.get_settings()
     }
 
-    pub fn get_sessions_manager(self: &Arc<Self>) -> Arc<SessionManager> {
-        self.sessions.clone()
+    pub fn get_session_manager(self: &Arc<Self>) -> Arc<SessionManager> {
+        self.session_mgr.clone()
     }
 
     pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
-        self.sessions.get_catalog()
+        self.session_mgr.get_catalog()
     }
 
     pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
-        self.sessions.get_user_manager()
+        self.session_mgr.get_user_manager()
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {

@@ -35,6 +35,7 @@ use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
+use crate::sessions::ProcessInfo;
 use crate::storages::cache::CacheManager;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::UserApiProvider;
@@ -229,5 +230,13 @@ impl SessionManager {
                 false
             }
         }
+    }
+
+    pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        self.active_sessions
+            .read()
+            .values()
+            .map(Session::process_info)
+            .collect::<Vec<_>>()
     }
 }
