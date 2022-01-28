@@ -35,11 +35,11 @@ set  parallel_read_threads=8;
 E2: Limit the CPU usage of a query
 
 ```
-set  max_threads = N
+set  max_threads = N;
 ```
 
 E3： Change Read buffer size 2M
 
 ```
-storage_read_buffer_size=2097152
+storage_read_buffer_size=2097152;
 ```
