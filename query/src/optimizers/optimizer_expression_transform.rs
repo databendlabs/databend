@@ -149,6 +149,108 @@ impl ExprTransformImpl {
             _ => Ok(origin.not_eq(lit(0))),
         }
     }
+
+    fn constant_transformer(origin: &Expression) -> Result<Expression> {
+        let (column_name, left, right, is_and) = match origin {
+            Expression::BinaryExpression { op, left, right } => match op.to_lowercase().as_str() {
+                "and" => (origin.column_name(), left, right, true),
+                "or" => (origin.column_name(), left, right, false),
+                _ => return Ok(origin.clone()),
+            },
+            _ => return Ok(origin.clone()),
+        };
+
+        let left = Self::constant_transformer(left)?;
+        let right = Self::constant_transformer(right)?;
+
+        let mut is_remove = false;
+
+        let mut left_const = false;
+        let new_left = Self::eval_const_cond(
+            column_name.clone(),
+            &left,
+            is_and,
+            &mut left_const,
+            &mut is_remove,
+        )?;
+        if is_remove {
+            return Ok(new_left);
+        }
+
+        let mut right_const = false;
+        let new_right = Self::eval_const_cond(
+            column_name.clone(),
+            &right,
+            is_and,
+            &mut right_const,
+            &mut is_remove,
+        )?;
+        if is_remove {
+            return Ok(new_right);
+        }
+
+        match (left_const, right_const) {
+            (true, true) => {
+                if is_and {
+                    Ok(Expression::Literal {
+                        value: DataValue::Boolean(Some(true)),
+                        column_name: Some(column_name),
+                        data_type: DataType::Boolean,
+                    })
+                } else {
+                    Ok(Expression::Literal {
+                        value: DataValue::Boolean(Some(false)),
+                        column_name: Some(column_name),
+                        data_type: DataType::Boolean,
+                    })
+                }
+            }
+            (true, false) => Ok(new_right),
+            (false, true) => Ok(new_left),
+            (false, false) => {
+                if is_and {
+                    Ok(new_left.and(new_right))
+                } else {
+                    Ok(new_left.or(new_right))
+                }
+            }
+        }
+    }
+
+    fn eval_const_cond(
+        column_name: String,
+        expr: &Expression,
+        is_and: bool,
+        is_const: &mut bool,
+        is_remove: &mut bool,
+    ) -> Result<Expression> {
+        match expr {
+            Expression::Literal { ref value, .. } => {
+                *is_const = true;
+                let val = value.as_bool()?;
+                if val {
+                    if !is_and {
+                        *is_remove = true;
+                        return Ok(Expression::Literal {
+                            value: DataValue::Boolean(Some(true)),
+                            column_name: Some(column_name),
+                            data_type: DataType::Boolean,
+                        });
+                    }
+                } else if is_and {
+                    *is_remove = true;
+                    return Ok(Expression::Literal {
+                        value: DataValue::Boolean(Some(false)),
+                        column_name: Some(column_name),
+                        data_type: DataType::Boolean,
+                    });
+                }
+            }
+            _ => *is_const = false,
+        }
+        *is_remove = false;
+        Ok(expr.clone())
+    }
 }
 
 impl PlanRewriter for ExprTransformImpl {
@@ -201,7 +303,8 @@ impl PlanRewriter for ExprTransformImpl {
         }
 
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        let new_predicate = Self::boolean_transformer(&plan.predicate)?;
+        let new_predicate = Self::constant_transformer(&plan.predicate)?;
+        let new_predicate = Self::boolean_transformer(&new_predicate)?;
         let new_predicate = Self::truth_transformer(&new_predicate, false)?;
         PlanBuilder::from(&new_input).filter(new_predicate)?.build()
     }
