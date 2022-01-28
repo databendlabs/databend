@@ -173,13 +173,7 @@ impl BufReaderProvider for &QueryContext {
 
 impl BufReaderProvider for Arc<QueryContext> {
     fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<InputStream>> {
-        let accessor = self.as_ref().get_storage_accessor()?;
-        let input_stream = accessor.get_input_stream(path, len)?;
-        let read_buffer_size = self.get_settings().get_storage_read_buffer_size()?;
-        Ok(BufReader::with_capacity(
-            read_buffer_size as usize,
-            input_stream,
-        ))
+        self.as_ref().buf_reader(path, len)
     }
 }
 
