@@ -69,6 +69,8 @@ impl PlanVisitor for QueryPipelineBuilder {
     }
 
     fn visit_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<()> {
+        self.visit_plan_node(&plan.input)?;
+
         let mut builder = TransformPipeBuilder::create();
         for _index in 0..self.pipeline.output_len() {
             let transform_input_port = InputPort::create();

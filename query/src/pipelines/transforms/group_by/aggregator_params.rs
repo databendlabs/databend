@@ -22,6 +22,9 @@ use common_functions::aggregates::AggregateFunctionRef;
 use common_planners::Expression;
 
 pub struct AggregatorParams {
+    pub schema: DataSchemaRef,
+    pub group_columns_name: Vec<String>,
+
     pub aggregate_functions: Vec<AggregateFunctionRef>,
     pub aggregate_functions_column_name: Vec<String>,
     pub aggregate_functions_arguments_name: Vec<Vec<String>>,
@@ -34,13 +37,18 @@ pub struct AggregatorParams {
 pub type AggregatorParamsRef = Arc<AggregatorParams>;
 
 impl AggregatorParams {
-    pub fn try_create(schema: DataSchemaRef, exprs: &[Expression]) -> Result<AggregatorParamsRef> {
+    pub fn try_create(
+        schema: &DataSchemaRef,
+        before_schema: &DataSchemaRef,
+        exprs: &[Expression],
+        group_cols: &[String],
+    ) -> Result<AggregatorParamsRef> {
         let mut aggregate_functions = Vec::with_capacity(exprs.len());
         let mut aggregate_functions_column_name = Vec::with_capacity(exprs.len());
         let mut aggregate_functions_arguments_name = Vec::with_capacity(exprs.len());
 
         for expr in exprs.iter() {
-            aggregate_functions.push(expr.to_aggregate_function(&schema)?);
+            aggregate_functions.push(expr.to_aggregate_function(before_schema)?);
             aggregate_functions_column_name.push(expr.column_name());
             aggregate_functions_arguments_name.push(expr.to_aggregate_function_names()?);
         }
@@ -52,6 +60,8 @@ impl AggregatorParams {
             aggregate_functions_column_name,
             aggregate_functions_arguments_name,
             layout: states_layout,
+            schema: schema.clone(),
+            group_columns_name: group_cols.to_vec(),
             offsets_aggregate_states: states_offsets,
         }))
     }

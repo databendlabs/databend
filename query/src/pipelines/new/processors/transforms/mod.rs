@@ -15,8 +15,9 @@
 mod transform;
 mod transform_dummy;
 mod transform_filter;
-mod transform_aggregator_partial;
+mod transform_aggregator;
+mod group_by;
 
 pub use transform_dummy::TransformDummy;
 pub use transform_filter::TransformFilter;
-pub use transform_aggregator_partial::TransformAggregatorPartial;
+pub use transform_aggregator::TransformAggregatorPartial;
