@@ -14,6 +14,7 @@ test = false
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../exception" }
 
+anyerror = "0.1.1"
 derive_more = "0.99.17"
 enumflags2 = { version = "0.7.3", features = ["serde"] }
 lazy_static = "1.4.0"

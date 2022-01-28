@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledTree;
+use common_meta_types::MetaError;
+use common_meta_types::MetaResult;
 use common_meta_types::NodeId;
 use common_tracing::tracing;
 use openraft::storage::HardState;
@@ -62,7 +63,7 @@ impl RaftState {
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
-    ) -> common_exception::Result<RaftState> {
+    ) -> MetaResult<RaftState> {
         tracing::info!(?config);
         tracing::info!("open: {:?}, create: {:?}", open, create);
 
@@ -78,10 +79,7 @@ impl RaftState {
             match (open, create) {
                 (Some(_), _) => (curr_id, true),
                 (None, Some(_)) => {
-                    return Err(ErrorCode::MetaStoreAlreadyExists(format!(
-                        "raft state present id={}, can not create",
-                        curr_id
-                    )));
+                    return Err(MetaError::MetaStoreAlreadyExists(curr_id));
                 }
                 (None, None) => panic!("no open no create"),
             }
@@ -89,9 +87,7 @@ impl RaftState {
             match (open, create) {
                 (Some(_), Some(_)) => (config.id, false),
                 (Some(_), None) => {
-                    return Err(ErrorCode::MetaStoreNotFound(
-                        "raft state absent, can not open",
-                    ));
+                    return Err(MetaError::MetaStoreNotFound);
                 }
                 (None, Some(_)) => (config.id, false),
                 (None, None) => panic!("no open no create"),

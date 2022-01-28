@@ -1854,6 +1854,7 @@ dependencies = [
 name = "common-meta-types"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "anyhow",
  "common-building",
  "common-datavalues",

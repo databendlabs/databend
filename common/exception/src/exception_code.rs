@@ -145,8 +145,8 @@ build_exceptions! {
 
     // meta store errors
     MetaStoreDamaged(2004),
-    MetaStoreAlreadyExists(2005),
-    MetaStoreNotFound(2006),
+    //MetaStoreAlreadyExists(2005),
+    //MetaStoreNotFound(2006),
 
     ConcurrentSnapshotInstall(2007),
     UnknownTableId(2008),
