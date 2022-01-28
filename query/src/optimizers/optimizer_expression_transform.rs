@@ -320,7 +320,8 @@ impl PlanRewriter for ExprTransformImpl {
         }
 
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        let new_predicate = Self::boolean_transformer(&plan.predicate)?;
+        let new_predicate = Self::constant_transformer(&plan.predicate)?;
+        let new_predicate = Self::boolean_transformer(&new_predicate)?;
         let new_predicate = Self::truth_transformer(&new_predicate, false)?;
         PlanBuilder::from(&new_input).having(new_predicate)?.build()
     }

@@ -179,6 +179,22 @@ async fn test_expression_transform_optimizer() -> Result<()> {
                 \n  Filter: true\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number > 1) OR true)]]",
             },
+            Test {
+                name: "Projection logics const",
+                query: "SELECT 1 = 1 and 2 > 1",
+                expect: "\
+                Projection: ((1 = 1) and (2 > 1)):Boolean\
+                \n  Expression: ((1 = 1) and (2 > 1)):Boolean (Before Projection)\
+                \n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
+            },
+            Test {
+                name: "Projection cond",
+                query: "select number<3 or number>5 from numbers(10);",
+                expect: "\
+                Projection: ((number < 3) or (number > 5)):Boolean\
+                \n  Expression: ((number < 3) or (number > 5)):Boolean (Before Projection)\
+                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
+            },
         ];
 
     for test in tests {
