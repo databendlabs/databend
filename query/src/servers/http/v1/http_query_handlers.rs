@@ -154,7 +154,7 @@ async fn query_cancel_handler(
         Some(query) => {
             query.kill().await;
             if params.delete.unwrap_or(false) {
-                http_query_manager.remove(&query_id).await;
+                http_query_manager.remove_query(&query_id).await;
             }
             StatusCode::OK
         }
@@ -203,7 +203,7 @@ async fn query_page_handler(
 ) -> PoemResult<Json<QueryResponse>> {
     let session_manager = sessions_extension.0;
     let http_query_manager = session_manager.get_http_query_manager();
-    match http_query_manager.get(&query_id).await {
+    match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             let wait_type = params.get_wait_type();
             let resp = query
@@ -231,7 +231,7 @@ pub(crate) async fn query_handler(
 
     match query {
         Ok(query) => {
-            http_query_manager.add(&query_id, query);
+            http_query_manager.add_query(&query_id, query.clone()).await;
             let wait_type = params.get_wait_type();
             let resp = query
                 .get_response_page(0, &wait_type, true)

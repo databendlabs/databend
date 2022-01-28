@@ -36,17 +36,17 @@ impl HttpQueryManager {
         uuid::Uuid::new_v4().to_string()
     }
 
-    pub(crate) async fn get(self: &Arc<Self>, query_id: &str) -> Option<Arc<HttpQuery>> {
+    pub(crate) async fn get_query(self: &Arc<Self>, query_id: &str) -> Option<Arc<HttpQuery>> {
         let queries = self.queries.read().await;
         queries.get(query_id).map(|q| q.to_owned())
     }
 
-    pub(crate) async fn add(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
+    pub(crate) async fn add_query(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
         let mut queries = self.queries.write().await;
         queries.insert(query_id.to_string(), query);
     }
 
-    pub(crate) async fn remove(self: &Arc<Self>, query_id: &str) {
+    pub(crate) async fn remove_query(self: &Arc<Self>, query_id: &str) {
         let mut queries = self.queries.write().await;
         queries.remove(query_id);
     }
