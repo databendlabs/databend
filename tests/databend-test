@@ -418,11 +418,11 @@ def main(args):
                                        stderr=PIPE)
     databend_query_proc_create.communicate(b"SELECT 1")
 
-    def is_test_from_dir(suite_dir, case):
-        case_file = os.path.join(suite_dir, case)
-        (name, ext) = os.path.splitext(case)
-        return os.path.isfile(case_file) and (ext == '.sql' or ext == '.sh'
-                                              or ext == '.py')
+    # def is_test_from_dir(suite_dir, case):
+    #     case_file = os.path.join(suite_dir, case)
+    #     (name, ext) = os.path.splitext(case)
+    #     return os.path.isfile(case_file) and (ext == '.sql' or ext == '.sh'
+    #                                           or ext == '.py')
 
     def sute_key_func(item):
         if -1 == item.find('_'):
@@ -495,9 +495,7 @@ def main(args):
                 except ValueError:
                     return 99997, ''
 
-            all_tests = os.listdir(suite_dir)
-            all_tests = filter(lambda case: is_test_from_dir(suite_dir, case),
-                               all_tests)
+            all_tests = get_all_tests_under_dir_recursive(suite_dir)
 
             if args.test:
                 all_tests = [
