@@ -25,6 +25,7 @@ use futures::channel::oneshot::Sender;
 
 use crate::sessions::context_shared::QueryContextShared;
 use crate::sessions::Settings;
+use crate::users::UserApiProvider;
 
 #[derive(MallocSizeOf)]
 pub struct MutableStatus {
@@ -43,7 +44,7 @@ pub struct MutableStatus {
 }
 
 impl MutableStatus {
-    pub fn try_create() -> Result<Self> {
+    pub fn try_create(_user_mgr: Arc<UserApiProvider>) -> Result<Self> {
         Ok(MutableStatus {
             abort: Default::default(),
             current_user: Default::default(),

@@ -19,6 +19,7 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_management::SettingApi;
 use common_meta_types::UserSetting;
 
 #[derive(Clone, Debug)]
@@ -28,13 +29,14 @@ pub struct SettingValue {
     user_setting: UserSetting,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Settings {
+    client: Arc<dyn SettingApi>,
     settings: Arc<RwLock<HashMap<&'static str, SettingValue>>>,
 }
 
 impl Settings {
-    pub fn try_create() -> Result<Self> {
+    pub fn try_create(client: Arc<dyn SettingApi>) -> Result<Self> {
         let map = Arc::new(RwLock::new(HashMap::default()));
         let mut settings = map.write();
 
@@ -54,6 +56,7 @@ impl Settings {
         // TODO(bohu): get settings from meta service and set is_global to ture.
 
         Ok(Settings {
+            client,
             settings: map.clone(),
         })
     }

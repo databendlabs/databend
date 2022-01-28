@@ -53,13 +53,14 @@ impl Session {
         typ: String,
         sessions: Arc<SessionManager>,
     ) -> Result<Arc<Session>> {
+        let user_mgr = sessions.get_user_manager();
         Ok(Arc::new(Session {
             id,
             typ,
             config,
             sessions,
             ref_count: Arc::new(AtomicUsize::new(0)),
-            mutable_state: Arc::new(MutableStatus::try_create()?),
+            mutable_state: Arc::new(MutableStatus::try_create(user_mgr)?),
         }))
     }
 

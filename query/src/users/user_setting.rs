@@ -18,6 +18,7 @@ use common_meta_types::UserSetting;
 use crate::users::UserApiProvider;
 
 impl UserApiProvider {
+    // Set a setting.
     pub async fn set_setting(
         &self,
         tenant: &str,
@@ -28,18 +29,13 @@ impl UserApiProvider {
         setting_api_provider.set_setting(setting).await
     }
 
-    // Get the tenant/cluster all settings list.
+    // Get all settings list prefixed by '/tenant/cluster'.
     pub async fn get_settings(&self, tenant: &str, cluster: &str) -> Result<Vec<UserSetting>> {
         let setting_api_provider = self.get_setting_api_client(tenant, cluster);
-        let get_settings = setting_api_provider.get_settings();
-
-        match get_settings.await {
-            Err(e) => Err(e.add_message_back("(while get settings).")),
-            Ok(seq_settings) => Ok(seq_settings),
-        }
+        setting_api_provider.get_settings().await
     }
 
-    // Drop a settings by name.
+    // Drop a setting by name.
     pub async fn drop_setting(&self, tenant: &str, cluster: &str, name: &str) -> Result<()> {
         let setting_api_provider = self.get_setting_api_client(tenant, cluster);
         setting_api_provider.drop_setting(name, None).await
