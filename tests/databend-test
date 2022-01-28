@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 
-## This file is based on clickhouse-test under the Apache license here:
-## https://github.com/ClickHouse/ClickHouse/blob/master/tests/clickhouse-test
+# This file is based on clickhouse-test under the Apache license here:
+# https://github.com/ClickHouse/ClickHouse/blob/master/tests/clickhouse-test
 
 import sys
 import os
 import os.path
 import re
-import json
 import traceback
+import copy
 
 from argparse import ArgumentParser
 import shlex
 import subprocess
 from subprocess import Popen
 from subprocess import PIPE
-from subprocess import CalledProcessError
-from subprocess import TimeoutExpired
 from datetime import datetime
 from time import time, sleep
 from errno import ESRCH
@@ -24,8 +22,6 @@ try:
     import termcolor
 except ImportError:
     termcolor = None
-import random
-import string
 import multiprocessing
 from contextlib import closing
 
@@ -36,6 +32,7 @@ def remove_control_characters(s):
     """
     https://github.com/html5lib/html5lib-python/issues/96#issuecomment-43438438
     """
+
     def str_to_int(s, default, base=10):
         if int(s, base) < 0x10000:
             return chr(int(s, base))
@@ -126,8 +123,8 @@ def get_processlist(client_cmd):
         return subprocess.check_output(
             "{} --query 'SHOW PROCESSLIST FORMAT Vertical'".format(client_cmd),
             shell=True)
-    except:
-        return ""  #  server seems dead
+    except Exception:
+        return ""  # server seems dead
 
 
 def get_stacktraces(server_pid):
@@ -140,15 +137,15 @@ def get_stacktraces(server_pid):
 
 
 def get_server_pid(server_tcp_port):
-    cmd = "lsof -i tcp:{port} -s tcp:LISTEN -Fp | awk '/^p[0-9]+$/{{print substr($0, 2)}}'".format(
-        port=server_tcp_port)
+    cmd = "lsof - i tcp: {port} - s tcp: LISTEN - Fp | \
+    awk '/^p[0-9]+$/{{print substr($0, 2)}}'".format(port=server_tcp_port)
     try:
         output = subprocess.check_output(cmd, shell=True)
         if output:
             return int(output[1:])
         else:
             return None  # server dead
-    except Exception as ex:
+    except Exception:
         return None
 
 
@@ -166,7 +163,8 @@ stop_time = None
 
 # def run_tests_array(all_tests, suite, suite_dir, suite_tmp_dir, run_total):
 def run_tests_array(all_tests_with_params):
-    all_tests, suite, suite_dir, suite_tmp_dir, run_total = all_tests_with_params
+    all_tests, suite, suite_dir, suite_tmp_dir, \
+        run_total = all_tests_with_params
     global exit_code
     global SERVER_DIED
     global stop_time
@@ -220,8 +218,8 @@ def run_tests_array(all_tests_with_params):
                 sys.stdout.flush()
                 sys.stdout.write("{0:72}".format(name + ": "))
                 # This flush is needed so you can see the test name of the long
-                # running test before it will finish. But don't do it in parallel
-                # mode, so that the lines don't mix.
+                # running test before it will finish. But don't do it in
+                # parallel mode, so that the lines don't mix.
                 sys.stdout.flush()
             else:
                 status = "{0:72}".format(name + ": ")
@@ -296,14 +294,16 @@ def run_tests_array(all_tests_with_params):
                             if stderr:
                                 status += stderr
 
-                            # Stop on fatal errors like segmentation fault. They are sent to client via logs.
+                            # Stop on fatal errors like segmentation fault.
+                            #  They are sent to client via logs.
                             if ' <Fatal> ' in stderr:
                                 SERVER_DIED = True
 
                             if args.stop and (
                                     'Connection refused' in stderr
                                     or 'Attempt to read after eof' in stderr
-                            ) and not 'Received exception from server' in stderr:
+                            ) and 'Received exception from server' \
+                                    not in stderr:
                                 SERVER_DIED = True
 
                             if os.path.isfile(stdout_file):
@@ -346,8 +346,8 @@ def run_tests_array(all_tests_with_params):
                                 failures += 1
                                 status += MSG_FAIL
                                 status += print_test_time(total_time)
-                                status += " - result differs with:\n{}\n".format(
-                                    diff)
+                                status += " - result differs with:\n{}\n"\
+                                    .format(diff)
                             else:
                                 passed_total += 1
                                 failures_chain = 0
@@ -367,7 +367,7 @@ def run_tests_array(all_tests_with_params):
         except KeyboardInterrupt as e:
             print(colored("Break tests execution", args, "red"))
             raise e
-        except:
+        except Exception:
             exc_type, exc_value, tb = sys.exc_info()
             failures += 1
             print("{0} - Test internal error: {1}\n{2}\n{3}".format(
@@ -382,10 +382,11 @@ def run_tests_array(all_tests_with_params):
     if failures_total > 0:
         print(
             colored(
-                "\nHaving {failures_total} errors! {passed_total} tests passed. {skipped_total} tests skipped."
-                .format(passed_total=passed_total,
-                        skipped_total=skipped_total,
-                        failures_total=failures_total),
+                "\nHaving {failures_total} errors! {passed_total} tests passed.\
+                     {skipped_total} tests skipped.".format(
+                    passed_total=passed_total,
+                    skipped_total=skipped_total,
+                    failures_total=failures_total),
                 args,
                 "red",
                 attrs=["bold"]))
@@ -432,6 +433,32 @@ def main(args):
         except ValueError:
             return 99997, ''
 
+    def get_all_tests_under_dir_recursive(suite_dir):
+        all_tests = []
+        sub_dir_paths = list(
+            map(lambda dir: os.path.join(suite_dir, dir),
+                os.listdir(suite_dir)))
+
+        while (len(sub_dir_paths) > 0):
+            sub_dir_path = sub_dir_paths.pop(0)
+            # dirs under this level.
+            sub_dir_paths += copy.deepcopy(
+                list(
+                    filter(
+                        lambda fullpath: os.path.isdir(fullpath),
+                        map(lambda dir: os.path.join(sub_dir_path, dir),
+                            os.listdir(sub_dir_path)))))
+
+            all_tests += copy.deepcopy(
+                list(
+                    filter(
+                        lambda fullpath: os.path.isfile(fullpath) and os.path.
+                        splitext(fullpath)[1] in ['.sql', '.sh', '.py'],
+                        map(lambda dir: os.path.join(sub_dir_path, dir),
+                            os.listdir(sub_dir_path)))))
+
+        return all_tests
+
     total_tests_run = 0
     for suite in sorted(os.listdir(base_dir), key=sute_key_func):
         if SERVER_DIED:
@@ -445,7 +472,7 @@ def main(args):
 
         suite_dir = os.path.join(base_dir, suite)
         suite_re_obj = re.search('^[0-9]+_(.*)$', suite)
-        if not suite_re_obj:  #skip .gitignore and so on
+        if not suite_re_obj:  # skip .gitignore and so on
             continue
 
         suite_tmp_dir = os.path.join(tmp_dir, suite)
@@ -486,9 +513,8 @@ def main(args):
             bad_tests = [t for t in bad_tests]
 
             if len(bad_tests) > 0:
-                print(
-                    "Illegal test case names: {}, must match `^[0-9]+_[0-9]+_(.*)$`"
-                    .format(bad_tests))
+                print("Illegal test case names: {}, \
+                    must match `^ [0-9]+_[0-9]+_(.*)$`".format(bad_tests))
                 sys.exit(1)
 
             all_tests.sort(key=key_func)
@@ -616,12 +642,10 @@ if __name__ == '__main__':
                         default=None,
                         dest='stop',
                         help='Stop on network errors')
-    parser.add_argument(
-        '--mode',
-        default='standalone',
-        help=
-        'DatabendQuery running mode, the value can be \'standalone\' or \'cluster\''
-    )
+    parser.add_argument('--mode',
+                        default='standalone',
+                        help='DatabendQuery running mode, \
+            the value can be \'standalone\' or \'cluster\'')
 
     args = parser.parse_args()
     if os.getenv("DATABEND_DEV_CONTAINER") is not None:
@@ -629,15 +653,14 @@ if __name__ == '__main__':
     if args.suites is None and os.path.isdir('suites'):
         args.suites = 'suites'
     if args.suites is None:
-        print(
-            "Failed to detect path to the suites directory. Please specify it with '--suites' option."
-        )
+        print("Failed to detect path to the suites directory. \
+                Please specify it with '--suites' option.")
         exit(1)
 
     if args.tmp is None:
         args.tmp = args.suites
 
-    args.client += f' --user default -s'
+    args.client += ' --user default -s'
     tcp_host = os.getenv("QUERY_MYSQL_HANDLER_HOST")
     if tcp_host is not None:
         args.tcp_host = tcp_host
