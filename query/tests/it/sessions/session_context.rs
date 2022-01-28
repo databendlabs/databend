@@ -25,7 +25,7 @@ use databend_query::sessions::SessionContext;
 use crate::tests::SessionManagerBuilder;
 
 #[test]
-fn test_session_status() -> Result<()> {
+fn test_session_context() -> Result<()> {
     let session_ctx = SessionContext::try_create()?;
 
     // Abort status.
