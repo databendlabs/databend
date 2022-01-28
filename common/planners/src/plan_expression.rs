@@ -176,13 +176,14 @@ impl Expression {
             Expression::UnaryExpression { op, expr } => {
                 format!("({} {})", op.to_lowercase(), expr.column_name())
             }
-            Expression::BinaryExpression { op, left, right } => {format!(
-                "({} {} {})",
-                left.column_name(),
-                op.to_lowercase(),
-                right.column_name()
-            )
-        }
+            Expression::BinaryExpression { op, left, right } => {
+                format!(
+                    "({} {} {})",
+                    left.column_name(),
+                    op.to_lowercase(),
+                    right.column_name()
+                )
+            }
             Expression::ScalarFunction { op, args } => {
                 match OP_SET.get(&op.to_lowercase().as_ref()) {
                     Some(_) => format!("{}()", op),
