@@ -115,6 +115,70 @@ async fn test_expression_transform_optimizer() -> Result<()> {
                 \n    Filter: true\
                 \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [true]]",
             },
+            Test {
+                name: "Filter true and cond",
+                query: "SELECT number from numbers(10) where true AND number > 1",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: (number > 1)\
+                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(true AND (number > 1))]]",
+            },
+            Test {
+                name: "Filter cond and true",
+                query: "SELECT number from numbers(10) where number > 1 AND true",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: (number > 1)\
+                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number > 1) AND true)]]",
+            },
+            Test {
+                name: "Filter false and cond",
+                query: "SELECT number from numbers(10) where false AND number > 1",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: false\
+                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(false AND (number > 1))]]",
+            },
+            Test {
+                name: "Filter cond and false",
+                query: "SELECT number from numbers(10) where number > 1 AND false",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: false\
+                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number > 1) AND false)]]",
+            },
+            Test {
+                name: "Filter false or cond",
+                query: "SELECT number from numbers(10) where false OR number > 1",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: (number > 1)\
+                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(false OR (number > 1))]]",
+            },
+            Test {
+                name: "Filter cond or false",
+                query: "SELECT number from numbers(10) where number > 1 OR false",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: (number > 1)\
+                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number > 1) OR false)]]",
+            },
+            Test {
+                name: "Filter true or cond",
+                query: "SELECT number from numbers(10) where true OR number > 1",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: true\
+                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(true OR (number > 1))]]",
+            },
+            Test {
+                name: "Filter cond or true",
+                query: "SELECT number from numbers(10) where number > 1 OR true",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: true\
+                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number > 1) OR true)]]",
+            },
         ];
 
     for test in tests {
