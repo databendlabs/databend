@@ -16,6 +16,7 @@ use std::fmt;
 
 use common_exception::ErrorCode;
 use common_meta_sled_store::SledOrderedSerde;
+use common_meta_types::MetaError;
 use openraft::LogId;
 use openraft::Membership;
 use serde::Deserialize;
@@ -57,7 +58,7 @@ impl fmt::Display for StateMachineMetaKey {
 }
 
 impl SledOrderedSerde for StateMachineMetaKey {
-    fn ser(&self) -> Result<IVec, ErrorCode> {
+    fn ser(&self) -> Result<IVec, MetaError> {
         let i = match self {
             StateMachineMetaKey::LastApplied => 1,
             StateMachineMetaKey::Initialized => 2,
@@ -67,7 +68,7 @@ impl SledOrderedSerde for StateMachineMetaKey {
         Ok(IVec::from(&[i]))
     }
 
-    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, MetaError>
     where Self: Sized {
         let slice = v.as_ref();
         if slice[0] == 1 {
@@ -78,7 +79,9 @@ impl SledOrderedSerde for StateMachineMetaKey {
             return Ok(StateMachineMetaKey::LastMembership);
         }
 
-        Err(ErrorCode::MetaStoreDamaged("invalid key IVec"))
+        Err(MetaError::MetaStoreDamaged(String::from(
+            "invalid key IVec",
+        )))
     }
 }
 

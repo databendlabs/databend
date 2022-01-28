@@ -16,11 +16,11 @@ use std::fmt;
 use std::io::Cursor;
 
 use bytes::BytesMut;
-use common_exception::ErrorCode;
 use common_io::prelude::BinaryRead;
 use common_io::prelude::BinaryWriteBuf;
 use common_meta_sled_store::sled::IVec;
 use common_meta_sled_store::SledOrderedSerde;
+use common_meta_types::MetaError;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -32,14 +32,14 @@ pub struct TableLookupKey {
 }
 
 impl SledOrderedSerde for TableLookupKey {
-    fn ser(&self) -> Result<IVec, ErrorCode> {
+    fn ser(&self) -> Result<IVec, MetaError> {
         let mut buf = BytesMut::new();
         buf.write_uvarint(self.database_id)?;
         buf.write_string(&self.table_name)?;
         Ok(IVec::from(buf.to_vec()))
     }
 
-    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, MetaError>
     where Self: Sized {
         let mut buf_read = Cursor::new(v);
         let database_id = buf_read.read_uvarint()?;

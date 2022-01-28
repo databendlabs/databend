@@ -20,6 +20,7 @@ use std::ops::Bound;
 use std::ops::RangeBounds;
 
 use common_exception::ErrorCode;
+use common_meta_types::MetaError;
 use sled::IVec;
 
 use crate::SledOrderedSerde;
@@ -40,7 +41,7 @@ pub trait SledKeySpace {
     /// Type for value.
     type V: SledSerde + Debug;
 
-    fn serialize_key(k: &Self::K) -> Result<sled::IVec, ErrorCode> {
+    fn serialize_key(k: &Self::K) -> Result<sled::IVec, MetaError> {
         let b = <Self::K as SledOrderedSerde>::ser(k)?;
         let x = b.as_ref();
 
@@ -51,19 +52,19 @@ pub trait SledKeySpace {
         Ok(buf.into())
     }
 
-    fn deserialize_key<T: AsRef<[u8]>>(iv: T) -> Result<Self::K, ErrorCode> {
+    fn deserialize_key<T: AsRef<[u8]>>(iv: T) -> Result<Self::K, MetaError> {
         let b = iv.as_ref();
         if b[0] != Self::PREFIX {
-            return Err(ErrorCode::MetaStoreDamaged("invalid prefix"));
+            return Err(MetaError::MetaStoreDamaged(String::from("invalid prefix")));
         }
         <Self::K as SledOrderedSerde>::de(&b[1..])
     }
 
-    fn serialize_value(v: &Self::V) -> Result<sled::IVec, ErrorCode> {
+    fn serialize_value(v: &Self::V) -> Result<sled::IVec, MetaError> {
         v.ser()
     }
 
-    fn deserialize_value<T: AsRef<[u8]>>(iv: T) -> Result<Self::V, ErrorCode> {
+    fn deserialize_value<T: AsRef<[u8]>>(iv: T) -> Result<Self::V, MetaError> {
         Self::V::de(iv)
     }
 

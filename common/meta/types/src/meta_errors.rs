@@ -60,6 +60,15 @@ pub enum MetaError {
 
     #[error("raft state absent, can not open")]
     MetaStoreNotFound,
+
+    #[error("serde_json error: {0}")]
+    SerdeJsonError(String),
+
+    #[error("{0}")]
+    MetaStoreDamaged(String),
+
+    #[error("{0}")]
+    BadBytes(String),
 }
 
 pub type MetaResult<T> = std::result::Result<T, MetaError>;
@@ -76,6 +85,21 @@ impl From<MetaError> for ErrorCode {
             MetaError::ErrorCode(err_code) => err_code.into(),
             _ => ErrorCode::MetaServiceError(e.to_string()),
         }
+    }
+}
+
+impl From<serde_json::Error> for MetaError {
+    fn from(error: serde_json::Error) -> Self {
+        MetaError::SerdeJsonError(format!("{}", error))
+    }
+}
+
+impl From<std::string::FromUtf8Error> for MetaError {
+    fn from(error: std::string::FromUtf8Error) -> Self {
+        MetaError::BadBytes(format!(
+            "Bad bytes, cannot parse bytes with UTF8, cause: {}",
+            error
+        ))
     }
 }
 

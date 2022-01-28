@@ -14,9 +14,9 @@
 
 use std::fmt;
 
-use common_exception::ErrorCode;
 use common_meta_sled_store::sled::IVec;
 use common_meta_sled_store::SledOrderedSerde;
+use common_meta_types::MetaError;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -44,12 +44,12 @@ impl DatabaseLookupKey {
 }
 
 impl SledOrderedSerde for DatabaseLookupKey {
-    fn ser(&self) -> Result<IVec, ErrorCode> {
+    fn ser(&self) -> Result<IVec, MetaError> {
         let k = format!("{}{}{}", self.tenant, self.delimiter, self.database_name);
         Ok(IVec::from(k.as_str()))
     }
 
-    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, MetaError>
     where Self: Sized {
         let db_lookup_key = String::from_utf8(v.as_ref().to_vec())?;
 
