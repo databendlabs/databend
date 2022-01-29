@@ -138,3 +138,33 @@ fn test_not_like_comparison_function() -> Result<()> {
 
     test_scalar_functions2(ComparisonLikeFunction::try_create_nlike("")?, &tests)
 }
+
+#[test]
+fn test_regexp_comparison_function() -> Result<()> {
+    let tests = vec![ScalarFunction2Test {
+        name: "regexp-passed",
+        columns: vec![
+            Series::from_data(vec!["abc", "abd", "abe", "abf", "abc", ""]),
+            Series::from_data(vec!["^a", "^b", "abe", "a", "", ""]),
+        ],
+        expect: Series::from_data(vec![true, false, true, true, false, true]),
+        error: "",
+    }];
+
+    test_scalar_functions2(ComparisonRegexpFunction::try_create_regexp("")?, &tests)
+}
+
+#[test]
+fn test_not_regexp_comparison_function() -> Result<()> {
+    let tests = vec![ScalarFunction2Test {
+        name: "regexp-passed",
+        columns: vec![
+            Series::from_data(vec!["abc", "abd", "abe", "abf", "abc", ""]),
+            Series::from_data(vec!["^a", "^b", "abe", "a", "", ""]),
+        ],
+        expect: Series::from_data(vec![false, true, false, false, true, false]),
+        error: "",
+    }];
+
+    test_scalar_functions2(ComparisonRegexpFunction::try_create_nregexp("")?, &tests)
+}

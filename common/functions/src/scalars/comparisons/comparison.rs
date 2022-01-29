@@ -32,6 +32,7 @@ use crate::scalars::ComparisonLikeFunction;
 use crate::scalars::ComparisonLtEqFunction;
 use crate::scalars::ComparisonLtFunction;
 use crate::scalars::ComparisonNotEqFunction;
+use crate::scalars::ComparisonRegexpFunction;
 use crate::scalars::Function2;
 use crate::scalars::Function2Factory;
 
@@ -51,6 +52,10 @@ impl ComparisonFunction {
         factory.register("<>", ComparisonNotEqFunction::desc());
         factory.register("like", ComparisonLikeFunction::desc_like());
         factory.register("not like", ComparisonLikeFunction::desc_unlike());
+        factory.register("regexp", ComparisonRegexpFunction::desc_regexp());
+        factory.register("not regexp", ComparisonRegexpFunction::desc_unregexp());
+        factory.register("rlike", ComparisonRegexpFunction::desc_regexp());
+        factory.register("not rlike", ComparisonRegexpFunction::desc_unregexp());
     }
 
     pub fn try_create_func(op: DataValueComparisonOperator) -> Result<Box<dyn Function2>> {
