@@ -63,7 +63,7 @@ pub async fn streaming_load(
     session.set_current_user(user_info.0.clone());
 
     let context = session
-        .create_context()
+        .create_query_context()
         .await
         .map_err(InternalServerError)?;
     let insert_sql = req

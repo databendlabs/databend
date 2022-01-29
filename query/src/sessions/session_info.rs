@@ -19,8 +19,8 @@ use common_base::ProgressValues;
 use common_dal::DalMetrics;
 use common_meta_types::UserInfo;
 
-use crate::sessions::MutableStatus;
 use crate::sessions::Session;
+use crate::sessions::SessionContext;
 use crate::sessions::Settings;
 
 pub struct ProcessInfo {
@@ -39,11 +39,11 @@ pub struct ProcessInfo {
 
 impl Session {
     pub fn process_info(self: &Arc<Self>) -> ProcessInfo {
-        let session_mutable_state = self.mutable_state.clone();
-        self.to_process_info(&session_mutable_state)
+        let session_ctx = self.session_ctx.clone();
+        self.to_process_info(&session_ctx)
     }
 
-    fn to_process_info(self: &Arc<Self>, status: &MutableStatus) -> ProcessInfo {
+    fn to_process_info(self: &Arc<Self>, status: &SessionContext) -> ProcessInfo {
         let mut memory_usage = 0;
 
         if let Some(shared) = &status.get_context_shared() {
@@ -69,7 +69,7 @@ impl Session {
         }
     }
 
-    fn process_state(self: &Arc<Self>, status: &MutableStatus) -> String {
+    fn process_state(self: &Arc<Self>, status: &SessionContext) -> String {
         match status.get_context_shared() {
             _ if status.get_abort() => String::from("Aborting"),
             None => String::from("Idle"),
@@ -77,34 +77,34 @@ impl Session {
         }
     }
 
-    fn process_extra_info(self: &Arc<Self>, status: &MutableStatus) -> Option<String> {
+    fn process_extra_info(self: &Arc<Self>, status: &SessionContext) -> Option<String> {
         match self.typ.as_str() {
             "RPCSession" => Session::rpc_extra_info(status),
             _ => Session::query_extra_info(status),
         }
     }
 
-    fn rpc_extra_info(status: &MutableStatus) -> Option<String> {
+    fn rpc_extra_info(status: &SessionContext) -> Option<String> {
         status
             .get_context_shared()
             .map(|_| String::from("Partial cluster query stage"))
     }
 
-    fn query_extra_info(status: &MutableStatus) -> Option<String> {
+    fn query_extra_info(status: &SessionContext) -> Option<String> {
         status
             .get_context_shared()
             .as_ref()
             .map(|context_shared| context_shared.get_query_str())
     }
 
-    fn query_dal_metrics(status: &MutableStatus) -> Option<DalMetrics> {
+    fn query_dal_metrics(status: &SessionContext) -> Option<DalMetrics> {
         status
             .get_context_shared()
             .as_ref()
             .map(|context_shared| context_shared.dal_ctx.get_metrics())
     }
 
-    fn query_scan_progress_value(status: &MutableStatus) -> Option<ProgressValues> {
+    fn query_scan_progress_value(status: &SessionContext) -> Option<ProgressValues> {
         status
             .get_context_shared()
             .as_ref()

@@ -217,6 +217,6 @@ impl QueryContextShared {
 
 impl Session {
     pub(in crate::sessions) fn destroy_context_shared(&self) {
-        self.mutable_state.take_context_shared();
+        self.session_ctx.take_context_shared();
     }
 }

@@ -23,11 +23,11 @@ use common_macros::MallocSizeOf;
 use common_meta_types::UserInfo;
 use futures::channel::oneshot::Sender;
 
-use crate::sessions::context_shared::QueryContextShared;
+use crate::sessions::QueryContextShared;
 use crate::sessions::Settings;
 
 #[derive(MallocSizeOf)]
-pub struct MutableStatus {
+pub struct SessionContext {
     abort: AtomicBool,
     current_database: RwLock<String>,
     current_tenant: RwLock<String>,
@@ -42,9 +42,9 @@ pub struct MutableStatus {
     context_shared: RwLock<Option<Arc<QueryContextShared>>>,
 }
 
-impl MutableStatus {
+impl SessionContext {
     pub fn try_create() -> Result<Self> {
-        Ok(MutableStatus {
+        Ok(SessionContext {
             abort: Default::default(),
             current_user: Default::default(),
             current_tenant: Default::default(),
