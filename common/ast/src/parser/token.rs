@@ -61,28 +61,20 @@ pub enum TokenKind {
     Gt,
     #[token("<=")]
     LtEq,
-    /// Greater Than Or Equals operator `>=`
     #[token(">=")]
     GtEq,
-    /// Spaceship operator <=>
     #[token("<=>")]
     Spaceship,
-    /// Plus operator `+`
     #[token("+")]
     Plus,
-    /// Minus operator `-`
     #[token("-")]
     Minus,
-    /// Multiplication operator `*`
     #[token("*")]
     Multiply,
-    /// Division operator `/`
     #[token("/")]
     Divide,
-    /// Modulo Operator `%`
     #[token("%")]
     Modulo,
-    /// String concatenation `||`
     #[token("||")]
     StringConcat,
     #[token("(")]
