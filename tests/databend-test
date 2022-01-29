@@ -160,8 +160,9 @@ SERVER_DIED = False
 exit_code = 0
 stop_time = None
 
-
 # def run_tests_array(all_tests, suite, suite_dir, suite_tmp_dir, run_total):
+
+
 def run_tests_array(all_tests_with_params):
     all_tests, suite, suite_dir, suite_tmp_dir, \
         run_total = all_tests_with_params
@@ -417,12 +418,6 @@ def main(args):
                                        stdout=PIPE,
                                        stderr=PIPE)
     databend_query_proc_create.communicate(b"SELECT 1")
-
-    # def is_test_from_dir(suite_dir, case):
-    #     case_file = os.path.join(suite_dir, case)
-    #     (name, ext) = os.path.splitext(case)
-    #     return os.path.isfile(case_file) and (ext == '.sql' or ext == '.sh'
-    #                                           or ext == '.py')
 
     def sute_key_func(item):
         if -1 == item.find('_'):
