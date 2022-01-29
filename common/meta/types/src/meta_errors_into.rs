@@ -30,7 +30,10 @@ impl From<MetaError> for ErrorCode {
     fn from(e: MetaError) -> Self {
         match e {
             MetaError::ErrorCode(err_code) => err_code.into(),
-            _ => ErrorCode::MetaServiceError(e.to_string()),
+            _ => {
+                println!("MetaError:{:?}", e);
+                ErrorCode::MetaServiceError(e.to_string())
+            }
         }
     }
 }

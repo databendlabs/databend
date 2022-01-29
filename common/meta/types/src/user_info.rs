@@ -14,13 +14,13 @@
 
 use std::convert::TryFrom;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::user_grant::UserGrantSet;
 use crate::AuthInfo;
-use crate::MetaError;
-use crate::MetaResult;
 use crate::UserIdentity;
 use crate::UserQuota;
 
@@ -66,12 +66,12 @@ impl UserInfo {
 }
 
 impl TryFrom<Vec<u8>> for UserInfo {
-    type Error = MetaError;
+    type Error = ErrorCode;
 
-    fn try_from(value: Vec<u8>) -> MetaResult<Self> {
+    fn try_from(value: Vec<u8>) -> Result<Self> {
         match serde_json::from_slice(&value) {
             Ok(user_info) => Ok(user_info),
-            Err(serialize_error) => Err(MetaError::IllegalUserInfoFormat(format!(
+            Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
                 "Cannot deserialize user info from bytes. cause {}",
                 serialize_error
             ))),

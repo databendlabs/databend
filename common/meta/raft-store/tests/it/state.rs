@@ -40,7 +40,7 @@ async fn test_raft_state_create() -> anyhow::Result<()> {
     let res = RaftState::open_create(db, &tc.raft_config, None, Some(())).await;
     assert!(res.is_err());
     assert_eq!(
-        "Code: 2005, displayText = raft state present id=3, can not create.",
+        "raft state present id=3, can not create",
         res.unwrap_err().to_string()
     );
 
@@ -48,7 +48,7 @@ async fn test_raft_state_create() -> anyhow::Result<()> {
     let res = RaftState::open_create(db, &tc.raft_config, None, Some(())).await;
     assert!(res.is_err());
     assert_eq!(
-        "Code: 2005, displayText = raft state present id=3, can not create.",
+        "raft state present id=3, can not create",
         res.unwrap_err().to_string()
     );
     Ok(())

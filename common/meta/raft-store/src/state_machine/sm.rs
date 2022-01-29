@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use common_exception::ErrorCode;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::EffectiveMembership;
@@ -810,11 +811,11 @@ impl StateMachine {
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn get_database_id(&self, tenant: &str, db_name: &str) -> MetaResult<u64> {
+    pub fn get_database_id(&self, tenant: &str, db_name: &str) -> common_exception::Result<u64> {
         let seq_dbi = self
             .database_lookup()
             .get(&(DatabaseLookupKey::new(tenant.to_string(), db_name.to_string())))?
-            .ok_or_else(|| MetaError::UnknownDatabase(db_name.to_string()))?;
+            .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
 
         Ok(seq_dbi.data)
     }
@@ -824,11 +825,11 @@ impl StateMachine {
         tenant: &str,
         db_name: &str,
         txn_tree: &TransactionSledTree,
-    ) -> MetaResult<u64> {
+    ) -> common_exception::Result<u64> {
         let txn_db_lookup = txn_tree.key_space::<DatabaseLookup>();
         let seq_dbi = txn_db_lookup
             .get(&(DatabaseLookupKey::new(tenant.to_string(), db_name.to_string())))?
-            .ok_or_else(|| MetaError::UnknownDatabase(db_name.to_string()))?;
+            .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
 
         Ok(seq_dbi.data)
     }

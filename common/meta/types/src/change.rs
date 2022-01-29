@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::MetaError;
 use crate::SeqV;
 
 pub enum OkOrExist<T> {
@@ -99,7 +99,7 @@ where
         self.prev != self.result
     }
 
-    pub fn into_add_result(mut self) -> Result<AddResult<T, ID>, MetaError> {
+    pub fn into_add_result(mut self) -> Result<AddResult<T, ID>, ErrorCode> {
         let id = self.ident.take();
         let (prev, result) = self.unpack();
         if let Some(p) = prev {
@@ -109,7 +109,7 @@ where
                     res: OkOrExist::Exists(p),
                 })
             } else {
-                Err(MetaError::UnknownException(format!(
+                Err(ErrorCode::UnknownException(format!(
                     "invalid result for add: prev: {:?} result: None",
                     p
                 )))
@@ -122,7 +122,7 @@ where
                 res: OkOrExist::Ok(res),
             })
         } else {
-            Err(MetaError::UnknownException(
+            Err(ErrorCode::UnknownException(
                 "invalid result for add: prev: None result: None".to_string(),
             ))
         }

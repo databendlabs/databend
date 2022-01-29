@@ -18,7 +18,6 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_base::tokio;
-use common_exception::ErrorCode;
 use common_meta_api::KVApi;
 use common_meta_raft_store::state_machine::testing::pretty_snapshot;
 use common_meta_raft_store::state_machine::testing::pretty_snapshot_iter;
@@ -33,6 +32,7 @@ use common_meta_types::DatabaseMeta;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
+use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
@@ -299,10 +299,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
 
             let err = r.unwrap_err();
 
-            assert_eq!(
-                ErrorCode::UnknownTableId("Unknown table id").code(),
-                err.code()
-            );
+            assert_eq!(MetaError::UnknownTableId(String::from("table_id:0")), err);
 
             Ok(AppliedState::None)
         })?;
