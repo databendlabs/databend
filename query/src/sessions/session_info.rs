@@ -46,7 +46,7 @@ impl Session {
     fn to_process_info(self: &Arc<Self>, status: &SessionContext) -> ProcessInfo {
         let mut memory_usage = 0;
 
-        if let Some(shared) = &status.get_context_shared() {
+        if let Some(shared) = &status.get_query_context_shared() {
             if let Ok(runtime) = shared.try_get_runtime() {
                 let runtime_tracker = runtime.get_tracker();
                 let runtime_memory_tracker = runtime_tracker.get_memory_tracker();
@@ -70,7 +70,7 @@ impl Session {
     }
 
     fn process_state(self: &Arc<Self>, status: &SessionContext) -> String {
-        match status.get_context_shared() {
+        match status.get_query_context_shared() {
             _ if status.get_abort() => String::from("Aborting"),
             None => String::from("Idle"),
             Some(_) => String::from("Query"),
@@ -86,27 +86,27 @@ impl Session {
 
     fn rpc_extra_info(status: &SessionContext) -> Option<String> {
         status
-            .get_context_shared()
+            .get_query_context_shared()
             .map(|_| String::from("Partial cluster query stage"))
     }
 
     fn query_extra_info(status: &SessionContext) -> Option<String> {
         status
-            .get_context_shared()
+            .get_query_context_shared()
             .as_ref()
             .map(|context_shared| context_shared.get_query_str())
     }
 
     fn query_dal_metrics(status: &SessionContext) -> Option<DalMetrics> {
         status
-            .get_context_shared()
+            .get_query_context_shared()
             .as_ref()
             .map(|context_shared| context_shared.dal_ctx.get_metrics())
     }
 
     fn query_scan_progress_value(status: &SessionContext) -> Option<ProgressValues> {
         status
-            .get_context_shared()
+            .get_query_context_shared()
             .as_ref()
             .map(|context_shared| context_shared.scan_progress.get_values())
     }

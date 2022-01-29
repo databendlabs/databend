@@ -78,7 +78,7 @@ impl Session {
     pub fn kill(self: &Arc<Self>) {
         let session_ctx = self.session_ctx.clone();
         session_ctx.set_abort(true);
-        if session_ctx.context_shared_is_none() {
+        if session_ctx.query_context_shared_is_none() {
             if let Some(io_shutdown) = session_ctx.take_io_shutdown_tx() {
                 let (tx, rx) = oneshot::channel();
                 if io_shutdown.send(tx).is_ok() {
@@ -97,7 +97,7 @@ impl Session {
     pub fn force_kill_query(self: &Arc<Self>) {
         let session_ctx = self.session_ctx.clone();
 
-        if let Some(context_shared) = session_ctx.take_context_shared() {
+        if let Some(context_shared) = session_ctx.take_query_context_shared() {
             context_shared.kill(/* shutdown executing query */);
         }
     }
@@ -106,7 +106,7 @@ impl Session {
     /// For a query, execution environment(e.g cluster) should be immutable.
     /// We can bind the environment to the context in create_context method.
     pub async fn create_query_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
-        let query_ctx = self.session_ctx.get_context_shared();
+        let query_ctx = self.session_ctx.get_query_context_shared();
 
         Ok(match query_ctx.as_ref() {
             Some(shared) => QueryContext::create_from_shared(shared.clone()),
@@ -118,11 +118,12 @@ impl Session {
                 let cluster = discovery.discover().await?;
                 let shared = QueryContextShared::try_create(config, session, cluster)?;
 
-                let query_ctx = self.session_ctx.get_context_shared();
+                let query_ctx = self.session_ctx.get_query_context_shared();
                 match query_ctx.as_ref() {
                     Some(shared) => QueryContext::create_from_shared(shared.clone()),
                     None => {
-                        self.session_ctx.set_context_shared(Some(shared.clone()));
+                        self.session_ctx
+                            .set_query_context_shared(Some(shared.clone()));
                         QueryContext::create_from_shared(shared)
                     }
                 }

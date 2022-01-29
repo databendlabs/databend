@@ -44,7 +44,7 @@ pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) discovery: Arc<ClusterDiscovery>,
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
-    pub(in crate::sessions) user: Arc<UserApiProvider>,
+    pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
 
@@ -71,7 +71,7 @@ impl SessionManager {
             catalog,
             conf,
             discovery,
-            user,
+            user_manager: user,
             http_query_manager,
             auth_manager,
             max_sessions: max_active_sessions,
@@ -98,7 +98,7 @@ impl SessionManager {
 
     /// Get the user api provider.
     pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
-        self.user.clone()
+        self.user_manager.clone()
     }
 
     pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
