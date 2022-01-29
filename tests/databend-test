@@ -572,6 +572,7 @@ def main(args):
                 while _start < _end:
                     _test_case_unit = []
                     _updated_suite_dir = ""
+                    _suite_tmp_dir = ""
                     assert(len(all_tests[_start].split("/"))
                            > len(suite_dir.split("/")))
                     # update suite_dir, there is a sub directory.
