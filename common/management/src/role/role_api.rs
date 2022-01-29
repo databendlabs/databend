@@ -19,7 +19,7 @@ use common_meta_types::SeqV;
 use common_meta_types::UserPrivilegeSet;
 
 #[async_trait::async_trait]
-pub trait RoleMgrApi: Sync + Send {
+pub trait RoleApi: Sync + Send {
     async fn add_role(&self, role_info: &RoleInfo) -> Result<u64>;
 
     async fn get_role(&self, role_name: &str, seq: Option<u64>) -> Result<SeqV<RoleInfo>>;

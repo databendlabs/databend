@@ -89,14 +89,14 @@ fn test_session_context() -> Result<()> {
             Cluster::empty(),
         )?;
 
-        session_ctx.set_context_shared(Some(shared.clone()));
-        let val = session_ctx.get_context_shared();
+        session_ctx.set_query_context_shared(Some(shared.clone()));
+        let val = session_ctx.get_query_context_shared();
         assert_eq!(shared.conf, val.unwrap().conf);
 
-        let val = session_ctx.take_context_shared();
+        let val = session_ctx.take_query_context_shared();
         assert_eq!(shared.conf, val.unwrap().conf);
 
-        let val = session_ctx.get_context_shared();
+        let val = session_ctx.get_query_context_shared();
         assert!(val.is_none());
     }
 

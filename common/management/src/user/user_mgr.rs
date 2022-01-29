@@ -30,7 +30,7 @@ use common_meta_types::UpsertKVAction;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
 
-use crate::user::user_api::UserMgrApi;
+use crate::user::user_api::UserApi;
 
 static USER_API_KEY_PREFIX: &str = "__fd_users";
 
@@ -81,7 +81,7 @@ impl UserMgr {
 }
 
 #[async_trait::async_trait]
-impl UserMgrApi for UserMgr {
+impl UserApi for UserMgr {
     async fn add_user(&self, user_info: UserInfo) -> common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
         let user_key = format_user_key(&user_info.name, &user_info.hostname);

@@ -29,7 +29,7 @@ use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UserPrivilegeSet;
 
-use crate::role::role_api::RoleMgrApi;
+use crate::role::role_api::RoleApi;
 
 static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
 
@@ -79,7 +79,7 @@ impl RoleMgr {
 }
 
 #[async_trait::async_trait]
-impl RoleMgrApi for RoleMgr {
+impl RoleApi for RoleMgr {
     async fn add_role(&self, role_info: &RoleInfo) -> common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
         let key = format!("{}/{}", self.role_prefix, &role_info.name);
