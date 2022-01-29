@@ -106,7 +106,7 @@ impl RaftState {
     /// Initialize a raft state. The only thing to do is to persist the node id
     /// so that next time opening it the caller knows it is initialized.
     #[tracing::instrument(level = "info", skip(self))]
-    async fn init(&self) -> common_exception::Result<()> {
+    async fn init(&self) -> MetaResult<()> {
         let state = self.state();
         state
             .insert(&RaftStateKey::Id, &RaftStateValue::NodeId(self.id))
@@ -114,7 +114,7 @@ impl RaftState {
         Ok(())
     }
 
-    pub async fn write_hard_state(&self, hs: &HardState) -> common_exception::Result<()> {
+    pub async fn write_hard_state(&self, hs: &HardState) -> MetaResult<()> {
         let state = self.state();
         state
             .insert(
@@ -125,7 +125,7 @@ impl RaftState {
         Ok(())
     }
 
-    pub fn read_hard_state(&self) -> common_exception::Result<Option<HardState>> {
+    pub fn read_hard_state(&self) -> MetaResult<Option<HardState>> {
         let state = self.state();
         let hs = state.get(&RaftStateKey::HardState)?;
         let hs = hs.map(HardState::from);
@@ -133,7 +133,7 @@ impl RaftState {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn write_state_machine_id(&self, id: &(u64, u64)) -> common_exception::Result<()> {
+    pub async fn write_state_machine_id(&self, id: &(u64, u64)) -> MetaResult<()> {
         let state = self.state();
         state
             .insert(
@@ -145,7 +145,7 @@ impl RaftState {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub fn read_state_machine_id(&self) -> common_exception::Result<(u64, u64)> {
+    pub fn read_state_machine_id(&self) -> MetaResult<(u64, u64)> {
         let state = self.state();
         let smid = state.get(&RaftStateKey::StateMachineId)?;
         let smid: (u64, u64) = smid.map_or((0, 0), |v| v.into());

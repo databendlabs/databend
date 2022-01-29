@@ -17,6 +17,9 @@ use std::str::FromStr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::MetaError;
+use crate::MetaResult;
+
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 pub struct StageParams {
     pub url: String,
@@ -82,16 +85,16 @@ impl Default for Format {
 }
 
 impl FromStr for Format {
-    type Err = ErrorCode;
+    type Err = MetaError;
 
-    fn from_str(s: &str) -> Result<Format> {
+    fn from_str(s: &str) -> MetaResult<Format> {
         let s = s.to_lowercase();
         match s.as_str() {
             "csv" => Ok(Format::Csv),
             "parquet" => Ok(Format::Parquet),
             "json" => Ok(Format::Json),
 
-            other => Err(ErrorCode::StrParseError(format!(
+            other => Err(MetaError::StrParseError(format!(
                 "no match for format: {}",
                 other
             ))),
@@ -121,9 +124,9 @@ impl Default for Compression {
 }
 
 impl FromStr for Compression {
-    type Err = ErrorCode;
+    type Err = MetaError;
 
-    fn from_str(s: &str) -> Result<Compression> {
+    fn from_str(s: &str) -> MetaResult<Compression> {
         let s = s.to_lowercase();
         match s.as_str() {
             "auto" => Ok(Compression::Auto),
@@ -134,7 +137,7 @@ impl FromStr for Compression {
             "deflate" => Ok(Compression::Deflate),
             "raw_deflate" => Ok(Compression::RawDeflate),
             "none" => Ok(Compression::None),
-            other => Err(ErrorCode::StrParseError(format!(
+            other => Err(MetaError::StrParseError(format!(
                 "no match for compression: {}",
                 other
             ))),

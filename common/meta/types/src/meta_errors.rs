@@ -26,7 +26,6 @@
 // limitations under the License.
 
 use anyerror::AnyError;
-use common_exception::ErrorCode;
 use common_exception::SerializedError;
 use openraft::error::ChangeMembershipError;
 use openraft::NodeId;
@@ -69,39 +68,63 @@ pub enum MetaError {
 
     #[error("{0}")]
     BadBytes(String),
+
+    #[error("{0}")]
+    LoadConfigError(String),
+
+    #[error("{0}")]
+    TLSConfigurationFailure(String),
+
+    #[error("{0}")]
+    StartMetaServiceError(String),
+
+    #[error("{0}")]
+    StrParseError(String),
+
+    #[error("{0}")]
+    BadAddressFormat(String),
+
+    #[error("{0}")]
+    DatabaseAlreadyExists(String),
+
+    #[error("{0}")]
+    UnknownDatabase(String),
+
+    #[error("{0}")]
+    UnknownDatabaseId(String),
+
+    #[error("{0}")]
+    TableAlreadyExists(String),
+
+    #[error("{0}")]
+    UnknownTable(String),
+
+    #[error("{0}")]
+    TransactionAbort(String),
+
+    #[error("{0}")]
+    TransactionError(String),
+
+    #[error("{0}")]
+    MetaSrvError(String),
+
+    #[error("{0}")]
+    ConcurrentSnapshotInstall(String),
+
+    #[error("{0}")]
+    UnknownNode(String),
+
+    #[error("{0}")]
+    MetaServiceError(String),
+
+    #[error("{0}")]
+    CannotConnectNode(String),
+
+    #[error("{0}")]
+    UnknownException(String),
 }
 
 pub type MetaResult<T> = std::result::Result<T, MetaError>;
-
-impl From<ErrorCode> for MetaError {
-    fn from(e: ErrorCode) -> Self {
-        MetaError::ErrorCode(SerializedError::from(e))
-    }
-}
-
-impl From<MetaError> for ErrorCode {
-    fn from(e: MetaError) -> Self {
-        match e {
-            MetaError::ErrorCode(err_code) => err_code.into(),
-            _ => ErrorCode::MetaServiceError(e.to_string()),
-        }
-    }
-}
-
-impl From<serde_json::Error> for MetaError {
-    fn from(error: serde_json::Error) -> Self {
-        MetaError::SerdeJsonError(format!("{}", error))
-    }
-}
-
-impl From<std::string::FromUtf8Error> for MetaError {
-    fn from(error: std::string::FromUtf8Error) -> Self {
-        MetaError::BadBytes(format!(
-            "Bad bytes, cannot parse bytes with UTF8, cause: {}",
-            error
-        ))
-    }
-}
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[error("ConnectionError: {msg} source: {source}")]
