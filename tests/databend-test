@@ -428,9 +428,9 @@ def main(args):
         except ValueError:
             return 99997, ''
 
+    # Return all (all_tests)
     def get_all_tests_under_dir_recursive(suite_dir):
         all_tests = []
-
         sub_dir_paths = list(
             filter(lambda fullpath: os.path.isdir(fullpath),
                    map(lambda _dir: os.path.join(suite_dir, _dir),
@@ -472,25 +472,28 @@ def main(args):
         if args.run_dir and not any(s in suite for s in args.run_dir):
             continue
 
+        # suite_dir should be changed when there is an subdirectory,
+        # Need read the result file
         suite_dir = os.path.join(base_dir, suite)
         suite_re_obj = re.search('^[0-9]+_(.*)$', suite)
         if not suite_re_obj:  # skip .gitignore and so on
             continue
 
+        # suite_tmp_dir is tmp directory, which can be unchanged.
         suite_tmp_dir = os.path.join(tmp_dir, suite)
         if not os.path.exists(suite_tmp_dir):
             os.makedirs(suite_tmp_dir)
 
-        suite = suite_re_obj.group(1)
+        suite_pat = suite_re_obj.group(1)
         if os.path.isdir(suite_dir):
             # Reverse sort order: we want run newest test first.
             # And not reverse subtests
             def key_func(item):
                 reverse = 1
-                if -1 == item.find('_'):
+                if -1 == item.split("/")[-1].find('_'):
                     return 99998, ''
 
-                prefix, suffix = item.split('_', 1)
+                prefix, suffix = item.split("/")[-1].split('_', 1)
 
                 try:
                     return reverse * int(prefix), suffix
@@ -537,12 +540,26 @@ def main(args):
 
             all_tests_array = []
             for n in range(1, 1 + int(run_total)):
-                start = int(tests_n / run_total * (n - 1))
-                end = int(tests_n / run_total * n)
-                all_tests_array.append([
-                    all_tests[start:end], suite, suite_dir, suite_tmp_dir,
-                    run_total
-                ])
+                _start = int(tests_n / run_total * (n - 1))
+                _end = int(tests_n / run_total * n)
+                while _start < _end:
+                    updated_suite_dir = ""
+                    assert(len(all_tests[_start].split("/"))
+                           > len(suite_dir.split("/")))
+                    # update suite_dir, there is a sub directory.
+                    if len(all_tests[_start].split("/")) != \
+                            len(suite_dir.split("/")) + 1:
+
+                        _suite_dir_len = len(suite_dir.split("/"))
+                        updated_suite_dir = os.path.join(
+                            suite_dir, "/".join(all_tests[_start].split("/")[
+                                                _suite_dir_len:-1]))
+                    all_tests_array.append([
+                        all_tests[_start], suite_pat, (
+                            updated_suite_dir or suite_dir), suite_tmp_dir,
+                        run_total
+                    ])
+                    _start += 1
 
             if jobs > 1:
                 with closing(multiprocessing.Pool(processes=jobs)) as pool:
@@ -608,7 +625,8 @@ if __name__ == '__main__':
                         action='store_true',
                         default=False,
                         help='Also run disabled tests')
-    parser.add_argument('--force-color', action='store_true', default=False)
+    parser.add_argument(
+        '--force-color', action='store_true', default=False)
     parser.add_argument('--print-time',
                         action='store_true',
                         dest='print_time',
