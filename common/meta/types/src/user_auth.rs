@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 // Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,9 +11,12 @@ use std::str::FromStr;
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use common_exception::ErrorCode;
+use std::str::FromStr;
+
 use sha2::Digest;
 use sha2::Sha256;
+
+use crate::MetaError;
 
 const NO_PASSWORD_STR: &str = "no_password";
 const PLAINTEXT_PASSWORD_STR: &str = "plaintext_password";
@@ -199,7 +200,7 @@ impl AuthInfo {
         salt: &[u8],
         input: &[u8],
         user_password_hash: &[u8],
-    ) -> Result<Vec<u8>, ErrorCode> {
+    ) -> Result<Vec<u8>, MetaError> {
         // SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1( password ) ) )
         let mut m = sha1::Sha1::new();
         m.update(salt);
@@ -207,7 +208,9 @@ impl AuthInfo {
 
         let result = m.digest().bytes();
         if input.len() != result.len() {
-            return Err(ErrorCode::SHA1CheckFailed("SHA1 check failed"));
+            return Err(MetaError::SHA1CheckFailed(String::from(
+                "SHA1 check failed",
+            )));
         }
         let mut s = Vec::with_capacity(result.len());
         for i in 0..result.len() {
@@ -216,7 +219,7 @@ impl AuthInfo {
         Ok(s)
     }
 
-    pub fn auth_mysql(&self, password_input: &[u8], salt: &[u8]) -> Result<bool, ErrorCode> {
+    pub fn auth_mysql(&self, password_input: &[u8], salt: &[u8]) -> Result<bool, MetaError> {
         match self {
             AuthInfo::None => Ok(true),
             AuthInfo::Password {
@@ -228,11 +231,11 @@ impl AuthInfo {
                     let password_sha1 = AuthInfo::restore_sha1_mysql(salt, password_input, p)?;
                     Ok(*p == calc_sha1(&password_sha1))
                 }
-                PasswordHashMethod::Sha256 => Err(ErrorCode::AuthenticateFailure(
+                PasswordHashMethod::Sha256 => Err(MetaError::AuthenticateFailure(String::from(
                     "login with sha256_password user for mysql protocol not supported yet.",
-                )),
+                ))),
             },
-            _ => Err(ErrorCode::AuthenticateFailure(format!(
+            _ => Err(MetaError::AuthenticateFailure(format!(
                 "user require auth type {}",
                 self.get_type().to_str()
             ))),

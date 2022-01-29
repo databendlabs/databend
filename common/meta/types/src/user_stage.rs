@@ -14,9 +14,6 @@
 
 use std::str::FromStr;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-
 use crate::MetaError;
 use crate::MetaResult;
 
@@ -181,12 +178,12 @@ impl UserStageInfo {
 }
 
 impl TryFrom<Vec<u8>> for UserStageInfo {
-    type Error = ErrorCode;
+    type Error = MetaError;
 
-    fn try_from(value: Vec<u8>) -> Result<Self> {
+    fn try_from(value: Vec<u8>) -> MetaResult<Self> {
         match serde_json::from_slice(&value) {
             Ok(info) => Ok(info),
-            Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
+            Err(serialize_error) => Err(MetaError::IllegalUserInfoFormat(format!(
                 "Cannot deserialize stage from bytes. cause {}",
                 serialize_error
             ))),

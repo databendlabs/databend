@@ -100,6 +100,9 @@ pub enum MetaError {
     UnknownTable(String),
 
     #[error("{0}")]
+    UnknownTableId(String),
+
+    #[error("{0}")]
     TransactionAbort(String),
 
     #[error("{0}")]
@@ -119,6 +122,21 @@ pub enum MetaError {
 
     #[error("{0}")]
     CannotConnectNode(String),
+
+    #[error("{0}")]
+    IllegalRoleInfoFormat(String),
+
+    #[error("{0}")]
+    SHA1CheckFailed(String),
+
+    #[error("{0}")]
+    AuthenticateFailure(String),
+
+    #[error("{0}")]
+    IllegalUserInfoFormat(String),
+
+    #[error("{0}")]
+    IllegalUDFFormat(String),
 
     #[error("{0}")]
     UnknownException(String),

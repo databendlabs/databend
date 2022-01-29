@@ -14,10 +14,11 @@
 
 use std::convert::TryFrom;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
+
+use crate::MetaError;
+use crate::MetaResult;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(default)]
@@ -40,12 +41,12 @@ impl UserDefinedFunction {
 }
 
 impl TryFrom<Vec<u8>> for UserDefinedFunction {
-    type Error = ErrorCode;
+    type Error = MetaError;
 
-    fn try_from(value: Vec<u8>) -> Result<Self> {
+    fn try_from(value: Vec<u8>) -> MetaResult<Self> {
         match serde_json::from_slice(&value) {
             Ok(udf) => Ok(udf),
-            Err(serialize_error) => Err(ErrorCode::IllegalUDFFormat(format!(
+            Err(serialize_error) => Err(MetaError::IllegalUDFFormat(format!(
                 "Cannot deserialize user defined function from bytes. cause {}",
                 serialize_error
             ))),

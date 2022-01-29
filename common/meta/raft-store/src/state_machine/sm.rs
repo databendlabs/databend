@@ -17,7 +17,6 @@ use std::fmt::Debug;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_exception::ErrorCode;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::EffectiveMembership;
@@ -579,7 +578,7 @@ impl StateMachine {
 
         // Unlike other Cmd, prev to be None is not allowed for upsert-options.
         let prev =
-            prev.ok_or_else(|| ErrorCode::UnknownTableId(format!("table_id:{}", req.table_id)))?;
+            prev.ok_or_else(|| MetaError::UnknownTableId(format!("table_id:{}", req.table_id)))?;
 
         if req.seq.match_seq(&prev).is_err() {
             let res = AppliedState::TableMeta(Change::new(Some(prev.clone()), Some(prev)));
@@ -815,7 +814,7 @@ impl StateMachine {
         let seq_dbi = self
             .database_lookup()
             .get(&(DatabaseLookupKey::new(tenant.to_string(), db_name.to_string())))?
-            .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
+            .ok_or_else(|| MetaError::UnknownDatabase(db_name.to_string()))?;
 
         Ok(seq_dbi.data)
     }
@@ -829,7 +828,7 @@ impl StateMachine {
         let txn_db_lookup = txn_tree.key_space::<DatabaseLookup>();
         let seq_dbi = txn_db_lookup
             .get(&(DatabaseLookupKey::new(tenant.to_string(), db_name.to_string())))?
-            .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
+            .ok_or_else(|| MetaError::UnknownDatabase(db_name.to_string()))?;
 
         Ok(seq_dbi.data)
     }
@@ -913,7 +912,7 @@ impl StateMachine {
         let x = self
             .databases()
             .get(db_id)?
-            .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", db_id)))?;
+            .ok_or_else(|| MetaError::UnknownDatabaseId(format!("database_id: {}", db_id)))?;
         Ok(x)
     }
 
@@ -956,7 +955,7 @@ impl StateMachine {
         table_id: u64,
         tbl: TableMeta,
         seq: &MatchSeq,
-    ) -> Result<Option<SeqV<TableMeta>>, ErrorCode> {
+    ) -> Result<Option<SeqV<TableMeta>>, MetaError> {
         let tables = self.tables();
         let (_prev, result) = self
             .sub_tree_upsert(tables, &table_id, seq, Operation::Update(tbl), None)

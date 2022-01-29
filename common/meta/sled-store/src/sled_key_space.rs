@@ -19,7 +19,6 @@ use std::fmt::Display;
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
-use common_exception::ErrorCode;
 use common_meta_types::MetaError;
 use sled::IVec;
 
@@ -69,7 +68,7 @@ pub trait SledKeySpace {
     }
 
     /// Convert range of user key to range of sled::IVec for query.
-    fn serialize_range<R>(range: &R) -> Result<(Bound<IVec>, Bound<IVec>), ErrorCode>
+    fn serialize_range<R>(range: &R) -> Result<(Bound<IVec>, Bound<IVec>), MetaError>
     where R: RangeBounds<Self::K> {
         let s = range.start_bound();
         let e = range.end_bound();
@@ -84,7 +83,7 @@ pub trait SledKeySpace {
     /// A u8 prefix is prepended to the bound value and an open bound is converted to a namespaced bound.
     /// E.g., use the [PREFIX] as the left side closed bound,
     /// and use the [PREFIX+1] as the right side open bound.
-    fn serialize_bound(v: Bound<&Self::K>, dir: &str) -> Result<Bound<sled::IVec>, ErrorCode> {
+    fn serialize_bound(v: Bound<&Self::K>, dir: &str) -> Result<Bound<sled::IVec>, MetaError> {
         let res = match v {
             Bound::Included(v) => Bound::Included(Self::serialize_key(v)?),
             Bound::Excluded(v) => Bound::Excluded(Self::serialize_key(v)?),

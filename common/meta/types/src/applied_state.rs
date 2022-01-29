@@ -14,7 +14,6 @@
 
 use std::fmt::Debug;
 
-use common_exception::ErrorCode;
 use openraft::AppDataResponse;
 use serde::Deserialize;
 use serde::Serialize;
@@ -22,6 +21,7 @@ use serde::Serialize;
 use crate::AddResult;
 use crate::Change;
 use crate::DatabaseMeta;
+use crate::MetaError;
 use crate::Node;
 use crate::TableMeta;
 
@@ -62,7 +62,7 @@ where
     Change<T, ID>: TryFrom<AppliedState>,
     <Change<T, ID> as TryFrom<AppliedState>>::Error: Debug,
 {
-    type Error = ErrorCode;
+    type Error = MetaError;
 
     fn try_into(self) -> Result<AddResult<T, ID>, Self::Error> {
         let typ = std::any::type_name::<T>();

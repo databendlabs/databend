@@ -18,7 +18,6 @@ use std::ops::Bound;
 use std::ops::Deref;
 use std::ops::RangeBounds;
 
-use common_exception::ErrorCode;
 use common_meta_types::MetaError;
 use common_meta_types::MetaResult;
 use common_meta_types::ToMetaError;
@@ -519,7 +518,7 @@ pub struct AsTxnKeySpace<'a, KV: SledKeySpace> {
 }
 
 impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
-    type Error = ErrorCode;
+    type Error = MetaError;
 
     fn insert(&self, key: &KV::K, value: &KV::V) -> Result<Option<KV::V>, Self::Error> {
         let k = KV::serialize_key(key)?;
@@ -527,7 +526,7 @@ impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
 
         let prev = self.txn_tree.insert(k, v).map_err(|e| {
             let e: ConflictableTransactionError = e.into();
-            ErrorCode::from(e)
+            MetaError::from(e)
         })?;
         match prev {
             Some(v) => Ok(Some(KV::deserialize_value(v)?)),
@@ -539,7 +538,7 @@ impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
         let k = KV::serialize_key(key)?;
         let got = self.txn_tree.get(k).map_err(|e| {
             let e: ConflictableTransactionError = e.into();
-            ErrorCode::from(e)
+            MetaError::from(e)
         })?;
 
         match got {
@@ -552,7 +551,7 @@ impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
         let k = KV::serialize_key(key)?;
         let removed = self.txn_tree.remove(k).map_err(|e| {
             let e: ConflictableTransactionError = e.into();
-            ErrorCode::from(e)
+            MetaError::from(e)
         })?;
 
         match removed {
@@ -567,9 +566,9 @@ impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
 
         let old_val_ivec = self.txn_tree.get(&key_ivec).map_err(|e| {
             let e: ConflictableTransactionError = e.into();
-            ErrorCode::from(e)
+            MetaError::from(e)
         })?;
-        let old_val: Result<Option<KV::V>, ErrorCode> = match old_val_ivec {
+        let old_val: Result<Option<KV::V>, MetaError> = match old_val_ivec {
             Some(v) => Ok(Some(KV::deserialize_value(v)?)),
             None => Ok(None),
         };
@@ -583,11 +582,11 @@ impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
                 .insert(key_ivec, KV::serialize_value(v)?)
                 .map_err(|e| {
                     let e: ConflictableTransactionError = e.into();
-                    ErrorCode::from(e)
+                    MetaError::from(e)
                 })?,
             None => self.txn_tree.remove(key_ivec).map_err(|e| {
                 let e: ConflictableTransactionError = e.into();
-                ErrorCode::from(e)
+                MetaError::from(e)
             })?,
         };
 

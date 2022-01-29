@@ -14,7 +14,6 @@
 
 use std::fmt;
 
-use common_exception::ErrorCode;
 use common_meta_sled_store::SledOrderedSerde;
 use common_meta_types::MetaError;
 use openraft::LogId;
