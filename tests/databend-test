@@ -527,7 +527,7 @@ def main(args):
             if args.test:
                 all_tests = [
                     t for t in all_tests
-                    if any([re.search(r, t) for r in args.test])
+                    if any([re.search(r, t.split("/")[-1]) for r in args.test])
                 ]
             else:
                 all_tests = [t for t in all_tests]
@@ -746,5 +746,4 @@ if __name__ == '__main__':
 
         args.database = 'test_{suffix}'.format(suffix=random_str())
     args.client_with_database += ' ' + args.database
-
     main(args)
