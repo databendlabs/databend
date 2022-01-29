@@ -1427,6 +1427,7 @@ dependencies = [
  "once_cell",
  "pretty_assertions",
  "sqlparser",
+ "thiserror",
 ]
 
 [[package]]

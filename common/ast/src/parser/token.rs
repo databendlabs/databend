@@ -16,11 +16,15 @@ use logos::Logos;
 use logos::Span;
 
 pub use self::TokenKind::*;
+use crate::error::Error;
+use crate::error::Result;
 
 #[allow(non_camel_case_types)]
 #[derive(Logos, Clone, Copy, Debug, PartialEq)]
 pub enum TokenKind {
     #[error]
+    Error,
+
     #[regex(r"[ \t\n\f]+", logos::skip)]
     Whitespace,
 
@@ -1039,79 +1043,28 @@ pub enum TokenKind {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token<'a> {
-    kind: TokenKind,
-    text: &'a str,
-    span: Span,
+    pub kind: TokenKind,
+    pub text: &'a str,
+    pub span: Span,
 }
 
-pub fn tokenise(input: &str) -> Vec<Token> {
+pub fn tokenise(input: &str) -> Result<Vec<Token>> {
     let mut lex = TokenKind::lexer(input);
     let mut tokens = Vec::new();
 
     while let Some(kind) = lex.next() {
-        tokens.push(Token {
-            kind,
-            text: lex.slice(),
-            span: lex.span(),
-        })
+        if kind == TokenKind::Error {
+            let position = lex.span().start;
+            let rest = input[position..].to_string();
+            return Err(Error::UnrecognisedToken { rest, position });
+        } else {
+            tokens.push(Token {
+                kind,
+                text: lex.slice(),
+                span: lex.span(),
+            })
+        }
     }
 
-    tokens
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_lexer() {
-        assert_lex(
-            "x'deadbeef' -- a hex string\n 'a string literal\n escape quote by '' or \\\'. '",
-            &[
-                (LiteralHex, "x'deadbeef'", 0..11),
-                (
-                    LiteralString,
-                    "'a string literal\n escape quote by '' or \\'. '",
-                    29..75,
-                ),
-            ],
-        );
-        assert_lex("42 3.5 4. .001 5e2 1.925e-3 .38e+7 1.e-01", &[
-            (LiteralNumeber, "42", 0..2),
-            (LiteralNumeber, "3.5", 3..6),
-            (LiteralNumeber, "4.", 7..9),
-            (LiteralNumeber, ".001", 10..14),
-            (LiteralNumeber, "5e2", 15..18),
-            (LiteralNumeber, "1.925e-3", 19..27),
-            (LiteralNumeber, ".38e+7", 28..34),
-            (LiteralNumeber, "1.e-01", 35..41),
-        ]);
-        assert_lex(
-            r#"create table "user" (id int, name varchar /* the user name */);"#,
-            &[
-                (CREATE, "create", 0..6),
-                (TABLE, "table", 7..12),
-                (QuotedIdent, "\"user\"", 13..19),
-                (LParen, "(", 20..21),
-                (Ident, "id", 21..23),
-                (INT, "int", 24..27),
-                (Comma, ",", 27..28),
-                (Ident, "name", 29..33),
-                (VARCHAR, "varchar", 34..41),
-                (RParen, ")", 61..62),
-                (SemiColon, ";", 62..63),
-            ],
-        )
-    }
-
-    fn assert_lex<'a>(source: &'a str, expected_tokens: &[(TokenKind, &'a str, Span)]) {
-        let tokens = tokenise(source);
-
-        let tuples: Vec<_> = tokens
-            .into_iter()
-            .map(|token| (token.kind, token.text, token.span))
-            .collect();
-
-        assert_eq!(tuples, expected_tokens);
-    }
+    Ok(tokens)
 }
