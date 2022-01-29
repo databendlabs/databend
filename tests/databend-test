@@ -178,7 +178,6 @@ stop_time = None
 
 
 def run_tests_array(all_tests_with_params):
-    print("all_tests_with_params: ", all_tests_with_params)
     all_test_list, suite, run_total = all_tests_with_params
     global exit_code
     global SERVER_DIED
@@ -213,7 +212,6 @@ def run_tests_array(all_tests_with_params):
             return " {0:.2f} sec.".format(test_time)
         else:
             return ''
-    print("all_test_list: ", all_test_list)
     for test_list in all_test_list:
         failures = 0
         if SERVER_DIED:
@@ -243,7 +241,6 @@ def run_tests_array(all_tests_with_params):
                 status += MSG_SKIPPED + " - skip\n"
                 skipped_total += 1
             else:
-                print(test_list)
                 case_file_full_path = test_list[0]
                 suite_dir = test_list[1]
                 suite_tmp_dir = test_list[2]
@@ -547,7 +544,6 @@ def main(args):
                 sys.exit(1)
 
             all_tests.sort(key=key_func)
-
             run_n, run_total = args.parallel.split('/')
             run_n = float(run_n)
             run_total = float(run_total)

@@ -8,7 +8,7 @@ import boto3
 from moto import mock_s3
 
 CURDIR = os.path.dirname(os.path.realpath(__file__))
-sys.path.insert(0, os.path.join(CURDIR, '../../helpers'))
+sys.path.insert(0, os.path.join(CURDIR, '../../../helpers'))
 
 from client import client
 
