@@ -45,13 +45,13 @@ def remove_control_characters(s):
     return s
 
 
-def run_single_test(args, ext, client_options, case_file, stdout_file,
+def run_single_test(args, ext, client_options, case_file_full_path, stdout_file,
                     stderr_file, result_file):
 
     params = {
         'client': args.client_with_database,
         'options': client_options,
-        'test': case_file,
+        'test': case_file_full_path,
         'stdout': stdout_file,
         'stderr': stderr_file,
         "result": result_file,
@@ -160,7 +160,8 @@ SERVER_DIED = False
 exit_code = 0
 stop_time = None
 
-# def run_tests_array(all_tests, suite, suite_dir, suite_tmp_dir, run_total):
+
+# all_cases will be the full path of test case file.
 
 
 def run_tests_array(all_tests_with_params):
@@ -199,7 +200,7 @@ def run_tests_array(all_tests_with_params):
         else:
             return ''
 
-    for case in all_tests:
+    for case_file_full_path in all_tests:
         failures = 0
         if SERVER_DIED:
             break
@@ -207,8 +208,7 @@ def run_tests_array(all_tests_with_params):
         if stop_time and time() > stop_time:
             print("\nStop tests run because global time limit is exceeded.\n")
             break
-
-        case_file = os.path.join(suite_dir, case)
+        case = case_file_full_path.split("/")[-1]
         (name, ext) = os.path.splitext(case)
 
         try:
@@ -257,8 +257,8 @@ def run_tests_array(all_tests_with_params):
                             name) + file_suffix + '_cluster.stderr'
 
                     proc, stdout, stderr, total_time = run_single_test(
-                        args, ext, client_options, case_file, stdout_file,
-                        stderr_file, result_file)
+                        args, ext, client_options, case_file_full_path,
+                        stdout_file, stderr_file, result_file)
 
                     if proc.returncode is None:
                         try:
@@ -277,7 +277,7 @@ def run_tests_array(all_tests_with_params):
                         counter = 1
                         while proc.returncode != 0 and need_retry(stderr):
                             proc, stdout, stderr, total_time = run_single_test(
-                                args, ext, client_options, case_file,
+                                args, ext, client_options, case_file_full_path,
                                 stdout_file, stderr_file, result_file)
                             sleep(2**counter)
                             counter += 1
@@ -508,7 +508,8 @@ def main(args):
                 all_tests = [t for t in all_tests]
 
             bad_tests = filter(
-                lambda case: re.search('^[0-9]+_[0-9]+_(.*)$', case) is None,
+                lambda case: re.search(
+                    '^[0-9]+_[0-9]+_(.*)$', case.split("/")[-1]) is None,
                 all_tests)
             bad_tests = [t for t in bad_tests]
 
