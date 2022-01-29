@@ -40,7 +40,7 @@ pub enum TokenKind {
     #[regex(r#""[_a-zA-Z][_$a-zA-Z0-9]*""#)]
     QuotedIdent,
 
-    #[regex(r#"'([^'\\]|\\t|\\u|\\n|\\'|'')*'"#)]
+    #[regex(r#"'([^'\\]|\\.|'')*'"#)]
     LiteralString,
 
     #[regex(r"[xX]'[a-fA-F0-9]*'")]
