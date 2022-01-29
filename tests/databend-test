@@ -436,26 +436,33 @@ def main(args):
     def get_all_tests_under_dir_recursive(suite_dir):
         all_tests = []
         sub_dir_paths = list(
-            map(lambda dir: os.path.join(suite_dir, dir),
+            map(lambda _dir:
+                os.path.isdir(suite_dir, _dir) and os.path.join(
+                    suite_dir, _dir),
                 os.listdir(suite_dir)))
 
         while (len(sub_dir_paths) > 0):
-            sub_dir_path = sub_dir_paths.pop(0)
+            cur_sub_dir_path = sub_dir_paths.pop(0)
             # dirs under this level.
             sub_dir_paths += copy.deepcopy(
                 list(
                     filter(
-                        lambda fullpath: os.path.isdir(fullpath),
-                        map(lambda dir: os.path.join(sub_dir_path, dir),
-                            os.listdir(sub_dir_path)))))
+                        lambda fullpath:
+                            os.path.isdir(fullpath),
+                        map(lambda _dir:
+                            os.path.join(cur_sub_dir_path, _dir),
+                            os.listdir(cur_sub_dir_path)))))
 
             all_tests += copy.deepcopy(
                 list(
                     filter(
-                        lambda fullpath: os.path.isfile(fullpath) and os.path.
-                        splitext(fullpath)[1] in ['.sql', '.sh', '.py'],
-                        map(lambda dir: os.path.join(sub_dir_path, dir),
-                            os.listdir(sub_dir_path)))))
+                        lambda fullpath:
+                        os.path.isfile(fullpath) and
+                        os.path.splitext(fullpath)[1] in [
+                            '.sql', '.sh', '.py'],
+                        map(lambda _dir:
+                            os.path.join(cur_sub_dir_path, _dir),
+                            os.listdir(cur_sub_dir_path)))))
 
         return all_tests
 
