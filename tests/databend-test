@@ -430,11 +430,11 @@ def main(args):
 
     def get_all_tests_under_dir_recursive(suite_dir):
         all_tests = []
+
         sub_dir_paths = list(
-            map(lambda _dir:
-                os.path.isdir(suite_dir, _dir) and os.path.join(
-                    suite_dir, _dir),
-                os.listdir(suite_dir)))
+            filter(lambda fullpath: os.path.isdir(fullpath),
+                   map(lambda _dir: os.path.join(suite_dir, _dir),
+                       os.listdir(suite_dir))))
 
         while (len(sub_dir_paths) > 0):
             cur_sub_dir_path = sub_dir_paths.pop(0)
