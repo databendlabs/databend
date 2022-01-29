@@ -9,16 +9,16 @@ xx_yyyy_[test_name]
 
 ### Test Category
 
-* 00 -- for Dummy tests, [example](00_0000_dummy_select_1.sql)
-* 01 -- for System tables tests, [example](01_0000_system_numbers.sql)
-* 02 -- for Function tests, [example](02_0000_function_arithmetic.sql)
-* 03 -- for Select tests, [example](03_0000_select_aliases.sql)
-* 04 -- for Explain tests, [example](04_0000_explain.sql)
-* 05 -- for DDL tests, [example](05_0000_ddl_create_tables.sql)
-* 06 -- for Show tests, [example](06_0000_show_queries.sql)
-* 07 -- for Use tests, [example](07_0000_use_database.sql)
-* 08 -- for Optimizer tests, [example](08_0000_optimizer.sql)
-* 09 -- for Remote engine tests, [example](09_0000_remote_create_table.sql)
+* 00_dummpy -- for Dummy tests, [example](00_0000_dummy_select_1.sql)
+* 01_system -- for System tables tests, [example](01_0000_system_numbers.sql)
+* 02_function -- for Function tests, [example](02_0000_function_arithmetic.sql)
+* 03_dml -- for Select tests, [example](03_0000_select_aliases.sql)
+* 04_ddl -- for Explain tests, [example](04_0000_explain.sql)
+* 05_show -- for DDL tests, [example](05_0000_ddl_create_tables.sql)
+* 06_use -- for Show tests, [example](06_0000_show_queries.sql)
+* 07_meta -- for Use tests, [example](07_0000_use_database.sql)
+* 08_fuse -- for Optimizer tests, [example](08_0000_optimizer.sql)
+* 09+_others -- for Other tests, [example](09_0000_remote_create_table.sql, 10_0000_describe_table.sql), etc
 * 10 -- for Describe tests, [example](10_0000_describe_table.sql)
 * 11 -- for Show tables, [example](11_0000_show_tables.sql)
 * 12 -- for Insert into, [example](12_0000_insert_into_select.sql)
