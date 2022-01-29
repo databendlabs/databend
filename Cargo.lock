@@ -1547,6 +1547,7 @@ dependencies = [
  "pin-project",
  "thiserror",
  "tokio",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -1871,6 +1872,7 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2 0.10.1",
+ "sled",
  "thiserror",
  "tonic",
  "tonic-build",
@@ -1915,7 +1917,7 @@ dependencies = [
  "async-trait",
  "common-arrow",
  "common-base",
- "common-dal",
+ "common-dal2",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -2413,6 +2415,7 @@ dependencies = [
  "pretty_assertions",
  "prost",
  "rand",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
@@ -2422,6 +2425,7 @@ dependencies = [
  "thiserror",
  "threadpool",
  "tokio-stream",
+ "tokio-util",
  "toml",
  "tonic",
  "tonic-build",
@@ -2457,6 +2461,7 @@ dependencies = [
  "common-cache",
  "common-clickhouse-srv",
  "common-dal",
+ "common-dal2",
  "common-datablocks",
  "common-datavalues",
  "common-exception",

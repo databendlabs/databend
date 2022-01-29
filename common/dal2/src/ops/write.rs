@@ -12,41 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use async_trait::async_trait;
-
-use super::io::Reader;
 use crate::error::Result;
+use crate::Operator;
+use crate::Reader;
 
-/// `Write` will write data to the underlying storage.
-#[async_trait]
-pub trait Write<S: Send + Sync>: Send + Sync {
-    async fn write(&self, r: Reader, args: &WriteBuilder<S>) -> Result<usize> {
-        let (_, _) = (r, args);
-        unimplemented!()
-    }
-}
-
-pub struct WriteBuilder<S> {
-    s: Arc<S>,
+pub struct OpWrite {
+    op: Operator,
 
     pub path: String,
     pub size: u64,
 }
 
-impl<S> WriteBuilder<S> {
-    pub fn new(s: Arc<S>, path: &str, size: u64) -> Self {
+impl OpWrite {
+    pub fn new(op: Operator, path: &str, size: u64) -> Self {
         Self {
-            s,
+            op,
             path: path.to_string(),
             size,
         }
     }
-}
 
-impl<S: Write<S>> WriteBuilder<S> {
     pub async fn run(&mut self, r: Reader) -> Result<usize> {
-        self.s.write(r, self).await
+        self.op.inner().write(r, self).await
     }
 }

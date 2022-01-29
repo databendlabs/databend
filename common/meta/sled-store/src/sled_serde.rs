@@ -28,7 +28,7 @@ use sled::IVec;
 use crate::SledValueToKey;
 
 /// Serialize/deserialize(ser/de) to/from sled values.
-pub trait SledSerde: Serialize + DeserializeOwned + Sized {
+pub trait SledSerde: Serialize + DeserializeOwned {
     /// (ser)ialize a value to `sled::IVec`.
     fn ser(&self) -> Result<IVec, MetaError> {
         let x = serde_json::to_vec(self)?;
@@ -50,7 +50,7 @@ pub trait SledSerde: Serialize + DeserializeOwned + Sized {
 /// While BigEndian encoding preserve the order.
 ///
 /// A type that is used as a sled db key should be serialized with order preserved, such as log index.
-pub trait SledOrderedSerde: Serialize + DeserializeOwned + Sized {
+pub trait SledOrderedSerde: Serialize + DeserializeOwned {
     /// (ser)ialize a value to `sled::IVec`.
     fn ser(&self) -> Result<IVec, MetaError>;
 
@@ -141,4 +141,4 @@ impl SledOrderedSerde for String {
     }
 }
 
-impl<T> SledSerde for T where T: Serialize + DeserializeOwned + Sized {}
+impl<T> SledSerde for T where T: Serialize + DeserializeOwned {}

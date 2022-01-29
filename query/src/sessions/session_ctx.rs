@@ -23,11 +23,11 @@ use common_macros::MallocSizeOf;
 use common_meta_types::UserInfo;
 use futures::channel::oneshot::Sender;
 
-use crate::sessions::context_shared::QueryContextShared;
+use crate::sessions::QueryContextShared;
 use crate::sessions::Settings;
 
 #[derive(MallocSizeOf)]
-pub struct MutableStatus {
+pub struct SessionContext {
     abort: AtomicBool,
     current_database: RwLock<String>,
     current_tenant: RwLock<String>,
@@ -39,12 +39,12 @@ pub struct MutableStatus {
     #[ignore_malloc_size_of = "insignificant"]
     io_shutdown_tx: RwLock<Option<Sender<Sender<()>>>>,
     #[ignore_malloc_size_of = "insignificant"]
-    context_shared: RwLock<Option<Arc<QueryContextShared>>>,
+    query_context_shared: RwLock<Option<Arc<QueryContextShared>>>,
 }
 
-impl MutableStatus {
+impl SessionContext {
     pub fn try_create() -> Result<Self> {
-        Ok(MutableStatus {
+        Ok(SessionContext {
             abort: Default::default(),
             current_user: Default::default(),
             current_tenant: Default::default(),
@@ -52,7 +52,7 @@ impl MutableStatus {
             current_database: RwLock::new("default".to_string()),
             session_settings: RwLock::new(Settings::try_create()?.as_ref().clone()),
             io_shutdown_tx: Default::default(),
-            context_shared: Default::default(),
+            query_context_shared: Default::default(),
         })
     }
 
@@ -128,24 +128,24 @@ impl MutableStatus {
         lock.take()
     }
 
-    pub fn context_shared_is_none(&self) -> bool {
-        let lock = self.context_shared.read();
+    pub fn query_context_shared_is_none(&self) -> bool {
+        let lock = self.query_context_shared.read();
         lock.is_none()
     }
 
-    pub fn get_context_shared(&self) -> Option<Arc<QueryContextShared>> {
-        let lock = self.context_shared.read();
+    pub fn get_query_context_shared(&self) -> Option<Arc<QueryContextShared>> {
+        let lock = self.query_context_shared.read();
         lock.clone()
     }
 
-    pub fn set_context_shared(&self, ctx: Option<Arc<QueryContextShared>>) {
-        let mut lock = self.context_shared.write();
+    pub fn set_query_context_shared(&self, ctx: Option<Arc<QueryContextShared>>) {
+        let mut lock = self.query_context_shared.write();
         *lock = ctx
     }
 
     //  Take the context_shared.
-    pub fn take_context_shared(&self) -> Option<Arc<QueryContextShared>> {
-        let mut lock = self.context_shared.write();
+    pub fn take_query_context_shared(&self) -> Option<Arc<QueryContextShared>> {
+        let mut lock = self.query_context_shared.write();
         lock.take()
     }
 }

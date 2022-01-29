@@ -19,6 +19,7 @@ use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::LogIndex;
 use common_meta_types::SeqV;
+use common_tracing::tracing_futures::Instrument;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use testing::new_sled_test_context;
@@ -1371,4 +1372,44 @@ async fn test_as_multi_types() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_export() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_sled_ut!();
+
+    async {
+        let tc = new_sled_test_context();
+        let db = &tc.db;
+        let tree = SledTree::open(db, tc.tree_name, true)?;
+        let log_tree = tree.key_space::<Logs>();
+
+        let logs: Vec<Entry<LogEntry>> = vec![
+            Entry {
+                log_id: LogId { term: 1, index: 2 },
+                payload: EntryPayload::Blank,
+            },
+            Entry {
+                log_id: LogId { term: 3, index: 4 },
+                payload: EntryPayload::Normal(LogEntry {
+                    txid: None,
+                    cmd: Cmd::IncrSeq {
+                        key: "foo".to_string(),
+                    },
+                }),
+            },
+        ];
+
+        log_tree.append_values(&logs).await?;
+
+        let data = tree.export()?;
+
+        for kv in data.iter() {
+            println!("{:?}", kv);
+        }
+
+        Ok(())
+    }
+    .instrument(ut_span)
+    .await
 }

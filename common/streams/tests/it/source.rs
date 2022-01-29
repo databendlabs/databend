@@ -16,8 +16,9 @@ use std::fs::File;
 use std::io::Write;
 
 use common_base::tokio;
-use common_dal::DataAccessor;
-use common_dal::Local;
+use common_dal2::readers::SeekableReader;
+use common_dal2::services::fs;
+use common_dal2::Operator;
 use common_datablocks::assert_blocks_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::DataColumn;
@@ -31,6 +32,7 @@ use common_streams::CsvSource;
 use common_streams::ParquetSource;
 use common_streams::Source;
 use common_streams::ValueSource;
+use futures::io::BufReader;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_parse_values() {
@@ -92,8 +94,12 @@ async fn test_parse_csvs() {
                 DataField::new("c", DataType::Float64, false),
             ]);
 
-            let local = Local::with_path(dir.path().to_path_buf());
-            let stream = local.get_input_stream(name, None).unwrap();
+            let local = Operator::new(
+                fs::Backend::build()
+                    .root(dir.path().to_str().unwrap())
+                    .finish(),
+            );
+            let stream = local.read(name).run().await.unwrap();
             let mut csv_source =
                 CsvSource::try_create(stream, schema, false, field_delimitor, record_delimitor, 10)
                     .unwrap();
@@ -174,8 +180,13 @@ async fn test_source_parquet() -> Result<()> {
         .map_err(|e| ErrorCode::ParquetError(e.to_string()))?
     };
 
-    let local = Local::with_path(dir.path().to_path_buf());
-    let stream = local.get_input_stream(name, Some(len)).unwrap();
+    let local = Operator::new(
+        fs::Backend::build()
+            .root(dir.path().to_str().unwrap())
+            .finish(),
+    );
+    let stream = SeekableReader::new(local, name, len);
+    let stream = BufReader::with_capacity(4 * 1024 * 1024, stream);
 
     let default_proj = (0..schema.fields().len())
         .into_iter()

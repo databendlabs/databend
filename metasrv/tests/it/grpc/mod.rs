@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod metasrv_grpc_api;
+mod metasrv_grpc_export;
 pub mod metasrv_grpc_kv_api;
 pub mod metasrv_grpc_kv_api_restart_cluster;
 pub mod metasrv_grpc_meta_api;

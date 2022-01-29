@@ -110,7 +110,7 @@ impl ClickHouseSession for InteractiveWorker {
             };
             let user_info_auth = self
                 .session
-                .get_sessions_manager()
+                .get_session_manager()
                 .get_auth_manager()
                 .auth(&credential)
                 .await;

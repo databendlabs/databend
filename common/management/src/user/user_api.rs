@@ -20,7 +20,7 @@ use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
 
 #[async_trait::async_trait]
-pub trait UserMgrApi: Sync + Send {
+pub trait UserApi: Sync + Send {
     async fn add_user(&self, user_info: UserInfo) -> Result<u64>;
 
     async fn get_user(

@@ -91,6 +91,21 @@ impl SledTree {
         }
     }
 
+    /// Returns a vec of key-value paris:
+    pub fn export(&self) -> Result<Vec<Vec<Vec<u8>>>, std::io::Error> {
+        let it = self.tree.iter();
+
+        let mut kvs = Vec::new();
+
+        for rkv in it {
+            let (k, v) = rkv?;
+
+            kvs.push(vec![k.to_vec(), v.to_vec()]);
+        }
+
+        Ok(kvs)
+    }
+
     pub fn txn<T>(
         &self,
         sync: bool,

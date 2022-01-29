@@ -15,5 +15,5 @@
 mod stage_api;
 mod stage_mgr;
 
-pub use stage_api::StageMgrApi;
+pub use stage_api::StageApi;
 pub use stage_mgr::StageMgr;

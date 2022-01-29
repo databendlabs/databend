@@ -19,32 +19,32 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use databend_query::clusters::Cluster;
-use databend_query::sessions::MutableStatus;
 use databend_query::sessions::QueryContextShared;
+use databend_query::sessions::SessionContext;
 
 use crate::tests::SessionManagerBuilder;
 
 #[test]
-fn test_session_status() -> Result<()> {
-    let mutable_status = MutableStatus::try_create()?;
+fn test_session_context() -> Result<()> {
+    let session_ctx = SessionContext::try_create()?;
 
     // Abort status.
     {
-        mutable_status.set_abort(true);
-        let val = mutable_status.get_abort();
+        session_ctx.set_abort(true);
+        let val = session_ctx.get_abort();
         assert!(val);
     }
 
     // Current database status.
     {
-        mutable_status.set_current_database("bend".to_string());
-        let val = mutable_status.get_current_database();
+        session_ctx.set_current_database("bend".to_string());
+        let val = session_ctx.get_current_database();
         assert_eq!("bend", val);
     }
 
     // Settings.
     {
-        let val = mutable_status.get_settings();
+        let val = session_ctx.get_settings();
         assert!(val.get_max_threads()? > 0);
     }
 
@@ -52,30 +52,30 @@ fn test_session_status() -> Result<()> {
     {
         let demo = "127.0.0.1:80";
         let server: SocketAddr = demo.parse().unwrap();
-        mutable_status.set_client_host(Some(server));
+        session_ctx.set_client_host(Some(server));
 
-        let val = mutable_status.get_client_host();
+        let val = session_ctx.get_client_host();
         assert_eq!(Some(server), val);
     }
 
     // Current user.
     {
         let user_info = UserInfo::new_no_auth("user1".to_string(), "".to_string());
-        mutable_status.set_current_user(user_info);
+        session_ctx.set_current_user(user_info);
 
-        let val = mutable_status.get_current_user().unwrap();
+        let val = session_ctx.get_current_user().unwrap();
         assert_eq!("user1".to_string(), val.name);
     }
 
     // io shutdown tx.
     {
         let (tx, _) = futures::channel::oneshot::channel();
-        mutable_status.set_io_shutdown_tx(Some(tx));
+        session_ctx.set_io_shutdown_tx(Some(tx));
 
-        let val = mutable_status.take_io_shutdown_tx();
+        let val = session_ctx.take_io_shutdown_tx();
         assert!(val.is_some());
 
-        let val = mutable_status.take_io_shutdown_tx();
+        let val = session_ctx.take_io_shutdown_tx();
         assert!(val.is_none());
     }
 
@@ -89,14 +89,14 @@ fn test_session_status() -> Result<()> {
             Cluster::empty(),
         )?;
 
-        mutable_status.set_context_shared(Some(shared.clone()));
-        let val = mutable_status.get_context_shared();
+        session_ctx.set_query_context_shared(Some(shared.clone()));
+        let val = session_ctx.get_query_context_shared();
         assert_eq!(shared.conf, val.unwrap().conf);
 
-        let val = mutable_status.take_context_shared();
+        let val = session_ctx.take_query_context_shared();
         assert_eq!(shared.conf, val.unwrap().conf);
 
-        let val = mutable_status.get_context_shared();
+        let val = session_ctx.get_query_context_shared();
         assert!(val.is_none());
     }
 
