@@ -37,7 +37,6 @@ impl SettingsTable {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("name", DataType::String, false),
             DataField::new("value", DataType::String, false),
-            DataField::new("default_value", DataType::String, false),
             DataField::new("description", DataType::String, false),
         ]);
 
@@ -72,29 +71,25 @@ impl Table for SettingsTable {
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let settings = ctx.get_settings();
+        let settings = ctx.get_settings().get_setting_values();
 
         let mut names: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
-        let mut default_values: Vec<String> = vec![];
         let mut descs: Vec<String> = vec![];
-        for setting in settings.iter() {
+        for setting in settings {
             if let DataValue::Struct(vals) = setting {
                 names.push(format!("{:?}", vals[0]));
                 values.push(format!("{:?}", vals[1]));
-                default_values.push(format!("{:?}", vals[2]));
-                descs.push(format!("{:?}", vals[3]));
+                descs.push(format!("{:?}", vals[2]));
             }
         }
 
         let names: Vec<&[u8]> = names.iter().map(|x| x.as_bytes()).collect();
         let values: Vec<&[u8]> = values.iter().map(|x| x.as_bytes()).collect();
-        let default_values: Vec<&[u8]> = default_values.iter().map(|x| x.as_bytes()).collect();
         let descs: Vec<&[u8]> = descs.iter().map(|x| x.as_bytes()).collect();
         let block = DataBlock::create_by_array(self.table_info.schema(), vec![
             Series::new(names),
             Series::new(values),
-            Series::new(default_values),
             Series::new(descs),
         ]);
         Ok(Box::pin(DataBlockStream::create(
