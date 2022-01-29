@@ -162,11 +162,24 @@ stop_time = None
 
 
 # all_cases will be the full path of test case file.
+# all_tests_with_params :
+# [
+#  [
+#   [
+#       [test_case0, suite_dir0, suit_tmp_dir0],
+#       [test_case1, suite_dir1, suit_tmp_dir1],
+#       ...
+#   ],
+#   suit,
+#   run_total
+#  ],
+#   ...
+# ]
 
 
 def run_tests_array(all_tests_with_params):
-    all_tests, suite, suite_dir, suite_tmp_dir, \
-        run_total = all_tests_with_params
+    print("all_tests_with_params: ", all_tests_with_params)
+    all_test_list, suite, run_total = all_tests_with_params
     global exit_code
     global SERVER_DIED
     global stop_time
@@ -191,16 +204,17 @@ def run_tests_array(all_tests_with_params):
 
     client_options = get_additional_client_options(args)
 
-    if len(all_tests):
-        print("\nRunning {} {} tests.".format(len(all_tests), suite) + "\n")
+    if len(all_test_list):
+        print("\nRunning {} {} tests.".format(
+            len(all_test_list), suite) + "\n")
 
     def print_test_time(test_time):
         if args.print_time:
             return " {0:.2f} sec.".format(test_time)
         else:
             return ''
-
-    for case_file_full_path in all_tests:
+    print("all_test_list: ", all_test_list)
+    for test_list in all_test_list:
         failures = 0
         if SERVER_DIED:
             break
@@ -208,7 +222,7 @@ def run_tests_array(all_tests_with_params):
         if stop_time and time() > stop_time:
             print("\nStop tests run because global time limit is exceeded.\n")
             break
-        case = case_file_full_path.split("/")[-1]
+        case = test_list[0].split("/")[-1]
         (name, ext) = os.path.splitext(case)
 
         try:
@@ -229,6 +243,10 @@ def run_tests_array(all_tests_with_params):
                 status += MSG_SKIPPED + " - skip\n"
                 skipped_total += 1
             else:
+                print(test_list)
+                case_file_full_path = test_list[0]
+                suite_dir = test_list[1]
+                suite_tmp_dir = test_list[2]
                 disabled_file = os.path.join(suite_dir, name) + '.disabled'
 
                 if os.path.exists(disabled_file) and not args.disabled:
@@ -428,37 +446,44 @@ def main(args):
         except ValueError:
             return 99997, ''
 
-    # Return all (all_tests)
+    def collect_subdirs_with_pattern(cur_dir_path, pattern):
+        return list(
+            # Make sure all sub-dir name starts with [0-9]+_*.
+            filter(lambda fullpath: os.path.isdir(fullpath) and \
+                   re.search(pattern, fullpath.split("/")[-1]),
+                   map(lambda _dir: os.path.join(cur_dir_path, _dir),
+                       os.listdir(cur_dir_path))))
+
+    def collect_files_with_pattern(cur_dir_path, patterns):
+        return list(
+            filter(
+                lambda fullpath:
+                os.path.isfile(fullpath) and
+                os.path.splitext(fullpath)[1] in
+                patterns.split("|"),
+                map(lambda _dir:
+                    os.path.join(cur_dir_path, _dir),
+                    os.listdir(cur_dir_path))))
+
     def get_all_tests_under_dir_recursive(suite_dir):
         all_tests = []
-        sub_dir_paths = list(
-            filter(lambda fullpath: os.path.isdir(fullpath),
-                   map(lambda _dir: os.path.join(suite_dir, _dir),
-                       os.listdir(suite_dir))))
 
-        while (len(sub_dir_paths) > 0):
+        all_tests = copy.deepcopy(
+            collect_files_with_pattern(suite_dir, ".sql|.sh|.py"))
+        # Collect files in depth 0 directory.
+        sub_dir_paths = copy.deepcopy(
+            collect_subdirs_with_pattern(suite_dir, "^[0-9]+"))
+        # Recursively get files from sub-directories.
+        while len(sub_dir_paths) > 0:
             cur_sub_dir_path = sub_dir_paths.pop(0)
-            # dirs under this level.
-            sub_dir_paths += copy.deepcopy(
-                list(
-                    filter(
-                        lambda fullpath:
-                            os.path.isdir(fullpath),
-                        map(lambda _dir:
-                            os.path.join(cur_sub_dir_path, _dir),
-                            os.listdir(cur_sub_dir_path)))))
 
             all_tests += copy.deepcopy(
-                list(
-                    filter(
-                        lambda fullpath:
-                        os.path.isfile(fullpath) and
-                        os.path.splitext(fullpath)[1] in [
-                            '.sql', '.sh', '.py'],
-                        map(lambda _dir:
-                            os.path.join(cur_sub_dir_path, _dir),
-                            os.listdir(cur_sub_dir_path)))))
+                collect_files_with_pattern(cur_sub_dir_path, ".sql|.sh|.py")
+            )
 
+            sub_dir_paths += copy.deepcopy(
+                collect_subdirs_with_pattern(cur_sub_dir_path, "^[0-9]+")
+            )
         return all_tests
 
     total_tests_run = 0
@@ -537,13 +562,16 @@ def main(args):
                 jobs = tests_n
             if jobs > run_total:
                 run_total = jobs
-
             all_tests_array = []
+
             for n in range(1, 1 + int(run_total)):
                 _start = int(tests_n / run_total * (n - 1))
                 _end = int(tests_n / run_total * n)
+                _test_case_group_in_one_run = []
+                _test_case_unit_group = []
                 while _start < _end:
-                    updated_suite_dir = ""
+                    _test_case_unit = []
+                    _updated_suite_dir = ""
                     assert(len(all_tests[_start].split("/"))
                            > len(suite_dir.split("/")))
                     # update suite_dir, there is a sub directory.
@@ -551,15 +579,29 @@ def main(args):
                             len(suite_dir.split("/")) + 1:
 
                         _suite_dir_len = len(suite_dir.split("/"))
-                        updated_suite_dir = os.path.join(
+
+                        _updated_suite_dir = os.path.join(
                             suite_dir, "/".join(all_tests[_start].split("/")[
                                                 _suite_dir_len:-1]))
-                    all_tests_array.append([
-                        all_tests[_start], suite_pat, (
-                            updated_suite_dir or suite_dir), suite_tmp_dir,
-                        run_total
-                    ])
+
+                        _suite_tmp_dir = os.path.join(
+                            suite_tmp_dir, "/".join(all_tests[_start]
+                                                    .split("/")[
+                                _suite_dir_len:-1]))
+
+                    _test_case_unit.append(all_tests[_start])
+                    _test_case_unit.append(_updated_suite_dir or suite_dir)
+                    _test_case_unit.append(_suite_tmp_dir or suite_tmp_dir)
+                    _test_case_unit_group.append(
+                        copy.deepcopy(_test_case_unit))
                     _start += 1
+
+                _test_case_group_in_one_run.append(_test_case_unit_group)
+                _test_case_group_in_one_run.append(suite_pat)
+                _test_case_group_in_one_run.append(run_total)
+
+                all_tests_array.append(
+                    copy.deepcopy(_test_case_group_in_one_run))
 
             if jobs > 1:
                 with closing(multiprocessing.Pool(processes=jobs)) as pool:
