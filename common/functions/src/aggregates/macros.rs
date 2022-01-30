@@ -112,13 +112,16 @@ macro_rules! with_match_unsigned_numeric_types {
 
         match $data_type {
             TypeID::UInt8 => {
-                $dispatch! { u16,  $($args),* }
+                $dispatch! { u8,  $($args),* }
             },
             TypeID::UInt16 => {
-                $dispatch! { i32,  $($args),* }
+                $dispatch! { u16,  $($args),* }
             }
             TypeID::UInt32 => {
                 $dispatch! { u32,  $($args),* }
+            },
+            TypeID::UInt64 => {
+                $dispatch! { u64,  $($args),* }
             },
             _ => {},
         }

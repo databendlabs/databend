@@ -47,11 +47,18 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     // used when we need to calculate with group keys
     fn accumulate_keys(
         &self,
-        _places: &[StateAddr],
-        _offset: usize,
-        _columns: &[ColumnRef],
+        places: &[StateAddr],
+        offset: usize,
+        columns: &[ColumnRef],
         _input_rows: usize,
-    ) -> Result<()>;
+    ) -> Result<()> {
+        for (row, place) in places.iter().enumerate() {
+            self.accumulate_row(place.next(offset), columns, row)?;
+        }
+        Ok(())
+    }
+
+    fn accumulate_row(&self, _place: StateAddr, _columns: &[ColumnRef], _row: usize) -> Result<()>;
 
     // serialize  the state into binary array
     fn serialize(&self, _place: StateAddr, _writer: &mut BytesMut) -> Result<()>;
@@ -63,7 +70,12 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     // TODO append the value into the column builder
     fn merge_result(&self, _place: StateAddr, array: &mut dyn MutableColumn) -> Result<()>;
 
-    fn passthrough_null(&self) -> bool {
-        true
+    fn get_own_null_adaptor(
+        &self,
+        _nested_function: AggregateFunctionRef,
+        _params: Vec<DataValue>,
+        _arguments: Vec<DataField>,
+    ) -> Result<Option<AggregateFunctionRef>> {
+        Ok(None)
     }
 }

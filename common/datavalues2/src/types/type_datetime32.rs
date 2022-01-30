@@ -103,6 +103,10 @@ impl DataType for DateTime32Type {
             tz: tz.parse::<Tz>().unwrap(),
         })
     }
+
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutablePrimitiveColumn::<u32>::with_capacity(capacity))
+    }
 }
 
 impl std::fmt::Debug for DateTime32Type {

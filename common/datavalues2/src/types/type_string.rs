@@ -75,6 +75,10 @@ impl DataType for StringType {
         Box::new(StringDeserializer::with_capacity(capacity))
     }
 
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutableStringColumn::with_capacity(capacity))
+    }
+
     fn create_column(&self, data: &[DataValue]) -> common_exception::Result<ColumnRef> {
         let mut values: Vec<u8> = vec![];
         let mut offsets: Vec<i64> = vec![0];

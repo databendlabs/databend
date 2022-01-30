@@ -185,7 +185,10 @@ impl Processor for GroupByFinalTransform {
                 let mut aggr_values: Vec<Box<dyn MutableColumn>> = {
                     let mut values = vec![];
                     for func in &funcs {
-                        let array = create_mutable_builder(func.return_type()?);
+                        let array = create_mutable_builder(
+                            func.return_type()?,
+                            func.nullable(&DataSchema::empty())?,
+                        );
                         values.push(array)
                     }
                     values

@@ -77,11 +77,11 @@ macro_rules! for_all_scalar_varints{
     ($macro:tt $(, $x:tt)*) => {
         $macro! {
             [$($x),*],
-            { i8, UInt8 },
-            { i16, UInt16 },
-            { i32, UInt32 },
-            { i64, UInt64 },
-            { u8, UInt8 },
+            { i8, Int8 },
+            { i16, Int16 },
+            { i32, Int32 },
+            { i64, Int64 },
+            { u8,  UInt8 },
             { u16, UInt16 },
             { u32, UInt32 },
             { u64, UInt64 },
@@ -175,6 +175,7 @@ macro_rules! with_match_primitive_type_id {
             TypeID::Int16 => __with_ty__! { i16 },
             TypeID::Int32 => __with_ty__! { i32 },
             TypeID::Int64 => __with_ty__! { i64 },
+
             TypeID::UInt8 => __with_ty__! { u8 },
             TypeID::UInt16 => __with_ty__! { u16 },
             TypeID::UInt32 => __with_ty__! { u32 },

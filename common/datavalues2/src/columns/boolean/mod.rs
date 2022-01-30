@@ -86,6 +86,10 @@ impl Column for BooleanColumn {
         Arc::new(array)
     }
 
+    fn arc(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
         assert!(
             offset + length <= self.len(),
@@ -96,6 +100,21 @@ impl Column for BooleanColumn {
                 values: self.values.clone().slice_unchecked(offset, length),
             })
         }
+    }
+
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        if filter.values().null_count() == 0 {
+            return Arc::new(self.clone());
+        }
+        let iter = self
+            .values()
+            .iter()
+            .zip(filter.values().iter())
+            .filter(|(_, b)| *b)
+            .map(|(a, _)| a);
+
+        let col = Self::from_iterator(iter);
+        Arc::new(col)
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {

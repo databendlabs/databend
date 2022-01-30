@@ -117,6 +117,15 @@ where
         Ok(())
     }
 
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let column: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+
+        let state = place.get::<AggregateSumState<SumT>>();
+        let v: SumT = unsafe { column.value_unchecked(row).as_() };
+        state.add(v);
+        Ok(())
+    }
+
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = place.get::<AggregateSumState<SumT>>();
         state.serialize(writer)

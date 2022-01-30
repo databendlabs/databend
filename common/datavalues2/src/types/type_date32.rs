@@ -85,6 +85,10 @@ impl DataType for Date32Type {
             builder: MutablePrimitiveColumn::<i32>::with_capacity(capacity),
         })
     }
+
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutablePrimitiveColumn::<i32>::with_capacity(capacity))
+    }
 }
 
 impl std::fmt::Debug for Date32Type {

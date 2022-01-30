@@ -120,6 +120,10 @@ macro_rules! impl_numeric {
                     builder: MutablePrimitiveColumn::<$ty>::with_capacity(capacity),
                 })
             }
+
+            fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+                Box::new(MutablePrimitiveColumn::<$ty>::with_capacity(capacity))
+            }
         }
 
         impl std::fmt::Debug for PrimitiveDataType<$ty> {

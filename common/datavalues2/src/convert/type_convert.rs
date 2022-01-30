@@ -16,7 +16,6 @@ use common_datavalues::prelude::DataField as OldDataField;
 use common_datavalues::prelude::DataType as OldDataType;
 
 use crate::from_arrow_field;
-use crate::prelude::*;
 use crate::DataField;
 use crate::MutableColumn;
 
@@ -37,16 +36,11 @@ impl From<DataField> for OldDataField {
     }
 }
 
-pub fn create_mutable_builder(datatype: OldDataType) -> Box<dyn MutableColumn> {
-    let f = OldDataField::new("xx", datatype, false);
+pub fn create_mutable_builder(datatype: OldDataType, nullable: bool) -> Box<dyn MutableColumn> {
+    let f = OldDataField::new("xx", datatype, nullable);
     let f: DataField = f.into();
 
-    match f.data_type().data_type_id().to_physical_type() {
-        PhysicalTypeID::Primitive(t) => with_match_physical_primitive_type!(t, |$T| {
-            return Box::new(<<$T as Scalar>::ColumnType as ScalarColumn>::Builder::with_capacity(1024))
-        }),
-        _ => unimplemented!(),
-    }
+    f.data_type().create_mutable(1024)
 }
 
 #[cfg(test)]

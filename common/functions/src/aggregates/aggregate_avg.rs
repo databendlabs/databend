@@ -126,6 +126,14 @@ where
         Ok(())
     }
 
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+        let v = unsafe { array.value_unchecked(row) };
+        let state = place.get::<AggregateAvgState<SumT>>();
+        state.add_assume(v.as_(), 1);
+        Ok(())
+    }
+
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = place.get::<AggregateAvgState<SumT>>();
         serialize_into_buf(writer, state)
@@ -151,9 +159,7 @@ where
         let builder: &mut MutablePrimitiveColumn<f64> = Series::check_get_mutable_column(array)?;
         let v: f64 = NumCast::from(state.value).unwrap_or_default();
         let val = v / state.count as f64;
-
         builder.append_value(val);
-
         Ok(())
     }
 }

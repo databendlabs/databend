@@ -24,21 +24,12 @@ use super::aggregate_stddev_pop::aggregate_stddev_pop_function_desc;
 use super::aggregate_window_funnel::aggregate_window_funnel_function_desc;
 use super::AggregateCountFunction;
 use super::AggregateFunctionFactory;
+use super::AggregateIfCombinator;
 use crate::aggregates::aggregate_sum::aggregate_sum_function_desc;
 
 pub struct Aggregators;
 
 impl Aggregators {
-    // pub fn register(factory: &mut AggregateFunctionFactory) {
-    //     // DatabendQuery always uses lowercase function names to get functions.
-
-    //     factory.register("uniq", AggregateDistinctCombinator::uniq_desc());
-    // }
-
-    // pub fn register_combinator(factory: &mut AggregateFunctionFactory) {
-    //     factory.register_combinator("if", AggregateIfCombinator::combinator_desc());
-    // }
-
     pub fn register(factory: &mut AggregateFunctionFactory) {
         // DatabendQuery always uses lowercase function names to get functions.
         factory.register("sum", aggregate_sum_function_desc());
@@ -58,9 +49,12 @@ impl Aggregators {
         factory.register("covar_pop", aggregate_covariance_population_desc());
 
         factory.register("windowFunnel", aggregate_window_funnel_function_desc());
+
+        factory.register("uniq", AggregateDistinctCombinator::uniq_desc());
     }
 
     pub fn register_combinator(factory: &mut AggregateFunctionFactory) {
         factory.register_combinator("distinct", AggregateDistinctCombinator::combinator_desc());
+        factory.register_combinator("if", AggregateIfCombinator::combinator_desc());
     }
 }

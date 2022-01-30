@@ -148,6 +148,15 @@ where T: PrimitiveType + AsPrimitive<f64>
         Ok(())
     }
 
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let column: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+
+        let state = place.get::<AggregateStddevPopState>();
+        let v: f64 = unsafe { column.value_unchecked(row).as_() };
+        state.add(v);
+        Ok(())
+    }
+
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = place.get::<AggregateStddevPopState>();
         serialize_into_buf(writer, state)

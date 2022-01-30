@@ -158,6 +158,10 @@ impl Column for StringColumn {
         ))
     }
 
+    fn arc(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
         let offsets = unsafe { self.offsets.clone().slice_unchecked(offset, length + 1) };
 
@@ -165,6 +169,23 @@ impl Column for StringColumn {
             offsets,
             values: self.values.clone(),
         })
+    }
+
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        let length = filter.values().len() - filter.values().null_count();
+        if length == self.len() {
+            return Arc::new(self.clone());
+        }
+        let mut builder = MutableStringColumn::with_capacity(length);
+        let values = self.values();
+        for (i, v) in filter.values().iter().enumerate() {
+            if v {
+                let start = self.offsets[i] as usize;
+                let end = self.offsets[i + 1] as usize;
+                builder.append_value(&values[start..end]);
+            }
+        }
+        builder.to_column()
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {

@@ -66,8 +66,10 @@ pub trait Column: Send + Sync {
     }
 
     fn memory_size(&self) -> usize;
+    fn arc(&self) -> ColumnRef;
     fn as_arrow_array(&self) -> ArrayRef;
     fn slice(&self, offset: usize, length: usize) -> ColumnRef;
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef;
 
     // Copies each element according offsets parameter.
     // (i-th element should be copied offsets[i] - offsets[i - 1] times.)
@@ -106,8 +108,6 @@ pub trait IntoColumn {
     fn into_nullable_column(self) -> ColumnRef;
 }
 
-// No nullable
-// We should wrap the nullable by ourselves
 impl IntoColumn for ArrayRef {
     fn into_column(self) -> ColumnRef {
         use TypeID::*;

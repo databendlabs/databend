@@ -17,6 +17,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use bytes::BytesMut;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -35,6 +36,7 @@ pub struct AggregateCountState {
 pub struct AggregateCountFunction {
     display_name: String,
     arguments: Vec<DataField>,
+    nullable: bool,
 }
 
 impl AggregateCountFunction {
@@ -46,6 +48,7 @@ impl AggregateCountFunction {
         assert_variadic_arguments(display_name, arguments.len(), (0, 1))?;
         Ok(Arc::new(AggregateCountFunction {
             display_name: display_name.to_string(),
+            nullable: false,
             arguments,
         }))
     }
@@ -59,6 +62,7 @@ impl AggregateCountFunction {
         Ok(AggregateCountFunction {
             display_name: display_name.to_string(),
             arguments,
+            nullable: false,
         })
     }
 
@@ -73,7 +77,11 @@ impl AggregateFunction for AggregateCountFunction {
     }
 
     fn return_type(&self) -> Result<DataTypePtr> {
-        Ok(u64::to_data_type())
+        if self.nullable {
+            Ok(wrap_nullable(&u64::to_data_type()))
+        } else {
+            Ok(u64::to_data_type())
+        }
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -88,7 +96,7 @@ impl AggregateFunction for AggregateCountFunction {
         &self,
         place: StateAddr,
         _columns: &[ColumnRef],
-        validity: Option<&common_arrow::arrow::bitmap::Bitmap>,
+        validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateCountState>();
@@ -105,14 +113,33 @@ impl AggregateFunction for AggregateCountFunction {
         &self,
         places: &[StateAddr],
         offset: usize,
-        _columns: &[ColumnRef],
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<()> {
-        for place in places.iter() {
-            let place = place.next(offset);
-            let state = place.get::<AggregateCountState>();
-            state.count += 1;
+        let (_, validity) = columns[0].validity();
+        match validity {
+            Some(v) => {
+                for ((row, valid), place) in v.iter().enumerate().zip(places.iter()) {
+                    if valid {
+                        let state = place.get::<AggregateCountState>();
+                        state.count += 1;
+                    }
+                }
+            }
+            None => {
+                for place in places {
+                    let state = place.get::<AggregateCountState>();
+                    state.count += 1;
+                }
+            }
         }
+
+        Ok(())
+    }
+
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let state = place.get::<AggregateCountState>();
+        state.count += 1;
         Ok(())
     }
 
@@ -141,6 +168,17 @@ impl AggregateFunction for AggregateCountFunction {
         let state = place.get::<AggregateCountState>();
         builder.append_value(state.count);
         Ok(())
+    }
+
+    fn get_own_null_adaptor(
+        &self,
+        _nested_function: super::AggregateFunctionRef,
+        _params: Vec<DataValue>,
+        _arguments: Vec<DataField>,
+    ) -> Result<Option<super::AggregateFunctionRef>> {
+        let mut f = self.clone();
+        f.nullable = true;
+        Ok(Some(Arc::new(f)))
     }
 }
 

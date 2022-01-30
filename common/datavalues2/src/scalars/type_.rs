@@ -53,6 +53,7 @@ macro_rules! impl_primitive_scalar_type {
                 *self
             }
 
+            #[allow(clippy::needless_lifetimes)]
             #[inline]
             fn upcast_gat<'short, 'long: 'short>(long: $native) -> $native {
                 long
@@ -92,6 +93,7 @@ impl Scalar for bool {
         *self
     }
 
+    #[allow(clippy::needless_lifetimes)]
     #[inline]
     fn upcast_gat<'short, 'long: 'short>(long: bool) -> bool {
         long

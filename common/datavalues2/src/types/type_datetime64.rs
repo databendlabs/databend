@@ -116,6 +116,10 @@ impl DataType for DateTime64Type {
             tz: tz.parse::<Tz>().unwrap(),
         })
     }
+
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutablePrimitiveColumn::<u64>::with_capacity(capacity))
+    }
 }
 
 impl std::fmt::Debug for DateTime64Type {

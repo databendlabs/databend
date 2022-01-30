@@ -90,11 +90,20 @@ where
     ) -> Result<()> {
         let col: &<S as Scalar>::ColumnType = unsafe { Series::static_cast(&columns[0]) };
 
-        col.iter().zip(places.iter()).try_for_each(|(item, place)| {
+        col.iter().zip(places.iter()).for_each(|(item, place)| {
             let addr = place.next(offset);
             let state = addr.get::<State>();
             state.add(item)
-        })
+        });
+        Ok(())
+    }
+
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let col: &<S as Scalar>::ColumnType = unsafe { Series::static_cast(&columns[0]) };
+
+        let state = place.get::<State>();
+        state.add(col.get_data(row));
+        Ok(())
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {

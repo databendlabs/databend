@@ -85,12 +85,25 @@ impl Column for StructColumn {
         Arc::new(StructArray::from_data(arrow_type, arrays, None))
     }
 
+    fn arc(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
         let values = self
             .values
             .iter()
             .map(|v| v.slice(offset, length))
             .collect();
+
+        Arc::new(Self {
+            values,
+            data_type: self.data_type.clone(),
+        })
+    }
+
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        let values = self.values.iter().map(|v| v.filter(filter)).collect();
 
         Arc::new(Self {
             values,

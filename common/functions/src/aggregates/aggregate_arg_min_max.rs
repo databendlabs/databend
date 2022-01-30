@@ -115,11 +115,9 @@ where
                     has_v = true;
                     v = data.to_owned_scalar();
                     data_value = data_column.get(row);
-                } else {
-                    if C::change_if(v.as_scalar_ref(), data) {
-                        v = data.to_owned_scalar();
-                        data_value = data_column.get(row);
-                    }
+                } else if C::change_if(v.as_scalar_ref(), data) {
+                    v = data.to_owned_scalar();
+                    data_value = data_column.get(row);
                 }
             }
 
@@ -128,7 +126,7 @@ where
             }
         } else {
             let v = col.iter().enumerate().reduce(|acc, (idx, val)| {
-                if !C::change_if(acc.1, val) {
+                if C::change_if(acc.1, val) {
                     (idx, val)
                 } else {
                     acc
@@ -162,7 +160,11 @@ where
         // TODO:
         // Currently,this is all virtual call.
         // data can be dispatched into scalars to improve the performance.
-        column.append_data_value(self.data.clone())
+        match self.value {
+            Some(_) => column.append_data_value(self.data.clone())?,
+            None => column.append_default(),
+        }
+        Ok(())
     }
 }
 
@@ -225,6 +227,12 @@ where
                 let state = addr.get::<State>();
                 state.add(item, columns[0].get(row))
             })
+    }
+
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let col: &<S as Scalar>::ColumnType = unsafe { Series::static_cast(&columns[1]) };
+        let state = place.get::<State>();
+        state.add(col.get_data(row), columns[0].get(row))
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {

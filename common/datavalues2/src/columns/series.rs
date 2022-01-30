@@ -42,7 +42,7 @@ impl Series {
         let arr = column.as_any().downcast_ref::<T>().ok_or_else(|| {
             ErrorCode::UnknownColumn(format!(
                 "downcast column error, column type: {:?}, expected column: {:?}",
-                column.data_type_id(),
+                column.data_type(),
                 std::any::type_name::<T>(),
             ))
         });
@@ -52,9 +52,11 @@ impl Series {
     pub fn check_get_mutable_column<T: 'static + MutableColumn>(
         column: &mut dyn MutableColumn,
     ) -> Result<&mut T> {
+        let ty = column.data_type();
         let arr = column.as_mut_any().downcast_mut().ok_or_else(|| {
             ErrorCode::UnknownColumn(format!(
-                "downcast column error, expected column: {:?}",
+                "downcast column error, column type: {:?}, expected column: {:?}",
+                ty,
                 std::any::type_name::<T>(),
             ))
         });

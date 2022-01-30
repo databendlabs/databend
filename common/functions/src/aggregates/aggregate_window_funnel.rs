@@ -31,6 +31,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::AggregateFunctionRef;
+use super::AggregateNullVariadicAdaptor;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_unary_params;
@@ -200,21 +201,21 @@ where
 
         match validity {
             Some(bitmap) => {
-                for ((row, timestmap), valid) in tcolumn.iter().enumerate().zip(bitmap.iter()) {
+                for ((row, timestamp), valid) in tcolumn.iter().enumerate().zip(bitmap.iter()) {
                     if valid {
                         for (i, filter) in dcolumns.iter().enumerate() {
                             if filter.get_bit(row) {
-                                state.add(*timestmap, (i + 1) as u8);
+                                state.add(*timestamp, (i + 1) as u8);
                             }
                         }
                     }
                 }
             }
             None => {
-                for (row, timestmap) in tcolumn.iter().enumerate() {
+                for (row, timestamp) in tcolumn.iter().enumerate() {
                     for (i, filter) in dcolumns.iter().enumerate() {
                         if filter.get_bit(row) {
-                            state.add(*timestmap, (i + 1) as u8);
+                            state.add(*timestamp, (i + 1) as u8);
                         }
                     }
                 }
@@ -239,12 +240,26 @@ where
 
         let tcolumn: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
 
-        for ((row, timestmap), place) in tcolumn.iter().enumerate().zip(places.iter()) {
+        for ((row, timestamp), place) in tcolumn.iter().enumerate().zip(places.iter()) {
             let state = (place.next(offset)).get::<AggregateWindowFunnelState<T>>();
             for (i, filter) in dcolumns.iter().enumerate() {
                 if filter.get_bit(row) {
-                    state.add(*timestmap, (i + 1) as u8);
+                    state.add(*timestamp, (i + 1) as u8);
                 }
+            }
+        }
+        Ok(())
+    }
+
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let tcolumn: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+        let timestamp = unsafe { tcolumn.value_unchecked(row) };
+
+        let state = place.get::<AggregateWindowFunnelState<T>>();
+        for i in 0..self.event_size {
+            let dcolumn: &BooleanColumn = unsafe { Series::static_cast(&columns[i + 1]) };
+            if dcolumn.values().get_bit(row) {
+                state.add(timestamp, (i + 1) as u8);
             }
         }
         Ok(())
@@ -274,6 +289,17 @@ where
         let result = self.get_event_level(place);
         column.append_value(result);
         Ok(())
+    }
+
+    fn get_own_null_adaptor(
+        &self,
+        _nested_function: AggregateFunctionRef,
+        _params: Vec<DataValue>,
+        _arguments: Vec<DataField>,
+    ) -> Result<Option<AggregateFunctionRef>> {
+        Ok(Some(AggregateNullVariadicAdaptor::<false, false>::create(
+            Arc::new(self.clone()),
+        )))
     }
 }
 

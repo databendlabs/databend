@@ -73,7 +73,13 @@ impl AggregateDistinctCombinator {
     }
 
     pub fn uniq_desc() -> AggregateFunctionDescription {
-        AggregateFunctionDescription::creator(Box::new(Self::try_create_uniq))
+        let properties = super::aggregate_function_factory::AggregateFunctionProperties {
+            returns_default_when_only_null: true,
+        };
+        AggregateFunctionDescription::creator_with_properties(
+            Box::new(Self::try_create_uniq),
+            properties,
+        )
     }
 
     pub fn try_create(
@@ -167,27 +173,16 @@ impl AggregateFunction for AggregateDistinctCombinator {
         Ok(())
     }
 
-    fn accumulate_keys(
-        &self,
-        places: &[StateAddr],
-        offset: usize,
-        columns: &[ColumnRef],
-        _input_rows: usize,
-    ) -> Result<()> {
-        for (row, place) in places.iter().enumerate() {
-            let values = columns.iter().map(|s| s.get(row)).collect::<Vec<_>>();
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let values = columns.iter().map(|s| s.get(row)).collect::<Vec<_>>();
+        let state = place.get::<AggregateDistinctState>();
+        state.set.insert(DataGroupValues(
+            values
+                .iter()
+                .map(DataGroupValue::try_from)
+                .collect::<Result<Vec<_>>>()?,
+        ));
 
-            if !values.iter().any(|c| c.is_null()) {
-                let place = place.next(offset);
-                let state = place.get::<AggregateDistinctState>();
-                state.set.insert(DataGroupValues(
-                    values
-                        .iter()
-                        .map(DataGroupValue::try_from)
-                        .collect::<Result<Vec<_>>>()?,
-                ));
-            }
-        }
         Ok(())
     }
 

@@ -78,6 +78,10 @@ impl DataType for BooleanType {
             builder: MutableBooleanColumn::with_capacity(capacity),
         })
     }
+
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutableBooleanColumn::with_capacity(capacity))
+    }
 }
 
 impl std::fmt::Debug for BooleanType {

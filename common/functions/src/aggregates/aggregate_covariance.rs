@@ -208,6 +208,18 @@ where
         Ok(())
     }
 
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let left: &PrimitiveColumn<T0> = unsafe { Series::static_cast(&columns[0]) };
+        let right: &PrimitiveColumn<T1> = unsafe { Series::static_cast(&columns[1]) };
+
+        let left_val = unsafe { left.value_unchecked(row) };
+        let right_val = unsafe { right.value_unchecked(row) };
+
+        let state = place.get::<AggregateCovarianceState>();
+        state.add(left_val.as_(), right_val.as_());
+        Ok(())
+    }
+
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
         serialize_into_buf(writer, state)

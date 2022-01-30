@@ -22,25 +22,28 @@ mod aggregate_sum;
 mod aggregator;
 mod aggregator_common;
 
+mod adaptors;
+
 #[macro_use]
 mod macros;
 mod aggregate_arg_min_max;
 mod aggregate_avg;
+mod aggregate_combinator;
 mod aggregate_combinator_distinct;
-// mod aggregate_combinator_if;
+mod aggregate_combinator_if;
 mod aggregate_covariance;
 mod aggregate_function_v1;
 mod aggregate_min_max;
+mod aggregate_null_result;
 mod aggregate_scalar_state;
 mod aggregate_stddev_pop;
 mod aggregate_window_funnel;
 
-// pub use aggregate_combinator_distinct::AggregateDistinctCombinator;
-// pub use aggregate_combinator_if::AggregateIfCombinator;
-
+pub use adaptors::*;
 pub use aggregate_arg_min_max::AggregateArgMinMaxFunction;
 pub use aggregate_avg::AggregateAvgFunction;
 pub use aggregate_combinator_distinct::AggregateDistinctCombinator;
+pub use aggregate_combinator_if::AggregateIfCombinator;
 pub use aggregate_count::AggregateCountFunction;
 pub use aggregate_covariance::AggregateCovarianceFunction;
 pub use aggregate_function::AggregateFunction;
@@ -51,6 +54,7 @@ pub use aggregate_function_state::StateAddr;
 pub use aggregate_function_state::StateAddrs;
 pub use aggregate_function_v1::*;
 pub use aggregate_min_max::AggregateMinMaxFunction;
+pub use aggregate_null_result::AggregateNullResultFunction;
 pub use aggregate_stddev_pop::AggregateStddevPopFunction;
 pub use aggregate_sum::AggregateSumFunction;
 pub use aggregate_window_funnel::AggregateWindowFunnelFunction;

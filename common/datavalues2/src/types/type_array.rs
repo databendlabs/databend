@@ -124,6 +124,10 @@ impl DataType for ArrayType {
     fn create_deserializer(&self, _capacity: usize) -> Box<dyn TypeDeserializer> {
         todo!()
     }
+
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        todo!()
+    }
 }
 
 impl std::fmt::Debug for ArrayType {

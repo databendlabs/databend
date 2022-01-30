@@ -23,6 +23,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues2::combine_validities;
 use common_datavalues2::DataField as NewDataField;
+use common_datavalues2::DataValue as NewDataValue;
 use common_datavalues2::IntoColumn;
 use common_datavalues2::MutableColumn;
 use common_exception::Result;
@@ -69,11 +70,21 @@ pub trait AggregateFunctionV1: fmt::Display + Sync + Send {
 #[derive(Clone)]
 pub struct AggConvertor {
     inner: AggregateFunctionRef,
+    params: Vec<NewDataValue>,
+    arguments: Vec<NewDataField>,
 }
 
 impl AggConvertor {
-    pub fn create(inner: AggregateFunctionRef) -> AggregateFunctionV1Ref {
-        Arc::new(Self { inner })
+    pub fn create(
+        inner: AggregateFunctionRef,
+        params: Vec<NewDataValue>,
+        arguments: Vec<NewDataField>,
+    ) -> AggregateFunctionV1Ref {
+        Arc::new(Self {
+            inner,
+            params,
+            arguments,
+        })
     }
 }
 
@@ -107,18 +118,22 @@ impl AggregateFunctionV1 for AggConvertor {
     fn accumulate(&self, place: StateAddr, arrays: &[Series], input_rows: usize) -> Result<()> {
         let columns = arrays
             .iter()
-            .map(|s| {
+            .zip(self.arguments.iter())
+            .map(|(s, f)| {
                 let arrow_column = s.get_array_ref();
-                arrow_column.into_column()
+                match f.is_nullable_or_null() {
+                    true => arrow_column.into_nullable_column(),
+                    false => arrow_column.into_column(),
+                }
             })
             .collect::<Vec<_>>();
 
         let mut bitmap = None;
         arrays.iter().for_each(|s| {
             let b = s.validity();
-            bitmap = combine_validities(bitmap.as_ref().map(|c| c), b);
+            bitmap = combine_validities(bitmap.as_ref(), b);
         });
-        let bitmap = bitmap.as_ref().map(|c| c);
+        let bitmap = bitmap.as_ref();
         self.inner.accumulate(place, &columns, bitmap, input_rows)
     }
 
@@ -131,9 +146,13 @@ impl AggregateFunctionV1 for AggConvertor {
     ) -> Result<()> {
         let columns = arrays
             .iter()
-            .map(|s| {
+            .zip(self.arguments.iter())
+            .map(|(s, f)| {
                 let arrow_column = s.get_array_ref();
-                arrow_column.into_column()
+                match f.is_nullable_or_null() {
+                    true => arrow_column.into_nullable_column(),
+                    false => arrow_column.into_column(),
+                }
             })
             .collect::<Vec<_>>();
 

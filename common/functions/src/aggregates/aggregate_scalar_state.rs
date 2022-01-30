@@ -26,7 +26,7 @@ use serde::Serialize;
 
 pub trait ScalarStateFunc<S: Scalar>: Send + Sync + 'static {
     fn new() -> Self;
-    fn add(&mut self, value: S::RefType<'_>) -> Result<()>;
+    fn add(&mut self, value: S::RefType<'_>);
     fn add_batch(&mut self, column: &ColumnRef, validity: Option<&Bitmap>) -> Result<()>;
 
     fn merge(&mut self, rhs: &Self) -> Result<()>;
@@ -102,7 +102,7 @@ where
     fn new() -> Self {
         Self::default()
     }
-    fn add(&mut self, other: S::RefType<'_>) -> Result<()> {
+    fn add(&mut self, other: S::RefType<'_>) {
         match &self.value {
             Some(a) => {
                 if C::change_if(a.as_scalar_ref(), other) {
@@ -111,7 +111,6 @@ where
             }
             _ => self.value = Some(other.to_owned_scalar()),
         }
-        Ok(())
     }
 
     fn add_batch(&mut self, column: &ColumnRef, validity: Option<&Bitmap>) -> Result<()> {
@@ -132,15 +131,13 @@ where
                 if !has_v {
                     has_v = true;
                     v = data.to_owned_scalar();
-                } else {
-                    if C::change_if(v.as_scalar_ref(), data) {
-                        v = data.to_owned_scalar();
-                    }
+                } else if C::change_if(v.as_scalar_ref(), data) {
+                    v = data.to_owned_scalar();
                 }
             }
 
             if has_v {
-                self.add(v.as_scalar_ref())?;
+                self.add(v.as_scalar_ref());
             }
         } else {
             let v = col
@@ -148,7 +145,7 @@ where
                 .reduce(|a, b| if !C::change_if(a, b) { a } else { b });
 
             if let Some(v) = v {
-                self.add(v)?;
+                self.add(v);
             }
         };
         Ok(())
@@ -156,7 +153,7 @@ where
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         if let Some(value) = &rhs.value {
-            self.add(value.as_scalar_ref())?;
+            self.add(value.as_scalar_ref());
         }
         Ok(())
     }

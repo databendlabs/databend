@@ -17,8 +17,6 @@ use std::fmt;
 use std::sync::Arc;
 
 use bytes::BytesMut;
-use common_arrow::arrow;
-use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
@@ -112,7 +110,12 @@ impl AggregateFunction for AggregateIfCombinator {
 
         let predicate: &BooleanColumn = Series::check_get(&columns[self.argument_len - 1])?;
         let bitmap = combine_validities(validity, Some(predicate.values()));
-        self.nested.accumulate(place, columns, bitmap, input_rows)
+        self.nested.accumulate(
+            place,
+            &columns[0..self.argument_len - 1],
+            bitmap.as_ref(),
+            input_rows,
+        )
     }
 
     fn accumulate_keys(
@@ -122,19 +125,23 @@ impl AggregateFunction for AggregateIfCombinator {
         columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<()> {
-        if columns.is_empty() {
-            // TODO: maybe is error?
-            return Ok(());
-        };
         let predicate: &BooleanColumn = Series::check_get(&columns[self.argument_len - 1])?;
 
-        let (column_array, row_size) = self.filter_column(columns, predicate)?;
-        let new_places = Self::filter_place(places, predicate, row_size);
+        let (columns, row_size) = self.filter_column(&columns[0..self.argument_len - 1], predicate);
+        let new_places = Self::filter_place(places, predicate);
 
         let new_places_slice = new_places.as_slice();
-        let column_array_slice = column_array.as_slice();
         self.nested
-            .accumulate_keys(new_places_slice, offset, column_array_slice, row_size)
+            .accumulate_keys(new_places_slice, offset, &columns, row_size)
+    }
+
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let predicate: &BooleanColumn = Series::check_get(&columns[self.argument_len - 1])?;
+        if predicate.values().get_bit(row) {
+            self.nested
+                .accumulate_row(place, &columns[0..self.argument_len - 1], row)?;
+        }
+        Ok(())
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
@@ -149,8 +156,8 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.merge(place, rhs)
     }
 
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
-        self.nested.merge_result(place, array)
+    fn merge_result(&self, place: StateAddr, column: &mut dyn MutableColumn) -> Result<()> {
+        self.nested.merge_result(place, column)
     }
 }
 
@@ -161,16 +168,33 @@ impl fmt::Display for AggregateIfCombinator {
 }
 
 impl AggregateIfCombinator {
-    fn filter_place(places: &[StateAddr], predicate: &BooleanColumn, rows: usize) -> StateAddrs {
-        let mut new_places = Vec::with_capacity(rows);
-        let arrow_filter_column = predicate.inner();
+    #[inline]
+    fn filter_column(
+        &self,
+        columns: &[ColumnRef],
+        predicate: &BooleanColumn,
+    ) -> (Vec<ColumnRef>, usize) {
+        let columns = columns
+            .iter()
+            .map(|c| c.filter(predicate))
+            .collect::<Vec<_>>();
 
-        for (index, place) in places.iter().enumerate() {
-            if !arrow_filter_column.is_null(index) && arrow_filter_column.value(index) {
-                new_places.push(*place);
-            }
+        let rows = predicate.len() - predicate.values().null_count();
+
+        (columns, rows)
+    }
+
+    fn filter_place(places: &[StateAddr], predicate: &BooleanColumn) -> StateAddrs {
+        if predicate.values().null_count() == 0 {
+            return places.to_vec();
         }
+        let it = predicate
+            .values()
+            .iter()
+            .zip(places.iter())
+            .filter(|(v, _)| *v)
+            .map(|(_, c)| *c);
 
-        new_places
+        Vec::from_iter(it)
     }
 }
