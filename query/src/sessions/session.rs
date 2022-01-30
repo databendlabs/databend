@@ -39,7 +39,7 @@ pub struct Session {
     pub(in crate::sessions) id: String,
     pub(in crate::sessions) typ: String,
     #[ignore_malloc_size_of = "insignificant"]
-    pub(in crate::sessions) config: Config,
+    pub(in crate::sessions) conf: Config,
     #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) session_mgr: Arc<SessionManager>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
@@ -48,18 +48,21 @@ pub struct Session {
 
 impl Session {
     pub fn try_create(
-        config: Config,
+        conf: Config,
         id: String,
         typ: String,
         session_mgr: Arc<SessionManager>,
     ) -> Result<Arc<Session>> {
+        let ref_count = Arc::new(AtomicUsize::new(0));
+        let session_ctx = Arc::new(SessionContext::try_create(&conf)?);
+
         Ok(Arc::new(Session {
             id,
             typ,
-            config,
+            conf,
             session_mgr,
-            ref_count: Arc::new(AtomicUsize::new(0)),
-            session_ctx: Arc::new(SessionContext::try_create()?),
+            ref_count,
+            session_ctx,
         }))
     }
 
@@ -111,7 +114,7 @@ impl Session {
         Ok(match query_ctx.as_ref() {
             Some(shared) => QueryContext::create_from_shared(shared.clone()),
             None => {
-                let config = self.config.clone();
+                let config = self.conf.clone();
                 let discovery = self.session_mgr.get_cluster_discovery();
 
                 let session = self.clone();

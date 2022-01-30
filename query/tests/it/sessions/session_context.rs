@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use databend_query::clusters::Cluster;
+use databend_query::configs::Config;
 use databend_query::sessions::QueryContextShared;
 use databend_query::sessions::SessionContext;
 
@@ -26,7 +27,8 @@ use crate::tests::SessionManagerBuilder;
 
 #[test]
 fn test_session_context() -> Result<()> {
-    let session_ctx = SessionContext::try_create()?;
+    let conf = Config::load_from_args();
+    let session_ctx = SessionContext::try_create(&conf)?;
 
     // Abort status.
     {
