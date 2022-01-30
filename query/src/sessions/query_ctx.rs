@@ -253,10 +253,7 @@ impl QueryContext {
 
     // Get user manager api.
     pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
-        self.shared
-            .session
-            .get_sessions_manager()
-            .get_user_manager()
+        self.shared.session.get_session_manager().get_user_manager()
     }
 
     // Get the current session.
@@ -268,13 +265,13 @@ impl QueryContext {
     pub fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
         self.shared
             .session
-            .get_sessions_manager()
+            .get_session_manager()
             .get_session_by_id(id)
     }
 
     // Get all the processes list info.
     pub fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        self.shared.session.get_sessions_manager().processes_info()
+        self.shared.session.get_session_manager().processes_info()
     }
 
     /// Get the data accessor metrics.
@@ -289,12 +286,12 @@ impl QueryContext {
 
     /// Get the client socket address.
     pub fn get_client_address(&self) -> Option<SocketAddr> {
-        self.shared.session.mutable_state.get_client_host()
+        self.shared.session.session_ctx.get_client_host()
     }
 
     /// Get the storage cache manager
     pub fn get_storage_cache_manager(&self) -> &CacheManager {
-        self.shared.session.sessions.get_storage_cache_manager()
+        self.shared.session.session_mgr.get_storage_cache_manager()
     }
 
     // Get the storage data accessor by config.

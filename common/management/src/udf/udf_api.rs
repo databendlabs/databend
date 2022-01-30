@@ -17,7 +17,7 @@ use common_meta_types::SeqV;
 use common_meta_types::UserDefinedFunction;
 
 #[async_trait::async_trait]
-pub trait UdfMgrApi: Sync + Send {
+pub trait UdfApi: Sync + Send {
     // Add a UDF to /tenant/udf-name.
     async fn add_udf(&self, udf: UserDefinedFunction) -> Result<u64>;
 

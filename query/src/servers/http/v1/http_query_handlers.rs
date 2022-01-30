@@ -20,6 +20,7 @@ use std::time::Instant;
 use common_base::ProgressValues;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
+use common_meta_types::UserInfo;
 use common_tracing::tracing;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
@@ -218,6 +219,7 @@ async fn query_page_handler(
 #[poem::handler]
 pub(crate) async fn query_handler(
     sessions_extension: Data<&Arc<SessionManager>>,
+    user_info: Data<&UserInfo>,
     Query(params): Query<PageParams>,
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<Json<QueryResponse>> {
@@ -225,7 +227,7 @@ pub(crate) async fn query_handler(
     let session_manager = sessions_extension.0;
     let http_query_manager = session_manager.get_http_query_manager();
     let query_id = http_query_manager.next_query_id();
-    let query = HttpQuery::try_create(query_id.clone(), req, session_manager).await;
+    let query = HttpQuery::try_create(query_id.clone(), req, session_manager, &user_info).await;
 
     match query {
         Ok(query) => {
@@ -255,7 +257,10 @@ pub fn query_route() -> Route {
         .at("/", post(query_handler))
         .at("/:id", get(query_state_handler))
         .at("/:id/page/:page_no", get(query_page_handler))
-        .at("/:id/kill", get(query_cancel_handler))
+        .at(
+            "/:id/kill",
+            get(query_cancel_handler).post(query_cancel_handler),
+        )
 }
 
 fn query_id_not_found(query_id: String) -> PoemError {

@@ -59,7 +59,7 @@ impl Interpreter for SettingInterpreter {
                 _ => {
                     self.ctx
                         .get_settings()
-                        .update_settings(&var.variable, var.value)?;
+                        .set_settings(var.variable, var.value)?;
                 }
             }
         }

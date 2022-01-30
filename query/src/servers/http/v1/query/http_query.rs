@@ -20,6 +20,7 @@ use common_base::ProgressValues;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::UserInfo;
 
 use crate::servers::http::v1::query::ExecuteState;
 use crate::servers::http::v1::query::ExecuteStateName;
@@ -63,11 +64,13 @@ impl HttpQuery {
         id: String,
         request: HttpQueryRequest,
         session_manager: &Arc<SessionManager>,
+        user_info: &UserInfo,
     ) -> Result<HttpQueryRef> {
         //TODO(youngsofun): support config/set channel size
         let (block_tx, block_rx) = mpsc::channel(10);
 
-        let (state, schema) = ExecuteState::try_create(&request, session_manager, block_tx).await?;
+        let (state, schema) =
+            ExecuteState::try_create(&request, session_manager, user_info, block_tx).await?;
         let data = Arc::new(TokioMutex::new(ResultDataManager::new(schema, block_rx)));
         let query = HttpQuery {
             id,
