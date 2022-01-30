@@ -18,9 +18,17 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::DataValue;
+use crate::Scalar;
 
 pub trait PrimitiveType:
-    NativeArithmetics + NumCast + PartialOrd + Into<DataValue> + Default + Serialize + DeserializeOwned
+    NativeArithmetics
+    + NumCast
+    + PartialOrd
+    + Into<DataValue>
+    + Default
+    + Serialize
+    + DeserializeOwned
+    + Scalar
 {
     type LargestType: PrimitiveType;
     const SIGN: bool;
@@ -50,11 +58,11 @@ impl_primitive!(i64, i64, true, false, 8);
 impl_primitive!(f32, f64, true, true, 4);
 impl_primitive!(f64, f64, true, true, 8);
 
-pub trait DFIntegerType: PrimitiveType {}
+pub trait IntegerType: PrimitiveType {}
 
 macro_rules! impl_integer {
     ($ca:ident, $native:ident) => {
-        impl DFIntegerType for $ca {}
+        impl IntegerType for $ca {}
     };
 }
 

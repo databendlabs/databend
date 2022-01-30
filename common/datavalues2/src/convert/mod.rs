@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.pub use data_type::*;
 
-pub mod arithmetics_type;
 pub mod column_convert;
 pub mod datavalue_convert;
 pub mod type_convert;

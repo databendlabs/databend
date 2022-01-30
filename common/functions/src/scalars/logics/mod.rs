@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod and;
 mod logic;
-mod logic_and;
-mod logic_not;
-mod logic_or;
+mod not;
+mod or;
+mod xor;
 
+pub use and::LogicAndFunction;
 pub use logic::LogicFunction;
-pub use logic_and::LogicAndFunction;
-pub use logic_not::LogicNotFunction;
-pub use logic_or::LogicOrFunction;
+pub use not::LogicNotFunction;
+pub use or::LogicOrFunction;
+pub use xor::LogicXorFunction;

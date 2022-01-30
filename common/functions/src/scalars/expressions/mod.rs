@@ -23,7 +23,6 @@ mod unary;
 
 pub use binary::*;
 pub use cast::CastFunction;
-pub use cast_with_type::cast_column_field;
-pub use cast_with_type::cast_with_type;
+pub use cast_with_type::*;
 pub use expression::ToCastFunction;
 pub use unary::*;

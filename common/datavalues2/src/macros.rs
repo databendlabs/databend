@@ -77,10 +77,10 @@ macro_rules! for_all_scalar_varints{
     ($macro:tt $(, $x:tt)*) => {
         $macro! {
             [$($x),*],
-            { i8, UInt8 },
-            { i16, UInt16 },
-            { i32, UInt32 },
-            { i64, UInt64 },
+            { i8, Int8 },
+            { i16, Int16 },
+            { i32, Int32 },
+            { i64, Int64 },
             { u8, UInt8 },
             { u16, UInt16 },
             { u32, UInt32 },
@@ -169,21 +169,44 @@ macro_rules! with_match_primitive_type {
                 $body
             };
         }
-        use crate::prelude::TypeID::*;
 
         match $key_type {
-            Int8 => __with_ty__! { i8 },
-            Int16 => __with_ty__! { i16 },
-            Int32 => __with_ty__! { i32 },
-            Int64 => __with_ty__! { i64 },
-            UInt8 => __with_ty__! { u8 },
-            UInt16 => __with_ty__! { u16 },
-            UInt32 => __with_ty__! { u32 },
-            UInt64 => __with_ty__! { u64 },
-            Float32 => __with_ty__! { f32 },
-            Float64 => __with_ty__! { f64 },
+            TypeID::Int8 => __with_ty__! { i8 },
+            TypeID::Int16 => __with_ty__! { i16 },
+            TypeID::Int32 => __with_ty__! { i32 },
+            TypeID::Int64 => __with_ty__! { i64 },
+            TypeID::UInt8 => __with_ty__! { u8 },
+            TypeID::UInt16 => __with_ty__! { u16 },
+            TypeID::UInt32 => __with_ty__! { u32 },
+            TypeID::UInt64 => __with_ty__! { u64 },
+            TypeID::Float32 => __with_ty__! { f32 },
+            TypeID::Float64 => __with_ty__! { f64 },
 
             _ => $nbody,
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! with_match_date_type_error {
+    (
+         $key_type:expr, | $_:tt $T:ident | $body:tt
+    ) => {{
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident ) => {
+                $body
+            };
+        }
+
+        match $key_type {
+            TypeID::Date16 => __with_ty__! { u16},
+            TypeID::Date32 => __with_ty__! { i32},
+            TypeID::DateTime32 => __with_ty__! { u32},
+            TypeID::DateTime64 => __with_ty__! { u64},
+            v => Err(ErrorCode::BadDataValueType(format!(
+                "Ops is not support on datatype: {:?}",
+                v
+            ))),
         }
     }};
 }

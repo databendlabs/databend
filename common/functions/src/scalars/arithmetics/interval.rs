@@ -16,10 +16,54 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use num::cast::AsPrimitive;
 
-use super::arithmetic::ArithmeticTrait;
-use super::utils::validate_input;
-use crate::interval_arithmetic;
 use crate::scalars::dates::IntervalFunctionFactory;
+
+#[macro_export]
+macro_rules! interval_arithmetic {
+    ($self: expr, $rhs: expr, $R:ty, $op: expr) => {{
+        let (interval, datetime) = validate_input($self, $rhs);
+        let result: DataColumn = match (datetime.column(), interval.column()) {
+            (DataColumn::Array(left), DataColumn::Array(right)) => {
+                let lhs: &DFPrimitiveArray<$R> = left.static_cast();
+                let rhs = right.i64()?;
+                binary(lhs, rhs, |l, r| $op(l.as_(), r)).into()
+            }
+            (DataColumn::Array(left), DataColumn::Constant(right, _)) => {
+                let lhs: &DFPrimitiveArray<$R> = left.static_cast();
+                let r: i64 = DFTryFrom::try_from(right.clone()).unwrap_or(0i64);
+                unary(lhs, |l| $op(l.as_(), r)).into()
+            }
+            (DataColumn::Constant(left, _), DataColumn::Array(right)) => {
+                let lhs: $R = DFTryFrom::try_from(left.clone()).unwrap_or(<$R>::default());
+                let l: i64 = lhs.as_();
+                let rhs = right.i64()?;
+                unary(rhs, |r| $op(l, r)).into()
+            }
+            (DataColumn::Constant(left, size), DataColumn::Constant(right, _)) => {
+                let l: $R = DFTryFrom::try_from(left.clone()).unwrap_or(<$R>::default());
+                let r: i64 = DFTryFrom::try_from(right.clone()).unwrap_or(0i64);
+                DataColumn::Constant($op(l.as_(), r).into(), size.clone())
+            }
+        };
+
+        Ok(result)
+    }};
+}
+
+pub trait ArithmeticTrait {
+    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn>;
+}
+
+pub fn validate_input<'a>(
+    col0: &'a DataColumnWithField,
+    col1: &'a DataColumnWithField,
+) -> (&'a DataColumnWithField, &'a DataColumnWithField) {
+    if col0.data_type().is_integer() || col0.data_type().is_interval() {
+        (col0, col1)
+    } else {
+        (col1, col0)
+    }
+}
 
 // Interval(DayTime) + Date16
 #[derive(Clone)]

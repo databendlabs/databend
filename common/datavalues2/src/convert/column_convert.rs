@@ -27,7 +27,7 @@ use crate::NullableColumn;
 
 pub fn convert2_new_column(column: &OldDataColumnWithField) -> ColumnWithField {
     let result = convert2_new_column_nonull(column);
-    if column.field().is_nullable() && result.data_type().can_inside_nullable() {
+    if column.field().is_nullable() && result.column().data_type().can_inside_nullable() {
         let arrow_c = column.column().get_array_ref().unwrap();
         let bitmap = arrow_c.validity().cloned();
 

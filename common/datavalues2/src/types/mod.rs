@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.pub use data_type::*;
 
+pub mod arithmetics_type;
 pub mod data_type;
 pub mod type_array;
 pub mod type_boolean;
@@ -35,6 +36,7 @@ pub mod deserializations;
 pub mod serializations;
 mod type_factory;
 
+pub use arithmetics_type::*;
 pub use data_type::*;
 pub use deserializations::*;
 pub use eq::*;

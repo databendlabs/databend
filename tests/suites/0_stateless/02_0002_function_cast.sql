@@ -11,9 +11,10 @@ SELECT CAST(1 + 1, Float64);
 SELECT CAST(CAST(1 + 1 + 1, String) AS Int8);
 
 SELECT CAST(Null as Int64); -- {ErrorCode 1010}
-SELECT CAST(Null as Boolean); -- {ErrorCode 1010}
 SELECT CAST(Null as Varchar); -- {ErrorCode 1010}
 
+-- Null can only be cast successfully to type boolean(false)
+SELECT CAST(Null as Boolean);
 SELECT CAST('33' as signed) = 33;
 SELECT CAST('33' as unsigned) = 33;
 SELECT CAST('-33aa' as signed) = 33; -- {ErrorCode 1010}
