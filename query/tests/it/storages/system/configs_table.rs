@@ -38,7 +38,7 @@ async fn test_configs_table() -> Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
-    assert_eq!(block.num_rows(), 58);
+    assert_eq!(block.num_rows(), 59);
 
     let expected = vec![
         "+--------------------------------------+------------------+---------+-------------+",
@@ -63,6 +63,7 @@ async fn test_configs_table() -> Result<()> {
         "| http_handler_tls_server_cert         |                  | query   |             |",
         "| http_handler_tls_server_key          |                  | query   |             |",
         "| http_handler_tls_server_root_ca_cert |                  | query   |             |",
+        "| jwt_key_file                         |                  | query   |             |",
         "| log_dir                              | ./_logs          | log     |             |",
         "| log_level                            | INFO             | log     |             |",
         "| max_active_sessions                  | 256              | query   |             |",

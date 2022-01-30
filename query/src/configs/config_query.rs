@@ -62,6 +62,7 @@ const QUERY_TABLE_ENGINE_MEMORY_ENABLED: &str = "QUERY_TABLE_ENGINE_MEMORY_ENABL
 const QUERY_DATABASE_ENGINE_GITHUB_ENABLED: &str = "QUERY_DATABASE_ENGINE_GITHUB_ENABLED";
 
 const QUERY_MANAGEMENT_MODE: &str = "QUERY_MANAGEMENT_MODE";
+const QUERY_JWT_KEY_FILE: &str = "QUERY_JWT_KEY_FILE";
 
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
@@ -208,6 +209,9 @@ pub struct QueryConfig {
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     #[clap(long, env = QUERY_MANAGEMENT_MODE)]
     pub management_mode: bool,
+
+    #[clap(long, env = QUERY_JWT_KEY_FILE, default_value = "")]
+    pub jwt_key_file: String,
 }
 
 impl Default for QueryConfig {
@@ -250,6 +254,7 @@ impl Default for QueryConfig {
             table_disk_cache_root: "_cache".to_string(),
             table_disk_cache_mb_size: 1024,
             management_mode: false,
+            jwt_key_file: "".to_string(),
         }
     }
 }
@@ -488,5 +493,6 @@ impl QueryConfig {
             bool,
             QUERY_MANAGEMENT_MODE
         );
+        env_helper!(mut_config, query, management_mode, bool, QUERY_JWT_KEY_FILE);
     }
 }

@@ -73,6 +73,17 @@ const config = {
             },
         ],
         [
+            '@docusaurus/plugin-content-docs',
+            /** @type {import('@docusaurus/plugin-content-docs').Options} */
+            {
+                id: 'learn',
+                path: '../docs/learn',
+                routeBasePath: 'learn',
+                sidebarPath: require.resolve('../docs/learn/sidebars.js'),
+                editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
+            },
+        ],
+        [
           '@docusaurus/plugin-client-redirects',
           {
             // this will be removed later, make a mark~.
@@ -111,7 +122,14 @@ const config = {
                         ]
                     },
                     {
-                        label: 'Dev Guide', position: 'left', items: [
+                        to: '/learn/category/lessons', label: 'Learn', position: 'left', items:[
+                            {label: 'Lessons', to: '/learn/category/lessons'},
+                        ]
+                    },
+                    {
+                        label: 'Dev Guide', position: 'left',
+                        to: '/dev',
+                        items: [
                             {label: 'Contributing', to: '/dev/category/contributing'},
                             {label: 'Development', to: '/dev/category/development'},
                             {label: 'Roadmap', to: '/dev/roadmap'},

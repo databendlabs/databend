@@ -17,8 +17,9 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use common_base::tokio;
-use common_meta_types::protobuf::meta_server::Meta;
-use common_meta_types::protobuf::meta_server::MetaServer;
+use common_meta_types::protobuf::meta_service_server::MetaService;
+use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
+use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeResponse;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
@@ -33,7 +34,7 @@ use tonic::Streaming;
 pub struct GrpcServiceForTestImpl {}
 
 #[tonic::async_trait]
-impl Meta for GrpcServiceForTestImpl {
+impl MetaService for GrpcServiceForTestImpl {
     type HandshakeStream =
         Pin<Box<dyn Stream<Item = Result<HandshakeResponse, Status>> + Send + Sync + 'static>>;
 
@@ -61,6 +62,16 @@ impl Meta for GrpcServiceForTestImpl {
         tokio::time::sleep(Duration::from_secs(60)).await;
         Err(Status::unimplemented("Not yet implemented"))
     }
+
+    type ExportStream =
+        Pin<Box<dyn Stream<Item = Result<ExportedChunk, tonic::Status>> + Send + Sync + 'static>>;
+
+    async fn export(
+        &self,
+        _request: Request<common_meta_types::protobuf::Empty>,
+    ) -> Result<Response<Self::ExportStream>, Status> {
+        todo!()
+    }
 }
 
 pub fn start_grpc_server() -> String {
@@ -69,7 +80,7 @@ pub fn start_grpc_server() -> String {
     let addr = format!("127.0.0.1:{}", port).parse().unwrap();
     let service = GrpcServiceForTestImpl {};
 
-    let svc = MetaServer::new(service);
+    let svc = MetaServiceServer::new(service);
 
     tokio::spawn(async move {
         Server::builder()

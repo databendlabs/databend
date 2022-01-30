@@ -63,7 +63,7 @@ impl InteractiveWorkerBase {
         let query = &ch_ctx.state.query;
         tracing::debug!("{}", query);
 
-        let ctx = session.create_context().await?;
+        let ctx = session.create_query_context().await?;
         ctx.attach_query_str(query);
 
         let plan = PlanParser::parse(query, ctx.clone()).await?;

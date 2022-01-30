@@ -63,6 +63,7 @@ tempfile = "3.2.0"
 thiserror = "1.0.30"
 threadpool = "1.8.1"
 tokio-stream = "0.1.8"
+tokio-util = "0.6.9"
 tonic = { version = "0.6.2", features = ["tls"] }
 sha2 = "0.10.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
@@ -76,6 +77,7 @@ common-building = { path = "../common/building" }
 [dev-dependencies]
 common-meta-api = { path = "../common/meta/api" }
 maplit = "1.0.2"
+regex = "1.5.4"
 
 pretty_assertions = "1.0.0"
 reqwest = { version = "0.11.8", features = ["json"] }

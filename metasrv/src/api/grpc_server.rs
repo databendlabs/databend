@@ -21,7 +21,7 @@ use common_base::tokio::sync::oneshot::Sender;
 use common_base::tokio::task::JoinHandle;
 use common_base::Stoppable;
 use common_exception::ErrorCode;
-use common_meta_types::protobuf::meta_server::MetaServer;
+use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 use futures::future::Either;
@@ -29,7 +29,7 @@ use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
 
-use crate::api::grpc::grpc_service::MetaGrpcImpl;
+use crate::api::grpc::grpc_service::MetaServiceImpl;
 use crate::configs::Config;
 use crate::meta_service::MetaNode;
 
@@ -84,8 +84,8 @@ impl GrpcServer {
         let addr = conf.grpc_api_address.parse::<std::net::SocketAddr>()?;
         tracing::info!("gRPC addr: {}", addr);
 
-        let grpc_impl = MetaGrpcImpl::create(meta_node.clone());
-        let grpc_srv = MetaServer::new(grpc_impl);
+        let grpc_impl = MetaServiceImpl::create(meta_node.clone());
+        let grpc_srv = MetaServiceServer::new(grpc_impl);
 
         let j = tokio::spawn(
             async move {

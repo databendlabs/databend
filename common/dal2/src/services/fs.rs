@@ -15,23 +15,24 @@
 use std::io::SeekFrom;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use async_compat::CompatExt;
 use async_trait::async_trait;
 use tokio::fs;
 use tokio::io;
+use tokio::io::AsyncReadExt;
 use tokio::io::AsyncSeekExt;
 
 use crate::error::Error;
 use crate::error::Result;
-use crate::ops::Delete;
 use crate::ops::Object;
-use crate::ops::Read;
-use crate::ops::ReadBuilder;
-use crate::ops::Reader;
-use crate::ops::Stat;
-use crate::ops::Write;
-use crate::ops::WriteBuilder;
+use crate::ops::OpDelete;
+use crate::ops::OpRead;
+use crate::ops::OpStat;
+use crate::ops::OpWrite;
+use crate::Accessor;
+use crate::Reader;
 
 #[derive(Default)]
 pub struct Builder {
@@ -45,11 +46,11 @@ impl Builder {
         self
     }
 
-    pub fn finish(self) -> Backend {
-        Backend {
+    pub fn finish(&mut self) -> Arc<dyn Accessor> {
+        Arc::new(Backend {
             // Make `/` as the default of root.
-            root: self.root.unwrap_or_else(|| "/".to_string()),
-        }
+            root: self.root.clone().unwrap_or_else(|| "/".to_string()),
+        })
     }
 }
 
@@ -64,9 +65,9 @@ impl Backend {
 }
 
 #[async_trait]
-impl<S: Send + Sync> Read<S> for Backend {
-    async fn read(&self, args: &ReadBuilder<S>) -> Result<Reader> {
-        let path = PathBuf::from(&self.root).join(args.path);
+impl Accessor for Backend {
+    async fn read(&self, args: &OpRead) -> Result<Reader> {
+        let path = PathBuf::from(&self.root).join(&args.path);
 
         let mut f = fs::OpenOptions::new()
             .read(true)
@@ -78,22 +79,18 @@ impl<S: Send + Sync> Read<S> for Backend {
             f.seek(SeekFrom::Start(offset))
                 .await
                 .map_err(|e| parse_io_error(&e, &path))?;
-        }
+        };
 
-        if let Some(size) = args.size {
-            f.set_len(size)
-                .await
-                .map_err(|e| parse_io_error(&e, &path))?;
-        }
+        let f: Reader = match args.size {
+            Some(size) => Box::new(f.take(size).compat()),
+            None => Box::new(f.compat()),
+        };
 
-        Ok(Box::new(f.compat()))
+        Ok(f)
     }
-}
 
-#[async_trait]
-impl<S: Send + Sync> Write<S> for Backend {
-    async fn write(&self, mut r: Reader, args: &WriteBuilder<S>) -> Result<usize> {
-        let path = PathBuf::from(&self.root).join(args.path);
+    async fn write(&self, mut r: Reader, args: &OpWrite) -> Result<usize> {
+        let path = PathBuf::from(&self.root).join(&args.path);
 
         let mut f = fs::OpenOptions::new()
             .create(true)
@@ -109,12 +106,9 @@ impl<S: Send + Sync> Write<S> for Backend {
 
         Ok(s as usize)
     }
-}
 
-#[async_trait]
-impl<S: Send + Sync> Stat<S> for Backend {
-    async fn stat(&self, path: &str) -> Result<Object> {
-        let path = PathBuf::from(&self.root).join(path);
+    async fn stat(&self, args: &OpStat) -> Result<Object> {
+        let path = PathBuf::from(&self.root).join(&args.path);
 
         let meta = fs::metadata(&path)
             .await
@@ -126,12 +120,9 @@ impl<S: Send + Sync> Stat<S> for Backend {
 
         Ok(o)
     }
-}
 
-#[async_trait]
-impl<S: Send + Sync> Delete<S> for Backend {
-    async fn delete(&self, path: &str) -> Result<()> {
-        let path = PathBuf::from(&self.root).join(path);
+    async fn delete(&self, args: &OpDelete) -> Result<()> {
+        let path = PathBuf::from(&self.root).join(&args.path);
 
         // PathBuf.is_dir() is not free, call metadata directly instead.
         let meta = fs::metadata(&path).await;

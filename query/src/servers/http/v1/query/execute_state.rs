@@ -25,6 +25,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::UserInfo;
 use common_tracing::tracing;
 use futures::StreamExt;
 use serde::Deserialize;
@@ -48,7 +49,6 @@ pub struct HttpQueryRequest {
 #[derive(Deserialize, Debug, Default)]
 pub struct HttpSessionConf {
     pub database: Option<String>,
-    pub user: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
@@ -149,26 +149,17 @@ impl ExecuteState {
     pub(crate) async fn try_create(
         request: &HttpQueryRequest,
         session_manager: &Arc<SessionManager>,
+        user_info: &UserInfo,
         block_tx: mpsc::Sender<DataBlock>,
     ) -> Result<(ExecutorRef, DataSchemaRef)> {
         let sql = &request.sql;
         let session = session_manager.create_session("http-statement")?;
-        let context = session.create_context().await?;
+        let context = session.create_query_context().await?;
         if let Some(db) = &request.session.database {
             context.set_current_database(db.clone()).await?;
         };
         context.attach_query_str(sql);
-        let default_user = "root".to_string();
-        let user_name = request.session.user.as_ref().unwrap_or(&default_user);
-        let user_manager = session.get_user_manager();
-
-        // take root@127.0.0.1 with all privileges yet
-        // TODO: verify the user identity by jwt
-        let ctx = session.create_context().await?;
-        let user_info = user_manager
-            .get_user(&ctx.get_tenant(), user_name, "127.0.0.1")
-            .await?;
-        session.set_current_user(user_info);
+        session.set_current_user(user_info.clone());
 
         let plan = PlanParser::parse(sql, context.clone()).await?;
         let schema = plan.schema();

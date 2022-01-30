@@ -13,5 +13,6 @@
 // limitations under the License.
 
 mod ast;
+mod token;
 mod transformer;
 mod udfs;

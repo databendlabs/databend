@@ -35,14 +35,17 @@ use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
+use crate::sessions::ProcessInfo;
 use crate::storages::cache::CacheManager;
+use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::UserApiProvider;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) discovery: Arc<ClusterDiscovery>,
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
-    pub(in crate::sessions) user: Arc<UserApiProvider>,
+    pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
+    pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
 
     pub(in crate::sessions) max_sessions: usize,
@@ -60,6 +63,7 @@ impl SessionManager {
 
         // User manager and init the default users.
         let user = UserApiProvider::create_global(conf.clone()).await?;
+        let auth_manager = Arc::new(AuthMgr::create(conf.clone(), user.clone()).await?);
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
 
         let max_active_sessions = conf.query.max_active_sessions as usize;
@@ -67,8 +71,9 @@ impl SessionManager {
             catalog,
             conf,
             discovery,
-            user,
+            user_manager: user,
             http_query_manager,
+            auth_manager,
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
             storage_cache_manager: Arc::new(storage_cache_mgr),
@@ -87,9 +92,13 @@ impl SessionManager {
         self.http_query_manager.clone()
     }
 
+    pub fn get_auth_manager(self: &Arc<Self>) -> Arc<AuthMgr> {
+        self.auth_manager.clone()
+    }
+
     /// Get the user api provider.
     pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
-        self.user.clone()
+        self.user_manager.clone()
     }
 
     pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
@@ -221,5 +230,13 @@ impl SessionManager {
                 false
             }
         }
+    }
+
+    pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        self.active_sessions
+            .read()
+            .values()
+            .map(Session::process_info)
+            .collect::<Vec<_>>()
     }
 }

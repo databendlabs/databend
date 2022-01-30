@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_meta_types::UserInfo;
 use hyper::StatusCode;
 use poem::error::Result as PoemResult;
 use poem::post;
@@ -34,12 +35,12 @@ use crate::sessions::SessionManager;
 #[derive(Deserialize)]
 pub struct StatementHandlerParams {
     db: Option<String>,
-    user: Option<String>,
 }
 
 #[poem::handler]
 pub async fn statement_handler(
     sessions_extension: Data<&Arc<SessionManager>>,
+    user_info: Data<&UserInfo>,
     sql: String,
     Query(params): Query<StatementHandlerParams>,
 ) -> PoemResult<Json<QueryResponse>> {
@@ -48,10 +49,9 @@ pub async fn statement_handler(
     let query_id = http_query_manager.next_query_id();
     let session = HttpSessionConf {
         database: params.db.filter(|x| !x.is_empty()),
-        user: params.user,
     };
     let req = HttpQueryRequest { sql, session };
-    let query = HttpQuery::try_create(query_id.clone(), req, session_manager).await;
+    let query = HttpQuery::try_create(query_id.clone(), req, session_manager, user_info.0).await;
 
     match query {
         Ok(query) => {
