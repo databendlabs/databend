@@ -18,10 +18,7 @@ xx_yyyy_[test_name]
 * 06_use -- for Show tests, [example](06_0000_show_queries.sql)
 * 07_meta -- for Use tests, [example](07_0000_use_database.sql)
 * 08_fuse -- for Optimizer tests, [example](08_0000_optimizer.sql)
-* 09+_others -- for Other tests, [example](09_0000_remote_create_table.sql, 10_0000_describe_table.sql), etc
-* 10 -- for Describe tests, [example](10_0000_describe_table.sql)
-* 11 -- for Show tables, [example](11_0000_show_tables.sql)
-* 12 -- for Insert into, [example](12_0000_insert_into_select.sql)
+* 09+_others -- for Other tests, [example](09_0000_remote_create_table.sql)
 
 Note: If your test is not in the above category, please add it.
 
