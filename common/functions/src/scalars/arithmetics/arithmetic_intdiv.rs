@@ -16,7 +16,7 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num_traits::AsPrimitive;
@@ -42,8 +42,8 @@ impl ArithmeticIntDivFunction {
             )))
         };
 
-        with_match_primitive_type!(left_type, |$T| {
-            with_match_primitive_type!(right_type, |$D| {
+        with_match_primitive_type_id!(left_type, |$T| {
+            with_match_primitive_type_id!(right_type, |$D| {
                 Ok(Box::new(IntDivFunctionImpl::<$T, $D, <($T, $D) as ResultTypeOfBinary>::IntDiv>::default()))
             }, {
                 error_fn()

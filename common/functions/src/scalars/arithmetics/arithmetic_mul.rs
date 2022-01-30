@@ -15,7 +15,7 @@
 use std::ops::Mul;
 
 use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::traits::AsPrimitive;
@@ -76,8 +76,8 @@ impl ArithmeticMulFunction {
             )))
         };
 
-        with_match_primitive_type!(left_type, |$T| {
-            with_match_primitive_type!(right_type, |$D| {
+        with_match_primitive_type_id!(left_type, |$T| {
+            with_match_primitive_type_id!(right_type, |$D| {
                 let result_type = <($T, $D) as ResultTypeOfBinary>::AddMul::to_data_type();
                 match result_type.data_type_id() {
                     TypeID::UInt64 => BinaryArithmeticFunction::<$T, $D, u64, _>::try_create_func(

@@ -15,7 +15,7 @@
 use std::ops::Neg;
 
 use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::traits::AsPrimitive;
@@ -70,7 +70,7 @@ impl ArithmeticNegateFunction {
             )))
         };
 
-        with_match_primitive_type!(arg_type, |$T| {
+        with_match_primitive_type_id!(arg_type, |$T| {
             let result_type = <$T as ResultTypeOfUnary>::Negate::to_data_type();
             match result_type.data_type_id() {
                 TypeID::Int64 => UnaryArithmeticFunction::<$T, i64, _>::try_create_func(

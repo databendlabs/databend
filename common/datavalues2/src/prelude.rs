@@ -17,11 +17,11 @@ use common_arrow::arrow::array::BinaryArray;
 use common_arrow::arrow::array::MutableBinaryArray;
 
 pub use crate::columns::*;
+pub use crate::convert::*;
 pub use crate::data_group_value::*;
+pub use crate::data_value::DFTryFrom;
 pub use crate::data_value::*;
 pub use crate::macros::*;
-pub use crate::convert::*;
-pub use crate::data_value::DFTryFrom;
 pub use crate::scalars::*;
 pub use crate::types::*;
 pub use crate::utils::*;

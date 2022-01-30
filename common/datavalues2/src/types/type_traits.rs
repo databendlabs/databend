@@ -30,10 +30,7 @@ pub trait PrimitiveType:
     + Default
     + Serialize
     + DeserializeOwned
-<<<<<<< HEAD
-=======
     + Scalar
->>>>>>> datavalues-dev
 {
     type LargestType: PrimitiveType;
     const SIGN: bool;
