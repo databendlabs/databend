@@ -3,34 +3,38 @@
 
 ### Test directory structure (like this)
 
-├── 0_stateless  
-│   ├── 00_dummy
-│   │   ├── 00_0000_dummy_select_1.result
-│   │   ├── 00_0000_dummy_select_1.sql
-|   |   |..
-│   ├── 01_system
-│   │   ├── 01_0000_system_numbers.result
-|   |   | ..
-|   ... 
+```
+00_dummy/
+├── 00_0000_dummy_select_1.result
+├── 00_0000_dummy_select_1.sql
+├── 00_0000_dummy_select_sh.sh
+├── 00_0001_select_with_stackoverflow.result
+├── 00_0001_select_with_stackoverflow.sql
+├── 00_0002_dummy_select_py.py
+├── 00_0002_dummy_select_py.result
+└── 00_0002_dummy_select_sh.result
+```
 
 ### Test Name
 
 xx_yyyy_[test_name]
-* xx is category
+* xx is category no
 * yyyy is the sequence no under the category
 
 ### Test Category
 
-* 00_dummy -- for Dummy tests, [example](00_0000_dummy_select_1.sql)
-* 01_system -- for System tables tests, [example](01_0000_system_numbers.sql)
-* 02_function -- for Function tests, [example](02_0000_function_arithmetic.sql)
-* 03_select -- for Select tests, [example](03_0000_select_aliases.sql)
-* 04_explain -- for Explain tests, [example](04_0000_explain.sql)
-* 05_ddl -- for DDL tests, [example](05_0000_ddl_create_tables.sql)
-* 06_show -- for Show tests, [example](06_0000_show_queries.sql)
-* 07_use -- for Use tests, [example](07_0000_use_database.sql)
-* 08_optimizer -- for Optimizer tests, [example](08_0000_optimizer.sql)
-* 09+_others -- for Other tests, [example](09_0000_remote_create_table.sql)
+* 00_dummy -- for Dummy tests
+* 01_system -- for System tables tests
+* 02_function -- for Function tests
+* 03_dml -- for `SELECT`, `INSERT`, `UPDATE`, `DELETE` tests
+* 04_explain -- for `EXPLAIN` tests
+* 05_ddl -- for DDL tests
+* 06_show -- for `SHOW` statement tests
+* 07_use -- for `USE` statement tests
+* 08_optimizer -- for Optimizer tests
+* 09_fuse_engine -- for `FUSE` storage engine tests
+* 10_stage -- for `STAGE` tests
+* 20_others -- for other tests
 
 Note: If your test is not in the above category, please add it.
 
