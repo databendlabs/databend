@@ -15,6 +15,7 @@
 use common_ast::error::Error;
 use common_ast::parser::token::*;
 use logos::Span;
+use pretty_assertions::assert_eq;
 
 #[test]
 fn test_lexer() {

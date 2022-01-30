@@ -17,6 +17,7 @@ use common_ast::parser::rule::util::Input;
 use common_ast::parser::token::*;
 use nom::Parser;
 use nom_supreme::error::ErrorTree;
+use pretty_assertions::assert_eq;
 
 #[test]
 fn test_truncate_table() {
