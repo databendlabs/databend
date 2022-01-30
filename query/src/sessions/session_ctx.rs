@@ -23,6 +23,7 @@ use common_macros::MallocSizeOf;
 use common_meta_types::UserInfo;
 use futures::channel::oneshot::Sender;
 
+use crate::configs::Config;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Settings;
 
@@ -43,14 +44,14 @@ pub struct SessionContext {
 }
 
 impl SessionContext {
-    pub fn try_create() -> Result<Self> {
+    pub fn try_create(conf: &Config) -> Result<Self> {
         Ok(SessionContext {
             abort: Default::default(),
             current_user: Default::default(),
             current_tenant: Default::default(),
             client_host: Default::default(),
             current_database: RwLock::new("default".to_string()),
-            session_settings: RwLock::new(Settings::try_create()?.as_ref().clone()),
+            session_settings: RwLock::new(Settings::try_create(conf)?),
             io_shutdown_tx: Default::default(),
             query_context_shared: Default::default(),
         })
