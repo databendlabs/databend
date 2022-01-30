@@ -30,7 +30,7 @@ where
     Error: ParseError<Input<'a>>,
 {
     move |i| match i.get(0).map(|t| {
-        let b = cond(&t);
+        let b = cond(t);
         (t, b)
     }) {
         Some((t, true)) => Ok((&i[1..], t)),
