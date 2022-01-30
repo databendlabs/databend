@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_datavalues2::combine_validities;
 use common_datavalues2::combine_validities_2;
 use common_datavalues2::remove_nullable;
 use common_datavalues2::wrap_nullable;
@@ -111,6 +112,18 @@ impl Function2 for Function2Adapter {
                     .collect::<Vec<_>>();
 
                 let col = self.eval(&columns, input_rows)?;
+
+                // Some functions always returns a nullable column because invalid input(not Nulls) may return a null output.
+                // For example, inet_aton("helloworld") will return Null.
+                // In this case, we need to merge the validity.
+                if col.is_nullable() {
+                    let (_, bitmap) = col.validity();
+                    validity = match validity {
+                        Some(v) => combine_validities(bitmap, Some(&v)),
+                        None => combine_validities(bitmap, None),
+                    };
+                }
+
                 let validity = match validity {
                     Some(v) => v,
                     None => {
@@ -120,7 +133,12 @@ impl Function2 for Function2Adapter {
                     }
                 };
 
-                let col = NullableColumn::new(col, validity);
+                let col = if col.is_nullable() {
+                    let nullable_column: &NullableColumn = col.as_any().downcast_ref().unwrap();
+                    NullableColumn::new(nullable_column.inner().clone(), validity)
+                } else {
+                    NullableColumn::new(col, validity)
+                };
                 return Ok(Arc::new(col));
             }
         }

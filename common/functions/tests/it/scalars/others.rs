@@ -18,6 +18,8 @@ use common_functions::scalars::InetAtonFunction;
 use common_functions::scalars::InetNtoaFunction;
 use common_functions::scalars::RunningDifferenceFunction;
 
+use super::scalar_function2_test::test_scalar_functions2;
+use super::scalar_function2_test::ScalarFunction2Test;
 use crate::scalars::scalar_function_test::test_scalar_functions;
 use crate::scalars::scalar_function_test::test_scalar_functions_with_type;
 use crate::scalars::scalar_function_test::ScalarFunctionTest;
@@ -173,25 +175,31 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
 
 #[test]
 fn test_inet_aton_function() -> Result<()> {
+    use common_datavalues2::prelude::*;
+
     let tests = vec![
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "valid input",
-            nullable: true,
-            columns: vec![Series::new(["127.0.0.1"]).into()],
-            expect: Series::new([2130706433_u32]).into(),
+            columns: vec![Series::from_data(vec!["127.0.0.1"])],
+            expect: Series::from_data(vec![Option::<u32>::Some(2130706433_u32)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "invalid input",
-            nullable: true,
-            columns: vec![Series::new(["invalid"]).into()],
-            expect: Series::new([Option::<u32>::None]).into(),
+            columns: vec![Series::from_data(vec![Some("invalid")])],
+            expect: Series::from_data(vec![Option::<u32>::None]),
+            error: "",
+        },
+        ScalarFunction2Test {
+            name: "null input",
+            columns: vec![Series::from_data(vec![Option::<Vec<u8>>::None])],
+            expect: Series::from_data(vec![Option::<u32>::None]),
             error: "",
         },
     ];
 
     let test_func = InetAtonFunction::try_create("inet_aton")?;
-    test_scalar_functions(test_func, &tests)
+    test_scalar_functions2(test_func, &tests)
 }
 
 #[test]

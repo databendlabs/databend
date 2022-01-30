@@ -31,7 +31,11 @@ pub struct NullableColumn {
 
 impl NullableColumn {
     pub fn new(column: ColumnRef, validity: Bitmap) -> Self {
-        debug_assert!(column.data_type().can_inside_nullable());
+        debug_assert!(
+            column.data_type().can_inside_nullable(),
+            "{} can't be inside of nullable.",
+            column.data_type().name()
+        );
         Self { column, validity }
     }
 
