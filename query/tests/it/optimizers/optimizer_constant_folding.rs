@@ -79,7 +79,7 @@ async fn test_constant_folding_optimizer() -> Result<()> {
                 query: "SELECT sipHash('test_string')",
                 expect: "\
                 Projection: sipHash('test_string'):UInt64\
-                \n  Expression: 15735157695654173841:UInt64 (Before Projection)\
+                \n  Expression: 11164312367746070837:UInt64 (Before Projection)\
                 \n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
             },
             Test {
