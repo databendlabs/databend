@@ -11,7 +11,6 @@ sys.path.insert(0, os.path.join(CURDIR, '../../../helpers'))
 
 from client import client
 
-
 log = None
 # uncomment the line below for debugging
 log = sys.stdout
