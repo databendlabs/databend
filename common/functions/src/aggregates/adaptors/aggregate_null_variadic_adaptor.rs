@@ -89,7 +89,10 @@ impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool> AggregateFunction
     }
 
     fn return_type(&self) -> Result<DataTypePtr> {
-        Ok(wrap_nullable(&self.nested.return_type()?))
+        match NULLABLE_RESULT {
+            true => Ok(wrap_nullable(&self.nested.return_type()?)),
+            false => Ok(self.nested.return_type()?),
+        }
     }
 
     fn init_state(&self, place: StateAddr) {

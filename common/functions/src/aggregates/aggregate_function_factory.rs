@@ -155,34 +155,39 @@ impl AggregateFunctionFactory {
         let name = name.as_ref();
         let mut properties = AggregateFunctionProperties::default();
 
-        let creator = self.get_creator(name, &mut properties)?;
         if !arguments.is_empty()
             && arguments
                 .iter()
                 .any(|f| f.is_nullable() || f.data_type().data_type_id() == TypeID::Null)
         {
+            let new_params = AggregateFunctionCombinatorNull::transform_params(&params)?;
+            let new_arguments = AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
+
+            let nested = self.get_impl(name, new_params, new_arguments, &mut properties)?;
             return AggregateFunctionCombinatorNull::try_create(
-                name, params, arguments, creator, properties,
+                name, params, arguments, nested, properties,
             );
         }
 
-        creator(name, params, arguments)
+        self.get_impl(name, params, arguments, &mut properties)
     }
 
-    fn get_creator(
+    fn get_impl(
         &self,
         name: &str,
+        params: Vec<DataValue>,
+        arguments: Vec<DataField>,
         properties: &mut AggregateFunctionProperties,
-    ) -> Result<&AggregateFunctionCreator> {
+    ) -> Result<AggregateFunctionRef> {
         let lowercase_name = name.to_lowercase();
         let aggregate_functions_map = &self.case_insensitive_desc;
         if let Some(desc) = aggregate_functions_map.get(&lowercase_name) {
             *properties = desc.properties;
-            return Ok(&desc.aggregate_function_creator);
+            return (desc.aggregate_function_creator)(name, params, arguments);
         }
 
         // find suffix
-        for (suffix, _desc) in &self.case_insensitive_combinator_desc {
+        for (suffix, desc) in &self.case_insensitive_combinator_desc {
             if let Some(nested_name) = lowercase_name.strip_suffix(suffix) {
                 let aggregate_functions_map = &self.case_insensitive_desc;
 
@@ -192,7 +197,12 @@ impl AggregateFunctionFactory {
                     }
                     Some(nested_desc) => {
                         *properties = nested_desc.properties;
-                        return Ok(&nested_desc.aggregate_function_creator);
+                        return (desc.creator)(
+                            name,
+                            params,
+                            arguments,
+                            &nested_desc.aggregate_function_creator,
+                        );
                     }
                 }
             }

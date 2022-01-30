@@ -144,7 +144,7 @@ impl IntoColumn for ArrayRef {
             column,
             validity.unwrap_or_else(|| {
                 let mut bm = MutableBitmap::with_capacity(size);
-                bm.extend_constant(size, false);
+                bm.extend_constant(size, true);
                 Bitmap::from(bm)
             }),
         ))

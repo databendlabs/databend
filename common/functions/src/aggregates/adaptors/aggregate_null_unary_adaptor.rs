@@ -85,7 +85,10 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
     }
 
     fn return_type(&self) -> Result<DataTypePtr> {
-        Ok(wrap_nullable(&self.nested.return_type()?))
+        match NULLABLE_RESULT {
+            true => Ok(wrap_nullable(&self.nested.return_type()?)),
+            false => Ok(self.nested.return_type()?),
+        }
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -106,12 +109,8 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         input_rows: usize,
     ) -> Result<()> {
         let mut validity = validity.cloned();
-        let mut is_all_null = false;
         let col = &columns[0];
         let (all_null, v) = col.validity();
-        if all_null {
-            is_all_null = true;
-        }
         validity = combine_validities(validity.as_ref(), v);
         let not_null_columns = Series::remove_nullable(col);
 
@@ -122,7 +121,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
             input_rows,
         )?;
 
-        if !is_all_null {
+        if !all_null {
             match validity {
                 Some(v) => {
                     if v.null_count() != input_rows {

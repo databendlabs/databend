@@ -17,7 +17,6 @@ use common_exception::Result;
 
 use super::aggregate_null_variadic_adaptor::AggregateNullVariadicAdaptor;
 use super::AggregateNullUnaryAdaptor;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionProperties;
 use crate::aggregates::aggregate_null_result::AggregateNullResultFunction;
 use crate::aggregates::AggregateFunctionRef;
@@ -26,7 +25,7 @@ use crate::aggregates::AggregateFunctionRef;
 pub struct AggregateFunctionCombinatorNull {}
 
 impl AggregateFunctionCombinatorNull {
-    pub fn transform_arguments(arguments: Vec<DataField>) -> Result<Vec<DataField>> {
+    pub fn transform_arguments(arguments: &[DataField]) -> Result<Vec<DataField>> {
         let mut results = Vec::with_capacity(arguments.len());
 
         for arg in arguments.iter() {
@@ -40,15 +39,15 @@ impl AggregateFunctionCombinatorNull {
         Ok(results)
     }
 
-    pub fn transform_params(params: Vec<DataValue>) -> Result<Vec<DataValue>> {
-        Ok(params)
+    pub fn transform_params(params: &[DataValue]) -> Result<Vec<DataValue>> {
+        Ok(params.to_owned())
     }
 
     pub fn try_create(
-        name: &str,
+        _name: &str,
         params: Vec<DataValue>,
         arguments: Vec<DataField>,
-        creator: &AggregateFunctionCreator,
+        nested: AggregateFunctionRef,
         properties: AggregateFunctionProperties,
     ) -> Result<AggregateFunctionRef> {
         // has_null_types
@@ -63,11 +62,10 @@ impl AggregateFunctionCombinatorNull {
                 return AggregateNullResultFunction::try_create(NullType::arc());
             }
         }
-        let params = Self::transform_params(params)?;
-        let arguments = Self::transform_arguments(arguments)?;
+        let params = Self::transform_params(&params)?;
+        let arguments = Self::transform_arguments(&arguments)?;
         let size = arguments.len();
 
-        let nested = creator(name, params.clone(), arguments.clone())?;
         // Some functions may have their own null adaptor
         if let Some(null_adaptor) =
             nested.get_own_null_adaptor(nested.clone(), params, arguments)?
