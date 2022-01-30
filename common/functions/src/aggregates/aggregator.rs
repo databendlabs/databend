@@ -49,7 +49,6 @@ impl Aggregators {
         factory.register("covar_pop", aggregate_covariance_population_desc());
 
         factory.register("windowFunnel", aggregate_window_funnel_function_desc());
-
         factory.register("uniq", AggregateDistinctCombinator::uniq_desc());
     }
 

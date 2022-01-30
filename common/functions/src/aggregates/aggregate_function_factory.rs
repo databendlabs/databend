@@ -84,6 +84,7 @@ impl AggregateFunctionDescription {
     }
 }
 
+#[allow(dead_code)]
 pub struct CombinatorDescription {
     creator: AggregateFunctionCombinatorCreator,
     // TODO(Winter): function document, this is very interesting.
@@ -181,7 +182,7 @@ impl AggregateFunctionFactory {
         }
 
         // find suffix
-        for (suffix, desc) in &self.case_insensitive_combinator_desc {
+        for (suffix, _desc) in &self.case_insensitive_combinator_desc {
             if let Some(nested_name) = lowercase_name.strip_suffix(suffix) {
                 let aggregate_functions_map = &self.case_insensitive_desc;
 

@@ -67,6 +67,7 @@ pub trait AggregateFunctionV1: fmt::Display + Sync + Send {
     fn merge_result(&self, _place: StateAddr, array: &mut dyn MutableColumn) -> Result<()>;
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct AggConvertor {
     inner: AggregateFunctionRef,

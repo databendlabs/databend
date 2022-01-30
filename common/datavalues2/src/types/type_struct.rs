@@ -109,7 +109,7 @@ impl DataType for StructType {
         todo!()
     }
 
-    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+    fn create_mutable(&self, _capacity: usize) -> Box<dyn MutableColumn> {
         todo!()
     }
 

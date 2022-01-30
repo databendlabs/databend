@@ -79,7 +79,7 @@ impl DataType for NullType {
         Ok(Arc::new(NullColumn::new(data.len())))
     }
 
-    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+    fn create_mutable(&self, _capacity: usize) -> Box<dyn MutableColumn> {
         Box::new(MutableNullColumn::default())
     }
 }

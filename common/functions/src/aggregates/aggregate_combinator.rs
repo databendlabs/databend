@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use common_datavalues2::prelude::*;
 use common_exception::Result;
 
@@ -23,11 +22,11 @@ use crate::aggregates::AggregateFunctionRef;
 pub trait AggregateCombinator: Sync + Send {
     fn name() -> &'static str;
 
-    fn transform_params(params: &Vec<DataValue>) -> Result<Vec<DataValue>> {
-        Ok(params.clone())
+    fn transform_params(params: &[DataValue]) -> Result<Vec<DataValue>> {
+        Ok(params.to_owned())
     }
-    fn transform_arguments(arguments: &Vec<DataField>) -> Result<Vec<DataField>> {
-        Ok(arguments.clone())
+    fn transform_arguments(arguments: &[DataField]) -> Result<Vec<DataField>> {
+        Ok(arguments.to_owned())
     }
 
     fn transform_aggr_function(

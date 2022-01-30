@@ -169,6 +169,11 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         Ok(())
     }
 
+    /// we already have accumulate_keys, so we don't need to implement this
+    fn accumulate_row(&self, _place: StateAddr, _columns: &[ColumnRef], _row: usize) -> Result<()> {
+        unreachable!()
+    }
+
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         if NULLABLE_RESULT {
             let flag = Self::get_flag(place) == 1;

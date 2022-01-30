@@ -119,9 +119,9 @@ impl AggregateFunction for AggregateCountFunction {
         let (_, validity) = columns[0].validity();
         match validity {
             Some(v) => {
-                for ((row, valid), place) in v.iter().enumerate().zip(places.iter()) {
+                for (valid, place) in v.iter().zip(places.iter()) {
                     if valid {
-                        let state = place.get::<AggregateCountState>();
+                        let state = place.next(offset).get::<AggregateCountState>();
                         state.count += 1;
                     }
                 }
@@ -137,7 +137,7 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, _columns: &[ColumnRef], _row: usize) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         state.count += 1;
         Ok(())

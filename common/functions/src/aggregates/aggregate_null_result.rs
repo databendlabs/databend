@@ -44,7 +44,7 @@ impl AggregateFunction for AggregateNullResultFunction {
         Ok(self.data_type.clone())
     }
 
-    fn init_state(&self, _place: StateAddr) {}
+    fn init_state(&self, __place: StateAddr) {}
 
     fn state_layout(&self) -> Layout {
         Layout::new::<u8>()
@@ -52,7 +52,7 @@ impl AggregateFunction for AggregateNullResultFunction {
 
     fn accumulate(
         &self,
-        _place: StateAddr,
+        __place: StateAddr,
         _columns: &[ColumnRef],
         _validity: Option<&Bitmap>,
         _input_rows: usize,
@@ -70,23 +70,23 @@ impl AggregateFunction for AggregateNullResultFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+    fn accumulate_row(&self, _place: StateAddr, _columns: &[ColumnRef], _row: usize) -> Result<()> {
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, _place: StateAddr, _writer: &mut BytesMut) -> Result<()> {
         Ok(())
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn deserialize(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()> {
         Ok(())
     }
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()> {
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
+    fn merge_result(&self, _place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
         array.append_default();
         Ok(())
     }
