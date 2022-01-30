@@ -14,8 +14,8 @@
 
 use std::str::FromStr;
 
-use crate::MetaError;
-use crate::MetaResult;
+use common_exception::ErrorCode;
+use common_exception::Result;
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 pub struct StageParams {
@@ -82,16 +82,16 @@ impl Default for Format {
 }
 
 impl FromStr for Format {
-    type Err = MetaError;
+    type Err = ErrorCode;
 
-    fn from_str(s: &str) -> MetaResult<Format> {
+    fn from_str(s: &str) -> Result<Format> {
         let s = s.to_lowercase();
         match s.as_str() {
             "csv" => Ok(Format::Csv),
             "parquet" => Ok(Format::Parquet),
             "json" => Ok(Format::Json),
 
-            other => Err(MetaError::StrParseError(format!(
+            other => Err(ErrorCode::StrParseError(format!(
                 "no match for format: {}",
                 other
             ))),
@@ -121,9 +121,9 @@ impl Default for Compression {
 }
 
 impl FromStr for Compression {
-    type Err = MetaError;
+    type Err = ErrorCode;
 
-    fn from_str(s: &str) -> MetaResult<Compression> {
+    fn from_str(s: &str) -> Result<Compression> {
         let s = s.to_lowercase();
         match s.as_str() {
             "auto" => Ok(Compression::Auto),
@@ -134,7 +134,7 @@ impl FromStr for Compression {
             "deflate" => Ok(Compression::Deflate),
             "raw_deflate" => Ok(Compression::RawDeflate),
             "none" => Ok(Compression::None),
-            other => Err(MetaError::StrParseError(format!(
+            other => Err(ErrorCode::StrParseError(format!(
                 "no match for compression: {}",
                 other
             ))),
@@ -178,12 +178,12 @@ impl UserStageInfo {
 }
 
 impl TryFrom<Vec<u8>> for UserStageInfo {
-    type Error = MetaError;
+    type Error = ErrorCode;
 
-    fn try_from(value: Vec<u8>) -> MetaResult<Self> {
+    fn try_from(value: Vec<u8>) -> Result<Self> {
         match serde_json::from_slice(&value) {
             Ok(info) => Ok(info),
-            Err(serialize_error) => Err(MetaError::IllegalUserInfoFormat(format!(
+            Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
                 "Cannot deserialize stage from bytes. cause {}",
                 serialize_error
             ))),

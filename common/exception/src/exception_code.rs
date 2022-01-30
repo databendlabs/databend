@@ -141,36 +141,22 @@ build_exceptions! {
     // meta service does not work.
     MetaServiceError(2001),
     InvalidConfig(2002),
-    UnknownNode(2003),
 
-    // meta store errors
-    MetaStoreDamaged(2004),
-    //MetaStoreAlreadyExists(2005),
-    //MetaStoreNotFound(2006),
-
-    ConcurrentSnapshotInstall(2007),
-    UnknownTableId(2008),
     TableVersionMismatched(2009),
-    UnknownDatabaseId(2010),
     OCCRetryFailure(2011),
-
 
     // KVSrv server error
     MetaSrvError(2101),
-    TransactionAbort(2102),
-    TransactionError(2103),
 
     // user-api error codes
     UnknownUser(2201),
     UserAlreadyExists(2202),
     IllegalUserInfoFormat(2203),
     UnknownRole(2204),
-    IllegalRoleInfoFormat(2205),
 
     // meta-api error codes
     DatabaseAlreadyExists(2301),
     TableAlreadyExists(2302),
-    IllegalMetaOperationArgument(2303),
     IllegalMetaState(2304),
     MetaNodeInternalError(2305),
 

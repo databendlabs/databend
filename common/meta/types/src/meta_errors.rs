@@ -11,19 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-// Copyright 2021 Datafuse Labs.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 use anyerror::AnyError;
 use common_exception::SerializedError;
@@ -79,22 +66,13 @@ pub enum MetaError {
     StartMetaServiceError(String),
 
     #[error("{0}")]
-    StrParseError(String),
-
-    #[error("{0}")]
     BadAddressFormat(String),
-
-    #[error("{0}")]
-    DatabaseAlreadyExists(String),
 
     #[error("{0}")]
     UnknownDatabase(String),
 
     #[error("{0}")]
     UnknownDatabaseId(String),
-
-    #[error("{0}")]
-    TableAlreadyExists(String),
 
     #[error("{0}")]
     UnknownTable(String),
@@ -134,9 +112,6 @@ pub enum MetaError {
 
     #[error("{0}")]
     IllegalUserInfoFormat(String),
-
-    #[error("{0}")]
-    IllegalUDFFormat(String),
 
     #[error("{0}")]
     UnknownException(String),
@@ -179,9 +154,11 @@ pub enum RetryableError {
     ForwardToLeader { leader: NodeId },
 }
 
+/*
 /// Error used to trigger Raft shutdown from storage.
 #[derive(Clone, Debug, Error)]
 pub enum ShutdownError {
     #[error("unsafe storage error")]
     UnsafeStorageError,
 }
+*/
