@@ -1,0 +1,8 @@
+flight_client_timeout	60
+max_block_size	10000
+max_threads	11
+parallel_read_threads	1
+storage_occ_backoff_init_delay_ms	5
+storage_occ_backoff_max_delay_ms	20000
+storage_occ_backoff_max_elapsed_ms	120000
+storage_read_buffer_size	1048576

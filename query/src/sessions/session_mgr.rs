@@ -35,6 +35,7 @@ use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
+use crate::sessions::ProcessInfo;
 use crate::storages::cache::CacheManager;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::UserApiProvider;
@@ -43,7 +44,7 @@ pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) discovery: Arc<ClusterDiscovery>,
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
-    pub(in crate::sessions) user: Arc<UserApiProvider>,
+    pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
 
@@ -70,7 +71,7 @@ impl SessionManager {
             catalog,
             conf,
             discovery,
-            user,
+            user_manager: user,
             http_query_manager,
             auth_manager,
             max_sessions: max_active_sessions,
@@ -97,7 +98,7 @@ impl SessionManager {
 
     /// Get the user api provider.
     pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
-        self.user.clone()
+        self.user_manager.clone()
     }
 
     pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
@@ -229,5 +230,13 @@ impl SessionManager {
                 false
             }
         }
+    }
+
+    pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        self.active_sessions
+            .read()
+            .values()
+            .map(Session::process_info)
+            .collect::<Vec<_>>()
     }
 }

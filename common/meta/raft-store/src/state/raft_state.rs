@@ -40,7 +40,7 @@ pub struct RaftState {
     is_open: bool,
 
     /// A sled tree with key space support.
-    pub(crate) inner: SledTree,
+    pub inner: SledTree,
 }
 
 const TREE_RAFT_STATE: &str = "raft_state";

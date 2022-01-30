@@ -15,5 +15,5 @@
 mod role_api;
 mod role_mgr;
 
-pub use role_api::RoleMgrApi;
+pub use role_api::RoleApi;
 pub use role_mgr::RoleMgr;
