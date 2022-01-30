@@ -17,6 +17,7 @@ use super::inet_ntoa::InetNtoaFunction;
 use super::running_difference_function::RunningDifferenceFunction;
 use super::IgnoreFunction;
 use crate::scalars::function_factory::FunctionFactory;
+use crate::scalars::Function2Factory;
 
 #[derive(Clone)]
 pub struct OtherFunction {}
@@ -24,10 +25,13 @@ pub struct OtherFunction {}
 impl OtherFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("runningDifference", RunningDifferenceFunction::desc());
-        factory.register("ignore", IgnoreFunction::desc());
         factory.register("inet_ntoa", InetNtoaFunction::desc());
         factory.register("IPv4NumToString", InetNtoaFunction::desc());
         factory.register("inet_aton", InetAtonFunction::desc());
         factory.register("IPv4StringToNum", InetAtonFunction::desc());
+    }
+
+    pub fn register2(factory: &mut Function2Factory) {
+        factory.register("ignore", IgnoreFunction::desc());
     }
 }
