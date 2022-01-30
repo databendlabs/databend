@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod api;
+mod catalogs;
 mod clusters;
 mod common;
 mod configs;

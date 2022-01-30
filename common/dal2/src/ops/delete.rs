@@ -12,20 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_trait::async_trait;
-
 use crate::error::Result;
+use crate::Operator;
 
-/// `Delete` will invoke the `delete` operation.
-///
-/// ## Behavior
-///
-/// - `Delete` is an idempotent operation, it's safe to call `Delete` on the same path multiple times.
-/// - `Delete` will return `Ok(())` if the path is deleted successfully or not exist.
-#[async_trait]
-pub trait Delete<S: Send + Sync>: Send + Sync {
-    async fn delete(&self, path: &str) -> Result<()> {
-        let _ = path;
-        unimplemented!()
+pub struct OpDelete {
+    op: Operator,
+
+    pub path: String,
+}
+
+impl OpDelete {
+    pub fn new(op: Operator, path: &str) -> Self {
+        Self {
+            op,
+            path: path.to_string(),
+        }
+    }
+
+    pub async fn run(&self) -> Result<()> {
+        self.op.inner().delete(self).await
     }
 }

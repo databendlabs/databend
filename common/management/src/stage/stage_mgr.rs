@@ -26,7 +26,7 @@ use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UserStageInfo;
 
-use crate::stage::StageMgrApi;
+use crate::stage::StageApi;
 
 static USER_STAGE_API_KEY_PREFIX: &str = "__fd_stages";
 
@@ -46,7 +46,7 @@ impl StageMgr {
 }
 
 #[async_trait::async_trait]
-impl StageMgrApi for StageMgr {
+impl StageApi for StageMgr {
     async fn add_stage(&self, info: UserStageInfo) -> Result<u64> {
         let seq = MatchSeq::Exact(0);
         let val = Operation::Update(serde_json::to_vec(&info)?);

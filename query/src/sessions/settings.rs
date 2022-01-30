@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,294 +15,259 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_macros::MallocSizeOf;
+use common_meta_types::UserSetting;
+
+use crate::configs::Config;
+
+#[derive(Clone, Debug, MallocSizeOf)]
+pub struct SettingValue {
+    #[ignore_malloc_size_of = "insignificant"]
+    user_setting: UserSetting,
+    desc: &'static str,
+}
+
 #[derive(Clone, Debug, MallocSizeOf)]
 pub struct Settings {
-    inner: SettingsBase,
+    settings: Arc<RwLock<HashMap<String, SettingValue>>>,
 }
 
 impl Settings {
-    apply_macros! { apply_getter_setter_settings, apply_initial_settings, apply_update_settings,
-        ("max_block_size", u64, 10000, "Maximum block size for reading"),
-        ("max_threads", u64, 16, "The maximum number of threads to execute the request. By default, it is determined automatically."),
-        ("flight_client_timeout", u64, 60, "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds"),
-        ("min_distributed_rows", u64, 100000000, "Minimum distributed read rows. In cluster mode, when read rows exceeds this value, the local table converted to distributed query."),
-        ("min_distributed_bytes", u64, 500 * 1024 * 1024, "Minimum distributed read bytes. In cluster mode, when read bytes exceeds this value, the local table converted to distributed query."),
-        ("parallel_read_threads", u64, 1, "The maximum number of parallelism for reading data. By default, it is 1."),
-        ("storage_read_buffer_size", u64, 1024 * 1024, "The size of buffer in bytes for buffered reader of dal. By default, it is 1MB."),
-        ("storage_occ_backoff_init_delay_ms", u64, 5, "The initial retry delay in millisecond. By default,  it is 5 ms."),
-        ("storage_occ_backoff_max_delay_ms", u64, 20 * 1000, "The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing. By default, it is 20 seconds."),
-        ("storage_occ_backoff_max_elapsed_ms", u64, 120 * 1000, "The maximum elapsed time after the occ starts, beyond which there will be no more retries. By default, it is 2 minutes")
-    }
+    pub fn try_create(conf: &Config) -> Result<Settings> {
+        let values = vec![
+            // max_block_size
+            SettingValue {
+                user_setting: UserSetting::create("max_block_size", DataValue::UInt64(Some(10000))),
+                desc: "Maximum block size for reading",
+            },
 
-    pub fn try_create() -> Result<Arc<Settings>> {
-        let settings = Arc::new(Settings {
-            inner: SettingsBase::create(),
-        });
+            // max_threads
+            SettingValue {
+                user_setting: UserSetting::create("max_threads", DataValue::UInt64(Some(16))),
+                desc: "The maximum number of threads to execute the request. By default, it is determined automatically.",
+            },
 
-        settings.initial_settings()?;
-        settings.set_max_threads(num_cpus::get() as u64)?;
+            // flight_client_timeout
+            SettingValue {
+                user_setting: UserSetting::create("flight_client_timeout", DataValue::UInt64(Some(60))),
+                desc:"Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds",
+            },
 
-        Ok(settings)
-    }
+            // parallel_read_threads
+            SettingValue {
+                user_setting: UserSetting::create("parallel_read_threads", DataValue::UInt64(Some(1))),
+                desc:"The maximum number of parallelism for reading data. By default, it is 1.",
+            },
 
-    pub fn iter(&self) -> SettingsIterator {
-        SettingsIterator {
-            settings: self.inner.get_settings(),
-            index: 0,
-        }
-    }
-}
+            // storage_read_buffer_size
+            SettingValue {
+                user_setting: UserSetting::create("storage_read_buffer_size", DataValue::UInt64(Some(1024*1024))),
+                desc:"The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.",
+            },
 
-#[derive(Clone, Debug, MallocSizeOf)]
-pub struct SettingsBase {
-    // DataValue is of DataValue::Struct([name, value, default_value, description])
-    settings: Arc<RwLock<HashMap<&'static str, DataValue>>>,
-}
+            // storage_backoff_init_delay_ms
+            SettingValue {
+                user_setting: UserSetting::create("storage_occ_backoff_init_delay_ms", DataValue::UInt64(Some(5))),
+                desc:"The initial retry delay in millisecond. By default,  it is 5 ms.",
+            },
 
-impl SettingsBase {
-    pub fn create() -> Self {
-        SettingsBase {
-            settings: Arc::new(RwLock::new(HashMap::default())),
-        }
-    }
+            // storage_occ_backoff_max_delay_ms
+            SettingValue {
+                user_setting: UserSetting::create("storage_occ_backoff_max_delay_ms", DataValue::UInt64(Some(20*1000))),
+                desc:"The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing. By default, it is 20 seconds.",
+            },
 
-    // TODO, to use macro generate this codes
-    #[allow(unused)]
-    pub fn try_set_u64(&self, key: &'static str, val: u64, desc: &str) -> Result<()> {
-        let mut settings = self.settings.write();
-        let setting_val = DataValue::Struct(vec![
-            DataValue::UInt64(Some(val)),
-            DataValue::UInt64(Some(val)),
-            DataValue::String(Some(desc.as_bytes().to_vec())),
-        ]);
-        settings.insert(key, setting_val);
-        Ok(())
-    }
+            // storage_occ_backoff_max_elapsed_ms
+            SettingValue {
+                user_setting: UserSetting::create("storage_occ_backoff_max_elapsed_ms", DataValue::UInt64(Some(120*1000))),
+                desc:"The maximum elapsed time after the occ starts, beyond which there will be no more retries. By default, it is 2 minutes.",
+            },
+        ];
 
-    #[allow(unused)]
-    pub fn try_update_u64(&self, key: &'static str, val: u64) -> Result<()> {
-        let mut settings = self.settings.write();
-        let setting_val = settings
-            .get(key)
-            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+        let settings = Arc::new(RwLock::new(HashMap::default()));
 
-        if let DataValue::Struct(values) = setting_val {
-            let v = DataValue::Struct(vec![
-                DataValue::UInt64(Some(val)),
-                values[1].clone(),
-                values[2].clone(),
-            ]);
-            settings.insert(key, v);
-        }
-        Ok(())
-    }
-
-    #[allow(unused)]
-    pub fn try_get_u64(&self, key: &str) -> Result<u64> {
-        let settings = self.settings.read();
-        let setting_val = settings
-            .get(key)
-            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
-
-        if let DataValue::Struct(values) = setting_val {
-            if let DataValue::UInt64(Some(result)) = values[0].clone() {
-                return Ok(result);
+        // Insert all init settings.
+        // Drop the write lock end of this block.
+        {
+            let mut settings_mut = settings.write();
+            for value in values {
+                let name = value.user_setting.name.clone();
+                settings_mut.insert(name, value);
             }
         }
 
-        Result::Err(ErrorCode::UnknownVariable(format!(
-            "Unknown variable: {:?}",
-            key
-        )))
+        let ret = Settings { settings };
+        // Set max threads.
+        let cpus = if conf.query.num_cpus == 0 {
+            num_cpus::get() as u64
+        } else {
+            conf.query.num_cpus
+        };
+        ret.set_max_threads(cpus)?;
+
+        Ok(ret)
     }
 
-    #[allow(unused)]
-    pub fn try_set_i64(&self, key: &'static str, val: i64, desc: &str) -> Result<()> {
-        let mut settings = self.settings.write();
-        let setting_val = DataValue::Struct(vec![
-            DataValue::Int64(Some(val)),
-            DataValue::Int64(Some(val)),
-            DataValue::String(Some(desc.as_bytes().to_vec())),
-        ]);
-        settings.insert(key, setting_val);
-        Ok(())
+    // Get max_block_size.
+    pub fn get_max_block_size(&self) -> Result<u64> {
+        let key = "max_block_size";
+        self.try_get_u64(key)
     }
 
-    #[allow(unused)]
-    pub fn try_update_i64(&self, key: &'static str, val: i64) -> Result<()> {
-        let mut settings = self.settings.write();
-        let setting_val = settings
-            .get(key)
-            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
-
-        if let DataValue::Struct(values) = setting_val {
-            let v = DataValue::Struct(vec![
-                DataValue::Int64(Some(val)),
-                values[1].clone(),
-                values[2].clone(),
-            ]);
-            settings.insert(key, v);
-        }
-        Ok(())
+    // Set max_block_size.
+    pub fn set_max_block_size(&self, val: u64) -> Result<()> {
+        let key = "max_block_size";
+        self.try_set_u64(key, val)
     }
 
-    #[allow(unused)]
-    pub fn try_get_i64(&self, key: &str) -> Result<i64> {
+    // Get max_threads.
+    pub fn get_max_threads(&self) -> Result<u64> {
+        let key = "max_threads";
+        self.try_get_u64(key)
+    }
+
+    // Set max_threads.
+    pub fn set_max_threads(&self, val: u64) -> Result<()> {
+        let key = "max_threads";
+        self.try_set_u64(key, val)
+    }
+
+    // Get flight client timeout.
+    pub fn get_flight_client_timeout(&self) -> Result<u64> {
+        let key = "flight_client_timeout";
+        self.try_get_u64(key)
+    }
+
+    // Set flight client timeout.
+    pub fn set_flight_client_timeout(&self, val: u64) -> Result<()> {
+        let key = "flight_client_timeout";
+        self.try_set_u64(key, val)
+    }
+
+    // Get parallel read threads.
+    pub fn get_parallel_read_threads(&self) -> Result<u64> {
+        let key = "parallel_read_threads";
+        self.try_get_u64(key)
+    }
+
+    // Set parallel read threads.
+    pub fn set_parallel_read_threads(&self, val: u64) -> Result<()> {
+        let key = "parallel_read_threads";
+        self.try_set_u64(key, val)
+    }
+
+    // Get storage read buffer size.
+    pub fn get_storage_read_buffer_size(&self) -> Result<u64> {
+        let key = "storage_read_buffer_size";
+        self.try_get_u64(key)
+    }
+
+    // Set storage read buffer size.
+    pub fn set_storage_read_buffer_size(&self, val: u64) -> Result<()> {
+        let key = "storage_read_buffer_size";
+        self.try_set_u64(key, val)
+    }
+
+    // Get storage occ backoff init delay in ms.
+    pub fn get_storage_occ_backoff_init_delay_ms(&self) -> Result<u64> {
+        let key = "storage_occ_backoff_init_delay_ms";
+        self.try_get_u64(key)
+    }
+
+    // Set storage occ backoff init delay in ms.
+    pub fn set_storage_occ_backoff_init_delay_ms(&self, val: u64) -> Result<()> {
+        let key = "storage_occ_backoff_init_delay_ms";
+        self.try_set_u64(key, val)
+    }
+
+    // Get storage occ backoff max delay in ms.
+    pub fn get_storage_occ_backoff_max_delay_ms(&self) -> Result<u64> {
+        let key = "storage_occ_backoff_max_delay_ms";
+        self.try_get_u64(key)
+    }
+
+    // Set storage occ backoff max delay in ms.
+    pub fn set_storage_occ_backoff_max_delay_ms(&self, val: u64) -> Result<()> {
+        let key = "storage_occ_backoff_max_delay_ms";
+        self.try_set_u64(key, val)
+    }
+
+    // Get storage occ backoff max elapsed in ms.
+    pub fn get_storage_occ_backoff_max_elapsed_ms(&self) -> Result<u64> {
+        let key = "storage_occ_backoff_max_elapsed_ms";
+        self.try_get_u64(key)
+    }
+
+    // Set storage occ backoff max elapsed in ms.
+    pub fn set_storage_occ_backoff_max_elapsed_ms(&self, val: u64) -> Result<()> {
+        let key = "storage_occ_backoff_max_elapsed_ms";
+        self.try_set_u64(key, val)
+    }
+
+    fn check_and_get_setting_value(&self, key: &str) -> Result<SettingValue> {
         let settings = self.settings.read();
-        let setting_val = settings
+        let setting = settings
             .get(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
-
-        if let DataValue::Struct(values) = setting_val {
-            if let DataValue::Int64(Some(result)) = values[0].clone() {
-                return Ok(result);
-            }
-        }
-
-        Result::Err(ErrorCode::UnknownVariable(format!(
-            "Unknown variable: {:?}",
-            key
-        )))
+        Ok(setting.clone())
     }
 
-    #[allow(unused)]
-    pub fn try_set_f64(&self, key: &'static str, val: f64, desc: &str) -> Result<()> {
+    // Get u64 value from settings map.
+    fn try_get_u64(&self, key: &str) -> Result<u64> {
+        let setting = self.check_and_get_setting_value(key)?;
+        setting.user_setting.value.as_u64()
+    }
+
+    // Set u64 value to settings map, if global(TODO) also write to meta.
+    fn try_set_u64(&self, key: &str, val: u64) -> Result<()> {
         let mut settings = self.settings.write();
-        let setting_val = DataValue::Struct(vec![
-            DataValue::Float64(Some(val)),
-            DataValue::Float64(Some(val)),
-            DataValue::String(Some(desc.as_bytes().to_vec())),
-        ]);
-        settings.insert(key, setting_val);
+        let mut setting = settings
+            .get_mut(key)
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+        setting.user_setting.value = DataValue::UInt64(Some(val));
+
         Ok(())
     }
 
-    #[allow(unused)]
-    pub fn try_update_f64(&self, key: &'static str, val: f64) -> Result<()> {
-        let mut settings = self.settings.write();
-        let setting_val = settings
-            .get(key)
-            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
-
-        if let DataValue::Struct(values) = setting_val {
-            let v = DataValue::Struct(vec![
-                DataValue::Float64(Some(val)),
-                values[1].clone(),
-                values[2].clone(),
-            ]);
-            settings.insert(key, v);
-        }
-        Ok(())
-    }
-
-    #[allow(unused)]
-    pub fn try_get_f64(&self, key: &str) -> Result<f64> {
-        let settings = self.settings.read();
-        let setting_val = settings
-            .get(key)
-            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
-
-        if let DataValue::Struct(values) = setting_val {
-            if let DataValue::Float64(Some(result)) = values[0].clone() {
-                return Ok(result);
-            }
-        }
-
-        Result::Err(ErrorCode::UnknownVariable(format!(
-            "Unknown variable: {:?}",
-            key
-        )))
-    }
-
-    #[allow(unused)]
-    pub fn try_set_string(&self, key: &'static str, val: &str, desc: &str) -> Result<()> {
-        let mut settings = self.settings.write();
-        let default_value = val;
-        let setting_val = DataValue::Struct(vec![
-            DataValue::String(Some(val.as_bytes().to_vec())),
-            DataValue::String(Some(default_value.as_bytes().to_vec())),
-            DataValue::String(Some(desc.as_bytes().to_vec())),
-        ]);
-        settings.insert(key, setting_val);
-        Ok(())
-    }
-
-    #[allow(unused)]
-    pub fn try_update_string(&self, key: &'static str, val: &str) -> Result<()> {
-        let mut settings = self.settings.write();
-        let setting_val = settings
-            .get(key)
-            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
-
-        if let DataValue::Struct(values) = setting_val {
-            let v = DataValue::Struct(vec![
-                DataValue::String(Some(val.as_bytes().to_vec())),
-                values[1].clone(),
-                values[2].clone(),
-            ]);
-            settings.insert(key, v);
-        }
-        Ok(())
-    }
-
-    #[allow(unused)]
-    pub fn try_get_string(&self, key: &str) -> Result<Vec<u8>> {
-        let settings = self.settings.read();
-        let setting_val = settings
-            .get(key)
-            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
-
-        if let DataValue::Struct(values) = setting_val {
-            if let DataValue::String(Some(result)) = values[0].clone() {
-                return Ok(result);
-            }
-        }
-
-        Result::Err(ErrorCode::UnknownVariable(format!(
-            "Unknown variable: {:?}",
-            key
-        )))
-    }
-
-    pub fn get_settings(&self) -> Vec<DataValue> {
+    pub fn get_setting_values(&self) -> Vec<DataValue> {
         let settings = self.settings.read();
 
         let mut result = vec![];
         for (k, v) in settings.iter() {
-            if let DataValue::Struct(values) = v {
-                let res = DataValue::Struct(vec![
-                    DataValue::String(Some(k.as_bytes().to_vec())),
-                    values[0].clone(),
-                    values[1].clone(),
-                    values[2].clone(),
-                ]);
-                result.push(res);
-            }
+            let res = DataValue::Struct(vec![
+                // Name.
+                DataValue::String(Some(k.as_bytes().to_vec())),
+                // Value.
+                v.user_setting.value.clone(),
+                // Desc.
+                DataValue::String(Some(v.desc.as_bytes().to_vec())),
+            ]);
+            result.push(res);
         }
         result
     }
-}
 
-pub struct SettingsIterator {
-    settings: Vec<DataValue>,
-    index: usize,
-}
+    pub fn set_settings(&self, key: String, val: String) -> Result<()> {
+        let setting = self.check_and_get_setting_value(&key)?;
 
-impl Iterator for SettingsIterator {
-    type Item = DataValue;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index == self.settings.len() {
-            None
-        } else {
-            let setting = self.settings[self.index].clone();
-            self.index += 1;
-            Some(setting)
+        match setting.user_setting.value.data_type() {
+            DataType::UInt64 => {
+                let u64_val = val.parse::<u64>()?;
+                self.try_set_u64(&key, u64_val)?;
+            }
+            v => {
+                return Err(ErrorCode::UnknownVariable(format!(
+                    "Unsupported variable:{:?} type:{:?} when set_settings().",
+                    key, v
+                )))
+            }
         }
+
+        Ok(())
     }
 }

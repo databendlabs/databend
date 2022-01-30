@@ -12,20 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod delete;
+mod header;
+pub use header::HeaderRange;
+
 mod object;
-mod read;
-mod stat;
-mod write;
-
-pub mod io;
-
-pub use delete::Delete;
-pub use io::Reader;
-pub use io::ReaderStream;
 pub use object::Object;
-pub use read::Read;
-pub use read::ReadBuilder;
-pub use stat::Stat;
-pub use write::Write;
-pub use write::WriteBuilder;
+
+// Supported operations
+mod read;
+pub use read::OpRead;
+
+mod write;
+pub use write::OpWrite;
+
+mod stat;
+pub use stat::OpStat;
+
+mod delete;
+pub use delete::OpDelete;

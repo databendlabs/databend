@@ -66,6 +66,12 @@ impl SessionManagerBuilder {
         SessionManagerBuilder::inner_create(new_config)
     }
 
+    pub fn jwt_key_file(self, value: impl Into<String>) -> SessionManagerBuilder {
+        let mut new_config = self.config;
+        new_config.query.jwt_key_file = value.into();
+        SessionManagerBuilder::inner_create(new_config)
+    }
+
     pub fn http_handler_tls_server_key(self, value: impl Into<String>) -> SessionManagerBuilder {
         let mut new_config = self.config;
         new_config.query.http_handler_tls_server_key = value.into();

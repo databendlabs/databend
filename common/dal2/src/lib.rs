@@ -13,19 +13,18 @@
 // limitations under the License.
 #![feature(io_error_other)]
 #![feature(mixed_integer_ops)]
+#![feature(type_alias_impl_trait)]
+#![feature(associated_type_defaults)]
 
-mod dal;
-mod ops;
+mod accessor;
+pub use accessor::Accessor;
+pub use accessor::Reader;
+
+mod operator;
+pub use operator::Operator;
 
 pub mod credential;
 pub mod error;
+pub mod ops;
+pub mod readers;
 pub mod services;
-
-pub use dal::DataAccessor;
-
-#[cfg(test)]
-mod tests {
-    mod ops {
-        mod io;
-    }
-}

@@ -214,7 +214,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let user_manager = self.session.get_user_manager();
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
 
-        let ctx = self.session.create_context().await?;
+        let ctx = self.session.create_query_context().await?;
         let user_info = user_manager
             .get_user_with_client_ip(&ctx.get_tenant(), user_name, client_ip)
             .await?;
@@ -272,7 +272,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         if self.federated_server_setup_set_or_jdbc_command(query) {
             Ok((vec![DataBlock::empty()], String::from("")))
         } else {
-            let context = self.session.create_context().await?;
+            let context = self.session.create_query_context().await?;
             context.attach_query_str(query);
             let (plan, hints) = PlanParser::parse_with_hint(query, context.clone()).await;
 

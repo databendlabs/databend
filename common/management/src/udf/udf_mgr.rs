@@ -28,7 +28,7 @@ use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UserDefinedFunction;
 
-use crate::udf::UdfMgrApi;
+use crate::udf::UdfApi;
 
 static UDF_API_KEY_PREFIX: &str = "__fd_udfs";
 
@@ -48,7 +48,7 @@ impl UdfMgr {
 }
 
 #[async_trait::async_trait]
-impl UdfMgrApi for UdfMgr {
+impl UdfApi for UdfMgr {
     async fn add_udf(&self, info: UserDefinedFunction) -> Result<u64> {
         if is_builtin_function(info.name.as_str()) {
             return Err(ErrorCode::UdfAlreadyExists(format!(

@@ -12,34 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use async_trait::async_trait;
-
-use super::io::Reader;
 use crate::error::Result;
+use crate::Operator;
+use crate::Reader;
 
-/// `Read` will read the data from the underlying storage.
-#[async_trait]
-pub trait Read<S: Send + Sync>: Send + Sync {
-    async fn read(&self, args: &ReadBuilder<S>) -> Result<Reader> {
-        let _ = args;
-        unimplemented!()
-    }
-}
-
-pub struct ReadBuilder<S> {
-    s: Arc<S>,
+pub struct OpRead {
+    op: Operator,
 
     pub path: String,
     pub offset: Option<u64>,
     pub size: Option<u64>,
 }
 
-impl<S> ReadBuilder<S> {
-    pub fn new(s: Arc<S>, path: &str) -> Self {
+impl OpRead {
+    pub fn new(op: Operator, path: &str) -> Self {
         Self {
-            s,
+            op,
             path: path.to_string(),
             offset: None,
             size: None,
@@ -57,10 +45,8 @@ impl<S> ReadBuilder<S> {
 
         self
     }
-}
 
-impl<S: Read<S>> ReadBuilder<S> {
     pub async fn run(&mut self) -> Result<Reader> {
-        self.s.read(self).await
+        self.op.inner().read(self).await
     }
 }

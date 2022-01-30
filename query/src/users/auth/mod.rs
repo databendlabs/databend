@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use crate::sessions::ProcessInfo;
-use crate::sessions::Session;
-use crate::sessions::SessionManager;
-
-impl SessionManager {
-    pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        self.active_sessions
-            .read()
-            .values()
-            .map(Session::process_info)
-            .collect::<Vec<_>>()
-    }
-}
+pub(crate) mod auth_mgr;
+mod jwt;

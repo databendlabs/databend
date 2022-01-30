@@ -73,6 +73,7 @@ table_memory_cache_mb_size = 256
 table_disk_cache_root = \"_cache\"
 table_disk_cache_mb_size = 1024
 management_mode = false
+jwt_key_file = \"\"
 
 [log]
 log_level = \"INFO\"
