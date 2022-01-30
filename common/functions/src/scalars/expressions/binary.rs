@@ -31,6 +31,8 @@ where F: Fn(L::RefType<'_>, R::RefType<'_>) -> O
 }
 
 /// A common struct to caculate binary expression scalar op.
+/// A common struct to calculate binary expression scalar op.
+#[derive(Clone)]
 pub struct ScalarBinaryExpression<L: Scalar, R: Scalar, O: Scalar, F> {
     func: F,
     _phantom: PhantomData<(L, R, O)>,

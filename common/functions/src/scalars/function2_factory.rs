@@ -21,17 +21,23 @@ use common_exception::Result;
 use once_cell::sync::Lazy;
 
 use super::function2::Function2;
-use super::function_factory::ArithmeticDescription;
 use super::function_factory::FunctionFeatures;
+use super::ArithmeticFunction;
 use super::ComparisonFunction;
 use super::ConditionalFunction;
 use super::HashesFunction;
+use super::LogicFunction;
 use super::StringFunction;
+use super::ToCastFunction;
 use super::TupleClassFunction;
 use super::UdfFunction;
-use crate::scalars::ToCastFunction;
+use crate::scalars::DateFunction;
 
 pub type Factory2Creator = Box<dyn Fn(&str) -> Result<Box<dyn Function2>> + Send + Sync>;
+
+// Temporary adaptation for arithmetic.
+pub type ArithmeticCreator =
+    Box<dyn Fn(&str, &[&DataTypePtr]) -> Result<Box<dyn Function2>> + Send + Sync>;
 
 pub struct Function2Description {
     features: FunctionFeatures,
@@ -53,6 +59,26 @@ impl Function2Description {
     }
 }
 
+pub struct ArithmeticDescription {
+    pub features: FunctionFeatures,
+    pub arithmetic_creator: ArithmeticCreator,
+}
+
+impl ArithmeticDescription {
+    pub fn creator(creator: ArithmeticCreator) -> ArithmeticDescription {
+        ArithmeticDescription {
+            arithmetic_creator: creator,
+            features: FunctionFeatures::default(),
+        }
+    }
+
+    #[must_use]
+    pub fn features(mut self, features: FunctionFeatures) -> ArithmeticDescription {
+        self.features = features;
+        self
+    }
+}
+
 pub struct Function2Factory {
     case_insensitive_desc: HashMap<String, Function2Description>,
     case_insensitive_arithmetic_desc: HashMap<String, ArithmeticDescription>,
@@ -61,6 +87,7 @@ pub struct Function2Factory {
 static FUNCTION2_FACTORY: Lazy<Arc<Function2Factory>> = Lazy::new(|| {
     let mut function_factory = Function2Factory::create();
 
+    ArithmeticFunction::register(&mut function_factory);
     ToCastFunction::register(&mut function_factory);
     TupleClassFunction::register(&mut function_factory);
     ComparisonFunction::register(&mut function_factory);
@@ -68,6 +95,8 @@ static FUNCTION2_FACTORY: Lazy<Arc<Function2Factory>> = Lazy::new(|| {
     StringFunction::register2(&mut function_factory);
     HashesFunction::register2(&mut function_factory);
     ConditionalFunction::register(&mut function_factory);
+    LogicFunction::register(&mut function_factory);
+    DateFunction::register2(&mut function_factory);
 
     Arc::new(function_factory)
 });
@@ -94,7 +123,7 @@ impl Function2Factory {
         case_insensitive_arithmetic_desc.insert(name.to_lowercase(), desc);
     }
 
-    pub fn get(&self, name: impl AsRef<str>, _args: &[&DataTypePtr]) -> Result<Box<dyn Function2>> {
+    pub fn get(&self, name: impl AsRef<str>, args: &[&DataTypePtr]) -> Result<Box<dyn Function2>> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
         match self.case_insensitive_desc.get(&lowercase_name) {
@@ -104,7 +133,7 @@ impl Function2Factory {
                     "Unsupported Function: {}",
                     origin_name
                 ))),
-                _ => todo!(),
+                Some(desc) => (desc.arithmetic_creator)(origin_name, args),
             },
             Some(desc) => (desc.function_creator)(origin_name),
         }

@@ -89,24 +89,23 @@ fn databend_if_else_then(
 
     match physical_id {
         PhysicalTypeID::Primitive(t) => with_match_physical_primitive_type!(t, |$T| {
+            let lhs_wrapper = ColumnViewer::<$T>::create(lhs)?;
+            let rhs_wrapper = ColumnViewer::<$T>::create(rhs)?;
+            let size = lhs_wrapper.len();
 
-        let lhs_wrapper = ColumnViewer::<$T>::create(lhs)?;
-        let rhs_wrapper = ColumnViewer::<$T>::create(rhs)?;
-        let size = lhs_wrapper.len();
+            let mut builder = NullableColumnBuilder::<$T>::with_capacity(size);
 
-        let mut builder = NullableColumnBuilder::<$T>::with_capacity(size);
+            for row in 0..size {
+                let valid = validity_predict.get_bit(row);
+                if bools.get_bit(row) {
+                    builder.append(lhs_wrapper.value(row), valid & lhs_wrapper.valid_at(row));
+                } else {
+                    builder.append(rhs_wrapper.value(row), valid & rhs_wrapper.valid_at(row));
+                };
+            }
 
-        for row in 0..size {
-            let valid = validity_predict.get_bit(row);
-             if bools.get_bit(row) {
-                builder.append(lhs_wrapper.value(row), valid & lhs_wrapper.valid_at(row));
-            } else {
-                builder.append(rhs_wrapper.value(row), valid & rhs_wrapper.valid_at(row));
-            };
-        }
-
-        Ok(builder.build(size))
-            }),
+            Ok(builder.build(size))
+        }),
         PhysicalTypeID::Boolean => todo!(),
         PhysicalTypeID::String => todo!(),
         _ => unimplemented!(),

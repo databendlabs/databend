@@ -72,6 +72,10 @@ impl Function2 for Function2Adapter {
     }
 
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        if columns.is_empty() {
+            return self.inner.eval(columns, input_rows);
+        }
+
         // unwrap nullable
         if self.passthrough_null() {
             // one is null, result is null
@@ -106,7 +110,7 @@ impl Function2 for Function2Adapter {
                     })
                     .collect::<Vec<_>>();
 
-                let col = self.inner.eval(&columns, input_rows)?;
+                let col = self.eval(&columns, input_rows)?;
                 let validity = match validity {
                     Some(v) => v,
                     None => {
@@ -134,7 +138,7 @@ impl Function2 for Function2Adapter {
                 })
                 .collect::<Vec<_>>();
 
-            let col = self.inner.eval(&columns, 1)?;
+            let col = self.eval(&columns, 1)?;
             let col = if col.is_const() && col.len() == 1 {
                 col.replicate(&[input_rows])
             } else {

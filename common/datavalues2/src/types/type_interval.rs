@@ -24,6 +24,12 @@ use crate::prelude::*;
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct IntervalType {}
 
+impl IntervalType {
+    pub fn arc() -> DataTypePtr {
+        Arc::new(Self {})
+    }
+}
+
 #[typetag::serde]
 impl DataType for IntervalType {
     fn data_type_id(&self) -> TypeID {

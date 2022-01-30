@@ -144,10 +144,11 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
         if let Some(custom_name) = m.get("ARROW:extension:databend_name") {
             let metatada = m.get("ARROW:extension:databend_metadata").cloned();
             match custom_name.as_str() {
-                "Date" | "Date16" => return Arc::new(Date16Type::default()),
-                "Date32" => return Arc::new(Date32Type::default()),
+                "Date" | "Date16" => return Date16Type::arc(),
+                "Date32" => return Date32Type::arc(),
                 "DateTime" | "DateTime32" => return DateTime32Type::arc(metatada),
                 "DateTime64" => return DateTime64Type::arc(3, metatada),
+                "Interval" => return IntervalType::arc(),
                 _ => {}
             }
         }
