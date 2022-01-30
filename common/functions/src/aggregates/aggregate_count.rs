@@ -77,11 +77,7 @@ impl AggregateFunction for AggregateCountFunction {
     }
 
     fn return_type(&self) -> Result<DataTypePtr> {
-        if self.nullable {
-            Ok(wrap_nullable(&u64::to_data_type()))
-        } else {
-            Ok(u64::to_data_type())
-        }
+        Ok(u64::to_data_type())
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -116,7 +112,14 @@ impl AggregateFunction for AggregateCountFunction {
         columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<()> {
-        let (_, validity) = columns[0].validity();
+        let validity = match columns.len() {
+            0 => None,
+            _ => {
+                let (_, validity) = columns[0].validity();
+                validity
+            }
+        };
+
         match validity {
             Some(v) => {
                 for (valid, place) in v.iter().zip(places.iter()) {

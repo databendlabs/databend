@@ -198,7 +198,7 @@ impl AggregateFunctionFactory {
                     Some(nested_desc) => {
                         *properties = nested_desc.properties;
                         return (desc.creator)(
-                            name,
+                            nested_name,
                             params,
                             arguments,
                             &nested_desc.aggregate_function_creator,
