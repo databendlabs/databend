@@ -3,15 +3,15 @@
 
 ### Test directory structure (like this)
 
-├── 0_stateless  
-│   ├── 00_dummy
-│   │   ├── 00_0000_dummy_select_1.result
-│   │   ├── 00_0000_dummy_select_1.sql
-|   |   |..
-│   ├── 01_system
-│   │   ├── 01_0000_system_numbers.result
-|   |   | ..
-|   ... 
+* ├── 0_stateless  
+* │  ├── 00_dummy
+* │  │  ├── 00_0000_dummy_select_1\.result
+* │  │  ├── 00_0000_dummy_select_1.sql
+* |  |  | ..
+* │  ├── 01_system
+* │  │  ├── 01_0000_system_numbers.result
+* |  |  | ..
+* |   ... 
 
 ### Test Name
 
