@@ -12,48 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::assert_parse;
 use common_ast::parser::rule::statement::*;
 use common_ast::parser::rule::util::Input;
 use common_ast::parser::token::*;
 use nom::Parser;
-use nom_supreme::error::ErrorTree;
 use pretty_assertions::assert_eq;
 
 #[test]
-fn test_truncate_table() {
-    assert_parse(
+fn test_statement() {
+    assert_parse!(truncate_table, "truncate table a;", "TRUNCATE TABLE a");
+    assert_parse!(
         truncate_table,
-        &tokenise("truncate table a;").unwrap(),
-        "TRUNCATE TABLE a",
-    );
-    assert_parse(
-        truncate_table,
-        &tokenise(r#"truncate table "a".b;"#).unwrap(),
+        r#"truncate table "a".b;"#,
         r#"TRUNCATE TABLE "a".b"#,
     );
-}
-
-#[test]
-fn test_drop_table() {
-    assert_parse(
+    assert_parse!(drop_table, "drop table a;", "DROP TABLE a");
+    assert_parse!(
         drop_table,
-        &tokenise("drop table a;").unwrap(),
-        "DROP TABLE a",
-    );
-    assert_parse(
-        drop_table,
-        &tokenise(r#"drop table if exists a."b";"#).unwrap(),
+        r#"drop table if exists a."b";"#,
         r#"DROP TABLE IF EXISTS a."b""#,
     );
-}
-
-fn assert_parse<'a, P, Output>(mut parser: P, source: Input<'a>, expected: &str)
-where
-    P: Parser<Input<'a>, Output, ErrorTree<Input<'a>>>,
-    Output: PartialEq + std::fmt::Debug + std::fmt::Display,
-{
-    let (i, output) = parser.parse(source).unwrap();
-
-    assert_eq!(&format!("{}", output), expected);
-    assert_eq!(i, &[]);
 }

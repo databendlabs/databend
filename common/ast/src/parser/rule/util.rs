@@ -74,10 +74,23 @@ where Error: ParseError<Input<'a>> {
     ))(i)
 }
 
+#[macro_export]
 macro_rules! rule {
     ($($tt:tt)*) => { nom_rule::rule!(
         (crate::parser::rule::util::match_text),
         (crate::parser::rule::util::match_token),
         $($tt)*)
     }
+}
+
+#[macro_export]
+macro_rules! assert_parse {
+    ($parser:expr, $source:literal, $expected:literal $(,)*) => {
+        let tokens = tokenise($source).unwrap();
+        let res: nom::IResult<_, _, nom_supreme::error::ErrorTree<Input>> = $parser.parse(&tokens);
+        let (i, output) = res.unwrap();
+
+        assert_eq!(&format!("{}", output), $expected);
+        assert_eq!(i, &[]);
+    };
 }

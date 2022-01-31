@@ -19,6 +19,7 @@ use crate::parser::ast::Statement;
 use crate::parser::rule::util::ident;
 use crate::parser::rule::util::Input;
 use crate::parser::token::*;
+use crate::rule;
 
 pub fn truncate_table<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, Statement, Error>
 where Error: ParseError<Input<'a>> {
