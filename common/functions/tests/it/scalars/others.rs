@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_functions::scalars::InetAtonFunction;
 use common_functions::scalars::InetNtoaFunction;
@@ -20,157 +21,244 @@ use common_functions::scalars::RunningDifferenceFunction;
 
 use super::scalar_function2_test::test_scalar_functions2;
 use super::scalar_function2_test::ScalarFunction2Test;
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::test_scalar_functions_with_type;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
-use crate::scalars::scalar_function_test::ScalarFunctionTestWithType;
+use crate::scalars::scalar_function2_test::test_scalar_functions2_with_type;
+use crate::scalars::scalar_function2_test::ScalarFunction2WithFieldTest;
 
 #[test]
 fn test_running_difference_first_null() -> Result<()> {
+    use common_datavalues2::prelude::*;
+
     let tests = vec![
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "i8_first_null",
-            nullable: true,
-            columns: vec![Series::new([None, Some(1_i8), None, Some(3), Some(7)]).into()],
-            expect: Series::new([None, None, None, None, Some(4_i16)]).into(),
+            columns: vec![Series::from_data([
+                None,
+                Some(1_i8),
+                None,
+                Some(3),
+                Some(7),
+            ])],
+            expect: Series::from_data([None, None, None, None, Some(4_i16)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "u8_first_null",
-            nullable: true,
-            columns: vec![Series::new([None, Some(1_u8), None, Some(3), Some(7)]).into()],
-            expect: Series::new([None, None, None, None, Some(4_i16)]).into(),
+            columns: vec![Series::from_data([
+                None,
+                Some(1_u8),
+                None,
+                Some(3),
+                Some(7),
+            ])],
+            expect: Series::from_data([None, None, None, None, Some(4_i16)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "i16_first_null",
-            nullable: true,
-            columns: vec![Series::new([None, Some(1_i16), None, Some(3), Some(7)]).into()],
-            expect: Series::new([None, None, None, None, Some(4_i32)]).into(),
+            columns: vec![Series::from_data([
+                None,
+                Some(1_i16),
+                None,
+                Some(3),
+                Some(7),
+            ])],
+            expect: Series::from_data([None, None, None, None, Some(4_i32)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "u16_first_null",
-            nullable: true,
-            columns: vec![Series::new([None, Some(1_u16), None, Some(3), Some(7)]).into()],
-            expect: Series::new([None, None, None, None, Some(4_i32)]).into(),
+            columns: vec![Series::from_data([
+                None,
+                Some(1_u16),
+                None,
+                Some(3),
+                Some(7),
+            ])],
+            expect: Series::from_data([None, None, None, None, Some(4_i32)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "i32_first_null",
-            nullable: true,
-            columns: vec![Series::new([None, Some(1_i32), None, Some(3), Some(7)]).into()],
-            expect: Series::new([None, None, None, None, Some(4_i64)]).into(),
+            columns: vec![Series::from_data([
+                None,
+                Some(1_i32),
+                None,
+                Some(3),
+                Some(7),
+            ])],
+            expect: Series::from_data([None, None, None, None, Some(4_i64)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "u32_first_null",
-            nullable: true,
-            columns: vec![Series::new([None, Some(1_u32), None, Some(3), Some(7)]).into()],
-            expect: Series::new([None, None, None, None, Some(4_i64)]).into(),
+            columns: vec![Series::from_data([
+                None,
+                Some(1_u32),
+                None,
+                Some(3),
+                Some(7),
+            ])],
+            expect: Series::from_data([None, None, None, None, Some(4_i64)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "i64_first_null",
-            nullable: true,
-            columns: vec![Series::new([None, Some(1_i64), None, Some(3), Some(7)]).into()],
-            expect: Series::new([None, None, None, None, Some(4_i64)]).into(),
+            columns: vec![Series::from_data([
+                None,
+                Some(1_i64),
+                None,
+                Some(3),
+                Some(7),
+            ])],
+            expect: Series::from_data([None, None, None, None, Some(4_i64)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "u64_first_null",
-            nullable: true,
-            columns: vec![Series::new([None, Some(1_u64), None, Some(3), Some(7)]).into()],
-            expect: Series::new([None, None, None, None, Some(4_i64)]).into(),
+            columns: vec![Series::from_data([
+                None,
+                Some(1_u64),
+                None,
+                Some(3),
+                Some(7),
+            ])],
+            expect: Series::from_data([None, None, None, None, Some(4_i64)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "i8_first_not_null",
-            nullable: true,
-            columns: vec![Series::new([Some(2_i8), Some(3), None, Some(4), Some(10)]).into()],
-            expect: Series::new([Some(0_i16), Some(1), None, None, Some(6)]).into(),
+            columns: vec![Series::from_data([
+                Some(2_i8),
+                Some(3),
+                None,
+                Some(4),
+                Some(10),
+            ])],
+            expect: Series::from_data([Some(0_i16), Some(1), None, None, Some(6)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "u8_first_not_null",
-            nullable: true,
-            columns: vec![Series::new([Some(2_u8), Some(3), None, Some(4), Some(10)]).into()],
-            expect: Series::new([Some(0_i16), Some(1), None, None, Some(6)]).into(),
+            columns: vec![Series::from_data([
+                Some(2_u8),
+                Some(3),
+                None,
+                Some(4),
+                Some(10),
+            ])],
+            expect: Series::from_data([Some(0_i16), Some(1), None, None, Some(6)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "i16_first_not_null",
-            nullable: true,
-            columns: vec![Series::new([Some(2_i16), Some(3), None, Some(4), Some(10)]).into()],
-            expect: Series::new([Some(0_i32), Some(1), None, None, Some(6)]).into(),
+            columns: vec![Series::from_data([
+                Some(2_i16),
+                Some(3),
+                None,
+                Some(4),
+                Some(10),
+            ])],
+            expect: Series::from_data([Some(0_i32), Some(1), None, None, Some(6)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "u16_first_not_null",
-            nullable: true,
-            columns: vec![Series::new([Some(2_u16), Some(3), None, Some(4), Some(10)]).into()],
-            expect: Series::new([Some(0_i32), Some(1), None, None, Some(6)]).into(),
+            columns: vec![Series::from_data([
+                Some(2_u16),
+                Some(3),
+                None,
+                Some(4),
+                Some(10),
+            ])],
+            expect: Series::from_data([Some(0_i32), Some(1), None, None, Some(6)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "i32_first_not_null",
-            nullable: true,
-            columns: vec![Series::new([Some(2_i32), Some(3), None, Some(4), Some(10)]).into()],
-            expect: Series::new([Some(0_i64), Some(1), None, None, Some(6)]).into(),
+            columns: vec![Series::from_data([
+                Some(2_i32),
+                Some(3),
+                None,
+                Some(4),
+                Some(10),
+            ])],
+            expect: Series::from_data([Some(0_i64), Some(1), None, None, Some(6)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "u32_first_not_null",
-            nullable: true,
-            columns: vec![Series::new([Some(2_u32), Some(3), None, Some(4), Some(10)]).into()],
-            expect: Series::new([Some(0_i64), Some(1), None, None, Some(6)]).into(),
+            columns: vec![Series::from_data([
+                Some(2_u32),
+                Some(3),
+                None,
+                Some(4),
+                Some(10),
+            ])],
+            expect: Series::from_data([Some(0_i64), Some(1), None, None, Some(6)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "i64_first_not_null",
-            nullable: true,
-            columns: vec![Series::new([Some(2_i64), Some(3), None, Some(4), Some(10)]).into()],
-            expect: Series::new([Some(0_i64), Some(1), None, None, Some(6)]).into(),
+            columns: vec![Series::from_data([
+                Some(2_i64),
+                Some(3),
+                None,
+                Some(4),
+                Some(10),
+            ])],
+            expect: Series::from_data([Some(0_i64), Some(1), None, None, Some(6)]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "u64_first_not_null",
-            nullable: true,
-            columns: vec![Series::new([Some(2_u64), Some(3), None, Some(4), Some(10)]).into()],
-            expect: Series::new([Some(0_i64), Some(1), None, None, Some(6)]).into(),
+            columns: vec![Series::from_data([
+                Some(2_u64),
+                Some(3),
+                None,
+                Some(4),
+                Some(10),
+            ])],
+            expect: Series::from_data([Some(0_i64), Some(1), None, None, Some(6)]),
             error: "",
         },
     ];
 
-    test_scalar_functions(RunningDifferenceFunction::try_create("a")?, &tests)
+    test_scalar_functions2(RunningDifferenceFunction::try_create("a")?, &tests)
 }
 
 #[test]
 fn test_running_difference_datetime32_first_null() -> Result<()> {
+    use common_datavalues2::prelude::*;
+    use common_datavalues2::type_datetime32::DateTime32Type;
+
     let tests = vec![
-        ScalarFunctionTestWithType {
+        ScalarFunction2WithFieldTest {
             name: "datetime32_first_null",
-            nullable: true,
-            columns: vec![DataColumnWithField::new(
-                Series::new([None, Some(3_u32), None, Some(4), Some(10)]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), true),
+            columns: vec![ColumnWithField::new(
+                Series::from_data([None, Some(3_u32), None, Some(4), Some(10)]),
+                DataField::new(
+                    "dummy_1",
+                    Arc::new(NullableType::create(DateTime32Type::arc(None))),
+                ),
             )],
-            expect: Series::new([None, None, None, None, Some(6_i64)]).into(),
+            expect: Series::from_data([None, None, None, None, Some(6_i64)]),
             error: "",
         },
-        ScalarFunctionTestWithType {
+        ScalarFunction2WithFieldTest {
             name: "datetime32_first_not_null",
-            nullable: true,
-            columns: vec![DataColumnWithField::new(
-                Series::new([Some(2_u32), Some(3), None, Some(4), Some(10)]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), true),
+            columns: vec![ColumnWithField::new(
+                Series::from_data([Some(2_u32), Some(3), None, Some(4), Some(10)]),
+                DataField::new(
+                    "dummy_1",
+                    Arc::new(NullableType::create(DateTime32Type::arc(None))),
+                ),
             )],
-            expect: Series::new([Some(0_i64), Some(1), None, None, Some(6)]).into(),
+            expect: Series::from_data([Some(0_i64), Some(1), None, None, Some(6)]),
             error: "",
         },
     ];
 
-    test_scalar_functions_with_type(RunningDifferenceFunction::try_create("a")?, &tests)
+    test_scalar_functions2_with_type(RunningDifferenceFunction::try_create("a")?, &tests)
 }
 
 #[test]

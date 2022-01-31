@@ -98,7 +98,7 @@ static FUNCTION2_FACTORY: Lazy<Arc<Function2Factory>> = Lazy::new(|| {
     ConditionalFunction::register(&mut function_factory);
     LogicFunction::register(&mut function_factory);
     DateFunction::register2(&mut function_factory);
-    OtherFunction::register2(&mut function_factory);
+    OtherFunction::register(&mut function_factory);
 
     Arc::new(function_factory)
 });
