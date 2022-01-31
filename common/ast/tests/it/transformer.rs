@@ -14,6 +14,7 @@
 
 use common_ast::parser::ast::*;
 use common_ast::parser::*;
+use pretty_assertions::assert_eq;
 
 #[test]
 fn test_parse_with_sqlparser() {
