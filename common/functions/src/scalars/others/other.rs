@@ -25,13 +25,13 @@ pub struct OtherFunction {}
 impl OtherFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("runningDifference", RunningDifferenceFunction::desc());
-        factory.register("inet_ntoa", InetNtoaFunction::desc());
-        factory.register("IPv4NumToString", InetNtoaFunction::desc());
     }
 
     pub fn register2(factory: &mut Function2Factory) {
         factory.register("ignore", IgnoreFunction::desc());
         factory.register("inet_aton", InetAtonFunction::desc());
         factory.register("IPv4StringToNum", InetAtonFunction::desc());
+        factory.register("inet_ntoa", InetNtoaFunction::desc());
+        factory.register("IPv4NumToString", InetNtoaFunction::desc());
     }
 }

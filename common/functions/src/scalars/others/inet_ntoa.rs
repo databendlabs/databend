@@ -13,20 +13,30 @@
 // limitations under the License.
 
 use std::fmt;
+use std::net::Ipv4Addr;
 use std::str;
+use std::sync::Arc;
 
-use common_datavalues::prelude::DFStringArray;
-use common_datavalues::prelude::DataColumn;
-use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::prelude::NewDataArray;
-use common_datavalues::DataType;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::remove_nullable;
+use common_datavalues2::types::type_string::StringType;
+use common_datavalues2::ColumnRef;
+use common_datavalues2::ColumnViewer;
+use common_datavalues2::ColumnsWithField;
+use common_datavalues2::DataTypePtr;
+use common_datavalues2::Float64Type;
+use common_datavalues2::NullableColumnBuilder;
+use common_datavalues2::NullableType;
+use common_datavalues2::TypeID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::cast_with_type;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::CastOptions;
+use crate::scalars::ExceptionMode;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
+use crate::scalars::ParsingMode;
 
 #[derive(Clone)]
 #[doc(alias = "IPv4NumToStringFunction")]
@@ -35,54 +45,71 @@ pub struct InetNtoaFunction {
 }
 
 impl InetNtoaFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(InetNtoaFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
-impl Function for InetNtoaFunction {
+impl Function2 for InetNtoaFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
-            Ok(DataType::String)
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        let input_type = remove_nullable(args[0]);
+
+        let output_type = if input_type.data_type_id().is_numeric()
+            || input_type.data_type_id().is_string()
+            || input_type.data_type_id() == TypeID::Null
+        {
+            Ok(StringType::arc())
         } else {
             Err(ErrorCode::IllegalDataType(format!(
-                "Expected numeric or string or null type, but got {}",
-                args[0]
+                "Expected numeric, string or null type, but got {}",
+                args[0].name()
             )))
         }?;
 
-        // The function returns null for invalid input, so the nullable is true.
-        Ok(DataTypeAndNullable::create(&data_type, true))
+        // For invalid input, the function should return null. So the return type must be nullable.
+        Ok(Arc::new(NullableType::create(output_type)))
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let opt_iter = columns[0]
-            .column()
-            .to_minimal_array()?
-            .cast_with_type(&DataType::Float64)?;
-        let opt_iter = opt_iter.f64()?.iter().map(|val_opt| {
-            val_opt.and_then(|&val| {
-                if val.is_nan() || val < 0.0 || val > u32::MAX as f64 {
-                    None
-                } else {
-                    Some(std::net::Ipv4Addr::from((val as u32).to_be_bytes()).to_string())
-                }
-            })
-        });
-        let result = DFStringArray::new_from_opt_iter(opt_iter);
-        let column: DataColumn = result.into();
-        Ok(column.resize_constant(columns[0].column().len()))
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        let cast_to: DataTypePtr = Arc::new(NullableType::create(Float64Type::arc()));
+        let cast_option = CastOptions {
+            // we allow cast failure
+            exception_mode: ExceptionMode::Zero,
+            parsing_mode: ParsingMode::Partial,
+        };
+        let column = cast_with_type(
+            columns[0].column(),
+            columns[0].data_type(),
+            &cast_to,
+            &cast_option,
+        )?;
+        let viewer = ColumnViewer::<f64>::create(&column)?;
+
+        let mut builder: NullableColumnBuilder<Vec<u8>> =
+            NullableColumnBuilder::with_capacity(input_rows);
+
+        for i in 0..input_rows {
+            let val = viewer.value(i);
+
+            if val.is_nan() || val < 0.0 || val > u32::MAX as f64 {
+                builder.append_null();
+            } else {
+                let addr_str = Ipv4Addr::from((val as u32).to_be_bytes()).to_string();
+                builder.append(addr_str.as_bytes(), viewer.valid_at(i));
+            }
+        }
+        Ok(builder.build(input_rows))
     }
 }
 

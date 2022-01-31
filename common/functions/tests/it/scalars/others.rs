@@ -204,89 +204,80 @@ fn test_inet_aton_function() -> Result<()> {
 
 #[test]
 fn test_inet_ntoa_function() -> Result<()> {
+    use common_datavalues2::prelude::*;
+
     let tests = vec![
         // integer input test cases
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "integer_input_i32_positive",
-            nullable: true,
-            columns: vec![Series::new([2130706433_i32]).into()],
-            expect: Series::new(["127.0.0.1"]).into(),
+            columns: vec![Series::from_data(vec![2130706433_i32])],
+            expect: Series::from_data(vec![Some("127.0.0.1")]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "integer_input_i32_negative",
-            nullable: true,
-            columns: vec![Series::new(["-1"]).into()],
-            expect: DataColumn::Constant(DataValue::String(None), 1),
+            columns: vec![Series::from_data(vec!["-1"])],
+            expect: Series::from_data(vec![Option::<Vec<u8>>::None]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "integer_input_u8",
-            nullable: true,
-            columns: vec![Series::new([0_u8]).into()],
-            expect: Series::new(["0.0.0.0"]).into(),
+            columns: vec![Series::from_data(vec![Some(0_u8)])],
+            expect: Series::from_data(vec![Some("0.0.0.0")]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "integer_input_u32",
-            nullable: true,
-            columns: vec![Series::new([3232235777_u32]).into()],
-            expect: Series::new(["192.168.1.1"]).into(),
+            columns: vec![Series::from_data(vec![Some(3232235777_u32)])],
+            expect: Series::from_data(vec![Some("192.168.1.1")]),
             error: "",
         },
         // float input test cases
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "float_input_f64",
-            nullable: true,
-            columns: vec![Series::new([2130706433.3917_f64]).into()],
-            expect: Series::new(["127.0.0.1"]).into(),
+            columns: vec![Series::from_data(vec![2130706433.3917_f64])],
+            expect: Series::from_data(vec![Some("127.0.0.1")]),
             error: "",
         },
         // string input test cases
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "string_input_empty",
-            nullable: true,
-            columns: vec![Series::new([""]).into()],
-            expect: Series::new(["0.0.0.0"]).into(),
+            columns: vec![Series::from_data(vec![""])],
+            expect: Series::from_data(vec![Option::<Vec<u8>>::None]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "string_input_u32",
-            nullable: true,
-            columns: vec![Series::new(["3232235777"]).into()],
-            expect: Series::new(["192.168.1.1"]).into(),
+            columns: vec![Series::from_data(vec!["3232235777"])],
+            expect: Series::from_data(vec![Some("192.168.1.1")]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "string_input_f64",
-            nullable: true,
-            columns: vec![Series::new(["3232235777.72319"]).into()],
-            expect: Series::new(["192.168.1.1"]).into(),
+            columns: vec![Series::from_data(vec!["3232235777.72319"])],
+            expect: Series::from_data(vec![Some("192.168.1.1")]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "string_input_starts_with_integer",
-            nullable: true,
-            columns: vec![Series::new(["323a"]).into()],
-            expect: Series::new(["0.0.1.67"]).into(),
+            columns: vec![Series::from_data(vec!["323a"])],
+            expect: Series::from_data(vec![Some("0.0.1.67")]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "string_input_char_inside_integer",
-            nullable: true,
-            columns: vec![Series::new(["323a111"]).into()],
-            expect: Series::new(["0.0.1.67"]).into(),
+            columns: vec![Series::from_data(vec!["323a111"])],
+            expect: Series::from_data(vec![Some("0.0.1.67")]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "string_input_invalid_string",
-            nullable: true,
-            columns: vec![Series::new(["-sad"]).into()],
-            expect: Series::new(["0.0.0.0"]).into(),
+            columns: vec![Series::from_data(["-sad"])],
+            expect: Series::from_data(vec![Option::<Vec<u8>>::None]),
             error: "",
         },
     ];
 
     let test_func = InetNtoaFunction::try_create("inet_ntoa")?;
-    test_scalar_functions(test_func, &tests)
+    test_scalar_functions2(test_func, &tests)
 }
