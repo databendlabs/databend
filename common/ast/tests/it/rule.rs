@@ -12,12 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::assert_parse;
 use common_ast::parser::rule::statement::*;
 use common_ast::parser::rule::util::Input;
 use common_ast::parser::token::*;
 use nom::Parser;
 use pretty_assertions::assert_eq;
+
+macro_rules! assert_parse {
+    ($parser:expr, $source:literal, $expected:literal $(,)*) => {
+        let tokens = tokenise($source).unwrap();
+        let res: nom::IResult<_, _, nom_supreme::error::ErrorTree<Input>> = $parser.parse(&tokens);
+        let (i, output) = res.unwrap();
+
+        assert_eq!(&format!("{}", output), $expected);
+        assert_eq!(i, &[]);
+    };
+}
 
 #[test]
 fn test_statement() {
