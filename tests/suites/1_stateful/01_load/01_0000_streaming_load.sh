@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-. "$CURDIR"/../../shell_env.sh
+. "$CURDIR"/../../../shell_env.sh
 
 
 ## create ontime table
-cat $CURDIR/ontime/create_table.sql | sed 's/ontime/ontime_streaming_load/g' | $MYSQL_CLIENT_CONNECT
+cat $CURDIR/../ontime/create_table.sql | sed 's/ontime/ontime_streaming_load/g' | $MYSQL_CLIENT_CONNECT
 
 
 if [ ! -f /tmp/ontime.csv ]; then
