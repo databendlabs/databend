@@ -459,8 +459,6 @@ def main(args):
                     os.listdir(cur_dir_path))))
 
     def get_all_tests_under_dir_recursive(suite_dir):
-        all_tests = []
-
         all_tests = copy.deepcopy(
             collect_files_with_pattern(suite_dir, ".sql|.sh|.py"))
         # Collect files in depth 0 directory.
