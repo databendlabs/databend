@@ -41,54 +41,63 @@ use crate::rule;
 
 pub fn query<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, Query, Error>
 where Error: ParseError<Input<'a>> {
-    todo!()
+    // TODO: unimplemented
+    nom::combinator::fail(i)
 }
 
 pub fn expr<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, Expr, Error>
 where Error: ParseError<Input<'a>> {
-    let (i, expr_elements) = rule! { #expr_element+ }(i)?;
-    let mut iter = expr_elements.into_iter();
-    let expr = ExprParser
-        .parse(&mut iter)
-        .map_err(|err| match err {
-            PrattError::EmptyInput => {
-                ContextError::add_context(i, "empty expresssion", make_error(i, ErrorKind::Eof))
-            }
-            // TODO (andylokandy): report the proper span
-            PrattError::UnexpectedNilfix(_) => ContextError::add_context(
-                i,
-                "unable to parse the value",
-                make_error(i, ErrorKind::Complete),
-            ),
-            PrattError::UnexpectedPrefix(_) => ContextError::add_context(
-                i,
-                "unable to parse the prefix operator",
-                make_error(i, ErrorKind::Complete),
-            ),
-            PrattError::UnexpectedInfix(_) => ContextError::add_context(
-                i,
-                "unable to parse the binary operator",
-                make_error(i, ErrorKind::Complete),
-            ),
-            PrattError::UnexpectedPostfix(_) => ContextError::add_context(
-                i,
-                "unable to parse the postfix operator",
-                make_error(i, ErrorKind::Complete),
-            ),
-            PrattError::UserError(_) => unreachable!(),
-        })
-        .map_err(nom::Err::Error)?;
+    subexpr(Error)(i)
+}
 
-    let rest: Vec<_> = iter.collect();
-    if !rest.is_empty() {
-        return Err(nom::Err::Error(ContextError::add_context(
-            i,
-            "unable to parse the rest of expression",
-            make_error(i, ErrorKind::Complete),
-        )));
+pub fn subexpr<'a, Error>(
+    stop_at: TokenKind,
+) -> impl FnMut(Input<'a>) -> IResult<Input<'a>, Expr, Error> + Copy
+where Error: ParseError<Input<'a>> {
+    move |i| {
+        let (i, expr_elements) = rule! { (!stop_at ~ #expr_element)+ }(i)?;
+        let mut iter = expr_elements.into_iter().map(|(_, elem)| elem);
+        let expr = ExprParser
+            .parse(&mut iter)
+            .map_err(|err| match err {
+                PrattError::EmptyInput => {
+                    ContextError::add_context(i, "empty expresssion", make_error(i, ErrorKind::Eof))
+                }
+                // TODO (andylokandy): report the proper span
+                PrattError::UnexpectedNilfix(_) => ContextError::add_context(
+                    i,
+                    "unable to parse the value",
+                    make_error(i, ErrorKind::Complete),
+                ),
+                PrattError::UnexpectedPrefix(_) => ContextError::add_context(
+                    i,
+                    "unable to parse the prefix operator",
+                    make_error(i, ErrorKind::Complete),
+                ),
+                PrattError::UnexpectedInfix(_) => ContextError::add_context(
+                    i,
+                    "unable to parse the binary operator",
+                    make_error(i, ErrorKind::Complete),
+                ),
+                PrattError::UnexpectedPostfix(_) => ContextError::add_context(
+                    i,
+                    "unable to parse the postfix operator",
+                    make_error(i, ErrorKind::Complete),
+                ),
+                PrattError::UserError(_) => unreachable!(),
+            })
+            .map_err(nom::Err::Error)?;
+
+        if iter.next().is_some() {
+            return Err(nom::Err::Error(ContextError::add_context(
+                i,
+                "unable to parse the rest of expression",
+                make_error(i, ErrorKind::Complete),
+            )));
+        }
+
+        Ok((i, expr))
     }
-
-    Ok((i, expr))
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -241,24 +250,26 @@ impl<I: Iterator<Item = ExprElement>> PrattParser<I> for ExprParser {
     }
 
     fn infix(&mut self, lhs: Expr, elem: ExprElement, rhs: Expr) -> pratt::Result<Expr> {
-        match elem {
-            ExprElement::BinaryOp { op } => Ok(Expr::BinaryOp {
+        let expr = match elem {
+            ExprElement::BinaryOp { op } => Expr::BinaryOp {
                 left: Box::new(lhs),
                 right: Box::new(rhs),
                 op,
-            }),
+            },
             _ => unreachable!(),
-        }
+        };
+        Ok(expr)
     }
 
     fn prefix(&mut self, elem: ExprElement, rhs: Expr) -> pratt::Result<Expr> {
-        match elem {
-            ExprElement::UnaryOp { op } => Ok(Expr::UnaryOp {
+        let expr = match elem {
+            ExprElement::UnaryOp { op } => Expr::UnaryOp {
                 op,
                 expr: Box::new(rhs),
-            }),
+            },
             _ => unreachable!(),
-        }
+        };
+        Ok(expr)
     }
 
     fn postfix(&mut self, lhs: Expr, elem: ExprElement) -> pratt::Result<Expr> {
@@ -293,20 +304,20 @@ pub fn expr_element<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, ExprElement, 
 where Error: ParseError<Input<'a>> {
     let column_ref = map(
         rule! {
-            ((#ident ~ ".")? ~ #ident ~ ".")? ~ #ident
+            #ident ~ ("." ~ #ident ~ ("." ~ #ident)?)?
         },
         |res| match res {
-            (None, column) => ExprElement::ColumnRef {
+            (column, None) => ExprElement::ColumnRef {
                 database: None,
                 table: None,
                 column,
             },
-            (Some((None, table, _)), column) => ExprElement::ColumnRef {
+            (table, Some((_, column, None))) => ExprElement::ColumnRef {
                 database: None,
                 table: Some(table),
                 column,
             },
-            (Some((Some((database, _)), table, _)), column) => ExprElement::ColumnRef {
+            (database, Some((_, table, Some((_, column))))) => ExprElement::ColumnRef {
                 database: Some(database),
                 table: Some(table),
                 column,
@@ -341,9 +352,10 @@ where Error: ParseError<Input<'a>> {
             not: not.is_some(),
         },
     );
+    let between_subexpr = subexpr(AND);
     let between = map(
         rule! {
-            NOT? ~ BETWEEN ~ #expr ~ AND ~  #expr
+            NOT? ~ BETWEEN ~ #between_subexpr ~ AND ~  #between_subexpr
         },
         |(not, _, low, _, high)| ExprElement::Between {
             low,
@@ -362,23 +374,49 @@ where Error: ParseError<Input<'a>> {
     });
     let function_call = map(
         rule! {
-            Ident ~ ("(" ~ #literal ~ ("," ~ #literal)*  ~ ")")? ~ "(" ~ DISTINCT? ~ #expr ~ ("," ~ #expr)*  ~ ")"
+            #function_name ~ "(" ~ (DISTINCT? ~ #expr ~ ("," ~ #expr)*)? ~ ")"
         },
-        |(name, params, _, distinct, args_head, args_tail, _)| {
+        |(name, _, args, _)| {
+            let (distinct, args) = args
+                .map(|(distinct, head, tail)| {
+                    let mut args = vec![head];
+                    args.extend(tail.into_iter().map(|(_, arg)| arg));
+                    (distinct.is_some(), args)
+                })
+                .unwrap_or_default();
+
+            ExprElement::FunctionCall {
+                distinct,
+                name,
+                args,
+                params: vec![],
+            }
+        },
+    );
+    let function_call_with_param = map(
+        rule! {
+            #function_name ~ "(" ~ (#literal ~ ("," ~ #literal)*)? ~ ")" ~ "(" ~ (DISTINCT? ~ #expr ~ ("," ~ #expr)*)? ~ ")"
+        },
+        |(name, _, params, _, _, args, _)| {
             let params = params
-                .map(|(_, head, tail, _)| {
+                .map(|(head, tail)| {
                     let mut params = vec![head];
                     params.extend(tail.into_iter().map(|(_, param)| param));
                     params
                 })
-                .unwrap_or_else(Vec::new);
+                .unwrap_or_default();
 
-            let mut args = vec![args_head];
-            args.extend(args_tail.into_iter().map(|(_, arg)| arg));
+            let (distinct, args) = args
+                .map(|(distinct, head, tail)| {
+                    let mut args = vec![head];
+                    args.extend(tail.into_iter().map(|(_, arg)| arg));
+                    (distinct.is_some(), args)
+                })
+                .unwrap_or_default();
 
             ExprElement::FunctionCall {
-                distinct: distinct.is_some(),
-                name: name.text.to_string(),
+                distinct,
+                name,
                 args,
                 params,
             }
@@ -427,6 +465,7 @@ where Error: ParseError<Input<'a>> {
         | #cast
         | #count_all
         | #literal
+        | #function_call_with_param
         | #function_call
         | #case
         | #exists
@@ -551,5 +590,23 @@ where Error: ParseError<Input<'a>> {
         | #ty_time
         | #ty_timestamp
         | #ty_text
+    )(i)
+}
+
+// TODO(andylokandy): complete the keyword-function list, or remove the function name from keywords
+pub fn function_name<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, String, Error>
+where Error: ParseError<Input<'a>> {
+    map(
+        rule! {
+            Ident
+            | COUNT
+            | SUM
+            | AVG
+            | MIN
+            | MAX
+            | STDDEV_POP
+            | SQRT
+        },
+        |name| name.text.to_string(),
     )(i)
 }

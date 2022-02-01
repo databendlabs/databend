@@ -24,7 +24,9 @@ use crate::parser::token::*;
 pub type Input<'a> = &'a [Token<'a>];
 pub trait ParseError<I> = nom::error::ParseError<I> + nom::error::ContextError<I>;
 
-pub fn satisfy<'a, F, Error>(cond: F) -> impl Fn(Input<'a>) -> IResult<Input<'a>, &'a Token, Error>
+pub fn satisfy<'a, F, Error>(
+    cond: F,
+) -> impl FnMut(Input<'a>) -> IResult<Input<'a>, &'a Token, Error>
 where
     F: Fn(&Token) -> bool,
     Error: ParseError<Input<'a>>,
