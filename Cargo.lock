@@ -1437,6 +1437,7 @@ dependencies = [
  "nom-rule",
  "nom-supreme",
  "once_cell",
+ "pratt",
  "pretty_assertions",
  "sqlparser",
  "thiserror",

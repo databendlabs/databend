@@ -35,14 +35,14 @@ fn test_lexer() {
         (LiteralString, "'日本語'", 9..20),
     ]);
     assert_lex("42 3.5 4. .001 5e2 1.925e-3 .38e+7 1.e-01", &[
-        (LiteralNumeber, "42", 0..2),
-        (LiteralNumeber, "3.5", 3..6),
-        (LiteralNumeber, "4.", 7..9),
-        (LiteralNumeber, ".001", 10..14),
-        (LiteralNumeber, "5e2", 15..18),
-        (LiteralNumeber, "1.925e-3", 19..27),
-        (LiteralNumeber, ".38e+7", 28..34),
-        (LiteralNumeber, "1.e-01", 35..41),
+        (LiteralNumber, "42", 0..2),
+        (LiteralNumber, "3.5", 3..6),
+        (LiteralNumber, "4.", 7..9),
+        (LiteralNumber, ".001", 10..14),
+        (LiteralNumber, "5e2", 15..18),
+        (LiteralNumber, "1.925e-3", 19..27),
+        (LiteralNumber, ".38e+7", 28..34),
+        (LiteralNumber, "1.e-01", 35..41),
     ]);
     assert_lex(
         r#"create table "user" (id int, name varchar /* the user name */);"#,

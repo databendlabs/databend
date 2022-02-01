@@ -49,7 +49,7 @@ pub enum TokenKind {
     #[regex(r"[0-9]+")]
     #[regex(r"[0-9]+e[+-]?[0-9]+")]
     #[regex(r"([0-9]*\.[0-9]+(e[+-]?[0-9]+)?)|([0-9]+\.[0-9]*(e[+-]?[0-9]+)?)")]
-    LiteralNumeber,
+    LiteralNumber,
 
     // Symbols
     #[token("==")]
@@ -58,15 +58,15 @@ pub enum TokenKind {
     Eq,
     #[token("<>")]
     #[token("!=")]
-    Neq,
+    NotEq,
     #[token("<")]
     Lt,
     #[token(">")]
     Gt,
     #[token("<=")]
-    LtEq,
+    Lte,
     #[token(">=")]
-    GtEq,
+    Gte,
     #[token("<=>")]
     Spaceship,
     #[token("+")]
@@ -383,6 +383,8 @@ pub enum TokenKind {
     DISTINCT,
     #[token("DISTRIBUTE", ignore(ascii_case))]
     DISTRIBUTE,
+    #[token("DIV", ignore(ascii_case))]
+    DIV,
     #[token("DOUBLE", ignore(ascii_case))]
     DOUBLE,
     #[token("DROP", ignore(ascii_case))]

@@ -628,8 +628,14 @@ impl TransformerSqlparser {
                     )))
                 }
             }
-            SqlparserExpr::IsNull(arg) => Ok(Expr::IsNull(Box::new(self.transform_expr(arg)?))),
-            SqlparserExpr::IsNotNull(arg) => Ok(Expr::IsNull(Box::new(self.transform_expr(arg)?))),
+            SqlparserExpr::IsNull(expr) => Ok(Expr::IsNull {
+                expr: Box::new(self.transform_expr(expr)?),
+                not: false,
+            }),
+            SqlparserExpr::IsNotNull(expr) => Ok(Expr::IsNull {
+                expr: Box::new(self.transform_expr(expr)?),
+                not: true,
+            }),
             SqlparserExpr::InList {
                 expr,
                 list,
@@ -649,7 +655,7 @@ impl TransformerSqlparser {
             } => Ok(Expr::InSubquery {
                 expr: Box::new(self.transform_expr(expr)?),
                 subquery: Box::new(self.transform_query(subquery)?),
-                not: negated.to_owned(),
+                not: *negated,
             }),
             SqlparserExpr::Between {
                 expr,
@@ -658,9 +664,9 @@ impl TransformerSqlparser {
                 high,
             } => Ok(Expr::Between {
                 expr: Box::new(self.transform_expr(expr)?),
-                negated: negated.to_owned(),
                 low: Box::new(self.transform_expr(low)?),
                 high: Box::new(self.transform_expr(high)?),
+                not: *negated,
             }),
             SqlparserExpr::BinaryOp { left, op, right } => Ok(Expr::BinaryOp {
                 op: self.transform_binary_operator(op)?,
@@ -690,6 +696,14 @@ impl TransformerSqlparser {
                     ))),
                 }?;
                 Ok(Expr::Literal(lit))
+            }
+            SqlparserExpr::Function(func)
+                if func.name.0.get(0).map(|ident| ident.value.to_uppercase())
+                    == Some("COUNT".to_string())
+                    && func.args.get(0)
+                        == Some(&FunctionArg::Unnamed(FunctionArgExpr::Wildcard)) =>
+            {
+                Ok(Expr::CountAll)
             }
             SqlparserExpr::Function(func) => Ok(Expr::FunctionCall {
                 distinct: func.distinct,
@@ -828,7 +842,7 @@ impl TransformerSqlparser {
     fn transform_function_arg(&self, arg_expr: &FunctionArgExpr) -> Result<Expr> {
         match arg_expr {
             FunctionArgExpr::Expr(expr) => self.transform_expr(expr),
-            FunctionArgExpr::Wildcard => Ok(Expr::Wildcard),
+            FunctionArgExpr::Wildcard => unreachable!(),
             FunctionArgExpr::QualifiedWildcard(_) => Err(ErrorCode::SyntaxException(std::format!(
                 "Unsupported SQL statement: {}",
                 self.orig_stmt
