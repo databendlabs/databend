@@ -334,9 +334,9 @@ where Error: ParseError<Input<'a>> {
         rule! {
             NOT? ~ IN ~ "(" ~ #expr ~ ("," ~ #expr)*  ~ ")"
         },
-        |(not, _, _, head, tails, _)| {
+        |(not, _, _, head, tail, _)| {
             let mut list = vec![head];
-            list.extend(tails.into_iter().map(|(_, expr)| expr));
+            list.extend(tail.into_iter().map(|(_, expr)| expr));
             ExprElement::InList {
                 list,
                 not: not.is_some(),
@@ -593,7 +593,7 @@ where Error: ParseError<Input<'a>> {
     )(i)
 }
 
-// TODO(andylokandy): complete the keyword-function list, or remove the function name from keywords
+// TODO(andylokandy): complete the keyword-function list, or remove the functions' name from keywords
 pub fn function_name<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, String, Error>
 where Error: ParseError<Input<'a>> {
     map(
