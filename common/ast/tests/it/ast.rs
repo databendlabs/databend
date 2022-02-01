@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_ast::parser::ast::*;
+use pretty_assertions::assert_eq;
 
 #[test]
 fn test_display_create_database() {
