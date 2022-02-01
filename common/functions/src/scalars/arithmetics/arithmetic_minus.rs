@@ -27,36 +27,25 @@ use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function2;
 use crate::scalars::Monotonicity;
-use crate::scalars::ScalarBinaryFunction;
 
-#[derive(Clone, Debug, Default)]
-struct SubFunction {}
-
-impl<L, R, O> ScalarBinaryFunction<L, R, O> for SubFunction
+fn sub_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>) -> O
 where
     L: PrimitiveType + AsPrimitive<O>,
     R: PrimitiveType + AsPrimitive<O>,
     O: PrimitiveType + Sub<Output = O>,
 {
-    fn eval(&self, l: L::RefType<'_>, r: R::RefType<'_>) -> O {
-        l.to_owned_scalar().as_() - r.to_owned_scalar().as_()
-    }
+    l.to_owned_scalar().as_() - r.to_owned_scalar().as_()
 }
 
-#[derive(Clone, Debug, Default)]
-struct WrappingSubFunction {}
-
-impl<L, R, O> ScalarBinaryFunction<L, R, O> for WrappingSubFunction
+fn wrapping_sub_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>) -> O
 where
     L: PrimitiveType + AsPrimitive<O>,
     R: PrimitiveType + AsPrimitive<O>,
     O: IntegerType + WrappingSub<Output = O>,
 {
-    fn eval(&self, l: L::RefType<'_>, r: R::RefType<'_>) -> O {
-        l.to_owned_scalar()
-            .as_()
-            .wrapping_sub(&r.to_owned_scalar().as_())
-    }
+    l.to_owned_scalar()
+        .as_()
+        .wrapping_sub(&r.to_owned_scalar().as_())
 }
 
 pub struct ArithmeticMinusFunction;
@@ -87,14 +76,14 @@ impl ArithmeticMinusFunction {
                     BinaryArithmeticFunction::<$T, $D, $T, _>::try_create_func(
                         op,
                         args[0].clone(),
-                        SubFunction::default(),
+                        sub_scalar::<$T,$D, _>
                     )
                 },{
                     with_match_date_type_error!(right_type, |$D| {
                         BinaryArithmeticFunction::<$T, $D, i32, _>::try_create_func(
                             op,
                             Int32Type::arc(),
-                            SubFunction::default(),
+                            sub_scalar::<$T, $D, _>
                         )
                     })
                 })
@@ -107,7 +96,7 @@ impl ArithmeticMinusFunction {
                     BinaryArithmeticFunction::<$T, $D, $D, _>::try_create_func(
                         op,
                         args[1].clone(),
-                        SubFunction::default(),
+                        sub_scalar::<$T, $D, _>
                     )
                 })
             },{
@@ -122,12 +111,12 @@ impl ArithmeticMinusFunction {
                     TypeID::Int64 => BinaryArithmeticFunction::<$T, $D, i64, _>::try_create_func(
                         op,
                         result_type,
-                        WrappingSubFunction::default(),
+                        wrapping_sub_scalar::<$T, $D, _>
                     ),
                     _ => BinaryArithmeticFunction::<$T, $D, <($T, $D) as ResultTypeOfBinary>::Minus, _>::try_create_func(
                         op,
                         result_type,
-                        SubFunction::default(),
+                        sub_scalar::<$T, $D, _>
                     ),
                 }
             }, {

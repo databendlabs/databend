@@ -28,7 +28,6 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
 use crate::scalars::Function2Description;
 use crate::scalars::ScalarUnaryExpression;
-use crate::scalars::ScalarUnaryFunction;
 
 /// H ---> Hasher
 /// R ---> Result Type
@@ -39,23 +38,16 @@ pub struct BaseHashFunction<H, R> {
     r: PhantomData<R>,
 }
 
-#[derive(Clone, Debug, Default)]
-struct HashFunction<H> {
-    h: PhantomData<H>,
-}
-
-impl<S, O, H> ScalarUnaryFunction<S, O> for HashFunction<H>
+fn hash_func<H, S, O>(l: S::RefType<'_>) -> O
 where
     S: Scalar,
     O: Scalar + FromPrimitive,
     H: Hasher + Default,
     for<'a> <S as Scalar>::RefType<'a>: DFHash,
 {
-    fn eval(&self, l: S::RefType<'_>) -> O {
-        let mut h = H::default();
-        l.hash(&mut h);
-        O::from_u64(h.finish()).unwrap()
-    }
+    let mut h = H::default();
+    l.hash(&mut h);
+    O::from_u64(h.finish()).unwrap()
 }
 
 impl<H, R> BaseHashFunction<H, R>
@@ -100,7 +92,7 @@ where
         _input_rows: usize,
     ) -> Result<common_datavalues2::ColumnRef> {
         with_match_scalar_types_error!(columns[0].data_type().data_type_id().to_physical_type(), |$S| {
-            let unary = ScalarUnaryExpression::<$S, R, _>::new(HashFunction::<H>::default());
+            let unary = ScalarUnaryExpression::<$S, R, _>::new(hash_func::<H, $S, R>);
             let col = unary.eval(columns[0].column())?;
             Ok(Arc::new(col))
         })

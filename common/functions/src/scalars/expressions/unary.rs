@@ -21,6 +21,15 @@ pub trait ScalarUnaryFunction<L: Scalar, O: Scalar> {
     fn eval(&self, l: L::RefType<'_>) -> O;
 }
 
+/// Blanket implementation for all binary expression functions
+impl<L: Scalar, O: Scalar, F> ScalarUnaryFunction<L, O> for F
+where F: Fn(L::RefType<'_>) -> O
+{
+    fn eval(&self, i1: L::RefType<'_>) -> O {
+        self(i1)
+    }
+}
+
 /// A common struct to caculate Unary expression scalar op.
 #[derive(Clone)]
 pub struct ScalarUnaryExpression<L: Scalar, O: Scalar, F> {
