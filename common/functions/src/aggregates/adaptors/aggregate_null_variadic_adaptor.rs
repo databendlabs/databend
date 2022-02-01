@@ -52,7 +52,7 @@ impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool>
     #[inline]
     pub fn set_flag(place: StateAddr) {
         if NULLABLE_RESULT {
-            let c = place.get::<usize>();
+            let c = place.get::<u8>();
             *c = 1;
         }
     }
@@ -60,15 +60,15 @@ impl<const NULLABLE_RESULT: bool, const STKIP_NULL: bool>
     #[inline]
     pub fn init_flag(place: StateAddr) {
         if NULLABLE_RESULT {
-            let c = place.get::<usize>();
+            let c = place.get::<u8>();
             *c = 0;
         }
     }
 
     #[inline]
-    pub fn get_flag(place: StateAddr) -> usize {
+    pub fn get_flag(place: StateAddr) -> u8 {
         if NULLABLE_RESULT {
-            let c = place.get::<usize>();
+            let c = place.get::<u8>();
             *c
         } else {
             1
