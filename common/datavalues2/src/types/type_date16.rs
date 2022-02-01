@@ -83,10 +83,15 @@ impl DataType for Date16Type {
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
         Box::new(DateSerializer::<u16>::default())
     }
+
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
         Box::new(DateDeserializer::<u16> {
             builder: MutablePrimitiveColumn::<u16>::with_capacity(capacity),
         })
+    }
+
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutablePrimitiveColumn::<u16>::with_capacity(capacity))
     }
 }
 

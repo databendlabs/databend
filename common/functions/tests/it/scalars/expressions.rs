@@ -191,7 +191,6 @@ fn test_unary_size() {
         }
     }
 
-    //create two string columns
     let l = Series::from_data(vec!["11", "22", "333"]);
     let expected = Series::from_data(vec![2i32, 2, 3]);
     let unary_expression = ScalarUnaryExpression::<Vec<u8>, i32, _>::new(LenFunc {});

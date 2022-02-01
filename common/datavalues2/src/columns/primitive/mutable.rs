@@ -15,15 +15,11 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
-use crate::prelude::DataTypePtr;
+use crate::prelude::*;
 use crate::types::create_primitive_datatype;
-use crate::PrimitiveColumn;
-use crate::PrimitiveType;
-use crate::Scalar;
-use crate::ScalarColumnBuilder;
-use crate::ScalarRef;
 
 #[derive(Debug)]
 pub struct MutablePrimitiveColumn<T>
@@ -69,6 +65,12 @@ where T: PrimitiveType
         Arc::new(PrimitiveColumn::<T> {
             values: std::mem::take(&mut self.values).into(),
         })
+    }
+
+    fn append_data_value(&mut self, value: crate::DataValue) -> Result<()> {
+        let t: T = DFTryFrom::try_from(value)?;
+        self.append_value(t);
+        Ok(())
     }
 }
 

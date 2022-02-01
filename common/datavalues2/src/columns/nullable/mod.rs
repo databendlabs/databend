@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod mutable;
+
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
+pub use mutable::*;
 
 use crate::prelude::*;
 
@@ -93,11 +96,31 @@ impl Column for NullableColumn {
         Arc::from(result.with_validity(Some(self.validity.clone())))
     }
 
+    fn arc(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
         Arc::new(Self {
             column: self.column.slice(offset, length),
             validity: self.validity.clone().slice(offset, length),
         })
+    }
+
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        if filter.values().null_count() == 0 {
+            return Arc::new(self.clone());
+        }
+        let inner = self.inner().filter(filter);
+        let iter = self
+            .validity
+            .iter()
+            .zip(filter.values().iter())
+            .filter(|(_, f)| *f)
+            .map(|(v, _)| v);
+        let validity = MutableBitmap::from_iter(iter);
+
+        Arc::new(Self::new(inner, validity.into()))
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {

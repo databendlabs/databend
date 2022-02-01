@@ -83,7 +83,16 @@ impl Column for NullColumn {
         Arc::new(NullArray::new_null(ArrowType::Null, self.length))
     }
 
+    fn arc(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
     fn slice(&self, _offset: usize, length: usize) -> ColumnRef {
+        Arc::new(Self { length })
+    }
+
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        let length = filter.values().len() - filter.values().null_count();
         Arc::new(Self { length })
     }
 

@@ -28,6 +28,9 @@ where for<'a> Self::ColumnType: ScalarColumn<RefItem<'a> = Self::RefType<'a>>
 
     /// Get a reference of the current value.
     fn as_scalar_ref(&self) -> Self::RefType<'_>;
+
+    /// Upcast GAT type's lifetime.
+    fn upcast_gat<'short, 'long: 'short>(long: Self::RefType<'long>) -> Self::RefType<'short>;
 }
 
 pub trait ScalarRef<'a>: std::fmt::Debug + Clone + Copy + Send + 'a {
@@ -45,8 +48,15 @@ macro_rules! impl_primitive_scalar_type {
             type ColumnType = PrimitiveColumn<$native>;
             type RefType<'a> = $native;
 
+            #[inline]
             fn as_scalar_ref(&self) -> $native {
                 *self
+            }
+
+            #[allow(clippy::needless_lifetimes)]
+            #[inline]
+            fn upcast_gat<'short, 'long: 'short>(long: $native) -> $native {
+                long
             }
         }
 
@@ -55,6 +65,7 @@ macro_rules! impl_primitive_scalar_type {
             type ColumnType = PrimitiveColumn<$native>;
             type ScalarType = $native;
 
+            #[inline]
             fn to_owned_scalar(&self) -> $native {
                 *self
             }
@@ -77,8 +88,15 @@ impl Scalar for bool {
     type ColumnType = BooleanColumn;
     type RefType<'a> = bool;
 
+    #[inline]
     fn as_scalar_ref(&self) -> bool {
         *self
+    }
+
+    #[allow(clippy::needless_lifetimes)]
+    #[inline]
+    fn upcast_gat<'short, 'long: 'short>(long: bool) -> bool {
+        long
     }
 }
 
@@ -86,6 +104,7 @@ impl<'a> ScalarRef<'a> for bool {
     type ColumnType = BooleanColumn;
     type ScalarType = bool;
 
+    #[inline]
     fn to_owned_scalar(&self) -> bool {
         *self
     }
@@ -95,8 +114,14 @@ impl Scalar for Vec<u8> {
     type ColumnType = StringColumn;
     type RefType<'a> = &'a [u8];
 
+    #[inline]
     fn as_scalar_ref(&self) -> &[u8] {
         self
+    }
+
+    #[inline]
+    fn upcast_gat<'short, 'long: 'short>(long: &'long [u8]) -> &'short [u8] {
+        long
     }
 }
 
@@ -104,6 +129,7 @@ impl<'a> ScalarRef<'a> for &'a [u8] {
     type ColumnType = StringColumn;
     type ScalarType = Vec<u8>;
 
+    #[inline]
     fn to_owned_scalar(&self) -> Vec<u8> {
         self.to_vec()
     }

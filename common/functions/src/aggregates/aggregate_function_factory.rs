@@ -15,12 +15,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataValue;
+use common_datavalues::prelude::DataField as OldDataField;
+use common_datavalues::prelude::DataValue as OldDataValue;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
+use super::AggConvertor;
+use super::AggregateFunctionCombinatorNull;
+use super::AggregateFunctionV1Ref;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::Aggregators;
 
@@ -46,19 +50,41 @@ static FACTORY: Lazy<Arc<AggregateFunctionFactory>> = Lazy::new(|| {
 });
 
 pub struct AggregateFunctionDescription {
-    aggregate_function_creator: AggregateFunctionCreator,
-    // TODO(Winter): function document, this is very interesting.
-    // TODO(Winter): We can support the SHOW FUNCTION DOCUMENT `function_name` or MAN FUNCTION `function_name` query syntax.
+    pub(crate) aggregate_function_creator: AggregateFunctionCreator,
+    pub(crate) properties: AggregateFunctionProperties,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AggregateFunctionProperties {
+    /** When the function is wrapped with Null combinator,
+     * should we return Nullable type with NULL when no values were aggregated
+     * or we should return non-Nullable type with default value (example: count, countDistinct).
+     */
+    pub(crate) returns_default_when_only_null: bool,
 }
 
 impl AggregateFunctionDescription {
     pub fn creator(creator: AggregateFunctionCreator) -> AggregateFunctionDescription {
         AggregateFunctionDescription {
             aggregate_function_creator: creator,
+            properties: AggregateFunctionProperties {
+                returns_default_when_only_null: false,
+            },
+        }
+    }
+
+    pub fn creator_with_properties(
+        creator: AggregateFunctionCreator,
+        properties: AggregateFunctionProperties,
+    ) -> AggregateFunctionDescription {
+        AggregateFunctionDescription {
+            aggregate_function_creator: creator,
+            properties,
         }
     }
 }
 
+#[allow(dead_code)]
 pub struct CombinatorDescription {
     creator: AggregateFunctionCombinatorCreator,
     // TODO(Winter): function document, this is very interesting.
@@ -110,15 +136,54 @@ impl AggregateFunctionFactory {
     pub fn get(
         &self,
         name: impl AsRef<str>,
+        params: Vec<OldDataValue>,
+        arguments: Vec<OldDataField>,
+    ) -> Result<AggregateFunctionV1Ref> {
+        let params: Vec<DataValue> = params.iter().map(|v| v.clone().into()).collect();
+        let arguments: Vec<DataField> = arguments.iter().map(|v| v.clone().into()).collect();
+
+        let f = self.get_new(name, params.clone(), arguments.clone())?;
+        Ok(AggConvertor::create(f, params, arguments))
+    }
+
+    pub fn get_new(
+        &self,
+        name: impl AsRef<str>,
         params: Vec<DataValue>,
         arguments: Vec<DataField>,
     ) -> Result<AggregateFunctionRef> {
-        let origin = name.as_ref();
-        let lowercase_name = origin.to_lowercase();
+        let name = name.as_ref();
+        let mut properties = AggregateFunctionProperties::default();
 
+        if !arguments.is_empty()
+            && arguments
+                .iter()
+                .any(|f| f.is_nullable() || f.data_type().data_type_id() == TypeID::Null)
+        {
+            let new_params = AggregateFunctionCombinatorNull::transform_params(&params)?;
+            let new_arguments = AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
+
+            let nested = self.get_impl(name, new_params, new_arguments, &mut properties)?;
+            return AggregateFunctionCombinatorNull::try_create(
+                name, params, arguments, nested, properties,
+            );
+        }
+
+        self.get_impl(name, params, arguments, &mut properties)
+    }
+
+    fn get_impl(
+        &self,
+        name: &str,
+        params: Vec<DataValue>,
+        arguments: Vec<DataField>,
+        properties: &mut AggregateFunctionProperties,
+    ) -> Result<AggregateFunctionRef> {
+        let lowercase_name = name.to_lowercase();
         let aggregate_functions_map = &self.case_insensitive_desc;
         if let Some(desc) = aggregate_functions_map.get(&lowercase_name) {
-            return (desc.aggregate_function_creator)(origin, params, arguments);
+            *properties = desc.properties;
+            return (desc.aggregate_function_creator)(name, params, arguments);
         }
 
         // find suffix
@@ -131,6 +196,7 @@ impl AggregateFunctionFactory {
                         break;
                     }
                     Some(nested_desc) => {
+                        *properties = nested_desc.properties;
                         return (desc.creator)(
                             nested_name,
                             params,
@@ -144,7 +210,7 @@ impl AggregateFunctionFactory {
 
         Err(ErrorCode::UnknownAggregateFunction(format!(
             "Unsupported AggregateFunction: {}",
-            origin
+            name
         )))
     }
 

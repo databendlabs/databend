@@ -18,11 +18,11 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
-use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::aggregates::AggregateFunctionV1Ref;
 use common_planners::Expression;
 
 pub struct AggregatorParams {
-    pub aggregate_functions: Vec<AggregateFunctionRef>,
+    pub aggregate_functions: Vec<AggregateFunctionV1Ref>,
     pub aggregate_functions_column_name: Vec<String>,
     pub aggregate_functions_arguments_name: Vec<Vec<String>>,
 

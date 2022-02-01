@@ -18,18 +18,17 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
-use crate::types::BooleanType;
 use crate::types::DataTypePtr;
-use crate::BooleanColumn;
 use crate::ColumnRef;
-use crate::ScalarColumnBuilder;
+use crate::NullableColumn;
 
-pub struct MutableBooleanColumn {
+pub struct MutableNullableColumn {
     values: MutableBitmap,
+    inner: Box<dyn MutableColumn>,
     data_type: DataTypePtr,
 }
 
-impl MutableColumn for MutableBooleanColumn {
+impl MutableColumn for MutableNullableColumn {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -43,11 +42,12 @@ impl MutableColumn for MutableBooleanColumn {
     }
 
     fn shrink_to_fit(&mut self) {
-        self.values.shrink_to_fit()
+        self.inner.shrink_to_fit()
     }
 
     fn append_default(&mut self) {
-        self.append_value(false);
+        self.values.push(false);
+        self.inner.append_default();
     }
 
     fn len(&self) -> usize {
@@ -55,26 +55,23 @@ impl MutableColumn for MutableBooleanColumn {
     }
 
     fn to_column(&mut self) -> ColumnRef {
-        Arc::new(self.finish())
+        let col = self.inner.to_column();
+        let validity = std::mem::take(&mut self.values);
+        Arc::new(NullableColumn::new(col, validity.into()))
     }
 
     fn append_data_value(&mut self, value: crate::DataValue) -> Result<()> {
-        self.append_value(value.as_bool()?);
-        Ok(())
+        self.values.push(true);
+        self.inner.append_data_value(value)
     }
 }
 
-impl Default for MutableBooleanColumn {
-    fn default() -> Self {
-        Self::with_capacity(0)
-    }
-}
-
-impl MutableBooleanColumn {
-    pub fn from_data(values: MutableBitmap) -> Self {
+impl MutableNullableColumn {
+    pub fn new(inner: Box<dyn MutableColumn>, data_type: DataTypePtr) -> Self {
         Self {
-            values,
-            data_type: BooleanType::arc(),
+            inner,
+            values: MutableBitmap::with_capacity(0),
+            data_type,
         }
     }
 
@@ -82,26 +79,12 @@ impl MutableBooleanColumn {
     pub fn append_value(&mut self, value: bool) {
         self.values.push(value);
     }
-}
 
-impl ScalarColumnBuilder for MutableBooleanColumn {
-    type ColumnType = BooleanColumn;
-
-    fn with_capacity(capacity: usize) -> Self {
-        Self {
-            values: MutableBitmap::with_capacity(capacity),
-            data_type: BooleanType::arc(),
-        }
+    pub fn inner_mut(&mut self) -> &mut Box<dyn MutableColumn> {
+        &mut self.inner
     }
 
-    fn push(&mut self, value: <Self::ColumnType as crate::ScalarColumn>::RefItem<'_>) {
-        self.values.push(value);
-    }
-
-    fn finish(&mut self) -> Self::ColumnType {
-        self.shrink_to_fit();
-        BooleanColumn {
-            values: std::mem::take(&mut self.values).into(),
-        }
+    pub fn validity_mut(&mut self) -> &mut MutableBitmap {
+        &mut self.values
     }
 }

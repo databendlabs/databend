@@ -21,7 +21,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
-use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::aggregates::AggregateFunctionV1Ref;
 use common_functions::aggregates::StateAddr;
 use common_io::prelude::*;
 use common_planners::Expression;
@@ -34,7 +34,7 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 
 pub struct AggregatorPartialTransform {
-    funcs: Vec<AggregateFunctionRef>,
+    funcs: Vec<AggregateFunctionV1Ref>,
     arg_names: Vec<Vec<String>>,
 
     schema: DataSchemaRef,

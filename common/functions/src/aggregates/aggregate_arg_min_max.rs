@@ -13,292 +13,136 @@
 // limitations under the License.
 
 use std::alloc::Layout;
-use std::cmp::Ordering;
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
+use common_arrow::arrow::bitmap::Bitmap;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
-use serde::Serialize;
 
+use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_scalar_state::ChangeIf;
+use super::aggregate_scalar_state::CmpMax;
+use super::aggregate_scalar_state::CmpMin;
+use super::AggregateFunctionRef;
 use super::StateAddr;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_binary_arguments;
 use crate::aggregates::AggregateFunction;
-use crate::aggregates::AggregateFunctionRef;
-use crate::with_match_primitive_type;
+use crate::with_match_scalar_type;
 
-pub trait AggregateArgMinMaxState: Send + Sync + 'static {
-    fn new(data_type: &DataType) -> Self;
-    fn add_keys(
-        places: &[StateAddr],
-        offset: usize,
-        data_series: &Series,
-        series: &Series,
-        rows: usize,
-        is_min: bool,
+pub trait AggregateArgMinMaxState<S: Scalar>: Send + Sync + 'static {
+    fn new() -> Self;
+    fn add(&mut self, value: S::RefType<'_>, data: DataValue) -> Result<()>;
+    fn add_batch(
+        &mut self,
+        data_column: &ColumnRef,
+        column: &ColumnRef,
+        validity: Option<&Bitmap>,
     ) -> Result<()>;
-    fn add_batch(&mut self, data_series: &Series, series: &Series, is_min: bool) -> Result<()>;
-    fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()>;
+
+    fn merge(&mut self, rhs: &Self) -> Result<()>;
     fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
-    fn merge_result(&mut self, array: &mut dyn MutableArrayBuilder) -> Result<()>;
+    fn merge_result(&mut self, column: &mut dyn MutableColumn) -> Result<()>;
 }
 
-#[derive(Serialize, Deserialize)]
-struct NumericState<T: DFPrimitiveType> {
-    #[serde(bound(deserialize = "T: DeserializeOwned"))]
-    pub value: Option<T>,
+#[derive(serde::Serialize, Deserialize)]
+struct ArgMinMaxState<S: Scalar, C> {
+    #[serde(bound(deserialize = "S: DeserializeOwned"))]
+    pub value: Option<S>,
     pub data: DataValue,
+    #[serde(skip)]
+    _c: PhantomData<C>,
 }
 
-#[derive(Serialize, Deserialize)]
-struct StringState {
-    pub value: Option<Vec<u8>>,
-    pub data: DataValue,
-}
-
-impl<T> NumericState<T>
+impl<S, C> AggregateArgMinMaxState<S> for ArgMinMaxState<S, C>
 where
-    T: DFPrimitiveType,
-    Option<T>: Into<DataValue>,
+    S: Scalar + Send + Sync + serde::Serialize + DeserializeOwned,
+    C: ChangeIf<S> + Default,
 {
-    #[inline]
-    fn merge_value(&mut self, data: DataValue, other: T, is_min: bool) {
-        match &self.value {
-            Some(a) => {
-                let ord = a.partial_cmp(&other);
-                match (ord, is_min) {
-                    (Some(Ordering::Greater), true) | (Some(Ordering::Less), false) => {
-                        self.value = Some(other);
-                        self.data = data;
-                    }
-                    _ => {}
-                }
-            }
-            None => {
-                self.value = Some(other);
-                self.data = data;
-            }
-        }
-    }
-}
-
-impl<T> AggregateArgMinMaxState for NumericState<T>
-where
-    T: DFPrimitiveType,
-    Option<T>: Into<DataValue>,
-{
-    fn new(data_type: &DataType) -> Self {
+    fn new() -> Self {
         Self {
             value: None,
-            data: data_type.into(),
+            data: DataValue::Null,
+            _c: PhantomData,
         }
     }
 
-    fn add_keys(
-        places: &[StateAddr],
-        offset: usize,
-        data_series: &Series,
-        series: &Series,
-        _rows: usize,
-        is_min: bool,
-    ) -> Result<()> {
-        let array: &DFPrimitiveArray<T> = series.static_cast();
-        array
-            .into_iter()
-            .zip(places.iter().enumerate())
-            .try_for_each(|(key, (idx, addr))| -> Result<()> {
-                let data = data_series.try_get(idx)?;
-                let place = addr.next(offset);
-                let state = place.get::<Self>();
-                if let Some(v) = key {
-                    state.merge_value(data, *v, is_min);
-                }
-                Ok(())
-            })
-    }
-
-    fn add_batch(&mut self, data_series: &Series, series: &Series, is_min: bool) -> Result<()> {
-        let arg_result = if is_min {
-            series.arg_min()
-        } else {
-            series.arg_max()
-        }?;
-
-        if let DataValue::Struct(index_value) = arg_result {
-            if index_value[0].is_null() {
-                return Ok(());
-            }
-            let value: Result<T> = DFTryFrom::try_from(index_value[1].clone());
-
-            if let Ok(other) = value {
-                let data = data_series.try_get(index_value[0].as_u64()? as usize)?;
-                self.merge_value(data, other, is_min);
-            }
-        }
-
-        Ok(())
-    }
-
-    fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()> {
-        if let Some(other) = rhs.value {
-            self.merge_value(rhs.data.clone(), other, is_min);
-        }
-        Ok(())
-    }
-
-    fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        serialize_into_buf(writer, self)
-    }
-
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        *self = deserialize_from_slice(reader)?;
-
-        Ok(())
-    }
-
-    #[allow(unused_mut)]
-    fn merge_result(&mut self, array: &mut dyn MutableArrayBuilder) -> Result<()> {
-        let datatype = array.data_type();
-        with_match_primitive_type!(datatype, |$T| {
-            let mut array = array
-                .as_mut_any()
-                .downcast_mut::<MutablePrimitiveArrayBuilder<$T, true>>()
-                .ok_or_else(|| {
-                    ErrorCode::UnexpectedError(
-                        "error occured when downcast MutableArray".to_string(),
-                    )
-                })?;
-            if self.data.is_null() {
-                array.push_null();
-            }else {
-                if self.data.is_integer() {
-                    let x = self.data.as_i64()?;
-                    array.push(x as $T);
-                }else {
-                    let x = self.data.as_f64()?;
-                    array.push(x as $T);
-                }
-            }
-        },
-        {
-            match &self.data {
-                DataValue::Boolean(val) => {
-                    let mut array = array
-                    .as_mut_any()
-                    .downcast_mut::<MutableBooleanArrayBuilder<true>>()
-                    .ok_or_else(|| {
-                        ErrorCode::UnexpectedError(
-                            "error occured when downcast MutableArray".to_string(),
-                        )
-                    })?;
-                    array.push_option(*val);
-                }
-                DataValue::String(val) => {
-                    let mut array = array
-                    .as_mut_any()
-                    .downcast_mut::<MutableStringArrayBuilder<true>>()
-                    .ok_or_else(|| {
-                        ErrorCode::UnexpectedError(
-                            "error occured when downcast MutableArray".to_string(),
-                        )
-                    })?;
-                    array.push_option(val.as_ref());
-                },
-                _ => {
-                    return Err(ErrorCode::UnexpectedError(
-                        "aggregate arg_min_max unexpected datatype".to_string(),
-                    ))
-                }
-            }
-        });
-        Ok(())
-    }
-}
-
-impl StringState {
-    fn merge_value(&mut self, data: DataValue, other: &[u8], is_min: bool) {
+    fn add(&mut self, other: S::RefType<'_>, data: DataValue) -> Result<()> {
         match &self.value {
             Some(a) => {
-                let ord = a.as_slice().partial_cmp(other);
-                match (ord, is_min) {
-                    (Some(Ordering::Greater), true) | (Some(Ordering::Less), false) => {
-                        self.value = Some(other.to_vec());
-                        self.data = data;
-                    }
-                    _ => {}
+                if C::change_if(a.as_scalar_ref(), other) {
+                    self.value = Some(other.to_owned_scalar());
+                    self.data = data;
                 }
             }
             _ => {
-                self.value = Some(other.to_vec());
+                self.value = Some(other.to_owned_scalar());
                 self.data = data;
             }
         }
-    }
-}
-impl AggregateArgMinMaxState for StringState {
-    fn new(data_type: &DataType) -> Self {
-        Self {
-            value: None,
-            data: data_type.into(),
-        }
-    }
-
-    fn add_keys(
-        places: &[StateAddr],
-        offset: usize,
-        data_series: &Series,
-        series: &Series,
-        _rows: usize,
-        is_min: bool,
-    ) -> Result<()> {
-        let array: &DFStringArray = series.static_cast();
-        array
-            .into_iter()
-            .zip(places.iter().enumerate())
-            .try_for_each(|(key, (idx, addr))| -> Result<()> {
-                let data = data_series.try_get(idx)?;
-
-                let place = addr.next(offset);
-                let state = place.get::<Self>();
-                if let Some(v) = key {
-                    state.merge_value(data, v, is_min);
-                }
-                Ok(())
-            })
-    }
-
-    fn add_batch(&mut self, data_series: &Series, series: &Series, is_min: bool) -> Result<()> {
-        let arg_result = if is_min {
-            series.arg_min()
-        } else {
-            series.arg_max()
-        }?;
-
-        if let DataValue::Struct(index_value) = arg_result {
-            if index_value[0].is_null() {
-                return Ok(());
-            }
-            let value: Result<Vec<u8>> = DFTryFrom::try_from(index_value[1].clone());
-
-            if let Ok(other) = value {
-                let data = data_series.try_get(index_value[0].as_u64()? as usize)?;
-                self.merge_value(data, &other, is_min);
-            }
-        }
-
         Ok(())
     }
 
-    fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()> {
-        if let Some(other) = &rhs.value {
-            self.merge_value(rhs.data.clone(), other.as_slice(), is_min);
+    fn add_batch(
+        &mut self,
+        data_column: &ColumnRef,
+        column: &ColumnRef,
+        validity: Option<&Bitmap>,
+    ) -> Result<()> {
+        let col: &<S as Scalar>::ColumnType = unsafe { Series::static_cast(column) };
+
+        if let Some(bit) = validity {
+            if bit.null_count() == column.len() {
+                return Ok(());
+            }
+            let mut v = S::default();
+            let mut data_value = DataValue::Null;
+            let mut has_v = false;
+            let view = ColumnViewer::<S>::create(column)?;
+
+            for row in 0..view.len() {
+                if view.null_at(row) {
+                    continue;
+                }
+                let data = view.value(row);
+                if !has_v {
+                    has_v = true;
+                    v = data.to_owned_scalar();
+                    data_value = data_column.get(row);
+                } else if C::change_if(v.as_scalar_ref(), data) {
+                    v = data.to_owned_scalar();
+                    data_value = data_column.get(row);
+                }
+            }
+
+            if has_v {
+                self.add(v.as_scalar_ref(), data_value)?;
+            }
+        } else {
+            let v = col.iter().enumerate().reduce(|acc, (idx, val)| {
+                if C::change_if(acc.1, val) {
+                    (idx, val)
+                } else {
+                    acc
+                }
+            });
+
+            if let Some((idx, val)) = v {
+                self.add(val, data_column.get(idx))?;
+            }
+        };
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        if let Some(value) = &rhs.value {
+            self.add(value.as_scalar_ref(), rhs.data.clone())?;
         }
         Ok(())
     }
@@ -309,174 +153,132 @@ impl AggregateArgMinMaxState for StringState {
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         *self = deserialize_from_slice(reader)?;
-
         Ok(())
     }
 
-    #[allow(unused_mut)]
-    fn merge_result(&mut self, array: &mut dyn MutableArrayBuilder) -> Result<()> {
-        let datatype = array.data_type();
-        with_match_primitive_type!(datatype, |$T| {
-            let mut array = array
-                .as_mut_any()
-                .downcast_mut::<MutablePrimitiveArrayBuilder<$T, true>>()
-                .ok_or_else(|| {
-                    ErrorCode::UnexpectedError(
-                        "error occured when downcast MutableArray".to_string(),
-                    )
-                })?;
-            if self.data.is_null() {
-                array.push_null();
-            }else {
-                if self.data.is_integer() {
-                    let x = self.data.as_i64()?;
-                    array.push(x as $T);
-                }else {
-                    let x = self.data.as_f64()?;
-                    array.push(x as $T);
-                }
-            }
-        },
-        {
-            match &self.data {
-                DataValue::Boolean(val) => {
-                    let mut array = array
-                    .as_mut_any()
-                    .downcast_mut::<MutableBooleanArrayBuilder<true>>()
-                    .ok_or_else(|| {
-                        ErrorCode::UnexpectedError(
-                            "error occured when downcast MutableArray".to_string(),
-                        )
-                    })?;
-                    array.push_option(*val);
-                }
-                DataValue::String(val) => {
-                    let mut array = array
-                    .as_mut_any()
-                    .downcast_mut::<MutableStringArrayBuilder<true>>()
-                    .ok_or_else(|| {
-                        ErrorCode::UnexpectedError(
-                            "error occured when downcast MutableArray".to_string(),
-                        )
-                    })?;
-                array.push_option(val.as_ref());
-                },
-                _ => {
-                    return Err(ErrorCode::UnexpectedError(
-                        "aggregate arg_min_max unexpected datatype".to_string(),
-                    ))
-                }
-            }
-        });
+    fn merge_result(&mut self, column: &mut dyn MutableColumn) -> Result<()> {
+        // TODO:
+        // Currently,this is all virtual call.
+        // data can be dispatched into scalars to improve the performance.
+        match self.value {
+            Some(_) => column.append_data_value(self.data.clone())?,
+            None => column.append_default(),
+        }
         Ok(())
     }
 }
 
 #[derive(Clone)]
-pub struct AggregateArgMinMaxFunction<T> {
+pub struct AggregateArgMinMaxFunction<S, C, State> {
     display_name: String,
     arguments: Vec<DataField>,
-    is_min: bool,
-    t: PhantomData<T>,
+    _s: PhantomData<S>,
+    _c: PhantomData<C>,
+    _state: PhantomData<State>,
 }
 
-impl<T> AggregateFunction for AggregateArgMinMaxFunction<T>
-where T: AggregateArgMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue> + Send + Sync + Clone + 'static,
+impl<S, C, State> AggregateFunction for AggregateArgMinMaxFunction<S, C, State>
+where
+    S: Scalar + Send + Sync + serde::Serialize + DeserializeOwned,
+    C: ChangeIf<S> + Default,
+    State: AggregateArgMinMaxState<S>,
 {
     fn name(&self) -> &str {
         "AggregateArgMinMaxFunction"
     }
 
-    fn return_type(&self) -> Result<DataType> {
+    fn return_type(&self) -> Result<DataTypePtr> {
         Ok(self.arguments[0].data_type().clone())
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
-    }
-
     fn init_state(&self, place: StateAddr) {
-        place.write(|| T::new(self.arguments[0].data_type()));
+        place.write(|| State::new());
     }
 
     fn state_layout(&self) -> Layout {
-        Layout::new::<T>()
+        Layout::new::<State>()
     }
 
-    fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
-        let state: &mut T = place.get();
-        state.add_batch(&arrays[0], &arrays[1], self.is_min)
+    fn accumulate(
+        &self,
+        place: StateAddr,
+        columns: &[ColumnRef],
+        validity: Option<&Bitmap>,
+        _input_rows: usize,
+    ) -> Result<()> {
+        let state: &mut State = place.get();
+        state.add_batch(&columns[0], &columns[1], validity)
     }
 
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
         offset: usize,
-        arrays: &[Series],
-        input_rows: usize,
+        columns: &[ColumnRef],
+        _input_rows: usize,
     ) -> Result<()> {
-        T::add_keys(
-            places,
-            offset,
-            &arrays[0],
-            &arrays[1],
-            input_rows,
-            self.is_min,
-        )
+        let col: &<S as Scalar>::ColumnType = unsafe { Series::static_cast(&columns[1]) };
+
+        col.iter()
+            .enumerate()
+            .zip(places.iter())
+            .try_for_each(|((row, item), place)| {
+                let addr = place.next(offset);
+                let state = addr.get::<State>();
+                state.add(item, columns[0].get(row))
+            })
+    }
+
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let col: &<S as Scalar>::ColumnType = unsafe { Series::static_cast(&columns[1]) };
+        let state = place.get::<State>();
+        state.add(col.get_data(row), columns[0].get(row))
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
-        let state = place.get::<T>();
+        let state = place.get::<State>();
         state.serialize(writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<T>();
+        let state = place.get::<State>();
         state.deserialize(reader)
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<T>();
-        let state = place.get::<T>();
-        state.merge(rhs, self.is_min)
+        let rhs = rhs.get::<State>();
+        let state = place.get::<State>();
+        state.merge(rhs)
     }
 
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
-        let state = place.get::<T>();
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
+        let state = place.get::<State>();
         state.merge_result(array)
     }
 }
 
-impl<T> fmt::Display for AggregateArgMinMaxFunction<T> {
+impl<S, C, State> fmt::Display for AggregateArgMinMaxFunction<S, C, State> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
 
-impl<T> AggregateArgMinMaxFunction<T>
-where T: AggregateArgMinMaxState
+impl<S, C, State> AggregateArgMinMaxFunction<S, C, State>
+where
+    S: Scalar + Send + Sync + serde::Serialize + DeserializeOwned,
+    C: ChangeIf<S> + Default,
+    State: AggregateArgMinMaxState<S>,
 {
-    pub fn try_create_arg_min(
+    pub fn try_create(
         display_name: &str,
         arguments: Vec<DataField>,
     ) -> Result<AggregateFunctionRef> {
-        Ok(Arc::new(AggregateArgMinMaxFunction::<T> {
+        Ok(Arc::new(AggregateArgMinMaxFunction::<S, C, State> {
             display_name: display_name.to_owned(),
             arguments,
-            t: PhantomData,
-            is_min: true,
-        }))
-    }
-
-    pub fn try_create_arg_max(
-        display_name: &str,
-        arguments: Vec<DataField>,
-    ) -> Result<AggregateFunctionRef> {
-        Ok(Arc::new(AggregateArgMinMaxFunction::<T> {
-            display_name: display_name.to_owned(),
-            arguments,
-            t: PhantomData,
-            is_min: false,
+            _s: PhantomData,
+            _c: PhantomData,
+            _state: PhantomData,
         }))
     }
 }
@@ -489,15 +291,16 @@ pub fn try_create_aggregate_arg_minmax_function<const IS_MIN: bool>(
     assert_binary_arguments(display_name, arguments.len())?;
     let data_type = arguments[1].data_type();
 
-    with_match_primitive_type!(data_type, |$T| {
-        type AggState = NumericState<$T>;
+    with_match_scalar_type!(data_type.data_type_id(), |$T| {
         if IS_MIN {
-             AggregateArgMinMaxFunction::<AggState>::try_create_arg_min(
+            type State = ArgMinMaxState<$T, CmpMin>;
+             AggregateArgMinMaxFunction::<$T, CmpMin, State>::try_create(
                 display_name,
                 arguments,
             )
         } else {
-             AggregateArgMinMaxFunction::<AggState>::try_create_arg_max(
+            type State = ArgMinMaxState<$T, CmpMax>;
+             AggregateArgMinMaxFunction::<$T, CmpMax, State>::try_create(
                 display_name,
                 arguments,
             )
@@ -506,20 +309,6 @@ pub fn try_create_aggregate_arg_minmax_function<const IS_MIN: bool>(
     },
 
     {
-        if data_type == &DataType::String {
-            if IS_MIN {
-                return AggregateArgMinMaxFunction::<StringState>::try_create_arg_min(
-                    display_name,
-                    arguments,
-                );
-            } else {
-                return AggregateArgMinMaxFunction::<StringState>::try_create_arg_max(
-                    display_name,
-                    arguments,
-                );
-            }
-        }
-
         Err(ErrorCode::BadDataValueType(format!(
             "AggregateArgMinMaxFunction does not support type '{:?}'",
             data_type

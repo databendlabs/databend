@@ -160,7 +160,7 @@ macro_rules! with_match_scalar_types_error {(
 })}
 
 #[macro_export]
-macro_rules! with_match_primitive_type {
+macro_rules! with_match_primitive_type_id {
     (
     $key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt
 ) => {{
@@ -260,6 +260,13 @@ macro_rules! apply_method_numeric_series {
 
 macro_rules! try_cast_data_value_to_std {
     ($NATIVE: ident, $AS_FN: ident) => {
+        impl DFTryFrom<DataValue> for $NATIVE {
+            fn try_from(value: DataValue) -> Result<Self> {
+                let v = value.$AS_FN()?;
+                Ok(v as $NATIVE)
+            }
+        }
+
         impl DFTryFrom<&DataValue> for $NATIVE {
             fn try_from(value: &DataValue) -> Result<Self> {
                 let v = value.$AS_FN()?;

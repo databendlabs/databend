@@ -17,11 +17,13 @@ use num::NumCast;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+use crate::DFTryFrom;
 use crate::DataValue;
 use crate::Scalar;
 
 pub trait PrimitiveType:
     NativeArithmetics
+    + DFTryFrom<DataValue>
     + NumCast
     + PartialOrd
     + Into<DataValue>

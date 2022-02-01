@@ -17,6 +17,7 @@ use common_macros::MallocSizeOf;
 
 use crate::types::data_type::from_arrow_field;
 use crate::types::data_type::DataTypePtr;
+use crate::TypeID;
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Clone, MallocSizeOf)]
 pub struct DataField {
@@ -57,6 +58,11 @@ impl DataField {
     #[inline]
     pub fn is_nullable(&self) -> bool {
         self.data_type.is_nullable()
+    }
+
+    #[inline]
+    pub fn is_nullable_or_null(&self) -> bool {
+        self.data_type.is_nullable() || self.data_type.data_type_id() == TypeID::Null
     }
 
     /// Check to see if `self` is a superset of `other` field. Superset is defined as:

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::traits::AsPrimitive;
@@ -57,8 +57,8 @@ impl ArithmeticDivFunction {
             )))
         };
 
-        with_match_primitive_type!(left_type, |$T| {
-            with_match_primitive_type!(right_type, |$D| {
+        with_match_primitive_type_id!(left_type, |$T| {
+            with_match_primitive_type_id!(right_type, |$D| {
                 BinaryArithmeticFunction::<$T, $D, f64, _>::try_create_func(
                     op,
                     Float64Type::arc(),

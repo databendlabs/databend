@@ -19,9 +19,12 @@ use std::time::Instant;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
+use common_datavalues2::column_convert::convert2_old_column;
+use common_datavalues2::type_convert::create_mutable_builder;
+use common_datavalues2::MutableColumn;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
-use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::aggregates::AggregateFunctionV1Ref;
 use common_functions::aggregates::StateAddr;
 use common_planners::Expression;
 use common_streams::DataBlockStream;
@@ -33,7 +36,7 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 
 pub struct AggregatorFinalTransform {
-    funcs: Vec<AggregateFunctionRef>,
+    funcs: Vec<AggregateFunctionV1Ref>,
     schema: DataSchemaRef,
     input: Arc<dyn Processor>,
 }
@@ -123,10 +126,13 @@ impl Processor for AggregatorFinalTransform {
 
         let funcs_len = funcs.len();
 
-        let mut aggr_values: Vec<Box<dyn MutableArrayBuilder>> = {
+        let mut aggr_values: Vec<Box<dyn MutableColumn>> = {
             let mut values = vec![];
             for func in &funcs {
-                let array = create_mutable_array(func.return_type()?);
+                let array = create_mutable_builder(
+                    func.return_type()?,
+                    func.nullable(&DataSchema::empty())?,
+                );
                 values.push(array)
             }
             values
@@ -134,13 +140,16 @@ impl Processor for AggregatorFinalTransform {
 
         for (idx, func) in funcs.iter().enumerate() {
             let place = places[idx].into();
-            let array: &mut dyn MutableArrayBuilder = aggr_values[idx].borrow_mut();
+            let array: &mut dyn MutableColumn = aggr_values[idx].borrow_mut();
             let _ = func.merge_result(place, array)?;
         }
 
         let mut columns: Vec<Series> = Vec::with_capacity(funcs_len);
         for mut array in aggr_values {
-            columns.push(array.as_series());
+            let col = array.to_column();
+            let old_col = convert2_old_column(&col);
+
+            columns.push(old_col.to_array()?);
         }
         let mut blocks = vec![];
         if !columns.is_empty() {

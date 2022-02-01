@@ -109,6 +109,10 @@ impl DataType for StructType {
         todo!()
     }
 
+    fn create_mutable(&self, _capacity: usize) -> Box<dyn MutableColumn> {
+        todo!()
+    }
+
     fn create_column(&self, _data: &[DataValue]) -> common_exception::Result<ColumnRef> {
         todo!()
     }

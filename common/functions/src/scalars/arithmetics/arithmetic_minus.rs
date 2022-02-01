@@ -16,7 +16,7 @@ use std::ops::Sub;
 
 use common_datavalues2::prelude::*;
 use common_datavalues2::with_match_date_type_error;
-use common_datavalues2::with_match_primitive_type;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::traits::AsPrimitive;
@@ -83,7 +83,7 @@ impl ArithmeticMinusFunction {
 
         if left_type.is_date_or_date_time() {
             return with_match_date_type_error!(left_type, |$T| {
-                with_match_primitive_type!(right_type, |$D| {
+                with_match_primitive_type_id!(right_type, |$D| {
                     BinaryArithmeticFunction::<$T, $D, $T, _>::try_create_func(
                         op,
                         args[0].clone(),
@@ -102,7 +102,7 @@ impl ArithmeticMinusFunction {
         }
 
         if right_type.is_date_or_date_time() {
-            return with_match_primitive_type!(left_type, |$T| {
+            return with_match_primitive_type_id!(left_type, |$T| {
                 with_match_date_type_error!(right_type, |$D| {
                     BinaryArithmeticFunction::<$T, $D, $D, _>::try_create_func(
                         op,
@@ -115,8 +115,8 @@ impl ArithmeticMinusFunction {
             });
         }
 
-        with_match_primitive_type!(left_type, |$T| {
-            with_match_primitive_type!(right_type, |$D| {
+        with_match_primitive_type_id!(left_type, |$T| {
+            with_match_primitive_type_id!(right_type, |$D| {
                 let result_type = <($T, $D) as ResultTypeOfBinary>::Minus::to_data_type();
                 match result_type.data_type_id() {
                     TypeID::Int64 => BinaryArithmeticFunction::<$T, $D, i64, _>::try_create_func(

@@ -23,15 +23,15 @@ mod macros;
 
 mod utils;
 
-pub mod columns;
-pub mod convert;
-pub mod data_field;
-pub mod data_schema;
-pub mod data_value;
-pub mod data_value_operator;
-pub mod prelude;
-pub mod scalars;
-pub mod types;
+mod columns;
+mod convert;
+mod data_field;
+mod data_group_value;
+mod data_schema;
+mod data_value;
+mod data_value_operator;
+mod scalars;
+mod types;
 
 /// third partry
 pub use chrono;
@@ -47,3 +47,5 @@ pub use prelude::*;
 pub use scalars::*;
 pub use types::*;
 pub use utils::*;
+
+pub mod prelude;

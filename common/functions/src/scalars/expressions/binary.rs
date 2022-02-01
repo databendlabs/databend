@@ -21,6 +21,16 @@ pub trait ScalarBinaryFunction<L: Scalar, R: Scalar, O: Scalar> {
     fn eval(&self, l: L::RefType<'_>, r: R::RefType<'_>) -> O;
 }
 
+/// Blanket implementation for all binary expression functions
+impl<L: Scalar, R: Scalar, O: Scalar, F> ScalarBinaryFunction<L, R, O> for F
+where F: Fn(L::RefType<'_>, R::RefType<'_>) -> O
+{
+    fn eval(&self, i1: L::RefType<'_>, i2: R::RefType<'_>) -> O {
+        self(i1, i2)
+    }
+}
+
+/// A common struct to caculate binary expression scalar op.
 /// A common struct to calculate binary expression scalar op.
 #[derive(Clone)]
 pub struct ScalarBinaryExpression<L: Scalar, R: Scalar, O: Scalar, F> {

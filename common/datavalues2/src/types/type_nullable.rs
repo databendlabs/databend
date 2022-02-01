@@ -87,6 +87,13 @@ impl DataType for NullableType {
         })
     }
 
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutableNullableColumn::new(
+            self.inner.create_mutable(capacity),
+            Arc::new(self.clone()),
+        ))
+    }
+
     fn create_constant_column(
         &self,
         data: &DataValue,

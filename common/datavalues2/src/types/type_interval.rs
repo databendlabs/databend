@@ -77,6 +77,10 @@ impl DataType for IntervalType {
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
         })
     }
+
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutablePrimitiveColumn::<i64>::with_capacity(capacity))
+    }
 }
 
 impl std::fmt::Debug for IntervalType {

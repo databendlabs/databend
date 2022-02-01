@@ -230,6 +230,7 @@ try_cast_data_value_to_std!(i64, as_i64);
 
 try_cast_data_value_to_std!(f32, as_f64);
 try_cast_data_value_to_std!(f64, as_i64);
+try_cast_data_value_to_std!(bool, as_bool);
 
 std_to_data_value!(Int64, i8, i64);
 std_to_data_value!(Int64, i16, i64);

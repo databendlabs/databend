@@ -81,11 +81,23 @@ impl Column for ConstColumn {
         column.as_arrow_array()
     }
 
+    fn arc(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
     fn slice(&self, _offset: usize, length: usize) -> ColumnRef {
         Arc::new(Self {
             column: self.column.clone(),
             length,
         })
+    }
+
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        let length = filter.values().len() - filter.values().null_count();
+        if length == self.len() {
+            return Arc::new(self.clone());
+        }
+        Arc::new(Self::new(self.inner().clone(), length))
     }
 
     // just for resize

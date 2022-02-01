@@ -110,6 +110,10 @@ impl Column for ArrayColumn {
         ))
     }
 
+    fn arc(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
         unsafe {
             let offsets = self.offsets.clone().slice_unchecked(offset, length + 1);
@@ -119,6 +123,10 @@ impl Column for ArrayColumn {
                 values: self.values.clone(),
             })
         }
+    }
+
+    fn filter(&self, _filter: &BooleanColumn) -> ColumnRef {
+        todo!()
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {

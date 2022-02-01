@@ -174,9 +174,33 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         ))
     }
 
+    fn arc(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
         let values = self.values.clone().slice(offset, length);
         Arc::new(Self { values })
+    }
+
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        let length = filter.values().len() - filter.values().null_count();
+        if length == self.len() {
+            return Arc::new(self.clone());
+        }
+        let iter = self
+            .values()
+            .iter()
+            .zip(filter.values().iter())
+            .filter(|(_, f)| *f)
+            .map(|(v, _)| *v);
+
+        let values: Vec<T> = iter.collect();
+        let col = PrimitiveColumn {
+            values: values.into(),
+        };
+
+        Arc::new(col)
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {

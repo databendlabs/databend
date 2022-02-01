@@ -82,6 +82,11 @@ impl MutableColumn for MutableStringColumn {
     fn to_column(&mut self) -> ColumnRef {
         Arc::new(self.finish())
     }
+
+    fn append_data_value(&mut self, value: DataValue) -> common_exception::Result<()> {
+        self.append_value(value.as_string()?);
+        Ok(())
+    }
 }
 
 impl ScalarColumnBuilder for MutableStringColumn {
