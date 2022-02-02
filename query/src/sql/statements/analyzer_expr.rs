@@ -97,7 +97,7 @@ impl ExpressionAnalyzer {
 
     fn analyze_inlist(&self, info: &InListInfo, args: &mut Vec<Expression>) -> Result<()> {
         let mut list = Vec::with_capacity(info.list_size);
-        for _index in 0..info.list_size {
+        for _ in 0..info.list_size {
             match args.pop() {
                 None => {
                     return Err(ErrorCode::LogicalError("It's a bug."));
