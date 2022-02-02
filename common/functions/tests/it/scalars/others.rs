@@ -18,6 +18,8 @@ use common_exception::Result;
 use common_functions::scalars::InetAtonFunction;
 use common_functions::scalars::InetNtoaFunction;
 use common_functions::scalars::RunningDifferenceFunction;
+use common_functions::scalars::TryInetAtonFunction;
+use common_functions::scalars::TryInetNtoaFunction;
 
 use super::scalar_function2_test::test_scalar_functions2;
 use super::scalar_function2_test::ScalarFunction2Test;
@@ -262,7 +264,7 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
 }
 
 #[test]
-fn test_inet_aton_function() -> Result<()> {
+fn test_try_inet_aton_function() -> Result<()> {
     use common_datavalues2::prelude::*;
 
     let tests = vec![
@@ -286,12 +288,47 @@ fn test_inet_aton_function() -> Result<()> {
         },
     ];
 
+    let test_func = TryInetAtonFunction::try_create("try_inet_aton")?;
+    test_scalar_functions2(test_func, &tests)
+}
+
+#[test]
+fn test_inet_aton_function() -> Result<()> {
+    use common_datavalues2::prelude::*;
+
+    let tests = vec![
+        ScalarFunction2Test {
+            name: "valid input",
+            columns: vec![Series::from_data([Some("127.0.0.1")])],
+            expect: Series::from_data(vec![Option::<u32>::Some(2130706433_u32)]),
+            error: "",
+        },
+        ScalarFunction2Test {
+            name: "null input",
+            columns: vec![Series::from_data([Option::<Vec<u8>>::None])],
+            expect: Series::from_data([Option::<u32>::None]),
+            error: "",
+        },
+        ScalarFunction2Test {
+            name: "invalid input",
+            columns: vec![Series::from_data([Some("1.1.1.1"), Some("batman")])],
+            expect: Series::from_data(vec![Option::<u32>::None]),
+            error: "Failed to parse 'batman' into a IPV4 address, invalid IP address syntax",
+        },
+        ScalarFunction2Test {
+            name: "empty string",
+            columns: vec![Series::from_data([Some("1.1.1.1"), Some("")])],
+            expect: Series::from_data(vec![Option::<u32>::None]),
+            error: "Failed to parse '' into a IPV4 address, invalid IP address syntax",
+        },
+    ];
+
     let test_func = InetAtonFunction::try_create("inet_aton")?;
     test_scalar_functions2(test_func, &tests)
 }
 
 #[test]
-fn test_inet_ntoa_function() -> Result<()> {
+fn test_try_inet_ntoa_function() -> Result<()> {
     use common_datavalues2::prelude::*;
 
     let tests = vec![
@@ -363,6 +400,86 @@ fn test_inet_ntoa_function() -> Result<()> {
             columns: vec![Series::from_data(["-sad"])],
             expect: Series::from_data(vec![Option::<Vec<u8>>::None]),
             error: "",
+        },
+    ];
+
+    let test_func = TryInetNtoaFunction::try_create("try_inet_ntoa")?;
+    test_scalar_functions2(test_func, &tests)
+}
+
+#[test]
+fn test_inet_ntoa_function() -> Result<()> {
+    use common_datavalues2::prelude::*;
+
+    let tests = vec![
+        // integer input test cases
+        ScalarFunction2Test {
+            name: "integer_input_i32_positive",
+            columns: vec![Series::from_data([2130706433_i32])],
+            expect: Series::from_data(["127.0.0.1"]),
+            error: "",
+        },
+        ScalarFunction2Test {
+            name: "integer_input_i32_negative",
+            columns: vec![Series::from_data(["-1"])],
+            expect: Series::from_data([""]),
+            error: "Cast error happens in casting from String to UInt32",
+        },
+        ScalarFunction2Test {
+            name: "integer_input_u8",
+            columns: vec![Series::from_data([Some(0_u8)])],
+            expect: Series::from_data([Some("0.0.0.0")]),
+            error: "",
+        },
+        ScalarFunction2Test {
+            name: "integer_input_u32",
+            columns: vec![Series::from_data([Some(3232235777_u32)])],
+            expect: Series::from_data([Some("192.168.1.1")]),
+            error: "",
+        },
+        // float input test cases
+        ScalarFunction2Test {
+            name: "float_input_f64",
+            columns: vec![Series::from_data([2130706433.3917_f64])],
+            expect: Series::from_data(["127.0.0.1"]),
+            error: "",
+        },
+        ScalarFunction2Test {
+            name: "string_input_u32",
+            columns: vec![Series::from_data([Some("3232235777")])],
+            expect: Series::from_data([Some("192.168.1.1")]),
+            error: "",
+        },
+        // string input test cases
+        ScalarFunction2Test {
+            name: "string_input_empty",
+            columns: vec![Series::from_data([""])],
+            expect: Series::from_data([""]),
+            error: "Cast error happens in casting from String to UInt32",
+        },
+        ScalarFunction2Test {
+            name: "string_input_f64",
+            columns: vec![Series::from_data(["3232235777.72319"])],
+            expect: Series::from_data([""]),
+            error: "Cast error happens in casting from String to UInt32",
+        },
+        ScalarFunction2Test {
+            name: "string_input_starts_with_integer",
+            columns: vec![Series::from_data(["323a"])],
+            expect: Series::from_data([""]),
+            error: "Cast error happens in casting from String to UInt32",
+        },
+        ScalarFunction2Test {
+            name: "string_input_char_inside_integer",
+            columns: vec![Series::from_data(["323a111"])],
+            expect: Series::from_data([""]),
+            error: "Cast error happens in casting from String to UInt32",
+        },
+        ScalarFunction2Test {
+            name: "string_input_invalid_string",
+            columns: vec![Series::from_data(["-sad"])],
+            expect: Series::from_data([""]),
+            error: "Cast error happens in casting from String to UInt32",
         },
     ];
 

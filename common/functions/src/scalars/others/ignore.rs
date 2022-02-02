@@ -15,7 +15,7 @@
 use std::fmt;
 use std::str;
 
-use common_datavalues2::types::type_primitive;
+use common_datavalues2::type_primitive;
 use common_datavalues2::ColumnRef;
 use common_datavalues2::ColumnsWithField;
 use common_datavalues2::DataTypePtr;

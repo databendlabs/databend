@@ -113,9 +113,9 @@ impl Function2 for Function2Adapter {
 
                 let col = self.eval(&columns, input_rows)?;
 
-                // Some functions always returns a nullable column because invalid input(not Nulls) may return a null output.
-                // For example, inet_aton("helloworld") will return Null.
-                // In this case, we need to merge the validity.
+                // The'try' series functions always return Null when they failed the try.
+                // For example, try_inet_aton("helloworld") will return Null because it failed to parse "helloworld" to a valid IP address.
+                // The same thing may happen on other 'try' functions. So we need to merge the validity.
                 if col.is_nullable() {
                     let (_, bitmap) = col.validity();
                     validity = match validity {
@@ -134,7 +134,7 @@ impl Function2 for Function2Adapter {
                 };
 
                 let col = if col.is_nullable() {
-                    let nullable_column: &NullableColumn = col.as_any().downcast_ref().unwrap();
+                    let nullable_column: &NullableColumn = unsafe { Series::static_cast(&col) };
                     NullableColumn::new(nullable_column.inner().clone(), validity)
                 } else {
                     NullableColumn::new(col, validity)

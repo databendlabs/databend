@@ -20,6 +20,8 @@ mod running_difference_function;
 
 pub use ignore::IgnoreFunction;
 pub use inet_aton::InetAtonFunction;
+pub use inet_aton::TryInetAtonFunction;
 pub use inet_ntoa::InetNtoaFunction;
+pub use inet_ntoa::TryInetNtoaFunction;
 pub use other::OtherFunction;
 pub use running_difference_function::RunningDifferenceFunction;
