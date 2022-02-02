@@ -19,6 +19,7 @@ use pretty_assertions::assert_eq;
 
 #[test]
 fn test_lexer() {
+    assert_lex("", &[(EOI, "", 0..0)]);
     assert_lex(
         "x'deadbeef' -- a hex string\n 'a string literal\n escape quote by '' or \\\'. '",
         &[
@@ -28,11 +29,13 @@ fn test_lexer() {
                 "'a string literal\n escape quote by '' or \\'. '",
                 29..75,
             ),
+            (EOI, "", 75..75),
         ],
     );
     assert_lex("'中文' '日本語'", &[
         (LiteralString, "'中文'", 0..8),
         (LiteralString, "'日本語'", 9..20),
+        (EOI, "", 20..20),
     ]);
     assert_lex("42 3.5 4. .001 5e2 1.925e-3 .38e+7 1.e-01", &[
         (LiteralNumber, "42", 0..2),
@@ -43,6 +46,7 @@ fn test_lexer() {
         (LiteralNumber, "1.925e-3", 19..27),
         (LiteralNumber, ".38e+7", 28..34),
         (LiteralNumber, "1.e-01", 35..41),
+        (EOI, "", 41..41),
     ]);
     assert_lex(
         r#"create table "user" (id int, name varchar /* the user name */);"#,
@@ -58,6 +62,7 @@ fn test_lexer() {
             (VARCHAR, "varchar", 34..41),
             (RParen, ")", 61..62),
             (SemiColon, ";", 62..63),
+            (EOI, "", 63..63),
         ],
     )
 }

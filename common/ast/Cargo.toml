@@ -29,5 +29,4 @@ pratt = "0.3"
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"
-nom-supreme = "0.6"
 common-base = { path = "../base" }

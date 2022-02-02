@@ -25,6 +25,8 @@ pub enum TokenKind {
     #[error]
     Error,
 
+    EOI,
+
     #[regex(r"[ \t\n\f]+", logos::skip)]
     Whitespace,
 
@@ -1067,6 +1069,12 @@ pub fn tokenise(input: &str) -> Result<Vec<Token>> {
             })
         }
     }
+
+    tokens.push(Token {
+        kind: TokenKind::EOI,
+        text: "",
+        span: (lex.span().end)..(lex.span().end),
+    });
 
     Ok(tokens)
 }

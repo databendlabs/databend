@@ -75,35 +75,19 @@ where Error: ParseError<Input<'a>> {
 
         let (i, expr_elements) = rule! { #expr_element_limited+ }(i)?;
 
+        dbg!(&expr_elements);
+
         let mut iter = expr_elements.into_iter();
         let expr = ExprParser
             .parse(&mut iter)
-            .map_err(|err| match err {
-                PrattError::EmptyInput => {
-                    ContextError::add_context(i, "empty expresssion", make_error(i, ErrorKind::Eof))
-                }
-                // TODO (andylokandy): report the proper span
-                PrattError::UnexpectedNilfix(_) => ContextError::add_context(
-                    i,
-                    "unable to parse the value",
-                    make_error(i, ErrorKind::Complete),
-                ),
-                PrattError::UnexpectedPrefix(_) => ContextError::add_context(
-                    i,
-                    "unable to parse the prefix operator",
-                    make_error(i, ErrorKind::Complete),
-                ),
-                PrattError::UnexpectedInfix(_) => ContextError::add_context(
-                    i,
-                    "unable to parse the binary operator",
-                    make_error(i, ErrorKind::Complete),
-                ),
-                PrattError::UnexpectedPostfix(_) => ContextError::add_context(
-                    i,
-                    "unable to parse the postfix operator",
-                    make_error(i, ErrorKind::Complete),
-                ),
-                PrattError::UserError(_) => unreachable!(),
+            .map_err(|err| {
+                map_pratt_error(
+                    iter.next()
+                        .map(|elem| elem.span)
+                        // It's safe to slice one more token because EOI is always added.
+                        .unwrap_or(&i[..1]),
+                    err,
+                )
             })
             .map_err(nom::Err::Error)?;
 
@@ -119,6 +103,58 @@ where Error: ParseError<Input<'a>> {
     }
 }
 
+fn map_pratt_error<'a, Error>(
+    next_token: Input<'a>,
+    err: PrattError<WithSpan<'a>, pratt::NoError>,
+) -> Error
+where
+    Error: ParseError<Input<'a>>,
+{
+    match err {
+        PrattError::EmptyInput => ContextError::add_context(
+            next_token,
+            "unexpected end of an expression",
+            make_error(next_token, ErrorKind::Complete),
+        ),
+        PrattError::UnexpectedNilfix(elem) => ContextError::add_context(
+            elem.span,
+            "unable to parse the value",
+            make_error(elem.span, ErrorKind::Complete),
+        ),
+        PrattError::UnexpectedPrefix(elem) => ContextError::add_context(
+            elem.span,
+            "unable to parse the prefix operator",
+            make_error(elem.span, ErrorKind::Complete),
+        ),
+        PrattError::UnexpectedInfix(elem) => ContextError::add_context(
+            elem.span,
+            "unable to parse the binary operator",
+            make_error(elem.span, ErrorKind::Complete),
+        ),
+        PrattError::UnexpectedPostfix(elem) => ContextError::add_context(
+            elem.span,
+            "unable to parse the postfix operator",
+            make_error(elem.span, ErrorKind::Complete),
+        ),
+        PrattError::UserError(_) => unreachable!(),
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WithSpan<'a> {
+    elem: ExprElement,
+    span: Input<'a>,
+}
+
+/// A 'flattened' AST of expressions.
+///
+/// This is used to parse expressions in Pratt parser.
+/// The Pratt parser is not able to parse expressions by grammar. So we need to extract
+/// the expression operands and operators to be the input of Pratt parser, by running a
+/// nom parser in advance.
+///
+/// For example, `a + b AND c is null` is parsed as `[col(a), PLUS, col(b), AND, col(c), ISNULL]` by nom parsers.
+/// Then the Pratt parser is able to parse the expression into `AND(PLUS(col(a), col(b)), ISNULL(col(c)))`.
 #[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
 pub enum ExprElement {
@@ -172,13 +208,13 @@ pub enum ExprElement {
 
 struct ExprParser;
 
-impl<I: Iterator<Item = ExprElement>> PrattParser<I> for ExprParser {
+impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
     type Error = pratt::NoError;
-    type Input = ExprElement;
+    type Input = WithSpan<'a>;
     type Output = Expr;
 
-    fn query(&mut self, elem: &ExprElement) -> pratt::Result<Affix> {
-        let affix = match elem {
+    fn query(&mut self, elem: &WithSpan) -> pratt::Result<Affix> {
+        let affix = match &elem.elem {
             ExprElement::IsNull { .. } => Affix::Postfix(Precedence(17)),
             ExprElement::Between { .. } => Affix::Postfix(BETWEEN_PREC),
             ExprElement::InList { .. } => Affix::Postfix(Precedence(20)),
@@ -221,8 +257,8 @@ impl<I: Iterator<Item = ExprElement>> PrattParser<I> for ExprParser {
         Ok(affix)
     }
 
-    fn primary(&mut self, elem: ExprElement) -> pratt::Result<Expr> {
-        let expr = match elem {
+    fn primary(&mut self, elem: WithSpan<'a>) -> pratt::Result<Expr> {
+        let expr = match elem.elem {
             ExprElement::ColumnRef {
                 database,
                 table,
@@ -268,8 +304,8 @@ impl<I: Iterator<Item = ExprElement>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn infix(&mut self, lhs: Expr, elem: ExprElement, rhs: Expr) -> pratt::Result<Expr> {
-        let expr = match elem {
+    fn infix(&mut self, lhs: Expr, elem: WithSpan<'a>, rhs: Expr) -> pratt::Result<Expr> {
+        let expr = match elem.elem {
             ExprElement::BinaryOp { op } => Expr::BinaryOp {
                 left: Box::new(lhs),
                 right: Box::new(rhs),
@@ -280,8 +316,8 @@ impl<I: Iterator<Item = ExprElement>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn prefix(&mut self, elem: ExprElement, rhs: Expr) -> pratt::Result<Expr> {
-        let expr = match elem {
+    fn prefix(&mut self, elem: WithSpan<'a>, rhs: Expr) -> pratt::Result<Expr> {
+        let expr = match elem.elem {
             ExprElement::UnaryOp { op } => Expr::UnaryOp {
                 op,
                 expr: Box::new(rhs),
@@ -291,8 +327,8 @@ impl<I: Iterator<Item = ExprElement>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn postfix(&mut self, lhs: Expr, elem: ExprElement) -> pratt::Result<Expr> {
-        let expr = match elem {
+    fn postfix(&mut self, lhs: Expr, elem: WithSpan<'a>) -> pratt::Result<Expr> {
+        let expr = match elem.elem {
             ExprElement::IsNull { not } => Expr::IsNull {
                 expr: Box::new(lhs),
                 not,
@@ -319,7 +355,7 @@ impl<I: Iterator<Item = ExprElement>> PrattParser<I> for ExprParser {
     }
 }
 
-pub fn expr_element<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, ExprElement, Error>
+pub fn expr_element<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
 where Error: ParseError<Input<'a>> {
     let column_ref = map(
         rule! {
@@ -473,7 +509,7 @@ where Error: ParseError<Input<'a>> {
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
     let literal = map(literal, ExprElement::Literal);
 
-    rule! (
+    let (rest, elem) = rule! (
         #column_ref
         | #is_null
         | #in_list
@@ -490,7 +526,14 @@ where Error: ParseError<Input<'a>> {
         | #exists
         | #subquery
         | #group
-    )(i)
+    )(i)?;
+
+    let input_ptr = i.as_ptr();
+    let rest_ptr = rest.as_ptr();
+    let offset = (rest_ptr as usize - input_ptr as usize) / std::mem::size_of::<Token>();
+    let span = &i[..offset];
+
+    Ok((rest, WithSpan { elem, span }))
 }
 
 pub fn unary_op<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, UnaryOperator, Error>
