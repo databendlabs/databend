@@ -24,19 +24,13 @@ use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function2;
 use crate::scalars::Monotonicity;
-use crate::scalars::ScalarBinaryFunction;
 
-#[derive(Clone, Debug, Default)]
-struct DivFunction {}
-
-impl<L, R> ScalarBinaryFunction<L, R, f64> for DivFunction
+fn div_scalar<L, R>(l: L::RefType<'_>, r: R::RefType<'_>) -> f64
 where
     L: PrimitiveType + AsPrimitive<f64>,
     R: PrimitiveType + AsPrimitive<f64>,
 {
-    fn eval(&self, l: L::RefType<'_>, r: R::RefType<'_>) -> f64 {
-        l.to_owned_scalar().as_() / r.to_owned_scalar().as_()
-    }
+    l.to_owned_scalar().as_() / r.to_owned_scalar().as_()
 }
 
 pub struct ArithmeticDivFunction;
@@ -62,7 +56,7 @@ impl ArithmeticDivFunction {
                 BinaryArithmeticFunction::<$T, $D, f64, _>::try_create_func(
                     op,
                     Float64Type::arc(),
-                    DivFunction::default(),
+                    div_scalar::<$T, $D>
                 )
             }, {
                 error_fn()
