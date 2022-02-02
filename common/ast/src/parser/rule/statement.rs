@@ -12,36 +12,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use nom::combinator::map;
+use nom::error::context;
 use nom::IResult;
 
 use crate::parser::ast::Statement;
+use crate::parser::rule::error::Error;
 use crate::parser::rule::util::ident;
 use crate::parser::rule::util::Input;
-use crate::parser::rule::util::ParseError;
 use crate::parser::token::*;
 use crate::rule;
 
-pub fn truncate_table<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, Statement, Error>
-where Error: ParseError<Input<'a>> {
-    let (i, (_, _, database, table, _)) = rule! {
-        TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ ";"
-    }(i)?;
+pub fn statement<'a>(i: Input<'a>) -> IResult<Input<'a>, Statement, Error> {
+    let truncate_table = context(
+        "TRUNCATE TABLE statement",
+        map(
+            rule! {
+                TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ ";"
+            },
+            |(_, _, database, table, _)| Statement::TruncateTable {
+                database: database.map(|(name, _)| name),
+                table,
+            },
+        ),
+    );
+    let drop_table = context(
+        "DROP TABLE statement",
+        map(
+            rule! {
+                DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ ";"
+            },
+            |(_, _, if_exists, database, table, _)| Statement::DropTable {
+                if_exists: if_exists.is_some(),
+                database: database.map(|(name, _)| name),
+                table,
+            },
+        ),
+    );
 
-    Ok((i, Statement::TruncateTable {
-        database: database.map(|(name, _)| name),
-        table,
-    }))
-}
-
-pub fn drop_table<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, Statement, Error>
-where Error: ParseError<Input<'a>> {
-    let (i, (_, _, if_exists, database, table, _)) = rule! {
-        DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ ";"
-    }(i)?;
-
-    Ok((i, Statement::DropTable {
-        if_exists: if_exists.is_some(),
-        database: database.map(|(name, _)| name),
-        table,
-    }))
+    rule!(
+        #truncate_table
+        | #drop_table
+    )(i)
 }

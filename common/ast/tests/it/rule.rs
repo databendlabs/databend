@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_ast::parser::rule::expr::*;
-use common_ast::parser::rule::statement::*;
-use common_ast::parser::rule::util::Input;
+use common_ast::parser::rule::error::pretty_print_error;
+use common_ast::parser::rule::error::Error;
+use common_ast::parser::rule::expr::expr;
+use common_ast::parser::rule::statement::statement;
 use common_ast::parser::token::*;
-use nom::error::VerboseError;
+use indoc::indoc;
 use nom::Parser;
 use pretty_assertions::assert_eq;
 
 macro_rules! assert_parse {
-    ($parser:expr, $source:literal, $expected:literal $(,)*) => {
+    ($parser:expr, $source:literal, $expected:expr $(,)*) => {
         let tokens = tokenise($source).unwrap();
-        let res: nom::IResult<_, _, VerboseError<Input>> = $parser.parse(&(tokens));
+        let res: nom::IResult<_, _, Error> = $parser.parse(&(tokens));
         let (i, output) = res.unwrap();
 
         assert_eq!(&format!("{}", output), $expected);
@@ -31,28 +32,30 @@ macro_rules! assert_parse {
     };
 }
 
-// TODO (andylokandy): render the parsing error more human-friendly
 macro_rules! assert_parse_error {
-    ($parser:expr, $source:literal, $expected:literal $(,)*) => {
+    ($parser:expr, $source:literal, $expected:expr $(,)*) => {
         let tokens = tokenise($source).unwrap();
-        let res: nom::IResult<_, _, VerboseError<Input>> = $parser.parse(&(tokens));
+        let res: nom::IResult<_, _, Error> = $parser.parse(&(tokens));
         let err = res.unwrap_err();
 
-        assert_eq!(&format!("{}", err), $expected);
+        let output = pretty_print_error($source, err).trim_end().to_string();
+        if output != $expected.trim() {
+            panic!("assertion failed: error message mismatched\noutput:\n{output}");
+        }
     };
 }
 
 #[test]
 fn test_statement() {
-    assert_parse!(truncate_table, "truncate table a;", "TRUNCATE TABLE a");
+    assert_parse!(statement, "truncate table a;", "TRUNCATE TABLE a");
     assert_parse!(
-        truncate_table,
+        statement,
         r#"truncate table "a".b;"#,
         r#"TRUNCATE TABLE "a".b"#,
     );
-    assert_parse!(drop_table, "drop table a;", "DROP TABLE a");
+    assert_parse!(statement, "drop table a;", "DROP TABLE a");
     assert_parse!(
-        drop_table,
+        statement,
         r#"drop table if exists a."b";"#,
         r#"DROP TABLE IF EXISTS a."b""#,
     );
@@ -73,7 +76,64 @@ fn test_expr() {
 }
 
 #[test]
+fn test_statement_error() {
+    assert_parse_error!(statement, "drop table if a.b;", indoc! {
+        r#"
+            error: 
+              --> SQL:1:12
+              |
+            1 | drop table if a.b;
+              | ----       ^^ expected a token of `Ident`
+              | |           
+              | while parsing DROP TABLE statement
+        "#
+    });
+    assert_parse_error!(statement, "truncate table a", indoc! {
+        r#"
+            error: 
+              --> SQL:1:17
+              |
+            1 | truncate table a
+              | --------        ^ expected token ";"
+              | |               
+              | while parsing TRUNCATE TABLE statement
+        "#
+    });
+}
+
+#[test]
 fn test_expr_error() {
-    assert_parse_error!(expr, "(a and ) 1", "Parsing Error: VerboseError { errors: [([Token { kind: RParen, text: \")\", span: 7..8 }], Nom(Complete)), ([Token { kind: RParen, text: \")\", span: 7..8 }], Context(\"unexpected end of an expression\")), ([Token { kind: LParen, text: \"(\", span: 0..1 }, Token { kind: Ident, text: \"a\", span: 1..2 }, Token { kind: AND, text: \"and\", span: 3..6 }, Token { kind: RParen, text: \")\", span: 7..8 }, Token { kind: LiteralNumber, text: \"1\", span: 9..10 }, Token { kind: EOI, text: \"\", span: 10..10 }], Nom(Alt)), ([Token { kind: LParen, text: \"(\", span: 0..1 }, Token { kind: Ident, text: \"a\", span: 1..2 }, Token { kind: AND, text: \"and\", span: 3..6 }, Token { kind: RParen, text: \")\", span: 7..8 }, Token { kind: LiteralNumber, text: \"1\", span: 9..10 }, Token { kind: EOI, text: \"\", span: 10..10 }], Nom(Many1))] }");
-    assert_parse_error!(expr, "a + +", "Parsing Error: VerboseError { errors: [([Token { kind: Plus, text: \"+\", span: 4..5 }], Nom(Complete)), ([Token { kind: Plus, text: \"+\", span: 4..5 }], Context(\"unable to parse the binary operator\"))] }");
+    assert_parse_error!(expr, "(a and ) 1", indoc! {
+        r#"
+            error: 
+              --> SQL:1:8
+              |
+            1 | (a and ) 1
+              |        ^ unexpected end of the expression
+        "#
+    });
+    assert_parse_error!(expr, "a + +", indoc! {
+        r#"
+            error: 
+              --> SQL:1:5
+              |
+            1 | a + +
+              |     ^ unable to parse the binary operator
+        "#
+    });
+    assert_parse_error!(
+        expr,
+        "G.E.B IS NOT NULL AND\n\tcol1 NOT BETWEEN col2 AND\n\t\tAND 1 + col3 DIV sum(col4)",
+        indoc! {
+            r#"
+                error: 
+                  --> SQL:3:3
+                  |
+                1 | G.E.B IS NOT NULL AND
+                2 |     col1 NOT BETWEEN col2 AND
+                3 |         AND 1 + col3 DIV sum(col4)
+                  |         ^^^ unexpected end of the expression
+            "#
+        }
+    );
 }

@@ -20,6 +20,8 @@ sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "c3
 
 # Crates.io dependencies
 async-trait = "0.1.52"
+codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c84116f5" }
+indoc = "1"
 logos = "0.12"
 nom = "7"
 nom-rule = "0.1"
