@@ -75,8 +75,6 @@ where Error: ParseError<Input<'a>> {
 
         let (i, expr_elements) = rule! { #expr_element_limited+ }(i)?;
 
-        dbg!(&expr_elements);
-
         let mut iter = expr_elements.into_iter();
         let expr = ExprParser
             .parse(&mut iter)
