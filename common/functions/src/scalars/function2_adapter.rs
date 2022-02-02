@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_datavalues2::combine_validities;
 use common_datavalues2::combine_validities_2;
 use common_datavalues2::remove_nullable;
 use common_datavalues2::wrap_nullable;
@@ -111,6 +112,18 @@ impl Function2 for Function2Adapter {
                     .collect::<Vec<_>>();
 
                 let col = self.eval(&columns, input_rows)?;
+
+                // The'try' series functions always return Null when they failed the try.
+                // For example, try_inet_aton("helloworld") will return Null because it failed to parse "helloworld" to a valid IP address.
+                // The same thing may happen on other 'try' functions. So we need to merge the validity.
+                if col.is_nullable() {
+                    let (_, bitmap) = col.validity();
+                    validity = match validity {
+                        Some(v) => combine_validities(bitmap, Some(&v)),
+                        None => combine_validities(bitmap, None),
+                    };
+                }
+
                 let validity = match validity {
                     Some(v) => v,
                     None => {
@@ -120,7 +133,12 @@ impl Function2 for Function2Adapter {
                     }
                 };
 
-                let col = NullableColumn::new(col, validity);
+                let col = if col.is_nullable() {
+                    let nullable_column: &NullableColumn = unsafe { Series::static_cast(&col) };
+                    NullableColumn::new(nullable_column.inner().clone(), validity)
+                } else {
+                    NullableColumn::new(col, validity)
+                };
                 return Ok(Arc::new(col));
             }
         }
