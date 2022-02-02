@@ -50,6 +50,7 @@ fn test_statement() {
 // TODO (andylokandy): test tree structure, maybe add parentheses?
 #[test]
 fn test_expr() {
+    assert_parse!(expr, "a", "a");
     assert_parse!(expr, "1 + a * c.d", "1 + a * c.d");
     assert_parse!(expr, "col1 not between 1 and 2", "col1 NOT BETWEEN 1 AND 2");
     assert_parse!(expr, "sum(col1)", "sum(col1)");

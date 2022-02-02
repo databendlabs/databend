@@ -15,6 +15,7 @@
 use nom::branch::alt;
 use nom::combinator::map;
 use nom::combinator::value;
+use nom::combinator::verify;
 use nom::error::make_error;
 use nom::error::ContextError;
 use nom::error::ErrorKind;
@@ -39,6 +40,8 @@ use crate::parser::rule::util::ParseError;
 use crate::parser::token::*;
 use crate::rule;
 
+const BETWEEN_PREC: Precedence = Precedence(20);
+
 pub fn query<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, Query, Error>
 where Error: ParseError<Input<'a>> {
     // TODO: unimplemented
@@ -47,16 +50,32 @@ where Error: ParseError<Input<'a>> {
 
 pub fn expr<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, Expr, Error>
 where Error: ParseError<Input<'a>> {
-    subexpr(Error)(i)
+    subexpr(Precedence(0))(i)
 }
 
 pub fn subexpr<'a, Error>(
-    stop_at: TokenKind,
+    min_precedence: Precedence,
 ) -> impl FnMut(Input<'a>) -> IResult<Input<'a>, Expr, Error> + Copy
 where Error: ParseError<Input<'a>> {
     move |i| {
-        let (i, expr_elements) = rule! { (!stop_at ~ #expr_element)+ }(i)?;
-        let mut iter = expr_elements.into_iter().map(|(_, elem)| elem);
+        let expr_element_limited =
+            verify(
+                expr_element,
+                |elem| match PrattParser::<std::iter::Once<_>>::query(&mut ExprParser, elem)
+                    .unwrap()
+                {
+                    Affix::Infix(prec, _) | Affix::Prefix(prec) | Affix::Postfix(prec)
+                        if prec <= min_precedence =>
+                    {
+                        false
+                    }
+                    _ => true,
+                },
+            );
+
+        let (i, expr_elements) = rule! { #expr_element_limited+ }(i)?;
+
+        let mut iter = expr_elements.into_iter();
         let expr = ExprParser
             .parse(&mut iter)
             .map_err(|err| match err {
@@ -161,7 +180,7 @@ impl<I: Iterator<Item = ExprElement>> PrattParser<I> for ExprParser {
     fn query(&mut self, elem: &ExprElement) -> pratt::Result<Affix> {
         let affix = match elem {
             ExprElement::IsNull { .. } => Affix::Postfix(Precedence(17)),
-            ExprElement::Between { .. } => Affix::Postfix(Precedence(20)),
+            ExprElement::Between { .. } => Affix::Postfix(BETWEEN_PREC),
             ExprElement::InList { .. } => Affix::Postfix(Precedence(20)),
             ExprElement::InSubquery { .. } => Affix::Postfix(Precedence(20)),
             ExprElement::UnaryOp { op } => match op {
@@ -352,7 +371,7 @@ where Error: ParseError<Input<'a>> {
             not: not.is_some(),
         },
     );
-    let between_subexpr = subexpr(AND);
+    let between_subexpr = subexpr(BETWEEN_PREC);
     let between = map(
         rule! {
             NOT? ~ BETWEEN ~ #between_subexpr ~ AND ~  #between_subexpr
