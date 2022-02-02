@@ -123,8 +123,7 @@ pub fn pretty_print_error<'a>(source: &'a str, error: nom::Err<Error<'a>>) -> St
         }
     }
 
-    let diagnostic = Diagnostic::error()
-        .with_labels(lables);
+    let diagnostic = Diagnostic::error().with_labels(lables);
 
     term::emit(&mut writer, &config, &file, &diagnostic).unwrap();
 
