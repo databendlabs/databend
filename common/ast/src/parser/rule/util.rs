@@ -71,8 +71,8 @@ pub fn literal_u64<'a>(i: Input<'a>) -> IResult<Input<'a>, u64, Error> {
 #[macro_export]
 macro_rules! rule {
     ($($tt:tt)*) => { nom_rule::rule!(
-        ($crate::parser::rule::util::match_text),
-        ($crate::parser::rule::util::match_token),
+        $crate::parser::rule::util::match_text,
+        $crate::parser::rule::util::match_token,
         $($tt)*)
     }
 }

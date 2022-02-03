@@ -4644,9 +4644,9 @@ dependencies = [
 
 [[package]]
 name = "nom-rule"
-version = "0.1.4"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d9f041e98192c6515752ef812475ae6a45751237a5a4cf2398dc495ae9f6e4b"
+checksum = "29e7d73737773a42ad59e7465b8efb97a17476f3b6256b64be372c11b66be190"
 dependencies = [
  "nom 7.1.0",
  "pratt",

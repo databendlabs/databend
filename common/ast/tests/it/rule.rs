@@ -109,7 +109,9 @@ fn test_expr_error() {
               --> SQL:1:8
               |
             1 | (a and ) 1
-              |        ^ unexpected end of expression
+              | -      ^ unexpected end of expression
+              | |       
+              | while parsing expression
         "#
     });
     assert_parse_error!(expr, "a + +", indoc! {
@@ -118,7 +120,9 @@ fn test_expr_error() {
               --> SQL:1:5
               |
             1 | a + +
-              |     ^ unable to parse the binary operator
+              | -   ^ unable to parse the binary operator
+              | |    
+              | while parsing expression
         "#
     });
     assert_parse_error!(
@@ -130,6 +134,7 @@ fn test_expr_error() {
                   --> SQL:3:3
                   |
                 1 | G.E.B IS NOT NULL AND
+                  | - while parsing expression
                 2 |     col1 NOT BETWEEN col2 AND
                 3 |         AND 1 + col3 DIV sum(col4)
                   |         ^^^ unexpected end of expression

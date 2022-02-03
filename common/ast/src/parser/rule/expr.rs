@@ -17,6 +17,7 @@ use nom::combinator::cut;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::combinator::verify;
+use nom::error::context;
 use nom::IResult;
 use pratt::Affix;
 use pratt::Associativity;
@@ -39,7 +40,7 @@ use crate::parser::rule::util::Input;
 use crate::parser::token::*;
 use crate::rule;
 
-const BETWEEN_PREC: Precedence = Precedence(20);
+const BETWEEN_PREC: u32 = 20;
 
 pub fn query<'a>(i: Input<'a>) -> IResult<Input<'a>, Query, Error> {
     // TODO: unimplemented
@@ -47,11 +48,11 @@ pub fn query<'a>(i: Input<'a>) -> IResult<Input<'a>, Query, Error> {
 }
 
 pub fn expr<'a>(i: Input<'a>) -> IResult<Input<'a>, Expr, Error> {
-    subexpr(Precedence(0))(i)
+    context("expression", subexpr(0))(i)
 }
 
 pub fn subexpr<'a>(
-    min_precedence: Precedence,
+    min_precedence: u32,
 ) -> impl FnMut(Input<'a>) -> IResult<Input<'a>, Expr, Error> {
     cut(move |i| {
         let expr_element_limited =
@@ -61,7 +62,7 @@ pub fn subexpr<'a>(
                     .unwrap()
                 {
                     Affix::Infix(prec, _) | Affix::Prefix(prec) | Affix::Postfix(prec)
-                        if prec <= min_precedence =>
+                        if prec <= Precedence(min_precedence) =>
                     {
                         false
                     }
@@ -200,7 +201,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
     fn query(&mut self, elem: &WithSpan) -> pratt::Result<Affix> {
         let affix = match &elem.elem {
             ExprElement::IsNull { .. } => Affix::Postfix(Precedence(17)),
-            ExprElement::Between { .. } => Affix::Postfix(BETWEEN_PREC),
+            ExprElement::Between { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
             ExprElement::InList { .. } => Affix::Postfix(Precedence(20)),
             ExprElement::InSubquery { .. } => Affix::Postfix(Precedence(20)),
             ExprElement::UnaryOp { op } => match op {
@@ -370,7 +371,7 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
     );
     let in_list = map(
         rule! {
-            NOT? ~ IN ~ "(" ~ #expr ~ ("," ~ #expr)*  ~ ")"
+            NOT? ~ IN ~ "(" ~ #subexpr(0) ~ ("," ~ #subexpr(0))*  ~ ")"
         },
         |(not, _, _, head, tail, _)| {
             let mut list = vec![head];
@@ -402,7 +403,7 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
     );
     let cast = map(
         rule! {
-            CAST ~ "(" ~ #expr ~ AS ~ #type_name ~ ")"
+            CAST ~ "(" ~ #subexpr(0) ~ AS ~ #type_name ~ ")"
         },
         |(_, _, expr, _, target_type, _)| ExprElement::Cast { expr, target_type },
     );
@@ -411,7 +412,7 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
     });
     let function_call = map(
         rule! {
-            #function_name ~ "(" ~ (DISTINCT? ~ #expr ~ ("," ~ #expr)*)? ~ ")"
+            #function_name ~ "(" ~ (DISTINCT? ~ #subexpr(0) ~ ("," ~ #subexpr(0))*)? ~ ")"
         },
         |(name, _, args, _)| {
             let (distinct, args) = args
@@ -432,7 +433,7 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
     );
     let function_call_with_param = map(
         rule! {
-            #function_name ~ "(" ~ (#literal ~ ("," ~ #literal)*)? ~ ")" ~ "(" ~ (DISTINCT? ~ #expr ~ ("," ~ #expr)*)? ~ ")"
+            #function_name ~ "(" ~ (#literal ~ ("," ~ #literal)*)? ~ ")" ~ "(" ~ (DISTINCT? ~ #subexpr(0) ~ ("," ~ #subexpr(0))*)? ~ ")"
         },
         |(name, _, params, _, _, args, _)| {
             let params = params
@@ -461,7 +462,7 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
     );
     let case = map(
         rule! {
-            CASE ~ #expr? ~ (WHEN ~ #expr ~ THEN ~ #expr)+ ~ (ELSE ~ #expr)? ~ END
+            CASE ~ #subexpr(0)? ~ (WHEN ~ #subexpr(0) ~ THEN ~ #subexpr(0))+ ~ (ELSE ~ #subexpr(0))? ~ END
         },
         |(_, operand, branches, else_result, _)| {
             let (conditions, results) = branches
@@ -484,7 +485,7 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
     let subquery = map(rule! { "(" ~ #query ~ ")" }, |(_, subquery, _)| {
         ExprElement::Subquery(subquery)
     });
-    let group = map(rule! { "(" ~ #expr ~ ")" }, |(_, expr, _)| {
+    let group = map(rule! { "(" ~ #subexpr(0) ~ ")" }, |(_, expr, _)| {
         ExprElement::Group(expr)
     });
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
