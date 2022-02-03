@@ -20,27 +20,35 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_macros::MallocSizeOf;
 use common_meta_types::UserSetting;
 
 use crate::configs::Config;
+use crate::sessions::SessionContext;
+use crate::users::UserApiProvider;
 
-#[derive(Clone, Debug, MallocSizeOf)]
+#[derive(Clone, Debug)]
 pub struct SettingValue {
     default_value: DataValue,
-    #[ignore_malloc_size_of = "insignificant"]
     user_setting: UserSetting,
     desc: &'static str,
 }
 
-#[derive(Clone, Debug, MallocSizeOf)]
+#[derive(Clone)]
 pub struct Settings {
     settings: Arc<RwLock<HashMap<String, SettingValue>>>,
+    #[allow(dead_code)]
+    user_api: Arc<UserApiProvider>,
+    #[allow(dead_code)]
+    session_ctx: Arc<SessionContext>,
 }
 
 impl Settings {
-    pub fn try_create(conf: &Config) -> Result<Settings> {
-        let values = vec![
+    pub fn try_create(
+        conf: &Config,
+        session_ctx: Arc<SessionContext>,
+        user_api: Arc<UserApiProvider>,
+    ) -> Result<Settings> {
+        let mut values = vec![
             // max_block_size
             SettingValue {
                 default_value:DataValue::UInt64(Some(10000)),
@@ -100,9 +108,22 @@ impl Settings {
 
         let settings = Arc::new(RwLock::new(HashMap::default()));
 
-        // Insert all init settings.
-        // Drop the write lock end of this block.
+        // Initial settings.
+        // Note: Use code block here to drop the write lock at the end.
         {
+            // Get settings from metasrv.
+            let global_settings = futures::executor::block_on(
+                user_api.get_settings(&session_ctx.get_current_tenant()),
+            )?;
+
+            for global in &global_settings {
+                for vx in values.iter_mut() {
+                    if global.name == vx.user_setting.name {
+                        vx.default_value = global.value.clone();
+                    }
+                }
+            }
+
             let mut settings_mut = settings.write();
             for value in values {
                 let name = value.user_setting.name.clone();
@@ -110,14 +131,22 @@ impl Settings {
             }
         }
 
-        let ret = Settings { settings };
-        // Set max threads.
-        let cpus = if conf.query.num_cpus == 0 {
-            num_cpus::get() as u64
-        } else {
-            conf.query.num_cpus
+        let ret = Settings {
+            settings,
+            user_api,
+            session_ctx,
         };
-        ret.set_max_threads(cpus)?;
+
+        // Overwrite settings.
+        {
+            // Set max threads.
+            let cpus = if conf.query.num_cpus == 0 {
+                num_cpus::get() as u64
+            } else {
+                conf.query.num_cpus
+            };
+            ret.set_max_threads(cpus)?;
+        }
 
         Ok(ret)
     }

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cluster;
-mod setting;
-mod stage;
-mod udf;
-mod user;
+use common_exception::Result;
+use common_meta_types::UserSetting;
+
+#[async_trait::async_trait]
+pub trait SettingApi: Sync + Send {
+    // Add a setting to /tenant/cluster/setting-name.
+    async fn set_setting(&self, setting: UserSetting) -> Result<u64>;
+
+    // Get all the settings for tenant/cluster.
+    async fn get_settings(&self) -> Result<Vec<UserSetting>>;
+
+    // Drop the setting by name.
+    async fn drop_setting(&self, name: &str, seq: Option<u64>) -> Result<()>;
+}
