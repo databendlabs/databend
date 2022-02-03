@@ -27,6 +27,7 @@ use crate::configs::Config;
 
 #[derive(Clone, Debug, MallocSizeOf)]
 pub struct SettingValue {
+    default_value: DataValue,
     #[ignore_malloc_size_of = "insignificant"]
     user_setting: UserSetting,
     desc: &'static str,
@@ -42,48 +43,56 @@ impl Settings {
         let values = vec![
             // max_block_size
             SettingValue {
+                default_value:DataValue::UInt64(Some(10000)),
                 user_setting: UserSetting::create("max_block_size", DataValue::UInt64(Some(10000))),
                 desc: "Maximum block size for reading",
             },
 
             // max_threads
             SettingValue {
+                default_value:DataValue::UInt64(Some(16)),
                 user_setting: UserSetting::create("max_threads", DataValue::UInt64(Some(16))),
                 desc: "The maximum number of threads to execute the request. By default, it is determined automatically.",
             },
 
             // flight_client_timeout
             SettingValue {
+                default_value:DataValue::UInt64(Some(60)),
                 user_setting: UserSetting::create("flight_client_timeout", DataValue::UInt64(Some(60))),
                 desc:"Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds",
             },
 
             // parallel_read_threads
             SettingValue {
+                default_value: DataValue::UInt64(Some(1)),
                 user_setting: UserSetting::create("parallel_read_threads", DataValue::UInt64(Some(1))),
                 desc:"The maximum number of parallelism for reading data. By default, it is 1.",
             },
 
             // storage_read_buffer_size
             SettingValue {
+                default_value: DataValue::UInt64(Some(1024*1024)),
                 user_setting: UserSetting::create("storage_read_buffer_size", DataValue::UInt64(Some(1024*1024))),
                 desc:"The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.",
             },
 
             // storage_backoff_init_delay_ms
             SettingValue {
+                default_value: DataValue::UInt64(Some(5)),
                 user_setting: UserSetting::create("storage_occ_backoff_init_delay_ms", DataValue::UInt64(Some(5))),
                 desc:"The initial retry delay in millisecond. By default,  it is 5 ms.",
             },
 
             // storage_occ_backoff_max_delay_ms
             SettingValue {
+                default_value:DataValue::UInt64(Some(20*1000)),
                 user_setting: UserSetting::create("storage_occ_backoff_max_delay_ms", DataValue::UInt64(Some(20*1000))),
                 desc:"The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing. By default, it is 20 seconds.",
             },
 
             // storage_occ_backoff_max_elapsed_ms
             SettingValue {
+                default_value:DataValue::UInt64(Some(120*1000)),
                 user_setting: UserSetting::create("storage_occ_backoff_max_elapsed_ms", DataValue::UInt64(Some(120*1000))),
                 desc:"The maximum elapsed time after the occ starts, beyond which there will be no more retries. By default, it is 2 minutes.",
             },
@@ -244,6 +253,8 @@ impl Settings {
                 DataValue::String(Some(k.as_bytes().to_vec())),
                 // Value.
                 v.user_setting.value.clone(),
+                // Default Value.
+                v.default_value.clone(),
                 // Desc.
                 DataValue::String(Some(v.desc.as_bytes().to_vec())),
             ]);
