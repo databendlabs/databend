@@ -26,8 +26,8 @@ use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 
-/// Series is a wrapper type to store the real data, which will be anonymous field.
-/// Series type can be initialized with Series(Arc<dyn SeriesTrait>) directly.
+/// Series is a wrapper type to store pointer to real data.
+/// This kind definition of `Series` style will make `Arc<dyn SeriesTrait>` as anonymous field.
 pub struct Series(pub Arc<dyn SeriesTrait>);
 
 impl<'a> AsRef<(dyn SeriesTrait + 'a)> for Series {
@@ -44,6 +44,7 @@ impl Deref for Series {
     }
 }
 
+/// Various trait implementation for Type is cocked by macro in the wrap module.
 pub trait IntoSeries {
     fn into_series(self) -> Series;
 }
