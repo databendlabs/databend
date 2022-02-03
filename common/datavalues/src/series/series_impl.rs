@@ -25,6 +25,9 @@ use common_exception::Result;
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
+
+/// Series is a wrapper type to store the real data, which will be anonymous field.
+/// Series type can be initialized with Series(Arc<dyn SeriesTrait>) directly.
 pub struct Series(pub Arc<dyn SeriesTrait>);
 
 impl<'a> AsRef<(dyn SeriesTrait + 'a)> for Series {
@@ -308,6 +311,7 @@ impl Series {
     }
 }
 
+/// Any Array can be converted to a Series Type.
 impl IntoSeries for ArrayRef {
     fn into_series(self) -> Series {
         let data_type = DataType::try_from(self.data_type()).unwrap();
