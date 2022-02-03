@@ -12,7 +12,7 @@ This is Databend Roadmap 2022 :rocket:
 
 # Main tasks
 
-###  1. Query 
+### 1. Query 
 
 
 | Task                                         | Status    | Release Target | Comments        | 
@@ -22,16 +22,23 @@ This is Databend Roadmap 2022 :rocket:
 | [ New planner framework #1217](https://github.com/datafuselabs/databend/issues/1218)| PROGRESS  | | [RFC](https://databend.rs/dev/rfcs/query/new-sql-planner-framework)|
 | [ Database sharing #3430](https://github.com/datafuselabs/databend/issues/3430)| PROGRESS  |     | |
 | [ Stage #2976](https://github.com/datafuselabs/databend/issues/2976)| PROGRESS  |     | |
-| Push-Based + Pull-Based processor | PROGRESS  |   |  |
-| [Index design #3711](https://github.com/datafuselabs/databend/issues/3711) | PLANNING  |   |   |
+| [Index design #3711](https://github.com/datafuselabs/databend/issues/3711) | PROGRESS  |   |   |
+| [Semi-structured Data Types #3916](https://github.com/datafuselabs/databend/issues/3916) | PLANNING  |   |   |
+| [Support fulltext index #3915](https://github.com/datafuselabs/databend/issues/3915) | PLANNING  |   |   |
+| Push-Based + Pull-Based processor| PROGRESS  |   |  |
 | Limited support for transactions | PLANNING  |   |  |
 | Window functions | PLANNING  |   |  |
 | Lambda functions | PLANNING  |   |  |
 | Array functions | PLANNING  |   |  |
 | Compile aggregate functions(JIT) | PLANNING  |   | |
+| Common Table Expressions | PLANNING  |   | [MySQL CTE](https://dev.mysql.com/doc/refman/8.0/en/with.html#common-table-expressions) |
+| External  cache | PLANNING  |   | |
+| Update&Delete | PLANNING  |   | |
+| Streaming ingestion  | PLANNING  |   | |
+| Streaming analytics  | PLANNING  |   | |
 
 
-###  2. Testing
+### 2. Testing
 
 | Task                                         | Status    | Release Target | Comments        | 
 | ----------------------------------------------- | --------- | -------------- | --------------- | 
@@ -43,8 +50,6 @@ This is Databend Roadmap 2022 :rocket:
 | ----------------------------------------------- | --------- | -------------- | --------------- | 
 | [ databend cli #938](https://github.com/datafuselabs/databend/issues/938) | PROGRESS  | |  All-in-one tool for setting up, managing with Databend |
 | online playground  | PROGRESS  |   | User can try the demo on the databend.rs website |
-
-
 
 # Releases
 - [x] #2525 
