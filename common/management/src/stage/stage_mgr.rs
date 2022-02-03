@@ -76,7 +76,7 @@ impl StageApi for StageMgr {
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
-            Err(_) => Err(ErrorCode::UnknownUser(format!("Unknown stage {}", name))),
+            Err(_) => Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name))),
         }
     }
 

@@ -31,8 +31,7 @@ async fn test_session() -> Result<()> {
         String::from("test-001"),
         String::from("test-type"),
         session_manager,
-    )
-    .unwrap();
+    )?;
 
     // Tenant.
     {
@@ -58,6 +57,34 @@ async fn test_session() -> Result<()> {
         let session_size = malloc_size(&session);
         assert!(session_size > 2500);
         assert_eq!(session_size, session.get_memory_usage());
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_session_in_management_mode() -> Result<()> {
+    let mut conf = Config::default();
+    conf.query.tenant_id = "tenant1".to_string();
+    conf.query.management_mode = true;
+
+    let session_manager = SessionManager::from_conf(conf.clone()).await.unwrap();
+
+    let session = Session::try_create(
+        conf.clone(),
+        String::from("test-001"),
+        String::from("test-type"),
+        session_manager,
+    )?;
+
+    // Tenant.
+    {
+        let actual = session.get_current_tenant();
+        assert_eq!(&actual, "");
+
+        session.set_current_tenant("tenant2".to_string());
+        let actual = session.get_current_tenant();
+        assert_eq!(&actual, "tenant2");
     }
 
     Ok(())

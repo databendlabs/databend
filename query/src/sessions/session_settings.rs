@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::UserSetting;
+use common_tracing::tracing;
 
 use crate::configs::Config;
 use crate::sessions::SessionContext;
@@ -157,12 +158,6 @@ impl Settings {
         self.try_get_u64(key)
     }
 
-    // Set max_block_size.
-    pub fn set_max_block_size(&self, val: u64) -> Result<()> {
-        let key = "max_block_size";
-        self.try_set_u64(key, val)
-    }
-
     // Get max_threads.
     pub fn get_max_threads(&self) -> Result<u64> {
         let key = "max_threads";
@@ -172,7 +167,7 @@ impl Settings {
     // Set max_threads.
     pub fn set_max_threads(&self, val: u64) -> Result<()> {
         let key = "max_threads";
-        self.try_set_u64(key, val)
+        self.try_set_u64(key, val, false)
     }
 
     // Get flight client timeout.
@@ -181,22 +176,10 @@ impl Settings {
         self.try_get_u64(key)
     }
 
-    // Set flight client timeout.
-    pub fn set_flight_client_timeout(&self, val: u64) -> Result<()> {
-        let key = "flight_client_timeout";
-        self.try_set_u64(key, val)
-    }
-
     // Get parallel read threads.
     pub fn get_parallel_read_threads(&self) -> Result<u64> {
         let key = "parallel_read_threads";
         self.try_get_u64(key)
-    }
-
-    // Set parallel read threads.
-    pub fn set_parallel_read_threads(&self, val: u64) -> Result<()> {
-        let key = "parallel_read_threads";
-        self.try_set_u64(key, val)
     }
 
     // Get storage read buffer size.
@@ -205,22 +188,10 @@ impl Settings {
         self.try_get_u64(key)
     }
 
-    // Set storage read buffer size.
-    pub fn set_storage_read_buffer_size(&self, val: u64) -> Result<()> {
-        let key = "storage_read_buffer_size";
-        self.try_set_u64(key, val)
-    }
-
     // Get storage occ backoff init delay in ms.
     pub fn get_storage_occ_backoff_init_delay_ms(&self) -> Result<u64> {
         let key = "storage_occ_backoff_init_delay_ms";
         self.try_get_u64(key)
-    }
-
-    // Set storage occ backoff init delay in ms.
-    pub fn set_storage_occ_backoff_init_delay_ms(&self, val: u64) -> Result<()> {
-        let key = "storage_occ_backoff_init_delay_ms";
-        self.try_set_u64(key, val)
     }
 
     // Get storage occ backoff max delay in ms.
@@ -229,22 +200,10 @@ impl Settings {
         self.try_get_u64(key)
     }
 
-    // Set storage occ backoff max delay in ms.
-    pub fn set_storage_occ_backoff_max_delay_ms(&self, val: u64) -> Result<()> {
-        let key = "storage_occ_backoff_max_delay_ms";
-        self.try_set_u64(key, val)
-    }
-
     // Get storage occ backoff max elapsed in ms.
     pub fn get_storage_occ_backoff_max_elapsed_ms(&self) -> Result<u64> {
         let key = "storage_occ_backoff_max_elapsed_ms";
         self.try_get_u64(key)
-    }
-
-    // Set storage occ backoff max elapsed in ms.
-    pub fn set_storage_occ_backoff_max_elapsed_ms(&self, val: u64) -> Result<()> {
-        let key = "storage_occ_backoff_max_elapsed_ms";
-        self.try_set_u64(key, val)
     }
 
     fn check_and_get_setting_value(&self, key: &str) -> Result<SettingValue> {
@@ -255,19 +214,47 @@ impl Settings {
         Ok(setting.clone())
     }
 
-    // Get u64 value from settings map.
+    // Get u64 value:
+    // First try to get from metasrv.
     fn try_get_u64(&self, key: &str) -> Result<u64> {
         let setting = self.check_and_get_setting_value(key)?;
+
+        let tenant = self.session_ctx.get_current_tenant();
+        let global_res = futures::executor::block_on(
+            self.user_api
+                .get_setting_api_client(&tenant)
+                .get_setting(key, None),
+        );
+        match global_res {
+            Ok(v) => {
+                return v.data.value.as_u64();
+            }
+            Err(e) => {
+                if e.code() != ErrorCode::unknown_variable_code() {
+                    // Only log the error.
+                    tracing::error!("Cannot get global setting:{}, {:?}", key, e);
+                }
+            }
+        };
         setting.user_setting.value.as_u64()
     }
 
     // Set u64 value to settings map, if global(TODO) also write to meta.
-    fn try_set_u64(&self, key: &str, val: u64) -> Result<()> {
+    fn try_set_u64(&self, key: &str, val: u64, is_global: bool) -> Result<()> {
         let mut settings = self.settings.write();
         let mut setting = settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
         setting.user_setting.value = DataValue::UInt64(Some(val));
+
+        if is_global {
+            let tenant = self.session_ctx.get_current_tenant();
+            let _ = futures::executor::block_on(
+                self.user_api
+                    .get_setting_api_client(&tenant)
+                    .set_setting(setting.user_setting.clone()),
+            )?;
+        }
 
         Ok(())
     }
@@ -292,13 +279,13 @@ impl Settings {
         result
     }
 
-    pub fn set_settings(&self, key: String, val: String) -> Result<()> {
+    pub fn set_settings(&self, key: String, val: String, is_global: bool) -> Result<()> {
         let setting = self.check_and_get_setting_value(&key)?;
 
         match setting.user_setting.value.data_type() {
             DataType::UInt64 => {
                 let u64_val = val.parse::<u64>()?;
-                self.try_set_u64(&key, u64_val)?;
+                self.try_set_u64(&key, u64_val, is_global)?;
             }
             v => {
                 return Err(ErrorCode::UnknownVariable(format!(

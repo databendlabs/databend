@@ -68,12 +68,19 @@ async fn test_set_setting() -> Result<()> {
 
     // Get settings.
     {
-        let actual = vec![UserSetting::create(
+        let expect = vec![UserSetting::create(
             "max_threads",
             DataValue::UInt64(Some(1)),
         )];
-        let expect = mgr.get_settings().await?;
+        let actual = mgr.get_settings().await?;
         assert_eq!(actual, expect);
+    }
+
+    // Get setting.
+    {
+        let expect = UserSetting::create("max_threads", DataValue::UInt64(Some(1)));
+        let actual = mgr.get_setting("max_threads", None).await?;
+        assert_eq!(actual.data, expect);
     }
 
     // Drop setting.
@@ -83,8 +90,14 @@ async fn test_set_setting() -> Result<()> {
 
     // Get settings.
     {
-        let expect = mgr.get_settings().await?;
-        assert_eq!(0, expect.len());
+        let actual = mgr.get_settings().await?;
+        assert_eq!(0, actual.len());
+    }
+
+    // Get setting.
+    {
+        let res = mgr.get_setting("max_threads", None).await;
+        assert!(res.is_err());
     }
 
     // Drop setting not exists.

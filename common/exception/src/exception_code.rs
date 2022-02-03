@@ -56,7 +56,6 @@ build_exceptions! {
     UnknownTypeOfQuery(1001),
     UnImplement(1002),
     UnknownDatabase(1003),
-    UnknownSetting(1004),
     SyntaxException(1005),
     BadArguments(1006),
     IllegalDataType(1007),
@@ -186,7 +185,6 @@ build_exceptions! {
     IllegalUDFFormat(2601),
     UnknownUDF(2602),
     UdfAlreadyExists(2603),
-
 
     // database error.
     UnknownDatabaseEngine(2701),

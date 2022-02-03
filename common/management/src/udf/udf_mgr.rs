@@ -117,7 +117,7 @@ impl UdfApi for UdfMgr {
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
-            Err(_) => Err(ErrorCode::UnknownUser(format!("Unknown UDF {}", udf_name))),
+            Err(_) => Err(ErrorCode::UnknownUDF(format!("Unknown UDF {}", udf_name))),
         }
     }
 

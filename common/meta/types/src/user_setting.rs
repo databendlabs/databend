@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use common_datavalues::DataValue;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -40,6 +42,20 @@ impl Default for UserSetting {
         UserSetting {
             name: "".to_string(),
             value: DataValue::Null,
+        }
+    }
+}
+
+impl TryFrom<Vec<u8>> for UserSetting {
+    type Error = ErrorCode;
+
+    fn try_from(value: Vec<u8>) -> Result<Self> {
+        match serde_json::from_slice(&value) {
+            Ok(info) => Ok(info),
+            Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
+                "Cannot deserialize setting from bytes. cause {}",
+                serialize_error
+            ))),
         }
     }
 }
