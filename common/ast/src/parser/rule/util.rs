@@ -26,11 +26,8 @@ pub type Input<'a> = &'a [Token<'a>];
 pub fn match_text<'a>(
     text: &'static str,
 ) -> impl FnMut(Input<'a>) -> IResult<Input<'a>, &'a Token, Error> {
-    move |i| match i.get(0).map(|token| {
-        let test = token.text == text;
-        (token, test)
-    }) {
-        Some((token, true)) => Ok((&i[1..], token)),
+    move |i| match i.get(0).filter(|token| token.text == text) {
+        Some(token) => Ok((&i[1..], token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
             ErrorKind::ExpectText(text),
@@ -41,11 +38,8 @@ pub fn match_text<'a>(
 pub fn match_token<'a>(
     kind: TokenKind,
 ) -> impl FnMut(Input<'a>) -> IResult<Input<'a>, &'a Token, Error> {
-    move |i| match i.get(0).map(|token| {
-        let test = token.kind == kind;
-        (token, test)
-    }) {
-        Some((token, true)) => Ok((&i[1..], token)),
+    move |i| match i.get(0).filter(|token| token.kind == kind) {
+        Some(token) => Ok((&i[1..], token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
             ErrorKind::ExpectToken(kind),

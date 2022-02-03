@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use nom::combinator::map;
-use nom::error::context;
 use nom::IResult;
 
 use crate::parser::ast::Statement;
@@ -24,34 +23,28 @@ use crate::parser::token::*;
 use crate::rule;
 
 pub fn statement<'a>(i: Input<'a>) -> IResult<Input<'a>, Statement, Error> {
-    let truncate_table = context(
-        "TRUNCATE TABLE statement",
-        map(
-            rule! {
-                TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ ";"
-            },
-            |(_, _, database, table, _)| Statement::TruncateTable {
-                database: database.map(|(name, _)| name),
-                table,
-            },
-        ),
+    let truncate_table = map(
+        rule! {
+            TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ ";"
+        },
+        |(_, _, database, table, _)| Statement::TruncateTable {
+            database: database.map(|(name, _)| name),
+            table,
+        },
     );
-    let drop_table = context(
-        "DROP TABLE statement",
-        map(
-            rule! {
-                DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ ";"
-            },
-            |(_, _, if_exists, database, table, _)| Statement::DropTable {
-                if_exists: if_exists.is_some(),
-                database: database.map(|(name, _)| name),
-                table,
-            },
-        ),
+    let drop_table = map(
+        rule! {
+            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ ";"
+        },
+        |(_, _, if_exists, database, table, _)| Statement::DropTable {
+            if_exists: if_exists.is_some(),
+            database: database.map(|(name, _)| name),
+            table,
+        },
     );
 
     rule!(
-        #truncate_table
-        | #drop_table
+        #truncate_table : "TRUNCATE TABLE statement"
+        | #drop_table : "DROP TABLE statement"
     )(i)
 }

@@ -83,7 +83,7 @@ fn test_statement_error() {
               --> SQL:1:12
               |
             1 | drop table if a.b;
-              | ----       ^^ expected a token of `Ident`
+              | ----       ^^ expected token <Ident>
               | |           
               | while parsing DROP TABLE statement
         "#
@@ -109,7 +109,7 @@ fn test_expr_error() {
               --> SQL:1:8
               |
             1 | (a and ) 1
-              |        ^ unexpected end of the expression
+              |        ^ unexpected end of expression
         "#
     });
     assert_parse_error!(expr, "a + +", indoc! {
@@ -132,7 +132,7 @@ fn test_expr_error() {
                 1 | G.E.B IS NOT NULL AND
                 2 |     col1 NOT BETWEEN col2 AND
                 3 |         AND 1 + col3 DIV sum(col4)
-                  |         ^^^ unexpected end of the expression
+                  |         ^^^ unexpected end of expression
             "#
         }
     );

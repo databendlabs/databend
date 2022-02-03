@@ -118,7 +118,7 @@ pub fn pretty_print_error<'a>(source: &'a str, error: nom::Err<Error<'a>>) -> St
     for (i, (input, kind)) in error.errors.iter().enumerate() {
         let msg = match kind {
             ErrorKind::Context(msg) => format!("while parsing {}", msg),
-            ErrorKind::ExpectToken(token) => format!("expected a token of `{:?}`", token),
+            ErrorKind::ExpectToken(token) => format!("expected token <{:?}>", token),
             ErrorKind::ExpectText(text) => format!("expected token {:?}", text),
             ErrorKind::ParseIntError(err) => format!("nable to parse int: {:?}", err),
             ErrorKind::Other(msg) => msg.to_string(),

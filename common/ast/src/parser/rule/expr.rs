@@ -101,10 +101,9 @@ fn map_pratt_error<'a>(
     err: PrattError<WithSpan<'a>, pratt::NoError>,
 ) -> Error<'a> {
     match err {
-        PrattError::EmptyInput => Error::from_error_kind(
-            next_token,
-            ErrorKind::Other("unexpected end of the expression"),
-        ),
+        PrattError::EmptyInput => {
+            Error::from_error_kind(next_token, ErrorKind::Other("unexpected end of expression"))
+        }
         PrattError::UnexpectedNilfix(elem) => Error::from_error_kind(
             elem.span,
             ErrorKind::Other("unable to parse the expression value"),
@@ -391,11 +390,9 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
             not: not.is_some(),
         },
     );
-    let between_subexpr1 = subexpr(BETWEEN_PREC);
-    let between_subexpr2 = subexpr(BETWEEN_PREC);
     let between = map(
         rule! {
-            NOT? ~ BETWEEN ~ #between_subexpr1 ~ AND ~  #between_subexpr2
+            NOT? ~ BETWEEN ~ #subexpr(BETWEEN_PREC) ~ AND ~  #subexpr(BETWEEN_PREC)
         },
         |(not, _, low, _, high)| ExprElement::Between {
             low,
