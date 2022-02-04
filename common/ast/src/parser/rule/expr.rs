@@ -68,7 +68,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                 },
             );
 
-        let (i, expr_elements) = rule! { #expr_element_limited+ }(i)?;
+        let (i, expr_elements) = rule! { #expr_element_limited* }(i)?;
 
         let mut iter = expr_elements.into_iter();
         let expr = ExprParser
