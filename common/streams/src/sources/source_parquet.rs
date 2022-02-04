@@ -22,9 +22,7 @@ use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::schema::FileMetaData;
 use common_arrow::parquet::read::get_page_stream;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::DataColumn;
-use common_datavalues::prelude::IntoSeries;
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
@@ -115,7 +113,12 @@ where R: AsyncRead + AsyncSeek + Unpin + Send
                 .instrument(debug_span!("parquet_source_page_stream_to_array"))
                 .await?;
             let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
-            data_cols.push(DataColumn::Array(array.into_series()))
+
+            let column = match fields[idx].nullable {
+                false => array.into_column(),
+                true => array.into_nullable_column(),
+            };
+            data_cols.push(column);
         }
         self.current_row_group += 1;
         let block = DataBlock::create(self.block_schema.clone(), data_cols);

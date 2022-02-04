@@ -1948,7 +1948,7 @@ dependencies = [
  "common-base",
  "common-dal2",
  "common-datablocks",
- "common-datavalues",
+ "common-datavalues2",
  "common-exception",
  "common-functions",
  "common-io",
