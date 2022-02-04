@@ -20,7 +20,7 @@ use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::merge_sort::*;
 use common_arrow::arrow::compute::sort as arrow_sort;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -40,7 +40,7 @@ impl DataBlock {
     ) -> Result<DataBlock> {
         let order_columns = sort_columns_descriptions
             .iter()
-            .map(|f| Ok(block.try_array_by_name(&f.column_name)?.get_array_ref()))
+            .map(|f| Ok(block.try_column_by_name(&f.column_name)?.as_arrow_array()))
             .collect::<Result<Vec<_>>>()?;
 
         let order_arrays = sort_columns_descriptions
@@ -58,7 +58,7 @@ impl DataBlock {
             .collect::<Result<Vec<_>>>()?;
 
         let indices = arrow_sort::lexsort_to_indices(&order_arrays, limit)?;
-        DataBlock::block_take_by_indices(block, &[], indices.values())
+        DataBlock::block_take_by_indices(block, indices.values())
     }
 
     pub fn merge_sort_block(
@@ -79,12 +79,12 @@ impl DataBlock {
             .iter()
             .map(|f| {
                 let left = lhs.try_column_by_name(&f.column_name)?.clone();
-                let left = left.to_array()?;
+                let left = left.as_arrow_array();
 
                 let right = rhs.try_column_by_name(&f.column_name)?.clone();
-                let right = right.to_array()?;
+                let right = right.as_arrow_array();
 
-                Ok(vec![left.get_array_ref(), right.get_array_ref()])
+                Ok(vec![left, right])
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -123,20 +123,17 @@ impl DataBlock {
                 let left = lhs.try_column_by_name(f.name())?;
                 let right = rhs.try_column_by_name(f.name())?;
 
-                let left = left.to_array()?;
-                let right = right.to_array()?;
+                let left = left.as_arrow_array();
+                let right = right.as_arrow_array();
 
-                let taked = Self::take_arrays_by_slices(
-                    &[
-                        left.get_array_ref().as_ref(),
-                        right.get_array_ref().as_ref(),
-                    ],
-                    &slices,
-                    limit,
-                );
+                let taked =
+                    Self::take_arrays_by_slices(&[left.as_ref(), right.as_ref()], &slices, limit);
                 let taked: ArrayRef = Arc::from(taked);
 
-                Ok(DataColumn::Array(taked.into_series()))
+                match f.data_type().is_nullable() {
+                    false => Ok(taked.into_column()),
+                    true => Ok(taked.into_nullable_column()),
+                }
             })
             .collect::<Result<Vec<_>>>()?;
 

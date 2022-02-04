@@ -125,6 +125,10 @@ impl Column for ArrayColumn {
         }
     }
 
+    fn scatter(&self, _indices: &[usize], _scattered_size: usize) -> Vec<ColumnRef> {
+        todo!()
+    }
+
     fn filter(&self, _filter: &BooleanColumn) -> ColumnRef {
         todo!()
     }

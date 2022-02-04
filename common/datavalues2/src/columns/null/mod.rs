@@ -96,6 +96,17 @@ impl Column for NullColumn {
         Arc::new(Self { length })
     }
 
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        let mut cnt = vec![0usize; scattered_size];
+        for i in indices {
+            cnt[*i] += 1;
+        }
+
+        cnt.iter()
+            .map(|c| Arc::new(Self::new(*c)) as ColumnRef)
+            .collect()
+    }
+
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
         debug_assert!(
             offsets.len() == self.len(),

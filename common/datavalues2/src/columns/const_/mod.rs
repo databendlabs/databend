@@ -100,6 +100,17 @@ impl Column for ConstColumn {
         Arc::new(Self::new(self.inner().clone(), length))
     }
 
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        let mut cnt = vec![0usize; scattered_size];
+        for i in indices {
+            cnt[*i] += 1;
+        }
+
+        cnt.iter()
+            .map(|c| Arc::new(Self::new(self.inner().clone(), *c)) as ColumnRef)
+            .collect()
+    }
+
     // just for resize
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
         debug_assert!(

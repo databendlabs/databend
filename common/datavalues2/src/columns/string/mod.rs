@@ -171,6 +171,19 @@ impl Column for StringColumn {
         })
     }
 
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        let mut builders = Vec::with_capacity(scattered_size);
+        for _i in 0..scattered_size {
+            builders.push(MutableStringColumn::with_capacity(self.len()));
+        }
+
+        indices.iter().zip(self.iter()).for_each(|(index, value)| {
+            builders[*index].append_value(value);
+        });
+
+        builders.iter_mut().map(|b| b.to_column()).collect()
+    }
+
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
         let length = filter.values().len() - filter.values().null_count();
         if length == self.len() {

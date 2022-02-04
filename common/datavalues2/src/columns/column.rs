@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::prelude::*;
@@ -71,6 +72,17 @@ pub trait Column: Send + Sync {
     fn slice(&self, offset: usize, length: usize) -> ColumnRef;
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef;
 
+    /// scatter() partitions the input array into multiple arrays.
+    /// indices: a slice whose length is the same as the array.
+    /// The element of indices indicates which group the corresponding row
+    /// in the input array belongs to.
+    /// scattered_size: the number of partitions
+    ///
+    /// Example: if the input array has four rows [1, 2, 3, 4] and
+    /// _indices = [0, 1, 0, 1] and _scatter_size = 2,
+    /// then the output would be a vector of two arrays: [1, 3] and [2, 4].
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef>;
+
     // Copies each element according offsets parameter.
     // (i-th element should be copied offsets[i] - offsets[i - 1] times.)
     fn replicate(&self, offsets: &[usize]) -> ColumnRef;
@@ -80,6 +92,17 @@ pub trait Column: Send + Sync {
     /// # Safety
     /// Assumes that the `index` is smaller than size.
     fn get(&self, index: usize) -> DataValue;
+
+    fn get_checked(&self, index: usize) -> Result<DataValue> {
+        if index > self.len() {
+            return Err(ErrorCode::BadDataArrayLength(format!(
+                "Index out of bounds: {}, col size: {}",
+                index,
+                self.len()
+            )));
+        }
+        Ok(self.get(index))
+    }
 
     /// # Safety
     /// Assumes that the `index` is smaller than size.
@@ -97,6 +120,13 @@ pub trait Column: Send + Sync {
 
     /// # Safety
     /// Assumes that the `index` is smaller than size.
+    fn get_bool(&self, index: usize) -> Result<bool> {
+        let value = self.get(index);
+        DFTryFrom::try_from(&value)
+    }
+
+    /// # Safety
+    /// Assumes that the `index` is smaller than size.
     fn get_string(&self, index: usize) -> Result<Vec<u8>> {
         let value = self.get(index);
         DFTryFrom::try_from(value)
@@ -106,6 +136,16 @@ pub trait Column: Send + Sync {
 pub trait IntoColumn {
     fn into_column(self) -> ColumnRef;
     fn into_nullable_column(self) -> ColumnRef;
+}
+
+impl IntoColumn for &ArrayRef {
+    fn into_column(self) -> ColumnRef {
+        IntoColumn::into_column(self.clone())
+    }
+
+    fn into_nullable_column(self) -> ColumnRef {
+        IntoColumn::into_nullable_column(self.clone())
+    }
 }
 
 impl IntoColumn for ArrayRef {

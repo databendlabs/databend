@@ -32,8 +32,8 @@ impl DataBlock {
         for col in column_names {
             let column = block.try_column_by_name(col)?;
             let typ = column.data_type();
-            if typ.is_integer() {
-                group_key_len += typ.numeric_byte_size()?;
+            if typ.data_type_id().is_integer() {
+                group_key_len += typ.data_type_id().numeric_byte_size()?;
             } else {
                 return Ok(HashMethodKind::Serializer(HashMethodSerializer::default()));
             }

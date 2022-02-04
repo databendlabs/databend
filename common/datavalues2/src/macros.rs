@@ -131,6 +131,36 @@ macro_rules! with_match_physical_primitive_type {(
 })}
 
 #[macro_export]
+macro_rules! with_match_scalar_type {
+    (
+    $key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt
+) => {{
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident ) => {
+                $body
+            };
+        }
+
+        match $key_type {
+            TypeID::Int8 => __with_ty__! { i8 },
+            TypeID::Int16 => __with_ty__! { i16 },
+            TypeID::Int32 => __with_ty__! { i32 },
+            TypeID::Int64 => __with_ty__! { i64 },
+            TypeID::UInt8 => __with_ty__! { u8 },
+            TypeID::UInt16 => __with_ty__! { u16 },
+            TypeID::UInt32 => __with_ty__! { u32 },
+            TypeID::UInt64 => __with_ty__! { u64 },
+            TypeID::Float32 => __with_ty__! { f32 },
+            TypeID::Float64 => __with_ty__! { f64 },
+            TypeID::String => __with_ty__! { Vu8 },
+            TypeID::Boolean => __with_ty__! { bool },
+
+            _ => $nbody,
+        }
+    }};
+}
+
+#[macro_export]
 macro_rules! with_match_scalar_types_error {(
     $key_type:expr, | $_:tt $T:ident | $($body:tt)*
 ) => ({
@@ -207,30 +237,6 @@ macro_rules! with_match_date_type_error {
                 "Ops is not support on datatype: {:?}",
                 v
             ))),
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! match_data_type_apply_macro_ca {
-    ($self:expr, $macro:ident, $macro_string:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
-
-        match $self.data_type() {
-            TypeID::String => $macro_string!($self.string().unwrap() $(, $opt_args)*),
-            TypeID::Boolean => $macro_bool!($self.bool().unwrap() $(, $opt_args)*),
-            TypeID::UInt8 => $macro!($self.u8().unwrap() $(, $opt_args)*),
-            TypeID::UInt16 => $macro!($self.u16().unwrap() $(, $opt_args)*),
-            TypeID::UInt32 => $macro!($self.u32().unwrap() $(, $opt_args)*),
-            TypeID::UInt64 => $macro!($self.u64().unwrap() $(, $opt_args)*),
-            TypeID::Int8 => $macro!($self.i8().unwrap() $(, $opt_args)*),
-            TypeID::Int16 => $macro!($self.i16().unwrap() $(, $opt_args)*),
-            TypeID::Int32 => $macro!($self.i32().unwrap() $(, $opt_args)*),
-            TypeID::Int64 => $macro!($self.i64().unwrap() $(, $opt_args)*),
-            TypeID::Float32 => $macro!($self.f32().unwrap() $(, $opt_args)*),
-            TypeID::Float64 => $macro!($self.f64().unwrap() $(, $opt_args)*),
-            TypeID::Date16 => $macro!($self.u16().unwrap() $(, $opt_args)*),
-            TypeID::Date32 => $macro!($self.i32().unwrap() $(, $opt_args)*),
-            _ => unimplemented!(),
         }
     }};
 }

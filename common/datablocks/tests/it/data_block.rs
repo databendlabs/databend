@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 #[test]
 fn test_data_block() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i64::to_data_type())]);
 
-    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
+    let block = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1, 2, 3])]);
     assert_eq!(&schema, block.schema());
 
     assert_eq!(3, block.num_rows());

@@ -14,7 +14,9 @@
 
 use std::sync::Arc;
 
+use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::compute::concatenate;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -86,8 +88,23 @@ impl Series {
             column.clone()
         }
     }
-}
 
+    pub fn concat(columns: &[ColumnRef]) -> Result<ColumnRef> {
+        debug_assert!(!columns.is_empty());
+        let is_nullable = columns[0].is_nullable();
+        let arrays = columns
+            .iter()
+            .map(|c| c.as_arrow_array())
+            .collect::<Vec<_>>();
+
+        let arrays = arrays.iter().map(|a| a.as_ref()).collect::<Vec<_>>();
+        let array: ArrayRef = Arc::from(concatenate::concatenate(&arrays)?);
+        Ok(match is_nullable {
+            true => array.into_nullable_column(),
+            false => array.into_column(),
+        })
+    }
+}
 pub trait SeriesFrom<T, Phantom: ?Sized> {
     /// Initialize by name and values.
     fn from_data(_: T) -> ColumnRef;
