@@ -13,24 +13,47 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::sync::Arc;
 
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::UserSetting;
-use common_tracing::tracing;
 
 use crate::configs::Config;
 use crate::sessions::SessionContext;
 use crate::users::UserApiProvider;
 
+#[derive(Clone)]
+enum ScopeLevel {
+    Global,
+    Session,
+}
+
+impl Debug for ScopeLevel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ScopeLevel::Global => {
+                write!(f, "GLOBAL")
+            }
+            ScopeLevel::Session => {
+                write!(f, "SESSION")
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct SettingValue {
+    // Default value of this setting.
     default_value: DataValue,
     user_setting: UserSetting,
+    // The scope of the setting is GLOBAL(metasrv) or SESSION.
+    level: ScopeLevel,
     desc: &'static str,
 }
 
@@ -54,6 +77,7 @@ impl Settings {
             SettingValue {
                 default_value:DataValue::UInt64(Some(10000)),
                 user_setting: UserSetting::create("max_block_size", DataValue::UInt64(Some(10000))),
+                level:ScopeLevel::Session,
                 desc: "Maximum block size for reading",
             },
 
@@ -61,6 +85,7 @@ impl Settings {
             SettingValue {
                 default_value:DataValue::UInt64(Some(16)),
                 user_setting: UserSetting::create("max_threads", DataValue::UInt64(Some(16))),
+                level:ScopeLevel::Session,
                 desc: "The maximum number of threads to execute the request. By default, it is determined automatically.",
             },
 
@@ -68,6 +93,7 @@ impl Settings {
             SettingValue {
                 default_value:DataValue::UInt64(Some(60)),
                 user_setting: UserSetting::create("flight_client_timeout", DataValue::UInt64(Some(60))),
+                level:ScopeLevel::Session,
                 desc:"Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds",
             },
 
@@ -75,6 +101,7 @@ impl Settings {
             SettingValue {
                 default_value: DataValue::UInt64(Some(1)),
                 user_setting: UserSetting::create("parallel_read_threads", DataValue::UInt64(Some(1))),
+                level:ScopeLevel::Session,
                 desc:"The maximum number of parallelism for reading data. By default, it is 1.",
             },
 
@@ -82,6 +109,7 @@ impl Settings {
             SettingValue {
                 default_value: DataValue::UInt64(Some(1024*1024)),
                 user_setting: UserSetting::create("storage_read_buffer_size", DataValue::UInt64(Some(1024*1024))),
+                level:ScopeLevel::Session,
                 desc:"The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.",
             },
 
@@ -89,13 +117,15 @@ impl Settings {
             SettingValue {
                 default_value: DataValue::UInt64(Some(5)),
                 user_setting: UserSetting::create("storage_occ_backoff_init_delay_ms", DataValue::UInt64(Some(5))),
-                desc:"The initial retry delay in millisecond. By default,  it is 5 ms.",
+                level:ScopeLevel::Session,
+                desc:"The initial retry delay in millisecond. By default, it is 5 ms.",
             },
 
             // storage_occ_backoff_max_delay_ms
             SettingValue {
                 default_value:DataValue::UInt64(Some(20*1000)),
                 user_setting: UserSetting::create("storage_occ_backoff_max_delay_ms", DataValue::UInt64(Some(20*1000))),
+                level:ScopeLevel::Session,
                 desc:"The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing. By default, it is 20 seconds.",
             },
 
@@ -103,6 +133,7 @@ impl Settings {
             SettingValue {
                 default_value:DataValue::UInt64(Some(120*1000)),
                 user_setting: UserSetting::create("storage_occ_backoff_max_elapsed_ms", DataValue::UInt64(Some(120*1000))),
+                level:ScopeLevel::Session,
                 desc:"The maximum elapsed time after the occ starts, beyond which there will be no more retries. By default, it is 2 minutes.",
             },
         ];
@@ -119,7 +150,9 @@ impl Settings {
 
             for global in &global_settings {
                 for vx in values.iter_mut() {
+                    // Overwrite setting from metasrv.
                     if global.name == vx.user_setting.name {
+                        vx.level = ScopeLevel::Global;
                         vx.default_value = global.value.clone();
                     }
                 }
@@ -214,32 +247,13 @@ impl Settings {
         Ok(setting.clone())
     }
 
-    // Get u64 value:
-    // First try to get from metasrv.
+    // Get u64 value, we don't get from the metasrv.
     fn try_get_u64(&self, key: &str) -> Result<u64> {
         let setting = self.check_and_get_setting_value(key)?;
-
-        let tenant = self.session_ctx.get_current_tenant();
-        let global_res = futures::executor::block_on(
-            self.user_api
-                .get_setting_api_client(&tenant)
-                .get_setting(key, None),
-        );
-        match global_res {
-            Ok(v) => {
-                return v.data.value.as_u64();
-            }
-            Err(e) => {
-                if e.code() != ErrorCode::unknown_variable_code() {
-                    // Only log the error.
-                    tracing::error!("Cannot get global setting:{}, {:?}", key, e);
-                }
-            }
-        };
         setting.user_setting.value.as_u64()
     }
 
-    // Set u64 value to settings map, if global(TODO) also write to meta.
+    // Set u64 value to settings map, if is_global will write to metasrv.
     fn try_set_u64(&self, key: &str, val: u64, is_global: bool) -> Result<()> {
         let mut settings = self.settings.write();
         let mut setting = settings
@@ -254,6 +268,7 @@ impl Settings {
                     .get_setting_api_client(&tenant)
                     .set_setting(setting.user_setting.clone()),
             )?;
+            setting.level = ScopeLevel::Global;
         }
 
         Ok(())
@@ -271,6 +286,8 @@ impl Settings {
                 v.user_setting.value.clone(),
                 // Default Value.
                 v.default_value.clone(),
+                // Scope level.
+                DataValue::String(Some(format!("{:?}", v.level).into_bytes())),
                 // Desc.
                 DataValue::String(Some(v.desc.as_bytes().to_vec())),
             ]);
