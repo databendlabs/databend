@@ -18,7 +18,6 @@ use nom::combinator::map;
 use nom::combinator::value;
 use nom::combinator::verify;
 use nom::error::context;
-use nom::IResult;
 use pratt::Affix;
 use pratt::Associativity;
 use pratt::PrattError;
@@ -36,24 +35,23 @@ use crate::parser::rule::error::Error;
 use crate::parser::rule::error::ErrorKind;
 use crate::parser::rule::util::ident;
 use crate::parser::rule::util::literal_u64;
+use crate::parser::rule::util::IResult;
 use crate::parser::rule::util::Input;
 use crate::parser::token::*;
 use crate::rule;
 
 const BETWEEN_PREC: u32 = 20;
 
-pub fn query<'a>(i: Input<'a>) -> IResult<Input<'a>, Query, Error> {
+pub fn query<'a>(i: Input<'a>) -> IResult<'a, Query> {
     // TODO: unimplemented
     nom::combinator::fail(i)
 }
 
-pub fn expr<'a>(i: Input<'a>) -> IResult<Input<'a>, Expr, Error> {
+pub fn expr<'a>(i: Input<'a>) -> IResult<'a, Expr> {
     context("expression", subexpr(0))(i)
 }
 
-pub fn subexpr<'a>(
-    min_precedence: u32,
-) -> impl FnMut(Input<'a>) -> IResult<Input<'a>, Expr, Error> {
+pub fn subexpr<'a>(min_precedence: u32) -> impl FnMut(Input<'a>) -> IResult<'a, Expr> {
     move |i| {
         let expr_element_limited =
             verify(
@@ -340,7 +338,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
     }
 }
 
-pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error> {
+pub fn expr_element<'a>(i: Input<'a>) -> IResult<WithSpan<'a>> {
     let column_ref = map(
         rule! {
             #ident ~ ("." ~ #ident ~ ("." ~ #ident)?)?
@@ -494,21 +492,21 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
 
     let (rest, elem) = rule! (
         #column_ref : "<column>"
-        | #is_null : "... IS NULL"
-        | #in_list : "IN (<expr>, ...)"
-        | #in_subquery : "IN (SELECT ...)"
-        | #between : "BETWEEN ..."
+        | #is_null : "`... IS [NOT] NULL` expression"
+        | #in_list : "`[NOT] IN (<expr>, ...)` expression"
+        | #in_subquery : "`[NOT] IN (SELECT ...)` expression"
+        | #between : "`[NOT] BETWEEN ... AND ...` expression"
         | #binary_op : "<operator>"
         | #unary_op : "<operator>"
-        | #cast : "CAST(... AS ...)"
+        | #cast : "`CAST(... AS ...)` expression"
         | #count_all : "COUNT(*)"
         | #literal : "<literal>"
         | #function_call_with_param : "<function>"
         | #function_call : "<function>"
-        | #case : "CASE ... END"
-        | #exists : "EXISTS (SELECT ...)"
-        | #subquery : "(SELECT ...)"
-        | #group : "(<expr>)"
+        | #case : "`CASE ... END` expression"
+        | #exists : "`EXISTS (SELECT ...)` expression"
+        | #subquery : "`(SELECT ...)` expression"
+        | #group : "expression between `(...)`"
     )(i)?;
 
     let input_ptr = i.as_ptr();
@@ -519,7 +517,7 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
     Ok((rest, WithSpan { elem, span }))
 }
 
-pub fn unary_op<'a>(i: Input<'a>) -> IResult<Input<'a>, UnaryOperator, Error> {
+pub fn unary_op<'a>(i: Input<'a>) -> IResult<'a, UnaryOperator> {
     alt((
         value(UnaryOperator::Plus, rule! { Plus }),
         value(UnaryOperator::Minus, rule! { Minus }),
@@ -527,7 +525,7 @@ pub fn unary_op<'a>(i: Input<'a>) -> IResult<Input<'a>, UnaryOperator, Error> {
     ))(i)
 }
 
-pub fn binary_op<'a>(i: Input<'a>) -> IResult<Input<'a>, BinaryOperator, Error> {
+pub fn binary_op<'a>(i: Input<'a>) -> IResult<'a, BinaryOperator> {
     alt((
         value(BinaryOperator::Plus, rule! { Plus }),
         value(BinaryOperator::Minus, rule! { Minus }),
@@ -551,7 +549,7 @@ pub fn binary_op<'a>(i: Input<'a>) -> IResult<Input<'a>, BinaryOperator, Error> 
     ))(i)
 }
 
-pub fn literal<'a>(i: Input<'a>) -> IResult<Input<'a>, Literal, Error> {
+pub fn literal<'a>(i: Input<'a>) -> IResult<'a, Literal> {
     let string = map(
         rule! {
             LiteralString
@@ -579,7 +577,7 @@ pub fn literal<'a>(i: Input<'a>) -> IResult<Input<'a>, Literal, Error> {
     )(i)
 }
 
-pub fn type_name<'a>(i: Input<'a>) -> IResult<Input<'a>, TypeName, Error> {
+pub fn type_name<'a>(i: Input<'a>) -> IResult<'a, TypeName> {
     let ty_char = map(
         rule! { CHAR ~ ("(" ~ #literal_u64 ~ ")")? },
         |(_, opt_args)| TypeName::Char(opt_args.map(|(_, length, _)| length)),
@@ -635,7 +633,7 @@ pub fn type_name<'a>(i: Input<'a>) -> IResult<Input<'a>, TypeName, Error> {
 }
 
 // TODO(andylokandy): complete the keyword-function list, or remove the functions' name from keywords
-pub fn function_name<'a>(i: Input<'a>) -> IResult<Input<'a>, String, Error> {
+pub fn function_name<'a>(i: Input<'a>) -> IResult<'a, String> {
     map(
         rule! {
             Ident

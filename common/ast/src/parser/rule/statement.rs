@@ -13,16 +13,15 @@
 // limitations under the License.
 
 use nom::combinator::map;
-use nom::IResult;
 
 use crate::parser::ast::Statement;
-use crate::parser::rule::error::Error;
 use crate::parser::rule::util::ident;
+use crate::parser::rule::util::IResult;
 use crate::parser::rule::util::Input;
 use crate::parser::token::*;
 use crate::rule;
 
-pub fn statement<'a>(i: Input<'a>) -> IResult<Input<'a>, Statement, Error> {
+pub fn statement<'a>(i: Input<'a>) -> IResult<'a, Statement> {
     let truncate_table = map(
         rule! {
             TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ ";"

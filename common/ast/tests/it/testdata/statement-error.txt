@@ -22,3 +22,39 @@ error:
   | while parsing TRUNCATE TABLE statement
 
 
+---------- Input ----------
+truncate table a.b.c.d
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | truncate table a.b.c.d
+  | --------          ^ expected token ";"
+  | |                  
+  | while parsing TRUNCATE TABLE statement
+
+
+---------- Input ----------
+truncate a
+---------- Output ---------
+error: 
+  --> SQL:1:10
+  |
+1 | truncate a
+  | -------- ^ expected token <TABLE>
+  | |         
+  | while parsing TRUNCATE TABLE statement
+
+
+---------- Input ----------
+drop a
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | drop a
+  | ---- ^ expected token <TABLE>
+  | |     
+  | while parsing DROP TABLE statement
+
+

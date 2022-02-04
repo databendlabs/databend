@@ -1,13 +1,13 @@
 ---------- Input ----------
-(a and ) 1
+5 * (a and ) 1
 ---------- Output ---------
 error: 
-  --> SQL:1:8
+  --> SQL:1:12
   |
-1 | (a and ) 1
-  | -      ^ unexpected end of expression
-  | |       
-  | while parsing (<expr>)
+1 | 5 * (a and ) 1
+  | -   -      ^ unexpected end of expression
+  | |   |       
+  | |   while parsing expression between `(...)`
   | while parsing expression
 
 
@@ -34,7 +34,7 @@ error:
 1 | G.E.B IS NOT NULL AND
   | - while parsing expression
 2 |     col1 NOT BETWEEN col2 AND
-  |          --- while parsing BETWEEN ...
+  |          --- while parsing `[NOT] BETWEEN ... AND ...` expression
 3 |         AND 1 + col3 DIV sum(col4)
   |         ^^^ unexpected end of expression
 

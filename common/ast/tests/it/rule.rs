@@ -23,7 +23,7 @@ use nom::Parser;
 use pretty_assertions::assert_eq;
 
 macro_rules! test_parse {
-    ($file:expr, $parser:expr, $source:literal $(,)*) => {
+    ($file:expr, $parser:expr, $source:expr $(,)*) => {
         let tokens = tokenise($source).unwrap();
         match $parser.parse(&(tokens)) {
             Ok((i, output)) => {
@@ -52,33 +52,48 @@ macro_rules! test_parse {
 fn test_statement() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("statement.txt").unwrap();
-    test_parse!(file, statement, "truncate table a;");
-    test_parse!(file, statement, r#"truncate table "a".b;"#,);
-    test_parse!(file, statement, "drop table a;");
-    test_parse!(file, statement, r#"drop table if exists a."b";"#,);
+    let cases = &[
+        "truncate table a;",
+        r#"truncate table "a".b;"#,
+        "drop table a;",
+        r#"drop table if exists a."b";"#,
+    ];
+
+    for case in cases {
+        test_parse!(file, statement, case);
+    }
+}
+
+#[test]
+fn test_statement_error() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let mut file = mint.new_goldenfile("statement-error.txt").unwrap();
+
+    let cases = &[
+        "drop table if a.b;",
+        "truncate table a",
+        "truncate table a.b.c.d",
+        "truncate a",
+        "drop a",
+    ];
+
+    for case in cases {
+        test_parse!(file, statement, case);
+    }
 }
 
 #[test]
 fn test_expr() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("expr.txt").unwrap();
-    test_parse!(file, expr, "a");
-    test_parse!(file, expr, "1 + a * c.d");
-    test_parse!(file, expr, "col1 not between 1 and 2");
-    test_parse!(file, expr, "sum(col1)");
-    test_parse!(
-        file,
-        expr,
+
+    let cases = &[
+        "a",
+        "1 + a * c.d",
+        "col1 not between 1 and 2",
+        "sum(col1)",
         "G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)",
-    );
-    test_parse!(
-        file,
-        expr,
         "sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END",
-    );
-    test_parse!(
-        file,
-        expr,
         "p_partkey = l_partkey
             AND p_brand = 'Brand#12'
             AND p_container IN ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')
@@ -86,26 +101,25 @@ fn test_expr() {
             AND p_size BETWEEN CAST (1 AS smallint) AND CAST (5 AS smallint)
             AND l_shipmode IN ('AIR', 'AIR REG')
             AND l_shipinstruct = 'DELIVER IN PERSON'",
-    );
-}
+    ];
 
-#[test]
-fn test_statement_error() {
-    let mut mint = Mint::new("tests/it/testdata");
-    let mut file = mint.new_goldenfile("statement-error.txt").unwrap();
-    test_parse!(file, statement, "drop table if a.b;");
-    test_parse!(file, statement, "truncate table a");
+    for case in cases {
+        test_parse!(file, expr, case);
+    }
 }
 
 #[test]
 fn test_expr_error() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("expr-error.txt").unwrap();
-    test_parse!(file, expr, "(a and ) 1");
-    test_parse!(file, expr, "a + +");
-    test_parse!(
-        file,
-        expr,
-        "G.E.B IS NOT NULL AND\n\tcol1 NOT BETWEEN col2 AND\n\t\tAND 1 + col3 DIV sum(col4)"
-    );
+
+    let cases = &[
+        "5 * (a and ) 1",
+        "a + +",
+        "G.E.B IS NOT NULL AND\n\tcol1 NOT BETWEEN col2 AND\n\t\tAND 1 + col3 DIV sum(col4)",
+    ];
+
+    for case in cases {
+        test_parse!(file, expr, case);
+    }
 }

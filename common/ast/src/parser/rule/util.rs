@@ -14,7 +14,6 @@
 
 use nom::branch::alt;
 use nom::combinator::map;
-use nom::IResult;
 
 use crate::parser::ast::Identifier;
 use crate::parser::rule::error::Error;
@@ -22,10 +21,9 @@ use crate::parser::rule::error::ErrorKind;
 use crate::parser::token::*;
 
 pub type Input<'a> = &'a [Token<'a>];
+pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
 
-pub fn match_text<'a>(
-    text: &'static str,
-) -> impl FnMut(Input<'a>) -> IResult<Input<'a>, &'a Token, Error> {
+pub fn match_text<'a>(text: &'static str) -> impl FnMut(Input<'a>) -> IResult<&'a Token> {
     move |i| match i.get(0).filter(|token| token.text == text) {
         Some(token) => Ok((&i[1..], token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
@@ -35,9 +33,7 @@ pub fn match_text<'a>(
     }
 }
 
-pub fn match_token<'a>(
-    kind: TokenKind,
-) -> impl FnMut(Input<'a>) -> IResult<Input<'a>, &'a Token, Error> {
+pub fn match_token<'a>(kind: TokenKind) -> impl FnMut(Input<'a>) -> IResult<&'a Token> {
     move |i| match i.get(0).filter(|token| token.kind == kind) {
         Some(token) => Ok((&i[1..], token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
@@ -47,7 +43,7 @@ pub fn match_token<'a>(
     }
 }
 
-pub fn ident<'a>(i: Input<'a>) -> IResult<Input<'a>, Identifier, Error> {
+pub fn ident<'a>(i: Input<'a>) -> IResult<'a, Identifier> {
     alt((
         map(match_token(TokenKind::Ident), |token| Identifier {
             name: token.text.to_string(),
@@ -60,7 +56,7 @@ pub fn ident<'a>(i: Input<'a>) -> IResult<Input<'a>, Identifier, Error> {
     ))(i)
 }
 
-pub fn literal_u64<'a>(i: Input<'a>) -> IResult<Input<'a>, u64, Error> {
+pub fn literal_u64<'a>(i: Input<'a>) -> IResult<'a, u64> {
     match_token(LiteralNumber)(i).and_then(|(i, token)| {
         token.text.parse().map(|num| (i, num)).map_err(|err| {
             nom::Err::Error(Error::from_error_kind(i, ErrorKind::ParseIntError(err)))
