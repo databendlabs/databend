@@ -120,7 +120,15 @@ pub fn pretty_print_error<'a>(source: &'a str, error: nom::Err<Error<'a>>) -> St
             ErrorKind::Context(msg) => format!("while parsing {}", msg),
             ErrorKind::ExpectToken(token) => format!("expected token <{:?}>", token),
             ErrorKind::ExpectText(text) => format!("expected token {:?}", text),
-            ErrorKind::ParseIntError(err) => format!("nable to parse int: {:?}", err),
+            ErrorKind::ParseIntError(err) => {
+                format!("unable to parse int because it {}", match err.kind() {
+                    std::num::IntErrorKind::InvalidDigit =>
+                        "contains invalid characters".to_string(),
+                    std::num::IntErrorKind::PosOverflow => "positive overflowed".to_string(),
+                    std::num::IntErrorKind::NegOverflow => "negative overflowed".to_string(),
+                    err => format!("{:?}", err),
+                })
+            }
             ErrorKind::Other(msg) => msg.to_string(),
             ErrorKind::Nom(_) => continue,
         };

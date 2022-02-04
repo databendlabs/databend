@@ -42,16 +42,16 @@ use crate::rule;
 
 const BETWEEN_PREC: u32 = 20;
 
-pub fn query<'a>(i: Input<'a>) -> IResult<'a, Query> {
+pub fn query(i: Input) -> IResult<Query> {
     // TODO: unimplemented
     nom::combinator::fail(i)
 }
 
-pub fn expr<'a>(i: Input<'a>) -> IResult<'a, Expr> {
+pub fn expr(i: Input) -> IResult<Expr> {
     context("expression", subexpr(0))(i)
 }
 
-pub fn subexpr<'a>(min_precedence: u32) -> impl FnMut(Input<'a>) -> IResult<'a, Expr> {
+pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     move |i| {
         let expr_element_limited =
             verify(
@@ -68,7 +68,7 @@ pub fn subexpr<'a>(min_precedence: u32) -> impl FnMut(Input<'a>) -> IResult<'a, 
                 },
             );
 
-        let (i, expr_elements) = rule! { #expr_element_limited* }(i)?;
+        let (i, expr_elements) = rule! { #expr_element_limited+ }(i)?;
 
         let mut iter = expr_elements.into_iter();
         let expr = ExprParser
@@ -240,7 +240,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(affix)
     }
 
-    fn primary(&mut self, elem: WithSpan<'a>) -> pratt::Result<Expr> {
+    fn primary(&mut self, elem: WithSpan) -> pratt::Result<Expr> {
         let expr = match elem.elem {
             ExprElement::ColumnRef {
                 database,
@@ -287,7 +287,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn infix(&mut self, lhs: Expr, elem: WithSpan<'a>, rhs: Expr) -> pratt::Result<Expr> {
+    fn infix(&mut self, lhs: Expr, elem: WithSpan, rhs: Expr) -> pratt::Result<Expr> {
         let expr = match elem.elem {
             ExprElement::BinaryOp { op } => Expr::BinaryOp {
                 left: Box::new(lhs),
@@ -299,7 +299,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn prefix(&mut self, elem: WithSpan<'a>, rhs: Expr) -> pratt::Result<Expr> {
+    fn prefix(&mut self, elem: WithSpan, rhs: Expr) -> pratt::Result<Expr> {
         let expr = match elem.elem {
             ExprElement::UnaryOp { op } => Expr::UnaryOp {
                 op,
@@ -310,7 +310,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn postfix(&mut self, lhs: Expr, elem: WithSpan<'a>) -> pratt::Result<Expr> {
+    fn postfix(&mut self, lhs: Expr, elem: WithSpan) -> pratt::Result<Expr> {
         let expr = match elem.elem {
             ExprElement::IsNull { not } => Expr::IsNull {
                 expr: Box::new(lhs),
@@ -338,7 +338,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
     }
 }
 
-pub fn expr_element<'a>(i: Input<'a>) -> IResult<WithSpan<'a>> {
+pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let column_ref = map(
         rule! {
             #ident ~ ("." ~ #ident ~ ("." ~ #ident)?)?
@@ -517,7 +517,7 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<WithSpan<'a>> {
     Ok((rest, WithSpan { elem, span }))
 }
 
-pub fn unary_op<'a>(i: Input<'a>) -> IResult<'a, UnaryOperator> {
+pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
     alt((
         value(UnaryOperator::Plus, rule! { Plus }),
         value(UnaryOperator::Minus, rule! { Minus }),
@@ -525,7 +525,7 @@ pub fn unary_op<'a>(i: Input<'a>) -> IResult<'a, UnaryOperator> {
     ))(i)
 }
 
-pub fn binary_op<'a>(i: Input<'a>) -> IResult<'a, BinaryOperator> {
+pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
     alt((
         value(BinaryOperator::Plus, rule! { Plus }),
         value(BinaryOperator::Minus, rule! { Minus }),
@@ -549,7 +549,7 @@ pub fn binary_op<'a>(i: Input<'a>) -> IResult<'a, BinaryOperator> {
     ))(i)
 }
 
-pub fn literal<'a>(i: Input<'a>) -> IResult<'a, Literal> {
+pub fn literal(i: Input) -> IResult<Literal> {
     let string = map(
         rule! {
             LiteralString
@@ -577,33 +577,33 @@ pub fn literal<'a>(i: Input<'a>) -> IResult<'a, Literal> {
     )(i)
 }
 
-pub fn type_name<'a>(i: Input<'a>) -> IResult<'a, TypeName> {
+pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_char = map(
-        rule! { CHAR ~ ("(" ~ #literal_u64 ~ ")")? },
+        rule! { CHAR ~ ("(" ~ #cut(literal_u64) ~ ")")? },
         |(_, opt_args)| TypeName::Char(opt_args.map(|(_, length, _)| length)),
     );
     let ty_varchar = map(
-        rule! { VARCHAR ~ ("(" ~ #literal_u64 ~ ")")? },
+        rule! { VARCHAR ~ ("(" ~ #cut(literal_u64) ~ ")")? },
         |(_, opt_args)| TypeName::Varchar(opt_args.map(|(_, length, _)| length)),
     );
     let ty_float = map(
-        rule! { FLOAT ~ ("(" ~ #literal_u64 ~ ")")? },
+        rule! { FLOAT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
         |(_, opt_args)| TypeName::Float(opt_args.map(|(_, prec, _)| prec)),
     );
     let ty_int = map(
-        rule! { INTEGER ~ ("(" ~ #literal_u64 ~ ")")? },
+        rule! { INTEGER ~ ("(" ~ #cut(literal_u64) ~ ")")? },
         |(_, opt_args)| TypeName::Int(opt_args.map(|(_, display, _)| display)),
     );
     let ty_tiny_int = map(
-        rule! { TINYINT ~ ("(" ~ #literal_u64 ~ ")")? },
+        rule! { TINYINT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
         |(_, opt_args)| TypeName::TinyInt(opt_args.map(|(_, display, _)| display)),
     );
     let ty_small_int = map(
-        rule! { SMALLINT ~ ("(" ~ #literal_u64 ~ ")")? },
+        rule! { SMALLINT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
         |(_, opt_args)| TypeName::SmallInt(opt_args.map(|(_, display, _)| display)),
     );
     let ty_big_int = map(
-        rule! { BIGINT ~ ("(" ~ #literal_u64 ~ ")")? },
+        rule! { BIGINT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
         |(_, opt_args)| TypeName::BigInt(opt_args.map(|(_, display, _)| display)),
     );
     let ty_real = value(TypeName::Real, rule! { REAL });
@@ -632,8 +632,8 @@ pub fn type_name<'a>(i: Input<'a>) -> IResult<'a, TypeName> {
     )(i)
 }
 
-// TODO(andylokandy): complete the keyword-function list, or remove the functions' name from keywords
-pub fn function_name<'a>(i: Input<'a>) -> IResult<'a, String> {
+// TODO (andylokandy): complete the keyword-function list, or remove the functions' name from keywords
+pub fn function_name(i: Input) -> IResult<String> {
     map(
         rule! {
             Ident

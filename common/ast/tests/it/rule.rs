@@ -117,6 +117,7 @@ fn test_expr_error() {
         "5 * (a and ) 1",
         "a + +",
         "G.E.B IS NOT NULL AND\n\tcol1 NOT BETWEEN col2 AND\n\t\tAND 1 + col3 DIV sum(col4)",
+        "CAST(col1 AS VARCHAR(0.1))",
     ];
 
     for case in cases {

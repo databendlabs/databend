@@ -21,7 +21,7 @@ use crate::parser::rule::util::Input;
 use crate::parser::token::*;
 use crate::rule;
 
-pub fn statement<'a>(i: Input<'a>) -> IResult<'a, Statement> {
+pub fn statement(i: Input) -> IResult<Statement> {
     let truncate_table = map(
         rule! {
             TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ ";"
