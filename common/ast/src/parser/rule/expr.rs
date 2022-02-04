@@ -54,7 +54,7 @@ pub fn expr<'a>(i: Input<'a>) -> IResult<Input<'a>, Expr, Error> {
 pub fn subexpr<'a>(
     min_precedence: u32,
 ) -> impl FnMut(Input<'a>) -> IResult<Input<'a>, Expr, Error> {
-    cut(move |i| {
+    move |i| {
         let expr_element_limited =
             verify(
                 expr_element,
@@ -94,7 +94,7 @@ pub fn subexpr<'a>(
         }
 
         Ok((i, expr))
-    })
+    }
 }
 
 fn map_pratt_error<'a>(
@@ -371,7 +371,7 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
     );
     let in_list = map(
         rule! {
-            NOT? ~ IN ~ "(" ~ #subexpr(0) ~ ("," ~ #subexpr(0))*  ~ ")"
+            NOT? ~ IN ~ "(" ~ #cut(subexpr(0)) ~ ("," ~ #cut(subexpr(0)))*  ~ ")"
         },
         |(not, _, _, head, tail, _)| {
             let mut list = vec![head];
@@ -393,7 +393,7 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
     );
     let between = map(
         rule! {
-            NOT? ~ BETWEEN ~ #subexpr(BETWEEN_PREC) ~ AND ~  #subexpr(BETWEEN_PREC)
+            NOT? ~ BETWEEN ~ #cut(subexpr(BETWEEN_PREC)) ~ AND ~  #cut(subexpr(BETWEEN_PREC))
         },
         |(not, _, low, _, high)| ExprElement::Between {
             low,
@@ -403,7 +403,7 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
     );
     let cast = map(
         rule! {
-            CAST ~ "(" ~ #subexpr(0) ~ AS ~ #type_name ~ ")"
+            CAST ~ "(" ~ #cut(subexpr(0)) ~ AS ~ #cut(type_name) ~ ")"
         },
         |(_, _, expr, _, target_type, _)| ExprElement::Cast { expr, target_type },
     );
@@ -412,7 +412,7 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
     });
     let function_call = map(
         rule! {
-            #function_name ~ "(" ~ (DISTINCT? ~ #subexpr(0) ~ ("," ~ #subexpr(0))*)? ~ ")"
+            #function_name ~ "(" ~ (DISTINCT? ~ #cut(subexpr(0)) ~ ("," ~ #cut(subexpr(0)))*)? ~ ")"
         },
         |(name, _, args, _)| {
             let (distinct, args) = args
@@ -433,7 +433,7 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
     );
     let function_call_with_param = map(
         rule! {
-            #function_name ~ "(" ~ (#literal ~ ("," ~ #literal)*)? ~ ")" ~ "(" ~ (DISTINCT? ~ #subexpr(0) ~ ("," ~ #subexpr(0))*)? ~ ")"
+            #function_name ~ "(" ~ (#literal ~ ("," ~ #literal)*)? ~ ")" ~ "(" ~ (DISTINCT? ~ #cut(subexpr(0)) ~ ("," ~ #cut(subexpr(0)))*)? ~ ")"
         },
         |(name, _, params, _, _, args, _)| {
             let params = params
@@ -462,7 +462,7 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
     );
     let case = map(
         rule! {
-            CASE ~ #subexpr(0)? ~ (WHEN ~ #subexpr(0) ~ THEN ~ #subexpr(0))+ ~ (ELSE ~ #subexpr(0))? ~ END
+            CASE ~ #subexpr(0)? ~ (WHEN ~ #cut(subexpr(0)) ~ THEN ~ #cut(subexpr(0)))+ ~ (ELSE ~ #cut(subexpr(0)))? ~ END
         },
         |(_, operand, branches, else_result, _)| {
             let (conditions, results) = branches
@@ -485,7 +485,7 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
     let subquery = map(rule! { "(" ~ #query ~ ")" }, |(_, subquery, _)| {
         ExprElement::Subquery(subquery)
     });
-    let group = map(rule! { "(" ~ #subexpr(0) ~ ")" }, |(_, expr, _)| {
+    let group = map(rule! { "(" ~ #cut(subexpr(0)) ~ ")" }, |(_, expr, _)| {
         ExprElement::Group(expr)
     });
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
@@ -493,22 +493,22 @@ pub fn expr_element<'a>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
     let literal = map(literal, ExprElement::Literal);
 
     let (rest, elem) = rule! (
-        #column_ref
-        | #is_null
-        | #in_list
-        | #in_subquery
-        | #between
-        | #binary_op
-        | #unary_op
-        | #cast
-        | #count_all
-        | #literal
-        | #function_call_with_param
-        | #function_call
-        | #case
-        | #exists
-        | #subquery
-        | #group
+        #column_ref : "<column>"
+        | #is_null : "... IS NULL"
+        | #in_list : "IN [...]"
+        | #in_subquery : "IN (SELECT ...)"
+        | #between : "BETWEEN ..."
+        | #binary_op : "<binary operator>"
+        | #unary_op : "<unary operator>"
+        | #cast : "CAST(... AS ...)"
+        | #count_all : "COUNT(*)"
+        | #literal : "<literal>"
+        | #function_call_with_param : "<function>"
+        | #function_call : "<function>"
+        | #case : "CASE ... END"
+        | #exists : "EXISTS (SELECT ...)"
+        | #subquery : "(SELECT ...)"
+        | #group : "(<expr>)"
     )(i)?;
 
     let input_ptr = i.as_ptr();

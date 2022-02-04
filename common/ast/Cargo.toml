@@ -31,6 +31,6 @@ thiserror = "1.0.30"
 pratt = "0.3"
 
 [dev-dependencies]
-indoc = "1"
+goldenfile = "1"
 pretty_assertions = "1.0.0"
 common-base = { path = "../base" }

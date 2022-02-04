@@ -322,7 +322,7 @@ impl Display for Literal {
                 write!(f, "{}", val)
             }
             Literal::String(val) => {
-                write!(f, "\"{}\"", val)
+                write!(f, "\'{}\'", val)
             }
             Literal::Boolean(val) => {
                 if *val {
