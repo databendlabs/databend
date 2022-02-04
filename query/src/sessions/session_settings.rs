@@ -72,7 +72,7 @@ impl Settings {
         session_ctx: Arc<SessionContext>,
         user_api: Arc<UserApiProvider>,
     ) -> Result<Settings> {
-        let mut values = vec![
+        let values = vec![
             // max_block_size
             SettingValue {
                 default_value:DataValue::UInt64(Some(10000)),
@@ -141,23 +141,7 @@ impl Settings {
         let settings = Arc::new(RwLock::new(HashMap::default()));
 
         // Initial settings.
-        // Note: Use code block here to drop the write lock at the end.
         {
-            // Get settings from metasrv.
-            let global_settings = futures::executor::block_on(
-                user_api.get_settings(&session_ctx.get_current_tenant()),
-            )?;
-
-            for global in &global_settings {
-                for vx in values.iter_mut() {
-                    // Overwrite setting from metasrv.
-                    if global.name == vx.user_setting.name {
-                        vx.level = ScopeLevel::Global;
-                        vx.default_value = global.value.clone();
-                    }
-                }
-            }
-
             let mut settings_mut = settings.write();
             for value in values {
                 let name = value.user_setting.name.clone();
@@ -171,7 +155,7 @@ impl Settings {
             session_ctx,
         };
 
-        // Overwrite settings.
+        // Overwrite settings from conf.
         {
             // Set max threads.
             let cpus = if conf.query.num_cpus == 0 {
