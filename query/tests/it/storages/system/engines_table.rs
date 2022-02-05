@@ -32,14 +32,14 @@ async fn test_engines_table() -> Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
 
     let expected = vec![
-        "+--------+---------+-----------------------+",
-        "| Engine | Support | Comment               |",
-        "+--------+---------+-----------------------+",
-        "| FUSE   | YES     | FUSE Storage Engine   |",
-        "| GITHUB | YES     | GITHUB Storage Engine |",
-        "| MEMORY | YES     | MEMORY Storage Engine |",
-        "| NULL   | YES     | NULL Storage Engine   |",
-        "+--------+---------+-----------------------+",
+        "+--------+-----------------------+",
+        "| Engine | Comment               |",
+        "+--------+-----------------------+",
+        "| FUSE   | FUSE Storage Engine   |",
+        "| GITHUB | GITHUB Storage Engine |",
+        "| MEMORY | MEMORY Storage Engine |",
+        "| NULL   | NULL Storage Engine   |",
+        "+--------+-----------------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected.clone(), result.as_slice());
 

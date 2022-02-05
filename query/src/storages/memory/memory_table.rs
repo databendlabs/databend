@@ -32,6 +32,8 @@ use common_streams::SendableDataBlockStream;
 use crate::sessions::QueryContext;
 use crate::storages::memory::MemoryTableStream;
 use crate::storages::StorageContext;
+use crate::storages::StorageCreator;
+use crate::storages::StorageDescriptor;
 use crate::storages::Table;
 
 pub struct MemoryTable {
@@ -57,6 +59,37 @@ impl MemoryTable {
 
         let table = Self { table_info, blocks };
         Ok(Box::new(table))
+    }
+}
+
+pub struct MemoryTableCreator {
+    descriptor: StorageDescriptor,
+}
+
+impl MemoryTableCreator {
+    pub fn new() -> MemoryTableCreator {
+        MemoryTableCreator {
+            descriptor: StorageDescriptor {
+                engine_name: "MEMORY".to_string(),
+                comment: "MEMORY Storage Engine".to_string(),
+            },
+        }
+    }
+}
+
+impl Default for MemoryTableCreator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StorageCreator for MemoryTableCreator {
+    fn try_create(&self, ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
+        MemoryTable::try_create(ctx, table_info)
+    }
+
+    fn desc(&self) -> StorageDescriptor {
+        self.descriptor.clone()
     }
 }
 

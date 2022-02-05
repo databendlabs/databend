@@ -1,4 +1,4 @@
-MEMORY	YES	MEMORY Storage Engine
-GITHUB	YES	GITHUB Storage Engine
-NULL	YES	NULL Storage Engine
-FUSE	YES	FUSE Storage Engine
+FUSE	FUSE Storage Engine
+GITHUB	GITHUB Storage Engine
+MEMORY	MEMORY Storage Engine
+NULL	NULL Storage Engine

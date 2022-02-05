@@ -37,7 +37,6 @@ impl EnginesTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Engine", DataType::String, false),
-            DataField::new("Support", DataType::String, false),
             DataField::new("Comment", DataType::String, false),
         ]);
 
@@ -72,18 +71,13 @@ impl Table for EnginesTable {
     ) -> Result<SendableDataBlockStream> {
         let descriptors = _ctx.get_catalog().get_storage_descriptors();
         let mut engine_name = Vec::with_capacity(descriptors.len());
-        let mut engine_support = Vec::with_capacity(descriptors.len());
         let mut engine_comment = Vec::with_capacity(descriptors.len());
         for descriptor in &descriptors {
-            let name = descriptor.engine_name.clone();
-            let comment = descriptor.comment.clone();
-            engine_name.push(name);
-            engine_comment.push(comment);
-            engine_support.push("YES".as_bytes());
+            engine_name.push(descriptor.engine_name.clone());
+            engine_comment.push(descriptor.comment.clone());
         }
         let block = DataBlock::create_by_array(self.table_info.schema(), vec![
             Series::new(engine_name),
-            Series::new(engine_support),
             Series::new(engine_comment),
         ]);
         Ok(Box::pin(DataBlockStream::create(
