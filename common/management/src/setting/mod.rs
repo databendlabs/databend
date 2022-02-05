@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cluster;
-mod setting;
-mod stage;
-mod udf;
-mod user;
+mod setting_api;
+mod setting_mgr;
+
+pub use setting_api::SettingApi;
+pub use setting_mgr::SettingMgr;

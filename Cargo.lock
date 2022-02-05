@@ -1732,6 +1732,7 @@ dependencies = [
  "async-trait",
  "common-ast",
  "common-base",
+ "common-datavalues",
  "common-exception",
  "common-functions",
  "common-meta-api",

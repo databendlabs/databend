@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,75 +24,76 @@ use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
-use common_meta_types::UserStageInfo;
+use common_meta_types::UserSetting;
 
-use crate::stage::StageApi;
+use crate::setting::SettingApi;
 
-static USER_STAGE_API_KEY_PREFIX: &str = "__fd_stages";
+static USER_SETTING_API_KEY_PREFIX: &str = "__fd_settings";
 
-pub struct StageMgr {
+pub struct SettingMgr {
     kv_api: Arc<dyn KVApi>,
-    stage_prefix: String,
+    setting_prefix: String,
 }
 
-impl StageMgr {
+impl SettingMgr {
     #[allow(dead_code)]
     pub fn new(kv_api: Arc<dyn KVApi>, tenant: &str) -> Self {
-        StageMgr {
+        SettingMgr {
             kv_api,
-            stage_prefix: format!("{}/{}", USER_STAGE_API_KEY_PREFIX, tenant),
+            setting_prefix: format!("{}/{}", USER_SETTING_API_KEY_PREFIX, tenant),
         }
     }
 }
 
 #[async_trait::async_trait]
-impl StageApi for StageMgr {
-    async fn add_stage(&self, info: UserStageInfo) -> Result<u64> {
-        let seq = MatchSeq::Exact(0);
-        let val = Operation::Update(serde_json::to_vec(&info)?);
-        let key = format!("{}/{}", self.stage_prefix, info.stage_name);
-        let upsert_info = self
+impl SettingApi for SettingMgr {
+    async fn set_setting(&self, setting: UserSetting) -> Result<u64> {
+        // Upsert.
+        let seq = MatchSeq::Any;
+        let val = Operation::Update(serde_json::to_vec(&setting)?);
+        let key = format!("{}/{}", self.setting_prefix, setting.name);
+        let upsert = self
             .kv_api
             .upsert_kv(UpsertKVAction::new(&key, seq, val, None));
 
-        let res = upsert_info.await?.into_add_result()?;
+        let res = upsert.await?.into_add_result()?;
 
         match res.res {
             OkOrExist::Ok(v) => Ok(v.seq),
-            OkOrExist::Exists(v) => Err(ErrorCode::StageAlreadyExists(format!(
-                "Stage already exists, seq [{}]",
-                v.seq
-            ))),
+            OkOrExist::Exists(v) => Ok(v.seq),
         }
     }
 
-    async fn get_stage(&self, name: &str, seq: Option<u64>) -> Result<SeqV<UserStageInfo>> {
-        let key = format!("{}/{}", self.stage_prefix, name);
+    async fn get_settings(&self) -> Result<Vec<UserSetting>> {
+        let values = self.kv_api.prefix_list_kv(&self.setting_prefix).await?;
+
+        let mut settings = Vec::with_capacity(values.len());
+        for (_, value) in values {
+            let setting = serde_json::from_slice::<UserSetting>(&value.data)?;
+            settings.push(setting);
+        }
+        Ok(settings)
+    }
+
+    async fn get_setting(&self, name: &str, seq: Option<u64>) -> Result<SeqV<UserSetting>> {
+        let key = format!("{}/{}", self.setting_prefix, name);
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
         let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownStage(format!("Unknown stage {}", name)))?;
+            res.ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown setting {}", name)))?;
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
-            Err(_) => Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name))),
+            Err(_) => Err(ErrorCode::UnknownVariable(format!(
+                "Unknown setting {}",
+                name
+            ))),
         }
     }
 
-    async fn get_stages(&self) -> Result<Vec<UserStageInfo>> {
-        let values = self.kv_api.prefix_list_kv(&self.stage_prefix).await?;
-
-        let mut stage_infos = Vec::with_capacity(values.len());
-        for (_, value) in values {
-            let stage_info = serde_json::from_slice::<UserStageInfo>(&value.data)?;
-            stage_infos.push(stage_info);
-        }
-        Ok(stage_infos)
-    }
-
-    async fn drop_stage(&self, name: &str, seq: Option<u64>) -> Result<()> {
-        let key = format!("{}/{}", self.stage_prefix, name);
+    async fn drop_setting(&self, name: &str, seq: Option<u64>) -> Result<()> {
+        let key = format!("{}/{}", self.setting_prefix, name);
         let kv_api = self.kv_api.clone();
         let upsert_kv = async move {
             kv_api
@@ -108,7 +109,10 @@ impl StageApi for StageMgr {
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {
-            Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name)))
+            Err(ErrorCode::UnknownVariable(format!(
+                "Unknown setting {}",
+                name
+            )))
         }
     }
 }

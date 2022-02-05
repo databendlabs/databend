@@ -12,5 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) mod user_api;
-pub(crate) mod user_mgr;
+mod user_api;
+mod user_mgr;
+
+pub use user_api::UserApi;
+pub use user_mgr::UserMgr;
