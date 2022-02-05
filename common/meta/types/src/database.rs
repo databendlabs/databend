@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
+use common_datavalues::chrono::Utc;
+use common_datavalues::chrono::DateTime;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseNameIdent {
@@ -32,19 +34,31 @@ pub struct DatabaseInfo {
     pub meta: DatabaseMeta,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseMeta {
     pub engine: String,
     pub engine_options: HashMap<String, String>,
     pub options: HashMap<String, String>,
+    pub created_on: DateTime<Utc>, 
+}
+
+impl Default for DatabaseMeta {
+    fn default() -> Self {
+        DatabaseMeta {
+            engine: "".to_string(),
+            engine_options: HashMap::new(),
+            options: HashMap::new(),
+            created_on: Utc::now(),
+        }
+    }
 }
 
 impl Display for DatabaseMeta {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Engine: {}={:?}, Options: {:?}",
-            self.engine, self.engine_options, self.options
+            "Engine: {}={:?}, Options: {:?}, CreatedOn: {:?}",
+            self.engine, self.engine_options, self.options, self.created_on
         )
     }
 }
