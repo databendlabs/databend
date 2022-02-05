@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions2;
+use crate::scalars::scalar_function2_test::ScalarFunction2Test;
 
 #[test]
 fn test_uuid_creator_functions() -> Result<()> {
@@ -33,13 +33,12 @@ fn test_uuid_creator_functions() -> Result<()> {
     //     error: "",
     // },
 
-    let tests = vec![ScalarFunctionTest {
+    let tests = vec![ScalarFunction2Test {
         name: "zeroUUID-passed",
-        nullable: false,
         columns: vec![],
-        expect: Series::new(vec!["00000000-0000-0000-0000-000000000000"]).into(),
+        expect: Series::from_data(vec!["00000000-0000-0000-0000-000000000000"]),
         error: "",
     }];
 
-    test_scalar_functions(UUIDZeroFunction::try_create("")?, &tests)
+    test_scalar_functions2(UUIDZeroFunction::try_create("")?, &tests)
 }

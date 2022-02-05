@@ -33,6 +33,7 @@ use super::ToCastFunction;
 use super::TupleClassFunction;
 use super::UdfFunction;
 use crate::scalars::DateFunction;
+use crate::scalars::UUIDFunction;
 
 pub type Factory2Creator = Box<dyn Fn(&str) -> Result<Box<dyn Function2>> + Send + Sync>;
 
@@ -99,6 +100,7 @@ static FUNCTION2_FACTORY: Lazy<Arc<Function2Factory>> = Lazy::new(|| {
     LogicFunction::register(&mut function_factory);
     DateFunction::register2(&mut function_factory);
     OtherFunction::register(&mut function_factory);
+    UUIDFunction::register2(&mut function_factory);
 
     Arc::new(function_factory)
 });
