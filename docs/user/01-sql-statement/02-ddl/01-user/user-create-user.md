@@ -2,7 +2,8 @@
 title: CREATE USER
 ---
 
-Create a database.
+Create a user.
+
 The CREATE USER statement creates new Databend accounts. It enables authentication, resource-limit, password-management, for new accounts. 
 
 ## Syntax
