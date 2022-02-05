@@ -17,12 +17,12 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::Series;
+use common_datavalues2::prelude::SeriesFrom;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRef;
+use common_datavalues2::DataSchemaRefExt;
+use common_datavalues2::DataType;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
@@ -62,8 +62,8 @@ async fn test_block_pruner() -> Result<()> {
 
     let test_tbl_name = "test_index_helper";
     let test_schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::UInt64, false),
-        DataField::new("b", DataType::UInt64, false),
+        DataField::new("a", u64::to_data_type()),
+        DataField::new("b", u64::to_data_type()),
     ]);
 
     let num_blocks = 10;
@@ -199,8 +199,8 @@ async fn test_block_pruner_monotonic() -> Result<()> {
 
     let test_tbl_name = "test_index_helper";
     let test_schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::UInt64, false),
-        DataField::new("b", DataType::UInt64, false),
+        DataField::new("a", u64::to_data_type()),
+        DataField::new("b", u64::to_data_type()),
     ]);
 
     let row_per_block = 3;

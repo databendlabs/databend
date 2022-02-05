@@ -22,7 +22,7 @@ use common_arrow::arrow::io::parquet::write::Version;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 
 // Used to create test parquet files from blocks.
 pub struct ParquetTestData {}
@@ -35,7 +35,7 @@ impl ParquetTestData {
     pub fn write_parquet(&self, path: &str) {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("name", DataType::String, true),
-            DataField::new("age", DataType::Int32, false),
+            DataField::new("age", i32::to_data_type()),
         ]);
 
         let block1 = DataBlock::create_by_array(schema.clone(), vec![

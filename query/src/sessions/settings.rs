@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues2::DataType;
+use common_datavalues2::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;

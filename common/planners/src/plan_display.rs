@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Display;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchema;
 
 use crate::plan_display_indent::PlanNodeIndentFormatDisplay;
 use crate::PlanNode;

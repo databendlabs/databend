@@ -14,8 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -127,7 +126,7 @@ pub trait ExpressionRewriter: Sized {
 
     fn mutate_cast(
         &mut self,
-        typ: &DataType,
+        typ: &DataTypePtr,
         expr: Expression,
         _origin_expr: &Expression,
         is_nullable: bool,
@@ -152,7 +151,7 @@ pub trait ExpressionRewriter: Sized {
         &mut self,
         value: &DataValue,
         column_name: &Option<String>,
-        data_type: &DataType,
+        data_type: &DataTypePtr,
         _origin_expr: &Expression,
     ) -> Result<Expression> {
         Ok(Expression::Literal {

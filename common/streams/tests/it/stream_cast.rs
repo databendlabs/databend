@@ -14,22 +14,21 @@
 
 use common_base::tokio;
 use common_datablocks::*;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_functions::scalars::CastFunction;
-use common_functions::scalars::Function2Convertor;
 use common_streams::*;
 use futures::stream::StreamExt;
 
 #[tokio::test]
 async fn test_cast_stream() {
     let input_schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::String, false),
-        DataField::new("b", DataType::String, false),
+        DataField::new("a", Vu8::to_data_type()),
+        DataField::new("b", Vu8::to_data_type()),
     ]);
 
     let output_schema = DataSchemaRefExt::create(vec![
-        DataField::new("c", DataType::UInt8, false),
-        DataField::new("d", DataType::UInt16, false),
+        DataField::new("c", u8::to_data_type()),
+        DataField::new("d", u16::to_data_type()),
     ]);
 
     // create a data block [(1, 10), (2, 20), (3, 30), (4, 40), (5, 50)]
@@ -41,9 +40,9 @@ async fn test_cast_stream() {
         .map(|n| (n * 10).to_string().into_bytes())
         .collect::<Vec<Vec<u8>>>();
 
-    let block0 = DataBlock::create_by_array(input_schema.clone(), vec![
-        Series::new(a_array),
-        Series::new(b_array),
+    let block0 = DataBlock::create(input_schema.clone(), vec![
+        Series::from_data(a_array),
+        Series::from_data(b_array),
     ]);
 
     // create a data block [(6, 60), (7, 70), (8, 80), (9, 90)]
@@ -55,16 +54,16 @@ async fn test_cast_stream() {
         .map(|n| (n * 10).to_string().into_bytes())
         .collect::<Vec<Vec<u8>>>();
 
-    let block1 = DataBlock::create_by_array(input_schema.clone(), vec![
-        Series::new(a_array),
-        Series::new(b_array),
+    let block1 = DataBlock::create(input_schema.clone(), vec![
+        Series::from_data(a_array),
+        Series::from_data(b_array),
     ]);
 
     let stream = DataBlockStream::create(input_schema.clone(), None, vec![block0, block1]);
 
     // cast from String to UInt8 and String to UInt16
-    let to_uint8 = Function2Convertor::create(CastFunction::create("cast", "UInt8").unwrap());
-    let to_uint16 = Function2Convertor::create(CastFunction::create("cast", "UInt16").unwrap());
+    let to_uint8 = CastFunction::create("cast", "UInt8").unwrap();
+    let to_uint16 = CastFunction::create("cast", "UInt16").unwrap();
 
     let functions = vec![to_uint8, to_uint16];
     let mut cast_stream =

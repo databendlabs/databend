@@ -14,12 +14,12 @@
 //
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::Series;
+use common_datavalues2::prelude::SeriesFrom;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRefExt;
+use common_datavalues2::DataType;
+use common_datavalues2::DataValue;
 use databend_query::storages::fuse::statistics::accumulator;
 use databend_query::storages::fuse::statistics::reducers;
 use databend_query::storages::fuse::statistics::StatisticsAccumulator;
@@ -28,7 +28,7 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[test]
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
     let block = DataBlock::create_by_array(schema, vec![Series::new(vec![1, 2, 3])]);
     let r = StatisticsAccumulator::acc_columns(&block)?;
     assert_eq!(1, r.len());
@@ -45,7 +45,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let val_start_with = 1;
 
     let blocks = TestFixture::gen_sample_blocks_ex(num_of_blocks, rows_per_block, val_start_with);
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
     let col_stats = blocks
         .iter()
         .map(|b| StatisticsAccumulator::acc_columns(&b.clone().unwrap()))

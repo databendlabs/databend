@@ -70,7 +70,7 @@ pub fn convert2_old_column(column: &ColumnRef) -> OldDataColumn {
     OldDataColumn::from(arrow_c)
 }
 
-pub fn convert2_old_column_with_fiekd(column: &ColumnWithField) -> OldDataColumnWithField {
+pub fn convert2_old_column_with_field(column: &ColumnWithField) -> OldDataColumnWithField {
     let new_f = column.field().clone();
     let old_field = new_f.into();
 

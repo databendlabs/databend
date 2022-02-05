@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use common_base::tokio;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchema;
+use common_datavalues2::DataType;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;

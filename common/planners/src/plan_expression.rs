@@ -16,15 +16,11 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
-use common_datavalues::DataTypeAndNullable;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::aggregates::AggregateFunctionV1Ref;
+use common_functions::aggregates::AggregateFunctionRef;
 use once_cell::sync::Lazy;
 
 use crate::plan_expression_common::ExpressionDataTypeVisitor;
@@ -73,7 +69,7 @@ pub enum Expression {
         column_name: Option<String>,
 
         // Logic data_type for this literal
-        data_type: DataType,
+        data_type: DataTypePtr,
     },
 
     /// A unary expression such as "NOT foo"
@@ -121,7 +117,7 @@ pub enum Expression {
         /// The expression being cast
         expr: Box<Expression>,
         /// The `DataType` the expression will yield
-        data_type: DataType,
+        data_type: DataTypePtr,
         /// default false, if it's try_cast, is_null is true
         is_nullable: bool,
     },
@@ -148,7 +144,7 @@ impl Expression {
         }
     }
 
-    pub fn create_literal_with_type(value: DataValue, data_type: DataType) -> Expression {
+    pub fn create_literal_with_type(value: DataValue, data_type: DataTypePtr) -> Expression {
         Expression::Literal {
             value,
             column_name: None,
@@ -165,7 +161,7 @@ impl Expression {
             } => match column_name {
                 Some(name) => name.clone(),
                 None => {
-                    if let DataValue::String(Some(v)) = value {
+                    if let DataValue::String(v) = value {
                         match std::str::from_utf8(v) {
                             Ok(v) => format!("'{}'", v),
                             Err(_e) => format!("{:?}", value),
@@ -234,14 +230,12 @@ impl Expression {
 
     pub fn to_data_field(&self, input_schema: &DataSchemaRef) -> Result<DataField> {
         let name = self.column_name();
-        self.to_data_type(input_schema).and_then(|return_type| {
-            self.nullable(input_schema)
-                .map(|nullable| DataField::new(&name, return_type, nullable))
-        })
+        self.to_data_type(input_schema)
+            .and_then(|return_type| Ok(DataField::new(&name, return_type)))
     }
 
     pub fn nullable(&self, input_schema: &DataSchemaRef) -> Result<bool> {
-        Ok(self.to_data_type_and_nullable(input_schema)?.is_nullable())
+        Ok(self.to_data_type(input_schema)?.is_nullable())
     }
 
     #[inline(always)]
@@ -254,67 +248,58 @@ impl Expression {
         Ok(nullable)
     }
 
-    pub fn to_subquery_type(subquery_plan: &PlanNode) -> DataTypeAndNullable {
+    pub fn to_subquery_type(subquery_plan: &PlanNode) -> DataTypePtr {
         let subquery_schema = subquery_plan.schema();
         // TODO: This may be wrong.
-        let mut is_nullable = false;
         let mut columns_field = Vec::with_capacity(subquery_schema.fields().len());
 
         for column_field in subquery_schema.fields() {
-            if column_field.is_nullable() {
-                is_nullable = true;
-            }
-
-            columns_field.push(DataField::new(
-                column_field.name(),
-                DataType::List(Box::new(DataField::new(
-                    "item",
-                    column_field.data_type().clone(),
-                    true,
-                ))),
-                false,
-            ));
+            let ty = ArrayType::create(column_field.data_type().clone());
+            columns_field.push(DataField::new(column_field.name(), Arc::new(ty)));
         }
 
         match columns_field.len() {
-            1 => DataTypeAndNullable::create(columns_field[0].data_type(), is_nullable),
-            _ => DataTypeAndNullable::create(&DataType::Struct(columns_field), is_nullable),
+            1 => columns_field[0].data_type().clone(),
+            _ => {
+                let names = columns_field.iter().map(|f| f.name().to_owned()).collect();
+                let types = columns_field
+                    .iter()
+                    .map(|f| f.data_type().to_owned())
+                    .collect();
+
+                Arc::new(StructType::create(names, types))
+            }
         }
     }
 
-    pub fn to_scalar_subquery_type(subquery_plan: &PlanNode) -> DataTypeAndNullable {
+    pub fn to_scalar_subquery_type(subquery_plan: &PlanNode) -> DataTypePtr {
         let subquery_schema = subquery_plan.schema();
-        // TODO: This may be wrong.
-        let is_nullable = subquery_schema
-            .fields()
-            .iter()
-            .any(|field| field.is_nullable());
 
         match subquery_schema.fields().len() {
-            1 => DataTypeAndNullable::create(subquery_schema.field(0).data_type(), is_nullable),
-            _ => DataTypeAndNullable::create(
-                &DataType::Struct(subquery_schema.fields().clone()),
-                is_nullable,
-            ),
+            1 => subquery_schema.field(0).data_type().clone(),
+            _ => {
+                let names = subquery_schema
+                    .fields()
+                    .iter()
+                    .map(|f| f.name().to_owned())
+                    .collect();
+                let types = subquery_schema
+                    .fields()
+                    .iter()
+                    .map(|f| f.data_type().to_owned())
+                    .collect();
+
+                Arc::new(StructType::create(names, types))
+            }
         }
     }
 
-    pub fn to_data_type(&self, input_schema: &DataSchemaRef) -> Result<DataType> {
-        Ok(self
-            .to_data_type_and_nullable(input_schema)?
-            .data_type()
-            .clone())
-    }
-
-    pub fn to_data_type_and_nullable(
-        &self,
-        input_schema: &DataSchemaRef,
-    ) -> Result<DataTypeAndNullable> {
+    pub fn to_data_type(&self, input_schema: &DataSchemaRef) -> Result<DataTypePtr> {
         let visitor = ExpressionDataTypeVisitor::create(input_schema.clone());
         visitor.visit(self)?.finalize()
     }
 
-    pub fn to_aggregate_function(&self, schema: &DataSchemaRef) -> Result<AggregateFunctionV1Ref> {
+    pub fn to_aggregate_function(&self, schema: &DataSchemaRef) -> Result<AggregateFunctionRef> {
         match self {
             Expression::AggregateFunction {
                 op,
@@ -331,7 +316,7 @@ impl Expression {
                 for arg in args.iter() {
                     fields.push(arg.to_data_field(schema)?);
                 }
-                AggregateFunctionFactory::instance().get(&func_name, params.clone(), fields)
+                AggregateFunctionFactory::instance().get_new(&func_name, params.clone(), fields)
             }
             _ => Err(ErrorCode::LogicalError(
                 "Expression must be aggregated function",

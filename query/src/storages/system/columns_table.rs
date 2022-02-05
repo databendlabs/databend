@@ -16,11 +16,11 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::Series;
+use common_datavalues2::prelude::SeriesFrom;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRefExt;
+use common_datavalues2::DataType;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -40,10 +40,10 @@ pub struct ColumnsTable {
 impl ColumnsTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("database", DataType::String, false),
-            DataField::new("table", DataType::String, false),
-            DataField::new("data_type", DataType::String, false),
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("database", Vu8::to_data_type()),
+            DataField::new("table", Vu8::to_data_type()),
+            DataField::new("data_type", Vu8::to_data_type()),
             DataField::new("is_nullable", DataType::Boolean, false),
         ]);
 

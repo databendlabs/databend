@@ -14,10 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_meta_types::TableInfo;
 use once_cell::sync::Lazy;
 
@@ -25,8 +22,8 @@ use crate::PlanNode;
 
 pub static SINK_SCHEMA: Lazy<DataSchemaRef> = Lazy::new(|| {
     DataSchemaRefExt::create(vec![
-        DataField::new("seg_loc", DataType::String, false),
-        DataField::new("seg_info", DataType::String, false),
+        DataField::new("seg_loc", Vu8::to_data_type()),
+        DataField::new("seg_info", Vu8::to_data_type()),
     ])
 });
 

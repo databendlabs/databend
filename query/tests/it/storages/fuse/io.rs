@@ -19,11 +19,11 @@ use common_base::tokio;
 use common_dal::AsyncSeekableReader;
 use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::Series;
+use common_datavalues2::prelude::SeriesFrom;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRefExt;
+use common_datavalues2::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use databend_query::storages::fuse::io::BlockRegulator;
@@ -40,7 +40,7 @@ async fn test_fuse_table_block_appender() {
     let tmp_dir = TempDir::new().unwrap();
     let local_fs = common_dal::Local::with_path(tmp_dir.path().to_owned());
     let local_fs = Arc::new(local_fs);
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
 
     // single segment
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
@@ -107,7 +107,7 @@ async fn test_fuse_table_block_appender() {
 
 #[test]
 fn test_block_regulator() -> common_exception::Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
     let gen_rows = |n| std::iter::repeat(1i32).take(n).collect::<Vec<_>>();
     let gen_block = |col| DataBlock::create_by_array(schema.clone(), vec![Series::new(col)]);
     let test_case =
@@ -243,7 +243,7 @@ fn test_block_regulator() -> common_exception::Result<()> {
 
 #[tokio::test]
 async fn test_block_stream_writer() -> common_exception::Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
     let gen_rows = |n| std::iter::repeat(1i32).take(n).collect::<Vec<_>>();
     let gen_block = |col| DataBlock::create_by_array(schema.clone(), vec![Series::new(col)]);
 

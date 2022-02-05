@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -35,9 +35,9 @@ pub struct ClustersTable {
 impl ClustersTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("host", DataType::String, false),
-            DataField::new("port", DataType::UInt16, false),
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("host", Vu8::to_data_type()),
+            DataField::new("port", u16: to_data_type()),
         ]);
 
         let table_info = TableInfo {

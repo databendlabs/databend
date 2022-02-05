@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
@@ -68,7 +68,7 @@ impl RepoInfoTable {
 
     fn schema() -> Arc<DataSchema> {
         let fields = vec![
-            DataField::new(REPOSITORY, DataType::String, false),
+            DataField::new(REPOSITORY, Vu8::to_data_type()),
             DataField::new(LANGUAGE, DataType::String, true),
             DataField::new(LICENSE, DataType::String, true),
             DataField::new(STAR_COUNT, DataType::UInt32, true),

@@ -34,7 +34,7 @@ use common_datavalues2::TypeID;
 use common_exception::Result;
 
 use super::Function2;
-use crate::scalars::Monotonicity;
+use super::Monotonicity2;
 
 #[derive(Clone)]
 pub struct Function2Adapter {
@@ -169,7 +169,7 @@ impl Function2 for Function2Adapter {
         self.inner.eval(columns, input_rows)
     }
 
-    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+    fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
         self.inner.get_monotonicity(args)
     }
 

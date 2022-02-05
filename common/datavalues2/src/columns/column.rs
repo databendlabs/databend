@@ -118,6 +118,11 @@ pub trait Column: Send + Sync {
         DFTryFrom::try_from(&value)
     }
 
+    fn get_f64(&self, index: usize) -> Result<f64> {
+        let value = self.get(index);
+        DFTryFrom::try_from(&value)
+    }
+
     /// # Safety
     /// Assumes that the `index` is smaller than size.
     fn get_bool(&self, index: usize) -> Result<bool> {

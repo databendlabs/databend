@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -34,8 +34,7 @@ pub struct ContributorsTable {
 
 impl ContributorsTable {
     pub fn create(table_id: u64) -> Self {
-        let schema =
-            DataSchemaRefExt::create(vec![DataField::new("name", DataType::String, false)]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new("name", Vu8::to_data_type())]);
 
         let table_info = TableInfo {
             desc: "'system'.'contributors'".to_string(),

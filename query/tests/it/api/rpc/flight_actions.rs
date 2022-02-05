@@ -16,7 +16,7 @@ use std::convert::TryInto;
 
 use common_arrow::arrow_format::flight::data::Action;
 use common_base::tokio;
-use common_datavalues::DataValue;
+use common_datavalues2::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
 use databend_query::api::FlightAction;

@@ -18,10 +18,10 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchema;
+use common_datavalues2::DataSchemaRef;
+use common_datavalues2::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;

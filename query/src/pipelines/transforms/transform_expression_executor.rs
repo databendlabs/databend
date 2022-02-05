@@ -16,11 +16,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::columns::DataColumn;
-use common_datavalues::prelude::DataColumnWithField;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
+use common_datavalues2::columns::DataColumn;
+use common_datavalues2::prelude::ColumnWithField;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRef;
+use common_datavalues2::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::ActionFunction;
@@ -72,9 +72,9 @@ impl ExpressionExecutor {
             self.chain.actions
         );
 
-        let mut column_map: HashMap<&str, DataColumnWithField> = HashMap::new();
+        let mut column_map: HashMap<&str, ColumnWithField> = HashMap::new();
 
-        let mut alias_map: HashMap<&str, &DataColumnWithField> = HashMap::new();
+        let mut alias_map: HashMap<&str, &ColumnWithField> = HashMap::new();
 
         // supported a + 1 as b, a + 1 as c
         // supported a + 1 as a, a as b
@@ -83,7 +83,7 @@ impl ExpressionExecutor {
 
         for f in block.schema().fields().iter() {
             let column =
-                DataColumnWithField::new(block.try_column_by_name(f.name())?.clone(), f.clone());
+                ColumnWithField::new(block.try_column_by_name(f.name())?.clone(), f.clone());
             column_map.insert(f.name(), column);
         }
 
@@ -104,7 +104,7 @@ impl ExpressionExecutor {
             match action {
                 ExpressionAction::Input(input) => {
                     let column = block.try_column_by_name(&input.name)?.clone();
-                    let column = DataColumnWithField::new(
+                    let column = ColumnWithField::new(
                         column,
                         block.schema().field_with_name(&input.name)?.clone(),
                     );
@@ -117,7 +117,7 @@ impl ExpressionExecutor {
                 ExpressionAction::Constant(constant) => {
                     let column = DataColumn::Constant(constant.value.clone(), rows);
 
-                    let column = DataColumnWithField::new(
+                    let column = ColumnWithField::new(
                         column,
                         DataField::new(
                             constant.name.as_str(),
@@ -174,10 +174,10 @@ impl ExpressionExecutor {
     #[inline]
     fn execute_function(
         &self,
-        column_map: &mut HashMap<&str, DataColumnWithField>,
+        column_map: &mut HashMap<&str, ColumnWithField>,
         f: &ActionFunction,
         rows: usize,
-    ) -> Result<DataColumnWithField> {
+    ) -> Result<ColumnWithField> {
         // check if it's cached
         let mut arg_columns = Vec::with_capacity(f.arg_names.len());
 
@@ -217,7 +217,7 @@ impl ExpressionExecutor {
             f.func.eval(&arg_columns, rows)?
         };
 
-        Ok(DataColumnWithField::new(
+        Ok(ColumnWithField::new(
             column,
             DataField::new(&f.name, f.return_type.clone(), f.is_nullable),
         ))

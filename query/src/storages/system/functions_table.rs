@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::FunctionFactory;
@@ -38,11 +38,11 @@ pub struct FunctionsTable {
 impl FunctionsTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
+            DataField::new("name", Vu8::to_data_type()),
             DataField::new("is_builtin", DataType::Boolean, false),
             DataField::new("is_aggregate", DataType::Boolean, false),
-            DataField::new("definition", DataType::String, false),
-            DataField::new("description", DataType::String, false),
+            DataField::new("definition", Vu8::to_data_type()),
+            DataField::new("description", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {

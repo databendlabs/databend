@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
@@ -74,7 +74,7 @@ impl ConstantFoldingImpl {
     }
 
     fn execute_expression(expression: Expression, origin_name: String) -> Result<Expression> {
-        let input_fields = vec![DataField::new("_dummy", DataType::UInt8, false)];
+        let input_fields = vec![DataField::new("_dummy", u8::to_data_type())];
         let input_schema = Arc::new(DataSchema::new(input_fields));
 
         let data_type = expression.to_data_type(&input_schema)?;

@@ -23,7 +23,7 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function2;
-use crate::scalars::Monotonicity;
+use crate::scalars::Monotonicity2;
 
 fn div_scalar<L, R>(l: L::RefType<'_>, r: R::RefType<'_>) -> f64
 where
@@ -75,7 +75,7 @@ impl ArithmeticDivFunction {
         )
     }
 
-    pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+    pub fn get_monotonicity(args: &[Monotonicity2]) -> Result<Monotonicity2> {
         arithmetic_mul_div_monotonicity(args, DataValueBinaryOperator::Div)
     }
 }

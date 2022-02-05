@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -36,9 +36,9 @@ pub struct CreditsTable {
 impl CreditsTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("version", DataType::String, false),
-            DataField::new("license", DataType::String, false),
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("version", Vu8::to_data_type()),
+            DataField::new("license", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {

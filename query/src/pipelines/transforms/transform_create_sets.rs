@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_base::tokio::task::JoinHandle;
 use common_base::TrySpawn;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
+use common_datavalues2::DataSchemaRef;
+use common_datavalues2::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;

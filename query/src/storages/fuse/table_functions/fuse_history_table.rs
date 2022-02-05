@@ -17,11 +17,11 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::Series;
+use common_datavalues2::prelude::SeriesFrom;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRefExt;
+use common_datavalues2::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableIdent;
@@ -60,13 +60,13 @@ impl FuseHistoryTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("snapshot_id", DataType::String, false),
+            DataField::new("snapshot_id", Vu8::to_data_type()),
             DataField::new("prev_snapshot_id", DataType::String, true),
-            DataField::new("segment_count", DataType::UInt64, false),
-            DataField::new("block_count", DataType::UInt64, false),
-            DataField::new("row_count", DataType::UInt64, false),
-            DataField::new("bytes_uncompressed", DataType::UInt64, false),
-            DataField::new("bytes_compressed", DataType::UInt64, false),
+            DataField::new("segment_count", u64::to_data_type()),
+            DataField::new("block_count", u64::to_data_type()),
+            DataField::new("row_count", u64::to_data_type()),
+            DataField::new("bytes_uncompressed", u64::to_data_type()),
+            DataField::new("bytes_compressed", u64::to_data_type()),
         ]);
 
         let (arg_database_name, arg_table_name) = parse_func_history_args(&table_args)?;

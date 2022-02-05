@@ -17,7 +17,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::TableIdent;
@@ -42,51 +42,51 @@ impl QueryLogTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
             // Type.
-            DataField::new("log_type", DataType::Int8, false),
-            DataField::new("handler_type", DataType::String, false),
+            DataField::new("log_type", i8::to_data_type()),
+            DataField::new("handler_type", Vu8::to_data_type()),
             // User.
-            DataField::new("tenant_id", DataType::String, false),
-            DataField::new("cluster_id", DataType::String, false),
-            DataField::new("sql_user", DataType::String, false),
-            DataField::new("sql_user_quota", DataType::String, false),
-            DataField::new("sql_user_privileges", DataType::String, false),
+            DataField::new("tenant_id", Vu8::to_data_type()),
+            DataField::new("cluster_id", Vu8::to_data_type()),
+            DataField::new("sql_user", Vu8::to_data_type()),
+            DataField::new("sql_user_quota", Vu8::to_data_type()),
+            DataField::new("sql_user_privileges", Vu8::to_data_type()),
             // Query.
-            DataField::new("query_id", DataType::String, false),
-            DataField::new("query_kind", DataType::String, false),
-            DataField::new("query_text", DataType::String, false),
+            DataField::new("query_id", Vu8::to_data_type()),
+            DataField::new("query_kind", Vu8::to_data_type()),
+            DataField::new("query_text", Vu8::to_data_type()),
             DataField::new("event_date", DataType::Date32, false),
             DataField::new("event_time", DataType::DateTime64(3, None), false),
             // Schema.
-            DataField::new("current_database", DataType::String, false),
-            DataField::new("databases", DataType::String, false),
-            DataField::new("tables", DataType::String, false),
-            DataField::new("columns", DataType::String, false),
-            DataField::new("projections", DataType::String, false),
+            DataField::new("current_database", Vu8::to_data_type()),
+            DataField::new("databases", Vu8::to_data_type()),
+            DataField::new("tables", Vu8::to_data_type()),
+            DataField::new("columns", Vu8::to_data_type()),
+            DataField::new("projections", Vu8::to_data_type()),
             // Stats.
-            DataField::new("written_rows", DataType::UInt64, false),
-            DataField::new("written_bytes", DataType::UInt64, false),
-            DataField::new("scan_rows", DataType::UInt64, false),
-            DataField::new("scan_bytes", DataType::UInt64, false),
-            DataField::new("scan_byte_cost_ms", DataType::UInt64, false),
-            DataField::new("scan_seeks", DataType::UInt64, false),
-            DataField::new("scan_seek_cost_ms", DataType::UInt64, false),
-            DataField::new("scan_partitions", DataType::UInt64, false),
-            DataField::new("total_partitions", DataType::UInt64, false),
-            DataField::new("result_rows", DataType::UInt64, false),
-            DataField::new("result_bytes", DataType::UInt64, false),
-            DataField::new("cpu_usage", DataType::UInt32, false),
-            DataField::new("memory_usage", DataType::UInt64, false),
+            DataField::new("written_rows", u64::to_data_type()),
+            DataField::new("written_bytes", u64::to_data_type()),
+            DataField::new("scan_rows", u64::to_data_type()),
+            DataField::new("scan_bytes", u64::to_data_type()),
+            DataField::new("scan_byte_cost_ms", u64::to_data_type()),
+            DataField::new("scan_seeks", u64::to_data_type()),
+            DataField::new("scan_seek_cost_ms", u64::to_data_type()),
+            DataField::new("scan_partitions", u64::to_data_type()),
+            DataField::new("total_partitions", u64::to_data_type()),
+            DataField::new("result_rows", u64::to_data_type()),
+            DataField::new("result_bytes", u64::to_data_type()),
+            DataField::new("cpu_usage", u32::to_data_type()),
+            DataField::new("memory_usage", u64::to_data_type()),
             // Client.
-            DataField::new("client_info", DataType::String, false),
-            DataField::new("client_address", DataType::String, false),
+            DataField::new("client_info", Vu8::to_data_type()),
+            DataField::new("client_address", Vu8::to_data_type()),
             // Exception.
-            DataField::new("exception_code", DataType::Int32, false),
-            DataField::new("exception_text", DataType::String, false),
-            DataField::new("stack_trace", DataType::String, false),
+            DataField::new("exception_code", i32::to_data_type()),
+            DataField::new("exception_text", Vu8::to_data_type()),
+            DataField::new("stack_trace", Vu8::to_data_type()),
             // Server.
-            DataField::new("server_version", DataType::String, false),
+            DataField::new("server_version", Vu8::to_data_type()),
             // Extra.
-            DataField::new("extra", DataType::String, false),
+            DataField::new("extra", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {

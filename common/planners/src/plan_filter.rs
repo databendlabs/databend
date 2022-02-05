@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
+use common_datavalues2::DataSchemaRef;
+use common_datavalues2::DataValue;
 
 use crate::Expression;
 use crate::PlanNode;
@@ -41,7 +41,7 @@ impl FilterPlan {
 
     pub fn is_literal_false(&self) -> bool {
         if let Expression::Literal { value, .. } = &self.predicate {
-            return *value == DataValue::Boolean(Some(false));
+            return *value == DataValue::Boolean(false);
         }
         false
     }

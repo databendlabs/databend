@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 use databend_query::storages::index::BloomFilter;

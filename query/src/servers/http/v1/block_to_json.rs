@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::arrays::DFPrimitiveArray;
-use common_datavalues::chrono::TimeZone;
-use common_datavalues::chrono::Utc;
-use common_datavalues::DFPrimitiveType;
-use common_datavalues::DataType;
+use common_datavalues2::arrays::DFPrimitiveArray;
+use common_datavalues2::chrono::TimeZone;
+use common_datavalues2::chrono::Utc;
+use common_datavalues2::DFPrimitiveType;
+use common_datavalues2::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Serialize;

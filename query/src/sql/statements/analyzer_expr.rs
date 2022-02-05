@@ -316,7 +316,7 @@ impl ExpressionAnalyzer {
 
     fn analyze_cast(
         &self,
-        data_type: &common_datavalues::DataType,
+        data_type: &common_datavalues2::DataType,
         args: &mut Vec<Expression>,
     ) -> Result<()> {
         match args.pop() {
@@ -389,7 +389,7 @@ enum ExprRPNItem {
     Wildcard,
     Exists(Box<Query>),
     Subquery(Box<Query>),
-    Cast(common_datavalues::DataType),
+    Cast(common_datavalues2::DataType),
     Between(bool),
     InList(InListInfo),
 }

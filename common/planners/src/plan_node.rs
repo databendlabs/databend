@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::DataSchemaRef;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;

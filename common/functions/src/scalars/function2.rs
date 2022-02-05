@@ -27,9 +27,9 @@ use common_datavalues2::DataTypePtr;
 use common_exception::Result;
 use dyn_clone::DynClone;
 
-use super::function2_adapter::Function2Adapter;
 use super::Function;
-use crate::scalars::Monotonicity;
+use super::Monotonicity;
+use super::Monotonicity2;
 
 pub trait Function2: fmt::Display + Sync + Send + DynClone {
     /// Returns the name of the function, should be unique.
@@ -41,8 +41,8 @@ pub trait Function2: fmt::Display + Sync + Send + DynClone {
     /// For unary function, the input should be an array of the only argument's monotonicity.
     /// The returned monotonicity should have 'left' and 'right' fields None -- the boundary
     /// calculation relies on the function.eval method.
-    fn get_monotonicity(&self, _args: &[Monotonicity]) -> Result<Monotonicity> {
-        Ok(Monotonicity::default())
+    fn get_monotonicity(&self, _args: &[Monotonicity2]) -> Result<Monotonicity2> {
+        Ok(Monotonicity2::default())
     }
 
     /// The method returns the return_type of this function.
@@ -79,7 +79,6 @@ pub struct Function2Convertor {
 
 impl Function2Convertor {
     pub fn create(inner: Box<dyn Function2>) -> Box<dyn Function> {
-        let inner = Function2Adapter::create(inner);
         Box::new(Self { inner })
     }
 }
@@ -126,7 +125,10 @@ impl Function for Function2Convertor {
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
-        self.inner.get_monotonicity(args)
+        let args: Vec<Monotonicity2> = args.iter().map(|m| m.clone().into()).collect();
+        let m = self.inner.get_monotonicity(&args)?;
+
+        Ok(m.into())
     }
 
     fn passthrough_null(&self) -> bool {

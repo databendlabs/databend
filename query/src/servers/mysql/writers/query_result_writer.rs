@@ -14,11 +14,11 @@
 
 use chrono_tz::Tz;
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_datavalues::DateConverter;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRef;
+use common_datavalues2::DataType;
+use common_datavalues2::DataValue;
+use common_datavalues2::DateConverter;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ABORT_QUERY;

@@ -17,7 +17,7 @@ use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-use common_datavalues::DataSchema;
+use common_datavalues2::DataSchema;
 use common_exception::Result;
 
 use crate::storages::fuse::meta::ColumnId;
@@ -74,13 +74,17 @@ pub fn reduce_block_stats<T: Borrow<BlockStatistics>>(
             // TODO
             // for some data types, we shall balance the accuracy and the length
             // e.g. for a string col, which max value is "abcdef....", we record the max as something like "b"
-            let min =
-                common_datavalues::DataValue::try_into_data_array(min_stats.as_slice(), data_type)?
-                    .min()?;
+            let min = common_datavalues2::DataValue::try_into_data_array(
+                min_stats.as_slice(),
+                data_type,
+            )?
+            .min()?;
 
-            let max =
-                common_datavalues::DataValue::try_into_data_array(max_stats.as_slice(), data_type)?
-                    .max()?;
+            let max = common_datavalues2::DataValue::try_into_data_array(
+                max_stats.as_slice(),
+                data_type,
+            )?
+            .max()?;
 
             acc.insert(*id, ColumnStatistics {
                 min,

@@ -17,13 +17,13 @@ use std::sync::Arc;
 
 use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::Series;
+use common_datavalues2::prelude::SeriesFrom;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRef;
+use common_datavalues2::DataSchemaRefExt;
+use common_datavalues2::DataType;
+use common_datavalues2::DataValue;
 use common_exception::Result;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::TableMeta;
@@ -109,7 +109,7 @@ impl TestFixture {
     }
 
     pub fn default_schema() -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)])
+        DataSchemaRefExt::create(vec![DataField::new("id", i32::to_data_type())])
     }
 
     pub fn default_crate_table_plan(&self) -> CreateTablePlan {
@@ -148,7 +148,7 @@ impl TestFixture {
             .into_iter()
             .map(|idx| {
                 let schema =
-                    DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
+                    DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
                 Ok(DataBlock::create_by_array(schema, vec![Series::new(
                     std::iter::repeat_with(|| idx as i32 + start)
                         .take(rows_perf_block)

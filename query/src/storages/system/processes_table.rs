@@ -19,11 +19,11 @@ use std::sync::Arc;
 use common_base::ProgressValues;
 use common_dal::DalMetrics;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::Series;
+use common_datavalues2::prelude::SeriesFrom;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRefExt;
+use common_datavalues2::DataType;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -43,12 +43,12 @@ pub struct ProcessesTable {
 impl ProcessesTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("id", DataType::String, false),
-            DataField::new("type", DataType::String, false),
+            DataField::new("id", Vu8::to_data_type()),
+            DataField::new("type", Vu8::to_data_type()),
             DataField::new("host", DataType::String, true),
             DataField::new("user", DataType::String, true),
-            DataField::new("state", DataType::String, false),
-            DataField::new("database", DataType::String, false),
+            DataField::new("state", Vu8::to_data_type()),
+            DataField::new("database", Vu8::to_data_type()),
             DataField::new("extra_info", DataType::String, true),
             DataField::new("memory_usage", DataType::Int64, true),
             DataField::new("dal_metrics_read_bytes", DataType::UInt64, true),

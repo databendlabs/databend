@@ -14,7 +14,7 @@
 
 use std::mem::size_of;
 
-use common_datavalues::*;
+use common_datavalues2::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::*;
@@ -40,9 +40,9 @@ fn test_statistics_exact_optimizer() -> Result<()> {
             "system",
             "test",
             DataSchemaRefExt::create(vec![
-                DataField::new("a", DataType::String, false),
-                DataField::new("b", DataType::String, false),
-                DataField::new("c", DataType::String, false),
+                DataField::new("a", Vu8::to_data_type()),
+                DataField::new("b", Vu8::to_data_type()),
+                DataField::new("c", Vu8::to_data_type()),
             ]),
         ),
         scan_fields: None,

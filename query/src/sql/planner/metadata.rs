@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataType;
+use common_datavalues2::DataType;
 
 use crate::sql::common::IndexType;
 use crate::storages::Table;

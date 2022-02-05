@@ -16,8 +16,8 @@
 use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::DataColumn;
-use common_datavalues::DataSchema;
+use common_datavalues2::prelude::DataColumn;
+use common_datavalues2::DataSchema;
 
 use crate::storages::fuse::meta::BlockLocation;
 use crate::storages::fuse::meta::BlockMeta;

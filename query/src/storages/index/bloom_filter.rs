@@ -17,13 +17,13 @@ use std::sync::Arc;
 use bincode;
 use bit_vec::BitVec;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::DataColumn;
-use common_datavalues::seahash::SeaHasher;
-use common_datavalues::DFHasher;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::DataColumn;
+use common_datavalues2::seahash::SeaHasher;
+use common_datavalues2::DFHasher;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchema;
+use common_datavalues2::DataType;
+use common_datavalues2::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -113,7 +113,7 @@ impl BloomFilterIndexer {
             if BloomFilter::is_supported_type(field.data_type()) {
                 // create field
                 let bloom_column_name = Self::to_bloom_column_name(field.name());
-                let bloom_field = DataField::new(&bloom_column_name, DataType::String, false);
+                let bloom_field = DataField::new(&bloom_column_name, Vu8::to_data_type());
                 bloom_fields.push(bloom_field);
 
                 // create bloom filter per column

@@ -16,7 +16,7 @@
 use common_base::tokio;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -29,8 +29,8 @@ use futures::TryStreamExt;
 async fn test_memorytable() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::UInt32, false),
-        DataField::new("b", DataType::UInt64, false),
+        DataField::new("a", u32::to_data_type()),
+        DataField::new("b", u64::to_data_type()),
     ]);
     let table = MemoryTable::try_create(crate::tests::create_storage_context()?, TableInfo {
         desc: "'default'.'a'".into(),

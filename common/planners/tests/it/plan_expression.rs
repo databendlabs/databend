@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::*;
@@ -25,7 +25,7 @@ use crate::test::Test;
 fn test_expression_plan_format() -> Result<()> {
     use pretty_assertions::assert_eq;
 
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", Vu8::to_data_type())]);
 
     let empty_plan = EmptyPlan::create_with_schema(schema.clone());
     let expression = PlanNode::Expression(ExpressionPlan {

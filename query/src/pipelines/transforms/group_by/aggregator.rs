@@ -14,12 +14,12 @@
 
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
-use common_datavalues::arrays::StringArrayBuilder;
-use common_datavalues::columns::DataColumn;
-use common_datavalues::prelude::IntoSeries;
-use common_datavalues::prelude::Series;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
+use common_datavalues2::arrays::StringArrayBuilder;
+use common_datavalues2::columns::DataColumn;
+use common_datavalues2::prelude::IntoSeries;
+use common_datavalues2::prelude::Series;
+use common_datavalues2::DataSchemaRef;
+use common_datavalues2::DataSchemaRefExt;
 use common_exception::Result;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;

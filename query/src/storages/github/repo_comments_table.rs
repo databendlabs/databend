@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
@@ -64,7 +64,7 @@ impl RepoCommentsTable {
 
     fn schema() -> Arc<DataSchema> {
         let fields = vec![
-            DataField::new(COMMENT_ID, DataType::UInt64, false),
+            DataField::new(COMMENT_ID, u64::to_data_type()),
             DataField::new(USER, DataType::String, true),
             DataField::new(BODY, DataType::String, true),
         ];

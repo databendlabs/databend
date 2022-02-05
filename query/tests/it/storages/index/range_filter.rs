@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 use databend_query::storages::index::range_filter::build_verifiable_expr;
@@ -28,9 +28,9 @@ use databend_query::storages::index::RangeFilter;
 #[test]
 fn test_range_filter() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int64, false),
-        DataField::new("b", DataType::Int32, false),
-        DataField::new("c", DataType::String, false),
+        DataField::new("a", i64::to_data_type()),
+        DataField::new("b", i32::to_data_type()),
+        DataField::new("c", Vu8::to_data_type()),
     ]);
 
     let mut stats: BlockStatistics = HashMap::new();
@@ -183,9 +183,9 @@ fn test_range_filter() -> Result<()> {
 #[test]
 fn test_build_verifiable_function() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int64, false),
-        DataField::new("b", DataType::Int32, false),
-        DataField::new("c", DataType::String, false),
+        DataField::new("a", i64::to_data_type()),
+        DataField::new("b", i32::to_data_type()),
+        DataField::new("c", Vu8::to_data_type()),
     ]);
 
     struct Test {

@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRef;
+use common_datavalues2::DataSchemaRefExt;
+use common_datavalues2::DataType;
+use common_datavalues2::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -69,7 +69,7 @@ impl HashFlightScatter {
     }
 
     fn indices_expr_schema(output_name: &str) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new(output_name, DataType::UInt64, false)])
+        DataSchemaRefExt::create(vec![DataField::new(output_name, u64::to_data_type())])
     }
 
     fn expr_executor(schema: DataSchemaRef, expr: &Expression) -> Result<ExpressionExecutor> {

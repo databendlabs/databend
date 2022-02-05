@@ -59,6 +59,16 @@ impl DataValue {
         matches!(self, DataValue::Null)
     }
 
+    pub fn custom_display(&self, single_quote: bool) -> String {
+        let s = self.to_string();
+        if single_quote {
+            if let DataValue::String(_) = self {
+                return format!("'{}'", s);
+            }
+        }
+        s
+    }
+
     pub fn value_type(&self) -> ValueType {
         match self {
             DataValue::Null => ValueType::Null,
@@ -229,7 +239,7 @@ try_cast_data_value_to_std!(i32, as_i64);
 try_cast_data_value_to_std!(i64, as_i64);
 
 try_cast_data_value_to_std!(f32, as_f64);
-try_cast_data_value_to_std!(f64, as_i64);
+try_cast_data_value_to_std!(f64, as_f64);
 try_cast_data_value_to_std!(bool, as_bool);
 
 std_to_data_value!(Int64, i8, i64);

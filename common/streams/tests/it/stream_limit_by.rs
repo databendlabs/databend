@@ -14,7 +14,7 @@
 
 use common_base::tokio;
 use common_datablocks::*;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_streams::*;
 use futures::stream::StreamExt;
@@ -22,19 +22,23 @@ use futures::stream::StreamExt;
 #[tokio::test]
 async fn test_limitby_stream() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("id", DataType::UInt8, false),
-        DataField::new("name", DataType::String, false),
+        DataField::new("id", u8::to_data_type()),
+        DataField::new("name", Vu8::to_data_type()),
     ]);
 
     let ids = vec![2u8, 2, 2, 2, 3, 3, 3];
     let names = vec!["2-1", "2-1", "2-1", "2-2", "3-1", "3-1", "3-2"];
-    let block0 =
-        DataBlock::create_by_array(schema.clone(), vec![Series::new(ids), Series::new(names)]);
+    let block0 = DataBlock::create(schema.clone(), vec![
+        Series::from_data(ids),
+        Series::from_data(names),
+    ]);
 
     let ids = vec![2u8, 2, 3u8, 3];
     let names = vec!["2-2", "2-2", "3-1", "3-2"];
-    let block1 =
-        DataBlock::create_by_array(schema.clone(), vec![Series::new(ids), Series::new(names)]);
+    let block1 = DataBlock::create(schema.clone(), vec![
+        Series::from_data(ids),
+        Series::from_data(names),
+    ]);
 
     let input = DataBlockStream::create(schema.clone(), None, vec![block0.clone(), block1.clone()]);
     // test with limit = 2

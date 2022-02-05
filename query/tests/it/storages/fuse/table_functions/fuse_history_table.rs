@@ -14,7 +14,7 @@
 //
 
 use common_base::tokio;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::*;

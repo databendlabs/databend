@@ -25,6 +25,7 @@ use super::function_factory::FunctionFeatures;
 use super::ArithmeticFunction;
 use super::ComparisonFunction;
 use super::ConditionalFunction;
+use super::Function2Adapter;
 use super::HashesFunction;
 use super::LogicFunction;
 use super::OtherFunction;
@@ -128,7 +129,7 @@ impl Function2Factory {
     pub fn get(&self, name: impl AsRef<str>, args: &[&DataTypePtr]) -> Result<Box<dyn Function2>> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
-        match self.case_insensitive_desc.get(&lowercase_name) {
+        let inner = match self.case_insensitive_desc.get(&lowercase_name) {
             // TODO(Winter): we should write similar function names into error message if function name is not found.
             None => match self.case_insensitive_arithmetic_desc.get(&lowercase_name) {
                 None => Err(ErrorCode::UnknownFunction(format!(
@@ -138,7 +139,9 @@ impl Function2Factory {
                 Some(desc) => (desc.arithmetic_creator)(origin_name, args),
             },
             Some(desc) => (desc.function_creator)(origin_name),
-        }
+        }?;
+
+        Ok(Function2Adapter::create(inner))
     }
 
     pub fn get_features(&self, name: impl AsRef<str>) -> Result<FunctionFeatures> {

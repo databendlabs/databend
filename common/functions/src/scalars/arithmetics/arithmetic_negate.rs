@@ -24,7 +24,7 @@ use num_traits::WrappingNeg;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::Function2;
-use crate::scalars::Monotonicity;
+use crate::scalars::Monotonicity2;
 use crate::scalars::ScalarUnaryFunction;
 use crate::scalars::UnaryArithmeticFunction;
 
@@ -113,10 +113,10 @@ impl ArithmeticNegateFunction {
         )
     }
 
-    pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+    pub fn get_monotonicity(args: &[Monotonicity2]) -> Result<Monotonicity2> {
         // unary operation like '-f(x)', just flip the is_positive.
         // also pass the is_constant, in case the input is a constant value.
-        Ok(Monotonicity::create(
+        Ok(Monotonicity2::create(
             args[0].is_monotonic || args[0].is_constant,
             !args[0].is_positive,
             args[0].is_constant,

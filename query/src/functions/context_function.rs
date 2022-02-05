@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataValue;
+use common_datavalues2::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::is_builtin_function;

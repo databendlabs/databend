@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 
@@ -22,12 +22,12 @@ use common_planners::*;
 fn test_projection_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", Vu8::to_data_type())]);
     let empty_plan = EmptyPlan::create_with_schema(schema);
 
     let projection = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a")],
-        schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, false)]),
+        schema: DataSchemaRefExt::create(vec![DataField::new("a", Vu8::to_data_type())]),
         input: Arc::from(PlanBuilder::from(&PlanNode::Empty(empty_plan)).build()?),
     });
     let _ = projection.schema();

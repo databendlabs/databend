@@ -27,7 +27,7 @@ use comfy_table::Cell;
 use comfy_table::Color;
 use comfy_table::Table;
 use common_base::ProgressValues;
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::DataSchemaRef;
 use http::HeaderMap;
 use http::StatusCode;
 use http::Uri;

@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::col;
 use common_planners::lit;
@@ -28,7 +28,7 @@ use pretty_assertions::assert_eq;
 fn test_sparse_index() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("name", DataType::String, true),
-        DataField::new("age", DataType::Int32, false),
+        DataField::new("age", i32::to_data_type()),
     ]);
 
     let block1 = DataBlock::create_by_array(schema.clone(), vec![

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataValue;
+use common_datavalues2::DataValue;
 
 use crate::Expression;
 
@@ -22,38 +22,40 @@ pub trait Literal {
 
 impl Literal for &[u8] {
     fn to_literal(&self) -> Expression {
-        Expression::create_literal(DataValue::String(Some(self.to_vec())))
+        Expression::create_literal(DataValue::String(self.to_vec()))
     }
 }
 
 impl Literal for Vec<u8> {
     fn to_literal(&self) -> Expression {
-        Expression::create_literal(DataValue::String(Some(self.clone())))
+        Expression::create_literal(DataValue::String(self.clone()))
     }
 }
 
 macro_rules! make_literal {
-    ($TYPE:ty, $SCALAR:ident) => {
+    ($TYPE:ty, $SUPER: ident, $SCALAR:ident) => {
         #[allow(missing_docs)]
         impl Literal for $TYPE {
             fn to_literal(&self) -> Expression {
-                Expression::create_literal(DataValue::$SCALAR(Some(self.clone())))
+                Expression::create_literal(DataValue::$SCALAR(*self as $SUPER))
             }
         }
     };
 }
 
-make_literal!(bool, Boolean);
-make_literal!(f32, Float32);
-make_literal!(f64, Float64);
-make_literal!(i8, Int8);
-make_literal!(i16, Int16);
-make_literal!(i32, Int32);
-make_literal!(i64, Int64);
-make_literal!(u8, UInt8);
-make_literal!(u16, UInt16);
-make_literal!(u32, UInt32);
-make_literal!(u64, UInt64);
+make_literal!(bool, bool, Boolean);
+make_literal!(f32, f64, Float64);
+make_literal!(f64, f64, Float64);
+
+make_literal!(i8, i64, Int64);
+make_literal!(i16, i64, Int64);
+make_literal!(i32, i64, Int64);
+make_literal!(i64, i64, Int64);
+
+make_literal!(u8, u64, UInt64);
+make_literal!(u16, u64, UInt64);
+make_literal!(u32, u64, UInt64);
+make_literal!(u64, u64, UInt64);
 
 pub fn lit<T: Literal>(n: T) -> Expression {
     n.to_literal()

@@ -15,11 +15,10 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::Function2Factory;
 
 use crate::Expression;
 use crate::ExpressionVisitor;
@@ -376,7 +375,7 @@ pub fn unwrap_alias_exprs(expr: &Expression) -> Result<Expression> {
 }
 
 pub struct ExpressionDataTypeVisitor {
-    stack: Vec<DataTypeAndNullable>,
+    stack: Vec<DataTypePtr>,
     input_schema: DataSchemaRef,
 }
 
@@ -388,7 +387,7 @@ impl ExpressionDataTypeVisitor {
         }
     }
 
-    pub fn finalize(mut self) -> Result<DataTypeAndNullable> {
+    pub fn finalize(mut self) -> Result<DataTypePtr> {
         match self.stack.len() {
             1 => Ok(self.stack.remove(0)),
             _ => Err(ErrorCode::LogicalError(
@@ -409,7 +408,9 @@ impl ExpressionDataTypeVisitor {
             }?);
         }
 
-        let function = FunctionFactory::instance().get(op, &arguments)?;
+        let arguments: Vec<&DataTypePtr> = arguments.iter().collect();
+
+        let function = Function2Factory::instance().get(op, &arguments)?;
         let return_type = function.return_type(&arguments)?;
         self.stack.push(return_type);
         Ok(self)
@@ -425,10 +426,7 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
         match expr {
             Expression::Column(s) => {
                 let field = self.input_schema.field_with_name(s)?;
-                self.stack.push(DataTypeAndNullable::create(
-                    field.data_type(),
-                    field.is_nullable(),
-                ));
+                self.stack.push(field.data_type().clone());
                 Ok(self)
             }
             Expression::Wildcard => Result::Err(ErrorCode::IllegalDataType(
@@ -437,11 +435,8 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
             Expression::QualifiedColumn(_) => Err(ErrorCode::LogicalError(
                 "QualifiedColumn should be resolve in analyze.",
             )),
-            Expression::Literal {
-                data_type, value, ..
-            } => {
-                let data_type = DataTypeAndNullable::create(data_type, value.is_null());
-                self.stack.push(data_type);
+            Expression::Literal { data_type, .. } => {
+                self.stack.push(data_type.clone());
                 Ok(self)
             }
             Expression::Subquery { query_plan, .. } => {
@@ -471,9 +466,7 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
 
                 let aggregate_function = expr.to_aggregate_function(&self.input_schema)?;
                 let return_type = aggregate_function.return_type()?;
-                let nullable = aggregate_function.nullable(&self.input_schema)?;
-                let data_type = DataTypeAndNullable::create(&return_type, nullable);
-                self.stack.push(data_type);
+                self.stack.push(return_type);
                 Ok(self)
             }
             Expression::Cast { data_type, .. } => {
@@ -481,10 +474,10 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
                     None => Err(ErrorCode::LogicalError(
                         "Cast expr expected 1 arguments, actual 0.",
                     )),
-                    Some(typ) => Ok(DataTypeAndNullable::create(data_type, typ.is_nullable())),
+                    Some(_) => Ok(data_type),
                 }?;
 
-                self.stack.push(inner_type);
+                self.stack.push(inner_type.clone());
                 Ok(self)
             }
             Expression::Alias(_, _) | Expression::Sort { .. } => Ok(self),

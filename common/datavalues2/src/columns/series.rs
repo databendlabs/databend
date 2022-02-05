@@ -40,6 +40,20 @@ impl Series {
         &*(object as *const dyn Column as *const T)
     }
 
+    pub fn check_get_scalar<T: Scalar>(column: &ColumnRef) -> Result<&<T as Scalar>::ColumnType> {
+        let arr = column
+            .as_any()
+            .downcast_ref::<<T as Scalar>::ColumnType>()
+            .ok_or_else(|| {
+                ErrorCode::UnknownColumn(format!(
+                    "downcast column error, column type: {:?}, expected column: {:?}",
+                    column.data_type(),
+                    std::any::type_name::<T>(),
+                ))
+            });
+        arr
+    }
+
     pub fn check_get<T: 'static + Column>(column: &ColumnRef) -> Result<&T> {
         let arr = column.as_any().downcast_ref::<T>().ok_or_else(|| {
             ErrorCode::UnknownColumn(format!(

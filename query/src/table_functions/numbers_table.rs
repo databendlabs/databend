@@ -17,13 +17,10 @@ use std::any::Any;
 use std::mem::size_of;
 use std::sync::Arc;
 
-use common_datavalues::chrono::NaiveDateTime;
-use common_datavalues::chrono::TimeZone;
-use common_datavalues::chrono::Utc;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues2::chrono::NaiveDateTime;
+use common_datavalues2::chrono::TimeZone;
+use common_datavalues2::chrono::Utc;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableIdent;
@@ -87,8 +84,7 @@ impl NumbersTable {
             meta: TableMeta {
                 schema: DataSchemaRefExt::create(vec![DataField::new(
                     "number",
-                    DataType::UInt64,
-                    false,
+                    u64::to_data_type(),
                 )]),
                 engine: engine.to_string(),
                 // Assuming that created_on is unnecessary for function table,

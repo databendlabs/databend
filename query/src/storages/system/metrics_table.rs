@@ -17,11 +17,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::Series;
+use common_datavalues2::prelude::SeriesFrom;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRefExt;
+use common_datavalues2::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableIdent;
@@ -43,10 +43,10 @@ pub struct MetricsTable {
 impl MetricsTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("metric", DataType::String, false),
-            DataField::new("kind", DataType::String, false),
-            DataField::new("labels", DataType::String, false),
-            DataField::new("value", DataType::String, false),
+            DataField::new("metric", Vu8::to_data_type()),
+            DataField::new("kind", Vu8::to_data_type()),
+            DataField::new("labels", Vu8::to_data_type()),
+            DataField::new("value", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {

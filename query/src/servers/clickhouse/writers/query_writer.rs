@@ -30,7 +30,7 @@ use common_clickhouse_srv::types::Block;
 use common_clickhouse_srv::types::DateTimeType;
 use common_clickhouse_srv::types::SqlType;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;

@@ -18,7 +18,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
@@ -223,11 +223,11 @@ impl StatColumn {
                 single_point = false;
             }
 
-            let variable_left = Some(DataColumnWithField::new(
+            let variable_left = Some(ColumnWithField::new(
                 DataColumn::Constant(stat.min.clone(), 1),
                 v.clone(),
             ));
-            let variable_right = Some(DataColumnWithField::new(
+            let variable_right = Some(ColumnWithField::new(
                 DataColumn::Constant(stat.max.clone(), 1),
                 v.clone(),
             ));

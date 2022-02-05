@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRef;
+use common_datavalues2::DataSchemaRefExt;
+use common_datavalues2::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
@@ -49,8 +49,8 @@ impl AnalyzableStatement for DfShowCreateTable {
 impl DfShowCreateTable {
     fn schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("Table", DataType::String, false),
-            DataField::new("Create Table", DataType::String, false),
+            DataField::new("Table", Vu8::to_data_type()),
+            DataField::new("Create Table", Vu8::to_data_type()),
         ])
     }
 
