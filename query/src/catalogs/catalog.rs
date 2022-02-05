@@ -122,8 +122,8 @@ pub trait Catalog: DynClone + Send + Sync {
         unimplemented!()
     }
 
-    // Get storage engine descriptors
-    fn get_storage_descriptors(&self) -> Vec<StorageDescriptor> {
+    // Get table engines
+    fn get_table_engines(&self) -> Vec<StorageDescriptor> {
         unimplemented!()
     }
 }

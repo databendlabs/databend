@@ -14,4 +14,3 @@
 
 mod null_table;
 pub use null_table::NullTable;
-pub use null_table::NullTableCreator;

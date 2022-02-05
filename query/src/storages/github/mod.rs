@@ -24,7 +24,6 @@ mod repo_prs_table;
 pub use github_client::create_github_client;
 pub use github_table::GithubDataGetter;
 pub use github_table::GithubTable;
-pub use github_table::GithubTableCreator;
 pub use github_table::GithubTableType;
 pub use repo::RepoTableOptions;
 pub use repo_comments_table::RepoCommentsTable;

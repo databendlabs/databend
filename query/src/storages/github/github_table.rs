@@ -32,7 +32,6 @@ use crate::storages::github::RepoIssuesTable;
 use crate::storages::github::RepoPRsTable;
 use crate::storages::github::RepoTableOptions;
 use crate::storages::StorageContext;
-use crate::storages::StorageCreator;
 use crate::storages::StorageDescriptor;
 use crate::storages::Table;
 
@@ -91,36 +90,12 @@ impl GithubTable {
         };
         Ok(table.get_data_from_github().await?)
     }
-}
 
-pub struct GithubTableCreator {
-    descriptor: StorageDescriptor,
-}
-
-impl GithubTableCreator {
-    pub fn new() -> GithubTableCreator {
-        GithubTableCreator {
-            descriptor: StorageDescriptor {
-                engine_name: "GITHUB".to_string(),
-                comment: "GITHUB Storage Engine".to_string(),
-            },
+    pub fn description() -> StorageDescriptor {
+        StorageDescriptor {
+            engine_name: "GITHUB".to_string(),
+            comment: "GITHUB Storage Engine".to_string(),
         }
-    }
-}
-
-impl Default for GithubTableCreator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl StorageCreator for GithubTableCreator {
-    fn try_create(&self, ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
-        GithubTable::try_create(ctx, table_info)
-    }
-
-    fn desc(&self) -> StorageDescriptor {
-        self.descriptor.clone()
     }
 }
 

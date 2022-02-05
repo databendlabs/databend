@@ -231,8 +231,8 @@ impl Catalog for DatabaseCatalog {
         self.table_function_factory.get(func_name, tbl_args)
     }
 
-    fn get_storage_descriptors(&self) -> Vec<StorageDescriptor> {
-        // only return mutable_catalog storage descriptors
-        self.mutable_catalog.get_storage_descriptors()
+    fn get_table_engines(&self) -> Vec<StorageDescriptor> {
+        // only return mutable_catalog storage table engines
+        self.mutable_catalog.get_table_engines()
     }
 }

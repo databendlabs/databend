@@ -69,10 +69,10 @@ impl Table for EnginesTable {
         _ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let descriptors = _ctx.get_catalog().get_storage_descriptors();
-        let mut engine_name = Vec::with_capacity(descriptors.len());
-        let mut engine_comment = Vec::with_capacity(descriptors.len());
-        for descriptor in &descriptors {
+        let table_engine_descriptors = _ctx.get_catalog().get_table_engines();
+        let mut engine_name = Vec::with_capacity(table_engine_descriptors.len());
+        let mut engine_comment = Vec::with_capacity(table_engine_descriptors.len());
+        for descriptor in &table_engine_descriptors {
             engine_name.push(descriptor.engine_name.clone());
             engine_comment.push(descriptor.comment.clone());
         }

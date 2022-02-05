@@ -241,7 +241,7 @@ impl Catalog for MutableCatalog {
         self.ctx.meta.upsert_table_option(req).await
     }
 
-    fn get_storage_descriptors(&self) -> Vec<StorageDescriptor> {
+    fn get_table_engines(&self) -> Vec<StorageDescriptor> {
         self.ctx.storage_factory.get_storage_descriptors()
     }
 }
