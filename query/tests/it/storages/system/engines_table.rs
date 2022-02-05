@@ -28,17 +28,24 @@ async fn test_engines_table() -> Result<()> {
     let table: Arc<dyn Table> = Arc::new(EnginesTable::create(1));
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
-    let stream = table.read(ctx, &source_plan).await?;
+    let stream = table.read(ctx.clone(), &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
 
     let expected = vec![
-        "+--------+---------+---------------------+",
-        "| Engine | Support | Comment             |",
-        "+--------+---------+---------------------+",
-        "| FUSE   | YES     | Fuse storage engine |",
-        "+--------+---------+---------------------+",
+        "+--------+---------+-----------------------+",
+        "| Engine | Support | Comment               |",
+        "+--------+---------+-----------------------+",
+        "| FUSE   | YES     | FUSE Storage Engine   |",
+        "| GITHUB | YES     | GITHUB Storage Engine |",
+        "| MEMORY | YES     | MEMORY Storage Engine |",
+        "| NULL   | YES     | NULL Storage Engine   |",
+        "+--------+---------+-----------------------+",
     ];
-    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    common_datablocks::assert_blocks_sorted_eq(expected.clone(), result.as_slice());
+
+    let stream_ = table.read(ctx, &source_plan).await?;
+    let result_ = stream_.try_collect::<Vec<_>>().await?;
+    common_datablocks::assert_blocks_sorted_eq(expected, result_.as_slice());
 
     Ok(())
 }

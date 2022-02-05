@@ -25,6 +25,7 @@ use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
+use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 
@@ -69,13 +70,17 @@ impl Table for EnginesTable {
         _ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let mut engine_name = Vec::with_capacity(1);
-        let mut engine_support = Vec::with_capacity(1);
-        let mut engine_comment = Vec::with_capacity(1);
-        // fuse engine
-        engine_name.push("FUSE".as_bytes());
-        engine_support.push("YES".as_bytes());
-        engine_comment.push("Fuse storage engine".as_bytes());
+        let descriptors = _ctx.get_catalog().get_storage_descriptors();
+        let mut engine_name = Vec::with_capacity(descriptors.len());
+        let mut engine_support = Vec::with_capacity(descriptors.len());
+        let mut engine_comment = Vec::with_capacity(descriptors.len());
+        for descriptor in &descriptors {
+            let name = descriptor.engine_name.clone();
+            let comment = descriptor.comment.clone();
+            engine_name.push(name);
+            engine_comment.push(comment);
+            engine_support.push("YES".as_bytes());
+        }
         let block = DataBlock::create_by_array(self.table_info.schema(), vec![
             Series::new(engine_name),
             Series::new(engine_support),

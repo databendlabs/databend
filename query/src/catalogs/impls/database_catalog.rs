@@ -35,6 +35,7 @@ use crate::catalogs::impls::ImmutableCatalog;
 use crate::catalogs::impls::MutableCatalog;
 use crate::configs::Config;
 use crate::databases::Database;
+use crate::storages::StorageDescriptor;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
@@ -228,5 +229,10 @@ impl Catalog for DatabaseCatalog {
         tbl_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         self.table_function_factory.get(func_name, tbl_args)
+    }
+
+    fn get_storage_descriptors(&self) -> Vec<StorageDescriptor> {
+        // only return mutable_catalog storage descriptors
+        self.mutable_catalog.get_storage_descriptors()
     }
 }

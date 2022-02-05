@@ -42,33 +42,58 @@ where
     }
 }
 
+#[derive(Default, Clone)]
+pub struct StorageDescriptor {
+    pub engine_name: String,
+    pub comment: String,
+}
+
 #[derive(Default)]
 pub struct StorageFactory {
     creators: RwLock<HashMap<String, Arc<dyn StorageCreator>>>,
+    descriptors: Vec<StorageDescriptor>,
 }
 
 impl StorageFactory {
     pub fn create(conf: Config) -> Self {
         let mut creators: HashMap<String, Arc<dyn StorageCreator>> = Default::default();
+        let mut descriptors = Vec::new();
 
         // Register memory table engine.
         if conf.query.table_engine_memory_enabled {
             creators.insert("MEMORY".to_string(), Arc::new(MemoryTable::try_create));
+            descriptors.push(StorageDescriptor {
+                engine_name: "MEMORY".to_string(),
+                comment: "MEMORY Storage Engine".to_string(),
+            });
         }
 
         // Register github table engine;
         if conf.query.database_engine_github_enabled {
             creators.insert("GITHUB".to_string(), Arc::new(GithubTable::try_create));
+            descriptors.push(StorageDescriptor {
+                engine_name: "GITHUB".to_string(),
+                comment: "GITHUB Storage Engine".to_string(),
+            });
         }
 
         // Register NULL table engine.
         creators.insert("NULL".to_string(), Arc::new(NullTable::try_create));
+        descriptors.push(StorageDescriptor {
+            engine_name: "NULL".to_string(),
+            comment: "NULL Storage Engine".to_string(),
+        });
 
         // Register FUSE table engine.
         creators.insert("FUSE".to_string(), Arc::new(FuseTable::try_create));
+        descriptors.push(StorageDescriptor {
+            engine_name: "FUSE".to_string(),
+            comment: "FUSE Storage Engine".to_string(),
+        });
 
         StorageFactory {
             creators: RwLock::new(creators),
+            descriptors,
         }
     }
 
@@ -81,5 +106,9 @@ impl StorageFactory {
 
         let table: Arc<dyn Table> = factory.try_create(ctx, table_info.clone())?.into();
         Ok(table)
+    }
+
+    pub fn get_storage_descriptors(&self) -> Vec<StorageDescriptor> {
+        self.descriptors.clone()
     }
 }
