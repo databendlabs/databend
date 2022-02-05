@@ -17,8 +17,9 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
-use common_datavalues::chrono::Utc;
+
 use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Utc;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseNameIdent {
@@ -39,7 +40,7 @@ pub struct DatabaseMeta {
     pub engine: String,
     pub engine_options: HashMap<String, String>,
     pub options: HashMap<String, String>,
-    pub created_on: DateTime<Utc>, 
+    pub created_on: DateTime<Utc>,
 }
 
 impl Default for DatabaseMeta {
