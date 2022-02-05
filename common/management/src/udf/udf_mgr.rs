@@ -38,12 +38,17 @@ pub struct UdfMgr {
 }
 
 impl UdfMgr {
-    #[allow(dead_code)]
-    pub fn new(kv_api: Arc<dyn KVApi>, tenant: &str) -> Self {
-        UdfMgr {
+    pub fn create(kv_api: Arc<dyn KVApi>, tenant: &str) -> Result<Self> {
+        if tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while udf mgr create)",
+            ));
+        }
+
+        Ok(UdfMgr {
             kv_api,
             udf_prefix: format!("{}/{}", UDF_API_KEY_PREFIX, tenant),
-        }
+        })
     }
 }
 

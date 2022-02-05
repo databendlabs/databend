@@ -349,9 +349,10 @@ async fn test_auth_jwt() -> Result<()> {
         quota: Default::default(),
     };
 
+    let tenant = "test";
     session_manager
         .get_user_manager()
-        .add_user("", user_info)
+        .add_user(tenant, user_info)
         .await?;
 
     let ep = Route::new()

@@ -16,19 +16,16 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_exception::Result;
-use databend_query::configs::Config;
 use databend_query::storages::system::ConfigsTable;
 use databend_query::storages::Table;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
-use crate::tests::create_query_context_with_config;
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_configs_table() -> Result<()> {
-    let config = Config::default();
-    let ctx = create_query_context_with_config(config)?;
+    let conf = crate::tests::ConfigBuilder::create().config();
+    let ctx = crate::tests::create_query_context_with_config(conf)?;
     ctx.get_settings().set_max_threads(8)?;
 
     let table: Arc<dyn Table> = Arc::new(ConfigsTable::create(1));
@@ -101,7 +98,7 @@ async fn test_configs_table() -> Result<()> {
         "| table_engine_memory_enabled          | true             | query   |             |",
         "| table_engine_parquet_enabled         | false            | query   |             |",
         "| table_memory_cache_mb_size           | 256              | query   |             |",
-        "| tenant_id                            |                  | query   |             |",
+        "| tenant_id                            | test             | query   |             |",
         "| wait_timeout_mills                   | 5000             | query   |             |",
         "+--------------------------------------+------------------+---------+-------------+",
     ];

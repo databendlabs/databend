@@ -18,21 +18,19 @@ use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
 use common_meta_types::StageParams;
 use common_meta_types::UserStageInfo;
-use databend_query::configs::Config;
 use databend_query::users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_stage() -> Result<()> {
-    let mut config = Config::default();
-    config.query.tenant_id = "tenant1".to_string();
+    let conf = crate::tests::ConfigBuilder::create().config();
 
-    let tenant = "tenant1";
+    let tenant = "test";
     let comments = "this is a comment";
     let stage_name1 = "stage1";
     let stage_name2 = "stage2";
     let if_not_exists = false;
-    let user_mgr = UserApiProvider::create_global(config).await?;
+    let user_mgr = UserApiProvider::create_global(conf).await?;
 
     // add 1.
     {
