@@ -64,10 +64,12 @@ async fn test_immutable_catalogs_database() -> Result<()> {
 async fn test_immutable_catalogs_table() -> Result<()> {
     let tenant = "test";
     let catalog = create_catalog()?;
+
     let db_list_1 = catalog.list_tables(tenant, "system").await?;
     assert!(!db_list_1.is_empty());
 
     let table_list = catalog.list_tables(tenant, "default").await?;
     assert!(table_list.is_empty());
+
     Ok(())
 }

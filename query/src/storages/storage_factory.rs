@@ -28,6 +28,12 @@ use crate::storages::null::NullTable;
 use crate::storages::StorageContext;
 use crate::storages::Table;
 
+#[derive(Default, Clone)]
+pub struct StorageDescriptor {
+    pub engine_name: String,
+    pub comment: String,
+}
+
 pub trait StorageCreator: Send + Sync {
     fn try_create(&self, ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>>;
 }
@@ -42,33 +48,54 @@ where
     }
 }
 
+pub trait StorageDesc: Send + Sync {
+    fn description(&self) -> StorageDescriptor;
+}
+
+impl<T> StorageDesc for T
+where
+    T: Fn() -> StorageDescriptor,
+    T: Send + Sync,
+{
+    fn description(&self) -> StorageDescriptor {
+        self()
+    }
+}
+
 #[derive(Default)]
 pub struct StorageFactory {
     creators: RwLock<HashMap<String, Arc<dyn StorageCreator>>>,
+    descriptors: RwLock<HashMap<String, Arc<dyn StorageDesc>>>,
 }
 
 impl StorageFactory {
     pub fn create(conf: Config) -> Self {
         let mut creators: HashMap<String, Arc<dyn StorageCreator>> = Default::default();
+        let mut descriptors: HashMap<String, Arc<dyn StorageDesc>> = Default::default();
 
         // Register memory table engine.
         if conf.query.table_engine_memory_enabled {
             creators.insert("MEMORY".to_string(), Arc::new(MemoryTable::try_create));
+            descriptors.insert("MEMORY".to_string(), Arc::new(MemoryTable::description));
         }
 
         // Register github table engine;
         if conf.query.database_engine_github_enabled {
             creators.insert("GITHUB".to_string(), Arc::new(GithubTable::try_create));
+            descriptors.insert("GITHUB".to_string(), Arc::new(GithubTable::description));
         }
 
         // Register NULL table engine.
         creators.insert("NULL".to_string(), Arc::new(NullTable::try_create));
+        descriptors.insert("NULL".to_string(), Arc::new(NullTable::description));
 
         // Register FUSE table engine.
         creators.insert("FUSE".to_string(), Arc::new(FuseTable::try_create));
+        descriptors.insert("FUSE".to_string(), Arc::new(FuseTable::description));
 
         StorageFactory {
             creators: RwLock::new(creators),
+            descriptors: RwLock::new(descriptors),
         }
     }
 
@@ -81,5 +108,15 @@ impl StorageFactory {
 
         let table: Arc<dyn Table> = factory.try_create(ctx, table_info.clone())?.into();
         Ok(table)
+    }
+
+    pub fn get_storage_descriptors(&self) -> Vec<StorageDescriptor> {
+        let lock = self.descriptors.read();
+        let mut descriptors = Vec::with_capacity(lock.len());
+        for value in lock.values() {
+            descriptors.push(value.description())
+        }
+        descriptors.sort_by(|d1, d2| d1.engine_name.cmp(&d2.engine_name));
+        descriptors
     }
 }

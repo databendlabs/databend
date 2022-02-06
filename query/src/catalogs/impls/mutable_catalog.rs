@@ -47,6 +47,7 @@ use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
 use crate::storages::StorageContext;
+use crate::storages::StorageDescriptor;
 use crate::storages::StorageFactory;
 use crate::storages::Table;
 
@@ -238,5 +239,9 @@ impl Catalog for MutableCatalog {
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
         self.ctx.meta.upsert_table_option(req).await
+    }
+
+    fn get_table_engines(&self) -> Vec<StorageDescriptor> {
+        self.ctx.storage_factory.get_storage_descriptors()
     }
 }

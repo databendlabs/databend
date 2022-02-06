@@ -1,0 +1,4 @@
+FUSE	FUSE Storage Engine
+GITHUB	GITHUB Storage Engine
+MEMORY	MEMORY Storage Engine
+NULL	NULL Storage Engine
