@@ -22,3 +22,9 @@ metrics = "0.18.0"
 metrics-exporter-prometheus = "0.8.0"
 prometheus-parse = "0.2.2"
 serde = { version = "1.0.136", features = ["derive"] }
+
+[dev-dependencies.tokio]
+version = "1.16.1"
+default-features = false
+features = ["io-util", "net", "sync", "rt-multi-thread", "macros"]
+
