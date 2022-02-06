@@ -35,7 +35,7 @@ fn test_uuid_creator_functions() -> Result<()> {
 
     let tests = vec![ScalarFunction2Test {
         name: "zeroUUID-passed",
-        columns: vec![],
+        columns: vec![Series::from_data(vec![""])],
         expect: Series::from_data(vec!["00000000-0000-0000-0000-000000000000"]),
         error: "",
     }];

@@ -14,8 +14,9 @@
 
 use std::fmt;
 use std::marker::PhantomData;
-use std::sync::Arc;
 
+use common_datavalues2::Column;
+use common_datavalues2::ConstColumn;
 use common_datavalues2::NewColumn;
 use common_datavalues2::StringColumn;
 use common_datavalues2::StringType;
@@ -96,11 +97,11 @@ where T: UUIDCreator + Clone + Sync + Send + 'static
     fn eval(
         &self,
         _columns: &common_datavalues2::ColumnsWithField,
-        _input_rows: usize,
+        input_rows: usize,
     ) -> Result<common_datavalues2::ColumnRef> {
         let uuid = T::create();
         let col = StringColumn::new_from_slice(vec![uuid.to_string()]);
 
-        Ok(Arc::new(col))
+        Ok(ConstColumn::new(col.arc(), input_rows).arc())
     }
 }
