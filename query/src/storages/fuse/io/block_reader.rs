@@ -105,7 +105,7 @@ impl BlockReader {
                 let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
                 let data_type = fields[idx].data_type();
                 let arrow_type = arrow_fields[idx].data_type();
-                Self::read_column(reader, &col_meta, data_type, arrow_type).await
+                Self::read_column(reader, &col_meta, data_type.clone(), arrow_type.clone()).await
             }
             .instrument(debug_span!("block_reader_read_column").or_current())
         });
@@ -122,8 +122,8 @@ impl BlockReader {
     async fn read_column(
         mut reader: BufReader<InputStream>,
         column_chunk_meta: &ColumnChunkMetaData,
-        data_type: &DataTypePtr,
-        arrow_type: &ArrowType,
+        data_type: DataTypePtr,
+        arrow_type: ArrowType,
     ) -> Result<ColumnRef> {
         let col_pages = get_page_stream(
             column_chunk_meta,
@@ -138,7 +138,7 @@ impl BlockReader {
             debug_span!("block_reader_decompress_page")
                 .in_scope(|| decompress(compressed_page?, &mut vec![]))
         });
-        let array = page_stream_to_array(pages, column_chunk_meta, arrow_type.clone())
+        let array = page_stream_to_array(pages, column_chunk_meta, arrow_type)
             .instrument(debug_span!("block_reader_page_stream_to_array"))
             .await?;
         let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();

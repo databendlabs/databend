@@ -80,7 +80,7 @@ impl ConstantFoldingImpl {
         let data_type = expression.to_data_type(&input_schema)?;
         let expression_executor = Self::expr_executor(&input_schema, expression)?;
         let const_col = ConstColumn::new(Series::from_data(vec![1u8]), 1);
-        let dummy_columns = vec![Arc::new(const_col)];
+        let dummy_columns = vec![Arc::new(const_col) as ColumnRef];
         let data_block = DataBlock::create(input_schema, dummy_columns);
         let executed_data_block = expression_executor.execute(&data_block)?;
 

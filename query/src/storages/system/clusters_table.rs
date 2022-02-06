@@ -88,9 +88,9 @@ impl Table for ClustersTable {
             self.table_info.schema(),
             None,
             vec![DataBlock::create(self.table_info.schema(), vec![
-                names.finish().into_series(),
-                addresses.finish().into_series(),
-                addresses_port.finish().into_series(),
+                names.finish().arc(),
+                addresses.finish().arc(),
+                addresses_port.finish().arc(),
             ])],
         )))
     }

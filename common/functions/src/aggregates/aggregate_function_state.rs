@@ -16,8 +16,6 @@ use std::alloc::Layout;
 use std::ptr::NonNull;
 use crate::aggregates::AggregateFunctionRef;
 
-use super::AggregateFunctionV1Ref;
-
 #[derive(Clone, Copy)]
 pub struct StateAddr {
     addr: usize,

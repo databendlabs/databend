@@ -132,9 +132,9 @@ impl Table for NumbersTable {
     }
 
     fn table_args(&self) -> Option<Vec<Expression>> {
-        Some(vec![Expression::create_literal(DataValue::UInt64(Some(
+        Some(vec![Expression::create_literal(DataValue::UInt64(
             self.total,
-        )))])
+        ))])
     }
 
     async fn read(

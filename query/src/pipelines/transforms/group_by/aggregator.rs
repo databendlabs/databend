@@ -99,7 +99,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
             let function = &aggregate_functions[index];
             let state_offset = offsets_aggregate_states[index];
             let function_arguments = &aggr_arg_columns_slice[index];
-            function.accumulate_keys(places, state_offset, function_arguments, rows)?;
+            function.accumulate_keys(places, state_offset, &function_arguments, rows)?;
         }
 
         Ok(())
@@ -151,7 +151,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
     fn aggregate_arguments(
         block: &DataBlock,
         params: &AggregatorParams,
-    ) -> Result<Vec<Vec<Series>>> {
+    ) -> Result<Vec<Vec<ColumnRef>>> {
         let aggregate_functions_arguments = &params.aggregate_functions_arguments_name;
         let mut aggregate_arguments_columns =
             Vec::with_capacity(aggregate_functions_arguments.len());
@@ -160,7 +160,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
 
             for argument_name in function_arguments {
                 let argument_column = block.try_column_by_name(argument_name)?;
-                function_arguments_column.push(argument_column.to_array()?);
+                function_arguments_column.push(argument_column.clone());
             }
 
             aggregate_arguments_columns.push(function_arguments_column);
@@ -209,13 +209,12 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
             group_key_builder.append_value(group_entity.get_state_key());
         }
 
-        let mut columns: Vec<Series> = Vec::with_capacity(schema.fields().len());
+        let mut columns: Vec<ColumnRef> = Vec::with_capacity(schema.fields().len());
         for mut builder in state_builders {
-            columns.push(builder.finish().into_series());
+            columns.push(builder.to_column());
         }
 
         columns.push(group_key_builder.finish());
-
         let block = DataBlock::create(schema.clone(), columns);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))
     }

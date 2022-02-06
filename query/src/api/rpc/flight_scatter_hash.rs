@@ -47,7 +47,10 @@ impl FlightScatter for HashFlightScatter {
         let expression_executor = self.scatter_expression_executor.clone();
         let evaluated_data_block = expression_executor.execute(data_block)?;
         let indices = evaluated_data_block.try_column_by_name(&self.scatter_expression_name)?;
-        DataBlock::scatter_block(data_block, indices, self.scattered_size)
+
+        let col: &PrimitiveColumn<u64> = Series::check_get(indices)?;
+        let indices: Vec<usize> = col.iter().map(|c| *c as usize).collect();
+        DataBlock::scatter_block(data_block, &indices, self.scattered_size)
     }
 }
 

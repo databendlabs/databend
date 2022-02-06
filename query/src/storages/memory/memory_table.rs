@@ -108,7 +108,7 @@ impl Table for MemoryTable {
                             .collect::<Vec<usize>>()
                             .iter()
                             .filter(|cid| projection_filter(**cid))
-                            .map(|cid| block.columns()[*cid].get_array_memory_size() as u64)
+                            .map(|cid| block.columns()[*cid].memory_size() as u64)
                             .sum::<u64>() as usize;
 
                         stats

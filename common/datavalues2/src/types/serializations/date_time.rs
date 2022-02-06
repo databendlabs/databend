@@ -16,6 +16,8 @@ use std::marker::PhantomData;
 
 use chrono::DateTime;
 use chrono_tz::Tz;
+use common_clickhouse_srv::types::column::ArcColumnWrapper;
+use common_clickhouse_srv::types::column::ColumnFrom;
 use common_exception::*;
 use serde_json::Value;
 
@@ -78,5 +80,14 @@ impl<T: PrimitiveType> TypeSerializer for DateTimeSerializer<T> {
             })
             .collect();
         Ok(result)
+    }
+
+    fn serialize_clickhouse_format(
+        &self,
+        column: &ColumnRef,
+    ) -> Result<common_clickhouse_srv::types::column::ArcColumnData> {
+        let array: &PrimitiveColumn<T> = Series::check_get(column)?;
+        let values: Vec<DateTime<Tz>> = array.iter().map(|v| self.to_date_time(v)).collect();
+        Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 }

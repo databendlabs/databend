@@ -136,6 +136,10 @@ pub trait Column: Send + Sync {
         let value = self.get(index);
         DFTryFrom::try_from(value)
     }
+
+    fn to_values(&self) -> Vec<DataValue> {
+        (0..self.len()).map(|i| self.get(i)).collect()
+    }
 }
 
 pub trait IntoColumn {

@@ -17,8 +17,10 @@ use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
+use common_datavalues2::{ColumnWithField, DataValue};
 use common_datavalues2::DataSchema;
 use common_exception::Result;
+use common_functions::aggregates::eval_aggr;
 
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::Statistics;
@@ -71,20 +73,35 @@ pub fn reduce_block_stats<T: Borrow<BlockStatistics>>(
             // TODO panic
             let data_type = schema.field((*id) as usize).data_type();
 
+            let field = schema.field((*id) as usize);
             // TODO
             // for some data types, we shall balance the accuracy and the length
             // e.g. for a string col, which max value is "abcdef....", we record the max as something like "b"
-            let min = common_datavalues2::DataValue::try_into_data_array(
-                min_stats.as_slice(),
-                data_type,
-            )?
-            .min()?;
+            let min = data_type.create_column(&min_stats)?;
+            let max = data_type.create_column(&max_stats)?;
 
-            let max = common_datavalues2::DataValue::try_into_data_array(
-                max_stats.as_slice(),
-                data_type,
-            )?
-            .max()?;
+            let mins = eval_aggr(
+                "min",
+                vec![],
+                &[ColumnWithField::new(min, field.clone())],
+                min.len(),
+            )?;
+            let maxs = eval_aggr(
+                "max",
+                vec![],
+                &[ColumnWithField::new(max, field.clone())],
+                max.len(),
+            )?;
+
+            let mut min = DataValue::Null;
+            let mut max = DataValue::Null;
+
+            if mins.len() > 0 {
+                min = mins.get(0);
+            }
+            if maxs.len() > 0 {
+                max = maxs.get(0);
+            }
 
             acc.insert(*id, ColumnStatistics {
                 min,

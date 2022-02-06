@@ -18,13 +18,10 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::column_convert::convert2_old_column;
 use common_datavalues2::prelude::*;
-use common_datavalues2::type_convert::create_mutable_builder;
 use common_datavalues2::MutableColumn;
 use common_exception::Result;
 use common_functions::aggregates::{AggregateFunctionRef, get_layout_offsets};
-use common_functions::aggregates::AggregateFunctionV1Ref;
 use common_functions::aggregates::StateAddr;
 use common_planners::Expression;
 use common_streams::DataBlockStream;

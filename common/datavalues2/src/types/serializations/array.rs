@@ -61,7 +61,14 @@ impl TypeSerializer for ArraySerializer {
         Ok(result)
     }
 
-    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+    fn serialize_json(&self, _column: &ColumnRef) -> Result<Vec<Value>> {
+        todo!()
+    }
+
+    fn serialize_clickhouse_format(
+        &self,
+        _column: &ColumnRef,
+    ) -> Result<common_clickhouse_srv::types::column::ArcColumnData> {
         todo!()
     }
 }

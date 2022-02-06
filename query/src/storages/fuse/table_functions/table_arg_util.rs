@@ -33,7 +33,7 @@ pub fn string_value(expr: &Expression) -> Result<String> {
 }
 
 pub fn string_literal(val: &str) -> Expression {
-    Expression::create_literal(DataValue::String(Some(val.as_bytes().to_vec())))
+    Expression::create_literal(DataValue::String(val.as_bytes().to_vec()))
 }
 
 pub fn parse_func_history_args(table_args: &TableArgs) -> Result<(String, String)> {

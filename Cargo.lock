@@ -1606,6 +1606,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "common-arrow",
+ "common-clickhouse-srv",
  "common-datavalues",
  "common-exception",
  "common-io",

@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::io::flight::deserialize_batch;
-use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_base::tokio::sync::mpsc::Receiver;
 use common_datablocks::DataBlock;
@@ -77,10 +76,8 @@ impl FlightDataStream {
                     is_little_endian: true,
                 };
 
-                Ok(
-                    deserialize_batch(&flight_data, arrow_schema, &ipc_schema, &Default::default())
-                        .map(TryFrom::try_from)?,
-                )
+                let batch = deserialize_batch(&flight_data, arrow_schema, &ipc_schema, &Default::default())?;
+                batch.try_into()
             }
         })
     }

@@ -90,7 +90,7 @@ impl RepoIssuesTable {
 
 #[async_trait::async_trait]
 impl GithubDataGetter for RepoIssuesTable {
-    async fn get_data_from_github(&self) -> Result<Vec<Series>> {
+    async fn get_data_from_github(&self) -> Result<Vec<ColumnRef>> {
         // init array
         let mut issue_numer_array: Vec<i64> = Vec::new();
         let mut title_array: Vec<Vec<u8>> = Vec::new();

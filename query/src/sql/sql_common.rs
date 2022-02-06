@@ -43,7 +43,7 @@ impl SQLCommon {
             // Custom(ObjectName([Ident { value: "uint8", quote_style: None }])
             SQLDataType::Custom(obj) if !obj.0.is_empty() => {
                 match obj.0[0].value.to_uppercase().as_str() {
-                    "SIGNED" => Ok(DataType::Int64),
+                    "SIGNED" => Ok(i64::to_data_type()),
                     "UNSIGNED" => Ok(u64::to_data_type()),
 
                     name => {

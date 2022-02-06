@@ -214,8 +214,8 @@ impl<'a> SubQueriesPuller<'a> {
 
                 #[allow(clippy::needless_range_loop)]
                 for column_index in 0..data_block.num_columns() {
-                    let series = data_block.column(column_index);
-                    let mut values = series.to_values()?;
+                    let col = data_block.column(column_index);
+                    let mut values = col.to_values();
                     columns[column_index].1.append(&mut values)
                 }
             }

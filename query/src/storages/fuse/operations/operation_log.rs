@@ -79,8 +79,8 @@ impl TryFrom<&DataBlock> for AppendOperationLogEntry {
 
 impl AppendOperationLogEntry {
     fn parse_col(idx: usize, val: &DataBlock) -> common_exception::Result<String> {
-        let col = &val.column(idx).to_values()?[0];
-        if let DataValue::String(Some(v)) = col {
+        let col = &val.column(idx).to_values()[0];
+        if let DataValue::String(v) = col {
             Ok(String::from_utf8(v.clone())?)
         } else {
             Err(ErrorCode::LogicalError(format!(

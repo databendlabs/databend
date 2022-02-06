@@ -18,6 +18,7 @@ common-io = { path = "../io" }
 common-macros = { path = "../macros" }
 common-datavalues = { path = "../datavalues" }
 common-mem-allocator = { path = "../mem-allocator" }
+common-clickhouse-srv = { path = "../clickhouse-srv" }
 
 # Github dependencies
 

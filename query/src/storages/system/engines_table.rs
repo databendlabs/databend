@@ -76,7 +76,7 @@ impl Table for EnginesTable {
             engine_name.push(descriptor.engine_name.clone());
             engine_comment.push(descriptor.comment.clone());
         }
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
+        let block = DataBlock::create(self.table_info.schema(), vec![
             Series::from_data(engine_name),
             Series::from_data(engine_comment),
         ]);

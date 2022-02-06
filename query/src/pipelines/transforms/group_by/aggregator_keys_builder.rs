@@ -20,7 +20,7 @@ use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 
 /// Remove the group by key from the state and rebuild it into a column
 pub trait KeysColumnBuilder<Key> {
-    fn finish(self) -> Series;
+    fn finish(self) -> ColumnRef;
     fn append_value(&mut self, v: &Key);
 }
 

@@ -75,7 +75,7 @@ impl RepoCommentsTable {
 
 #[async_trait::async_trait]
 impl GithubDataGetter for RepoCommentsTable {
-    async fn get_data_from_github(&self) -> Result<Vec<Series>> {
+    async fn get_data_from_github(&self) -> Result<Vec<ColumnRef>> {
         // init array
         let mut id_array: Vec<u64> = Vec::new();
         let mut user_array: Vec<Vec<u8>> = Vec::new();

@@ -15,7 +15,7 @@
 use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues2::prelude::TypeID;
-use common_datavalues2::DataField;
+use common_datavalues2::{DataField, DateConverter};
 use common_datavalues2::DataSchemaRef;
 use common_datavalues2::DataValue;
 use common_datavalues2::DateTime32Type;
@@ -114,53 +114,35 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                     let rows_size = block.column(0).len();
                     for row_index in 0..rows_size {
                         for col_index in 0..columns_size {
-                            let val = block.column(col_index).try_get(row_index)?;
+                            let val = block.column(col_index).get_checked(row_index)?;
                             if val.is_null() {
                                 row_writer.write_col(None::<u8>)?;
                                 continue;
                             }
                             let data_type = block.schema().fields()[col_index].data_type();
                             match (data_type.data_type_id(), val.clone()) {
-                                (TypeID::Boolean, DataValue::Boolean(Some(v))) => {
+                                (TypeID::Boolean, DataValue::Boolean(v)) => {
                                     row_writer.write_col(v as i8)?
                                 }
-                                (TypeID::Int8, DataValue::Int8(Some(v))) => {
+
+                                (_, DataValue::Int64(v)) => {
                                     row_writer.write_col(v)?
                                 }
-                                (TypeID::Int16, DataValue::Int16(Some(v))) => {
+
+                                (_, DataValue::UInt64(v)) => {
                                     row_writer.write_col(v)?
                                 }
-                                (TypeID::Int32, DataValue::Int32(Some(v))) => {
+
+                                (_, DataValue::Float64(v)) => {
                                     row_writer.write_col(v)?
                                 }
-                                (TypeID::Int64, DataValue::Int64(Some(v))) => {
-                                    row_writer.write_col(v)?
-                                }
-                                (TypeID::UInt8, DataValue::UInt8(Some(v))) => {
-                                    row_writer.write_col(v)?
-                                }
-                                (TypeID::UInt16, DataValue::UInt16(Some(v))) => {
-                                    row_writer.write_col(v)?
-                                }
-                                (TypeID::UInt32, DataValue::UInt32(Some(v))) => {
-                                    row_writer.write_col(v)?
-                                }
-                                (TypeID::UInt64, DataValue::UInt64(Some(v))) => {
-                                    row_writer.write_col(v)?
-                                }
-                                (TypeID::Float32, DataValue::Float32(Some(v))) => {
-                                    row_writer.write_col(v)?
-                                }
-                                (TypeID::Float64, DataValue::Float64(Some(v))) => {
-                                    row_writer.write_col(v)?
-                                }
-                                (TypeID::Date16, DataValue::UInt16(Some(v))) => {
+                                (TypeID::Date16, DataValue::UInt64(v)) => {
                                     row_writer.write_col(v.to_date(&utc).naive_local())?
                                 }
-                                (TypeID::Date32, DataValue::Int32(Some(v))) => {
+                                (TypeID::Date32, DataValue::Int64(v)) => {
                                     row_writer.write_col(v.to_date(&utc).naive_local())?
                                 }
-                                (TypeID::DateTime32, DataValue::UInt32(Some(v))) => {
+                                (TypeID::DateTime32, DataValue::UInt64(v)) => {
                                     let data_type: &DateTime32Type =
                                         data_type.as_any().downcast_ref().unwrap();
                                     let tz = data_type.tz();
@@ -168,13 +150,13 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     let tz: Tz = tz.parse().unwrap();
                                     row_writer.write_col(v.to_date_time(&tz).naive_local())?
                                 }
-                                (TypeID::DateTime64, DataValue::UInt64(Some(v))) => {
+                                (TypeID::DateTime64, DataValue::UInt64(v)) => {
                                     let data_type: &DateTime64Type =
                                         data_type.as_any().downcast_ref().unwrap();
                                     let tz = data_type.tz();
                                     let tz = tz.cloned().unwrap_or_else(|| "UTC".to_string());
                                     let tz: Tz = tz.parse().unwrap();
-                                    let fmt = format!("%Y-%m-%d %H:%M:%S%.{}f", precision);
+                                    let fmt = format!("%Y-%m-%d %H:%M:%S%.{}f", data_type.precision());
 
                                     row_writer.write_col(
                                         v.to_date_time64(precision, &tz)
@@ -186,7 +168,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 (TypeID::String, DataValue::String(v)) => {
                                     row_writer.write_col(v)?
                                 }
-                                (TypeID::Struct, DataValue::Struct(v)) => {
+                                (TypeID::Struct, DataValue::Struct(_)) => {
                                     let serializer = data_type.create_serializer();
                                     row_writer.write_col(serializer.serialize_value(&val)?)?
                                 }

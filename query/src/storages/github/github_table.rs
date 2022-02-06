@@ -80,7 +80,7 @@ impl GithubTable {
         }
     }
 
-    async fn get_data_from_github(&self) -> Result<Vec<Series>> {
+    async fn get_data_from_github(&self) -> Result<Vec<ColumnRef>> {
         let table_type = self.get_table_type()?;
         let table = match table_type {
             GithubTableType::Comments => RepoCommentsTable::create(self.options.clone()),
@@ -127,5 +127,5 @@ impl Table for GithubTable {
 
 #[async_trait::async_trait]
 pub trait GithubDataGetter: Sync + Send {
-    async fn get_data_from_github(&self) -> Result<Vec<Series>>;
+    async fn get_data_from_github(&self) -> Result<Vec<ColumnRef>>;
 }

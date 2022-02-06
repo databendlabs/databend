@@ -95,11 +95,11 @@ impl StatisticsAccumulator {
             let col_stats = ColumnStatistics {
                 min,
                 max,
-                null_count,
+                null_count: null_count as u64,
                 in_memory_size,
             };
 
-            statistics.insert(idx, col_stats);
+            statistics.insert(idx as u32, col_stats);
         }
         Ok(statistics)
     }

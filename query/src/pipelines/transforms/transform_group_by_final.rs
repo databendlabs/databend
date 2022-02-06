@@ -21,7 +21,6 @@ use std::time::Instant;
 use bumpalo::Bump;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethodKind;
-use common_datavalues2::column_convert::convert2_old_column;
 use common_datavalues2::prelude::MutableColumn;
 use common_datavalues2::prelude::*;
 use common_exception::Result;
@@ -130,7 +129,7 @@ impl Processor for GroupByFinalTransform {
 
                     let states_columns = (0..aggr_funcs_len)
                         .map(|i| block.column(i))
-                        .collect::<Result<Vec<_>>>()?;
+                        .collect::<Vec<_>>();
                     let mut states_binary_columns = Vec::with_capacity(states_columns.len());
 
                     for agg in states_columns.iter().take(aggr_funcs_len) {
@@ -149,7 +148,7 @@ impl Processor for GroupByFinalTransform {
                                     for (idx, func) in funcs.iter().enumerate() {
                                         let arg_place = place.next(offsets_aggregate_states[idx]);
 
-                                        let mut data = states_binary_columns[idx].value(row);
+                                        let mut data = states_binary_columns[idx].get_data(row);
                                         func.init_state(arg_place);
                                         func.deserialize(arg_place, &mut data)?;
                                     }

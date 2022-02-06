@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_clickhouse_srv::types::column::ArcColumnWrapper;
+use common_clickhouse_srv::types::column::ColumnFrom;
+use common_clickhouse_srv::types::column::NullableColumnData;
 use common_exception::Result;
 use serde_json::Value;
 
@@ -38,5 +43,15 @@ impl TypeSerializer for NullSerializer {
         let null = Value::Null;
         let result: Vec<Value> = vec![null; column.len()];
         Ok(result)
+    }
+
+    fn serialize_clickhouse_format(
+        &self,
+        column: &ColumnRef,
+    ) -> Result<common_clickhouse_srv::types::column::ArcColumnData> {
+        let nulls = vec![1u8; column.len()];
+        let inner = Vec::column_from::<ArcColumnWrapper>(vec![1u8; column.len()]);
+        let data = NullableColumnData { nulls, inner };
+        Ok(Arc::new(data))
     }
 }

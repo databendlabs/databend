@@ -21,7 +21,6 @@ use common_datavalues2::prelude::*;
 use common_datavalues2::DataField;
 use common_datavalues2::DataSchema;
 use common_datavalues2::DataSchemaRef;
-use common_datavalues2::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;

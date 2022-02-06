@@ -69,8 +69,8 @@ impl RepoInfoTable {
     fn schema() -> Arc<DataSchema> {
         let fields = vec![
             DataField::new(REPOSITORY, Vu8::to_data_type()),
-            DataField::new(LANGUAGE, DataType::String),
-            DataField::new(LICENSE, DataType::String),
+            DataField::new(LANGUAGE, Vu8::to_data_type()),
+            DataField::new(LICENSE, Vu8::to_data_type()),
             DataField::new(STAR_COUNT, u32::to_data_type()),
             DataField::new(FORKS_COUNT, u32::to_data_type()),
             DataField::new(WATCHERS_COUNT, u32::to_data_type()),
@@ -84,7 +84,7 @@ impl RepoInfoTable {
 
 #[async_trait::async_trait]
 impl GithubDataGetter for RepoInfoTable {
-    async fn get_data_from_github(&self) -> Result<Vec<Series>> {
+    async fn get_data_from_github(&self) -> Result<Vec<ColumnRef>> {
         let RepoTableOptions {
             ref repo,
             ref owner,

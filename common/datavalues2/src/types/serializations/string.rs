@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_clickhouse_srv::types::column::ArcColumnWrapper;
+use common_clickhouse_srv::types::column::ColumnFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde_json::Value;
@@ -45,5 +47,14 @@ impl TypeSerializer for StringSerializer {
             .map(|x| serde_json::to_value(x).unwrap())
             .collect();
         Ok(result)
+    }
+
+    fn serialize_clickhouse_format(
+        &self,
+        column: &ColumnRef,
+    ) -> Result<common_clickhouse_srv::types::column::ArcColumnData> {
+        let column: &StringColumn = Series::check_get(column)?;
+        let values: Vec<&[u8]> = column.iter().collect();
+        Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 }

@@ -15,18 +15,23 @@
 use std::marker::PhantomData;
 use std::ops::AddAssign;
 
+use chrono::Date;
 use chrono::Duration;
 use chrono::NaiveDate;
+use chrono_tz::Tz;
+use common_clickhouse_srv::types::column::ArcColumnWrapper;
+use common_clickhouse_srv::types::column::ColumnFrom;
 use common_exception::*;
+use num::cast::AsPrimitive;
 use serde_json::Value;
 
 use crate::prelude::*;
 
-pub struct DateSerializer<T: PrimitiveType> {
+pub struct DateSerializer<T: PrimitiveType + AsPrimitive<i64>> {
     t: PhantomData<T>,
 }
 
-impl<T: PrimitiveType> Default for DateSerializer<T> {
+impl<T: PrimitiveType + AsPrimitive<i64>> Default for DateSerializer<T> {
     fn default() -> Self {
         Self {
             t: Default::default(),
@@ -36,7 +41,7 @@ impl<T: PrimitiveType> Default for DateSerializer<T> {
 
 const DATE_FMT: &str = "%Y-%m-%d";
 
-impl<T: PrimitiveType> TypeSerializer for DateSerializer<T> {
+impl<T: PrimitiveType + AsPrimitive<i64>> TypeSerializer for DateSerializer<T> {
     fn serialize_value(&self, value: &DataValue) -> Result<String> {
         let mut date = NaiveDate::from_ymd(1970, 1, 1);
         let d = Duration::days(value.as_i64()?);
@@ -72,5 +77,16 @@ impl<T: PrimitiveType> TypeSerializer for DateSerializer<T> {
             })
             .collect();
         Ok(result)
+    }
+
+    fn serialize_clickhouse_format(
+        &self,
+        column: &ColumnRef,
+    ) -> Result<common_clickhouse_srv::types::column::ArcColumnData> {
+        let array: &PrimitiveColumn<T> = Series::check_get(column)?;
+        let tz: Tz = "UTC".parse().unwrap();
+
+        let values: Vec<Date<Tz>> = array.iter().map(|v| v.to_date(&tz)).collect();
+        Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 }

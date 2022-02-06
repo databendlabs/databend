@@ -45,7 +45,8 @@ fn test_num_bits_hashes() -> Result<()> {
 
 #[test]
 fn test_bloom_add_find_string() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("name", DataType::String, true)]);
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new_nullable("name", Vu8::to_data_type())]);
     let block = DataBlock::create(schema, vec![Series::from_data(vec![
         "Alice", "Bob", "Batman", "Superman",
     ])]);

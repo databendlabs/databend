@@ -14,13 +14,8 @@
 
 use std::sync::Arc;
 
-use chrono::TimeZone;
-use chrono::Utc;
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use serde::Serialize;
 use serde_json::Value as JsonValue;
 
 pub(crate) type JsonBlock = Vec<Vec<JsonValue>>;

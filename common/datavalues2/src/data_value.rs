@@ -143,9 +143,6 @@ impl DataValue {
         matches!(self, DataValue::UInt64(_))
     }
 
-    pub fn to_values(&self, size: usize) -> Result<Vec<DataValue>> {
-        Ok((0..size).map(|_| self.clone()).collect())
-    }
 
     pub fn as_u64(&self) -> Result<u64> {
         match self {
@@ -206,6 +203,24 @@ impl DataValue {
 
     pub fn as_const_column(&self, data_type: &DataTypePtr, size: usize) -> Result<ColumnRef> {
         data_type.create_constant_column(self, size)
+    }
+
+    #[allow(clippy::needless_late_init)]
+    pub fn try_from_literal(literal: &str, radix: Option<u32>) -> Result<DataValue> {
+        let radix = radix.unwrap_or(10);
+        let ret =  if literal.starts_with(char::from_u32(45).unwrap()) {
+            match i64::from_str_radix(literal, radix) {
+                Ok(n) =>  DataValue::Int64(n),
+                Err(_) => DataValue::Float64(literal.parse::<f64>()?)
+            }
+        } else {
+             match u64::from_str_radix(literal, radix) {
+                Ok(n) => DataValue::UInt64(n),
+                Err(_) => DataValue::Float64(literal.parse::<f64>()?)
+            }
+        };
+
+        Ok(ret)
     }
 }
 

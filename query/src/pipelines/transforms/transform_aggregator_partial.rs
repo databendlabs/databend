@@ -21,7 +21,7 @@ use common_datablocks::DataBlock;
 use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
-use common_functions::aggregates::AggregateFunctionV1Ref;
+use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::aggregates::StateAddr;
 use common_io::prelude::*;
 use common_planners::Expression;
@@ -34,7 +34,7 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 
 pub struct AggregatorPartialTransform {
-    funcs: Vec<AggregateFunctionV1Ref>,
+    funcs: Vec<AggregateFunctionRef>,
     arg_names: Vec<Vec<String>>,
 
     schema: DataSchemaRef,
@@ -118,10 +118,10 @@ impl Processor for AggregatorPartialTransform {
             for (idx, func) in funcs.iter().enumerate() {
                 let mut arg_columns = vec![];
                 for name in arg_names[idx].iter() {
-                    arg_columns.push(block.try_column_by_name(name)?);
+                    arg_columns.push(block.try_column_by_name(name)?.clone());
                 }
                 let place = places[idx].into();
-                func.accumulate(place, &arg_columns, rows)?;
+                func.accumulate(place, &arg_columns, None,rows)?;
             }
         }
         let delta = start.elapsed();
