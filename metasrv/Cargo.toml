@@ -41,33 +41,33 @@ common-metrics = { path = "../common/metrics" }
 # Github dependencies
 
 # Crates.io dependencies
-anyerror = "0.1.1"
-anyhow = "1.0.52"
+anyerror = "0.1.2"
+anyhow = "1.0.53"
 async-trait = "0.1.52"
-backtrace = "0.3.63"
+backtrace = "0.3.64"
 byteorder = "1.4.3"
-clap = { version = "3.0.5", features = ["derive", "env"] }
+clap = { version = "3.0.14", features = ["derive", "env"] }
 derive_more = "0.99.17"
-futures = "0.3.19"
-indexmap = "1.7.0"
-metrics = "0.17.1"
-metrics-exporter-prometheus = "0.7.0"
+futures = "0.3.21"
+indexmap = "1.8.0"
+metrics = "0.18.0"
+metrics-exporter-prometheus = "0.8.0"
 num = "0.4.0"
 num_cpus = "1.13.1"
 prost = "0.9.0"
 rand = "0.8.4"
-serde = { version = "1.0.133", features = ["derive"] }
-serde_json = "1.0.74"
+serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1.0.78"
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-tempfile = "3.2.0"
+tempfile = "3.3.0"
 thiserror = "1.0.30"
 threadpool = "1.8.1"
 tokio-stream = "0.1.8"
 tokio-util = "0.6.9"
 tonic = { version = "0.6.2", features = ["tls"] }
-sha2 = "0.10.0"
+sha2 = "0.10.1"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
-poem = { version = "1.2.27", features = ["rustls"] }
+poem = { version = "1.2.53", features = ["rustls"] }
 toml = "0.5.8"
 
 [build-dependencies]
@@ -79,5 +79,5 @@ common-meta-api = { path = "../common/meta/api" }
 maplit = "1.0.2"
 regex = "1.5.4"
 
-pretty_assertions = "1.0.0"
-reqwest = { version = "0.11.8", features = ["json"] }
+pretty_assertions = "1.1.0"
+reqwest = { version = "0.11.9", features = ["json"] }

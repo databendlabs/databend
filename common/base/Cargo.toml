@@ -23,9 +23,9 @@ common-exception = { path = "../exception" }
 # Crates.io dependencies
 async-trait = "0.1.52"
 ctrlc = { version = "3.2.1", features = ["termination"] }
-futures = "0.3.19"
+futures = "0.3.21"
 pprof = { version = "0.6.2", features = ["flamegraph", "protobuf"] }
-tokio = { version = "1.15.0", features = ["macros", "rt", "rt-multi-thread", "sync", "fs", "signal"] }
+tokio = { version = "1.16.1", features = ["macros", "rt", "rt-multi-thread", "sync", "fs", "signal"] }
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
-serde = { version = "1.0.133", features = ["derive"] }
-poem = { version = "1.2.27", features = ["rustls"] }
+serde = { version = "1.0.136", features = ["derive"] }
+poem = { version = "1.2.53", features = ["rustls"] }

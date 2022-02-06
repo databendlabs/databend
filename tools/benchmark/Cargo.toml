@@ -20,10 +20,10 @@ common-tracing = { path = "../../common/tracing" }
 clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "9d2133f" }
 
 # Crates.io dependencies
-clap = { version = "3.0.5", features = ["derive", "env"] }
-crossbeam-queue = "0.3.2"
+clap = { version = "3.0.14", features = ["derive", "env"] }
+crossbeam-queue = "0.3.4"
 ctrlc = { version = "3.2.1", features = ["termination"] }
-futures = "0.3.19"
+futures = "0.3.21"
 quantiles = "0.7.1"
 rand = "0.8.4"
-serde = { version = "1.0.133", features = ["derive"] }
+serde = { version = "1.0.136", features = ["derive"] }
