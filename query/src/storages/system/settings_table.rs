@@ -37,7 +37,10 @@ impl SettingsTable {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("name", DataType::String, false),
             DataField::new("value", DataType::String, false),
+            DataField::new("default", DataType::String, false),
+            DataField::new("level", DataType::String, false),
             DataField::new("description", DataType::String, false),
+            DataField::new("type", DataType::String, false),
         ]);
 
         let table_info = TableInfo {
@@ -75,23 +78,42 @@ impl Table for SettingsTable {
 
         let mut names: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
+        let mut defaults: Vec<String> = vec![];
+        let mut levels: Vec<String> = vec![];
         let mut descs: Vec<String> = vec![];
+        let mut types: Vec<String> = vec![];
         for setting in settings {
             if let DataValue::Struct(vals) = setting {
+                // Name.
                 names.push(format!("{:?}", vals[0]));
+                // Value.
                 values.push(format!("{:?}", vals[1]));
-                descs.push(format!("{:?}", vals[2]));
+                // Default Value.
+                defaults.push(format!("{:?}", vals[2]));
+                // Scope level.
+                levels.push(format!("{:?}", vals[3]));
+                // Desc.
+                descs.push(format!("{:?}", vals[4]));
+                // Types.
+                types.push(format!("{:?}", vals[2].data_type()));
             }
         }
 
         let names: Vec<&[u8]> = names.iter().map(|x| x.as_bytes()).collect();
         let values: Vec<&[u8]> = values.iter().map(|x| x.as_bytes()).collect();
+        let defaults: Vec<&[u8]> = defaults.iter().map(|x| x.as_bytes()).collect();
+        let levels: Vec<&[u8]> = levels.iter().map(|x| x.as_bytes()).collect();
         let descs: Vec<&[u8]> = descs.iter().map(|x| x.as_bytes()).collect();
+        let types: Vec<&[u8]> = types.iter().map(|x| x.as_bytes()).collect();
         let block = DataBlock::create_by_array(self.table_info.schema(), vec![
             Series::new(names),
             Series::new(values),
+            Series::new(defaults),
+            Series::new(levels),
             Series::new(descs),
+            Series::new(types),
         ]);
+
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),
             None,

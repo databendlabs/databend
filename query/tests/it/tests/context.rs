@@ -66,7 +66,7 @@ pub fn create_query_context() -> Result<Arc<QueryContext>> {
 }
 
 pub fn create_query_context_with_config(config: Config) -> Result<Arc<QueryContext>> {
-    let sessions = SessionManagerBuilder::create().build()?;
+    let sessions = SessionManagerBuilder::create_with_conf(config.clone()).build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
     let mut user_info = UserInfo::new(

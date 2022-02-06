@@ -28,7 +28,7 @@ use crate::tests::SessionManagerBuilder;
 #[test]
 fn test_session_context() -> Result<()> {
     let conf = Config::load_from_args();
-    let session_ctx = SessionContext::try_create(&conf)?;
+    let session_ctx = SessionContext::try_create(conf)?;
 
     // Abort status.
     {
@@ -42,12 +42,6 @@ fn test_session_context() -> Result<()> {
         session_ctx.set_current_database("bend".to_string());
         let val = session_ctx.get_current_database();
         assert_eq!("bend", val);
-    }
-
-    // Settings.
-    {
-        let val = session_ctx.get_settings();
-        assert!(val.get_max_threads()? > 0);
     }
 
     // Client host.

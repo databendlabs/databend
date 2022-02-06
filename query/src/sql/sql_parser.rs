@@ -78,6 +78,7 @@ use crate::sql::statements::DfSetVariable;
 use crate::sql::statements::DfShowCreateDatabase;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
+use crate::sql::statements::DfShowEngines;
 use crate::sql::statements::DfShowFunctions;
 use crate::sql::statements::DfShowGrants;
 use crate::sql::statements::DfShowMetrics;
@@ -226,6 +227,8 @@ impl<'a> DfParser<'a> {
                             self.parse_show_grants()
                         } else if self.consume_token("FUNCTIONS") {
                             self.parse_show_functions()
+                        } else if self.consume_token("ENGINES") {
+                            Ok(DfStatement::ShowEngines(DfShowEngines))
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }

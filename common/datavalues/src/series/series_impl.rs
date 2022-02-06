@@ -25,6 +25,9 @@ use common_exception::Result;
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
+
+/// Series is a wrapper type to store pointer to real data.
+/// This kind definition of `Series` style will make `Arc<dyn SeriesTrait>` as anonymous field.
 pub struct Series(pub Arc<dyn SeriesTrait>);
 
 impl<'a> AsRef<(dyn SeriesTrait + 'a)> for Series {
@@ -41,6 +44,7 @@ impl Deref for Series {
     }
 }
 
+/// Various trait implementation for Type is cocked by macro in the wrap module.
 pub trait IntoSeries {
     fn into_series(self) -> Series;
 }
@@ -308,6 +312,7 @@ impl Series {
     }
 }
 
+/// Any Array can be converted to a Series Type.
 impl IntoSeries for ArrayRef {
     fn into_series(self) -> Series {
         let data_type = DataType::try_from(self.data_type()).unwrap();

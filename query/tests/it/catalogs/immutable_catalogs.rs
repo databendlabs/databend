@@ -60,7 +60,7 @@ async fn test_immutable_catalogs_database() -> Result<()> {
 async fn test_immutable_catalogs_table() -> Result<()> {
     let catalog = create_catalog()?;
     let db_list_1 = catalog.list_tables("test", "system").await?;
-    assert_eq!(db_list_1.len(), 15);
+    assert_eq!(db_list_1.len(), 16);
     let table_list_2 = catalog.list_tables("test", "default").await;
     assert!(table_list_2.is_err());
     let db_list_3 = catalog.list_tables("", "default").await?;

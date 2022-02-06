@@ -55,7 +55,7 @@ impl ExpressionAnalyzer {
     pub async fn analyze(&self, expr: &Expr) -> Result<Expression> {
         let mut stack = Vec::new();
 
-        // Build RPN for expr. because async function unsupported recursion
+        // Build RPN for expr. Because async function unsupported recursion
         for rpn_item in &ExprRPNBuilder::build(self.context.clone(), expr).await? {
             match rpn_item {
                 ExprRPNItem::Value(v) => Self::analyze_value(v, &mut stack)?,
@@ -97,7 +97,7 @@ impl ExpressionAnalyzer {
 
     fn analyze_inlist(&self, info: &InListInfo, args: &mut Vec<Expression>) -> Result<()> {
         let mut list = Vec::with_capacity(info.list_size);
-        for _index in 0..info.list_size {
+        for _ in 0..info.list_size {
             match args.pop() {
                 None => {
                     return Err(ErrorCode::LogicalError("It's a bug."));
@@ -125,7 +125,7 @@ impl ExpressionAnalyzer {
 
     fn analyze_function(&self, info: &FunctionExprInfo, args: &mut Vec<Expression>) -> Result<()> {
         let mut arguments = Vec::with_capacity(info.args_count);
-        for _index in 0..info.args_count {
+        for _ in 0..info.args_count {
             match args.pop() {
                 None => {
                     return Err(ErrorCode::LogicalError("It's a bug."));
@@ -151,9 +151,7 @@ impl ExpressionAnalyzer {
 
     fn unary_function(info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
         match args.is_empty() {
-            true => Err(ErrorCode::LogicalError(
-                "Unary operator must be two children.",
-            )),
+            true => Err(ErrorCode::LogicalError("Unary operator must be one child.")),
             false => Ok(Expression::UnaryExpression {
                 op: info.name.clone(),
                 expr: Box::new(args[0].to_owned()),
@@ -175,6 +173,7 @@ impl ExpressionAnalyzer {
         }
     }
 
+    /// Function to process when args's size is more than 2.
     fn other_function(&self, info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
         let query_context = self.context.clone();
         let context_args = ContextFunction::build_args_from_ctx(&info.name, query_context)?;
