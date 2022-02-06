@@ -1374,6 +1374,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "codespan-reporting"
+version = "0.11.1"
+source = "git+https://github.com/brendanzab/codespan?rev=c84116f5#c84116f5a667bfce2aa1e045205c5832cfee1548"
+dependencies = [
+ "termcolor",
+ "unicode-width",
+]
+
+[[package]]
 name = "colored"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1420,9 +1429,11 @@ name = "common-ast"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "codespan-reporting",
  "common-base",
  "common-exception",
  "common-functions",
+ "goldenfile",
  "logos",
  "nom 7.1.0",
  "nom-rule",
@@ -2573,6 +2584,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e25ea47919b1560c4e3b7fe0aaab9becf5b84a10325ddf7db0f0ba5e1026499"
 
 [[package]]
+name = "difference"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
+
+[[package]]
 name = "difflib"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3297,6 +3314,16 @@ dependencies = [
  "js-sys",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "goldenfile"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f46e6a4d70c06f0b9a70d36dd8eef4fdeaa1ab657e4f1eaff290f69e48145f2"
+dependencies = [
+ "difference",
+ "tempfile",
 ]
 
 [[package]]
@@ -4625,9 +4652,9 @@ dependencies = [
 
 [[package]]
 name = "nom-rule"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "076271786ddbb45ca33a82addc152e2392c0d8039515c9e7c022491c17dc3538"
+checksum = "29e7d73737773a42ad59e7465b8efb97a17476f3b6256b64be372c11b66be190"
 dependencies = [
  "nom 7.1.0",
  "pratt",

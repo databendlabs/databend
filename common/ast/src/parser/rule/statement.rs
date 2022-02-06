@@ -12,36 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use nom::IResult;
+use nom::combinator::map;
 
 use crate::parser::ast::Statement;
 use crate::parser::rule::util::ident;
+use crate::parser::rule::util::IResult;
 use crate::parser::rule::util::Input;
-use crate::parser::rule::util::ParseError;
 use crate::parser::token::*;
 use crate::rule;
 
-pub fn truncate_table<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, Statement, Error>
-where Error: ParseError<Input<'a>> {
-    let (i, (_, _, database, table, _)) = rule! {
-        TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ ";"
-    }(i)?;
+pub fn statement(i: Input) -> IResult<Statement> {
+    let truncate_table = map(
+        rule! {
+            TRUNCATE ~ TABLE ~ ( #ident ~ "." )? ~ #ident ~ ";"
+        },
+        |(_, _, database, table, _)| Statement::TruncateTable {
+            database: database.map(|(name, _)| name),
+            table,
+        },
+    );
+    let drop_table = map(
+        rule! {
+            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ ";"
+        },
+        |(_, _, if_exists, database, table, _)| Statement::DropTable {
+            if_exists: if_exists.is_some(),
+            database: database.map(|(name, _)| name),
+            table,
+        },
+    );
 
-    Ok((i, Statement::TruncateTable {
-        database: database.map(|(name, _)| name),
-        table,
-    }))
-}
-
-pub fn drop_table<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, Statement, Error>
-where Error: ParseError<Input<'a>> {
-    let (i, (_, _, if_exists, database, table, _)) = rule! {
-        DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ ( #ident ~ "." )? ~ #ident ~ ";"
-    }(i)?;
-
-    Ok((i, Statement::DropTable {
-        if_exists: if_exists.is_some(),
-        database: database.map(|(name, _)| name),
-        table,
-    }))
+    rule!(
+        #truncate_table : "TRUNCATE TABLE statement"
+        | #drop_table : "DROP TABLE statement"
+    )(i)
 }
