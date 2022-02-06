@@ -15,7 +15,7 @@
 use std::fmt;
 use std::str;
 
-use common_datavalues2::type_primitive;
+use common_datavalues2::BooleanType;
 use common_datavalues2::ColumnRef;
 use common_datavalues2::ColumnsWithField;
 use common_datavalues2::DataTypePtr;
@@ -45,6 +45,7 @@ impl IgnoreFunction {
         Function2Description::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
+                .bool_function()
                 .variadic_arguments(0, usize::MAX),
         )
     }
@@ -62,12 +63,12 @@ impl Function2 for IgnoreFunction {
     }
 
     fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(type_primitive::UInt8Type::arc())
+        Ok(BooleanType::arc())
     }
 
     fn eval(&self, _columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
-        let return_type = type_primitive::UInt8Type::arc();
-        let return_value = DataValue::try_from(0_u8)?;
+        let return_type = BooleanType::arc();
+        let return_value = DataValue::try_from(false)?;
         return_type.create_constant_column(&return_value, input_rows)
     }
 
