@@ -12,23 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod catalog;
-mod config;
-mod context;
-mod number;
-#[allow(dead_code)]
-mod parquet;
-mod sessions;
-pub(crate) mod tls_constants;
+use databend_query::configs::Config;
 
-pub use catalog::create_catalog;
-pub use config::ConfigBuilder;
-pub use context::create_catalog_context;
-pub use context::create_query_context;
-pub use context::create_query_context_with_cluster;
-pub use context::create_query_context_with_config;
-pub use context::create_storage_context;
-pub use context::ClusterDescriptor;
-pub use number::NumberTestData;
-pub use parquet::ParquetTestData;
-pub use sessions::SessionManagerBuilder;
+pub struct ConfigBuilder {
+    conf: Config,
+}
+
+impl ConfigBuilder {
+    pub fn create() -> ConfigBuilder {
+        let mut conf = Config::default();
+        conf.query.tenant_id = "test".to_string();
+
+        ConfigBuilder { conf }
+    }
+
+    pub fn with_management_mode(&self) -> ConfigBuilder {
+        let mut conf = self.conf.clone();
+        conf.query.management_mode = true;
+        ConfigBuilder { conf }
+    }
+
+    pub fn config(&self) -> Config {
+        self.conf.clone()
+    }
+}

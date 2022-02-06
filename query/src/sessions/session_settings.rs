@@ -249,7 +249,7 @@ impl Settings {
             let tenant = self.session_ctx.get_current_tenant();
             let _ = futures::executor::block_on(
                 self.user_api
-                    .get_setting_api_client(&tenant)
+                    .get_setting_api_client(&tenant)?
                     .set_setting(setting.user_setting.clone()),
             )?;
             setting.level = ScopeLevel::Global;

@@ -18,18 +18,16 @@ use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
-use databend_query::configs::Config;
 use databend_query::users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_role_manager() -> Result<()> {
-    let mut config = Config::default();
-    config.query.tenant_id = "tenant1".to_string();
+    let conf = crate::tests::ConfigBuilder::create().config();
 
     let tenant = "tenant1";
     let role_name = "test-role1";
-    let role_mgr = UserApiProvider::create_global(config).await?;
+    let role_mgr = UserApiProvider::create_global(conf).await?;
 
     // add role
     {

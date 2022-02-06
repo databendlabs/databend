@@ -15,21 +15,19 @@
 use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
-use databend_query::configs::Config;
 use databend_query::users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_udf() -> Result<()> {
-    let mut config = Config::default();
-    config.query.tenant_id = "tenant1".to_string();
+    let conf = crate::tests::ConfigBuilder::create().config();
 
-    let tenant = "tenant1";
+    let tenant = "test";
     let description = "this is a description";
     let isempty = "isempty";
     let isnotempty = "isnotempty";
     let if_not_exists = false;
-    let user_mgr = UserApiProvider::create_global(config).await?;
+    let user_mgr = UserApiProvider::create_global(conf).await?;
 
     // add isempty.
     {

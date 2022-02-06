@@ -40,7 +40,7 @@ impl UserApiProvider {
                 Ok(user_info)
             }
             _ => {
-                let client = self.get_user_api_client(tenant);
+                let client = self.get_user_api_client(tenant)?;
                 let get_user = client.get_user(username.to_string(), hostname.to_string(), None);
                 Ok(get_user.await?.data)
             }
@@ -74,7 +74,7 @@ impl UserApiProvider {
 
     // Get the tenant all users list.
     pub async fn get_users(&self, tenant: &str) -> Result<Vec<UserInfo>> {
-        let client = self.get_user_api_client(tenant);
+        let client = self.get_user_api_client(tenant)?;
         let get_users = client.get_users();
 
         let mut res = vec![];
@@ -92,7 +92,7 @@ impl UserApiProvider {
 
     // Add a new user info.
     pub async fn add_user(&self, tenant: &str, user_info: UserInfo) -> Result<u64> {
-        let client = self.get_user_api_client(tenant);
+        let client = self.get_user_api_client(tenant)?;
         let add_user = client.add_user(user_info);
         match add_user.await {
             Ok(res) => Ok(res),
@@ -108,7 +108,7 @@ impl UserApiProvider {
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
-        let client = self.get_user_api_client(tenant);
+        let client = self.get_user_api_client(tenant)?;
         client
             .grant_user_privileges(
                 username.to_string(),
@@ -129,7 +129,7 @@ impl UserApiProvider {
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
-        let client = self.get_user_api_client(tenant);
+        let client = self.get_user_api_client(tenant)?;
         client
             .revoke_user_privileges(
                 username.to_string(),
@@ -150,7 +150,7 @@ impl UserApiProvider {
         hostname: &str,
         if_exists: bool,
     ) -> Result<()> {
-        let client = self.get_user_api_client(tenant);
+        let client = self.get_user_api_client(tenant)?;
         let drop_user = client.drop_user(username.to_string(), hostname.to_string(), None);
         match drop_user.await {
             Ok(res) => Ok(res),
@@ -172,7 +172,7 @@ impl UserApiProvider {
         hostname: &str,
         auth_info: AuthInfo,
     ) -> Result<Option<u64>> {
-        let client = self.get_user_api_client(tenant);
+        let client = self.get_user_api_client(tenant)?;
         let update_user =
             client.update_user(username.to_string(), hostname.to_string(), auth_info, None);
         match update_user.await {
