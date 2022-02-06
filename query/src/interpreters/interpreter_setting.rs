@@ -50,14 +50,10 @@ impl Interpreter for SettingInterpreter {
             match var.variable.to_lowercase().as_str() {
                 // To be compatible with some drivers
                 "sql_mode" | "autocommit" => {}
-                "max_threads" => {
-                    let threads: u64 = var.value.parse()?;
-                    self.ctx.get_settings().set_max_threads(threads)?;
-                }
                 _ => {
                     self.ctx
                         .get_settings()
-                        .set_settings(var.variable, var.value)?;
+                        .set_settings(var.variable, var.value, false)?;
                 }
             }
         }

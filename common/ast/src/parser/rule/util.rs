@@ -14,17 +14,19 @@
 
 use nom::branch::alt;
 use nom::combinator::map;
+use nom::error::make_error;
 use nom::error::ErrorKind;
-use nom::error::ParseError;
 use nom::IResult;
 
 use crate::parser::ast::Identifier;
-use crate::parser::token::Token;
-use crate::parser::token::TokenKind;
+use crate::parser::token::*;
 
 pub type Input<'a> = &'a [Token<'a>];
+pub trait ParseError<I> = nom::error::ParseError<I> + nom::error::ContextError<I>;
 
-pub fn satisfy<'a, F, Error>(cond: F) -> impl Fn(Input<'a>) -> IResult<Input<'a>, &'a Token, Error>
+pub fn satisfy<'a, F, Error>(
+    cond: F,
+) -> impl FnMut(Input<'a>) -> IResult<Input<'a>, &'a Token, Error>
 where
     F: Fn(&Token) -> bool,
     Error: ParseError<Input<'a>>,
@@ -72,6 +74,17 @@ where Error: ParseError<Input<'a>> {
             },
         ),
     ))(i)
+}
+
+pub fn literal_u64<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, u64, Error>
+where Error: ParseError<Input<'a>> {
+    match_token(LiteralNumber)(i).and_then(|(i, token)| {
+        token
+            .text
+            .parse()
+            .map(|num| (i, num))
+            .map_err(|_| nom::Err::Error(make_error(i, ErrorKind::Digit)))
+    })
 }
 
 #[macro_export]

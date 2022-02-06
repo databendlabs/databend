@@ -27,6 +27,7 @@ mod storage_table_read_plan;
 
 pub use storage_context::StorageContext;
 pub use storage_factory::StorageCreator;
+pub use storage_factory::StorageDescriptor;
 pub use storage_factory::StorageFactory;
 pub use storage_table::Table;
 pub use storage_table_read_plan::ToReadDataSourcePlan;

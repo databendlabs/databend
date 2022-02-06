@@ -81,7 +81,7 @@ async fn test_catalogs_table() -> Result<()> {
     let catalog = create_catalog()?;
     catalog.list_databases("test").await?;
     let table_list = catalog.list_tables("test", "system").await?;
-    assert_eq!(table_list.len(), 15);
+    assert_eq!(table_list.len(), 16);
     let table_list_1 = catalog.list_tables("test", "default").await;
     assert!(table_list_1.is_err());
     let table_list_2 = catalog.list_tables("", "default").await?;

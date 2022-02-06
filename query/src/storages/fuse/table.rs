@@ -36,6 +36,7 @@ use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::StorageContext;
+use crate::storages::StorageDescriptor;
 use crate::storages::Table;
 
 pub struct FuseTable {
@@ -45,6 +46,13 @@ pub struct FuseTable {
 impl FuseTable {
     pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Box::new(FuseTable { table_info }))
+    }
+
+    pub fn description() -> StorageDescriptor {
+        StorageDescriptor {
+            engine_name: "FUSE".to_string(),
+            comment: "FUSE Storage Engine".to_string(),
+        }
     }
 }
 

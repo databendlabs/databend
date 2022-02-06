@@ -47,6 +47,7 @@ use databend_query::sql::statements::DfRevokeStatement;
 use databend_query::sql::statements::DfShowCreateDatabase;
 use databend_query::sql::statements::DfShowCreateTable;
 use databend_query::sql::statements::DfShowDatabases;
+use databend_query::sql::statements::DfShowEngines;
 use databend_query::sql::statements::DfShowGrants;
 use databend_query::sql::statements::DfShowTables;
 use databend_query::sql::statements::DfTruncateTable;
@@ -1484,5 +1485,13 @@ fn test_alter_udf() -> Result<()> {
         }),
     )?;
 
+    Ok(())
+}
+
+#[test]
+fn show_engines_test() -> Result<()> {
+    expect_parse_ok("show engines", DfStatement::ShowEngines(DfShowEngines))?;
+
+    expect_parse_ok("SHOW ENGINES", DfStatement::ShowEngines(DfShowEngines))?;
     Ok(())
 }

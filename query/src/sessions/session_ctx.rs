@@ -25,14 +25,14 @@ use futures::channel::oneshot::Sender;
 
 use crate::configs::Config;
 use crate::sessions::QueryContextShared;
-use crate::sessions::Settings;
 
 #[derive(MallocSizeOf)]
 pub struct SessionContext {
+    #[ignore_malloc_size_of = "insignificant"]
+    conf: Config,
     abort: AtomicBool,
     current_database: RwLock<String>,
     current_tenant: RwLock<String>,
-    session_settings: RwLock<Settings>,
     #[ignore_malloc_size_of = "insignificant"]
     current_user: RwLock<Option<UserInfo>>,
     #[ignore_malloc_size_of = "insignificant"]
@@ -44,14 +44,14 @@ pub struct SessionContext {
 }
 
 impl SessionContext {
-    pub fn try_create(conf: &Config) -> Result<Self> {
+    pub fn try_create(conf: Config) -> Result<Self> {
         Ok(SessionContext {
+            conf,
             abort: Default::default(),
             current_user: Default::default(),
             current_tenant: Default::default(),
             client_host: Default::default(),
             current_database: RwLock::new("default".to_string()),
-            session_settings: RwLock::new(Settings::try_create(conf)?),
             io_shutdown_tx: Default::default(),
             query_context_shared: Default::default(),
         })
@@ -86,9 +86,15 @@ impl SessionContext {
     }
 
     // Get current database.
+    // If is management mode, return the current_tenant
+    // Others return the config tenant config.
     pub fn get_current_tenant(&self) -> String {
-        let lock = self.current_tenant.read();
-        lock.clone()
+        if self.conf.query.management_mode {
+            let lock = self.current_tenant.read();
+            lock.clone()
+        } else {
+            self.conf.query.tenant_id.clone()
+        }
     }
 
     // Get current user
@@ -101,11 +107,6 @@ impl SessionContext {
     pub fn set_current_user(&self, user: UserInfo) {
         let mut lock = self.current_user.write();
         *lock = Some(user);
-    }
-
-    pub fn get_settings(&self) -> Arc<Settings> {
-        let lock = self.session_settings.read();
-        Arc::new(lock.clone())
     }
 
     pub fn get_client_host(&self) -> Option<SocketAddr> {
