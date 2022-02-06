@@ -53,7 +53,7 @@ impl FlightDataStream {
                         &ipc_schema,
                         &Default::default(),
                     )?;
-                    TryFrom::from(batch)
+                    batch.try_into()
                 }
             }
         })

@@ -75,7 +75,7 @@ impl Table for DatabasesTable {
             .map(|database| database.name().as_bytes())
             .collect();
 
-        let block = DataBlock::create(self.table_info.schema(), vec![Series::new(db_names)]);
+        let block = DataBlock::create(self.table_info.schema(), vec![Series::from_data(db_names)]);
 
         let s = Box::pin(DataBlockStream::create(
             self.table_info.schema(),

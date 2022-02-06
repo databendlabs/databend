@@ -95,13 +95,13 @@ impl TracingTableStream {
         let times: Vec<&[u8]> = time_col.iter().map(|x| x.as_bytes()).collect();
 
         let block = DataBlock::create(self.schema.clone(), vec![
-            Series::new(version_col),
-            Series::new(names),
-            Series::new(msgs),
-            Series::new(level_col),
-            Series::new(hosts),
-            Series::new(pid_col),
-            Series::new(times),
+            Series::from_data(version_col),
+            Series::from_data(names),
+            Series::from_data(msgs),
+            Series::from_data(level_col),
+            Series::from_data(hosts),
+            Series::from_data(pid_col),
+            Series::from_data(times),
         ]);
 
         Ok(Some(block))

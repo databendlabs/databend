@@ -65,8 +65,8 @@ impl RepoCommentsTable {
     fn schema() -> Arc<DataSchema> {
         let fields = vec![
             DataField::new(COMMENT_ID, u64::to_data_type()),
-            DataField::new(USER, DataType::String, true),
-            DataField::new(BODY, DataType::String, true),
+            DataField::new(USER, Vu8::to_data_type()),
+            DataField::new(BODY, Vu8::to_data_type()),
         ];
 
         Arc::new(DataSchema::new(fields))
@@ -112,9 +112,9 @@ impl GithubDataGetter for RepoCommentsTable {
         }
 
         Ok(vec![
-            Series::new(id_array),
-            Series::new(user_array),
-            Series::new(body_array),
+            Series::from_data(id_array),
+            Series::from_data(user_array),
+            Series::from_data(body_array),
         ])
     }
 }

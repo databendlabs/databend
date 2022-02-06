@@ -14,6 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use serde_json::Value;
 
 use crate::prelude::*;
 
@@ -29,11 +30,19 @@ impl TypeSerializer for StringSerializer {
     }
 
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
-        let array: &StringColumn = Series::check_get(column)?;
-
-        let result: Vec<String> = array
+        let column: &StringColumn = Series::check_get(column)?;
+        let result: Vec<String> = column
             .iter()
             .map(|v| String::from_utf8_lossy(v).to_string())
+            .collect();
+        Ok(result)
+    }
+
+    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+        let column: &StringColumn = Series::check_get(column)?;
+        let result: Vec<Value> = column
+            .iter()
+            .map(|x| serde_json::to_value(x).unwrap())
             .collect();
         Ok(result)
     }

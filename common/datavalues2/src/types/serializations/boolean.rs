@@ -14,6 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use serde_json::Value;
 
 use crate::prelude::*;
 
@@ -47,6 +48,15 @@ impl TypeSerializer for BooleanSerializer {
                     FALSE_STR.to_owned()
                 }
             })
+            .collect();
+        Ok(result)
+    }
+
+    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+        let array: &BooleanColumn = Series::check_get(column)?;
+        let result: Vec<Value> = array
+            .iter()
+            .map(|v| serde_json::to_value(v).unwrap())
             .collect();
         Ok(result)
     }

@@ -16,12 +16,7 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::Series;
-use common_datavalues2::prelude::SeriesFrom;
-use common_datavalues2::DataField;
-use common_datavalues2::DataSchema;
-use common_datavalues2::DataSchemaRefExt;
-use common_datavalues2::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::ProgressStream;
@@ -62,7 +57,7 @@ pub trait SendableWithSchema {
 impl SendableWithSchema for &[Vec<Expression>] {
     fn to_stream(self, schema: Arc<DataSchema>) -> Result<SendableDataBlockStream> {
         let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);
-        let one_row_block = DataBlock::create(dummy.clone(), vec![Series::new(vec![1u8])]);
+        let one_row_block = DataBlock::create(dummy.clone(), vec![Series::from_data(vec![1u8])]);
         let blocks = self
             .as_ref()
             .iter()

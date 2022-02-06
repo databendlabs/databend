@@ -107,10 +107,10 @@ impl Table for TablesTable {
         let created_ons: Vec<&[u8]> = created_ons.iter().map(|s| s.as_bytes()).collect();
 
         let block = DataBlock::create(self.table_info.schema(), vec![
-            Series::new(databases),
-            Series::new(names),
-            Series::new(engines),
-            Series::new(created_ons),
+            Series::from_data(databases),
+            Series::from_data(names),
+            Series::from_data(engines),
+            Series::from_data(created_ons),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(

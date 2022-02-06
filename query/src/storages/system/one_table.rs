@@ -80,8 +80,7 @@ impl Table for OneTable {
         _ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let block =
-            DataBlock::create(self.table_info.schema(), vec![Series::new(vec![1u8])]);
+        let block = DataBlock::create(self.table_info.schema(), vec![Series::from_data(vec![1u8])]);
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),
             None,

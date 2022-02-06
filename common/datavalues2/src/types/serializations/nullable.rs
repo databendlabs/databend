@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use serde_json::Value;
 
 use crate::prelude::DataValue;
 use crate::Column;
@@ -42,6 +43,19 @@ impl TypeSerializer for NullableSerializer {
         (0..rows).for_each(|row| {
             if column.null_at(row) {
                 res[row] = "NULL".to_owned();
+            }
+        });
+        Ok(res)
+    }
+
+    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+        let column: &NullableColumn = Series::check_get(column)?;
+        let rows = column.len();
+        let mut res = self.inner.serialize_json(column.inner())?;
+
+        (0..rows).for_each(|row| {
+            if column.null_at(row) {
+                res[row] = Value::Null;
             }
         });
         Ok(res)

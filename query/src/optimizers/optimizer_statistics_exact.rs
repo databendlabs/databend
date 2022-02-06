@@ -65,9 +65,9 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                         let source_plan = table.read_plan(self.ctx.clone(), None).await?;
                         let dummy_read_plan = PlanNode::ReadSource(source_plan);
 
-                        let expr = Expression::create_literal(DataValue::UInt64(Some(
+                        let expr = Expression::create_literal(DataValue::UInt64(
                             read_source_plan.statistics.read_rows as u64,
-                        )));
+                        ));
 
                         self.rewritten = true;
                         let alias_name = plan.aggr_expr[0].column_name();

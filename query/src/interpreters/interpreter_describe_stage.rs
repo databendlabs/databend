@@ -128,12 +128,12 @@ impl Interpreter for DescribeStageInterpreter {
             .collect::<Vec<bool>>();
 
         let block = DataBlock::create(schema.clone(), vec![
-            Series::new(parent_properties),
-            Series::new(properties),
-            Series::new(property_types),
-            Series::new(property_values),
-            Series::new(property_defaults),
-            Series::new(property_changed),
+            Series::from_data(parent_properties),
+            Series::from_data(properties),
+            Series::from_data(property_types),
+            Series::from_data(property_values),
+            Series::from_data(property_defaults),
+            Series::from_data(property_changed),
         ]);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))
     }

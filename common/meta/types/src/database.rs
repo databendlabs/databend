@@ -18,8 +18,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
+use common_datavalues2::chrono::DateTime;
+use common_datavalues2::chrono::Utc;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseNameIdent {

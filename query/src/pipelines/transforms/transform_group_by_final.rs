@@ -162,7 +162,7 @@ impl Processor for GroupByFinalTransform {
                                 for (idx, func) in funcs.iter().enumerate() {
                                     let arg_place = place.next(offsets_aggregate_states[idx]);
 
-                                    let mut data = states_binary_columns[idx].value(row);
+                                    let mut data = states_binary_columns[idx].get_data(row);
                                     let temp = arena.alloc_layout(funcs[idx].state_layout());
                                     let temp_addr = temp.into();
 
@@ -202,11 +202,11 @@ impl Processor for GroupByFinalTransform {
                 }
 
                 // Build final state block.
-                let mut columns: Vec<Series> = Vec::with_capacity(aggr_funcs_len + group_expr_len);
+                let mut columns: Vec<ColumnRef> =
+                    Vec::with_capacity(aggr_funcs_len + group_expr_len);
                 for mut array in aggr_builders {
                     let col = array.to_column();
-                    let old_c = convert2_old_column(&col);
-                    columns.push(old_c.to_array()?);
+                    columns.push(col);
                 }
 
                 {

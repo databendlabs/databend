@@ -110,13 +110,13 @@ impl FuseHistoryTable {
         }
 
         DataBlock::create(self.table_info.schema(), vec![
-            Series::new(snapshot_ids),
-            Series::new(prev_snapshot_ids),
-            Series::new(segment_count),
-            Series::new(block_count),
-            Series::new(row_count),
-            Series::new(uncompressed),
-            Series::new(compressed),
+            Series::from_data(snapshot_ids),
+            Series::from_data(prev_snapshot_ids),
+            Series::from_data(segment_count),
+            Series::from_data(block_count),
+            Series::from_data(row_count),
+            Series::from_data(uncompressed),
+            Series::from_data(compressed),
         ])
     }
 }

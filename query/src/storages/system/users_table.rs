@@ -85,10 +85,10 @@ impl Table for UsersTable {
             .collect();
 
         let block = DataBlock::create(self.table_info.schema(), vec![
-            Series::new(names),
-            Series::new(hostnames),
-            Series::new(auth_types),
-            Series::new(auth_strings),
+            Series::from_data(names),
+            Series::from_data(hostnames),
+            Series::from_data(auth_types),
+            Series::from_data(auth_strings),
         ]);
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),

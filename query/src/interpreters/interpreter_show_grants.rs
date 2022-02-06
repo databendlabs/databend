@@ -67,7 +67,7 @@ impl Interpreter for ShowGrantsInterpreter {
             .map(|e| e.to_string().into_bytes())
             .collect::<Vec<_>>();
 
-        let block = DataBlock::create(schema.clone(), vec![Series::new(grant_list)]);
+        let block = DataBlock::create(schema.clone(), vec![Series::from_data(grant_list)]);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))
     }
 }

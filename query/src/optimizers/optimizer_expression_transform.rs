@@ -193,15 +193,15 @@ impl ExprTransformImpl {
             (true, true) => {
                 if is_and {
                     Ok(Expression::Literal {
-                        value: DataValue::Boolean(Some(true)),
+                        value: DataValue::Boolean(true),
                         column_name: Some(column_name),
-                        data_type: DataType::Boolean,
+                        data_type: bool::to_data_type(),
                     })
                 } else {
                     Ok(Expression::Literal {
-                        value: DataValue::Boolean(Some(false)),
+                        value: DataValue::Boolean(false),
                         column_name: Some(column_name),
-                        data_type: DataType::Boolean,
+                        data_type: bool::to_data_type(),
                     })
                 }
             }
@@ -232,17 +232,17 @@ impl ExprTransformImpl {
                     if !is_and {
                         *is_remove = true;
                         return Ok(Expression::Literal {
-                            value: DataValue::Boolean(Some(true)),
+                            value: DataValue::Boolean(true),
                             column_name: Some(column_name),
-                            data_type: DataType::Boolean,
+                            data_type: bool::to_data_type(),
                         });
                     }
                 } else if is_and {
                     *is_remove = true;
                     return Ok(Expression::Literal {
-                        value: DataValue::Boolean(Some(false)),
+                        value: DataValue::Boolean(false),
                         column_name: Some(column_name),
-                        data_type: DataType::Boolean,
+                        data_type: bool::to_data_type(),
                     });
                 }
             }

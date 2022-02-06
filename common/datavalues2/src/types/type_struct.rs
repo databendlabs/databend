@@ -100,6 +100,7 @@ impl DataType for StructType {
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
         let inners = self.types.iter().map(|v| v.create_serializer()).collect();
         Box::new(StructSerializer {
+            names: self.names.clone(),
             inners,
             types: self.types.clone(),
         })

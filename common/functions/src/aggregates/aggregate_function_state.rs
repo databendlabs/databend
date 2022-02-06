@@ -14,6 +14,7 @@
 
 use std::alloc::Layout;
 use std::ptr::NonNull;
+use crate::aggregates::AggregateFunctionRef;
 
 use super::AggregateFunctionV1Ref;
 
@@ -101,7 +102,7 @@ impl From<StateAddr> for usize {
 
 /// # Safety
 /// layout must ensure to be aligned
-pub unsafe fn get_layout_offsets(funcs: &[AggregateFunctionV1Ref]) -> (Layout, Vec<usize>) {
+pub unsafe fn get_layout_offsets(funcs: &[AggregateFunctionRef]) -> (Layout, Vec<usize>) {
     let mut max_align = 0;
     let mut total_size = 0;
 

@@ -96,7 +96,7 @@ impl ConstantFoldingImpl {
         debug_assert!(data_block.num_columns() == 1);
 
         let column_name = Some(column_name);
-        let value = data_block.column(0).try_get(0)?;
+        let value = data_block.column(0).get_checked(0)?;
         Ok(Expression::Literal {
             value,
             column_name,

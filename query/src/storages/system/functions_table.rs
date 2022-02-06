@@ -126,11 +126,11 @@ impl Table for FunctionsTable {
             .collect::<Vec<&str>>();
 
         let block = DataBlock::create(self.table_info.schema(), vec![
-            Series::new(names),
-            Series::new(is_builtin),
-            Series::new(is_aggregate),
-            Series::new(definitions),
-            Series::new(descriptions),
+            Series::from_data(names),
+            Series::from_data(is_builtin),
+            Series::from_data(is_aggregate),
+            Series::from_data(definitions),
+            Series::from_data(descriptions),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(

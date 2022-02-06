@@ -214,7 +214,7 @@ impl<'a> SubQueriesPuller<'a> {
 
                 #[allow(clippy::needless_range_loop)]
                 for column_index in 0..data_block.num_columns() {
-                    let series = data_block.column(column_index).to_array()?;
+                    let series = data_block.column(column_index);
                     let mut values = series.to_values()?;
                     columns[column_index].1.append(&mut values)
                 }
@@ -223,7 +223,7 @@ impl<'a> SubQueriesPuller<'a> {
             let mut struct_fields = Vec::with_capacity(columns.len());
 
             for (data_type, values) in columns {
-                struct_fields.push(DataValue::List(Some(values), data_type))
+                struct_fields.push(DataValue::Array(values))
             }
 
             match struct_fields.len() {
@@ -251,9 +251,8 @@ impl<'a> SubQueriesPuller<'a> {
 
                 let mut columns_data = Vec::with_capacity(data_block.num_columns());
                 for column in data_block.columns() {
-                    let series = column.to_array()?;
-                    match series.to_values()? {
-                        values if values.len() == 1 => columns_data.push(values[0].clone()),
+                    match column.len() {
+                        1 => columns_data.push(column.get(0)),
                         _ => {
                             return Err(ErrorCode::ScalarSubqueryBadRows(
                                 "Scalar subquery result set must be one row.",

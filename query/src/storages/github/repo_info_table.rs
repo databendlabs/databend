@@ -69,13 +69,13 @@ impl RepoInfoTable {
     fn schema() -> Arc<DataSchema> {
         let fields = vec![
             DataField::new(REPOSITORY, Vu8::to_data_type()),
-            DataField::new_nullable(LANGUAGE, DataType::String),
-            DataField::new_nullable(LICENSE, DataType::String),
-            DataField::new_nullable(STAR_COUNT, u32::to_data_type()),
-            DataField::new_nullable(FORKS_COUNT, u32::to_data_type()),
-            DataField::new_nullable(WATCHERS_COUNT, u32::to_data_type()),
-            DataField::new_nullable(OPEN_ISSUES_COUNT, u32::to_data_type()),
-            DataField::new_nullable(SUBSCRIBERS_COUNT, u32::to_data_type()),
+            DataField::new(LANGUAGE, DataType::String),
+            DataField::new(LICENSE, DataType::String),
+            DataField::new(STAR_COUNT, u32::to_data_type()),
+            DataField::new(FORKS_COUNT, u32::to_data_type()),
+            DataField::new(WATCHERS_COUNT, u32::to_data_type()),
+            DataField::new(OPEN_ISSUES_COUNT, u32::to_data_type()),
+            DataField::new(SUBSCRIBERS_COUNT, u32::to_data_type()),
         ];
 
         Arc::new(DataSchema::new(fields))
@@ -117,14 +117,14 @@ impl GithubDataGetter for RepoInfoTable {
         let subscribers_count_array: Vec<u32> = vec![repo.subscribers_count.unwrap_or(0) as u32];
 
         Ok(vec![
-            Series::new(repo_name_array),
-            Series::new(language_array),
-            Series::new(license_array),
-            Series::new(star_count_array),
-            Series::new(forks_count_array),
-            Series::new(watchers_count_array),
-            Series::new(open_issues_count_array),
-            Series::new(subscribers_count_array),
+            Series::from_data(repo_name_array),
+            Series::from_data(language_array),
+            Series::from_data(license_array),
+            Series::from_data(star_count_array),
+            Series::from_data(forks_count_array),
+            Series::from_data(watchers_count_array),
+            Series::from_data(open_issues_count_array),
+            Series::from_data(subscribers_count_array),
         ])
     }
 }

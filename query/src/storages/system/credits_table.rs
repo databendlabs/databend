@@ -93,9 +93,9 @@ impl Table for CreditsTable {
             .collect();
 
         let block = DataBlock::create(self.table_info.schema(), vec![
-            Series::new(names),
-            Series::new(versions),
-            Series::new(licenses),
+            Series::from_data(names),
+            Series::from_data(versions),
+            Series::from_data(licenses),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(

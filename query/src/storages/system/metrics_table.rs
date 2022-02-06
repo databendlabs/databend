@@ -117,10 +117,10 @@ impl Table for MetricsTable {
         }
 
         let block = DataBlock::create(self.table_info.schema(), vec![
-            Series::new(metrics),
-            Series::new(kinds),
-            Series::new(labels),
-            Series::new(values),
+            Series::from_data(metrics),
+            Series::from_data(kinds),
+            Series::from_data(labels),
+            Series::from_data(values),
         ]);
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),

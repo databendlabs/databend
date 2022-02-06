@@ -70,9 +70,9 @@ impl Interpreter for DescribeTableInterpreter {
         let desc_schema = self.plan.schema();
 
         let block = DataBlock::create(desc_schema.clone(), vec![
-            Series::new(names),
-            Series::new(types),
-            Series::new(nulls),
+            Series::from_data(names),
+            Series::from_data(types),
+            Series::from_data(nulls),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(desc_schema, None, vec![

@@ -71,8 +71,8 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
         }
         let schema = self.plan.schema();
         let block = DataBlock::create(schema.clone(), vec![
-            Series::new(vec![name.as_bytes()]),
-            Series::new(vec![info.into_bytes()]),
+            Series::from_data(vec![name.as_bytes()]),
+            Series::from_data(vec![info.into_bytes()]),
         ]);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))
     }

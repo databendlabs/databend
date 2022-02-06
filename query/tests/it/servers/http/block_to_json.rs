@@ -27,13 +27,22 @@ where T: Serialize {
 }
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("c1", DataType::Int32, is_nullable),
-        DataField::new("c2", DataType::String, is_nullable),
-        DataField::new("c3", DataType::Boolean, is_nullable),
-        DataField::new("c4", DataType::Float64, is_nullable),
-        DataField::new("c5", DataType::Date16, is_nullable),
-    ]);
+    let schema = match is_nullable {
+        false => DataSchemaRefExt::create(vec![
+            DataField::new("c1", DataType::Int32),
+            DataField::new("c2", DataType::String),
+            DataField::new("c3", DataType::Boolean),
+            DataField::new("c4", DataType::Float64),
+            DataField::new("c5", DataType::Date16),
+        ]),
+        true => DataSchemaRefExt::create(vec![
+            DataField::new_nullable("c1", DataType::Int32),
+            DataField::new_nullable("c2", DataType::String),
+            DataField::new_nullable("c3", DataType::Boolean),
+            DataField::new_nullable("c4", DataType::Float64),
+            DataField::new_nullable("c5", DataType::Date16),
+        ]),
+    };
 
     let block = DataBlock::create(schema, vec![
         Series::new(vec![1, 2, 3]),

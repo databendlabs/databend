@@ -71,7 +71,7 @@ impl ExplainInterpreter {
             Optimizers::create(self.ctx.clone()),
             &self.explain.input,
         )?;
-        let formatted_plan = Series::new(
+        let formatted_plan = Series::from_data(
             format!("{}", plan.display_graphviz())
                 .lines()
                 .map(|s| s.as_bytes())
@@ -86,7 +86,7 @@ impl ExplainInterpreter {
             Optimizers::create(self.ctx.clone()),
             &self.explain.input,
         )?;
-        let formatted_plan = Series::new(
+        let formatted_plan = Series::from_data(
             format!("{:?}", plan)
                 .lines()
                 .map(|s| s.as_bytes())
@@ -102,7 +102,7 @@ impl ExplainInterpreter {
 
         let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
         let pipeline = pipeline_builder.build(&plan)?;
-        let formatted_pipeline = Series::new(
+        let formatted_pipeline = Series::from_data(
             format!("{:?}", pipeline)
                 .lines()
                 .map(|s| s.as_bytes())

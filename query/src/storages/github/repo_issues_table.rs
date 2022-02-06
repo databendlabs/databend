@@ -73,15 +73,15 @@ impl RepoIssuesTable {
     fn schema() -> Arc<DataSchema> {
         let fields = vec![
             DataField::new(NUMBER, i64::to_data_type()),
-            DataField::new_nullable(TITLE, DataType::String),
-            DataField::new_nullable(STATE, DataType::String),
-            DataField::new_nullable(USER, DataType::String),
-            DataField::new_nullable(LABELS, DataType::String),
-            DataField::new_nullable(ASSIGNESS, DataType::String),
-            DataField::new_nullable(COMMENTS, u32::to_data_type()),
-            DataField::new_nullable(CREATED_AT, DataType::DateTime32(None)),
-            DataField::new_nullable(UPDATED_AT, DataType::DateTime32(None)),
-            DataField::new_nullable(CLOSED_AT, DataType::DateTime32(None)),
+            DataField::new(TITLE, Vu8::to_data_type()),
+            DataField::new(STATE, Vu8::to_data_type()),
+            DataField::new(USER, Vu8::to_data_type()),
+            DataField::new(LABELS, Vu8::to_data_type()),
+            DataField::new(ASSIGNESS, Vu8::to_data_type()),
+            DataField::new(COMMENTS, u32::to_data_type()),
+            DataField::new(CREATED_AT, DateTime32Type::arc(None)),
+            DataField::new(UPDATED_AT, DateTime32Type::arc(None)),
+            DataField::new_nullable(CLOSED_AT, DateTime32Type::arc(None)),
         ];
 
         Arc::new(DataSchema::new(fields))
@@ -156,16 +156,16 @@ impl GithubDataGetter for RepoIssuesTable {
         }
 
         Ok(vec![
-            Series::new(issue_numer_array),
-            Series::new(title_array),
-            Series::new(state_array),
-            Series::new(user_array),
-            Series::new(labels_array),
-            Series::new(assigness_array),
-            Series::new(comments_number_array),
-            Series::new(created_at_array),
-            Series::new(updated_at_array),
-            Series::new(closed_at_array),
+            Series::from_data(issue_numer_array),
+            Series::from_data(title_array),
+            Series::from_data(state_array),
+            Series::from_data(user_array),
+            Series::from_data(labels_array),
+            Series::from_data(assigness_array),
+            Series::from_data(comments_number_array),
+            Series::from_data(created_at_array),
+            Series::from_data(updated_at_array),
+            Series::from_data(closed_at_array),
         ])
     }
 }

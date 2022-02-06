@@ -15,6 +15,7 @@
 use std::marker::PhantomData;
 
 use common_exception::Result;
+use serde_json::Value;
 
 use crate::prelude::*;
 
@@ -36,8 +37,17 @@ impl<T: PrimitiveType> TypeSerializer for NumberSerializer<T> {
     }
 
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
-        let array: &PrimitiveColumn<T> = Series::check_get(column)?;
-        let result: Vec<String> = array.iter().map(|x| format!("{}", x)).collect();
+        let column: &PrimitiveColumn<T> = Series::check_get(column)?;
+        let result: Vec<String> = column.iter().map(|x| format!("{}", x)).collect();
+        Ok(result)
+    }
+
+    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+        let column: &PrimitiveColumn<T> = Series::check_get(column)?;
+        let result: Vec<Value> = column
+            .iter()
+            .map(|x| serde_json::to_value(x).unwrap())
+            .collect();
         Ok(result)
     }
 }

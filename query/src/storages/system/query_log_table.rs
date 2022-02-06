@@ -54,8 +54,8 @@ impl QueryLogTable {
             DataField::new("query_id", Vu8::to_data_type()),
             DataField::new("query_kind", Vu8::to_data_type()),
             DataField::new("query_text", Vu8::to_data_type()),
-            DataField::new("event_date", DataType::Date32, false),
-            DataField::new("event_time", DataType::DateTime64(3, None), false),
+            DataField::new("event_date", Date32Type::arc()),
+            DataField::new("event_time", DateTime64Type::arc(3, None)),
             // Schema.
             DataField::new("current_database", Vu8::to_data_type()),
             DataField::new("databases", Vu8::to_data_type()),

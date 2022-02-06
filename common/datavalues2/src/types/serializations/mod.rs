@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_exception::Result;
+use serde_json::Value;
 
 use crate::prelude::*;
-
 mod array;
 mod boolean;
 mod date;
@@ -38,5 +38,6 @@ pub use struct_::*;
 
 pub trait TypeSerializer: Send + Sync {
     fn serialize_value(&self, value: &DataValue) -> Result<String>;
+    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>>;
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>>;
 }

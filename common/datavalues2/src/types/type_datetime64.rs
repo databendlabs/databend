@@ -110,7 +110,11 @@ impl DataType for DateTime64Type {
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(DateTimeSerializer::<u64>::default())
+        let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
+        Box::new(DateTimeSerializer::<u64>::create(
+            tz.parse::<Tz>().unwrap(),
+            self.precision as u32,
+        ))
     }
 
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {

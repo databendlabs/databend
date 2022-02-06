@@ -21,6 +21,7 @@ use common_datablocks::DataBlock;
 use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::check_pattern_type;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::PatternType;
 use common_planners::lit;
@@ -84,12 +85,12 @@ impl RangeFilter {
             if val_opt.is_none() {
                 return Ok(true);
             }
-            columns.push(val_opt.unwrap().to_array()?);
+            columns.push(val_opt.unwrap());
         }
         let data_block = DataBlock::create(self.schema.clone(), columns);
         let executed_data_block = self.executor.execute(&data_block)?;
 
-        executed_data_block.column(0).try_get(0)?.as_bool()
+        executed_data_block.column(0).get_bool(0)
     }
 }
 
@@ -197,7 +198,7 @@ impl StatColumn {
         &self,
         stats: &BlockStatistics,
         schema: DataSchemaRef,
-    ) -> Result<Option<DataValue>> {
+    ) -> Result<Option<ColumnRef>> {
         if self.stat_type == StatType::Nulls {
             // The len of column_fields is 1.
             let (k, _) = self.column_fields.iter().next().unwrap();
@@ -207,7 +208,7 @@ impl StatColumn {
                     k
                 ))
             })?;
-            return Ok(Some(DataValue::UInt64(Some(stat.null_count))));
+            return Ok(Some(Series::from_data(vec![stat.null_count])));
         }
 
         let mut single_point = true;
@@ -224,12 +225,15 @@ impl StatColumn {
                 single_point = false;
             }
 
+            let min_col = v.data_type().create_constant_column(&stat.min, 1)?;
             let variable_left = Some(ColumnWithField::new(
-                &v.data_type().create_constant_column(&stat.min, 1)?,
+                min_col,
                 v.clone(),
             ));
+
+            let max_col = v.data_type().create_constant_column(&stat.max, 1)?;
             let variable_right = Some(ColumnWithField::new(
-                &v.data_type().create_constant_column(&stat.max, 1)?,
+                max_col,
                 v.clone(),
             ));
             variables.insert(v.name().clone(), (variable_left, variable_right));
@@ -263,7 +267,7 @@ impl StatColumn {
             _ => unreachable!(),
         };
 
-        Ok(column_with_field_opt.map(|v| v.column().try_get(0).unwrap()))
+        Ok(column_with_field_opt.map(|v| v.column().slice(0, 1)))
     }
 }
 
@@ -457,7 +461,7 @@ impl<'a> VerifiableExprBuilder<'a> {
             }
             "like" => {
                 if let Expression::Literal {
-                    value: DataValue::String(Some(v)),
+                    value: DataValue::String(v),
                     ..
                 } = &self.args[1]
                 {
@@ -480,7 +484,7 @@ impl<'a> VerifiableExprBuilder<'a> {
             }
             "not like" => {
                 if let Expression::Literal {
-                    value: DataValue::String(Some(v)),
+                    value: DataValue::String(v),
                     ..
                 } = &self.args[1]
                 {

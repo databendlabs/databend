@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use serde_json::Value;
 
 use crate::prelude::DataValue;
 use crate::ColumnRef;
@@ -30,6 +31,12 @@ impl TypeSerializer for NullSerializer {
 
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
         let result: Vec<String> = vec![NULL_STR.to_owned(); column.len()];
+        Ok(result)
+    }
+
+    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+        let null = Value::Null;
+        let result: Vec<Value> = vec![null; column.len()];
         Ok(result)
     }
 }

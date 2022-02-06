@@ -41,12 +41,12 @@ impl ProcessesTable {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("id", Vu8::to_data_type()),
             DataField::new("type", Vu8::to_data_type()),
-            DataField::new_nullable("host", DataType::String),
-            DataField::new_nullable("user", DataType::String),
+            DataField::new_nullable("host", Vu8::to_data_type()),
+            DataField::new_nullable("user", Vu8::to_data_type()),
             DataField::new("state", Vu8::to_data_type()),
             DataField::new("database", Vu8::to_data_type()),
-            DataField::new_nullable("extra_info", DataType::String),
-            DataField::new_nullable("memory_usage", DataType::Int64),
+            DataField::new_nullable("extra_info", Vu8::to_data_type()),
+            DataField::new_nullable("memory_usage", i64::to_data_type()),
             DataField::new_nullable("dal_metrics_read_bytes", u64::to_data_type()),
             DataField::new_nullable("dal_metrics_write_bytes", u64::to_data_type()),
             DataField::new_nullable("scan_progress_read_rows", u64::to_data_type()),
@@ -159,18 +159,18 @@ impl Table for ProcessesTable {
 
         let schema = self.table_info.schema();
         let block = DataBlock::create(schema.clone(), vec![
-            Series::new(processes_id),
-            Series::new(processes_type),
-            Series::new(processes_host),
-            Series::new(processes_user),
-            Series::new(processes_state),
-            Series::new(processes_database),
-            Series::new(processes_extra_info),
-            Series::new(processes_memory_usage),
-            Series::new(processes_dal_metrics_read_bytes),
-            Series::new(processes_dal_metrics_write_bytes),
-            Series::new(processes_scan_progress_read_rows),
-            Series::new(processes_scan_progress_read_bytes),
+            Series::from_data(processes_id),
+            Series::from_data(processes_type),
+            Series::from_data(processes_host),
+            Series::from_data(processes_user),
+            Series::from_data(processes_state),
+            Series::from_data(processes_database),
+            Series::from_data(processes_extra_info),
+            Series::from_data(processes_memory_usage),
+            Series::from_data(processes_dal_metrics_read_bytes),
+            Series::from_data(processes_dal_metrics_write_bytes),
+            Series::from_data(processes_scan_progress_read_rows),
+            Series::from_data(processes_scan_progress_read_bytes),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))

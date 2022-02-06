@@ -118,7 +118,7 @@ impl Processor for AggregatorPartialTransform {
             for (idx, func) in funcs.iter().enumerate() {
                 let mut arg_columns = vec![];
                 for name in arg_names[idx].iter() {
-                    arg_columns.push(block.try_column_by_name(name)?.to_array()?);
+                    arg_columns.push(block.try_column_by_name(name)?);
                 }
                 let place = places[idx].into();
                 func.accumulate(place, &arg_columns, rows)?;

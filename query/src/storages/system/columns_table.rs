@@ -111,11 +111,11 @@ impl Table for ColumnsTable {
         }
 
         let block = DataBlock::create(self.table_info.schema(), vec![
-            Series::new(names),
-            Series::new(databases),
-            Series::new(tables),
-            Series::new(data_types),
-            Series::new(is_nullables),
+            Series::from_data(names),
+            Series::from_data(databases),
+            Series::from_data(tables),
+            Series::from_data(data_types),
+            Series::from_data(is_nullables),
         ]);
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),

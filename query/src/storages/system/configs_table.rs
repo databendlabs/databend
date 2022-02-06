@@ -226,10 +226,10 @@ impl Table for ConfigsTable {
         let groups: Vec<&str> = groups.iter().map(|x| x.as_str()).collect();
         let descs: Vec<&str> = descs.iter().map(|x| x.as_str()).collect();
         let block = DataBlock::create(self.table_info.schema(), vec![
-            Series::new(names),
-            Series::new(values),
-            Series::new(groups),
-            Series::new(descs),
+            Series::from_data(names),
+            Series::from_data(values),
+            Series::from_data(groups),
+            Series::from_data(descs),
         ]);
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),
