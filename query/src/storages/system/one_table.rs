@@ -81,7 +81,7 @@ impl Table for OneTable {
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let block =
-            DataBlock::create_by_array(self.table_info.schema(), vec![Series::new(vec![1u8])]);
+            DataBlock::create(self.table_info.schema(), vec![Series::new(vec![1u8])]);
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),
             None,

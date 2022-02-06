@@ -31,12 +31,12 @@ fn test_sparse_index() -> Result<()> {
         DataField::new("age", i32::to_data_type()),
     ]);
 
-    let block1 = DataBlock::create_by_array(schema.clone(), vec![
+    let block1 = DataBlock::create(schema.clone(), vec![
         Series::new(vec!["jack", "ace", "bohu"]),
         Series::new(vec![11, 6, 24]),
     ]);
 
-    let block2 = DataBlock::create_by_array(schema, vec![
+    let block2 = DataBlock::create(schema, vec![
         Series::new(vec!["xjack", "xace", "xbohu"]),
         Series::new(vec![11, 6, 24]),
     ]);

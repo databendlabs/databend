@@ -82,7 +82,7 @@ impl Interpreter for ShowCreateTableInterpreter {
         ];
         let show_schema = DataSchemaRefExt::create(show_fields);
 
-        let block = DataBlock::create_by_array(show_schema.clone(), vec![
+        let block = DataBlock::create(show_schema.clone(), vec![
             Series::new(vec![name.as_bytes()]),
             Series::new(vec![table_info.into_bytes()]),
         ]);

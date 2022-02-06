@@ -29,7 +29,7 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 #[test]
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
-    let block = DataBlock::create_by_array(schema, vec![Series::new(vec![1, 2, 3])]);
+    let block = DataBlock::create(schema, vec![Series::new(vec![1, 2, 3])]);
     let r = StatisticsAccumulator::acc_columns(&block)?;
     assert_eq!(1, r.len());
     let col_stats = r.get(&0).unwrap();

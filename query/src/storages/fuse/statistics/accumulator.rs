@@ -16,8 +16,9 @@
 use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::DataColumn;
+use common_datavalues2::prelude::*;
 use common_datavalues2::DataSchema;
+use common_functions::aggregates::eval_aggr;
 
 use crate::storages::fuse::meta::BlockLocation;
 use crate::storages::fuse::meta::BlockMeta;
@@ -62,43 +63,45 @@ impl StatisticsAccumulator {
     }
 
     pub fn acc_columns(data_block: &DataBlock) -> common_exception::Result<BlockStatistics> {
-        (0..)
-            .into_iter()
-            .zip(data_block.columns().iter())
-            .map(|(idx, col)| {
-                let min = match col {
-                    DataColumn::Array(s) => s.min(),
-                    DataColumn::Constant(v, _) => Ok(v.clone()),
-                }?;
+        let mut statistics = BlockStatistics::new();
 
-                let max = match col {
-                    DataColumn::Array(s) => s.max(),
-                    DataColumn::Constant(v, _) => Ok(v.clone()),
-                }?;
+        let rows = data_block.num_rows();
+        for idx in 0..data_block.num_columns() {
+            let col = data_block.column(idx);
+            let field = data_block.schema().field(idx);
+            let column_field = ColumnWithField::new(col.clone(), field.clone());
 
-                let null_count = match col {
-                    DataColumn::Array(s) => s.null_count(),
-                    DataColumn::Constant(v, _) => {
-                        if v.is_null() {
-                            1
-                        } else {
-                            0
-                        }
-                    }
-                } as u64;
+            let mut min = DataValue::Null;
+            let mut max = DataValue::Null;
 
-                let in_memory_size = col.get_array_memory_size() as u64;
+            let mins = eval_aggr("min", vec![], &[column_field], rows)?;
+            let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
 
-                let col_stats = ColumnStatistics {
-                    min,
-                    max,
-                    null_count,
-                    in_memory_size,
-                };
+            if mins.len() > 0 {
+                min = mins.get(0);
+            }
+            if maxs.len() > 0 {
+                max = maxs.get(0);
+            }
 
-                Ok((idx, col_stats))
-            })
-            .collect()
+            let (is_all_null, bitmap) = col.validity();
+            let null_count = match (is_all_null, bitmap) {
+                (true, _) => rows,
+                (false, Some(bitmap)) => bitmap.null_count(),
+                (false, None) => 0,
+            };
+
+            let in_memory_size = col.memory_size() as u64;
+            let col_stats = ColumnStatistics {
+                min,
+                max,
+                null_count,
+                in_memory_size,
+            };
+
+            statistics.insert(idx, col_stats);
+        }
+        Ok(statistics)
     }
 }
 

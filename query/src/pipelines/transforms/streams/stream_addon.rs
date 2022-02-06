@@ -17,7 +17,7 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::DataColumn;
+use common_datavalues2::prelude::*;
 use common_datavalues2::DataField;
 use common_datavalues2::DataSchema;
 use common_datavalues2::DataSchemaRef;
@@ -101,10 +101,11 @@ impl AddOnStream {
         }
 
         for f in &self.default_nonexpr_fields {
-            let column = DataColumn::Constant(
-                DataValue::new_from_data_type(f.data_type(), f.is_nullable()),
-                num_rows,
-            );
+            let default_value = f.data_type().default_value();
+            let column = f
+                .data_type()
+                .create_constant_column(&default_value, num_rows)?;
+
             block = block.add_column(column, f.clone())?;
         }
         block.resort(self.output_schema.clone())

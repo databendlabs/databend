@@ -256,7 +256,7 @@ impl Settings {
         let setting = self.check_and_get_setting_value(&key)?;
 
         match setting.user_setting.value.data_type() {
-            DataType::UInt64 => {
+            u64::to_data_type() => {
                 let u64_val = val.parse::<u64>()?;
                 self.try_set_u64(&key, u64_val)?;
             }

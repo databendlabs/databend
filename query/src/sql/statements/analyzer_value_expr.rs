@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::DataType;
-use common_datavalues2::DataValue;
-use common_datavalues2::IntervalUnit;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -60,7 +58,7 @@ impl ValueExprAnalyzer {
     }
 
     fn analyze_bool_value(value: &bool) -> Result<Expression> {
-        Ok(Expression::create_literal(DataValue::Boolean(Some(*value))))
+        Ok(Expression::create_literal(DataValue::Boolean(*value)))
     }
 
     fn analyze_number_value(value: &str, radix: Option<u32>) -> Result<Expression> {
@@ -69,7 +67,7 @@ impl ValueExprAnalyzer {
     }
 
     fn analyze_string_value(value: &str) -> Result<Expression> {
-        let data_value = DataValue::String(Some(value.to_string().into_bytes()));
+        let data_value = DataValue::String(value.to_string().into_bytes());
         Ok(Expression::create_literal(data_value))
     }
 
@@ -101,9 +99,9 @@ impl ValueExprAnalyzer {
 
     fn year_month_interval(months: i32) -> Result<Expression> {
         Ok(Expression::Literal {
-            value: DataValue::Int64(Some(months as i64)),
+            value: DataValue::Int64(months as i64),
             column_name: Some(months.to_string()),
-            data_type: DataType::Interval(IntervalUnit::YearMonth),
+            data_type: IntervalType::arc(IntervalUnit::YearMonth),
         })
     }
 
@@ -112,9 +110,9 @@ impl ValueExprAnalyzer {
         let total_ms = days as i64 * MILLISECONDS_PER_DAY + ms as i64;
 
         Ok(Expression::Literal {
-            value: DataValue::Int64(Some(total_ms)),
+            value: DataValue::Int64(total_ms),
             column_name: Some(total_ms.to_string()),
-            data_type: DataType::Interval(IntervalUnit::DayTime),
+            data_type: IntervalType::arc(IntervalUnit::DayTime),
         })
     }
 }

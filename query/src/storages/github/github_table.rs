@@ -107,7 +107,7 @@ impl Table for GithubTable {
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let arrays = self.get_data_from_github().await?;
-        let block = DataBlock::create_by_array(self.table_info.schema(), arrays);
+        let block = DataBlock::create(self.table_info.schema(), arrays);
 
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),

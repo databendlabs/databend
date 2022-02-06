@@ -225,7 +225,7 @@ impl Table for ConfigsTable {
         let values: Vec<&str> = values.iter().map(|x| x.as_str()).collect();
         let groups: Vec<&str> = groups.iter().map(|x| x.as_str()).collect();
         let descs: Vec<&str> = descs.iter().map(|x| x.as_str()).collect();
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
+        let block = DataBlock::create(self.table_info.schema(), vec![
             Series::new(names),
             Series::new(values),
             Series::new(groups),

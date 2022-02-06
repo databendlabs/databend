@@ -19,11 +19,7 @@ use std::sync::Arc;
 use common_base::ProgressValues;
 use common_dal::DalMetrics;
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::Series;
-use common_datavalues2::prelude::SeriesFrom;
-use common_datavalues2::DataField;
-use common_datavalues2::DataSchemaRefExt;
-use common_datavalues2::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -45,16 +41,16 @@ impl ProcessesTable {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("id", Vu8::to_data_type()),
             DataField::new("type", Vu8::to_data_type()),
-            DataField::new("host", DataType::String, true),
-            DataField::new("user", DataType::String, true),
+            DataField::new_nullable("host", DataType::String),
+            DataField::new_nullable("user", DataType::String),
             DataField::new("state", Vu8::to_data_type()),
             DataField::new("database", Vu8::to_data_type()),
-            DataField::new("extra_info", DataType::String, true),
-            DataField::new("memory_usage", DataType::Int64, true),
-            DataField::new("dal_metrics_read_bytes", DataType::UInt64, true),
-            DataField::new("dal_metrics_write_bytes", DataType::UInt64, true),
-            DataField::new("scan_progress_read_rows", DataType::UInt64, true),
-            DataField::new("scan_progress_read_bytes", DataType::UInt64, true),
+            DataField::new_nullable("extra_info", DataType::String),
+            DataField::new_nullable("memory_usage", DataType::Int64),
+            DataField::new_nullable("dal_metrics_read_bytes", u64::to_data_type()),
+            DataField::new_nullable("dal_metrics_write_bytes", u64::to_data_type()),
+            DataField::new_nullable("scan_progress_read_rows", u64::to_data_type()),
+            DataField::new_nullable("scan_progress_read_bytes", u64::to_data_type()),
         ]);
 
         let table_info = TableInfo {
@@ -162,7 +158,7 @@ impl Table for ProcessesTable {
         }
 
         let schema = self.table_info.schema();
-        let block = DataBlock::create_by_array(schema.clone(), vec![
+        let block = DataBlock::create(schema.clone(), vec![
             Series::new(processes_id),
             Series::new(processes_type),
             Series::new(processes_host),

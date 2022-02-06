@@ -92,7 +92,7 @@ impl Table for CreditsTable {
             })
             .collect();
 
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
+        let block = DataBlock::create(self.table_info.schema(), vec![
             Series::new(names),
             Series::new(versions),
             Series::new(licenses),

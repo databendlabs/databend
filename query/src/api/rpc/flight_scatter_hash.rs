@@ -88,7 +88,7 @@ impl HashFlightScatter {
             args: vec![
                 Expression::Cast {
                     expr: Box::new(expr),
-                    data_type: DataType::UInt64,
+                    data_type: u64::to_data_type(),
                     is_nullable: true,
                 },
                 Expression::create_literal(DataValue::UInt64(Some(num as u64))),

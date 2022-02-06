@@ -17,11 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::Series;
-use common_datavalues2::prelude::SeriesFrom;
-use common_datavalues2::DataField;
-use common_datavalues2::DataSchemaRefExt;
-use common_datavalues2::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableIdent;
@@ -120,7 +116,7 @@ impl Table for MetricsTable {
             values.push(self.display_sample_value(&sample.value)?.into_bytes());
         }
 
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
+        let block = DataBlock::create(self.table_info.schema(), vec![
             Series::new(metrics),
             Series::new(kinds),
             Series::new(labels),

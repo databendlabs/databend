@@ -16,11 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::Series;
-use common_datavalues2::prelude::SeriesFrom;
-use common_datavalues2::DataField;
-use common_datavalues2::DataSchemaRefExt;
-use common_datavalues2::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -44,7 +40,7 @@ impl ColumnsTable {
             DataField::new("database", Vu8::to_data_type()),
             DataField::new("table", Vu8::to_data_type()),
             DataField::new("data_type", Vu8::to_data_type()),
-            DataField::new("is_nullable", DataType::Boolean, false),
+            DataField::new("is_nullable", bool::to_data_type()),
         ]);
 
         let table_info = TableInfo {
@@ -114,7 +110,7 @@ impl Table for ColumnsTable {
             is_nullables.push(field.is_nullable());
         }
 
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
+        let block = DataBlock::create(self.table_info.schema(), vec![
             Series::new(names),
             Series::new(databases),
             Series::new(tables),

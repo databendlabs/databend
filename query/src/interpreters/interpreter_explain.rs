@@ -77,7 +77,7 @@ impl ExplainInterpreter {
                 .map(|s| s.as_bytes())
                 .collect::<Vec<_>>(),
         );
-        Ok(DataBlock::create_by_array(schema, vec![formatted_plan]))
+        Ok(DataBlock::create(schema, vec![formatted_plan]))
     }
 
     fn explain_syntax(&self) -> Result<DataBlock> {
@@ -92,7 +92,7 @@ impl ExplainInterpreter {
                 .map(|s| s.as_bytes())
                 .collect::<Vec<_>>(),
         );
-        Ok(DataBlock::create_by_array(schema, vec![formatted_plan]))
+        Ok(DataBlock::create(schema, vec![formatted_plan]))
     }
 
     fn explain_pipeline(&self) -> Result<DataBlock> {
@@ -108,6 +108,6 @@ impl ExplainInterpreter {
                 .map(|s| s.as_bytes())
                 .collect::<Vec<_>>(),
         );
-        Ok(DataBlock::create_by_array(schema, vec![formatted_pipeline]))
+        Ok(DataBlock::create(schema, vec![formatted_pipeline]))
     }
 }

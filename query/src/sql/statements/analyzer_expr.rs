@@ -22,6 +22,7 @@ use common_ast::udfs::UDFDefinition;
 use common_ast::udfs::UDFFetcher;
 use common_ast::udfs::UDFParser;
 use common_ast::udfs::UDFTransformer;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -314,11 +315,7 @@ impl ExpressionAnalyzer {
         Ok(())
     }
 
-    fn analyze_cast(
-        &self,
-        data_type: &common_datavalues2::DataType,
-        args: &mut Vec<Expression>,
-    ) -> Result<()> {
+    fn analyze_cast(&self, data_type: &DataTypePtr, args: &mut Vec<Expression>) -> Result<()> {
         match args.pop() {
             None => Err(ErrorCode::LogicalError(
                 "Cast operator must be one children.",
@@ -389,7 +386,7 @@ enum ExprRPNItem {
     Wildcard,
     Exists(Box<Query>),
     Subquery(Box<Query>),
-    Cast(common_datavalues2::DataType),
+    Cast(DataTypePtr),
     Between(bool),
     InList(InListInfo),
 }

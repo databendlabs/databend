@@ -103,7 +103,7 @@ impl InterpreterQueryLog {
         let query_log = self.ctx.get_table("system", "query_log").await?;
         let schema = query_log.get_table_info().meta.schema.clone();
 
-        let block = DataBlock::create_by_array(schema.clone(), vec![
+        let block = DataBlock::create(schema.clone(), vec![
             // Type.
             Series::new(vec![event.log_type as i8]),
             Series::new(vec![event.handler_type.as_str()]),

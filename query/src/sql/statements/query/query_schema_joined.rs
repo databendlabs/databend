@@ -18,10 +18,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_datavalues2::DataField;
-use common_datavalues2::DataSchema;
-use common_datavalues2::DataSchemaRef;
-use common_datavalues2::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;
@@ -109,17 +106,12 @@ impl JoinedSchema {
                     true => {
                         let prefix = table_desc.get_name_parts().join(".");
                         let fullname = format!("{}.{}", prefix, column_desc.short_name);
-                        fields.push(DataField::new(
-                            &fullname,
-                            column_desc.data_type.clone(),
-                            column_desc.nullable,
-                        ));
+                        fields.push(DataField::new(&fullname, column_desc.data_type.clone()));
                     }
                     false => {
                         fields.push(DataField::new(
                             &column_desc.short_name,
                             column_desc.data_type.clone(),
-                            column_desc.nullable,
                         ));
                     }
                 };
@@ -231,7 +223,7 @@ impl JoinedTableDesc {
 #[derive(Clone)]
 pub struct JoinedColumnDesc {
     pub short_name: String,
-    pub data_type: DataType,
+    pub data_type: DataTypePtr,
     pub nullable: bool,
     pub is_ambiguity: bool,
 }
@@ -246,7 +238,7 @@ impl JoinedColumnDesc {
         }
     }
 
-    pub fn create(alias: &str, data_type: DataType, nullable: bool) -> JoinedColumnDesc {
+    pub fn create(alias: &str, data_type: DataTypePtr, nullable: bool) -> JoinedColumnDesc {
         JoinedColumnDesc {
             short_name: alias.to_string(),
             data_type,

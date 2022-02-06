@@ -41,11 +41,7 @@ impl DataSchemaHelper {
         let column_entries = metadata.columns_by_table_index(scan.table_index);
         let mut data_fields = vec![];
         for column_entry in column_entries.iter() {
-            let field = DataField::new(
-                column_entry.name.as_str(),
-                column_entry.data_type.clone(),
-                column_entry.nullable,
-            );
+            let field = DataField::new(column_entry.name.as_str(), column_entry.data_type.clone());
             data_fields.push(field)
         }
         let result = DataSchema::new(data_fields);
@@ -62,11 +58,7 @@ impl DataSchemaHelper {
         let mut data_fields = vec![];
         for item in project.items.iter() {
             let column_entry = metadata.column(item.index);
-            let field = DataField::new(
-                column_entry.name.as_str(),
-                column_entry.data_type.clone(),
-                column_entry.nullable,
-            );
+            let field = DataField::new(column_entry.name.as_str(), column_entry.data_type.clone());
             data_fields.push(field);
         }
         let result = DataSchema::new(data_fields);

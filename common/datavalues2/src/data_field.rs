@@ -17,6 +17,7 @@ use common_macros::MallocSizeOf;
 
 use crate::types::data_type::from_arrow_field;
 use crate::types::data_type::DataTypePtr;
+use crate::wrap_nullable;
 use crate::TypeID;
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Clone, MallocSizeOf)]
@@ -30,6 +31,15 @@ pub struct DataField {
 
 impl DataField {
     pub fn new(name: &str, data_type: DataTypePtr) -> Self {
+        DataField {
+            name: name.to_string(),
+            default_expr: None,
+            data_type,
+        }
+    }
+
+    pub fn new_nullable(name: &str, data_type: DataTypePtr) -> Self {
+        let data_type = wrap_nullable(&data_type);
         DataField {
             name: name.to_string(),
             default_expr: None,

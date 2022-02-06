@@ -39,19 +39,6 @@ impl FlightDataStream {
             match flight_data {
                 Err(status) => Err(ErrorCode::UnknownException(status.message())),
                 Ok(flight_data) => {
-                    fn create_data_block(record_batch: RecordBatch) -> DataBlock {
-                        let columns = record_batch
-                            .columns()
-                            .iter()
-                            .map(|column| DataColumn::Array(column.clone().into_series()))
-                            .collect::<Vec<_>>();
-
-                        DataBlock::create(
-                            Arc::new(DataSchema::from(record_batch.schema().as_ref())),
-                            columns,
-                        )
-                    }
-
                     let arrow_schema = Arc::new(schema.to_arrow());
                     let ipc_fields = common_arrow::arrow::io::ipc::write::default_ipc_fields(
                         &arrow_schema.fields,
@@ -60,14 +47,13 @@ impl FlightDataStream {
                         fields: ipc_fields,
                         is_little_endian: true,
                     };
-
-                    Ok(deserialize_batch(
+                    let batch = deserialize_batch(
                         &flight_data,
                         arrow_schema,
                         &ipc_schema,
                         &Default::default(),
-                    )
-                    .map(create_data_block)?)
+                    )?;
+                    TryFrom::from(batch)
                 }
             }
         })
@@ -83,17 +69,6 @@ impl FlightDataStream {
         ReceiverStream::new(inner).map(move |flight_data| match flight_data {
             Err(error_code) => Err(error_code),
             Ok(flight_data) => {
-                fn create_data_block(record_batch: RecordBatch) -> DataBlock {
-                    let columns = record_batch
-                        .columns()
-                        .iter()
-                        .map(|column| DataColumn::Array(column.clone().into_series()))
-                        .collect::<Vec<_>>();
-
-                    let schema = DataSchema::from(record_batch.schema().as_ref());
-                    DataBlock::create(Arc::new(schema), columns)
-                }
-
                 let arrow_schema = Arc::new(schema.to_arrow());
                 let ipc_fields =
                     common_arrow::arrow::io::ipc::write::default_ipc_fields(&arrow_schema.fields);
@@ -104,7 +79,7 @@ impl FlightDataStream {
 
                 Ok(
                     deserialize_batch(&flight_data, arrow_schema, &ipc_schema, &Default::default())
-                        .map(create_data_block)?,
+                        .map(TryFrom::try_from)?,
                 )
             }
         })

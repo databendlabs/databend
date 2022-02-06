@@ -35,7 +35,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         DataField::new("c5", DataType::Date16, is_nullable),
     ]);
 
-    let block = DataBlock::create_by_array(schema, vec![
+    let block = DataBlock::create(schema, vec![
         Series::new(vec![1, 2, 3]),
         Series::new(vec!["a", "b", "c"]),
         Series::new(vec![true, true, false]),

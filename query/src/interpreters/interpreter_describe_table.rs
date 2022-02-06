@@ -69,7 +69,7 @@ impl Interpreter for DescribeTableInterpreter {
 
         let desc_schema = self.plan.schema();
 
-        let block = DataBlock::create_by_array(desc_schema.clone(), vec![
+        let block = DataBlock::create(desc_schema.clone(), vec![
             Series::new(names),
             Series::new(types),
             Series::new(nulls),

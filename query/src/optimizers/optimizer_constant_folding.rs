@@ -79,7 +79,8 @@ impl ConstantFoldingImpl {
 
         let data_type = expression.to_data_type(&input_schema)?;
         let expression_executor = Self::expr_executor(&input_schema, expression)?;
-        let dummy_columns = vec![DataColumn::Constant(DataValue::UInt8(Some(1)), 1)];
+        let const_col = ConstColumn::new(Series::from_data(vec![1u8]), 1);
+        let dummy_columns = vec![Arc::new(const_col)];
         let data_block = DataBlock::create(input_schema, dummy_columns);
         let executed_data_block = expression_executor.execute(&data_block)?;
 
@@ -89,7 +90,7 @@ impl ConstantFoldingImpl {
     fn convert_to_expression(
         column_name: String,
         data_block: DataBlock,
-        data_type: DataType,
+        data_type: DataTypePtr,
     ) -> Result<Expression> {
         debug_assert!(data_block.num_rows() == 1);
         debug_assert!(data_block.num_columns() == 1);
@@ -162,7 +163,7 @@ impl PlanRewriter for ConstantFoldingImpl {
 
             fn mutate_cast(
                 &mut self,
-                typ: &DataType,
+                typ: &DataTypePtr,
                 expr: Expression,
                 origin_expr: &Expression,
                 is_nullable: bool,

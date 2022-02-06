@@ -42,6 +42,10 @@ impl DateTime64Type {
         Arc::new(DateTime64Type { precision, tz })
     }
 
+    pub fn tz(&self) -> Option<&String> {
+        self.tz.as_ref()
+    }
+
     pub fn precision(&self) -> usize {
         self.precision
     }

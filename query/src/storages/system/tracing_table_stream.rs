@@ -94,7 +94,7 @@ impl TracingTableStream {
         let hosts: Vec<&[u8]> = host_col.iter().map(|x| x.as_bytes()).collect();
         let times: Vec<&[u8]> = time_col.iter().map(|x| x.as_bytes()).collect();
 
-        let block = DataBlock::create_by_array(self.schema.clone(), vec![
+        let block = DataBlock::create(self.schema.clone(), vec![
             Series::new(version_col),
             Series::new(names),
             Series::new(msgs),

@@ -19,26 +19,25 @@ use common_datavalues2::prelude::*;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 
 /// Remove the group by key from the state and rebuild it into a column
-pub trait KeysArrayBuilder<Key> {
+pub trait KeysColumnBuilder<Key> {
     fn finish(self) -> Series;
     fn append_value(&mut self, v: &Key);
 }
 
-pub struct FixedKeysArrayBuilder<T>
-where T: DFPrimitiveType
+pub struct FixedKeysColumnBuilder<T>
+where T: PrimitiveType
 {
-    pub inner_builder: PrimitiveArrayBuilder<T>,
+    pub inner_builder: MutablePrimitiveColumn<T>,
 }
 
-impl<T> KeysArrayBuilder<T> for FixedKeysArrayBuilder<T>
+impl<T> KeysColumnBuilder<T> for FixedKeysColumnBuilder<T>
 where
-    T: DFPrimitiveType,
-    DFPrimitiveArray<T>: IntoSeries,
+    T: PrimitiveType,
     HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
 {
     #[inline]
-    fn finish(mut self) -> Series {
-        self.inner_builder.finish().into_series()
+    fn finish(mut self) -> ColumnRef {
+        self.inner_builder.to_column()
     }
 
     #[inline]
@@ -47,13 +46,13 @@ where
     }
 }
 
-pub struct SerializedKeysArrayBuilder {
-    pub inner_builder: StringArrayBuilder,
+pub struct SerializedKeysColumnBuilder {
+    pub inner_builder: MutableStringColumn,
 }
 
-impl KeysArrayBuilder<KeysRef> for SerializedKeysArrayBuilder {
-    fn finish(mut self) -> Series {
-        self.inner_builder.finish().into_series()
+impl KeysColumnBuilder<KeysRef> for SerializedKeysColumnBuilder {
+    fn finish(mut self) -> ColumnRef {
+        self.inner_builder.to_column()
     }
 
     fn append_value(&mut self, v: &KeysRef) {

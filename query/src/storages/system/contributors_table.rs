@@ -69,8 +69,7 @@ impl Table for ContributorsTable {
             .split_terminator(',')
             .map(|x| x.trim().as_bytes())
             .collect();
-        let block =
-            DataBlock::create_by_array(self.table_info.schema(), vec![Series::new(contributors)]);
+        let block = DataBlock::create(self.table_info.schema(), vec![Series::new(contributors)]);
 
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),

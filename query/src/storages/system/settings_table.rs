@@ -87,7 +87,7 @@ impl Table for SettingsTable {
         let names: Vec<&[u8]> = names.iter().map(|x| x.as_bytes()).collect();
         let values: Vec<&[u8]> = values.iter().map(|x| x.as_bytes()).collect();
         let descs: Vec<&[u8]> = descs.iter().map(|x| x.as_bytes()).collect();
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
+        let block = DataBlock::create(self.table_info.schema(), vec![
             Series::new(names),
             Series::new(values),
             Series::new(descs),

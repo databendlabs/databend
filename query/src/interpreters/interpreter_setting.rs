@@ -14,9 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues2::DataField;
-use common_datavalues2::DataSchemaRefExt;
-use common_datavalues2::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::SettingPlan;
 use common_streams::DataBlockStream;

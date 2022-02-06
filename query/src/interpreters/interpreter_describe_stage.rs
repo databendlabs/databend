@@ -127,7 +127,7 @@ impl Interpreter for DescribeStageInterpreter {
             .map(|(v, d)| v != d)
             .collect::<Vec<bool>>();
 
-        let block = DataBlock::create_by_array(schema.clone(), vec![
+        let block = DataBlock::create(schema.clone(), vec![
             Series::new(parent_properties),
             Series::new(properties),
             Series::new(property_types),

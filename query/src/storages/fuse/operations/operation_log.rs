@@ -49,13 +49,10 @@ impl AppendOperationLogEntry {
 impl TryFrom<AppendOperationLogEntry> for DataBlock {
     type Error = common_exception::ErrorCode;
     fn try_from(value: AppendOperationLogEntry) -> std::result::Result<Self, Self::Error> {
-        Ok(DataBlock::create_by_array(
-            AppendOperationLogEntry::schema(),
-            vec![
-                Series::new(vec![value.segment_location.as_str()]),
-                Series::new(vec![serde_json::to_string(&value.segment_info)?.as_str()]),
-            ],
-        ))
+        Ok(DataBlock::create(AppendOperationLogEntry::schema(), vec![
+            Series::new(vec![value.segment_location.as_str()]),
+            Series::new(vec![serde_json::to_string(&value.segment_info)?.as_str()]),
+        ]))
     }
 }
 

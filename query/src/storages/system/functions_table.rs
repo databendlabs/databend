@@ -39,8 +39,8 @@ impl FunctionsTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("name", Vu8::to_data_type()),
-            DataField::new("is_builtin", DataType::Boolean, false),
-            DataField::new("is_aggregate", DataType::Boolean, false),
+            DataField::new("is_builtin", bool::to_data_type()),
+            DataField::new("is_aggregate", bool::to_data_type()),
             DataField::new("definition", Vu8::to_data_type()),
             DataField::new("description", Vu8::to_data_type()),
         ]);
@@ -125,7 +125,7 @@ impl Table for FunctionsTable {
             })
             .collect::<Vec<&str>>();
 
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
+        let block = DataBlock::create(self.table_info.schema(), vec![
             Series::new(names),
             Series::new(is_builtin),
             Series::new(is_aggregate),

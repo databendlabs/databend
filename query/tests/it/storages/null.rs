@@ -46,7 +46,7 @@ async fn test_null_table() -> Result<()> {
 
     // append data.
     {
-        let block = DataBlock::create_by_array(schema.clone(), vec![
+        let block = DataBlock::create(schema.clone(), vec![
             Series::new(vec![1u64, 2]),
             Series::new(vec![11u64, 22]),
         ]);

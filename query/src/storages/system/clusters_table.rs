@@ -37,7 +37,7 @@ impl ClustersTable {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("name", Vu8::to_data_type()),
             DataField::new("host", Vu8::to_data_type()),
-            DataField::new("port", u16: to_data_type()),
+            DataField::new("port", u16::to_data_type()),
         ]);
 
         let table_info = TableInfo {
@@ -72,9 +72,9 @@ impl Table for ClustersTable {
     ) -> Result<SendableDataBlockStream> {
         let cluster_nodes = ctx.get_cluster().get_nodes();
 
-        let mut names = StringArrayBuilder::with_capacity(cluster_nodes.len());
-        let mut addresses = StringArrayBuilder::with_capacity(cluster_nodes.len());
-        let mut addresses_port = DFUInt16ArrayBuilder::with_capacity(cluster_nodes.len());
+        let mut names = MutableStringColumn::with_capacity(cluster_nodes.len());
+        let mut addresses = MutableStringColumn::with_capacity(cluster_nodes.len());
+        let mut addresses_port = MutablePrimitiveColumn::<u16>::with_capacity(cluster_nodes.len());
 
         for cluster_node in &cluster_nodes {
             let (ip, port) = cluster_node.ip_port()?;
@@ -87,7 +87,7 @@ impl Table for ClustersTable {
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),
             None,
-            vec![DataBlock::create_by_array(self.table_info.schema(), vec![
+            vec![DataBlock::create(self.table_info.schema(), vec![
                 names.finish().into_series(),
                 addresses.finish().into_series(),
                 addresses_port.finish().into_series(),

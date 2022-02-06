@@ -46,11 +46,11 @@ async fn test_memorytable() -> Result<()> {
 
     // append data.
     {
-        let block = DataBlock::create_by_array(schema.clone(), vec![
+        let block = DataBlock::create(schema.clone(), vec![
             Series::new(vec![1u32, 2]),
             Series::new(vec![11u64, 22]),
         ]);
-        let block2 = DataBlock::create_by_array(schema.clone(), vec![
+        let block2 = DataBlock::create(schema.clone(), vec![
             Series::new(vec![4u32, 3]),
             Series::new(vec![33u64, 33]),
         ]);
@@ -139,11 +139,11 @@ async fn test_memorytable() -> Result<()> {
 
     // overwrite
     {
-        let block = DataBlock::create_by_array(schema.clone(), vec![
+        let block = DataBlock::create(schema.clone(), vec![
             Series::new(vec![5u64, 6]),
             Series::new(vec![55u64, 66]),
         ]);
-        let block2 = DataBlock::create_by_array(schema.clone(), vec![
+        let block2 = DataBlock::create(schema.clone(), vec![
             Series::new(vec![7u64, 8]),
             Series::new(vec![77u64, 88]),
         ]);

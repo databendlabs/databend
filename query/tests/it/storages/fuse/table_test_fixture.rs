@@ -149,7 +149,7 @@ impl TestFixture {
             .map(|idx| {
                 let schema =
                     DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
-                Ok(DataBlock::create_by_array(schema, vec![Series::new(
+                Ok(DataBlock::create(schema, vec![Series::new(
                     std::iter::repeat_with(|| idx as i32 + start)
                         .take(rows_perf_block)
                         .collect::<Vec<i32>>(),

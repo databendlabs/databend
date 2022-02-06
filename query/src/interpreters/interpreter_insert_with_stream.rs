@@ -62,7 +62,7 @@ pub trait SendableWithSchema {
 impl SendableWithSchema for &[Vec<Expression>] {
     fn to_stream(self, schema: Arc<DataSchema>) -> Result<SendableDataBlockStream> {
         let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);
-        let one_row_block = DataBlock::create_by_array(dummy.clone(), vec![Series::new(vec![1u8])]);
+        let one_row_block = DataBlock::create(dummy.clone(), vec![Series::new(vec![1u8])]);
         let blocks = self
             .as_ref()
             .iter()

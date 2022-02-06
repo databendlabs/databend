@@ -106,7 +106,7 @@ impl Table for TablesTable {
             .collect();
         let created_ons: Vec<&[u8]> = created_ons.iter().map(|s| s.as_bytes()).collect();
 
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
+        let block = DataBlock::create(self.table_info.schema(), vec![
             Series::new(databases),
             Series::new(names),
             Series::new(engines),

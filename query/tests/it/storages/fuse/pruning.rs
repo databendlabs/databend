@@ -110,7 +110,7 @@ async fn test_block_pruner() -> Result<()> {
     let blocks = (0..num_blocks)
         .into_iter()
         .map(|idx| {
-            Ok(DataBlock::create_by_array(test_schema.clone(), vec![
+            Ok(DataBlock::create(test_schema.clone(), vec![
                 // value of column a always equals  1
                 gen_col(1, row_per_block),
                 // for column b
@@ -238,15 +238,15 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         .await?;
 
     let blocks = vec![
-        Ok(DataBlock::create_by_array(test_schema.clone(), vec![
+        Ok(DataBlock::create(test_schema.clone(), vec![
             Series::new(vec![1u64, 2, 3]),
             Series::new(vec![11u64, 12, 13]),
         ])),
-        Ok(DataBlock::create_by_array(test_schema.clone(), vec![
+        Ok(DataBlock::create(test_schema.clone(), vec![
             Series::new(vec![4u64, 5, 6]),
             Series::new(vec![21u64, 22, 23]),
         ])),
-        Ok(DataBlock::create_by_array(test_schema, vec![
+        Ok(DataBlock::create(test_schema, vec![
             Series::new(vec![7u64, 8, 9]),
             Series::new(vec![31u64, 32, 33]),
         ])),

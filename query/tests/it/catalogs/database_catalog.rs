@@ -90,7 +90,7 @@ async fn test_catalogs_table() -> Result<()> {
     // Table schema with metadata(due to serde issue).
     let schema = Arc::new(DataSchema::new(vec![DataField::new(
         "number",
-        DataType::UInt64,
+        u64::to_data_type(),
         false,
     )]));
 

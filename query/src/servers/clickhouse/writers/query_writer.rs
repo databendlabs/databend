@@ -160,87 +160,57 @@ pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<Data
     let get_series = |block: &Block, index: usize| -> CHResult<Series> {
         let col = &block.columns()[index];
         match col.sql_type() {
-            SqlType::UInt8 => {
-                Ok(DFUInt8Array::new_from_iter(col.iter::<u8>()?.copied()).into_series())
-            }
-            SqlType::UInt16 | SqlType::Date => {
-                Ok(DFUInt16Array::new_from_iter(col.iter::<u16>()?.copied()).into_series())
-            }
+            SqlType::UInt8 => Ok(Series::from_data(col.iter::<u8>()?.copied())),
+            SqlType::UInt16 | SqlType::Date => Ok(Series::from_data(col.iter::<u16>()?.copied())),
             SqlType::UInt32 | SqlType::DateTime(DateTimeType::DateTime32) => {
-                Ok(DFUInt32Array::new_from_iter(col.iter::<u32>()?.copied()).into_series())
+                Ok(Series::from_data(col.iter::<u32>()?.copied()))
             }
-            SqlType::UInt64 => {
-                Ok(DFUInt64Array::new_from_iter(col.iter::<u64>()?.copied()).into_series())
-            }
-            SqlType::Int8 => {
-                Ok(DFInt8Array::new_from_iter(col.iter::<i8>()?.copied()).into_series())
-            }
-            SqlType::Int16 => {
-                Ok(DFInt16Array::new_from_iter(col.iter::<i16>()?.copied()).into_series())
-            }
-            SqlType::Int32 => {
-                Ok(DFInt32Array::new_from_iter(col.iter::<i32>()?.copied()).into_series())
-            }
-            SqlType::Int64 => {
-                Ok(DFInt64Array::new_from_iter(col.iter::<i64>()?.copied()).into_series())
-            }
-            SqlType::Float32 => {
-                Ok(DFFloat32Array::new_from_iter(col.iter::<f32>()?.copied()).into_series())
-            }
-            SqlType::Float64 => {
-                Ok(DFFloat64Array::new_from_iter(col.iter::<f64>()?.copied()).into_series())
-            }
-            SqlType::String => Ok(DFStringArray::new_from_iter(col.iter::<&[u8]>()?).into_series()),
-            SqlType::FixedString(_) => {
-                Ok(DFStringArray::new_from_iter(col.iter::<&[u8]>()?).into_series())
-            }
+            SqlType::UInt64 => Ok(Series::from_data(col.iter::<u64>()?.copied())),
+            SqlType::Int8 => Ok(Series::from_data(col.iter::<i8>()?.copied())),
+            SqlType::Int16 => Ok(Series::from_data(col.iter::<i16>()?.copied())),
+            SqlType::Int32 => Ok(Series::from_data(col.iter::<i32>()?.copied())),
+            SqlType::Int64 => Ok(Series::from_data(col.iter::<i64>()?.copied())),
+            SqlType::Float32 => Ok(Series::from_data(col.iter::<f32>()?.copied())),
+            SqlType::Float64 => Ok(Series::from_data(col.iter::<f64>()?.copied())),
+            SqlType::String => Ok(Series::from_data(col.iter::<&[u8]>()?)),
+            SqlType::FixedString(_) => Ok(Series::from_data(col.iter::<&[u8]>()?)),
 
-            SqlType::Nullable(SqlType::UInt8) => Ok(DFUInt8Array::new_from_opt_iter(
+            SqlType::Nullable(SqlType::UInt8) => Ok(Series::from_data(
                 col.iter::<Option<u8>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
+            )),
             SqlType::Nullable(SqlType::UInt16) | SqlType::Nullable(SqlType::Date) => Ok(
-                DFUInt16Array::new_from_opt_iter(col.iter::<Option<u16>>()?.map(|c| c.copied()))
-                    .into_series(),
+                Series::from_data(col.iter::<Option<u16>>()?.map(|c| c.copied())),
             ),
             SqlType::Nullable(SqlType::UInt32)
             | SqlType::Nullable(SqlType::DateTime(DateTimeType::DateTime32)) => Ok(
-                DFUInt32Array::new_from_opt_iter(col.iter::<Option<u32>>()?.map(|c| c.copied()))
-                    .into_series(),
+                Series::from_data(col.iter::<Option<u32>>()?.map(|c| c.copied())),
             ),
-            SqlType::Nullable(SqlType::UInt64) => Ok(DFUInt64Array::new_from_opt_iter(
+            SqlType::Nullable(SqlType::UInt64) => Ok(Series::from_data(
                 col.iter::<Option<u64>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
-            SqlType::Nullable(SqlType::Int8) => Ok(DFInt8Array::new_from_opt_iter(
+            )),
+            SqlType::Nullable(SqlType::Int8) => Ok(Series::from_data(
                 col.iter::<Option<i8>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
-            SqlType::Nullable(SqlType::Int16) => Ok(DFInt16Array::new_from_opt_iter(
+            )),
+            SqlType::Nullable(SqlType::Int16) => Ok(Series::from_data(
                 col.iter::<Option<i16>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
-            SqlType::Nullable(SqlType::Int32) => Ok(DFInt32Array::new_from_opt_iter(
+            )),
+            SqlType::Nullable(SqlType::Int32) => Ok(Series::from_data(
                 col.iter::<Option<i32>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
-            SqlType::Nullable(SqlType::Int64) => Ok(DFInt64Array::new_from_opt_iter(
+            )),
+            SqlType::Nullable(SqlType::Int64) => Ok(Series::from_data(
                 col.iter::<Option<i64>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
-            SqlType::Nullable(SqlType::Float32) => Ok(DFFloat32Array::new_from_opt_iter(
+            )),
+            SqlType::Nullable(SqlType::Float32) => Ok(Series::from_data(
                 col.iter::<Option<f32>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
-            SqlType::Nullable(SqlType::Float64) => Ok(DFFloat64Array::new_from_opt_iter(
+            )),
+            SqlType::Nullable(SqlType::Float64) => Ok(Series::from_data(
                 col.iter::<Option<f64>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
+            )),
             SqlType::Nullable(SqlType::String) => {
-                Ok(DFStringArray::new_from_opt_iter(col.iter::<Option<&[u8]>>()?).into_series())
+                Ok(Series::from_data(col.iter::<Option<&[u8]>>()?))
             }
             SqlType::Nullable(SqlType::FixedString(_)) => {
-                Ok(DFStringArray::new_from_opt_iter(col.iter::<Option<&[u8]>>()?).into_series())
+                Ok(Series::from_data(col.iter::<Option<&[u8]>>()?))
             }
 
             other => Err(CHError::Other(Cow::from(format!(
@@ -256,7 +226,7 @@ pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<Data
         let a2 = array.map_err(from_clickhouse_err);
         arrays.push(a2?);
     }
-    Ok(DataBlock::create_by_array(schema, arrays))
+    Ok(DataBlock::create(schema, arrays))
 }
 
 fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnData> {
@@ -280,7 +250,7 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
                     .collect();
                 Vec::column_from::<ArcColumnWrapper>(c)
             }
-            DataType::UInt32 => {
+            u32::to_data_type() => {
                 Vec::column_from::<ArcColumnWrapper>(column.u32()?.collect_values())
             }
             DataType::Date32 => {
@@ -304,7 +274,7 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
 
                 Vec::column_from::<ArcColumnWrapper>(c)
             }
-            DataType::UInt64 => {
+            u64::to_data_type() => {
                 Vec::column_from::<ArcColumnWrapper>(column.u64()?.collect_values())
             }
             DataType::Float32 => {
@@ -330,7 +300,7 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
                     .iter()
                     .zip(column.tuple()?.inner().values().iter())
                     .map(|(f, v)| {
-                        let series = v.clone().into_series();
+                        let series = v.clone();
                         to_clickhouse_column(f, &series)
                     })
                     .collect::<Result<Vec<_>>>()?,
@@ -370,7 +340,7 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
 
                 Vec::column_from::<ArcColumnWrapper>(c)
             }
-            DataType::UInt32 => Vec::column_from::<ArcColumnWrapper>(
+            u32::to_data_type() => Vec::column_from::<ArcColumnWrapper>(
                 column.u32()?.inner().values().as_slice().to_vec(),
             ),
             DataType::Date32 => {
@@ -396,7 +366,7 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
                 Vec::column_from::<ArcColumnWrapper>(c)
             }
 
-            DataType::UInt64 => Vec::column_from::<ArcColumnWrapper>(
+            u64::to_data_type() => Vec::column_from::<ArcColumnWrapper>(
                 column.u64()?.inner().values().as_slice().to_vec(),
             ),
             DataType::Float32 => Vec::column_from::<ArcColumnWrapper>(
@@ -425,7 +395,7 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
                     .iter()
                     .zip(column.tuple()?.inner().values().iter())
                     .map(|(f, v)| {
-                        let series = v.clone().into_series();
+                        let series = v.clone();
                         to_clickhouse_column(f, &series)
                     })
                     .collect::<Result<Vec<_>>>()?,

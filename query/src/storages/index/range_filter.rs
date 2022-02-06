@@ -22,6 +22,7 @@ use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::PatternType;
 use common_planners::lit;
 use common_planners::Expression;
 use common_planners::ExpressionMonotonicityVisitor;
@@ -85,7 +86,7 @@ impl RangeFilter {
             }
             columns.push(val_opt.unwrap().to_array()?);
         }
-        let data_block = DataBlock::create_by_array(self.schema.clone(), columns);
+        let data_block = DataBlock::create(self.schema.clone(), columns);
         let executed_data_block = self.executor.execute(&data_block)?;
 
         executed_data_block.column(0).try_get(0)?.as_bool()
@@ -178,11 +179,11 @@ impl StatColumn {
     ) -> Self {
         let column_new = format!("{}_{}", stat_type, field.name());
         let data_type = if matches!(stat_type, StatType::Nulls) {
-            DataType::UInt64
+            u64::to_data_type()
         } else {
             field.data_type().clone()
         };
-        let stat_field = DataField::new(column_new.as_str(), data_type, field.is_nullable());
+        let stat_field = DataField::new(column_new.as_str(), data_type);
 
         Self {
             column_fields,
@@ -224,11 +225,11 @@ impl StatColumn {
             }
 
             let variable_left = Some(ColumnWithField::new(
-                DataColumn::Constant(stat.min.clone(), 1),
+                &v.data_type().create_constant_column(&stat.min, 1)?,
                 v.clone(),
             ));
             let variable_right = Some(ColumnWithField::new(
-                DataColumn::Constant(stat.max.clone(), 1),
+                &v.data_type().create_constant_column(&stat.max, 1)?,
                 v.clone(),
             ));
             variables.insert(v.name().clone(), (variable_left, variable_right));

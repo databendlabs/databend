@@ -14,12 +14,10 @@
 
 use std::sync::Arc;
 
+use chrono::TimeZone;
+use chrono::Utc;
 use common_datablocks::DataBlock;
-use common_datavalues2::arrays::DFPrimitiveArray;
-use common_datavalues2::chrono::TimeZone;
-use common_datavalues2::chrono::Utc;
-use common_datavalues2::DFPrimitiveType;
-use common_datavalues2::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Serialize;
@@ -36,13 +34,13 @@ where T: Serialize {
     serde_json::to_value(v).unwrap()
 }
 
-fn primitive_array_to_json<T>(array: &DFPrimitiveArray<T>) -> Vec<JsonValue>
-where T: DFPrimitiveType + Serialize {
-    array.into_iter().map(to_json_value).collect()
+fn primitive_array_to_json<T>(array: &PrimitiveColumn<T>) -> Vec<JsonValue>
+where T: PrimitiveType + Serialize {
+    array.iter().map(to_json_value).collect()
 }
 
-fn primitive_array_to_json_not_null<T>(array: &DFPrimitiveArray<T>) -> Vec<JsonValue>
-where T: DFPrimitiveType + Serialize {
+fn primitive_array_to_json_not_null<T>(array: &PrimitiveColumn<T>) -> Vec<JsonValue>
+where T: PrimitiveType + Serialize {
     array
         .inner()
         .values()
@@ -69,22 +67,17 @@ fn date_number_to_string(x: i64, fmt: &str) -> String {
     Utc.timestamp(x * 24 * 3600, 0_u32).format(fmt).to_string()
 }
 
-fn date_array_to_string_array<T>(array: &DFPrimitiveArray<T>, fmt: &str) -> Vec<JsonValue>
-where T: DFPrimitiveType + Serialize + Into<i64> {
+fn date_array_to_string_array<T>(array: &PrimitiveColumn<T>, fmt: &str) -> Vec<JsonValue>
+where T: PrimitiveType + Serialize + Into<i64> {
     array
-        .into_iter()
-        .map(|o| o.map(|x| date_number_to_string(Into::<i64>::into(*x), fmt)))
+        .iter()
+        .map(|x| date_number_to_string(Into::<i64>::into(*x), fmt))
         .map(to_json_value)
         .collect()
 }
 
-fn date_array_to_string_array_not_null<T>(
-    array: &DFPrimitiveArray<T>,
-    fmt: &str,
-) -> Vec<JsonValue>
-where
-    T: DFPrimitiveType + Serialize + Into<i64>,
-{
+fn date_array_to_string_array_not_null<T>(array: &PrimitiveColumn<T>, fmt: &str) -> Vec<JsonValue>
+where T: PrimitiveType + Serialize + Into<i64> {
     array
         .into_no_null_iter()
         .map(|x| date_number_to_string(Into::<i64>::into(*x), fmt))
@@ -92,7 +85,7 @@ where
         .collect()
 }
 
-fn bad_type(data_type: &DataType) -> ErrorCode {
+fn bad_type(data_type: &DataTypePtr) -> ErrorCode {
     ErrorCode::BadDataValueType(format!("Unsupported column type:{:?}", data_type))
 }
 
@@ -113,8 +106,8 @@ pub fn block_to_json(block: &DataBlock) -> Result<Vec<Vec<JsonValue>>> {
                 DataType::Int64 => primitive_array_to_json(series.i64()?),
                 DataType::UInt8 => primitive_array_to_json(series.u8()?),
                 DataType::UInt16 => primitive_array_to_json(series.u16()?),
-                DataType::UInt32 => primitive_array_to_json(series.u32()?),
-                DataType::UInt64 => primitive_array_to_json(series.u64()?),
+                u32::to_data_type() => primitive_array_to_json(series.u32()?),
+                u64::to_data_type() => primitive_array_to_json(series.u64()?),
                 DataType::Float32 => primitive_array_to_json(series.f32()?),
                 DataType::Float64 => primitive_array_to_json(series.f64()?),
                 DataType::String => series
@@ -139,8 +132,8 @@ pub fn block_to_json(block: &DataBlock) -> Result<Vec<Vec<JsonValue>>> {
                 DataType::Int64 => primitive_array_to_json_not_null(series.i64()?),
                 DataType::UInt8 => primitive_array_to_json_not_null(series.u8()?),
                 DataType::UInt16 => primitive_array_to_json_not_null(series.u16()?),
-                DataType::UInt32 => primitive_array_to_json_not_null(series.u32()?),
-                DataType::UInt64 => primitive_array_to_json_not_null(series.u64()?),
+                u32::to_data_type() => primitive_array_to_json_not_null(series.u32()?),
+                u64::to_data_type() => primitive_array_to_json_not_null(series.u64()?),
                 DataType::Float32 => primitive_array_to_json_not_null(series.f32()?),
                 DataType::Float64 => primitive_array_to_json_not_null(series.f64()?),
                 DataType::Boolean => series

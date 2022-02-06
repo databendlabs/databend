@@ -38,7 +38,7 @@ impl UsersTable {
             DataField::new("name", Vu8::to_data_type()),
             DataField::new("hostname", Vu8::to_data_type()),
             DataField::new("auth_type", Vu8::to_data_type()),
-            DataField::new("auth_string", DataType::String, true),
+            DataField::new_nullable("auth_string", DataType::String),
         ]);
 
         let table_info = TableInfo {
@@ -84,7 +84,7 @@ impl Table for UsersTable {
             .map(|x| x.auth_info.get_auth_string())
             .collect();
 
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
+        let block = DataBlock::create(self.table_info.schema(), vec![
             Series::new(names),
             Series::new(hostnames),
             Series::new(auth_types),

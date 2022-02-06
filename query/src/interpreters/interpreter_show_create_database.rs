@@ -70,7 +70,7 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
             }
         }
         let schema = self.plan.schema();
-        let block = DataBlock::create_by_array(schema.clone(), vec![
+        let block = DataBlock::create(schema.clone(), vec![
             Series::new(vec![name.as_bytes()]),
             Series::new(vec![info.into_bytes()]),
         ]);

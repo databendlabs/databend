@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 
 use crate::sql::optimizer::ColumnSet;
@@ -25,7 +25,7 @@ pub enum ScalarExpr {
 }
 
 impl ScalarExpr {
-    pub fn data_type(&self) -> Result<DataType> {
+    pub fn data_type(&self) -> Result<DataTypePtr> {
         match self {
             ScalarExpr::BoundVariable(BoundVariable { data_type, .. }) => Ok(data_type.clone()),
         }
@@ -47,7 +47,7 @@ impl ScalarExpr {
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoundVariable {
     pub index: IndexType,
-    pub data_type: DataType,
+    pub data_type: DataTypePtr,
     pub nullable: bool,
 }
 

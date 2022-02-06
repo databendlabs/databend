@@ -37,6 +37,9 @@ impl DateTime32Type {
     pub fn arc(tz: Option<String>) -> DataTypePtr {
         Arc::new(DateTime32Type { tz })
     }
+    pub fn tz(&self) -> Option<&String> {
+        self.tz.as_ref()
+    }
 }
 
 #[typetag::serde]
