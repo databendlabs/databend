@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_datavalues::prelude::*;
+use sha1::Digest;
 
 use crate::scalars::strings::String2StringFunction;
 use crate::scalars::strings::StringOperator;
@@ -25,7 +26,9 @@ impl StringOperator for Sha1 {
     fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
         let buffer = &mut buffer[0..40];
         // TODO sha1 lib doesn't allow encode into buffer...
-        hex::encode_to_slice(sha1::Sha1::from(s).digest().bytes(), buffer).unwrap();
+        let mut m = ::sha1::Sha1::new();
+        m.update(s);
+        hex::encode_to_slice(m.finalize().as_slice(), buffer).unwrap();
         40
     }
 
