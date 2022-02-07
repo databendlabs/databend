@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use async_trait;
 use common_dal2::ops::OpDelete;
 use common_dal2::services::fs;
 use common_dal2::Accessor;
@@ -59,5 +58,5 @@ async fn test_layer() {
 
     op.delete("xxxxx").run().await.unwrap();
 
-    assert_eq!(true, test.deleted.clone().lock().await.clone());
+    assert!(test.deleted.clone().lock().await.clone());
 }
