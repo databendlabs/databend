@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
-use common_datavalues::chrono::DateTime;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::MonthsArithmeticFunction;
 use common_functions::scalars::SecondsArithmeticFunction;
@@ -28,17 +27,17 @@ fn test_add_months() -> Result<()> {
     let dt_to_seconds = |dt: &str| -> i64 { DateTime::parse_from_rfc3339(dt).unwrap().timestamp() };
 
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("date16", DataType::Date16, false),
-        DataField::new("date32", DataType::Date32, false),
-        DataField::new("datetime32", DataType::DateTime32(None), false),
-        DataField::new("u8", DataType::UInt8, false),
-        DataField::new("u16", DataType::UInt16, false),
-        DataField::new("u32", DataType::UInt32, false),
-        DataField::new("u64", DataType::UInt64, false),
-        DataField::new("i8", DataType::Int8, false),
-        DataField::new("i16", DataType::Int16, false),
-        DataField::new("i32", DataType::Int32, false),
-        DataField::new("i64", DataType::Int64, false),
+        DataField::new("date16", Date16Type::arc()),
+        DataField::new("date32", Date32Type::arc()),
+        DataField::new("datetime32", DateTime32Type::arc(None)),
+        DataField::new("u8", u8::to_data_type()),
+        DataField::new("u16", u16::to_data_type()),
+        DataField::new("u32", DataType::UInt32),
+        DataField::new("u64", DataType::UInt64),
+        DataField::new("i8", DataType::Int8),
+        DataField::new("i16", DataType::Int16),
+        DataField::new("i32", DataType::Int32),
+        DataField::new("i64", DataType::Int64),
     ]);
 
     let blocks = DataBlock::create_by_array(schema.clone(), vec![
@@ -139,15 +138,15 @@ fn test_add_subtract_seconds() -> Result<()> {
     let dt_to_seconds = |dt: &str| -> i64 { DateTime::parse_from_rfc3339(dt).unwrap().timestamp() };
 
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("datetime32", DataType::DateTime32(None), false),
-        DataField::new("u8", DataType::UInt8, false),
-        DataField::new("u16", DataType::UInt16, false),
-        DataField::new("u32", DataType::UInt32, false),
-        DataField::new("u64", DataType::UInt64, false),
-        DataField::new("i8", DataType::Int8, false),
-        DataField::new("i16", DataType::Int16, false),
-        DataField::new("i32", DataType::Int32, false),
-        DataField::new("i64", DataType::Int64, false),
+        DataField::new("datetime32", DataType::DateTime32(None)),
+        DataField::new("u8", u8::to_data_type()),
+        DataField::new("u16", DataType::UInt16),
+        DataField::new("u32", DataType::UInt32),
+        DataField::new("u64", DataType::UInt64),
+        DataField::new("i8", DataType::Int8),
+        DataField::new("i16", DataType::Int16),
+        DataField::new("i32", DataType::Int32),
+        DataField::new("i64", DataType::Int64),
     ]);
 
     let blocks = DataBlock::create_by_array(schema.clone(), vec![

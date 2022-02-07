@@ -141,3 +141,67 @@ impl std::fmt::Display for Function2Convertor {
         write!(f, "{}", self.inner)
     }
 }
+
+/// convert function into function2
+#[derive(Clone)]
+pub struct Function1Convertor {
+    inner: Box<dyn Function>,
+}
+
+impl Function1Convertor {
+    pub fn create(inner: Box<dyn Function>) -> Box<dyn Function2> {
+        Box::new(Self { inner })
+    }
+}
+impl Function2 for Function1Convertor {
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        let args = args
+            .iter()
+            .map(|arg| DataField::new("xx", (*arg).clone()))
+            .collect::<Vec<_>>();
+
+        let mut types = vec![];
+        let fs: Vec<OldDataField> = args.iter().map(|f| f.clone().into()).collect();
+        for t in fs.iter() {
+            types.push(DataTypeAndNullable::create(t.data_type(), t.is_nullable()));
+        }
+
+        let typ = self.inner.return_type(&types)?;
+
+        let new_typ = DataField::new("xx", typ);
+        let old_f: OldDataField = new_typ.into();
+
+        Ok(DataTypeAndNullable::create(
+            old_f.data_type(),
+            old_f.is_nullable(),
+        ))
+    }
+
+    fn eval(&self, _columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        todo!()
+    }
+
+    fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
+        let args: Vec<Monotonicity> = args.iter().map(|m| m.clone().into()).collect();
+        let m = self.inner.get_monotonicity(&args)?;
+        Ok(m.into())
+    }
+
+    fn passthrough_null(&self) -> bool {
+        true
+    }
+
+    fn passthrough_constant(&self) -> bool {
+        true
+    }
+}
+
+impl std::fmt::Display for Function1Convertor {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}
