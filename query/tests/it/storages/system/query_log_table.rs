@@ -37,9 +37,9 @@ async fn test_query_log_table() -> Result<()> {
 
     // Insert.
     {
-        let block = DataBlock::create(schema.clone(), vec![Series::new(vec![1u32])]);
-        let block2 = DataBlock::create(schema.clone(), vec![Series::new(vec![2u32])]);
-        let block3 = DataBlock::create(schema.clone(), vec![Series::new(vec![3u32])]);
+        let block = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1u32])]);
+        let block2 = DataBlock::create(schema.clone(), vec![Series::from_data(vec![2u32])]);
+        let block3 = DataBlock::create(schema.clone(), vec![Series::from_data(vec![3u32])]);
         let blocks = vec![Ok(block), Ok(block2), Ok(block3)];
         let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
         table

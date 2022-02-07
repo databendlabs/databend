@@ -22,7 +22,7 @@ use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::check_pattern_type;
-use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::Function2Factory;
 use common_functions::scalars::PatternType;
 use common_planners::lit;
 use common_planners::Expression;
@@ -226,16 +226,10 @@ impl StatColumn {
             }
 
             let min_col = v.data_type().create_constant_column(&stat.min, 1)?;
-            let variable_left = Some(ColumnWithField::new(
-                min_col,
-                v.clone(),
-            ));
+            let variable_left = Some(ColumnWithField::new(min_col, v.clone()));
 
             let max_col = v.data_type().create_constant_column(&stat.max, 1)?;
-            let variable_right = Some(ColumnWithField::new(
-                max_col,
-                v.clone(),
-            ));
+            let variable_right = Some(ColumnWithField::new(max_col, v.clone()));
             variables.insert(v.name().clone(), (variable_left, variable_right));
         }
 
@@ -603,7 +597,7 @@ pub fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
 }
 
 fn get_maybe_monotonic(op: &str, args: Expressions) -> Result<bool> {
-    let factory = FunctionFactory::instance();
+    let factory = Function2Factory::instance();
     let function_features = factory.get_features(op)?;
     if !function_features.maybe_monotonic {
         return Ok(false);

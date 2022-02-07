@@ -41,16 +41,14 @@ impl NumberTestData {
 
     pub fn number_schema_for_test(&self) -> Result<DataSchemaRef> {
         let catalog = create_catalog()?;
-        let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(1)))]);
+        let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(1))]);
         Ok(catalog.get_table_function(self.table, tbl_arg)?.schema())
     }
 
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
         let catalog = create_catalog()?;
         futures::executor::block_on(async move {
-            let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(
-                numbers,
-            )))]);
+            let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(numbers))]);
             let table = catalog.get_table_function(self.table, tbl_arg)?;
             table
                 .clone()

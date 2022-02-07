@@ -15,15 +15,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::prelude::DataField as OldDataField;
 use common_datavalues::DataTypeAndNullable;
-use common_datavalues2::DataField;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
-use super::Function2Convertor;
-use super::Function2Factory;
 use crate::scalars::DateFunction;
 use crate::scalars::Function;
 use crate::scalars::MathsFunction;
@@ -152,26 +148,10 @@ impl FunctionFactory {
     pub fn get(
         &self,
         name: impl AsRef<str>,
-        args: &[DataTypeAndNullable],
+        _args: &[DataTypeAndNullable],
     ) -> Result<Box<dyn Function>> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
-
-        // TODO: remove the codes, and create a new Function2Adapter for arithmetics.
-        let new_args = args
-            .iter()
-            .map(|arg| OldDataField::new("xx", arg.data_type().clone(), arg.is_nullable()))
-            .collect::<Vec<_>>();
-        let mut types = vec![];
-        let fs: Vec<DataField> = new_args.iter().map(|f| f.clone().into()).collect();
-        for t in fs.iter() {
-            types.push(t.data_type());
-        }
-        let factory2 = Function2Factory::instance();
-        if let Ok(v) = factory2.get(origin_name, &types) {
-            let adapter = Function2Convertor::create(v);
-            return Ok(adapter);
-        }
 
         match self.case_insensitive_desc.get(&lowercase_name) {
             // TODO(Winter): we should write similar function names into error message if function name is not found.
@@ -186,11 +166,6 @@ impl FunctionFactory {
     pub fn get_features(&self, name: impl AsRef<str>) -> Result<FunctionFeatures> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
-
-        let factory2 = Function2Factory::instance();
-        if let Ok(v) = factory2.get_features(origin_name) {
-            return Ok(v);
-        }
 
         match self.case_insensitive_desc.get(&lowercase_name) {
             // TODO(Winter): we should write similar function names into error message if function name is not found.
@@ -209,11 +184,8 @@ impl FunctionFactory {
     }
 
     pub fn registered_names(&self) -> Vec<String> {
-        let function2_factory = Function2Factory::instance();
-        let func_names = function2_factory.registered_names();
         self.case_insensitive_desc
             .keys()
-            .chain(func_names.iter())
             .cloned()
             .collect::<Vec<_>>()
     }

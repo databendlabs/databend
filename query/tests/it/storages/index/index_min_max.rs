@@ -31,26 +31,26 @@ fn test_min_max_index() -> Result<()> {
     ]);
 
     let block1 = DataBlock::create(schema.clone(), vec![
-        Series::new(vec!["jack", "ace", "bohu"]),
-        Series::new(vec![11, 6, 24]),
+        Series::from_data(vec!["jack", "ace", "bohu"]),
+        Series::from_data(vec![11, 6, 24]),
     ]);
 
     let block2 = DataBlock::create(schema, vec![
-        Series::new(vec!["xjack", "xace", "xbohu"]),
-        Series::new(vec![11, 6, 24]),
+        Series::from_data(vec!["xjack", "xace", "xbohu"]),
+        Series::from_data(vec![11, 6, 24]),
     ]);
 
     let idx_slice = vec![
         MinMaxIndex {
             col: "name".to_string(),
-            min: DataValue::String(Some("jack".as_bytes().to_vec())),
-            max: DataValue::String(Some("xbohu".as_bytes().to_vec())),
+            min: DataValue::String("jack".as_bytes().to_vec()),
+            max: DataValue::String("xbohu".as_bytes().to_vec()),
             version: IndexSchemaVersion::V1,
         },
         MinMaxIndex {
             col: "age".to_string(),
-            min: DataValue::Int32(Some(11)),
-            max: DataValue::Int32(Some(24)),
+            min: DataValue::Int64(11),
+            max: DataValue::Int64(24),
             version: IndexSchemaVersion::V1,
         },
     ];

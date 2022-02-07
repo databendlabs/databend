@@ -35,20 +35,20 @@ fn test_range_filter() -> Result<()> {
 
     let mut stats: BlockStatistics = HashMap::new();
     stats.insert(0u32, ColumnStatistics {
-        min: DataValue::Int64(Some(1)),
-        max: DataValue::Int64(Some(20)),
+        min: DataValue::Int64(1),
+        max: DataValue::Int64(20),
         null_count: 1,
         in_memory_size: 0,
     });
     stats.insert(1u32, ColumnStatistics {
-        min: DataValue::Int32(Some(3)),
-        max: DataValue::Int32(Some(10)),
+        min: DataValue::Int64(3),
+        max: DataValue::Int64(10),
         null_count: 0,
         in_memory_size: 0,
     });
     stats.insert(2u32, ColumnStatistics {
-        min: DataValue::String(Some("abc".as_bytes().to_vec())),
-        max: DataValue::String(Some("bcd".as_bytes().to_vec())),
+        min: DataValue::String("abc".as_bytes().to_vec()),
+        max: DataValue::String("bcd".as_bytes().to_vec()),
         null_count: 0,
         in_memory_size: 0,
     });
@@ -63,13 +63,13 @@ fn test_range_filter() -> Result<()> {
     let tests: Vec<Test> = vec![
         Test {
             name: "a < 1 and b > 3",
-            expr: col("a").lt(lit(1)).and(col("b").gt(lit(3))),
+            expr: col("a").lt(lit(1)).and(col("b").gt(lit(3i32))),
             expect: false,
             error: "",
         },
         Test {
             name: "1 > -a or 3 >= b",
-            expr: lit(1).gt(neg(col("a"))).or(lit(3).gt_eq(col("b"))),
+            expr: lit(1).gt(neg(col("a"))).or(lit(3i32).gt_eq(col("b"))),
             expect: true,
             error: "",
         },
@@ -137,19 +137,19 @@ fn test_range_filter() -> Result<()> {
         },
         Test {
             name: "a + b > 30",
-            expr: add(col("a"), col("b")).gt(lit(30)),
+            expr: add(col("a"), col("b")).gt(lit(30i32)),
             expect: false,
             error: "",
         },
         Test {
             name: "a + b < 10",
-            expr: add(col("a"), col("b")).lt(lit(10)),
+            expr: add(col("a"), col("b")).lt(lit(10i32)),
             expect: true,
             error: "",
         },
         Test {
             name: "a - b <= -10",
-            expr: sub(col("a"), col("b")).lt_eq(lit(-10)),
+            expr: sub(col("a"), col("b")).lt_eq(lit(-10i32)),
             expect: true,
             error:
                 "Code: 1067, displayText = Function '-' is not monotonic in the variables range.",

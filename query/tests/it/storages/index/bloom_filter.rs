@@ -92,8 +92,8 @@ fn test_bloom_interval() -> Result<()> {
 
     // this case false positive not exist
     bloom.add(col)?;
-    assert!(bloom.find(DataValue::Int64(Some(1234_i64)))?);
-    assert!(bloom.find(DataValue::Int64(Some(-4321_i64)))?);
+    assert!(bloom.find(DataValue::Int64(1234_i64))?);
+    assert!(bloom.find(DataValue::Int64(-4321_i64))?);
     Ok(())
 }
 

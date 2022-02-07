@@ -17,12 +17,7 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::Series;
-use common_datavalues2::prelude::SeriesFrom;
-use common_datavalues2::DataField;
-use common_datavalues2::DataSchemaRef;
-use common_datavalues2::DataSchemaRefExt;
-use common_datavalues2::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
@@ -102,7 +97,7 @@ async fn test_block_pruner() -> Result<()> {
         .await?;
 
     let gen_col =
-        |value, rows| Series::new(std::iter::repeat(value).take(rows).collect::<Vec<u64>>());
+        |value, rows| Series::from_data(std::iter::repeat(value).take(rows).collect::<Vec<u64>>());
 
     // prepare test blocks
     // - there will be `num_blocks` blocks, for each block, it comprises of `row_per_block` rows,
@@ -239,16 +234,16 @@ async fn test_block_pruner_monotonic() -> Result<()> {
 
     let blocks = vec![
         Ok(DataBlock::create(test_schema.clone(), vec![
-            Series::new(vec![1u64, 2, 3]),
-            Series::new(vec![11u64, 12, 13]),
+            Series::from_data(vec![1u64, 2, 3]),
+            Series::from_data(vec![11u64, 12, 13]),
         ])),
         Ok(DataBlock::create(test_schema.clone(), vec![
-            Series::new(vec![4u64, 5, 6]),
-            Series::new(vec![21u64, 22, 23]),
+            Series::from_data(vec![4u64, 5, 6]),
+            Series::from_data(vec![21u64, 22, 23]),
         ])),
         Ok(DataBlock::create(test_schema, vec![
-            Series::new(vec![7u64, 8, 9]),
-            Series::new(vec![31u64, 32, 33]),
+            Series::from_data(vec![7u64, 8, 9]),
+            Series::from_data(vec![31u64, 32, 33]),
         ])),
     ];
 

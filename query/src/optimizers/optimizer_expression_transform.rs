@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::Function2Factory;
 use common_planners::*;
 
 use crate::optimizers::Optimizer;
@@ -47,7 +47,7 @@ impl ExprTransformImpl {
             return Ok(origin.clone());
         }
 
-        let factory = FunctionFactory::instance();
+        let factory = Function2Factory::instance();
         let function_features = factory.get_features(op)?;
 
         let expr = function_features.negative_function_name.as_ref().map_or(
@@ -111,7 +111,7 @@ impl ExprTransformImpl {
     }
 
     fn make_condition(op: &str, origin: &Expression) -> Result<Expression> {
-        let factory = FunctionFactory::instance();
+        let factory = Function2Factory::instance();
         let function_features = factory.get_features(op)?;
         if function_features.is_bool_func {
             Ok(origin.clone())

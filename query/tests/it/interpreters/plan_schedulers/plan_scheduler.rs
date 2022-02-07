@@ -62,7 +62,7 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
     let scheduler = PlanScheduler::try_create(context)?;
     let scheduled_tasks = scheduler.reschedule(&PlanNode::Stage(StagePlan {
         kind: StageKind::Convergent,
-        scatters_expr: Expression::create_literal(DataValue::UInt64(Some(0))),
+        scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
         input: Arc::new(PlanNode::Empty(EmptyPlan::cluster())),
     }))?;
 
@@ -80,7 +80,7 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
     assert_eq!(remote_actions[0].1.sinks, vec![String::from("dummy_local")]);
     assert_eq!(
         remote_actions[0].1.scatters_expression,
-        Expression::create_literal(DataValue::UInt64(Some(0)))
+        Expression::create_literal(DataValue::UInt64(0))
     );
     assert_eq!(
         remote_actions[0].1.plan,
@@ -91,7 +91,7 @@ async fn test_scheduler_plan_with_one_convergent_stage() -> Result<()> {
     assert_eq!(remote_actions[1].1.sinks, vec![String::from("dummy_local")]);
     assert_eq!(
         remote_actions[1].1.scatters_expression,
-        Expression::create_literal(DataValue::UInt64(Some(0)))
+        Expression::create_literal(DataValue::UInt64(0))
     );
     assert_eq!(
         remote_actions[1].1.plan,
@@ -130,7 +130,7 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
     let scheduled_tasks = scheduler.reschedule(&PlanNode::Select(SelectPlan {
         input: Arc::new(PlanNode::Stage(StagePlan {
             kind: StageKind::Convergent,
-            scatters_expr: Expression::create_literal(DataValue::UInt64(Some(0))),
+            scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
             input: Arc::new(PlanNode::Select(SelectPlan {
                 input: Arc::new(PlanNode::Stage(StagePlan {
                     kind: StageKind::Expansive,
@@ -174,14 +174,14 @@ async fn test_scheduler_plan_with_convergent_and_expansive_stage() -> Result<()>
     assert_eq!(remote_actions[1].1.sinks, vec![String::from("dummy_local")]);
     assert_eq!(
         remote_actions[1].1.scatters_expression,
-        Expression::create_literal(DataValue::UInt64(Some(0)))
+        Expression::create_literal(DataValue::UInt64(0))
     );
 
     assert_eq!(remote_actions[2].0.id, String::from("dummy"));
     assert_eq!(remote_actions[2].1.sinks, vec![String::from("dummy_local")]);
     assert_eq!(
         remote_actions[2].1.scatters_expression,
-        Expression::create_literal(DataValue::UInt64(Some(0)))
+        Expression::create_literal(DataValue::UInt64(0))
     );
 
     // Perform the same plan in different nodes
@@ -233,11 +233,11 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     let scheduled_tasks = plan_scheduler.reschedule(&PlanNode::Select(SelectPlan {
         input: Arc::new(PlanNode::Stage(StagePlan {
             kind: StageKind::Convergent,
-            scatters_expr: Expression::create_literal(DataValue::UInt64(Some(1))),
+            scatters_expr: Expression::create_literal(DataValue::UInt64(1)),
             input: Arc::new(PlanNode::Select(SelectPlan {
                 input: Arc::new(PlanNode::Stage(StagePlan {
                     kind: StageKind::Normal,
-                    scatters_expr: Expression::create_literal(DataValue::UInt64(Some(0))),
+                    scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
                     input: Arc::new(PlanNode::Empty(EmptyPlan::cluster())),
                 })),
             })),
@@ -261,7 +261,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     ]);
     assert_eq!(
         remote_actions[0].1.scatters_expression,
-        Expression::create_literal(DataValue::UInt64(Some(0)))
+        Expression::create_literal(DataValue::UInt64(0))
     );
     assert_eq!(
         remote_actions[0].1.plan,
@@ -275,7 +275,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     ]);
     assert_eq!(
         remote_actions[2].1.scatters_expression,
-        Expression::create_literal(DataValue::UInt64(Some(0)))
+        Expression::create_literal(DataValue::UInt64(0))
     );
     assert_eq!(
         remote_actions[2].1.plan,
@@ -286,14 +286,14 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     assert_eq!(remote_actions[1].1.sinks, vec![String::from("dummy_local")]);
     assert_eq!(
         remote_actions[1].1.scatters_expression,
-        Expression::create_literal(DataValue::UInt64(Some(1)))
+        Expression::create_literal(DataValue::UInt64(1))
     );
 
     assert_eq!(remote_actions[3].0.id, String::from("dummy"));
     assert_eq!(remote_actions[3].1.sinks, vec![String::from("dummy_local")]);
     assert_eq!(
         remote_actions[3].1.scatters_expression,
-        Expression::create_literal(DataValue::UInt64(Some(1)))
+        Expression::create_literal(DataValue::UInt64(1))
     );
 
     // Perform the same plan in different nodes

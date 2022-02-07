@@ -23,7 +23,7 @@ use futures::TryStreamExt;
 
 #[tokio::test]
 async fn test_number_table() -> Result<()> {
-    let tbl_args = Some(vec![Expression::create_literal(DataValue::UInt64(Some(8)))]);
+    let tbl_args = Some(vec![Expression::create_literal(DataValue::UInt64(8))]);
     let ctx = crate::tests::create_query_context()?;
     let table = NumbersTable::create("system", "numbers_mt", 1, tbl_args)?;
 

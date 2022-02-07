@@ -39,13 +39,13 @@ impl ParquetTestData {
         ]);
 
         let block1 = DataBlock::create(schema.clone(), vec![
-            Series::new(vec!["jack", "ace", "bohu"]),
-            Series::new(vec![11, 6, 24]),
+            Series::from_data(vec!["jack", "ace", "bohu"]),
+            Series::from_data(vec![11, 6, 24]),
         ]);
 
         let block2 = DataBlock::create(schema, vec![
-            Series::new(vec!["xjack", "xace", "xbohu"]),
-            Series::new(vec![11, 6, 24]),
+            Series::from_data(vec!["xjack", "xace", "xbohu"]),
+            Series::from_data(vec![11, 6, 24]),
         ]);
         self.write_to_parquet(path, &[block1, block2]);
     }

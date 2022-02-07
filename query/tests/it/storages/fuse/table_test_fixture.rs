@@ -17,13 +17,7 @@ use std::sync::Arc;
 
 use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::Series;
-use common_datavalues2::prelude::SeriesFrom;
-use common_datavalues2::DataField;
-use common_datavalues2::DataSchemaRef;
-use common_datavalues2::DataSchemaRefExt;
-use common_datavalues2::DataType;
-use common_datavalues2::DataValue;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::TableMeta;
@@ -149,7 +143,7 @@ impl TestFixture {
             .map(|idx| {
                 let schema =
                     DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
-                Ok(DataBlock::create(schema, vec![Series::new(
+                Ok(DataBlock::create(schema, vec![Series::from_data(
                     std::iter::repeat_with(|| idx as i32 + start)
                         .take(rows_perf_block)
                         .collect::<Vec<i32>>(),
@@ -192,11 +186,20 @@ pub async fn test_drive(
     test_db: Option<&str>,
     test_tbl: Option<&str>,
 ) -> Result<SendableDataBlockStream> {
-    let arg_db =
-        Expression::create_literal(DataValue::String(test_db.map(|v| v.as_bytes().to_vec())));
-    let arg_tbl =
-        Expression::create_literal(DataValue::String(test_tbl.map(|v| v.as_bytes().to_vec())));
-    let tbl_args = Some(vec![arg_db, arg_tbl]);
+    let arg_db = match test_db {
+        Some(v) => DataValue::String(v.as_bytes().to_vec()),
+        None => DataValue::Null,
+    };
+
+    let arg_tbl = match test_tbl {
+        Some(v) => DataValue::String(v.as_bytes().to_vec()),
+        None => DataValue::Null,
+    };
+
+    let tbl_args = Some(vec![
+        Expression::create_literal(arg_db),
+        Expression::create_literal(arg_tbl),
+    ]);
     test_drive_with_args(tbl_args).await
 }
 
