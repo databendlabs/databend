@@ -15,19 +15,21 @@
 use std::fmt;
 use std::marker::PhantomData;
 use std::str;
+use std::sync::Arc;
 
-use common_datavalues::columns::DataColumn;
-use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataType;
-use common_datavalues::DataTypeAndNullable;
-use common_datavalues::DataValue;
+use common_datavalues2::BooleanColumn;
+use common_datavalues2::BooleanType;
+use common_datavalues2::ColumnViewerIter;
+use common_datavalues2::ScalarColumn;
+use common_datavalues2::TypeID;
+use common_datavalues2::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use uuid::Uuid;
 
-use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 pub type UUIDIsEmptyFunction = UUIDVerifierFunction<UUIDIsEmpty>;
 pub type UUIDIsNotEmptyFunction = UUIDVerifierFunction<UUIDIsNotEmpty>;
@@ -41,15 +43,15 @@ pub struct UUIDVerifierFunction<T> {
 impl<T> UUIDVerifierFunction<T>
 where T: UUIDVerifier + Clone + Sync + Send + 'static
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(UUIDVerifierFunction::<T> {
             display_name: display_name.to_string(),
             t: PhantomData,
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().num_arguments(1))
     }
 }
@@ -92,55 +94,53 @@ impl UUIDVerifier for UUIDIsNotEmpty {
     }
 }
 
-impl<T> Function for UUIDVerifierFunction<T>
+impl<T> Function2 for UUIDVerifierFunction<T>
 where T: UUIDVerifier + Clone + Sync + Send + 'static
 {
     fn name(&self) -> &str {
         self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        if !args[0].data_type().is_string() && !args[0].data_type().is_null() {
+    fn return_type(
+        &self,
+        args: &[&common_datavalues2::DataTypePtr],
+    ) -> Result<common_datavalues2::DataTypePtr> {
+        if args[0].data_type_id() != TypeID::String && args[0].data_type_id() != TypeID::Null {
             return Err(ErrorCode::IllegalDataType(format!(
-                "Expected string or null, but got {}",
+                "Expected string or null, but got {:?}",
                 args[0]
             )));
         }
 
-        let dt = DataType::Boolean;
-        Ok(DataTypeAndNullable::create(&dt, false))
+        Ok(BooleanType::arc())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        match columns[0].data_type() {
-            &DataType::String => {
-                if let Ok(string) = str::from_utf8(
-                    columns[0]
-                        .column()
-                        .cast_with_type(&DataType::String)?
-                        .to_minimal_array()?
-                        .string()?
-                        .inner()
-                        .values()
-                        .as_slice(),
-                ) {
-                    if let Ok(uuid) = Uuid::parse_str(string) {
-                        return Ok(DataColumn::Constant(
-                            DataValue::Boolean(Some(T::verify(uuid))),
-                            input_rows,
-                        ));
-                    }
-                }
+    fn passthrough_null(&self) -> bool {
+        false
+    }
 
-                Ok(DataColumn::Constant(
-                    DataValue::Boolean(Some(T::default_verify())),
-                    input_rows,
-                ))
-            }
-            _ => Ok(DataColumn::Constant(
-                DataValue::Boolean(Some(T::default_verify())),
-                input_rows,
-            )),
-        }
+    fn eval(
+        &self,
+        columns: &common_datavalues2::ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<common_datavalues2::ColumnRef> {
+        let result_column = if columns[0].data_type().data_type_id() == TypeID::String {
+            let iter = ColumnViewerIter::<Vu8>::try_create(columns[0].column())?;
+            BooleanColumn::from_iterator(iter.map(|uuid_bytes| {
+                if let Ok(uuid_str) = str::from_utf8(uuid_bytes) {
+                    if let Ok(uuid) = Uuid::parse_str(uuid_str) {
+                        T::verify(uuid)
+                    } else {
+                        T::default_verify()
+                    }
+                } else {
+                    T::default_verify()
+                }
+            }))
+        } else {
+            BooleanColumn::from_slice(&[T::default_verify()])
+        };
+
+        Ok(Arc::new(result_column))
     }
 }
