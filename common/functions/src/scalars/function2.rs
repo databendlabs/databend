@@ -15,10 +15,12 @@
 use std::fmt;
 
 use common_datavalues::prelude::DataColumn;
+use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::prelude::DataField as OldDataField;
 use common_datavalues::DataTypeAndNullable;
 use common_datavalues2::column_convert::convert2_new_column;
 use common_datavalues2::column_convert::convert2_old_column;
+use common_datavalues2::column_convert::convert2_old_column_with_field;
 use common_datavalues2::ColumnRef;
 use common_datavalues2::ColumnWithField;
 use common_datavalues2::ColumnsWithField;
@@ -171,18 +173,36 @@ impl Function2 for Function1Convertor {
         }
 
         let typ = self.inner.return_type(&types)?;
+        let old_field = OldDataField::new("xx", typ.data_type().clone(), typ.is_nullable());
 
-        let new_typ = DataField::new("xx", typ);
-        let old_f: OldDataField = new_typ.into();
-
-        Ok(DataTypeAndNullable::create(
-            old_f.data_type(),
-            old_f.is_nullable(),
-        ))
+        let new_field: DataField = old_field.into();
+        Ok(new_field.data_type().clone())
     }
 
-    fn eval(&self, _columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        todo!()
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        let args = columns
+            .iter()
+            .map(|c| DataField::new("xx", c.data_type().clone()))
+            .collect::<Vec<_>>();
+
+        let mut types = vec![];
+        let fs: Vec<OldDataField> = args.iter().map(|f| f.clone().into()).collect();
+        for t in fs.iter() {
+            types.push(DataTypeAndNullable::create(t.data_type(), t.is_nullable()));
+        }
+
+        let typ = self.inner.return_type(&types)?;
+        let data_field = OldDataField::new("xx", typ.data_type().clone(), typ.is_nullable());
+
+        let columns: Vec<DataColumnWithField> = columns
+            .iter()
+            .map(convert2_old_column_with_field)
+            .collect::<Vec<_>>();
+        let col = self.inner.eval(&columns, input_rows)?;
+
+        let col = DataColumnWithField::new(col, data_field);
+        let column = convert2_new_column(&col);
+        Ok(column.column().clone())
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
@@ -192,11 +212,11 @@ impl Function2 for Function1Convertor {
     }
 
     fn passthrough_null(&self) -> bool {
-        true
+        self.inner.passthrough_null()
     }
 
     fn passthrough_constant(&self) -> bool {
-        true
+        false
     }
 }
 
