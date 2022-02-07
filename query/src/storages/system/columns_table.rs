@@ -106,7 +106,7 @@ impl Table for ColumnsTable {
             names.push(field.name().clone().into_bytes());
             tables.push(table_name.into_bytes());
             databases.push(database_name.into_bytes());
-            let type_str= format!("{:?}", field.data_type());
+            let type_str = format!("{:?}", field.data_type());
             data_types.push(type_str.into_bytes());
             is_nullables.push(field.is_nullable());
         }

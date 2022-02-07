@@ -14,6 +14,7 @@
 
 use std::alloc::Layout;
 use std::ptr::NonNull;
+
 use crate::aggregates::AggregateFunctionRef;
 
 #[derive(Clone, Copy)]

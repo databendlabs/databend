@@ -170,9 +170,7 @@ pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<Data
             SqlType::Float32 => Ok(Float32Column::from_iterator(col.iter::<f32>()?.copied()).arc()),
             SqlType::Float64 => Ok(Float64Column::from_iterator(col.iter::<f64>()?.copied()).arc()),
             SqlType::String => Ok(StringColumn::from_iterator(col.iter::<&[u8]>()?).arc()),
-            SqlType::FixedString(_) => {
-                Ok(StringColumn::from_iterator(col.iter::<&[u8]>()?).arc())
-            }
+            SqlType::FixedString(_) => Ok(StringColumn::from_iterator(col.iter::<&[u8]>()?).arc()),
 
             SqlType::Nullable(SqlType::UInt8) => Ok(Series::from_data(
                 col.iter::<Option<u8>>()?.map(|c| c.copied()),

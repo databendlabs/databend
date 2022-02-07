@@ -121,7 +121,7 @@ impl Processor for AggregatorPartialTransform {
                     arg_columns.push(block.try_column_by_name(name)?.clone());
                 }
                 let place = places[idx].into();
-                func.accumulate(place, &arg_columns, None,rows)?;
+                func.accumulate(place, &arg_columns, None, rows)?;
             }
         }
         let delta = start.elapsed();

@@ -233,28 +233,29 @@ macro_rules! fmt_dyn {
 impl std::fmt::Debug for dyn Column + '_ {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let dt = self.data_type().data_type_id();
+        let col = self.convert_full_column();
         with_match_primitive_type_id!(dt, |$T| {
             fmt_dyn!(&self, PrimitiveColumn<$T>, f)
         }, {
             use crate::types::type_id::TypeID::*;
             match dt {
                 Null => {
-                    fmt_dyn!(self, NullColumn, f)
+                    fmt_dyn!(col, NullColumn, f)
                 }
                 Nullable => {
-                    fmt_dyn!(self, NullableColumn, f)
+                    fmt_dyn!(col, NullableColumn, f)
                 },
                 Boolean => {
-                    fmt_dyn!(self, BooleanColumn, f)
+                    fmt_dyn!(col, BooleanColumn, f)
                 },
                 String => {
-                    fmt_dyn!(self, StringColumn, f)
+                    fmt_dyn!(col, StringColumn, f)
                 },
                 Array => {
-                    fmt_dyn!(self, ArrayColumn, f)
+                    fmt_dyn!(col, ArrayColumn, f)
                 },
                 Struct => {
-                    fmt_dyn!(self, StructColumn, f)
+                    fmt_dyn!(col, StructColumn, f)
                 },
                 _ => {
                     unimplemented!()

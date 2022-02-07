@@ -76,7 +76,12 @@ impl FlightDataStream {
                     is_little_endian: true,
                 };
 
-                let batch = deserialize_batch(&flight_data, arrow_schema, &ipc_schema, &Default::default())?;
+                let batch = deserialize_batch(
+                    &flight_data,
+                    arrow_schema,
+                    &ipc_schema,
+                    &Default::default(),
+                )?;
                 batch.try_into()
             }
         })

@@ -122,8 +122,8 @@ impl Column for StructColumn {
 
         for s in 0..scattered_size {
             let mut arrays = Vec::with_capacity(self.values.len());
-            for v in 0..values.len() {
-                arrays.push(values[v][s].clone());
+            for value in values {
+                arrays.push(value[s].clone());
             }
             result.push(
                 Arc::new(StructColumn::from_data(arrays, self.data_type.clone())) as ColumnRef,

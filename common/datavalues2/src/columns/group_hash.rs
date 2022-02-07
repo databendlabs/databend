@@ -26,9 +26,9 @@ impl Series {
             let col: &<$T as Scalar>::ColumnType = Series::check_get(column)?;
             GroupHash::fixed_hash(col, ptr, step)
         }, {
-            Err(ErrorCode::BadDataValueType(format!(
-                "Unsupported apply fn fixed_hash operation for fixed_hash",
-            )))
+            Err(ErrorCode::BadDataValueType(
+                "Unsupported apply fn fixed_hash operation for fixed_hash".to_string(),
+            ))
         })
     }
 

@@ -169,7 +169,6 @@ fn test_range_filter() -> Result<()> {
     ];
 
     for test in tests {
-        println!("test -> {:?}", test.name);
         let prune = RangeFilter::try_create(&test.expr, schema.clone())?;
 
         match prune.eval(&stats) {

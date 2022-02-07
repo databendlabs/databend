@@ -17,8 +17,9 @@ use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-use common_datavalues2::{ColumnWithField, DataValue};
+use common_datavalues2::ColumnWithField;
 use common_datavalues2::DataSchema;
+use common_datavalues2::DataValue;
 use common_exception::Result;
 use common_functions::aggregates::eval_aggr;
 

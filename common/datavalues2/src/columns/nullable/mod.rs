@@ -142,13 +142,12 @@ impl Column for NullableColumn {
 
         let mut results = Vec::with_capacity(scattered_size);
 
-        for index in 0..scattered_size {
+        for (index, value) in inner_values.iter().enumerate().take(scattered_size) {
             let bitmap = bitmaps.get_mut(index).unwrap();
             let bitmap = std::mem::take(bitmap).into();
-            results.push(
-                Arc::new(NullableColumn::new(inner_values[index].clone(), bitmap)) as ColumnRef,
-            );
+            results.push(Arc::new(NullableColumn::new(value.clone(), bitmap)) as ColumnRef);
         }
+
         results
     }
 

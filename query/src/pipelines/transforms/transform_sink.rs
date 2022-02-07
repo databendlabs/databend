@@ -88,12 +88,7 @@ impl Processor for SinkTransform {
         if let Some(cast_schema) = &self.cast_schema {
             let mut functions = Vec::with_capacity(cast_schema.fields().len());
             for field in cast_schema.fields() {
-                let name = if field.is_nullable() {
-                    format!("Nullable({:?})", field.data_type())
-                } else {
-                    format!("{:?}", field.data_type())
-                };
-
+                let name = format!("{:?}", field.data_type());
                 let cast_function = CastFunction::create("cast", &name).unwrap();
                 functions.push(cast_function);
             }
