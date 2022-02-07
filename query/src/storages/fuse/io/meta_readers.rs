@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
+use futures::io::BufReader;
 use serde::de::DeserializeOwned;
 
 use crate::sessions::QueryContext;
@@ -34,12 +35,12 @@ use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
 
-/// Provider of [InputStream]
+/// Provider of [BufReader]
 ///
 /// Mainly used as a auxiliary facility in the implementation of [Loader], such that the acquirement
-/// of an [InputStream] can be deferred or avoided (e.g. if hits cache).
-pub trait InputStreamProvider {
-    fn input_stream(&self, path: &str, len: Option<u64>) -> Result<InputStream>;
+/// of an [BufReader] can be deferred or avoided (e.g. if hits cache).
+pub trait BufReaderProvider {
+    fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<InputStream>>;
 }
 
 /// A Newtype for [FileMetaData].
@@ -123,11 +124,11 @@ impl<'a> TableSnapshotReader<'a> {
 #[async_trait::async_trait]
 impl<T, V> Loader<V> for T
 where
-    T: InputStreamProvider + Sync,
+    T: BufReaderProvider + Sync,
     V: DeserializeOwned,
 {
     async fn load(&self, key: &str, length_hint: Option<u64>) -> Result<V> {
-        let mut reader = self.input_stream(key, length_hint)?;
+        let mut reader = self.buf_reader(key, length_hint)?;
         let mut buffer = vec![];
 
         use futures::AsyncReadExt;
@@ -146,10 +147,10 @@ where
 
 #[async_trait::async_trait]
 impl<T> Loader<BlockMeta> for T
-where T: InputStreamProvider + Sync
+where T: BufReaderProvider + Sync
 {
     async fn load(&self, key: &str, length_hint: Option<u64>) -> Result<BlockMeta> {
-        let mut reader = self.input_stream(key, length_hint)?;
+        let mut reader = self.buf_reader(key, length_hint)?;
         let meta = read_metadata_async(&mut reader)
             .instrument(debug_span!("parquet_source_read_meta"))
             .await
@@ -158,16 +159,21 @@ where T: InputStreamProvider + Sync
     }
 }
 
-impl InputStreamProvider for &QueryContext {
-    fn input_stream(&self, path: &str, len: Option<u64>) -> Result<InputStream> {
+impl BufReaderProvider for &QueryContext {
+    fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<InputStream>> {
         let accessor = self.get_storage_accessor()?;
-        accessor.get_input_stream(path, len)
+        let input_stream = accessor.get_input_stream(path, len)?;
+        let read_buffer_size = self.get_settings().get_storage_read_buffer_size()?;
+        Ok(BufReader::with_capacity(
+            read_buffer_size as usize,
+            input_stream,
+        ))
     }
 }
 
-impl InputStreamProvider for Arc<QueryContext> {
-    fn input_stream(&self, path: &str, len: Option<u64>) -> Result<InputStream> {
-        self.as_ref().input_stream(path, len)
+impl BufReaderProvider for Arc<QueryContext> {
+    fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<InputStream>> {
+        self.as_ref().buf_reader(path, len)
     }
 }
 

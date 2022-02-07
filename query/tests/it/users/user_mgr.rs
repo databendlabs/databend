@@ -20,22 +20,20 @@ use common_meta_types::PasswordHashMethod;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
-use databend_query::configs::Config;
 use databend_query::users::User;
 use databend_query::users::UserApiProvider;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager() -> Result<()> {
-    let mut config = Config::default();
-    config.query.tenant_id = "tenant1".to_string();
+    let conf = crate::tests::ConfigBuilder::create().config();
 
-    let tenant = "tenant1";
+    let tenant = "test";
     let user = "test-user1";
     let hostname = "localhost";
     let hostname2 = "%";
     let pwd = "test-pwd";
-    let user_mgr = UserApiProvider::create_global(config).await?;
+    let user_mgr = UserApiProvider::create_global(conf).await?;
 
     let auth_info = AuthInfo::Password {
         hash_value: Vec::from(pwd),
@@ -212,10 +210,9 @@ async fn test_user_manager() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager_with_root_user() -> Result<()> {
-    let mut config = Config::default();
-    config.query.tenant_id = "tenant1".to_string();
+    let conf = crate::tests::ConfigBuilder::create().config();
 
-    let tenant = "tenant1";
+    let tenant = "test";
     let username1 = "default";
     let username2 = "root";
 
@@ -223,7 +220,7 @@ async fn test_user_manager_with_root_user() -> Result<()> {
     let hostname2 = "localhost";
     let hostname3 = "otherhost";
 
-    let user_mgr = UserApiProvider::create_global(config).await?;
+    let user_mgr = UserApiProvider::create_global(conf).await?;
 
     // Get user via username `default` and hostname `127.0.0.1`.
     {

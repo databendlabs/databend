@@ -1,0 +1,60 @@
+---------- Input ----------
+drop table if a.b;
+---------- Output ---------
+error: 
+  --> SQL:1:12
+  |
+1 | drop table if a.b;
+  | ----       ^^ expected token <Ident>
+  | |           
+  | while parsing DROP TABLE statement
+
+
+---------- Input ----------
+truncate table a
+---------- Output ---------
+error: 
+  --> SQL:1:17
+  |
+1 | truncate table a
+  | --------        ^ expected token ";"
+  | |               
+  | while parsing TRUNCATE TABLE statement
+
+
+---------- Input ----------
+truncate table a.b.c.d
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | truncate table a.b.c.d
+  | --------          ^ expected token ";"
+  | |                  
+  | while parsing TRUNCATE TABLE statement
+
+
+---------- Input ----------
+truncate a
+---------- Output ---------
+error: 
+  --> SQL:1:10
+  |
+1 | truncate a
+  | -------- ^ expected token <TABLE>
+  | |         
+  | while parsing TRUNCATE TABLE statement
+
+
+---------- Input ----------
+drop a
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | drop a
+  | ---- ^ expected token <TABLE>
+  | |     
+  | while parsing DROP TABLE statement
+
+

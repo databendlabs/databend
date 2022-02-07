@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::pin::Pin;
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::task::Context;
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::task::Poll;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
 use common_meta_grpc::MetaGrpcReadReq;
 use common_meta_grpc::MetaGrpcWriteReq;
 use common_meta_types::protobuf::meta_service_server::MetaService;
+use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeRequest;
 use common_meta_types::protobuf::HandshakeResponse;
 use common_meta_types::protobuf::RaftReply;
@@ -27,6 +31,7 @@ use common_meta_types::protobuf::RaftRequest;
 use common_tracing::tracing;
 use futures::StreamExt;
 use prost::Message;
+use tokio_stream::Stream;
 use tonic::metadata::MetadataMap;
 use tonic::Request;
 use tonic::Response;
@@ -34,6 +39,7 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::executor::ActionHandler;
+use crate::export::exported_line_to_json;
 use crate::meta_service::meta_service_impl::GrpcStream;
 use crate::meta_service::MetaNode;
 
@@ -136,5 +142,64 @@ impl MetaService for MetaServiceImpl {
             error: "".to_string(),
         };
         Ok(Response::new(r))
+    }
+
+    type ExportStream =
+        Pin<Box<dyn Stream<Item = Result<ExportedChunk, tonic::Status>> + Send + Sync + 'static>>;
+
+    // Export all meta data.
+    //
+    // Including raft hard state, logs and state machine.
+    // The exported data is a list of json strings in form of `(tree_name, sub_tree_prefix, key, value)`.
+    async fn export(
+        &self,
+        _request: Request<common_meta_types::protobuf::Empty>,
+    ) -> Result<Response<Self::ExportStream>, Status> {
+        let meta_node = &self.action_handler.meta_node;
+
+        let mut res = vec![];
+
+        let state_kvs = meta_node.sto.raft_state.inner.export()?;
+        let log_kvs = meta_node.sto.log.inner.export()?;
+        let sm_kvs = meta_node.sto.state_machine.write().await.sm_tree.export()?;
+
+        for kv in state_kvs.iter() {
+            let line = exported_line_to_json("state", kv)?;
+            res.push(line);
+        }
+        for kv in log_kvs.iter() {
+            let line = exported_line_to_json("log", kv)?;
+            res.push(line);
+        }
+        for kv in sm_kvs.iter() {
+            let line = exported_line_to_json("sm", kv)?;
+            res.push(line);
+        }
+
+        let stream = ExportStream { data: res };
+
+        let s = stream.map(|strings| Ok(ExportedChunk { data: strings }));
+
+        Ok(Response::new(Box::pin(s)))
+    }
+}
+
+pub struct ExportStream {
+    pub data: Vec<String>,
+}
+
+impl Stream for ExportStream {
+    type Item = Vec<String>;
+
+    fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let l = self.data.len();
+
+        if l == 0 {
+            return Poll::Ready(None);
+        }
+
+        let chunk_size = 16;
+
+        Poll::Ready(Some(self.data.drain(0..chunk_size).collect()))
     }
 }

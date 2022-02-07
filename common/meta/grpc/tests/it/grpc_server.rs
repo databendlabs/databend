@@ -19,6 +19,7 @@ use std::time::Duration;
 use common_base::tokio;
 use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
+use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeResponse;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
@@ -60,6 +61,16 @@ impl MetaService for GrpcServiceForTestImpl {
         // for timeout test
         tokio::time::sleep(Duration::from_secs(60)).await;
         Err(Status::unimplemented("Not yet implemented"))
+    }
+
+    type ExportStream =
+        Pin<Box<dyn Stream<Item = Result<ExportedChunk, tonic::Status>> + Send + Sync + 'static>>;
+
+    async fn export(
+        &self,
+        _request: Request<common_meta_types::protobuf::Empty>,
+    ) -> Result<Response<Self::ExportStream>, Status> {
+        todo!()
     }
 }
 

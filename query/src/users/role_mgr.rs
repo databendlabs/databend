@@ -23,14 +23,14 @@ use crate::users::UserApiProvider;
 impl UserApiProvider {
     // Get one role from by tenant.
     pub async fn get_role(&self, tenant: &str, role_name: &str) -> Result<RoleInfo> {
-        let client = self.get_role_api_client(tenant);
+        let client = self.get_role_api_client(tenant)?;
         let role_data = client.get_role(role_name, None).await?.data;
         Ok(role_data)
     }
 
     // Get the tenant all roles list.
     pub async fn get_roles(&self, tenant: &str) -> Result<Vec<RoleInfo>> {
-        let client = self.get_role_api_client(tenant);
+        let client = self.get_role_api_client(tenant)?;
         let get_roles = client.get_roles();
 
         let mut res = vec![];
@@ -48,7 +48,7 @@ impl UserApiProvider {
 
     // Add a new role info.
     pub async fn add_role(&self, tenant: &str, role_info: RoleInfo) -> Result<u64> {
-        let client = self.get_role_api_client(tenant);
+        let client = self.get_role_api_client(tenant)?;
         let add_role = client.add_role(&role_info);
         match add_role.await {
             Ok(res) => Ok(res),
@@ -64,7 +64,7 @@ impl UserApiProvider {
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
-        let client = self.get_role_api_client(tenant);
+        let client = self.get_role_api_client(tenant)?;
         client
             .grant_role_privileges(
                 role_name.to_string(),
@@ -85,7 +85,7 @@ impl UserApiProvider {
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
-        let client = self.get_role_api_client(tenant);
+        let client = self.get_role_api_client(tenant)?;
         client
             .revoke_role_privileges(
                 role_name.to_string(),
@@ -100,7 +100,7 @@ impl UserApiProvider {
 
     // Drop a role by name
     pub async fn drop_role(&self, tenant: &str, role_name: &str, if_exists: bool) -> Result<()> {
-        let client = self.get_role_api_client(tenant);
+        let client = self.get_role_api_client(tenant)?;
         let drop_role = client.drop_role(role_name.to_string(), None);
         match drop_role.await {
             Ok(res) => Ok(res),

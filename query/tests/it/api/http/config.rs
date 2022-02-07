@@ -16,7 +16,6 @@
  */
 use common_base::tokio;
 use databend_query::api::http::v1::config::config_handler;
-use databend_query::configs::Config;
 use poem::get;
 use poem::http::Method;
 use poem::http::StatusCode;
@@ -29,7 +28,7 @@ use pretty_assertions::assert_eq; // for `app.oneshot()`
 
 #[tokio::test]
 async fn test_config() -> common_exception::Result<()> {
-    let conf = Config::default();
+    let conf = crate::tests::ConfigBuilder::create().config();
     let cluster_router = Route::new()
         .at("/v1/config", get(config_handler))
         .data(conf.clone());
