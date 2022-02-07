@@ -92,17 +92,14 @@ type StateLockGuard<'a> = RwLockUpgradableReadGuard<'a, ExecutingGraph>;
 
 impl ExecutingGraph {
     pub fn create(pipeline: NewPipeline) -> Result<ExecutingGraph> {
+        // let (nodes_size, edges_size) = pipeline.graph_size();
         let mut graph = StableGraph::new();
 
         let mut node_stack = Vec::new();
         let mut edge_stack: Vec<Arc<OutputPort>> = Vec::new();
         for query_pipe in &pipeline.pipes {
             match query_pipe {
-                NewPipe::ResizePipe {
-                    processor,
-                    inputs_port,
-                    outputs_port,
-                } => unsafe {
+                NewPipe::ResizePipe { processor, inputs_port, outputs_port, } => unsafe {
                     assert_eq!(node_stack.len(), inputs_port.len());
 
                     let resize_node = Node::create(processor, inputs_port, outputs_port);
@@ -113,9 +110,10 @@ impl ExecutingGraph {
                         let source_index = node_stack[index];
                         let edge_index = graph.add_edge(source_index, target_index, ());
 
-                        inputs_port[index].set_trigger(resize_node.create_trigger(edge_index));
-                        edge_stack[index]
-                            .set_trigger(graph[source_index].create_trigger(edge_index));
+                        let input_trigger = resize_node.create_trigger(edge_index);
+                        println!("create trigger {:?} -> {:?} : {:?}, {:?}", source_index, target_index, edge_index, input_trigger as usize);
+                        inputs_port[index].set_trigger(input_trigger);
+                        edge_stack[index].set_trigger(graph[source_index].create_trigger(edge_index));
                         connect(&inputs_port[index], &edge_stack[index]);
                     }
 
@@ -150,8 +148,7 @@ impl ExecutingGraph {
                             p_outputs_port.push(outputs_port[index].clone());
                         }
 
-                        let target_node =
-                            Node::create(&processors[index], &p_inputs_port, &p_outputs_port);
+                        let target_node = Node::create(&processors[index], &p_inputs_port, &p_outputs_port);
                         let target_index = graph.add_node(target_node.clone());
                         processors[index].set_id(target_index);
 
@@ -197,11 +194,7 @@ impl ExecutingGraph {
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn schedule_queue(
-        locker: &StateLockGuard,
-        index: NodeIndex,
-        schedule_queue: &mut ScheduleQueue,
-    ) -> Result<()> {
+    pub unsafe fn schedule_queue(locker: &StateLockGuard, index: NodeIndex, schedule_queue: &mut ScheduleQueue) -> Result<()> {
         let mut need_schedule_nodes = VecDeque::new();
         let mut need_schedule_edges = VecDeque::new();
 
@@ -213,6 +206,7 @@ impl ExecutingGraph {
             if need_schedule_nodes.is_empty() {
                 let edge = need_schedule_edges.pop_front().unwrap();
                 let target_index = DirectedEdge::get_target(&edge, &locker.graph);
+                // println!("need schedule edges: {:?}", target_index);
 
                 let node = &locker.graph[target_index];
                 let node_state = node.state.lock().unwrap();
@@ -327,7 +321,7 @@ pub struct RunningGraph(RwLock<ExecutingGraph>);
 impl RunningGraph {
     pub fn create(pipeline: NewPipeline) -> Result<RunningGraph> {
         let graph_state = ExecutingGraph::create(pipeline)?;
-        // graph_state.initialize_tasks()?;
+        println!("Created graph: {:?}", graph_state);
         Ok(RunningGraph(RwLock::new(graph_state)))
     }
 

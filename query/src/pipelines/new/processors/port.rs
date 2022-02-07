@@ -93,7 +93,7 @@ impl SharedStatus {
                 }
                 Err(new_expected) => {
                     expected = new_expected;
-                    let address = desired as usize;
+                    let address = expected as usize;
                     let desired_data = address & UNSET_FLAGS_MASK;
                     let desired_flags = (address & FLAGS_MASK & !unset_flags) | set_flags;
                     desired = (desired_data | desired_flags) as *mut SharedData;
@@ -132,9 +132,13 @@ impl InputPort {
         }
     }
 
+    pub fn get_flags(&self) -> usize {
+        self.shared.get_flags()
+    }
+
     #[inline(always)]
     pub fn is_finished(&self) -> bool {
-        (self.shared.get_flags() & IS_FINISHED) != 0
+        (self.shared.get_flags() & IS_FINISHED) == IS_FINISHED
     }
 
     #[inline(always)]

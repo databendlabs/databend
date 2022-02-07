@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::format;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
@@ -45,7 +46,8 @@ impl PipelineThreadsExecutor {
         let mut threads = Vec::with_capacity(self.threads_num);
         for thread_num in 0..self.threads_num {
             let worker_executor = self.inner_executor.clone();
-            threads.push(Thread::spawn(move || unsafe {
+            let name = format!("PipelineExecutor-{}", thread_num);
+            threads.push(Thread::named_spawn(Some(String::from(name)), move || unsafe {
                 match worker_executor.execute(thread_num) {
                     Ok(_) => Ok(()),
                     Err(cause) => {

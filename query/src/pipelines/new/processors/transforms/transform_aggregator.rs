@@ -7,76 +7,103 @@ use common_exception::{ErrorCode, Result};
 use common_functions::aggregates::{AggregateFunctionRef, get_layout_offsets};
 use common_planners::Expression;
 use crate::pipelines::new::processors::port::{InputPort, OutputPort};
-use crate::pipelines::new::processors::Processor;
+use crate::pipelines::new::processors::{AggregatorParams, AggregatorTransformParams, Processor};
 use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
-use crate::pipelines::new::processors::transforms::group_by::{KeysU16PartialAggregator, KeysU32PartialAggregator, KeysU64PartialAggregator, KeysU8PartialAggregator, PartialAggregator, SerializerPartialAggregator, WithoutGroupBy};
+use crate::pipelines::new::processors::transforms::aggregator::{FinalSingleKeyAggregator, KeysU16PartialAggregator, KeysU32PartialAggregator, KeysU64PartialAggregator, KeysU8PartialAggregator, PartialAggregator, PartialSingleKeyAggregator, SerializerPartialAggregator};
 use crate::pipelines::new::processors::transforms::transform::Transform;
-use crate::pipelines::transforms::group_by::{AggregatorParams, AggregatorParamsRef};
 
-pub struct TransformAggregatorPartial;
 
-impl TransformAggregatorPartial {
-    fn extract_group_columns(group_exprs: &[Expression]) -> Vec<String> {
-        group_exprs
-            .iter()
-            .map(|x| x.column_name())
-            .collect::<Vec<_>>()
-    }
+pub struct TransformAggregator;
 
-    pub fn try_create(
-        schema: DataSchemaRef,
-        schema_before_group_by: DataSchemaRef,
-        aggr_exprs: &[Expression],
-        group_exprs: &[Expression],
+impl TransformAggregator {
+    pub fn try_create_final(
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
+        transform_params: AggregatorTransformParams,
     ) -> Result<ProcessorPtr> {
-        if group_exprs.is_empty() {
+        let aggregator_params = transform_params.aggregator_params;
+
+        if aggregator_params.group_columns_name.is_empty() {
             return AggregatorTransform::create(
                 input_port,
                 output_port,
-                WithoutGroupBy::create(schema, schema_before_group_by, aggr_exprs)?,
+                FinalSingleKeyAggregator::try_create(&aggregator_params)?,
             );
         }
 
-        let group_cols = Self::extract_group_columns(group_exprs);
-        let sample_block = DataBlock::empty_with_schema(schema_before_group_by.clone());
-        let hash_method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
-        let params = AggregatorParams::try_create(&schema, &schema_before_group_by, aggr_exprs, &group_cols)?;
-
-        match !aggr_exprs.is_empty() {
-            true => Self::create::<true>(input_port, output_port, hash_method, params),
-            false => Self::create::<false>(input_port, output_port, hash_method, params)
-        }
+        unimplemented!()
     }
 
-    fn create<const HAS_AGG: bool>(input: Arc<InputPort>, output: Arc<OutputPort>, method: HashMethodKind, params: AggregatorParamsRef) -> Result<ProcessorPtr> {
-        if HAS_AGG {
-            return match method {
-                HashMethodKind::KeysU8(m) => AggregatorTransform::create(
-                    input, output, KeysU8PartialAggregator::<true>::create(m, params)),
-                HashMethodKind::KeysU16(m) => AggregatorTransform::create(
-                    input, output, KeysU16PartialAggregator::<true>::create(m, params)),
-                HashMethodKind::KeysU32(m) => AggregatorTransform::create(
-                    input, output, KeysU32PartialAggregator::<true>::create(m, params)),
-                HashMethodKind::KeysU64(m) => AggregatorTransform::create(
-                    input, output, KeysU64PartialAggregator::<true>::create(m, params)),
-                HashMethodKind::Serializer(m) => AggregatorTransform::create(
-                    input, output, SerializerPartialAggregator::<true>::create(m, params)),
-            };
-        } else {
-            return match method {
-                HashMethodKind::KeysU8(m) => AggregatorTransform::create(
-                    input, output, KeysU8PartialAggregator::<false>::create(m, params)),
-                HashMethodKind::KeysU16(m) => AggregatorTransform::create(
-                    input, output, KeysU16PartialAggregator::<false>::create(m, params)),
-                HashMethodKind::KeysU32(m) => AggregatorTransform::create(
-                    input, output, KeysU32PartialAggregator::<false>::create(m, params)),
-                HashMethodKind::KeysU64(m) => AggregatorTransform::create(
-                    input, output, KeysU64PartialAggregator::<false>::create(m, params)),
-                HashMethodKind::Serializer(m) => AggregatorTransform::create(
-                    input, output, SerializerPartialAggregator::<false>::create(m, params)),
-            };
+    pub fn try_create_partial(
+        input_port: Arc<InputPort>,
+        output_port: Arc<OutputPort>,
+        transform_params: AggregatorTransformParams,
+    ) -> Result<ProcessorPtr> {
+        let aggregator_params = transform_params.aggregator_params;
+
+        if aggregator_params.group_columns_name.is_empty() {
+            return AggregatorTransform::create(
+                input_port,
+                output_port,
+                PartialSingleKeyAggregator::try_create(&aggregator_params)?,
+            );
+        }
+
+        match aggregator_params.aggregate_functions.is_empty() {
+            true => match transform_params.method {
+                HashMethodKind::KeysU8(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU8PartialAggregator::<false>::create(method, aggregator_params),
+                ),
+                HashMethodKind::KeysU16(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU16PartialAggregator::<false>::create(method, aggregator_params),
+                ),
+                HashMethodKind::KeysU32(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU32PartialAggregator::<false>::create(method, aggregator_params),
+                ),
+                HashMethodKind::KeysU64(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU64PartialAggregator::<false>::create(method, aggregator_params),
+                ),
+                HashMethodKind::Serializer(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    SerializerPartialAggregator::<false>::create(method, aggregator_params),
+                ),
+            }
+            false => match transform_params.method {
+                HashMethodKind::KeysU8(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU8PartialAggregator::<true>::create(method, aggregator_params),
+                ),
+                HashMethodKind::KeysU16(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU16PartialAggregator::<true>::create(method, aggregator_params),
+                ),
+                HashMethodKind::KeysU32(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU32PartialAggregator::<true>::create(method, aggregator_params),
+                ),
+                HashMethodKind::KeysU64(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    KeysU64PartialAggregator::<true>::create(method, aggregator_params),
+                ),
+                HashMethodKind::Serializer(method) => AggregatorTransform::create(
+                    transform_params.transform_input_port,
+                    transform_params.transform_output_port,
+                    SerializerPartialAggregator::<true>::create(method, aggregator_params),
+                ),
+            }
         }
     }
 }
@@ -154,7 +181,6 @@ impl<TAggregator: Aggregator + 'static> AggregatorTransform<TAggregator> {
             }
 
             if state.input_port.is_finished() {
-                println!("ConsumeState finished");
                 let mut temp_state = AggregatorTransform::Finished;
                 std::mem::swap(self, &mut temp_state);
                 temp_state = temp_state.to_generate()?;
@@ -199,6 +225,7 @@ impl<TAggregator: Aggregator + 'static> AggregatorTransform<TAggregator> {
             if state.is_finished {
                 if !state.output_port.is_finished() {
                     state.output_port.finish();
+                    state.inner.on_finished();
                 }
 
                 let mut temp_state = AggregatorTransform::Finished;
@@ -223,7 +250,6 @@ struct ConsumeState<TAggregator: Aggregator> {
 impl<TAggregator: Aggregator> ConsumeState<TAggregator> {
     pub fn consume(&mut self) -> Result<()> {
         if let Some(input_data) = self.input_data_block.take() {
-            println!("ConsumeState consume");
             self.inner.consume(input_data)?;
         }
 
@@ -242,9 +268,8 @@ struct GenerateState<TAggregator: Aggregator> {
 impl<TAggregator: Aggregator> GenerateState<TAggregator> {
     pub fn generate(&mut self) -> Result<()> {
         let generate_data = self.inner.generate()?;
-        println!("GenerateState generate");
+
         if generate_data.is_none() {
-            println!("GenerateState finished");
             self.is_finished = true;
         }
 

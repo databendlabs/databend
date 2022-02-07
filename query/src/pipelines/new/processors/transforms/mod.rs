@@ -16,8 +16,12 @@ mod transform;
 mod transform_dummy;
 mod transform_filter;
 mod transform_aggregator;
-mod group_by;
+mod aggregator;
+mod transform_expression;
 
 pub use transform_dummy::TransformDummy;
 pub use transform_filter::TransformFilter;
-pub use transform_aggregator::TransformAggregatorPartial;
+pub use transform_aggregator::TransformAggregator;
+pub use transform_expression::ExpressionTransform;
+pub use aggregator::AggregatorParams;
+pub use aggregator::AggregatorTransformParams;

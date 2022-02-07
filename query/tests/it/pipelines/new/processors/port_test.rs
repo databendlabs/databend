@@ -61,3 +61,24 @@ async fn test_input_and_output_port() -> Result<()> {
         Ok(())
     }
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_input_and_output_flags() -> Result<()> {
+    unsafe {
+        let input = InputPort::create();
+        let output = OutputPort::create();
+
+
+        connect(&input, &output);
+
+        output.finish();
+        assert!(input.is_finished());
+        input.set_need_data();
+        assert!(input.is_finished());
+    }
+
+    // assert_eq!(output.can_push());
+    // input.set_need_data();
+    // assert_eq!(!output.can_push());
+    Ok(())
+}

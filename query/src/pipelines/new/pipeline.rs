@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::pipelines::new::pipe::NewPipe;
+use crate::pipelines::new::pipe::{NewPipe, TransformPipeBuilder};
+use crate::pipelines::new::processors::port::{InputPort, OutputPort};
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::ResizeProcessor;
+use crate::pipelines::new::SourcePipeBuilder;
 
 pub struct NewPipeline {
     max_threads: usize,
@@ -41,6 +44,24 @@ impl NewPipeline {
         }
     }
 
+    pub fn graph_size(&self) -> (usize, usize) {
+        let mut nodes_size = 0;
+        let mut edges_size = 0;
+        for pipe in &self.pipes {
+            nodes_size += match pipe {
+                NewPipe::ResizePipe { .. } => 1,
+                NewPipe::SimplePipe { processors, .. } => processors.len(),
+            };
+
+            edges_size += match pipe {
+                NewPipe::ResizePipe { inputs_port, .. } => inputs_port.len(),
+                NewPipe::SimplePipe { inputs_port, .. } => inputs_port.len(),
+            };
+        }
+
+        (nodes_size, edges_size)
+    }
+
     pub fn set_max_threads(&mut self, max_threads: usize) {
         let mut max_pipe_size = 0;
         for pipe in &self.pipes {
@@ -52,6 +73,22 @@ impl NewPipeline {
 
     pub fn get_max_threads(&self) -> usize {
         self.max_threads
+    }
+
+    pub fn add_transform<F>(&mut self, f: F) -> Result<()>
+        where F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>
+    {
+        let mut transform_builder = TransformPipeBuilder::create();
+        for _index in 0..self.output_len() {
+            let input_port = InputPort::create();
+            let output_port = OutputPort::create();
+
+            let processor = f(input_port.clone(), output_port.clone())?;
+            transform_builder.add_transform(input_port, output_port, processor);
+        }
+
+        self.add_pipe(transform_builder.finalize());
+        Ok(())
     }
 
     pub fn resize(&mut self, new_size: usize) -> Result<()> {

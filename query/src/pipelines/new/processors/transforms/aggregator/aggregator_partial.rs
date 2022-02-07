@@ -5,10 +5,11 @@ use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::{IntoSeries, Series, StringArrayBuilder};
 use common_exception::Result;
 use common_functions::aggregates::{StateAddr, StateAddrs};
+use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::transforms::group_by::StateEntity;
 use crate::pipelines::transforms::group_by::KeysArrayBuilder;
 use crate::pipelines::new::processors::transforms::transform_aggregator::Aggregator;
-use crate::pipelines::transforms::group_by::{AggregatorParams, AggregatorParamsRef, AggregatorState, PolymorphicKeysHelper};
+use crate::pipelines::transforms::group_by::{AggregatorState, PolymorphicKeysHelper};
 
 pub type KeysU8PartialAggregator<const HAS_AGG: bool> = PartialAggregator<HAS_AGG, HashMethodKeysU8>;
 pub type KeysU16PartialAggregator<const HAS_AGG: bool> = PartialAggregator<HAS_AGG, HashMethodKeysU16>;
@@ -21,11 +22,11 @@ pub struct PartialAggregator<const HAS_AGG: bool, Method: HashMethod + Polymorph
 
     method: Method,
     state: Method::State,
-    params: AggregatorParamsRef,
+    params: Arc<AggregatorParams>,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> PartialAggregator<HAS_AGG, Method> {
-    pub fn create(method: Method, params: AggregatorParamsRef) -> Self {
+    pub fn create(method: Method, params: Arc<AggregatorParams>) -> Self {
         let state = method.aggregate_state();
         Self { is_generated: false, state, method, params }
     }
@@ -40,30 +41,30 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
     /// Allocate aggregation function state for each key(the same key can always get the same state)
     #[inline(always)]
-    fn lookup_state(params: &AggregatorParamsRef, keys: Vec<Method::HashKey>, state: &mut Method::State) -> StateAddrs {
+    fn lookup_state(params: &Arc<AggregatorParams>, keys: Vec<Method::HashKey>, state: &mut Method::State) -> StateAddrs {
         let mut places = Vec::with_capacity(keys.len());
 
         let mut inserted = true;
         for key in keys.iter() {
             let entity = state.entity(key, &mut inserted);
 
-            match inserted {
-                true => {
-                    let place = state.alloc_layout(params);
-                    places.push(place);
-                    entity.set_state_value(place.addr());
-                }
-                false => {
-                    let place: StateAddr = (*entity.get_state_value()).into();
-                    places.push(place);
-                }
-            }
+            // match inserted {
+            //     true => {
+            //         let place = state.alloc_layout(params);
+            //         places.push(place);
+            //         entity.set_state_value(place.addr());
+            //     }
+            //     false => {
+            //         let place: StateAddr = (*entity.get_state_value()).into();
+            //         places.push(place);
+            //     }
+            // }
         }
         places
     }
 
     #[inline(always)]
-    fn aggregate_arguments(block: &DataBlock, params: &AggregatorParamsRef) -> Result<Vec<Vec<Series>>> {
+    fn aggregate_arguments(block: &DataBlock, params: &Arc<AggregatorParams>) -> Result<Vec<Vec<Series>>> {
         let aggregate_functions_arguments = &params.aggregate_functions_arguments_name;
         let mut aggregate_arguments_columns = Vec::with_capacity(aggregate_functions_arguments.len());
         for function_arguments in aggregate_functions_arguments {
@@ -82,7 +83,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
     #[inline(always)]
     #[allow(clippy::ptr_arg)] // &[StateAddr] slower than &StateAddrs ~20%
-    fn execute(params: &AggregatorParamsRef, block: &DataBlock, places: &StateAddrs) -> Result<()> {
+    fn execute(params: &Arc<AggregatorParams>, block: &DataBlock, places: &StateAddrs) -> Result<()> {
         let aggregate_functions = &params.aggregate_functions;
         let offsets_aggregate_states = &params.offsets_aggregate_states;
         let aggregate_arguments_columns = Self::aggregate_arguments(block, params)?;

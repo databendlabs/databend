@@ -45,9 +45,9 @@ use crate::pipelines::transforms::group_by::AggregatorState;
 // use databend_query::common::HashTable;
 // use common_datablocks::HashMethodSerializer;
 // use common_datavalues::arrays::StringArrayBuilder;
-// use databend_query::pipelines::transforms::group_by::PolymorphicKeysHelper;
-// use databend_query::pipelines::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
-// use databend_query::pipelines::transforms::group_by::aggregator_keys_builder::SerializedKeysArrayBuilder;
+// use databend_query::pipelines::transforms::aggregator::PolymorphicKeysHelper;
+// use databend_query::pipelines::transforms::aggregator::aggregator_state::SerializedKeysAggregatorState;
+// use databend_query::pipelines::transforms::aggregator::aggregator_keys_builder::SerializedKeysArrayBuilder;
 //
 // impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
 //     type State = SerializedKeysAggregatorState;

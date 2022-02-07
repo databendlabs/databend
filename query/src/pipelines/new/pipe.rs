@@ -17,6 +17,7 @@ use std::sync::Arc;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
+use common_exception::Result;
 
 pub enum NewPipe {
     SimplePipe {

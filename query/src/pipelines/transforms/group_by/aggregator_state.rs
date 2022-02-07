@@ -51,6 +51,8 @@ pub trait AggregatorState<Method: HashMethod>: Sync + Send {
 
     fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr;
 
+    // fn alloc_layout2(&self, params: &AggregatorParams) -> StateAddr;
+
     fn entity(&mut self, key: &Method::HashKey, inserted: &mut bool) -> *mut Self::Entity;
 }
 
