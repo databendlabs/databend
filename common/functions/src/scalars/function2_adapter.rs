@@ -20,6 +20,7 @@ use common_datavalues2::combine_validities;
 use common_datavalues2::combine_validities_2;
 use common_datavalues2::remove_nullable;
 use common_datavalues2::wrap_nullable;
+use common_datavalues2::Column;
 use common_datavalues2::ColumnRef;
 use common_datavalues2::ColumnWithField;
 use common_datavalues2::ColumnsWithField;
@@ -159,8 +160,10 @@ impl Function2 for Function2Adapter {
             let col = self.eval(&columns, 1)?;
             let col = if col.is_const() && col.len() == 1 {
                 col.replicate(&[input_rows])
+            } else if col.is_null() {
+                NullColumn::new(input_rows).arc()
             } else {
-                Arc::new(ConstColumn::new(col, input_rows))
+                ConstColumn::new(col, input_rows).arc()
             };
 
             return Ok(col);

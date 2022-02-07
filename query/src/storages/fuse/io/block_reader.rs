@@ -39,6 +39,7 @@ pub struct BlockReader {
     data_accessor: Arc<dyn DataAccessor>,
     path: String,
     block_schema: DataSchemaRef,
+    table_schema: DataSchemaRef,
     arrow_table_schema: ArrowSchema,
     projection: Vec<usize>,
     file_len: u64,
@@ -57,11 +58,13 @@ impl BlockReader {
         reader: BlockMetaReader,
     ) -> Self {
         let block_schema = Arc::new(table_schema.project(projection.clone()));
+        let arrow_table_schema = table_schema.clone().to_arrow();
         Self {
             data_accessor,
             path,
             block_schema,
-            arrow_table_schema: table_schema.to_arrow(),
+            table_schema,
+            arrow_table_schema,
             projection,
             file_len,
             read_buffer_size,
@@ -92,7 +95,7 @@ impl BlockReader {
             .into_iter()
             .map(|idx| (row_group.column(idx).clone(), idx));
 
-        let fields = self.block_schema.fields();
+        let fields = self.table_schema.fields();
         let arrow_fields = self.arrow_table_schema.fields();
         let stream_len = self.file_len;
         let read_buffer_size = self.read_buffer_size;

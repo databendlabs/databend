@@ -28,11 +28,9 @@ impl DataBlock {
         }
 
         let predict_boolean_nonull = Self::cast_to_nonull_boolean(predicate)?;
-
         // faster path for constant filter
-        if predicate.is_const() {
-            let flag = predicate.get_bool(0)?;
-
+        if predict_boolean_nonull.is_const() {
+            let flag = predict_boolean_nonull.get_bool(0)?;
             if flag {
                 return Ok(block.clone());
             } else {

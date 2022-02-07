@@ -67,9 +67,9 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function2 for InetAtonFunctionImpl<SUPPRE
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         let input_type = remove_nullable(args[0]);
-
         let output_type = match input_type.data_type_id() {
-            TypeID::String | TypeID::Null => Ok(type_primitive::UInt32Type::arc()),
+            TypeID::Null => return Ok(NullType::arc()),
+            TypeID::String => Ok(type_primitive::UInt32Type::arc()),
             _ => Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null type, but got {}",
                 args[0].name()
@@ -89,11 +89,14 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function2 for InetAtonFunctionImpl<SUPPRE
     }
 
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        if columns[0].column().data_type_id() == TypeID::Null {
+            return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
+        }
+
+        let viewer = ColumnViewer::<Vec<u8>>::create(columns[0].column())?;
+
         if SUPPRESS_PARSE_ERROR {
-            let viewer = ColumnViewer::<Vec<u8>>::create(columns[0].column())?;
-
             let mut builder = NullableColumnBuilder::<u32>::with_capacity(input_rows);
-
             for i in 0..input_rows {
                 // We skip the null check because the function has passthrough_null is true.
                 // This is arguably correct because the address parsing is not optimized by SIMD, not quite sure how much we can gain from skipping branch prediction.
@@ -111,13 +114,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function2 for InetAtonFunctionImpl<SUPPRE
             return Ok(builder.build(input_rows));
         }
 
-        if columns[0].column().data_type_id() == TypeID::Null {
-            return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
-        }
-
-        let viewer = ColumnViewer::<Vec<u8>>::create(columns[0].column())?;
-
-        if columns[0].column().is_nullable() || columns[0].column().data_type_id() == TypeID::Null {
+        if columns[0].column().is_nullable() {
             let mut builder = NullableColumnBuilder::<u32>::with_capacity(input_rows);
             for i in 0..input_rows {
                 if viewer.null_at(i) {

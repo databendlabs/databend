@@ -15,6 +15,7 @@
 use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues2::prelude::TypeID;
+use common_datavalues2::remove_nullable;
 use common_datavalues2::DataField;
 use common_datavalues2::DataSchemaRef;
 use common_datavalues2::DataValue;
@@ -64,7 +65,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         }
 
         fn convert_field_type(field: &DataField) -> Result<ColumnType> {
-            match field.data_type().data_type_id() {
+            match remove_nullable(field.data_type()).data_type_id() {
                 TypeID::Int8 => Ok(ColumnType::MYSQL_TYPE_LONG),
                 TypeID::Int16 => Ok(ColumnType::MYSQL_TYPE_LONG),
                 TypeID::Int32 => Ok(ColumnType::MYSQL_TYPE_LONG),
@@ -120,7 +121,9 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 row_writer.write_col(None::<u8>)?;
                                 continue;
                             }
-                            let data_type = block.schema().fields()[col_index].data_type();
+                            let data_type =
+                                remove_nullable(block.schema().fields()[col_index].data_type());
+
                             match (data_type.data_type_id(), val.clone()) {
                                 (TypeID::Boolean, DataValue::Boolean(v)) => {
                                     row_writer.write_col(v as i8)?

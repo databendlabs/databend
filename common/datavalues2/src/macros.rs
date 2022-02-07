@@ -144,12 +144,12 @@ macro_rules! with_match_scalar_type {
         match $key_type {
             TypeID::Int8 => __with_ty__! { i8 },
             TypeID::Int16 => __with_ty__! { i16 },
-            TypeID::Int32 => __with_ty__! { i32 },
+            TypeID::Int32 | TypeID::Date32 => __with_ty__! { i32 },
             TypeID::Int64 => __with_ty__! { i64 },
             TypeID::UInt8 => __with_ty__! { u8 },
-            TypeID::UInt16 => __with_ty__! { u16 },
-            TypeID::UInt32 => __with_ty__! { u32 },
-            TypeID::UInt64 => __with_ty__! { u64 },
+            TypeID::UInt16 | TypeID::Date16 => __with_ty__! { u16 },
+            TypeID::UInt32 | TypeID::DateTime32 => __with_ty__! { u32 },
+            TypeID::UInt64 | TypeID::DateTime64 => __with_ty__! { u64 },
             TypeID::Float32 => __with_ty__! { f32 },
             TypeID::Float64 => __with_ty__! { f64 },
             TypeID::String => __with_ty__! { Vu8 },
@@ -203,12 +203,12 @@ macro_rules! with_match_primitive_type_id {
         match $key_type {
             TypeID::Int8 => __with_ty__! { i8 },
             TypeID::Int16 => __with_ty__! { i16 },
-            TypeID::Int32 => __with_ty__! { i32 },
+            TypeID::Int32 | TypeID::Date32 => __with_ty__! { i32 },
             TypeID::Int64 => __with_ty__! { i64 },
             TypeID::UInt8 => __with_ty__! { u8 },
-            TypeID::UInt16 => __with_ty__! { u16 },
-            TypeID::UInt32 => __with_ty__! { u32 },
-            TypeID::UInt64 => __with_ty__! { u64 },
+            TypeID::UInt16 | TypeID::Date16 => __with_ty__! { u16 },
+            TypeID::UInt32 | TypeID::DateTime32 => __with_ty__! { u32 },
+            TypeID::UInt64 | TypeID::DateTime64 => __with_ty__! { u64 },
             TypeID::Float32 => __with_ty__! { f32 },
             TypeID::Float64 => __with_ty__! { f64 },
 
@@ -239,29 +239,6 @@ macro_rules! with_match_date_type_error {
             ))),
         }
     }};
-}
-
-// doesn't include Bool and String
-#[macro_export]
-macro_rules! apply_method_numeric_series {
-    ($self:ident, $method:ident, $($args:expr),*) => {
-        match $self.data_type() {
-            TypeID::UInt8 => $self.u8().unwrap().$method($($args),*),
-            TypeID::UInt16 => $self.u16().unwrap().$method($($args),*),
-            TypeID::UInt32 => $self.u32().unwrap().$method($($args),*),
-            TypeID::UInt64 => $self.u64().unwrap().$method($($args),*),
-            TypeID::Int8 => $self.i8().unwrap().$method($($args),*),
-            TypeID::Int16 => $self.i16().unwrap().$method($($args),*),
-            TypeID::Int32 => $self.i32().unwrap().$method($($args),*),
-            TypeID::Int64 => $self.i64().unwrap().$method($($args),*),
-            TypeID::Float32 => $self.f32().unwrap().$method($($args),*),
-            TypeID::Float64 => $self.f64().unwrap().$method($($args),*),
-            TypeID::Date16 => $self.u16().unwrap().$method($($args),*),
-            TypeID::Date32 => $self.i32().unwrap().$method($($args),*),
-
-            _ => unimplemented!(),
-        }
-    }
 }
 
 macro_rules! try_cast_data_value_to_std {
@@ -299,25 +276,4 @@ macro_rules! std_to_data_value {
             }
         }
     };
-}
-
-#[macro_export]
-macro_rules! match_type_id_apply_macro {
-    ($obj:expr, $macro:ident, $macro_string:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
-        match $obj {
-            TypeID::String => $macro_string!($($opt_args)*),
-            TypeID::Boolean => $macro_bool!($($opt_args)*),
-            TypeID::UInt8 => $macro!(u8 $(, $opt_args)*),
-            TypeID::UInt16 => $macro!(u16 $(, $opt_args)*),
-            TypeID::UInt32 => $macro!(u32 $(, $opt_args)*),
-            TypeID::UInt64 => $macro!(u64 $(, $opt_args)*),
-            TypeID::Int8 => $macro!(i8 $(, $opt_args)*),
-            TypeID::Int16 => $macro!(i16 $(, $opt_args)*),
-            TypeID::Int32 => $macro!(i32 $(, $opt_args)*),
-            TypeID::Int64 => $macro!(i64 $(, $opt_args)*),
-            TypeID::Float32 => $macro!(f32 $(, $opt_args)*),
-            TypeID::Float64 => $macro!(f64 $(, $opt_args)*),
-            _ => unimplemented!(),
-        }
-    }};
 }

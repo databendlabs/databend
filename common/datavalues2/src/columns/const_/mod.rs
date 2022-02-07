@@ -27,6 +27,11 @@ pub struct ConstColumn {
 
 impl ConstColumn {
     pub fn new(column: ColumnRef, length: usize) -> Self {
+        // Avoid const recursion.
+        if column.is_const() {
+            let col: &ConstColumn = unsafe { Series::static_cast(&column) };
+            return Self::new(col.inner().clone(), length);
+        }
         Self { column, length }
     }
 

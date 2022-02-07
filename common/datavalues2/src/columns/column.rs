@@ -42,6 +42,10 @@ pub trait Column: Send + Sync {
         false
     }
 
+    fn is_null(&self) -> bool {
+        false
+    }
+
     fn is_const(&self) -> bool {
         false
     }

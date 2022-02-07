@@ -55,7 +55,7 @@ impl Column for NullColumn {
         Arc::new(NullType {})
     }
 
-    fn is_nullable(&self) -> bool {
+    fn is_null(&self) -> bool {
         true
     }
 
