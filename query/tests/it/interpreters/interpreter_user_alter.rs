@@ -27,8 +27,7 @@ async fn test_alter_user_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
     let ctx = crate::tests::create_query_context()?;
-    let tenant = ctx.get_tenant().to_string();
-
+    let tenant = "test";
     let name = "test";
     let hostname = "localhost";
     let password = "test";
@@ -40,9 +39,9 @@ async fn test_alter_user_interpreter() -> Result<()> {
 
     let user_info = UserInfo::new(name.to_string(), hostname.to_string(), auth_info);
     let user_mgr = ctx.get_user_manager();
-    user_mgr.add_user("", user_info).await?;
+    user_mgr.add_user(tenant, user_info).await?;
 
-    let old_user = user_mgr.get_user(&tenant, name, hostname).await?;
+    let old_user = user_mgr.get_user(tenant, name, hostname).await?;
     assert_eq!(
         old_user.auth_info.get_password().unwrap(),
         Vec::from(password)
@@ -58,7 +57,7 @@ async fn test_alter_user_interpreter() -> Result<()> {
     assert_eq!(executor.name(), "AlterUserInterpreter");
     let mut stream = executor.execute(None).await?;
     while let Some(_block) = stream.next().await {}
-    let new_user = user_mgr.get_user(&tenant, name, hostname).await?;
+    let new_user = user_mgr.get_user(tenant, name, hostname).await?;
     assert_eq!(
         new_user.auth_info.get_password(),
         Some(Vec::from(new_password))

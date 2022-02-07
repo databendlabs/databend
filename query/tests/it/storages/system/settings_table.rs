@@ -20,7 +20,6 @@ use databend_query::storages::system::SettingsTable;
 use databend_query::storages::Table;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
-use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_settings_table() -> Result<()> {
@@ -32,8 +31,22 @@ async fn test_settings_table() -> Result<()> {
 
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
-    let block = &result[0];
-    assert_eq!(block.num_columns(), 4);
+
+    let expected = vec![
+        "+------------------------------------+---------+---------+---------+--------------------------------------------------------------------------------------------------------------------------------------------+--------+",
+        "| name                               | value   | default | level   | description                                                                                                                                | type   |",
+        "+------------------------------------+---------+---------+---------+--------------------------------------------------------------------------------------------------------------------------------------------+--------+",
+        "| flight_client_timeout              | 60      | 60      | SESSION | Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds                                         | UInt64 |",
+        "| max_block_size                     | 10000   | 10000   | SESSION | Maximum block size for reading                                                                                                             | UInt64 |",
+        "| max_threads                        | 2       | 16      | SESSION | The maximum number of threads to execute the request. By default, it is determined automatically.                                          | UInt64 |",
+        "| parallel_read_threads              | 1       | 1       | SESSION | The maximum number of parallelism for reading data. By default, it is 1.                                                                   | UInt64 |",
+        "| storage_occ_backoff_init_delay_ms  | 5       | 5       | SESSION | The initial retry delay in millisecond. By default, it is 5 ms.                                                                            | UInt64 |",
+        "| storage_occ_backoff_max_delay_ms   | 20000   | 20000   | SESSION | The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing. By default, it is 20 seconds. | UInt64 |",
+        "| storage_occ_backoff_max_elapsed_ms | 120000  | 120000  | SESSION | The maximum elapsed time after the occ starts, beyond which there will be no more retries. By default, it is 2 minutes.                    | UInt64 |",
+        "| storage_read_buffer_size           | 1048576 | 1048576 | SESSION | The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.                                                             | UInt64 |",
+        "+------------------------------------+---------+---------+---------+--------------------------------------------------------------------------------------------------------------------------------------------+--------+",
+    ];
+    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
     Ok(())
 }

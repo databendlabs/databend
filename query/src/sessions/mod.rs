@@ -12,26 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-mod macros;
-
-mod context;
-mod context_shared;
 mod metrics;
+mod query_ctx;
+mod query_ctx_shared;
 mod session;
+mod session_ctx;
 mod session_info;
-mod session_ref;
-mod session_status;
 #[allow(clippy::module_inception)]
-mod sessions;
-mod sessions_info;
-mod settings;
+mod session_mgr;
+mod session_ref;
+mod session_settings;
 
-pub use context::QueryContext;
-pub use context_shared::QueryContextShared;
+pub use query_ctx::QueryContext;
+pub use query_ctx_shared::QueryContextShared;
 pub use session::Session;
+pub use session_ctx::SessionContext;
 pub use session_info::ProcessInfo;
+pub use session_mgr::SessionManager;
 pub use session_ref::SessionRef;
-pub use session_status::MutableStatus;
-pub use sessions::SessionManager;
-pub use settings::Settings;
+pub use session_settings::Settings;

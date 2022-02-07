@@ -32,7 +32,7 @@ async fn test_successfully_add_node() -> Result<()> {
     let node_info = create_test_node_info();
     cluster_api.add_node(node_info.clone()).await?;
     let value = kv_api
-        .get_kv("__fd_clusters///databend_query/test_node")
+        .get_kv("__fd_clusters/admin//databend_query/test_node")
         .await?;
 
     match value {
@@ -121,7 +121,7 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
     cluster_api.add_node(node_info.clone()).await?;
 
     let value = kv_api
-        .get_kv("__fd_clusters///databend_query/test_node")
+        .get_kv("__fd_clusters/admin//databend_query/test_node")
         .await?;
 
     assert!(value.unwrap().meta.unwrap().expire_at.unwrap() - current_time >= 60);
@@ -130,7 +130,7 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
     cluster_api.heartbeat(node_info.id.clone(), None).await?;
 
     let value = kv_api
-        .get_kv("__fd_clusters///databend_query/test_node")
+        .get_kv("__fd_clusters/admin//databend_query/test_node")
         .await?;
 
     assert!(value.unwrap().meta.unwrap().expire_at.unwrap() - current_time >= 60);
@@ -155,6 +155,7 @@ fn create_test_node_info() -> NodeInfo {
 
 async fn new_cluster_api() -> Result<(Arc<MetaEmbedded>, ClusterMgr)> {
     let test_api = Arc::new(MetaEmbedded::new_temp().await?);
-    let cluster_manager = ClusterMgr::new(test_api.clone(), "", "", Duration::from_secs(60))?;
+    let cluster_manager =
+        ClusterMgr::create(test_api.clone(), "admin", "", Duration::from_secs(60))?;
     Ok((test_api, cluster_manager))
 }

@@ -40,42 +40,48 @@ pub struct SessionManagerBuilder {
 
 impl SessionManagerBuilder {
     pub fn create() -> SessionManagerBuilder {
-        SessionManagerBuilder::inner_create(Config::default())
-            .log_dir_with_relative("../tests/data/logs")
+        let conf = crate::tests::ConfigBuilder::create().config();
+        SessionManagerBuilder::create_with_conf(conf).log_dir_with_relative("../tests/data/logs")
     }
 
-    fn inner_create(config: Config) -> SessionManagerBuilder {
+    pub fn create_with_conf(config: Config) -> SessionManagerBuilder {
         SessionManagerBuilder { config }
     }
 
     pub fn max_sessions(self, max_sessions: u64) -> SessionManagerBuilder {
         let mut new_config = self.config;
         new_config.query.max_active_sessions = max_sessions;
-        SessionManagerBuilder::inner_create(new_config)
+        SessionManagerBuilder::create_with_conf(new_config)
     }
 
     pub fn rpc_tls_server_key(self, value: impl Into<String>) -> SessionManagerBuilder {
         let mut new_config = self.config;
         new_config.query.rpc_tls_server_key = value.into();
-        SessionManagerBuilder::inner_create(new_config)
+        SessionManagerBuilder::create_with_conf(new_config)
     }
 
     pub fn rpc_tls_server_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
         let mut new_config = self.config;
         new_config.query.rpc_tls_server_cert = value.into();
-        SessionManagerBuilder::inner_create(new_config)
+        SessionManagerBuilder::create_with_conf(new_config)
+    }
+
+    pub fn jwt_key_file(self, value: impl Into<String>) -> SessionManagerBuilder {
+        let mut new_config = self.config;
+        new_config.query.jwt_key_file = value.into();
+        SessionManagerBuilder::create_with_conf(new_config)
     }
 
     pub fn http_handler_tls_server_key(self, value: impl Into<String>) -> SessionManagerBuilder {
         let mut new_config = self.config;
         new_config.query.http_handler_tls_server_key = value.into();
-        SessionManagerBuilder::inner_create(new_config)
+        SessionManagerBuilder::create_with_conf(new_config)
     }
 
     pub fn http_handler_tls_server_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
         let mut new_config = self.config;
         new_config.query.http_handler_tls_server_cert = value.into();
-        SessionManagerBuilder::inner_create(new_config)
+        SessionManagerBuilder::create_with_conf(new_config)
     }
 
     pub fn http_handler_tls_server_root_ca_cert(
@@ -84,31 +90,31 @@ impl SessionManagerBuilder {
     ) -> SessionManagerBuilder {
         let mut new_config = self.config;
         new_config.query.http_handler_tls_server_root_ca_cert = value.into();
-        SessionManagerBuilder::inner_create(new_config)
+        SessionManagerBuilder::create_with_conf(new_config)
     }
 
     pub fn api_tls_server_key(self, value: impl Into<String>) -> SessionManagerBuilder {
         let mut new_config = self.config;
         new_config.query.api_tls_server_key = value.into();
-        SessionManagerBuilder::inner_create(new_config)
+        SessionManagerBuilder::create_with_conf(new_config)
     }
 
     pub fn api_tls_server_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
         let mut new_config = self.config;
         new_config.query.api_tls_server_cert = value.into();
-        SessionManagerBuilder::inner_create(new_config)
+        SessionManagerBuilder::create_with_conf(new_config)
     }
 
     pub fn api_tls_server_root_ca_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
         let mut new_config = self.config;
         new_config.query.api_tls_server_root_ca_cert = value.into();
-        SessionManagerBuilder::inner_create(new_config)
+        SessionManagerBuilder::create_with_conf(new_config)
     }
 
     pub fn disk_storage_path(self, path: String) -> SessionManagerBuilder {
         let mut new_config = self.config;
         new_config.storage.disk.data_path = path;
-        SessionManagerBuilder::inner_create(new_config)
+        SessionManagerBuilder::create_with_conf(new_config)
     }
 
     pub fn log_dir_with_relative(self, path: impl Into<String>) -> SessionManagerBuilder {
@@ -119,7 +125,7 @@ impl SessionManagerBuilder {
             .display()
             .to_string();
 
-        SessionManagerBuilder::inner_create(new_config)
+        SessionManagerBuilder::create_with_conf(new_config)
     }
 
     pub fn build(self) -> Result<Arc<SessionManager>> {

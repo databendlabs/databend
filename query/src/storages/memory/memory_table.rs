@@ -32,6 +32,7 @@ use common_streams::SendableDataBlockStream;
 use crate::sessions::QueryContext;
 use crate::storages::memory::MemoryTableStream;
 use crate::storages::StorageContext;
+use crate::storages::StorageDescription;
 use crate::storages::Table;
 
 pub struct MemoryTable {
@@ -57,6 +58,13 @@ impl MemoryTable {
 
         let table = Self { table_info, blocks };
         Ok(Box::new(table))
+    }
+
+    pub fn description() -> StorageDescription {
+        StorageDescription {
+            engine_name: "MEMORY".to_string(),
+            comment: "MEMORY Storage Engine".to_string(),
+        }
     }
 }
 

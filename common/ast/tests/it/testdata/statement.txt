@@ -1,0 +1,72 @@
+---------- Input ----------
+truncate table a;
+---------- Output ---------
+TRUNCATE TABLE a
+---------- AST ------------
+TruncateTable {
+    database: None,
+    table: Identifier {
+        name: "a",
+        quote: None,
+    },
+}
+
+
+---------- Input ----------
+truncate table "a".b;
+---------- Output ---------
+TRUNCATE TABLE "a".b
+---------- AST ------------
+TruncateTable {
+    database: Some(
+        Identifier {
+            name: "a",
+            quote: Some(
+                '"',
+            ),
+        },
+    ),
+    table: Identifier {
+        name: "b",
+        quote: None,
+    },
+}
+
+
+---------- Input ----------
+drop table a;
+---------- Output ---------
+DROP TABLE a
+---------- AST ------------
+DropTable {
+    if_exists: false,
+    database: None,
+    table: Identifier {
+        name: "a",
+        quote: None,
+    },
+}
+
+
+---------- Input ----------
+drop table if exists a."b";
+---------- Output ---------
+DROP TABLE IF EXISTS a."b"
+---------- AST ------------
+DropTable {
+    if_exists: true,
+    database: Some(
+        Identifier {
+            name: "a",
+            quote: None,
+        },
+    ),
+    table: Identifier {
+        name: "b",
+        quote: Some(
+            '"',
+        ),
+    },
+}
+
+

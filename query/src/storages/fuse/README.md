@@ -39,9 +39,9 @@ the latest snapshot of a given table.
   
   For each block, put it in object storage (as parquet for the time being).  
     
-  Segment are generated for those blocks, which tracks all the block
-  meta information. Also, statistics of each block are aggregated and kept 
-  in the segments.
+  Segments are generated for those blocks, which tracks all the block
+  meta information. Also, statistics of each block is aggregated and kept 
+  in the corresponding segment.
 
   Segments are stored in object storage as well.
  

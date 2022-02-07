@@ -40,19 +40,25 @@ pub struct ClusterMgr {
 }
 
 impl ClusterMgr {
-    pub fn new(
+    pub fn create(
         kv_api: Arc<dyn KVApi>,
-        tenant_id: &str,
+        tenant: &str,
         cluster_id: &str,
         lift_time: Duration,
     ) -> Result<Self> {
+        if tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while cluster mgr create)",
+            ));
+        }
+
         Ok(ClusterMgr {
             kv_api,
             lift_time,
             cluster_prefix: format!(
                 "{}/{}/{}/databend_query",
                 CLUSTER_API_KEY_PREFIX,
-                Self::escape_for_key(tenant_id)?,
+                Self::escape_for_key(tenant)?,
                 Self::escape_for_key(cluster_id)?
             ),
         })

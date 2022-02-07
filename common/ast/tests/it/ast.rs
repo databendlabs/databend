@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_ast::parser::ast::*;
+use pretty_assertions::assert_eq;
 
 #[test]
 fn test_display_create_database() {
@@ -182,33 +183,36 @@ fn test_display_expr() {
             name: "FUNC".to_owned(),
             args: vec![
                 Expr::Cast {
-                    expr: Box::new(Expr::Wildcard),
+                    expr: Box::new(Expr::Literal(Literal::Number("1".to_string()))),
                     target_type: TypeName::Int(None),
                 },
                 Expr::Between {
-                    expr: Box::new(Expr::Wildcard),
-                    negated: true,
-                    low: Box::new(Expr::Wildcard),
-                    high: Box::new(Expr::Wildcard),
+                    expr: Box::new(Expr::Literal(Literal::Number("1".to_string()))),
+                    low: Box::new(Expr::Literal(Literal::Number("1".to_string()))),
+                    high: Box::new(Expr::Literal(Literal::Number("1".to_string()))),
+                    not: true,
                 },
                 Expr::InList {
-                    expr: Box::new(Expr::Wildcard),
-                    list: vec![Expr::Wildcard, Expr::Wildcard],
+                    expr: Box::new(Expr::Literal(Literal::Number("1".to_string()))),
+                    list: vec![
+                        Expr::Literal(Literal::Number("1".to_string())),
+                        Expr::Literal(Literal::Number("1".to_string())),
+                    ],
                     not: true,
                 },
             ],
             params: vec![Literal::Number("123".to_owned())],
         }),
         right: Box::new(Expr::Case {
-            operand: Some(Box::new(Expr::Wildcard)),
-            conditions: vec![Expr::Wildcard],
-            results: vec![Expr::Wildcard],
-            else_result: Some(Box::new(Expr::Wildcard)),
+            operand: Some(Box::new(Expr::Literal(Literal::Number("1".to_string())))),
+            conditions: vec![Expr::Literal(Literal::Number("1".to_string()))],
+            results: vec![Expr::Literal(Literal::Number("1".to_string()))],
+            else_result: Some(Box::new(Expr::Literal(Literal::Number("1".to_string())))),
         }),
     };
 
     assert_eq!(
         format!("{}", expr),
-        r#"FUNC(123)(DISTINCT CAST(* AS INTEGER), * NOT BETWEEN * AND *, * NOT IN(*, *)) AND CASE * WHEN * THEN * ELSE * END"#
+        r#"FUNC(123)(DISTINCT CAST(1 AS INTEGER), 1 NOT BETWEEN 1 AND 1, 1 NOT IN(1, 1)) AND CASE 1 WHEN 1 THEN 1 ELSE 1 END"#
     );
 }

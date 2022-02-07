@@ -56,7 +56,6 @@ build_exceptions! {
     UnknownTypeOfQuery(1001),
     UnImplement(1002),
     UnknownDatabase(1003),
-    UnknownSetting(1004),
     SyntaxException(1005),
     BadArguments(1006),
     IllegalDataType(1007),
@@ -72,7 +71,6 @@ build_exceptions! {
     DataStructMissMatch(1017),
     BadDataArrayLength(1018),
     UnknownContextID(1019),
-    UnknownVariable(1020),
     UnknownTableFunction(1021),
     BadOption(1022),
     CannotReadFile(1023),
@@ -119,31 +117,34 @@ build_exceptions! {
     UnmarshalError(1064),
     SemanticError(1065),
 
-    // uncategorized
+    // Uncategorized error codes.
     UnexpectedResponseType(1066),
     UnknownException(1067),
     TokioError(1068),
 
-    // pipeline executor
+    // Pipeline executor error codes.
     PipelineAreadlyStarted(1069),
     PipelineNotStarted(1070),
     PipelineUnInitialized(1071),
 
-    // http query error
+    // Http query error codes.
     HttpNotFound(1072),
 
-    // network error
+    // Network error codes.
     NetworkRequestError(1073),
+
+    // Tenant error codes.
+    TenantIsEmpty(1101),
 }
 
 // Metasvr errors [2001, 3000].
 build_exceptions! {
-    // meta service does not work.
+    // Meta service does not work.
     MetaServiceError(2001),
     InvalidConfig(2002),
     UnknownNode(2003),
 
-    // meta store errors
+    // Meta store error codes.
     MetaStoreDamaged(2004),
     MetaStoreAlreadyExists(2005),
     MetaStoreNotFound(2006),
@@ -154,43 +155,44 @@ build_exceptions! {
     UnknownDatabaseId(2010),
     OCCRetryFailure(2011),
 
-
-    // KVSrv server error
+    // KVSrv server error codes.
     MetaSrvError(2101),
     TransactionAbort(2102),
     TransactionError(2103),
 
-    // user-api error codes
+    // User api error codes.
     UnknownUser(2201),
     UserAlreadyExists(2202),
     IllegalUserInfoFormat(2203),
     UnknownRole(2204),
     IllegalRoleInfoFormat(2205),
 
-    // meta-api error codes
+    // Meta api error codes.
     DatabaseAlreadyExists(2301),
     TableAlreadyExists(2302),
     IllegalMetaOperationArgument(2303),
     IllegalMetaState(2304),
     MetaNodeInternalError(2305),
 
-    // cluster error.
+    // Cluster error codes.
     ClusterUnknownNode(2401),
     ClusterNodeAlreadyExists(2402),
 
-    // stage error.
+    // Stage error codes.
     UnknownStage(2501),
     StageAlreadyExists(2502),
 
-    // user defined function error.
+    // User defined function error codes.
     IllegalUDFFormat(2601),
     UnknownUDF(2602),
     UdfAlreadyExists(2603),
 
-
-    // database error.
+    // Database error codes.
     UnknownDatabaseEngine(2701),
     UnknownTableEngine(2702),
+
+    // Variable error codes.
+    UnknownVariable(2801),
 }
 
 // Storage errors [3001, 4000].

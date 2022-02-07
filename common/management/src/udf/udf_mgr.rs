@@ -28,7 +28,7 @@ use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UserDefinedFunction;
 
-use crate::udf::UdfMgrApi;
+use crate::udf::UdfApi;
 
 static UDF_API_KEY_PREFIX: &str = "__fd_udfs";
 
@@ -38,17 +38,22 @@ pub struct UdfMgr {
 }
 
 impl UdfMgr {
-    #[allow(dead_code)]
-    pub fn new(kv_api: Arc<dyn KVApi>, tenant: &str) -> Self {
-        UdfMgr {
+    pub fn create(kv_api: Arc<dyn KVApi>, tenant: &str) -> Result<Self> {
+        if tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while udf mgr create)",
+            ));
+        }
+
+        Ok(UdfMgr {
             kv_api,
             udf_prefix: format!("{}/{}", UDF_API_KEY_PREFIX, tenant),
-        }
+        })
     }
 }
 
 #[async_trait::async_trait]
-impl UdfMgrApi for UdfMgr {
+impl UdfApi for UdfMgr {
     async fn add_udf(&self, info: UserDefinedFunction) -> Result<u64> {
         if is_builtin_function(info.name.as_str()) {
             return Err(ErrorCode::UdfAlreadyExists(format!(
@@ -117,7 +122,7 @@ impl UdfMgrApi for UdfMgr {
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
-            Err(_) => Err(ErrorCode::UnknownUser(format!("Unknown UDF {}", udf_name))),
+            Err(_) => Err(ErrorCode::UnknownUDF(format!("Unknown UDF {}", udf_name))),
         }
     }
 

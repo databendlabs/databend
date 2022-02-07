@@ -183,6 +183,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::DropUDF(v) => v.analyze(ctx).await,
             DfStatement::AlterUDF(v) => v.analyze(ctx).await,
             DfStatement::AlterTable(v) => v.analyze(ctx).await,
+            DfStatement::ShowEngines(v) => v.analyze(ctx).await,
         }
     }
 }

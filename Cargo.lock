@@ -808,6 +808,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "beef"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bed554bd50246729a1ec158d08aa3235d1b69d94ad120ebe187e28894787e736"
+
+[[package]]
 name = "bendctl"
 version = "0.1.0"
 dependencies = [
@@ -1368,6 +1374,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "codespan-reporting"
+version = "0.11.1"
+source = "git+https://github.com/brendanzab/codespan?rev=c84116f5#c84116f5a667bfce2aa1e045205c5832cfee1548"
+dependencies = [
+ "termcolor",
+ "unicode-width",
+]
+
+[[package]]
 name = "colored"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1414,12 +1429,19 @@ name = "common-ast"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "codespan-reporting",
  "common-base",
  "common-exception",
  "common-functions",
+ "goldenfile",
+ "logos",
+ "nom 7.1.0",
+ "nom-rule",
  "once_cell",
+ "pratt",
  "pretty_assertions",
  "sqlparser",
+ "thiserror",
 ]
 
 [[package]]
@@ -1547,6 +1569,7 @@ dependencies = [
  "pin-project",
  "thiserror",
  "tokio",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -1720,6 +1743,7 @@ dependencies = [
  "async-trait",
  "common-ast",
  "common-base",
+ "common-datavalues",
  "common-exception",
  "common-functions",
  "common-meta-api",
@@ -1914,7 +1938,7 @@ dependencies = [
  "async-trait",
  "common-arrow",
  "common-base",
- "common-dal",
+ "common-dal2",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -2412,6 +2436,7 @@ dependencies = [
  "pretty_assertions",
  "prost",
  "rand",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
@@ -2421,6 +2446,7 @@ dependencies = [
  "thiserror",
  "threadpool",
  "tokio-stream",
+ "tokio-util",
  "toml",
  "tonic",
  "tonic-build",
@@ -2437,6 +2463,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "backoff",
+ "base64 0.13.0",
  "bincode 1.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "bit-vec",
  "bumpalo",
@@ -2455,6 +2482,7 @@ dependencies = [
  "common-cache",
  "common-clickhouse-srv",
  "common-dal",
+ "common-dal2",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -2479,8 +2507,10 @@ dependencies = [
  "dyn-clone",
  "futures",
  "headers",
+ "httpmock",
  "hyper",
  "indexmap",
+ "jwt-simple",
  "maplit",
  "metrics",
  "msql-srv",
@@ -2499,6 +2529,7 @@ dependencies = [
  "rand",
  "regex",
  "reqwest",
+ "rsa",
  "serde",
  "serde_json",
  "sha1",
@@ -2551,6 +2582,12 @@ name = "diff"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e25ea47919b1560c4e3b7fe0aaab9becf5b84a10325ddf7db0f0ba5e1026499"
+
+[[package]]
+name = "difference"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
 
 [[package]]
 name = "difflib"
@@ -3277,6 +3314,16 @@ dependencies = [
  "js-sys",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "goldenfile"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f46e6a4d70c06f0b9a70d36dd8eef4fdeaa1ab657e4f1eaff290f69e48145f2"
+dependencies = [
+ "difference",
+ "tempfile",
 ]
 
 [[package]]
@@ -4100,6 +4147,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "logos"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "427e2abca5be13136da9afdbf874e6b34ad9001dd70f2b103b083a85daa7b345"
+dependencies = [
+ "logos-derive",
+]
+
+[[package]]
+name = "logos-derive"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56a7d287fd2ac3f75b11f19a1c8a874a7d55744bd91f7a1b3e7cf87d4343c36d"
+dependencies = [
+ "beef",
+ "fnv",
+ "proc-macro2",
+ "quote",
+ "regex-syntax",
+ "syn",
+ "utf8-ranges",
+]
+
+[[package]]
 name = "lru"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4577,6 +4648,20 @@ dependencies = [
  "memchr",
  "minimal-lexical",
  "version_check",
+]
+
+[[package]]
+name = "nom-rule"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29e7d73737773a42ad59e7465b8efb97a17476f3b6256b64be372c11b66be190"
+dependencies = [
+ "nom 7.1.0",
+ "pratt",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -5371,6 +5456,12 @@ name = "ppv-lite86"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb9f9e6e233e5c4a35559a617bf40a4ec447db2e84c20b55a6f83167b7e57872"
+
+[[package]]
+name = "pratt"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e31bbc12f7936a7b195790dd6d9b982b66c54f45ff6766decf25c44cac302dce"
 
 [[package]]
 name = "precomputed-hash"
@@ -7435,6 +7526,12 @@ dependencies = [
  "libc",
  "log",
 ]
+
+[[package]]
+name = "utf8-ranges"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4ae116fef2b7fea257ed6440d3cfcff7f190865f170cdad00bb6465bf18ecba"
 
 [[package]]
 name = "utf8-width"

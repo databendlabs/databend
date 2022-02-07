@@ -17,6 +17,7 @@ use std::sync::Arc;
 use async_compat::CompatExt;
 use async_stream::stream;
 use common_base::ProgressValues;
+use common_meta_types::UserInfo;
 use common_planners::InsertInputSource;
 use common_planners::PlanNode;
 use common_streams::CsvSource;
@@ -49,30 +50,20 @@ pub struct LoadResponse {
 pub async fn streaming_load(
     req: &Request,
     mut multipart: Multipart,
+    user_info: Data<&UserInfo>,
     sessions_extension: Data<&Arc<SessionManager>>,
 ) -> PoemResult<Json<LoadResponse>> {
     let session_manager = sessions_extension.0;
     let session = session_manager
         .create_session("Streaming load")
         .map_err(InternalServerError)?;
-    // Auth.
-    let user_name = "root";
-    let user_manager = session.get_user_manager();
 
     // TODO: list user's grant list and check client address
 
-    let ctx = session
-        .create_context()
-        .await
-        .map_err(InternalServerError)?;
-    let user_info = user_manager
-        .get_user(&ctx.get_tenant(), user_name, "127.0.0.1")
-        .await
-        .map_err(InternalServerError)?;
-    session.set_current_user(user_info);
+    session.set_current_user(user_info.0.clone());
 
     let context = session
-        .create_context()
+        .create_query_context()
         .await
         .map_err(InternalServerError)?;
     let insert_sql = req

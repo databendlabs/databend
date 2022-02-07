@@ -46,6 +46,7 @@ use crate::sql::statements::DfSetVariable;
 use crate::sql::statements::DfShowCreateDatabase;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
+use crate::sql::statements::DfShowEngines;
 use crate::sql::statements::DfShowFunctions;
 use crate::sql::statements::DfShowGrants;
 use crate::sql::statements::DfShowMetrics;
@@ -126,6 +127,9 @@ pub enum DfStatement {
     CreateUDF(DfCreateUDF),
     DropUDF(DfDropUDF),
     AlterUDF(DfAlterUDF),
+
+    // Engine
+    ShowEngines(DfShowEngines),
 }
 
 /// Comment hints from SQL.
