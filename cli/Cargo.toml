@@ -14,6 +14,8 @@ test = false
 [[bin]]
 name = "bendctl"
 path = "src/bin/bendctl.rs"
+doctest = false
+test = false
 
 [features]
 

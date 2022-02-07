@@ -7,6 +7,10 @@ publish = false
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "databend-benchmark"
+doctest = false
+test = false
 
 [dependencies]
 # Workspace dependencies
