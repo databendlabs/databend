@@ -41,15 +41,9 @@ pub enum MatchSeq {
 
 impl From<Option<u64>> for MatchSeq {
     fn from(s: Option<u64>) -> Self {
-        (&s).into()
-    }
-}
-
-impl From<&Option<u64>> for MatchSeq {
-    fn from(s: &Option<u64>) -> Self {
         match s {
             None => MatchSeq::Any,
-            Some(s) => MatchSeq::Exact(*s),
+            Some(s) => MatchSeq::Exact(s),
         }
     }
 }
