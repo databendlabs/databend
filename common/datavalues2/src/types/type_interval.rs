@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::fmt;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
@@ -24,18 +25,63 @@ use crate::prelude::*;
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct IntervalType {
-    unit: IntervalUnit,
+    /// Interval(YearMonth) represents the elapsed number of months.
+    /// Interval(DayTime) represents the elapsed number of microseconds.
+    kind: IntervalKind,
 }
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-pub enum IntervalUnit {
-    YearMonth,
-    DayTime,
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+)]
+pub enum IntervalKind {
+    Year,
+    Month,
+    Day,
+    Hour,
+    Minute,
+    Second,
+}
+
+impl fmt::Display for IntervalKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            IntervalKind::Year => "YEAR",
+            IntervalKind::Month => "MONTH",
+            IntervalKind::Day => "DAY",
+            IntervalKind::Hour => "HOUR",
+            IntervalKind::Minute => "MINUTE",
+            IntervalKind::Second => "SECOND",
+        })
+    }
+}
+
+impl From<String> for IntervalKind {
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "YEAR" => IntervalKind::Year,
+            "MONTH" => IntervalKind::Month,
+            "DAY" => IntervalKind::Day,
+            "HOUR" => IntervalKind::Hour,
+            "MINUTE" => IntervalKind::Minute,
+            "SECOND" => IntervalKind::Second,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl IntervalType {
-    pub fn arc(unit: IntervalUnit) -> DataTypePtr {
-        Arc::new(Self { unit })
+    pub fn arc(kind: IntervalKind) -> DataTypePtr {
+        Arc::new(Self { kind })
+    }
+
+    pub fn kind(&self) -> &IntervalKind {
+        &self.kind
     }
 }
 
@@ -75,6 +121,13 @@ impl DataType for IntervalType {
 
     fn arrow_type(&self) -> ArrowType {
         ArrowType::Int64
+    }
+
+    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
+        let mut mp = BTreeMap::new();
+        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Interval".to_string());
+        mp.insert(ARROW_EXTENSION_META.to_string(), format!("{}", self.kind));
+        Some(mp)
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {

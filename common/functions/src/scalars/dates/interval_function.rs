@@ -20,6 +20,7 @@ use common_datavalues::chrono::Datelike;
 use common_datavalues::chrono::Duration;
 use common_datavalues::chrono::NaiveDate;
 use common_datavalues::chrono::NaiveDateTime;
+use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Timelike;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
@@ -141,7 +142,7 @@ pub type MonthsArithmeticFunction = IntegerTypedIntervalFunction<MonthsArithmeti
 pub struct SecondsArithmetic;
 
 impl IntegerTypedArithmetic for SecondsArithmetic {
-    fn get_func(a: &DataType, b: &DataType) -> IntegerMonthsArithmeticFunction {
+    fn get_func(a: &DataType, b: &DataType) -> IntegerSecondsArithmeticFunction {
         IntervalFunctionFactory::get_integer_seconds_arithmetic_func(a, b)
     }
 }
@@ -419,42 +420,50 @@ impl IntervalFunctionFactory {
         Ok((dt.timestamp() / seconds_per_day) as u32)
     }
 
-    // A private helper function to add/subtract month to/from chrono datetime object
-    fn datetime_plus_signed_months(dt: &DateTime<Utc>, months: i64) -> Result<DateTime<Utc>> {
-        let total_months = (dt.month0() as i64) + months;
-        let mut new_year = dt.year() + (total_months / 12) as i32;
+    // A private helper function to add/subtract month to/from days
+    fn date16_plus_month(days: i64, months: i64) -> Result<i32> {
+        let date = Utc
+            .ymd(1970, 1, 1)
+            .checked_add_signed(Duration::days(days))
+            .ok_or_else(|| ErrorCode::Overflow(format!("Overflow on date with days {}.", days,)))?;
+
+        let new_date = Self::plus_months(date.year(), date.month0() as i64, date.day(), months)?;
+
+        let dt = DateTime::<Utc>::from_utc(new_date.and_hms(0, 0, 0), Utc);
+        let seconds_per_day = 24 * 3600;
+        Ok((dt.timestamp() / seconds_per_day) as i32)
+    }
+
+    fn plus_months(year: i32, month0: i64, day: u32, months: i64) -> Result<NaiveDate> {
+        let total_months = month0 + months;
+        let mut new_year = year + (total_months / 12) as i32;
         let mut new_month0 = total_months % 12;
         if new_month0 < 0 {
             new_year -= 1;
             new_month0 += 12;
         }
 
-        let (_y, _m, d, h, m, s) = (
-            dt.year(),
-            dt.month(),
-            dt.day(),
-            dt.hour(),
-            dt.minute(),
-            dt.second(),
-        );
-
         // Handle month last day overflow, "2020-2-29" + "1 year" should be "2021-2-28", or "1990-1-31" + "3 month" should be "1990-4-30".
         let new_day = std::cmp::min::<u32>(
-            d,
+            day,
             Self::last_day_of_year_month(new_year, (new_month0 + 1) as u32),
         );
 
-        let new_date = NaiveDate::from_ymd_opt(new_year, (new_month0 + 1) as u32, new_day);
-        if new_date.is_none() {
-            return Err(ErrorCode::Overflow(format!(
+        NaiveDate::from_ymd_opt(new_year, (new_month0 + 1) as u32, new_day).ok_or_else(|| {
+            ErrorCode::Overflow(format!(
                 "Overflow on date YMD {}-{}-{}.",
                 new_year,
                 new_month0 + 1,
                 new_day
-            )));
-        }
+            ))
+        })
+    }
+
+    // A private helper function to add/subtract month to/from chrono datetime object
+    fn datetime_plus_signed_months(dt: &DateTime<Utc>, months: i64) -> Result<DateTime<Utc>> {
+        let new_date = Self::plus_months(dt.year(), dt.month0() as i64, dt.day(), months)?;
         Ok(DateTime::<Utc>::from_utc(
-            new_date.unwrap().and_hms(h, m, s),
+            new_date.and_hms(dt.hour(), dt.minute(), dt.second()),
             Utc,
         ))
     }

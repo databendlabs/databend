@@ -27,6 +27,7 @@ use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function2;
 use crate::scalars::Monotonicity2;
+use crate::scalars::Function2Factory;
 
 fn add_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>) -> O
 where
@@ -56,8 +57,10 @@ impl ArithmeticPlusFunction {
         args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function2>> {
         let op = DataValueBinaryOperator::Plus;
-        let left_type = remove_nullable(args[0]).data_type_id();
-        let right_type = remove_nullable(args[1]).data_type_id();
+        let left_arg = remove_nullable(args[0]);
+        let right_arg = remove_nullable(args[1]);
+        let left_type = left_arg.data_type_id();
+        let right_type = right_arg.data_type_id();
 
         let error_fn = || -> Result<Box<dyn Function2>> {
             Err(ErrorCode::BadDataValueType(format!(
@@ -65,10 +68,6 @@ impl ArithmeticPlusFunction {
                 left_type, op, right_type
             )))
         };
-
-        if left_type.is_interval() || right_type.is_interval() {
-            todo!()
-        }
 
         // Only support one of argument types is date type.
         if left_type.is_date_or_date_time() {
@@ -80,22 +79,36 @@ impl ArithmeticPlusFunction {
                         add_scalar::<$T, $D, _>,
                     )
                 },{
-                    error_fn()
+                    if right_type.is_interval() {
+                        let interval = right_arg.as_any().downcast_ref::<IntervalType>().unwrap();
+                        let kind = interval.kind();
+                        let function_name = format!("add{}s", kind);
+                        Function2Factory::instance().get(function_name, args)
+                    } else {
+                        error_fn()
+                    }
                 })
             });
         }
 
         if right_type.is_date_or_date_time() {
-            return with_match_primitive_type_id!(left_type, |$T| {
-                with_match_date_type_error!(right_type, |$D| {
+            return with_match_date_type_error!(right_type, |$D| {
+                with_match_primitive_type_id!(left_type, |$T| { 
                     BinaryArithmeticFunction::<$T, $D, $D, _>::try_create_func(
                         op,
                         args[1].clone(),
                         add_scalar::<$T, $D, _>,
                     )
+                }, {
+                    if left_type.is_interval() {
+                        let interval = left_arg.as_any().downcast_ref::<IntervalType>().unwrap();
+                        let kind = interval.kind();
+                        let function_name = format!("add{}s", kind);
+                        Function2Factory::instance().get(function_name, args)
+                    } else {
+                        error_fn()
+                    }
                 })
-            },{
-                error_fn()
             });
         }
 

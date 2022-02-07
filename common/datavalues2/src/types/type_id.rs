@@ -55,16 +55,14 @@ pub enum TypeID {
 
     /// A 32-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
     /// in seconds, it's physical type is UInt32
-    /// Option<String> indicates the timezone, if it's None, it's UTC
     DateTime32,
 
     /// A 64-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
     /// in nanoseconds, it's physical type is UInt64
-    /// The time resolution is determined by the precision parameter, range from 0 to 9
-    /// Typically are used - 3 (milliseconds), 6 (microseconds), 9 (nanoseconds)
-    /// Option<String> indicates the timezone, if it's None, it's UTC
     DateTime64,
 
+    /// Interval represents the time interval, e.g. the elapsed time between two date or datetime.
+    /// Underneath Interval is stored as int64, so it supports negative values.
     Interval,
 
     Array,

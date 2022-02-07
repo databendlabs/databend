@@ -30,7 +30,10 @@ use crate::prelude::*;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DateTime64Type {
+    /// The time resolution is determined by the precision parameter, range from 0 to 9
+    /// Typically are used - 3 (milliseconds), 6 (microseconds), 9 (nanoseconds).
     precision: usize,
+    /// tz indicates the timezone, if it's None, it's UTC.
     tz: Option<String>,
 }
 

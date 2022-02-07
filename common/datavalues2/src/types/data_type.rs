@@ -153,8 +153,7 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
                 "Date32" => return Date32Type::arc(),
                 "DateTime" | "DateTime32" => return DateTime32Type::arc(metatada),
                 "DateTime64" => return DateTime64Type::arc(3, metatada),
-                "IntervalDayTime" => return IntervalType::arc(IntervalUnit::DayTime),
-                "IntervalYearMonth" => return IntervalType::arc(IntervalUnit::YearMonth),
+                "Interval" => return IntervalType::arc(metatada.unwrap().into()),
                 _ => {}
             }
         }
