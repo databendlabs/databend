@@ -29,7 +29,6 @@ use crate::scalars::Function;
 use crate::scalars::MathsFunction;
 use crate::scalars::NullableFunction;
 use crate::scalars::StringFunction;
-use crate::scalars::UUIDFunction;
 use crate::scalars::UdfFunction;
 
 pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send + Sync>;
@@ -130,7 +129,6 @@ static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     UdfFunction::register(&mut function_factory);
     DateFunction::register(&mut function_factory);
     MathsFunction::register(&mut function_factory);
-    UUIDFunction::register(&mut function_factory);
 
     Arc::new(function_factory)
 });

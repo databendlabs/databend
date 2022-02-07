@@ -15,14 +15,12 @@
 use common_base::tokio;
 use common_exception::Result;
 use common_mem_allocator::malloc_size;
-use databend_query::configs::Config;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session() -> Result<()> {
-    let mut conf = Config::default();
-    conf.query.tenant_id = "tenant1".to_string();
+    let conf = crate::tests::ConfigBuilder::create().config();
 
     let session_manager = SessionManager::from_conf(conf.clone()).await.unwrap();
 
@@ -36,12 +34,12 @@ async fn test_session() -> Result<()> {
     // Tenant.
     {
         let actual = session.get_current_tenant();
-        assert_eq!(&actual, "tenant1");
+        assert_eq!(&actual, "test");
 
         // We are not in management mode, so always get the config tenant.
         session.set_current_tenant("tenant2".to_string());
         let actual = session.get_current_tenant();
-        assert_eq!(&actual, "tenant1");
+        assert_eq!(&actual, "test");
     }
 
     // Settings.
@@ -64,9 +62,9 @@ async fn test_session() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_in_management_mode() -> Result<()> {
-    let mut conf = Config::default();
-    conf.query.tenant_id = "tenant1".to_string();
-    conf.query.management_mode = true;
+    let conf = crate::tests::ConfigBuilder::create()
+        .with_management_mode()
+        .config();
 
     let session_manager = SessionManager::from_conf(conf.clone()).await.unwrap();
 

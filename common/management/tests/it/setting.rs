@@ -30,9 +30,7 @@ async fn test_set_setting() -> Result<()> {
     {
         let setting = UserSetting::create("max_threads", DataValue::UInt64(3));
         mgr.set_setting(setting.clone()).await?;
-        let value = kv_api
-            .get_kv("__fd_settings/databend_query/max_threads")
-            .await?;
+        let value = kv_api.get_kv("__fd_settings/admin/max_threads").await?;
 
         match value {
             Some(SeqV {
@@ -50,9 +48,7 @@ async fn test_set_setting() -> Result<()> {
     {
         let setting = UserSetting::create("max_threads", DataValue::UInt64(1));
         mgr.set_setting(setting.clone()).await?;
-        let value = kv_api
-            .get_kv("__fd_settings/databend_query/max_threads")
-            .await?;
+        let value = kv_api.get_kv("__fd_settings/admin/max_threads").await?;
 
         match value {
             Some(SeqV {
@@ -111,6 +107,6 @@ async fn test_set_setting() -> Result<()> {
 
 async fn new_setting_api() -> Result<(Arc<MetaEmbedded>, SettingMgr)> {
     let test_api = Arc::new(MetaEmbedded::new_temp().await?);
-    let mgr = SettingMgr::new(test_api.clone(), "databend_query");
+    let mgr = SettingMgr::create(test_api.clone(), "admin")?;
     Ok((test_api, mgr))
 }

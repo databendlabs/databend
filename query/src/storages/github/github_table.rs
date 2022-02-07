@@ -32,7 +32,7 @@ use crate::storages::github::RepoIssuesTable;
 use crate::storages::github::RepoPRsTable;
 use crate::storages::github::RepoTableOptions;
 use crate::storages::StorageContext;
-use crate::storages::StorageDescriptor;
+use crate::storages::StorageDescription;
 use crate::storages::Table;
 
 pub enum GithubTableType {
@@ -91,8 +91,8 @@ impl GithubTable {
         Ok(table.get_data_from_github().await?)
     }
 
-    pub fn description() -> StorageDescriptor {
-        StorageDescriptor {
+    pub fn description() -> StorageDescription {
+        StorageDescription {
             engine_name: "GITHUB".to_string(),
             comment: "GITHUB Storage Engine".to_string(),
         }

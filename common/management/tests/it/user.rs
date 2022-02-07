@@ -102,7 +102,7 @@ mod add {
                 .times(1)
                 .return_once(|_u| Ok(UpsertKVActionReply::new(None, Some(SeqV::new(1, v)))));
             let api = Arc::new(api);
-            let user_mgr = UserMgr::new(api, "tenant1");
+            let user_mgr = UserMgr::create(api, "tenant1")?;
             let res = user_mgr.add_user(user_info);
 
             assert!(res.await.is_ok());
@@ -128,7 +128,7 @@ mod add {
                 });
 
             let api = Arc::new(api);
-            let user_mgr = UserMgr::new(api, "tenant1");
+            let user_mgr = UserMgr::create(api, "tenant1")?;
 
             let user_info = UserInfo::new(
                 test_user_name.to_string(),
@@ -159,7 +159,7 @@ mod add {
 
             let kv = Arc::new(api);
 
-            let user_mgr = UserMgr::new(kv, "tenant1");
+            let user_mgr = UserMgr::create(kv, "tenant1")?;
             let user_info = UserInfo::new(
                 test_user_name.to_string(),
                 test_hostname.to_string(),
@@ -205,7 +205,7 @@ mod get {
             .return_once(move |_k| Ok(Some(SeqV::new(1, value))));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::create(kv, "tenant1")?;
         let res = user_mgr.get_user(
             test_user_name.to_string(),
             test_hostname.to_string(),
@@ -239,7 +239,7 @@ mod get {
             .return_once(move |_k| Ok(Some(SeqV::new(100, value))));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::create(kv, "tenant1")?;
         let res = user_mgr.get_user(test_user_name.to_string(), test_hostname.to_string(), None);
         assert!(res.await.is_ok());
         Ok(())
@@ -261,7 +261,7 @@ mod get {
             .return_once(move |_k| Ok(None));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::create(kv, "tenant1")?;
         let res = user_mgr
             .get_user(test_user_name.to_string(), test_hostname.to_string(), None)
             .await;
@@ -286,7 +286,7 @@ mod get {
             .return_once(move |_k| Ok(Some(SeqV::new(1, vec![]))));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::create(kv, "tenant1")?;
         let res = user_mgr
             .get_user(
                 test_user_name.to_string(),
@@ -315,7 +315,7 @@ mod get {
             .return_once(move |_k| Ok(Some(SeqV::new(1, vec![]))));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::create(kv, "tenant1")?;
         let res = user_mgr.get_user(test_user_name.to_string(), test_hostname.to_string(), None);
         assert_eq!(
             res.await.unwrap_err().code(),
@@ -373,7 +373,7 @@ mod get_users {
         }
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::create(kv, "tenant1")?;
         let res = user_mgr.get_users();
         assert_eq!(res.await?, user_infos);
 
@@ -401,7 +401,7 @@ mod get_users {
         }
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::create(kv, "tenant1")?;
         let res = user_mgr.get_users();
         assert_eq!(
             res.await.unwrap_err().code(),
@@ -434,7 +434,7 @@ mod drop {
             .times(1)
             .returning(|_k| Ok(UpsertKVActionReply::new(Some(SeqV::new(1, vec![])), None)));
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::create(kv, "tenant1")?;
         let res = user_mgr.drop_user(test_user.to_string(), test_hostname.to_string(), None);
         assert!(res.await.is_ok());
 
@@ -460,7 +460,7 @@ mod drop {
             .times(1)
             .returning(|_k| Ok(UpsertKVActionReply::new(None, None)));
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::create(kv, "tenant1")?;
         let res = user_mgr.drop_user(test_user.to_string(), test_hostname.to_string(), None);
         assert_eq!(
             res.await.unwrap_err().code(),
@@ -543,7 +543,7 @@ mod update {
             .return_once(|_| Ok(UpsertKVActionReply::new(None, Some(SeqV::new(0, vec![])))));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::create(kv, "tenant1")?;
 
         let res = user_mgr.update_user(
             test_user_name.to_string(),
@@ -575,7 +575,7 @@ mod update {
             .return_once(move |_k| Ok(None));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::create(kv, "tenant1")?;
 
         let res = user_mgr.update_user(
             test_user_name.to_string(),
@@ -626,7 +626,7 @@ mod update {
             .returning(|_| Ok(UpsertKVActionReply::new(None, None)));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::create(kv, "tenant1")?;
 
         let res = user_mgr.update_user(
             test_user_name.to_string(),
@@ -698,7 +698,7 @@ mod set_user_privileges {
             .return_once(|_| Ok(UpsertKVActionReply::new(None, Some(SeqV::new(0, vec![])))));
 
         let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
+        let user_mgr = UserMgr::create(kv, "tenant1")?;
 
         let res = user_mgr.grant_user_privileges(
             test_user_name.to_string(),

@@ -40,8 +40,8 @@ pub struct SessionManagerBuilder {
 
 impl SessionManagerBuilder {
     pub fn create() -> SessionManagerBuilder {
-        SessionManagerBuilder::create_with_conf(Config::default())
-            .log_dir_with_relative("../tests/data/logs")
+        let conf = crate::tests::ConfigBuilder::create().config();
+        SessionManagerBuilder::create_with_conf(conf).log_dir_with_relative("../tests/data/logs")
     }
 
     pub fn create_with_conf(config: Config) -> SessionManagerBuilder {

@@ -13,13 +13,11 @@
 // limitations under the License.
 
 use nom::branch::alt;
+use nom::combinator::cut;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::combinator::verify;
-use nom::error::make_error;
-use nom::error::ContextError;
-use nom::error::ErrorKind;
-use nom::IResult;
+use nom::error::context;
 use pratt::Affix;
 use pratt::Associativity;
 use pratt::PrattError;
@@ -33,30 +31,27 @@ use crate::parser::ast::Literal;
 use crate::parser::ast::Query;
 use crate::parser::ast::TypeName;
 use crate::parser::ast::UnaryOperator;
+use crate::parser::rule::error::Error;
+use crate::parser::rule::error::ErrorKind;
 use crate::parser::rule::util::ident;
 use crate::parser::rule::util::literal_u64;
+use crate::parser::rule::util::IResult;
 use crate::parser::rule::util::Input;
-use crate::parser::rule::util::ParseError;
 use crate::parser::token::*;
 use crate::rule;
 
-const BETWEEN_PREC: Precedence = Precedence(20);
+const BETWEEN_PREC: u32 = 20;
 
-pub fn query<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, Query, Error>
-where Error: ParseError<Input<'a>> {
+pub fn query(i: Input) -> IResult<Query> {
     // TODO: unimplemented
     nom::combinator::fail(i)
 }
 
-pub fn expr<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, Expr, Error>
-where Error: ParseError<Input<'a>> {
-    subexpr(Precedence(0))(i)
+pub fn expr(i: Input) -> IResult<Expr> {
+    context("expression", subexpr(0))(i)
 }
 
-pub fn subexpr<'a, Error>(
-    min_precedence: Precedence,
-) -> impl FnMut(Input<'a>) -> IResult<Input<'a>, Expr, Error> + Copy
-where Error: ParseError<Input<'a>> {
+pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     move |i| {
         let expr_element_limited =
             verify(
@@ -65,7 +60,7 @@ where Error: ParseError<Input<'a>> {
                     .unwrap()
                 {
                     Affix::Infix(prec, _) | Affix::Prefix(prec) | Affix::Postfix(prec)
-                        if prec <= min_precedence =>
+                        if prec <= Precedence(min_precedence) =>
                     {
                         false
                     }
@@ -73,7 +68,7 @@ where Error: ParseError<Input<'a>> {
                 },
             );
 
-        let (i, expr_elements) = rule! { #expr_element_limited+ }(i)?;
+        let (i, expr_elements) = rule! { #expr_element_limited* }(i)?;
 
         let mut iter = expr_elements.into_iter();
         let expr = ExprParser
@@ -90,10 +85,9 @@ where Error: ParseError<Input<'a>> {
             .map_err(nom::Err::Error)?;
 
         if iter.next().is_some() {
-            return Err(nom::Err::Error(ContextError::add_context(
+            return Err(nom::Err::Error(Error::from_error_kind(
                 i,
-                "unable to parse the rest of expression",
-                make_error(i, ErrorKind::Complete),
+                ErrorKind::Other("unable to parse rest of the expression"),
             )));
         }
 
@@ -101,38 +95,29 @@ where Error: ParseError<Input<'a>> {
     }
 }
 
-fn map_pratt_error<'a, Error>(
+fn map_pratt_error<'a>(
     next_token: Input<'a>,
     err: PrattError<WithSpan<'a>, pratt::NoError>,
-) -> Error
-where
-    Error: ParseError<Input<'a>>,
-{
+) -> Error<'a> {
     match err {
-        PrattError::EmptyInput => ContextError::add_context(
-            next_token,
-            "unexpected end of an expression",
-            make_error(next_token, ErrorKind::Complete),
-        ),
-        PrattError::UnexpectedNilfix(elem) => ContextError::add_context(
+        PrattError::EmptyInput => {
+            Error::from_error_kind(next_token, ErrorKind::Other("unexpected end of expression"))
+        }
+        PrattError::UnexpectedNilfix(elem) => Error::from_error_kind(
             elem.span,
-            "unable to parse the value",
-            make_error(elem.span, ErrorKind::Complete),
+            ErrorKind::Other("unable to parse the expression value"),
         ),
-        PrattError::UnexpectedPrefix(elem) => ContextError::add_context(
+        PrattError::UnexpectedPrefix(elem) => Error::from_error_kind(
             elem.span,
-            "unable to parse the prefix operator",
-            make_error(elem.span, ErrorKind::Complete),
+            ErrorKind::Other("unable to parse the prefix operator"),
         ),
-        PrattError::UnexpectedInfix(elem) => ContextError::add_context(
+        PrattError::UnexpectedInfix(elem) => Error::from_error_kind(
             elem.span,
-            "unable to parse the binary operator",
-            make_error(elem.span, ErrorKind::Complete),
+            ErrorKind::Other("unable to parse the binary operator"),
         ),
-        PrattError::UnexpectedPostfix(elem) => ContextError::add_context(
+        PrattError::UnexpectedPostfix(elem) => Error::from_error_kind(
             elem.span,
-            "unable to parse the postfix operator",
-            make_error(elem.span, ErrorKind::Complete),
+            ErrorKind::Other("unable to parse the postfix operator"),
         ),
         PrattError::UserError(_) => unreachable!(),
     }
@@ -214,7 +199,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
     fn query(&mut self, elem: &WithSpan) -> pratt::Result<Affix> {
         let affix = match &elem.elem {
             ExprElement::IsNull { .. } => Affix::Postfix(Precedence(17)),
-            ExprElement::Between { .. } => Affix::Postfix(BETWEEN_PREC),
+            ExprElement::Between { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
             ExprElement::InList { .. } => Affix::Postfix(Precedence(20)),
             ExprElement::InSubquery { .. } => Affix::Postfix(Precedence(20)),
             ExprElement::UnaryOp { op } => match op {
@@ -255,7 +240,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(affix)
     }
 
-    fn primary(&mut self, elem: WithSpan<'a>) -> pratt::Result<Expr> {
+    fn primary(&mut self, elem: WithSpan) -> pratt::Result<Expr> {
         let expr = match elem.elem {
             ExprElement::ColumnRef {
                 database,
@@ -302,7 +287,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn infix(&mut self, lhs: Expr, elem: WithSpan<'a>, rhs: Expr) -> pratt::Result<Expr> {
+    fn infix(&mut self, lhs: Expr, elem: WithSpan, rhs: Expr) -> pratt::Result<Expr> {
         let expr = match elem.elem {
             ExprElement::BinaryOp { op } => Expr::BinaryOp {
                 left: Box::new(lhs),
@@ -314,7 +299,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn prefix(&mut self, elem: WithSpan<'a>, rhs: Expr) -> pratt::Result<Expr> {
+    fn prefix(&mut self, elem: WithSpan, rhs: Expr) -> pratt::Result<Expr> {
         let expr = match elem.elem {
             ExprElement::UnaryOp { op } => Expr::UnaryOp {
                 op,
@@ -325,7 +310,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
         Ok(expr)
     }
 
-    fn postfix(&mut self, lhs: Expr, elem: WithSpan<'a>) -> pratt::Result<Expr> {
+    fn postfix(&mut self, lhs: Expr, elem: WithSpan) -> pratt::Result<Expr> {
         let expr = match elem.elem {
             ExprElement::IsNull { not } => Expr::IsNull {
                 expr: Box::new(lhs),
@@ -353,8 +338,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a>>> PrattParser<I> for ExprParser {
     }
 }
 
-pub fn expr_element<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, WithSpan<'a>, Error>
-where Error: ParseError<Input<'a>> {
+pub fn expr_element(i: Input) -> IResult<WithSpan> {
     let column_ref = map(
         rule! {
             #ident ~ ("." ~ #ident ~ ("." ~ #ident)?)?
@@ -385,7 +369,7 @@ where Error: ParseError<Input<'a>> {
     );
     let in_list = map(
         rule! {
-            NOT? ~ IN ~ "(" ~ #expr ~ ("," ~ #expr)*  ~ ")"
+            NOT? ~ IN ~ "(" ~ #cut(subexpr(0)) ~ ("," ~ #cut(subexpr(0)))*  ~ ")"
         },
         |(not, _, _, head, tail, _)| {
             let mut list = vec![head];
@@ -405,10 +389,9 @@ where Error: ParseError<Input<'a>> {
             not: not.is_some(),
         },
     );
-    let between_subexpr = subexpr(BETWEEN_PREC);
     let between = map(
         rule! {
-            NOT? ~ BETWEEN ~ #between_subexpr ~ AND ~  #between_subexpr
+            NOT? ~ BETWEEN ~ #cut(subexpr(BETWEEN_PREC)) ~ AND ~  #cut(subexpr(BETWEEN_PREC))
         },
         |(not, _, low, _, high)| ExprElement::Between {
             low,
@@ -418,7 +401,7 @@ where Error: ParseError<Input<'a>> {
     );
     let cast = map(
         rule! {
-            CAST ~ "(" ~ #expr ~ AS ~ #type_name ~ ")"
+            CAST ~ "(" ~ #cut(subexpr(0)) ~ AS ~ #cut(type_name) ~ ")"
         },
         |(_, _, expr, _, target_type, _)| ExprElement::Cast { expr, target_type },
     );
@@ -427,7 +410,7 @@ where Error: ParseError<Input<'a>> {
     });
     let function_call = map(
         rule! {
-            #function_name ~ "(" ~ (DISTINCT? ~ #expr ~ ("," ~ #expr)*)? ~ ")"
+            #function_name ~ "(" ~ (DISTINCT? ~ #cut(subexpr(0)) ~ ("," ~ #cut(subexpr(0)))*)? ~ ")"
         },
         |(name, _, args, _)| {
             let (distinct, args) = args
@@ -448,7 +431,7 @@ where Error: ParseError<Input<'a>> {
     );
     let function_call_with_param = map(
         rule! {
-            #function_name ~ "(" ~ (#literal ~ ("," ~ #literal)*)? ~ ")" ~ "(" ~ (DISTINCT? ~ #expr ~ ("," ~ #expr)*)? ~ ")"
+            #function_name ~ "(" ~ (#literal ~ ("," ~ #literal)*)? ~ ")" ~ "(" ~ (DISTINCT? ~ #cut(subexpr(0)) ~ ("," ~ #cut(subexpr(0)))*)? ~ ")"
         },
         |(name, _, params, _, _, args, _)| {
             let params = params
@@ -477,7 +460,7 @@ where Error: ParseError<Input<'a>> {
     );
     let case = map(
         rule! {
-            CASE ~ #expr? ~ (WHEN ~ #expr ~ THEN ~ #expr)+ ~ (ELSE ~ #expr)? ~ END
+            CASE ~ #subexpr(0)? ~ (WHEN ~ #cut(subexpr(0)) ~ THEN ~ #cut(subexpr(0)))+ ~ (ELSE ~ #cut(subexpr(0)))? ~ END
         },
         |(_, operand, branches, else_result, _)| {
             let (conditions, results) = branches
@@ -500,7 +483,7 @@ where Error: ParseError<Input<'a>> {
     let subquery = map(rule! { "(" ~ #query ~ ")" }, |(_, subquery, _)| {
         ExprElement::Subquery(subquery)
     });
-    let group = map(rule! { "(" ~ #expr ~ ")" }, |(_, expr, _)| {
+    let group = map(rule! { "(" ~ #cut(subexpr(0)) ~ ")" }, |(_, expr, _)| {
         ExprElement::Group(expr)
     });
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
@@ -508,22 +491,22 @@ where Error: ParseError<Input<'a>> {
     let literal = map(literal, ExprElement::Literal);
 
     let (rest, elem) = rule! (
-        #column_ref
-        | #is_null
-        | #in_list
-        | #in_subquery
-        | #between
-        | #binary_op
-        | #unary_op
-        | #cast
-        | #count_all
-        | #literal
-        | #function_call_with_param
-        | #function_call
-        | #case
-        | #exists
-        | #subquery
-        | #group
+        #column_ref : "<column>"
+        | #is_null : "`... IS [NOT] NULL` expression"
+        | #in_list : "`[NOT] IN (<expr>, ...)` expression"
+        | #in_subquery : "`[NOT] IN (SELECT ...)` expression"
+        | #between : "`[NOT] BETWEEN ... AND ...` expression"
+        | #binary_op : "<operator>"
+        | #unary_op : "<operator>"
+        | #cast : "`CAST(... AS ...)` expression"
+        | #count_all : "COUNT(*)"
+        | #literal : "<literal>"
+        | #function_call_with_param : "<function>"
+        | #function_call : "<function>"
+        | #case : "`CASE ... END` expression"
+        | #exists : "`EXISTS (SELECT ...)` expression"
+        | #subquery : "`(SELECT ...)` expression"
+        | #group : "expression between `(...)`"
     )(i)?;
 
     let input_ptr = i.as_ptr();
@@ -534,8 +517,7 @@ where Error: ParseError<Input<'a>> {
     Ok((rest, WithSpan { elem, span }))
 }
 
-pub fn unary_op<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, UnaryOperator, Error>
-where Error: ParseError<Input<'a>> {
+pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
     alt((
         value(UnaryOperator::Plus, rule! { Plus }),
         value(UnaryOperator::Minus, rule! { Minus }),
@@ -543,8 +525,7 @@ where Error: ParseError<Input<'a>> {
     ))(i)
 }
 
-pub fn binary_op<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, BinaryOperator, Error>
-where Error: ParseError<Input<'a>> {
+pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
     alt((
         value(BinaryOperator::Plus, rule! { Plus }),
         value(BinaryOperator::Minus, rule! { Minus }),
@@ -568,8 +549,7 @@ where Error: ParseError<Input<'a>> {
     ))(i)
 }
 
-pub fn literal<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, Literal, Error>
-where Error: ParseError<Input<'a>> {
+pub fn literal(i: Input) -> IResult<Literal> {
     let string = map(
         rule! {
             LiteralString
@@ -597,34 +577,33 @@ where Error: ParseError<Input<'a>> {
     )(i)
 }
 
-pub fn type_name<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, TypeName, Error>
-where Error: ParseError<Input<'a>> {
+pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_char = map(
-        rule! { CHAR ~ ("(" ~ #literal_u64 ~ ")")? },
+        rule! { CHAR ~ ("(" ~ #cut(literal_u64) ~ ")")? },
         |(_, opt_args)| TypeName::Char(opt_args.map(|(_, length, _)| length)),
     );
     let ty_varchar = map(
-        rule! { VARCHAR ~ ("(" ~ #literal_u64 ~ ")")? },
+        rule! { VARCHAR ~ ("(" ~ #cut(literal_u64) ~ ")")? },
         |(_, opt_args)| TypeName::Varchar(opt_args.map(|(_, length, _)| length)),
     );
     let ty_float = map(
-        rule! { FLOAT ~ ("(" ~ #literal_u64 ~ ")")? },
+        rule! { FLOAT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
         |(_, opt_args)| TypeName::Float(opt_args.map(|(_, prec, _)| prec)),
     );
     let ty_int = map(
-        rule! { INTEGER ~ ("(" ~ #literal_u64 ~ ")")? },
+        rule! { INTEGER ~ ("(" ~ #cut(literal_u64) ~ ")")? },
         |(_, opt_args)| TypeName::Int(opt_args.map(|(_, display, _)| display)),
     );
     let ty_tiny_int = map(
-        rule! { TINYINT ~ ("(" ~ #literal_u64 ~ ")")? },
+        rule! { TINYINT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
         |(_, opt_args)| TypeName::TinyInt(opt_args.map(|(_, display, _)| display)),
     );
     let ty_small_int = map(
-        rule! { SMALLINT ~ ("(" ~ #literal_u64 ~ ")")? },
+        rule! { SMALLINT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
         |(_, opt_args)| TypeName::SmallInt(opt_args.map(|(_, display, _)| display)),
     );
     let ty_big_int = map(
-        rule! { BIGINT ~ ("(" ~ #literal_u64 ~ ")")? },
+        rule! { BIGINT ~ ("(" ~ #cut(literal_u64) ~ ")")? },
         |(_, opt_args)| TypeName::BigInt(opt_args.map(|(_, display, _)| display)),
     );
     let ty_real = value(TypeName::Real, rule! { REAL });
@@ -653,9 +632,8 @@ where Error: ParseError<Input<'a>> {
     )(i)
 }
 
-// TODO(andylokandy): complete the keyword-function list, or remove the functions' name from keywords
-pub fn function_name<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, String, Error>
-where Error: ParseError<Input<'a>> {
+// TODO (andylokandy): complete the keyword-function list, or remove the functions' name from keywords
+pub fn function_name(i: Input) -> IResult<String> {
     map(
         rule! {
             Ident

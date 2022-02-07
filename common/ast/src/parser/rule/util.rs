@@ -14,84 +14,65 @@
 
 use nom::branch::alt;
 use nom::combinator::map;
-use nom::error::make_error;
-use nom::error::ErrorKind;
-use nom::IResult;
 
 use crate::parser::ast::Identifier;
+use crate::parser::rule::error::Error;
+use crate::parser::rule::error::ErrorKind;
 use crate::parser::token::*;
 
 pub type Input<'a> = &'a [Token<'a>];
-pub trait ParseError<I> = nom::error::ParseError<I> + nom::error::ContextError<I>;
+pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
 
-pub fn satisfy<'a, F, Error>(
-    cond: F,
-) -> impl FnMut(Input<'a>) -> IResult<Input<'a>, &'a Token, Error>
-where
-    F: Fn(&Token) -> bool,
-    Error: ParseError<Input<'a>>,
-{
-    move |i| match i.get(0).map(|t| {
-        let b = cond(t);
-        (t, b)
-    }) {
-        Some((t, true)) => Ok((&i[1..], t)),
+pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
+    move |i| match i.get(0).filter(|token| token.text == text) {
+        Some(token) => Ok((&i[1..], token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
-            ErrorKind::Satisfy,
+            ErrorKind::ExpectText(text),
         ))),
     }
 }
 
-pub fn match_text<'a, Error>(
-    text: &'static str,
-) -> impl FnMut(Input<'a>) -> IResult<Input<'a>, &'a Token, Error>
-where Error: ParseError<Input<'a>> {
-    move |i| satisfy(|token: &Token| token.text == text)(i)
+pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
+    move |i| match i.get(0).filter(|token| token.kind == kind) {
+        Some(token) => Ok((&i[1..], token)),
+        _ => Err(nom::Err::Error(Error::from_error_kind(
+            i,
+            ErrorKind::ExpectToken(kind),
+        ))),
+    }
 }
 
-pub fn match_token<'a, Error>(
-    kind: TokenKind,
-) -> impl FnMut(Input<'a>) -> IResult<Input<'a>, &'a Token, Error>
-where Error: ParseError<Input<'a>> {
-    move |i| satisfy(|token: &Token| token.kind == kind)(i)
-}
-
-pub fn ident<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, Identifier, Error>
-where Error: ParseError<Input<'a>> {
+pub fn ident(i: Input) -> IResult<Identifier> {
     alt((
-        map(satisfy(|token| token.kind == TokenKind::Ident), |token| {
-            Identifier {
-                name: token.text.to_string(),
-                quote: None,
-            }
+        map(match_token(TokenKind::Ident), |token| Identifier {
+            name: token.text.to_string(),
+            quote: None,
         }),
-        map(
-            satisfy(|token| token.kind == TokenKind::QuotedIdent),
-            |token| Identifier {
-                name: token.text[1..token.text.len() - 1].to_string(),
-                quote: Some('"'),
-            },
-        ),
+        map(match_token(TokenKind::QuotedIdent), |token| Identifier {
+            name: token.text[1..token.text.len() - 1].to_string(),
+            quote: Some('"'),
+        }),
     ))(i)
 }
 
-pub fn literal_u64<'a, Error>(i: Input<'a>) -> IResult<Input<'a>, u64, Error>
-where Error: ParseError<Input<'a>> {
-    match_token(LiteralNumber)(i).and_then(|(i, token)| {
+pub fn literal_u64(i: Input) -> IResult<u64> {
+    match_token(LiteralNumber)(i).and_then(|(input_inner, token)| {
         token
             .text
             .parse()
-            .map(|num| (i, num))
-            .map_err(|_| nom::Err::Error(make_error(i, ErrorKind::Digit)))
+            .map(|num| (input_inner, num))
+            .map_err(|err| {
+                nom::Err::Error(Error::from_error_kind(i, ErrorKind::ParseIntError(err)))
+            })
     })
 }
 
 #[macro_export]
 macro_rules! rule {
     ($($tt:tt)*) => { nom_rule::rule!(
-        ($crate::parser::rule::util::match_text),
-        ($crate::parser::rule::util::match_token),
+        $crate::parser::rule::util::match_text,
+        $crate::parser::rule::util::match_token,
         $($tt)*)
     }
 }

@@ -28,7 +28,7 @@ use futures::stream::StreamExt;
 
 use crate::sessions::QueryContext;
 use crate::storages::StorageContext;
-use crate::storages::StorageDescriptor;
+use crate::storages::StorageDescription;
 use crate::storages::Table;
 
 pub struct NullTable {
@@ -40,8 +40,8 @@ impl NullTable {
         Ok(Box::new(Self { table_info }))
     }
 
-    pub fn description() -> StorageDescriptor {
-        StorageDescriptor {
+    pub fn description() -> StorageDescription {
+        StorageDescription {
             engine_name: "NULL".to_string(),
             comment: "NULL Storage Engine".to_string(),
         }

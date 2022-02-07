@@ -43,23 +43,23 @@ impl UserApiProvider {
         Ok(Arc::new(UserApiProvider { client }))
     }
 
-    pub fn get_user_api_client(&self, tenant: &str) -> Arc<dyn UserApi> {
-        Arc::new(UserMgr::new(self.client.clone(), tenant))
+    pub fn get_user_api_client(&self, tenant: &str) -> Result<Arc<dyn UserApi>> {
+        Ok(Arc::new(UserMgr::create(self.client.clone(), tenant)?))
     }
 
-    pub fn get_role_api_client(&self, tenant: &str) -> Arc<dyn RoleApi> {
-        Arc::new(RoleMgr::new(self.client.clone(), tenant))
+    pub fn get_role_api_client(&self, tenant: &str) -> Result<Arc<dyn RoleApi>> {
+        Ok(Arc::new(RoleMgr::create(self.client.clone(), tenant)?))
     }
 
-    pub fn get_stage_api_client(&self, tenant: &str) -> Arc<dyn StageApi> {
-        Arc::new(StageMgr::new(self.client.clone(), tenant))
+    pub fn get_stage_api_client(&self, tenant: &str) -> Result<Arc<dyn StageApi>> {
+        Ok(Arc::new(StageMgr::create(self.client.clone(), tenant)?))
     }
 
-    pub fn get_udf_api_client(&self, tenant: &str) -> Arc<dyn UdfApi> {
-        Arc::new(UdfMgr::new(self.client.clone(), tenant))
+    pub fn get_udf_api_client(&self, tenant: &str) -> Result<Arc<dyn UdfApi>> {
+        Ok(Arc::new(UdfMgr::create(self.client.clone(), tenant)?))
     }
 
-    pub fn get_setting_api_client(&self, tenant: &str) -> Arc<dyn SettingApi> {
-        Arc::new(SettingMgr::new(self.client.clone(), tenant))
+    pub fn get_setting_api_client(&self, tenant: &str) -> Result<Arc<dyn SettingApi>> {
+        Ok(Arc::new(SettingMgr::create(self.client.clone(), tenant)?))
     }
 }
