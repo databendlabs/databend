@@ -15,8 +15,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_base::tokio;
 use common_base::tokio::sync::RwLock;
 use common_exception::Result;
+use common_tracing::tracing;
 
 use crate::configs::Config;
 use crate::servers::http::v1::query::http_query::HttpQuery;
@@ -43,11 +45,22 @@ impl HttpQueryManager {
 
     pub(crate) async fn add_query(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
         let mut queries = self.queries.write().await;
-        queries.insert(query_id.to_string(), query);
+        queries.insert(query_id.to_string(), query.clone());
+
+        let self_clone = self.clone();
+        let query_id_clone = query_id.to_string();
+        let query_clone = query.clone();
+        tokio::spawn(async move {
+            while !query_clone.check_timeout().await {}
+            if self_clone.remove_query(&query_id_clone).await {
+                tracing::warn!("http query {} timeout", &query_id_clone);
+            }
+        });
     }
 
-    pub(crate) async fn remove_query(self: &Arc<Self>, query_id: &str) {
+    // not remove it until timeout or cancelled by user, even if query execution is aborted
+    pub(crate) async fn remove_query(self: &Arc<Self>, query_id: &str) -> bool {
         let mut queries = self.queries.write().await;
-        queries.remove(query_id);
+        queries.remove(query_id).is_none()
     }
 }

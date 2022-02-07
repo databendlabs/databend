@@ -150,7 +150,7 @@ async fn query_cancel_handler(
 ) -> impl IntoResponse {
     let session_manager = sessions_extension.0;
     let http_query_manager = session_manager.get_http_query_manager();
-    match http_query_manager.get(&query_id).await {
+    match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             query.kill().await;
             if params.delete.unwrap_or(false) {
@@ -169,7 +169,7 @@ async fn query_state_handler(
 ) -> PoemResult<Json<QueryResponse>> {
     let session_manager = sessions_extension.0;
     let http_query_manager = session_manager.get_http_query_manager();
-    match http_query_manager.get(&query_id).await {
+    match http_query_manager.get_query(&query_id).await {
         Some(query) => {
             let response = query.get_response_state_only().await;
             Ok(Json(QueryResponse::from_internal(query_id, response)))
@@ -210,6 +210,7 @@ async fn query_page_handler(
                 .get_response_page(page_no, &wait_type, false)
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
+            query.update_timeout().await;
             Ok(Json(QueryResponse::from_internal(query_id, resp)))
         }
         None => Err(query_id_not_found(query_id)),
@@ -237,6 +238,7 @@ pub(crate) async fn query_handler(
                 .get_response_page(0, &wait_type, true)
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
+            query.update_timeout().await;
             Ok(Json(QueryResponse::from_internal(
                 query.id.to_string(),
                 resp,

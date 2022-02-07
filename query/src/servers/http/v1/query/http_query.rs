@@ -13,9 +13,12 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
 
 use common_base::tokio::sync::mpsc;
 use common_base::tokio::sync::Mutex as TokioMutex;
+use common_base::tokio::time::sleep;
 use common_base::ProgressValues;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -31,6 +34,8 @@ use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::ResultDataManager;
 use crate::servers::http::v1::query::Wait;
 use crate::sessions::SessionManager;
+
+const HTTP_QUERY_TIMEOUT: u64 = 10;
 
 pub struct ResponseInitialState {
     pub schema: Option<DataSchemaRef>,
@@ -55,6 +60,7 @@ pub struct HttpQuery {
     request: HttpQueryRequest,
     state: ExecutorRef,
     data: Arc<TokioMutex<ResultDataManager>>,
+    timeout: Arc<TokioMutex<Option<Instant>>>,
 }
 
 impl HttpQuery {
@@ -75,6 +81,7 @@ impl HttpQuery {
             request,
             state,
             data,
+            timeout: Arc::new(TokioMutex::new(None)),
         };
         let query = Arc::new(query);
         Ok(query)
@@ -112,7 +119,7 @@ impl HttpQuery {
         }
     }
 
-    pub async fn get_state(&self) -> ResponseState {
+    async fn get_state(&self) -> ResponseState {
         let state = self.state.read().await;
         let (exe_state, err) = state.state.extract();
         let wall_time_ms = state.elapsed().as_millis();
@@ -124,7 +131,7 @@ impl HttpQuery {
         }
     }
 
-    pub async fn get_page(&self, page_no: usize, tp: &Wait) -> Result<ResponseData> {
+    async fn get_page(&self, page_no: usize, tp: &Wait) -> Result<ResponseData> {
         let mut data = self.data.lock().await;
         let page = data.get_a_page(page_no, tp).await?;
         let response = ResponseData {
@@ -142,5 +149,26 @@ impl HttpQuery {
         )
         .await;
         self.data.lock().await.block_rx.close();
+    }
+
+    pub async fn update_timeout(&self) {
+        let mut t = self.timeout.lock().await;
+        *t = Some(Instant::now() + Duration::new(HTTP_QUERY_TIMEOUT, 0))
+    }
+
+    pub async fn check_timeout(&self) -> bool {
+        let t = self.timeout.lock().await;
+        if let Some(t) = *t {
+            let now = Instant::now();
+            if now >= t {
+                true
+            } else {
+                sleep(t + Duration::from_secs(HTTP_QUERY_TIMEOUT) - now).await;
+                false
+            }
+        } else {
+            sleep(Duration::from_secs(HTTP_QUERY_TIMEOUT)).await;
+            false
+        }
     }
 }
