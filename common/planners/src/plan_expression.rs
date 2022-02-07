@@ -147,8 +147,8 @@ impl Expression {
     pub fn create_literal_with_type(value: DataValue, data_type: DataTypePtr) -> Expression {
         Expression::Literal {
             value,
-            column_name: None,
             data_type,
+            column_name: None,
         }
     }
 

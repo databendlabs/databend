@@ -90,7 +90,10 @@ impl RangeFilter {
         let data_block = DataBlock::create(self.schema.clone(), columns);
         let executed_data_block = self.executor.execute(&data_block)?;
 
-        executed_data_block.column(0).get_bool(0)
+        match executed_data_block.column(0).get(0) {
+            DataValue::Null => Ok(false),
+            other => other.as_bool(),
+        }
     }
 }
 

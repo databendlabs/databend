@@ -95,7 +95,7 @@ impl Table for SettingsTable {
                 // Desc.
                 descs.push(format!("{:?}", vals[4]));
                 // Types.
-                types.push(format!("{:?}", vals[2].data_type()));
+                types.push(format!("{:?}", vals[2].max_data_type()));
             }
         }
 

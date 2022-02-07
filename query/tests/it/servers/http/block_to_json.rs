@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_datavalues2::prelude::*;
 use common_exception::Result;
@@ -44,13 +45,29 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         ]),
     };
 
-    let block = DataBlock::create(schema, vec![
+    let block = DataBlock::create(schema.clone(), vec![
         Series::from_data(vec![1, 2, 3]),
         Series::from_data(vec!["a", "b", "c"]),
         Series::from_data(vec![true, true, false]),
         Series::from_data(vec![1.1, 2.2, 3.3]),
         Series::from_data(vec![1_u16, 2_u16, 3_u16]),
     ]);
+
+    let block = if is_nullable {
+        let columns = block
+            .columns()
+            .iter()
+            .map(|c| {
+                let mut validity = MutableBitmap::new();
+                validity.extend_constant(c.len(), true);
+                NullableColumn::new(c.clone(), validity.into()).arc()
+            })
+            .collect();
+        DataBlock::create(schema, columns)
+    } else {
+        block
+    };
+
     let json_block = block_to_json(&block)?;
     let expect = vec![
         vec![val(1), val("a"), val(true), val(1.1), val("1970-01-02")],

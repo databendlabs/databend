@@ -44,7 +44,7 @@ impl TypeSerializer for StringSerializer {
         let column: &StringColumn = Series::check_get(column)?;
         let result: Vec<Value> = column
             .iter()
-            .map(|x| serde_json::to_value(x).unwrap())
+            .map(|x| serde_json::to_value(String::from_utf8_lossy(x).to_string()).unwrap())
             .collect();
         Ok(result)
     }

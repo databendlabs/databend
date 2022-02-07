@@ -27,7 +27,7 @@ pub struct IntervalType {
     unit: IntervalUnit,
 }
 
-#[derive(Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub enum IntervalUnit {
     YearMonth,
     DayTime,
@@ -109,6 +109,6 @@ impl DataType for IntervalType {
 
 impl std::fmt::Debug for IntervalType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
+        write!(f, "{}({:?})", self.name(), self.unit)
     }
 }

@@ -200,3 +200,11 @@ pub fn remove_nullable(data_type: &DataTypePtr) -> DataTypePtr {
     }
     data_type.clone()
 }
+
+pub fn format_data_type_sql(data_type: &DataTypePtr) -> String {
+    let notnull_type = remove_nullable(data_type);
+    match data_type.is_nullable() {
+        true => format!("{:?}", notnull_type),
+        false => format!("{:?} NOT NULL", notnull_type),
+    }
+}

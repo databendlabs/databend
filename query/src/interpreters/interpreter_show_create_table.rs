@@ -61,7 +61,11 @@ impl Interpreter for ShowCreateTableInterpreter {
 
         let mut table_info = format!("CREATE TABLE `{}` (\n", name);
         for field in schema.fields().iter() {
-            let column = format!("  `{}` {:?},\n", field.name(), field.data_type());
+            let column = format!(
+                "  `{}` {},\n",
+                field.name(),
+                format_data_type_sql(field.data_type())
+            );
             table_info.push_str(column.as_str());
         }
         let table_engine = format!(") ENGINE={}", engine);

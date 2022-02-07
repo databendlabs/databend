@@ -282,7 +282,7 @@ impl Settings {
     pub fn set_settings(&self, key: String, val: String, is_global: bool) -> Result<()> {
         let setting = self.check_and_get_setting_value(&key)?;
 
-        match setting.user_setting.value.data_type().data_type_id() {
+        match setting.user_setting.value.max_data_type().data_type_id() {
             TypeID::UInt64 => {
                 let u64_val = val.parse::<u64>()?;
                 self.try_set_u64(&key, u64_val, is_global)?;

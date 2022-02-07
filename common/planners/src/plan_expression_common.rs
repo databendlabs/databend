@@ -466,6 +466,7 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
 
                 let aggregate_function = expr.to_aggregate_function(&self.input_schema)?;
                 let return_type = aggregate_function.return_type()?;
+
                 self.stack.push(return_type);
                 Ok(self)
             }
