@@ -53,7 +53,7 @@ impl DataBlock {
         if predict.is_const() {
             let col: &ConstColumn = unsafe { Series::static_cast(predict) };
             let inner_boolean = Self::cast_to_nonull_boolean(col.inner())?;
-            return Ok(Arc::new(ConstColumn::new(inner_boolean, col.len())));
+            Ok(Arc::new(ConstColumn::new(inner_boolean, col.len())))
         } else if predict.is_nullable() {
             let col: &NullableColumn = unsafe { Series::static_cast(predict) };
             let inner_boolean = Self::cast_to_nonull_boolean(col.inner())?;
@@ -63,12 +63,12 @@ impl DataBlock {
             let values = combine_validities(Some(validity), Some(inner.values())).unwrap();
 
             let col = BooleanColumn::from_arrow_data(values);
-            return Ok(Arc::new(col));
+            Ok(Arc::new(col))
         } else if predict.data_type_id() == TypeID::Null {
-            return Ok(Arc::new(ConstColumn::new(
+            Ok(Arc::new(ConstColumn::new(
                 Series::from_data(vec![false]),
                 predict.len(),
-            )));
+            )))
         } else {
             let data_type_id = predict.data_type_id();
             if data_type_id == TypeID::Boolean {

@@ -24,8 +24,8 @@ fn test_data_block_slice() -> Result<()> {
     ]);
 
     let raw = DataBlock::create(schema, vec![
-        Series::from_data(vec![1i64, 2, 3, 4, 5]).into(),
-        Series::from_data(vec![1.0f64, 2., 3., 4., 5.]).into(),
+        Series::from_data(vec![1i64, 2, 3, 4, 5]),
+        Series::from_data(vec![1.0f64, 2., 3., 4., 5.]),
     ]);
 
     let sliced = DataBlock::split_block_by_size(&raw, 1)?;

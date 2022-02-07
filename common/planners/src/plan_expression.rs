@@ -231,7 +231,7 @@ impl Expression {
     pub fn to_data_field(&self, input_schema: &DataSchemaRef) -> Result<DataField> {
         let name = self.column_name();
         self.to_data_type(input_schema)
-            .and_then(|return_type| Ok(DataField::new(&name, return_type)))
+            .map(|return_type| DataField::new(&name, return_type))
     }
 
     pub fn nullable(&self, input_schema: &DataSchemaRef) -> Result<bool> {

@@ -24,8 +24,8 @@ fn test_data_block_scatter() -> Result<()> {
     ]);
 
     let raw = DataBlock::create(schema, vec![
-        Series::from_data(vec![1i64, 2, 3]).into(),
-        Series::from_data(vec![1.0f64, 2., 3.]).into(),
+        Series::from_data(vec![1i64, 2, 3]),
+        Series::from_data(vec![1.0f64, 2., 3.]),
     ]);
 
     let indices = &[0usize, 1, 0];

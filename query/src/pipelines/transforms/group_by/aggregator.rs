@@ -99,7 +99,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
             let function = &aggregate_functions[index];
             let state_offset = offsets_aggregate_states[index];
             let function_arguments = &aggr_arg_columns_slice[index];
-            function.accumulate_keys(places, state_offset, &function_arguments, rows)?;
+            function.accumulate_keys(places, state_offset, function_arguments, rows)?;
         }
 
         Ok(())

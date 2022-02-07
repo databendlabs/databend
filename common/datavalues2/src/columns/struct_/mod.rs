@@ -122,7 +122,7 @@ impl Column for StructColumn {
 
         for s in 0..scattered_size {
             let mut arrays = Vec::with_capacity(self.values.len());
-            for value in values {
+            for value in values.iter() {
                 arrays.push(value[s].clone());
             }
             result.push(

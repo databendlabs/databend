@@ -27,7 +27,7 @@ impl Series {
             GroupHash::fixed_hash(col, ptr, step)
         }, {
             Err(ErrorCode::BadDataValueType(
-                "Unsupported apply fn fixed_hash operation for fixed_hash".to_string(),
+                format!("Unsupported apply fn fixed_hash operation for column: {:?}", column.data_type()),
             ))
         })
     }
@@ -38,9 +38,9 @@ impl Series {
             let col: &<$T as Scalar>::ColumnType = Series::check_get(column)?;
             GroupHash::serialize(col, vec)
         }, {
-            Err(ErrorCode::BadDataValueType(format!(
-                "Unsupported apply fn serialize operation for fixed_hash",
-            )))
+             Err(ErrorCode::BadDataValueType(
+                format!("Unsupported apply fn serialize operation for column: {:?}", column.data_type()),
+            ))
         })
     }
 }
