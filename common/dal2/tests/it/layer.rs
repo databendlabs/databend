@@ -58,5 +58,5 @@ async fn test_layer() {
 
     op.delete("xxxxx").run().await.unwrap();
 
-    assert!(test.deleted.clone().lock().await.clone());
+    assert!(*test.deleted.clone().lock().await);
 }
