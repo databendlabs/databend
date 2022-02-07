@@ -19,6 +19,7 @@ use crate::ops::OpRead;
 use crate::ops::OpStat;
 use crate::ops::OpWrite;
 use crate::Accessor;
+use crate::Layer;
 
 #[derive(Clone)]
 pub struct Operator {
@@ -28,6 +29,13 @@ pub struct Operator {
 impl Operator {
     pub fn new(accessor: Arc<dyn Accessor>) -> Self {
         Self { accessor }
+    }
+
+    #[must_use]
+    pub fn layer(self, layer: impl Layer) -> Self {
+        Operator {
+            accessor: layer.layer(self.accessor.clone()),
+        }
     }
 
     pub fn inner(&self) -> Arc<dyn Accessor> {
