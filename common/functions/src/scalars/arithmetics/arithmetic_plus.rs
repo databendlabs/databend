@@ -93,7 +93,7 @@ impl ArithmeticPlusFunction {
 
         if right_type.is_date_or_date_time() {
             return with_match_date_type_error!(right_type, |$D| {
-                with_match_primitive_type_id!(left_type, |$T| { 
+                with_match_primitive_type_id!(left_type, |$T| {
                     BinaryArithmeticFunction::<$T, $D, $D, _>::try_create_func(
                         op,
                         args[1].clone(),

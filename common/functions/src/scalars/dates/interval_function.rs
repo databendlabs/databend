@@ -406,22 +406,7 @@ impl IntervalFunctionFactory {
     }
 
     // A private helper function to add/subtract month to/from days
-    fn days_plus_signed_months(days: i64, months: i64) -> Result<u32> {
-        let naive = NaiveDateTime::from_timestamp(0, 0).checked_add_signed(Duration::days(days));
-        if naive.is_none() {
-            return Err(ErrorCode::Overflow(format!(
-                "Overflow on date with days {}.",
-                days,
-            )));
-        }
-        let dt = DateTime::<Utc>::from_utc(naive.unwrap(), Utc);
-        let dt = Self::datetime_plus_signed_months(&dt, months)?;
-        let seconds_per_day = 24 * 3600;
-        Ok((dt.timestamp() / seconds_per_day) as u32)
-    }
-
-    // A private helper function to add/subtract month to/from days
-    fn date16_plus_month(days: i64, months: i64) -> Result<i32> {
+    fn days_plus_signed_months(days: i64, months: i64) -> Result<i32> {
         let date = Utc
             .ymd(1970, 1, 1)
             .checked_add_signed(Duration::days(days))

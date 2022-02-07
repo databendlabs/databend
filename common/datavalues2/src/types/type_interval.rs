@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::fmt;
+use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
@@ -30,15 +30,7 @@ pub struct IntervalType {
     kind: IntervalKind,
 }
 
-#[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Hash,
-)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IntervalKind {
     Year,
     Month,
