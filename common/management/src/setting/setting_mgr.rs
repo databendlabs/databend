@@ -36,12 +36,17 @@ pub struct SettingMgr {
 }
 
 impl SettingMgr {
-    #[allow(dead_code)]
-    pub fn new(kv_api: Arc<dyn KVApi>, tenant: &str) -> Self {
-        SettingMgr {
+    pub fn create(kv_api: Arc<dyn KVApi>, tenant: &str) -> Result<Self> {
+        if tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while setting mgr create)",
+            ));
+        }
+
+        Ok(SettingMgr {
             kv_api,
             setting_prefix: format!("{}/{}", USER_SETTING_API_KEY_PREFIX, tenant),
-        }
+        })
     }
 }
 

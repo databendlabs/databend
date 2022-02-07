@@ -20,19 +20,19 @@ use crate::users::UserApiProvider;
 impl UserApiProvider {
     // Set a setting.
     pub async fn set_setting(&self, tenant: &str, setting: UserSetting) -> Result<u64> {
-        let setting_api_provider = self.get_setting_api_client(tenant);
+        let setting_api_provider = self.get_setting_api_client(tenant)?;
         setting_api_provider.set_setting(setting).await
     }
 
     // Get all settings list.
     pub async fn get_settings(&self, tenant: &str) -> Result<Vec<UserSetting>> {
-        let setting_api_provider = self.get_setting_api_client(tenant);
+        let setting_api_provider = self.get_setting_api_client(tenant)?;
         setting_api_provider.get_settings().await
     }
 
     // Drop a setting by name.
     pub async fn drop_setting(&self, tenant: &str, name: &str) -> Result<()> {
-        let setting_api_provider = self.get_setting_api_client(tenant);
+        let setting_api_provider = self.get_setting_api_client(tenant)?;
         setting_api_provider.drop_setting(name, None).await
     }
 }

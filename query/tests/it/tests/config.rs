@@ -12,22 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod cache;
-pub mod fuse;
-pub mod github;
-pub mod index;
-pub mod memory;
-pub mod null;
-pub mod system;
+use databend_query::configs::Config;
 
-mod storage_context;
-mod storage_factory;
-mod storage_table;
-mod storage_table_read_plan;
+pub struct ConfigBuilder {
+    conf: Config,
+}
 
-pub use storage_context::StorageContext;
-pub use storage_factory::StorageCreator;
-pub use storage_factory::StorageDescription;
-pub use storage_factory::StorageFactory;
-pub use storage_table::Table;
-pub use storage_table_read_plan::ToReadDataSourcePlan;
+impl ConfigBuilder {
+    pub fn create() -> ConfigBuilder {
+        let mut conf = Config::default();
+        conf.query.tenant_id = "test".to_string();
+
+        ConfigBuilder { conf }
+    }
+
+    pub fn with_management_mode(&self) -> ConfigBuilder {
+        let mut conf = self.conf.clone();
+        conf.query.management_mode = true;
+        ConfigBuilder { conf }
+    }
+
+    pub fn config(&self) -> Config {
+        self.conf.clone()
+    }
+}
