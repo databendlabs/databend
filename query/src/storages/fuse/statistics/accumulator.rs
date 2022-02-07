@@ -74,7 +74,7 @@ impl StatisticsAccumulator {
             let mut min = DataValue::Null;
             let mut max = DataValue::Null;
 
-            let mins = eval_aggr("min", vec![], &[column_field], rows)?;
+            let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
             let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
 
             if mins.len() > 0 {

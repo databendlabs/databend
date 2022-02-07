@@ -43,7 +43,7 @@ impl<T: PrimitiveType> DateTimeSerializer<T> {
 
         match T::SIZE {
             4 => value.to_date_time(&self.tz),
-            8 => value.to_date_time64(&self.precision, &self.tz),
+            8 => value.to_date_time64(self.precision as usize, &self.tz),
             _ => unreachable!(),
         }
     }

@@ -294,6 +294,12 @@ where
             values: values.into(),
         }
     }
+
+    fn from_vecs(values: Vec<Self::OwnedItem>) -> Self {
+        PrimitiveColumn {
+            values: values.into(),
+        }
+    }
 }
 
 pub type UInt8Column = PrimitiveColumn<u8>;

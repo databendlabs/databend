@@ -83,13 +83,13 @@ pub fn reduce_block_stats<T: Borrow<BlockStatistics>>(
             let mins = eval_aggr(
                 "min",
                 vec![],
-                &[ColumnWithField::new(min, field.clone())],
+                &[ColumnWithField::new(min.clone(), field.clone())],
                 min.len(),
             )?;
             let maxs = eval_aggr(
                 "max",
                 vec![],
-                &[ColumnWithField::new(max, field.clone())],
+                &[ColumnWithField::new(max.clone(), field.clone())],
                 max.len(),
             )?;
 

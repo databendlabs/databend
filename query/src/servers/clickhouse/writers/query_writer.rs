@@ -14,25 +14,17 @@
 
 use std::borrow::Cow;
 
-use chrono::Date;
-use chrono::DateTime;
-use chrono_tz::Tz;
 use common_base::ProgressValues;
 use common_clickhouse_srv::connection::Connection;
 use common_clickhouse_srv::errors::Error as CHError;
 use common_clickhouse_srv::errors::Result as CHResult;
 use common_clickhouse_srv::errors::ServerError;
-use common_clickhouse_srv::types::column::ArcColumnData;
-use common_clickhouse_srv::types::column::ArcColumnWrapper;
-use common_clickhouse_srv::types::column::ColumnFrom;
 use common_clickhouse_srv::types::column::{self};
 use common_clickhouse_srv::types::Block;
 use common_clickhouse_srv::types::DateTimeType;
 use common_clickhouse_srv::types::SqlType;
 use common_datablocks::DataBlock;
 use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
-use common_datavalues2::with_match_scalar_type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
@@ -98,7 +90,7 @@ impl<'a> QueryWriter<'a> {
 
         match self.conn.write_block(&block).await {
             Ok(_) => Ok(()),
-            Err(error) => Err(ErrorCode::UnknownException(format!("{}", error))),
+            Err(error) => Err(ErrorCode::UnknownException(format!("{:?}", error))),
         }
     }
 
@@ -160,5 +152,78 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
 }
 
 pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<DataBlock> {
-    todo!()
+    let get_series = |block: &Block, index: usize| -> CHResult<ColumnRef> {
+        let col = &block.columns()[index];
+        match col.sql_type() {
+            SqlType::UInt8 => Ok(UInt8Column::from_iterator(col.iter::<u8>()?.copied()).arc()),
+            SqlType::UInt16 | SqlType::Date => {
+                Ok(UInt16Column::from_iterator(col.iter::<u16>()?.copied()).arc())
+            }
+            SqlType::UInt32 | SqlType::DateTime(DateTimeType::DateTime32) => {
+                Ok(UInt32Column::from_iterator(col.iter::<u32>()?.copied()).arc())
+            }
+            SqlType::UInt64 => Ok(UInt64Column::from_iterator(col.iter::<u64>()?.copied()).arc()),
+            SqlType::Int8 => Ok(Int8Column::from_iterator(col.iter::<i8>()?.copied()).arc()),
+            SqlType::Int16 => Ok(Int16Column::from_iterator(col.iter::<i16>()?.copied()).arc()),
+            SqlType::Int32 => Ok(Int32Column::from_iterator(col.iter::<i32>()?.copied()).arc()),
+            SqlType::Int64 => Ok(Int64Column::from_iterator(col.iter::<i64>()?.copied()).arc()),
+            SqlType::Float32 => Ok(Float32Column::from_iterator(col.iter::<f32>()?.copied()).arc()),
+            SqlType::Float64 => Ok(Float64Column::from_iterator(col.iter::<f64>()?.copied()).arc()),
+            SqlType::String => Ok(StringColumn::from_iterator(col.iter::<&[u8]>()?).arc()),
+            SqlType::FixedString(_) => {
+                Ok(StringColumn::from_iterator(col.iter::<&[u8]>()?).arc())
+            }
+
+            SqlType::Nullable(SqlType::UInt8) => Ok(Series::from_data(
+                col.iter::<Option<u8>>()?.map(|c| c.copied()),
+            )),
+            SqlType::Nullable(SqlType::UInt16) | SqlType::Nullable(SqlType::Date) => Ok(
+                Series::from_data(col.iter::<Option<u16>>()?.map(|c| c.copied())),
+            ),
+            SqlType::Nullable(SqlType::UInt32)
+            | SqlType::Nullable(SqlType::DateTime(DateTimeType::DateTime32)) => Ok(
+                Series::from_data(col.iter::<Option<u32>>()?.map(|c| c.copied())),
+            ),
+            SqlType::Nullable(SqlType::UInt64) => Ok(Series::from_data(
+                col.iter::<Option<u64>>()?.map(|c| c.copied()),
+            )),
+            SqlType::Nullable(SqlType::Int8) => Ok(Series::from_data(
+                col.iter::<Option<i8>>()?.map(|c| c.copied()),
+            )),
+            SqlType::Nullable(SqlType::Int16) => Ok(Series::from_data(
+                col.iter::<Option<i16>>()?.map(|c| c.copied()),
+            )),
+            SqlType::Nullable(SqlType::Int32) => Ok(Series::from_data(
+                col.iter::<Option<i32>>()?.map(|c| c.copied()),
+            )),
+            SqlType::Nullable(SqlType::Int64) => Ok(Series::from_data(
+                col.iter::<Option<i64>>()?.map(|c| c.copied()),
+            )),
+            SqlType::Nullable(SqlType::Float32) => Ok(Series::from_data(
+                col.iter::<Option<f32>>()?.map(|c| c.copied()),
+            )),
+            SqlType::Nullable(SqlType::Float64) => Ok(Series::from_data(
+                col.iter::<Option<f64>>()?.map(|c| c.copied()),
+            )),
+            SqlType::Nullable(SqlType::String) => {
+                Ok(Series::from_data(col.iter::<Option<&[u8]>>()?))
+            }
+            SqlType::Nullable(SqlType::FixedString(_)) => {
+                Ok(Series::from_data(col.iter::<Option<&[u8]>>()?))
+            }
+
+            other => Err(CHError::Other(Cow::from(format!(
+                "Unsupported type: {:?}",
+                other
+            )))),
+        }
+    };
+
+    let mut columns = vec![];
+    for index in 0..block.column_count() {
+        let array = get_series(&block, index);
+        let a2 = array.map_err(from_clickhouse_err);
+        columns.push(a2?);
+    }
+    Ok(DataBlock::create(schema, columns))
 }

@@ -68,7 +68,7 @@ mod enums;
 pub mod factory;
 pub(crate) mod fixed_string;
 mod ip;
-pub(crate) mod iter;
+pub mod iter;
 mod list;
 mod nullable;
 mod numeric;

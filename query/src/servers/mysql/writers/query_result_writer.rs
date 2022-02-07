@@ -15,9 +15,10 @@
 use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues2::prelude::TypeID;
-use common_datavalues2::{DataField, DateConverter};
+use common_datavalues2::DataField;
 use common_datavalues2::DataSchemaRef;
 use common_datavalues2::DataValue;
+use common_datavalues2::DateConverter;
 use common_datavalues2::DateTime32Type;
 use common_datavalues2::DateTime64Type;
 use common_exception::ErrorCode;
@@ -124,18 +125,6 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 (TypeID::Boolean, DataValue::Boolean(v)) => {
                                     row_writer.write_col(v as i8)?
                                 }
-
-                                (_, DataValue::Int64(v)) => {
-                                    row_writer.write_col(v)?
-                                }
-
-                                (_, DataValue::UInt64(v)) => {
-                                    row_writer.write_col(v)?
-                                }
-
-                                (_, DataValue::Float64(v)) => {
-                                    row_writer.write_col(v)?
-                                }
                                 (TypeID::Date16, DataValue::UInt64(v)) => {
                                     row_writer.write_col(v.to_date(&utc).naive_local())?
                                 }
@@ -156,10 +145,11 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     let tz = data_type.tz();
                                     let tz = tz.cloned().unwrap_or_else(|| "UTC".to_string());
                                     let tz: Tz = tz.parse().unwrap();
-                                    let fmt = format!("%Y-%m-%d %H:%M:%S%.{}f", data_type.precision());
+                                    let fmt =
+                                        format!("%Y-%m-%d %H:%M:%S%.{}f", data_type.precision());
 
                                     row_writer.write_col(
-                                        v.to_date_time64(precision, &tz)
+                                        v.to_date_time64(data_type.precision(), &tz)
                                             .naive_local()
                                             .format(fmt.as_str())
                                             .to_string(),
@@ -172,6 +162,11 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     let serializer = data_type.create_serializer();
                                     row_writer.write_col(serializer.serialize_value(&val)?)?
                                 }
+                                (_, DataValue::Int64(v)) => row_writer.write_col(v)?,
+
+                                (_, DataValue::UInt64(v)) => row_writer.write_col(v)?,
+
+                                (_, DataValue::Float64(v)) => row_writer.write_col(v)?,
                                 (_, v) => {
                                     return Err(ErrorCode::BadDataValueType(format!(
                                         "Unsupported column type:{:?}, expected type in schema: {:?}",

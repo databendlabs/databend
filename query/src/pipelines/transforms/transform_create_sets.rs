@@ -222,7 +222,7 @@ impl<'a> SubQueriesPuller<'a> {
 
             let mut struct_fields = Vec::with_capacity(columns.len());
 
-            for (data_type, values) in columns {
+            for (_, values) in columns {
                 struct_fields.push(DataValue::Array(values))
             }
 
