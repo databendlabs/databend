@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_meta_types::MetaId;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::Partitions;
@@ -30,6 +31,7 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::StreamExt;
 
+use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::TableSnapshot;
@@ -132,6 +134,15 @@ impl Table for FuseTable {
     async fn optimize(&self, ctx: Arc<QueryContext>, keep_last_snapshot: bool) -> Result<()> {
         self.do_optimize(ctx, keep_last_snapshot).await
     }
+
+    async fn rename(
+        &self,
+        ctx: Arc<QueryContext>,
+        old_col_name: &str,
+        new_col_name: &str,
+    ) -> Result<()> {
+        self.do_rename(ctx, old_col_name, new_col_name).await
+    }
 }
 
 impl FuseTable {
@@ -153,6 +164,24 @@ impl FuseTable {
         } else {
             Ok(None)
         }
+    }
+
+    pub(crate) async fn get_latest_table_by_id(
+        &self,
+        ctx: &QueryContext,
+        table_meta_id: MetaId,
+    ) -> Result<Arc<dyn Table>> {
+        let tid = self.table_info.ident.table_id;
+        let name = self.table_info.name.clone();
+        let catalog = ctx.get_catalog();
+        let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
+        let table_info: TableInfo = TableInfo {
+            ident,
+            desc: "".to_owned(),
+            name,
+            meta: meta.as_ref().clone(),
+        };
+        catalog.get_table_by_info(&table_info)
     }
 }
 

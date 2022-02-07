@@ -14,17 +14,18 @@
 
 use std::sync::Arc;
 
+use common_datavalues::DataType;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
 use common_planners::AlterTablePlan;
-use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
+use crate::storages::Table;
 
 pub struct AlterTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -45,7 +46,7 @@ impl Interpreter for AlterTableInterpreter {
 
     async fn execute(
         &self,
-        input_stream: Option<SendableDataBlockStream>,
+        _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         self.ctx.get_current_session().validate_privilege(
             &GrantObject::Table(
@@ -60,39 +61,37 @@ impl Interpreter for AlterTableInterpreter {
 
 impl AlterTableInterpreter {
     async fn apply(&self) -> Result<()> {
+        use common_planners::AlterTableOperation::*;
         match &self.plan.operation {
-            common_planners::AlterTableOperation::RenameColumn {
+            RenameColumn {
                 old_column_name,
                 new_column_name,
-            } => {
-                self.rename_column(&old_column_name, &new_column_name)
-                    .await?;
-                Ok(())
-            }
+            } => self.rename_column(&old_column_name, &new_column_name).await,
+            AddColumn {
+                column_name,
+                data_type,
+            } => self.add_column(column_name.as_str(), data_type).await,
+
             _ => todo!(),
         }
     }
-    async fn rename_column(
-        &self,
-        old_col_name: &str,
-        new_col_name: &str,
-    ) -> Result<SendableDataBlockStream> {
+
+    async fn add_column(&self, col_name: &str, data_type: &DataType) -> Result<()> {
+        todo!()
+    }
+
+    async fn rename_column(&self, old_col_name: &str, new_col_name: &str) -> Result<()> {
+        let table = self.get_table().await?;
+        table
+            .rename(self.ctx.clone(), old_col_name, new_col_name)
+            .await
+    }
+
+    async fn get_table(&self) -> Result<Arc<dyn Table>> {
         let catalog = self.ctx.get_catalog();
         let tenant = self.ctx.get_tenant();
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
-        let tbl = catalog.get_table(&tenant, db_name, tbl_name).await?;
-        let schema = tbl.get_table_info().schema();
-        //todo!()
-        //let new_schema = schema.rename(old_col_name, new_col_name)?;
-        //let tbl.update_schema()
-
-        //        catalog.create_table(self.plan.clone().into()).await?;
-
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        catalog.get_table(&tenant, db_name, tbl_name).await
     }
 }

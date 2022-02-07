@@ -23,7 +23,6 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
@@ -98,21 +97,15 @@ impl FuseTable {
                             );
                             common_base::tokio::time::sleep(d).await;
 
-                            let catalog = ctx.get_catalog();
-                            let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
-                            let table_info: TableInfo = TableInfo {
-                                ident,
-                                desc: "".to_owned(),
-                                name,
-                                meta: meta.as_ref().clone(),
-                            };
-                            latest = catalog.get_table_by_info(&table_info)?;
+                            latest = tbl.get_latest_table_by_id(&ctx, tid).await?;
+
                             tbl = latest.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
                                 ErrorCode::LogicalError(format!(
                                     "expects table engine FUSE, but got {}",
                                     latest.engine()
                                 ))
                             })?;
+
                             retry_times += 1;
                             continue;
                         }

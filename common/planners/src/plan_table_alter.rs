@@ -29,7 +29,7 @@ pub enum AlterTableOperation {
         column_name: String,
     },
 
-    // sqlparser support adding only one column at a time
+    // sqlparser supports adding only one column at a time
     AddColumn {
         column_name: String,
         data_type: DataType,

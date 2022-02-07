@@ -97,7 +97,7 @@ pub trait Table: Sync + Send {
         _stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         Err(ErrorCode::UnImplement(format!(
-            "append operation for table {} is not implemented, table engine is {}",
+            "Append operation is not implemented for table {} . Table's engine is {}",
             self.name(),
             self.get_table_info().meta.engine
         )))
@@ -118,12 +118,26 @@ pub trait Table: Sync + Send {
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
-            "truncate for table {} is not implemented",
-            self.name()
+            "Truncate operation is not implemented for table {} . Table's engine is {}",
+            self.name(),
+            self.get_table_info().meta.engine
         )))
     }
 
     async fn optimize(&self, _ctx: Arc<QueryContext>, _keep_last_snapshot: bool) -> Result<()> {
         Ok(())
+    }
+
+    async fn rename(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _old_col_name: &str,
+        _new_col_name: &str,
+    ) -> Result<()> {
+        Err(ErrorCode::UnImplement(format!(
+            "Rename operation is not implemented for table {} . Table's engine is {}",
+            self.name(),
+            self.get_table_info().meta.engine
+        )))
     }
 }
