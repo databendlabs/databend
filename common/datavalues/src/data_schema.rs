@@ -174,6 +174,7 @@ impl From<&ArrowSchema> for DataSchema {
     }
 }
 
+#[allow(clippy::needless_borrow)]
 impl From<ArrowSchema> for DataSchema {
     fn from(a_schema: ArrowSchema) -> Self {
         (&a_schema).into()

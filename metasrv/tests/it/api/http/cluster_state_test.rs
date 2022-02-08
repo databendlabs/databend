@@ -108,8 +108,7 @@ async fn test_cluster_state() -> common_exception::Result<()> {
     assert_eq!(response.status(), StatusCode::OK);
 
     let body = response.into_body().into_vec().await.unwrap();
-    let state =
-        serde_json::from_str::<serde_json::Value>((&String::from_utf8_lossy(&body)).as_ref())?;
+    let state = serde_json::from_str::<serde_json::Value>(String::from_utf8_lossy(&body).as_ref())?;
     let voters = state["voters"].as_array().unwrap();
     let non_voters = state["non_voters"].as_array().unwrap();
     assert_eq!(voters.len(), 2);
