@@ -58,7 +58,7 @@ impl BlockReader {
         reader: BlockMetaReader,
     ) -> Self {
         let block_schema = Arc::new(table_schema.project(projection.clone()));
-        let arrow_table_schema = table_schema.clone().to_arrow();
+        let arrow_table_schema = table_schema.to_arrow();
         Self {
             data_accessor,
             path,

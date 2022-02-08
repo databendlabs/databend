@@ -126,11 +126,12 @@ impl DataType for StructType {
                 for (i, v) in value.iter().enumerate() {
                     values[i].push(v.clone());
                 }
+            } else {
+                return Result::Err(ErrorCode::BadDataValueType(format!(
+                    "Unexpected type:{:?}, expect to be struct",
+                    data.value_type()
+                )));
             }
-            return Result::Err(ErrorCode::BadDataValueType(format!(
-                "Unexpected type:{:?}, expect to be struct",
-                data.value_type()
-            )));
         }
 
         let mut columns = Vec::with_capacity(self.types.len());
