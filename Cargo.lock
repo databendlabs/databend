@@ -2356,6 +2356,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "dal_context"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-base",
+ "common-dal2",
+ "common-datablocks",
+ "common-exception",
+ "common-infallible",
+]
+
+[[package]]
 name = "dashmap"
 version = "4.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

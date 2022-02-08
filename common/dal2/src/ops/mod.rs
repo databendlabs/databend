@@ -15,8 +15,7 @@
 mod header;
 pub use header::HeaderRange;
 
-mod object;
-pub use object::Object;
+pub use crate::object::Object;
 
 // Supported operations
 mod read;

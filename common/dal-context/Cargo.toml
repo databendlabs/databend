@@ -1,0 +1,15 @@
+[package]
+name = "dal_context"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common-base = { path = "../base" }
+common-datablocks = { path = "../datablocks" }
+common-exception = { path = "../exception" }
+common-infallible = { path = "../infallible" }
+common-dal2 = { path = "../dal2" }
+
+async-trait = "0.1.52"

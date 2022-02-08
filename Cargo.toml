@@ -9,6 +9,7 @@ members = [
     "common/containers",
     "common/dal",
     "common/dal2",
+    "common/dal-context",
     "common/datablocks",
     "common/datavalues",
     "common/datavalues2",
