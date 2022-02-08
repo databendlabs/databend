@@ -20,6 +20,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
 
+use crate::MetaStorageError;
+
 /// Top level error MetaNode would return.
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum MetaError {
@@ -34,6 +36,9 @@ pub enum MetaError {
 
     #[error(transparent)]
     ErrorCode(#[from] SerializedError),
+
+    #[error(transparent)]
+    MetaStorageError(MetaStorageError),
 
     #[error("{0}")]
     UnknownError(String),
@@ -79,12 +84,6 @@ pub enum MetaError {
 
     #[error("{0}")]
     UnknownTableId(String),
-
-    #[error("{0}")]
-    TransactionAbort(String),
-
-    #[error("{0}")]
-    TransactionError(String),
 
     #[error("{0}")]
     MetaSrvError(String),

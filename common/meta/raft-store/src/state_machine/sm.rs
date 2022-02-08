@@ -40,12 +40,15 @@ use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::MetaResult;
+use common_meta_types::MetaStorageError;
+use common_meta_types::MetaStorageResult;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
 use common_meta_types::ToMetaError;
+use common_meta_types::ToMetaStorageError;
 use common_tracing::tracing;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
@@ -170,7 +173,7 @@ impl StateMachine {
     /// - and a snapshot id
     pub fn snapshot(
         &self,
-    ) -> MetaResult<(
+    ) -> MetaStorageResult<(
         impl Iterator<Item = sled::Result<(IVec, IVec)>>,
         LogId,
         String,
@@ -200,11 +203,13 @@ impl StateMachine {
     /// no matter if there are other writes applied to the tree.
     pub fn serialize_snapshot(
         view: impl Iterator<Item = sled::Result<(IVec, IVec)>>,
-    ) -> MetaResult<Vec<u8>> {
+    ) -> MetaStorageResult<Vec<u8>> {
         let mut kvs = Vec::new();
         for rkv in view {
-            let (k, v) =
-                rkv.map_error_to_meta_error(MetaError::MetaStoreDamaged, || "taking snapshot")?;
+            let (k, v) = rkv
+                .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
+                    "taking snapshot"
+                })?;
             kvs.push(vec![k.to_vec(), v.to_vec()]);
         }
         let snap = SerializableSnapshot { kvs };
@@ -237,7 +242,7 @@ impl StateMachine {
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "debug", skip(self, entry), fields(log_id=%entry.log_id))]
-    pub async fn apply(&self, entry: &Entry<LogEntry>) -> MetaResult<AppliedState> {
+    pub async fn apply(&self, entry: &Entry<LogEntry>) -> MetaStorageResult<AppliedState> {
         tracing::debug!("apply: summary: {}", entry.summary());
         tracing::debug!("apply: payload: {:?}", entry.payload);
 
@@ -302,7 +307,7 @@ impl StateMachine {
         key: &str,
 
         txn_tree: &TransactionSledTree,
-    ) -> MetaResult<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let r = self.txn_incr_seq(key, txn_tree)?;
 
         Ok(r.into())
@@ -315,7 +320,7 @@ impl StateMachine {
         node: &Node,
 
         txn_tree: &TransactionSledTree,
-    ) -> MetaResult<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let sm_nodes = txn_tree.key_space::<Nodes>();
 
         let prev = sm_nodes.get(node_id)?;
@@ -336,7 +341,7 @@ impl StateMachine {
         name: &str,
         meta: &DatabaseMeta,
         txn_tree: &TransactionSledTree,
-    ) -> MetaResult<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let db_id = self.txn_incr_seq(SEQ_DATABASE_ID, txn_tree)?;
 
         let db_lookup_tree = txn_tree.key_space::<DatabaseLookup>();
@@ -397,9 +402,8 @@ impl StateMachine {
         &self,
         tenant: &str,
         name: &str,
-
         txn_tree: &TransactionSledTree,
-    ) -> MetaResult<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let dbs = txn_tree.key_space::<DatabaseLookup>();
 
         let (prev, result) = self.sub_txn_tree_upsert(
@@ -448,9 +452,8 @@ impl StateMachine {
         db_name: &str,
         table_name: &str,
         table_meta: &TableMeta,
-
         txn_tree: &TransactionSledTree,
-    ) -> MetaResult<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let db_id = self.txn_get_database_id(tenant, db_name, txn_tree)?;
 
         let lookup_key = TableLookupKey {
@@ -508,9 +511,8 @@ impl StateMachine {
         tenant: &str,
         db_name: &str,
         table_name: &str,
-
         txn_tree: &TransactionSledTree,
-    ) -> MetaResult<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let db_id = self.txn_get_database_id(tenant, db_name, txn_tree)?;
 
         let lookup_key = TableLookupKey {
@@ -552,9 +554,8 @@ impl StateMachine {
         seq: &MatchSeq,
         value_op: &Operation<Vec<u8>>,
         value_meta: &Option<KVMeta>,
-
         txn_tree: &TransactionSledTree,
-    ) -> MetaResult<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
         let (prev, result) = self.sub_txn_tree_upsert(
             &sub_tree,
@@ -573,7 +574,7 @@ impl StateMachine {
         &self,
         req: &common_meta_types::UpsertTableOptionReq,
         txn_tree: &TransactionSledTree,
-    ) -> MetaResult<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let table_tree = txn_tree.key_space::<Tables>();
         let prev = table_tree.get(&req.table_id)?;
 
@@ -623,7 +624,11 @@ impl StateMachine {
     /// This is the only entry to modify state machine.
     /// The `cmd` is always committed by raft before applying.
     #[tracing::instrument(level = "debug", skip(self, cmd, txn_tree))]
-    pub fn apply_cmd(&self, cmd: &Cmd, txn_tree: &TransactionSledTree) -> MetaResult<AppliedState> {
+    pub fn apply_cmd(
+        &self,
+        cmd: &Cmd,
+        txn_tree: &TransactionSledTree,
+    ) -> MetaStorageResult<AppliedState> {
         tracing::debug!("apply_cmd: {:?}", cmd);
 
         match cmd {
@@ -850,7 +855,7 @@ impl StateMachine {
         Ok(value.1)
     }
 
-    pub fn get_membership(&self) -> MetaResult<Option<EffectiveMembership>> {
+    pub fn get_membership(&self) -> MetaStorageResult<Option<EffectiveMembership>> {
         let sm_meta = self.sm_meta();
         let mem = sm_meta
             .get(&StateMachineMetaKey::LastMembership)?
@@ -859,7 +864,7 @@ impl StateMachine {
         Ok(mem)
     }
 
-    pub fn get_last_applied(&self) -> MetaResult<Option<LogId>> {
+    pub fn get_last_applied(&self) -> MetaStorageResult<Option<LogId>> {
         let sm_meta = self.sm_meta();
         let last_applied = sm_meta
             .get(&LastApplied)?
@@ -901,12 +906,18 @@ impl StateMachine {
 
     pub fn get_node(&self, node_id: &NodeId) -> MetaResult<Option<Node>> {
         let sm_nodes = self.nodes();
-        sm_nodes.get(node_id)
+        match sm_nodes.get(node_id) {
+            Ok(e) => Ok(e),
+            Err(e) => Err(e.into()),
+        }
     }
 
     pub fn get_nodes(&self) -> MetaResult<Vec<Node>> {
         let sm_nodes = self.nodes();
-        sm_nodes.range_values(..)
+        match sm_nodes.range_values(..) {
+            Ok(e) => Ok(e),
+            Err(e) => Err(e.into()),
+        }
     }
 
     pub fn get_database_meta_by_id(&self, db_id: &u64) -> MetaResult<SeqV<DatabaseMeta>> {
@@ -1007,12 +1018,15 @@ impl StateMachine {
         db_id: u64,
         name: &str,
     ) -> Result<Option<SeqV<TableLookupValue>>, MetaError> {
-        self.table_lookup().get(
+        match self.table_lookup().get(
             &(TableLookupKey {
                 database_id: db_id,
                 table_name: name.to_string(),
             }),
-        )
+        ) {
+            Ok(e) => Ok(e),
+            Err(e) => Err(e.into()),
+        }
     }
 }
 

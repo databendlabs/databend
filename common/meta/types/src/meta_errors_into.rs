@@ -19,6 +19,7 @@ use common_exception::SerializedError;
 
 use crate::MetaError;
 use crate::MetaResult;
+use crate::MetaStorageError;
 
 impl From<ErrorCode> for MetaError {
     fn from(e: ErrorCode) -> Self {
@@ -38,9 +39,15 @@ impl From<MetaError> for ErrorCode {
     }
 }
 
+impl From<MetaStorageError> for MetaError {
+    fn from(e: MetaStorageError) -> Self {
+        MetaError::MetaStorageError(e)
+    }
+}
+
 impl From<serde_json::Error> for MetaError {
     fn from(error: serde_json::Error) -> Self {
-        MetaError::SerdeJsonError(format!("{}", error))
+        MetaError::MetaStorageError(error.into())
     }
 }
 
@@ -95,34 +102,6 @@ where E: Display + Send + Sync + 'static
             let err_text = format!("{}, cause: {}", context_fn(), error);
             make_exception(err_text)
         })
-    }
-}
-
-// ser/de to/from sled::transaction::TransactionError,sled::transaction::ConflictableTransactionError
-impl<T: Display> From<sled::transaction::ConflictableTransactionError<T>> for MetaError {
-    fn from(error: sled::transaction::ConflictableTransactionError<T>) -> Self {
-        match error {
-            sled::transaction::ConflictableTransactionError::Abort(e) => {
-                MetaError::TransactionAbort(format!("Transaction abort, cause: {}", e))
-            }
-            sled::transaction::ConflictableTransactionError::Storage(e) => {
-                MetaError::TransactionError(format!("Transaction storage error, cause: {}", e))
-            }
-            _ => MetaError::MetaSrvError(String::from("Unexpect transaction error")),
-        }
-    }
-}
-
-impl<E: Display> From<sled::transaction::TransactionError<E>> for MetaError {
-    fn from(error: sled::transaction::TransactionError<E>) -> Self {
-        match error {
-            sled::transaction::TransactionError::Abort(e) => {
-                MetaError::TransactionAbort(format!("Transaction abort, cause: {}", e))
-            }
-            sled::transaction::TransactionError::Storage(e) => {
-                MetaError::TransactionError(format!("Transaction storage error, cause :{}", e))
-            }
-        }
     }
 }
 

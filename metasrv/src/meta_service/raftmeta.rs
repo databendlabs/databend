@@ -620,12 +620,15 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        sm.table_lookup().get(
+        match sm.table_lookup().get(
             &(TableLookupKey {
                 database_id: db_id,
                 table_name: name.to_string(),
             }),
-        )
+        ) {
+            Ok(e) => Ok(e),
+            Err(e) => Err(e.into()),
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

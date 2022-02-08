@@ -17,7 +17,7 @@ use std::fmt;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::SledOrderedSerde;
-use common_meta_types::MetaError;
+use common_meta_types::MetaStorageError;
 use openraft::LogId;
 use serde::Deserialize;
 use serde::Serialize;
@@ -48,7 +48,7 @@ impl fmt::Display for LogMetaKey {
 }
 
 impl SledOrderedSerde for LogMetaKey {
-    fn ser(&self) -> Result<IVec, MetaError> {
+    fn ser(&self) -> Result<IVec, MetaStorageError> {
         let i = match self {
             LogMetaKey::LastPurged => 1,
         };
@@ -56,14 +56,14 @@ impl SledOrderedSerde for LogMetaKey {
         Ok(IVec::from(&[i]))
     }
 
-    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, MetaError>
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, MetaStorageError>
     where Self: Sized {
         let slice = v.as_ref();
         if slice[0] == 1 {
             return Ok(LogMetaKey::LastPurged);
         }
 
-        Err(MetaError::MetaStoreDamaged(String::from(
+        Err(MetaStorageError::MetaStoreDamaged(String::from(
             "invalid key IVec",
         )))
     }

@@ -19,7 +19,7 @@ use std::fmt::Display;
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
-use common_meta_types::MetaError;
+use common_meta_types::MetaStorageError;
 use sled::IVec;
 
 use crate::SledOrderedSerde;
@@ -40,7 +40,7 @@ pub trait SledKeySpace {
     /// Type for value.
     type V: SledSerde + Debug;
 
-    fn serialize_key(k: &Self::K) -> Result<sled::IVec, MetaError> {
+    fn serialize_key(k: &Self::K) -> Result<sled::IVec, MetaStorageError> {
         let b = <Self::K as SledOrderedSerde>::ser(k)?;
         let x = b.as_ref();
 
@@ -51,24 +51,26 @@ pub trait SledKeySpace {
         Ok(buf.into())
     }
 
-    fn deserialize_key<T: AsRef<[u8]>>(iv: T) -> Result<Self::K, MetaError> {
+    fn deserialize_key<T: AsRef<[u8]>>(iv: T) -> Result<Self::K, MetaStorageError> {
         let b = iv.as_ref();
         if b[0] != Self::PREFIX {
-            return Err(MetaError::MetaStoreDamaged(String::from("invalid prefix")));
+            return Err(MetaStorageError::MetaStoreDamaged(String::from(
+                "invalid prefix",
+            )));
         }
         <Self::K as SledOrderedSerde>::de(&b[1..])
     }
 
-    fn serialize_value(v: &Self::V) -> Result<sled::IVec, MetaError> {
+    fn serialize_value(v: &Self::V) -> Result<sled::IVec, MetaStorageError> {
         v.ser()
     }
 
-    fn deserialize_value<T: AsRef<[u8]>>(iv: T) -> Result<Self::V, MetaError> {
+    fn deserialize_value<T: AsRef<[u8]>>(iv: T) -> Result<Self::V, MetaStorageError> {
         Self::V::de(iv)
     }
 
     /// Convert range of user key to range of sled::IVec for query.
-    fn serialize_range<R>(range: &R) -> Result<(Bound<IVec>, Bound<IVec>), MetaError>
+    fn serialize_range<R>(range: &R) -> Result<(Bound<IVec>, Bound<IVec>), MetaStorageError>
     where R: RangeBounds<Self::K> {
         let s = range.start_bound();
         let e = range.end_bound();
@@ -83,7 +85,10 @@ pub trait SledKeySpace {
     /// A u8 prefix is prepended to the bound value and an open bound is converted to a namespaced bound.
     /// E.g., use the [PREFIX] as the left side closed bound,
     /// and use the [PREFIX+1] as the right side open bound.
-    fn serialize_bound(v: Bound<&Self::K>, dir: &str) -> Result<Bound<sled::IVec>, MetaError> {
+    fn serialize_bound(
+        v: Bound<&Self::K>,
+        dir: &str,
+    ) -> Result<Bound<sled::IVec>, MetaStorageError> {
         let res = match v {
             Bound::Included(v) => Bound::Included(Self::serialize_key(v)?),
             Bound::Excluded(v) => Bound::Excluded(Self::serialize_key(v)?),

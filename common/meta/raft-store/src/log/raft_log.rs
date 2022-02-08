@@ -21,7 +21,7 @@ use common_meta_sled_store::SledTree;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::LogIndex;
-use common_meta_types::MetaResult;
+use common_meta_types::MetaStorageResult;
 use common_tracing::tracing;
 use openraft::raft::Entry;
 
@@ -42,7 +42,7 @@ pub struct RaftLog {
 impl RaftLog {
     /// Open RaftLog
     #[tracing::instrument(level = "info", skip(db,config), fields(config_id=%config.config_id))]
-    pub async fn open(db: &sled::Db, config: &RaftConfig) -> MetaResult<RaftLog> {
+    pub async fn open(db: &sled::Db, config: &RaftConfig) -> MetaStorageResult<RaftLog> {
         tracing::info!(?config);
 
         let tree_name = config.tree_name(TREE_RAFT_LOG);
@@ -51,26 +51,26 @@ impl RaftLog {
         Ok(rl)
     }
 
-    pub fn contains_key(&self, key: &LogIndex) -> MetaResult<bool> {
+    pub fn contains_key(&self, key: &LogIndex) -> MetaStorageResult<bool> {
         self.logs().contains_key(key)
     }
 
-    pub fn get(&self, key: &LogIndex) -> MetaResult<Option<Entry<LogEntry>>> {
+    pub fn get(&self, key: &LogIndex) -> MetaStorageResult<Option<Entry<LogEntry>>> {
         self.logs().get(key)
     }
 
-    pub fn last(&self) -> MetaResult<Option<(LogIndex, Entry<LogEntry>)>> {
+    pub fn last(&self) -> MetaStorageResult<Option<(LogIndex, Entry<LogEntry>)>> {
         self.logs().last()
     }
 
-    pub async fn set_last_purged(&self, log_id: LogId) -> MetaResult<()> {
+    pub async fn set_last_purged(&self, log_id: LogId) -> MetaStorageResult<()> {
         self.log_meta()
             .insert(&LogMetaKey::LastPurged, &LogMetaValue::LogId(log_id))
             .await?;
         Ok(())
     }
 
-    pub fn get_last_purged(&self) -> MetaResult<Option<LogId>> {
+    pub fn get_last_purged(&self) -> MetaStorageResult<Option<LogId>> {
         let res = self.log_meta().get(&LogMetaKey::LastPurged)?;
         match res {
             None => Ok(None),
@@ -96,7 +96,7 @@ impl RaftLog {
     ///    In this case, atomic delete is quite enough(to not leave a hole).
     ///    If the system allows logs hole, non-atomic delete is quite enough(depends on the upper layer).
     ///
-    pub async fn range_remove<R>(&self, range: R) -> MetaResult<()>
+    pub async fn range_remove<R>(&self, range: R) -> MetaStorageResult<()>
     where R: RangeBounds<LogIndex> {
         self.logs().range_remove(range, true).await
     }
@@ -105,19 +105,21 @@ impl RaftLog {
     pub fn range<R>(
         &self,
         range: R,
-    ) -> MetaResult<impl DoubleEndedIterator<Item = MetaResult<(LogIndex, Entry<LogEntry>)>>>
+    ) -> MetaStorageResult<
+        impl DoubleEndedIterator<Item = MetaStorageResult<(LogIndex, Entry<LogEntry>)>>,
+    >
     where
         R: RangeBounds<LogIndex>,
     {
         self.logs().range(range)
     }
 
-    pub fn range_keys<R>(&self, range: R) -> MetaResult<Vec<LogIndex>>
+    pub fn range_keys<R>(&self, range: R) -> MetaStorageResult<Vec<LogIndex>>
     where R: RangeBounds<LogIndex> {
         self.logs().range_keys(range)
     }
 
-    pub fn range_values<R>(&self, range: R) -> MetaResult<Vec<Entry<LogEntry>>>
+    pub fn range_values<R>(&self, range: R) -> MetaStorageResult<Vec<Entry<LogEntry>>>
     where R: RangeBounds<LogIndex> {
         self.logs().range_values(range)
     }
@@ -127,13 +129,16 @@ impl RaftLog {
     /// There is no overriding check either. It always overrides the existent ones.
     ///
     /// When this function returns the logs are guaranteed to be fsync-ed.
-    pub async fn append(&self, logs: &[Entry<LogEntry>]) -> MetaResult<()> {
+    pub async fn append(&self, logs: &[Entry<LogEntry>]) -> MetaStorageResult<()> {
         self.logs().append_values(logs).await
     }
 
     /// Insert a single log.
     #[tracing::instrument(level = "debug", skip(self, log), fields(log_id=format!("{}",log.log_id).as_str()))]
-    pub async fn insert(&self, log: &Entry<LogEntry>) -> MetaResult<Option<Entry<LogEntry>>> {
+    pub async fn insert(
+        &self,
+        log: &Entry<LogEntry>,
+    ) -> MetaStorageResult<Option<Entry<LogEntry>>> {
         self.logs().insert_value(log).await
     }
 
