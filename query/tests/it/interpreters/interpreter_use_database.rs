@@ -23,7 +23,7 @@ use pretty_assertions::assert_eq;
 async fn test_use_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = PlanParser::parse("USE default", ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), "USE default").await?;
     let interpreter = InterpreterFactory::get(ctx, plan)?;
     assert_eq!(interpreter.name(), "UseDatabaseInterpreter");
 
@@ -37,7 +37,7 @@ async fn test_use_interpreter() -> Result<()> {
 async fn test_use_database_interpreter_error() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = PlanParser::parse("USE xx", ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), "USE xx").await?;
     let interpreter = InterpreterFactory::get(ctx, plan)?;
 
     if let Err(e) = interpreter.execute(None).await {

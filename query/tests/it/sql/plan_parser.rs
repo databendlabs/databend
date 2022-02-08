@@ -239,7 +239,7 @@ async fn test_plan_parser() -> Result<()> {
 
     let ctx = crate::tests::create_query_context()?;
     for t in tests {
-        match PlanParser::parse(t.sql, ctx.clone()).await {
+        match PlanParser::parse(ctx.clone(), t.sql).await {
             Ok(v) => {
                 assert_eq!(t.expect, format!("{:?}", v), "{}", t.name);
             }

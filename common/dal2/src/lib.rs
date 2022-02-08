@@ -20,8 +20,14 @@ mod accessor;
 pub use accessor::Accessor;
 pub use accessor::Reader;
 
+mod layer;
+pub use layer::Layer;
+
 mod operator;
 pub use operator::Operator;
+
+mod object;
+pub use object::Object;
 
 pub mod credential;
 pub mod error;

@@ -25,29 +25,29 @@ async fn test_truncate_table_interpreter() -> Result<()> {
 
     // Create table.
     {
-        static TEST_CREATE_QUERY: &str = "\
+        let query = "\
             CREATE TABLE default.a(\
                 a String, b String\
             ) Engine = Memory\
         ";
 
-        let plan = PlanParser::parse(TEST_CREATE_QUERY, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = interpreter.execute(None).await?;
     }
 
     // Insert into.
     {
-        static TEST_INSERT_QUERY: &str = "INSERT INTO default.a VALUES('1,1', '2,2')";
-        let plan = PlanParser::parse(TEST_INSERT_QUERY, ctx.clone()).await?;
+        let query = "INSERT INTO default.a VALUES('1,1', '2,2')";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = executor.execute(None).await?;
     }
 
     // select.
     {
-        static TEST_SELECT_QUERY: &str = "SELECT * FROM default.a";
-        let plan = PlanParser::parse(TEST_SELECT_QUERY, ctx.clone()).await?;
+        let query = "SELECT * FROM default.a";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let stream = interpreter.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -63,8 +63,8 @@ async fn test_truncate_table_interpreter() -> Result<()> {
 
     // truncate table.
     {
-        static TEST_TRUNCATE_QUERY: &str = "TRUNCATE TABLE default.a";
-        let plan = PlanParser::parse(TEST_TRUNCATE_QUERY, ctx.clone()).await?;
+        let query = "TRUNCATE TABLE default.a";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(interpreter.name(), "TruncateTableInterpreter");
 
@@ -76,8 +76,8 @@ async fn test_truncate_table_interpreter() -> Result<()> {
 
     // select.
     {
-        static TEST_SELECT_QUERY: &str = "SELECT * FROM default.a";
-        let plan = PlanParser::parse(TEST_SELECT_QUERY, ctx.clone()).await?;
+        let query = "SELECT * FROM default.a";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let stream = interpreter.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;

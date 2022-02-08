@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// https://github.com/rust-lang/rust-clippy/issues/8334
+#![allow(clippy::ptr_arg)]
+
 use std::sync::Arc;
 
 use common_tracing::tracing;

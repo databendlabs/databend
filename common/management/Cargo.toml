@@ -23,9 +23,9 @@ common-functions= {path = "../functions"}
 common-ast= {path = "../ast"}
 
 async-trait = "0.1.52"
-serde = { version = "1.0.133", features = ["derive"] }
-serde_json = "1.0.74"
-tempfile = "3.2.0"
+serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1.0.78"
+tempfile = "3.3.0"
 
 
 [dev-dependencies]
@@ -33,4 +33,4 @@ common-base = { path = "../base" }
 common-meta-embedded = {path = "../meta/embedded" }
 
 mockall = "0.11.0"
-tempfile = "3.2.0"
+tempfile = "3.3.0"

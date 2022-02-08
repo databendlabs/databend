@@ -96,7 +96,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
     ];
 
     for tt in tests {
-        let plan = PlanParser::parse(&tt.query, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), &tt.query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "GrantPrivilegeInterpreter");
         let r = match executor.execute(None).await {

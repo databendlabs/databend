@@ -16,6 +16,9 @@
 //! insipration for the crate*
 //!
 
+// https://github.com/rust-lang/rust-clippy/issues/8334
+#![allow(clippy::ptr_arg)]
+
 #[macro_use]
 mod macros;
 

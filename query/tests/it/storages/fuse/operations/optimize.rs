@@ -60,7 +60,7 @@ async fn insert_test_data(qry: &str, fixture: &TestFixture) -> Result<()> {
     append_sample_data(1, fixture).await?;
     // then, overwrite the table, new data set: 1 block, 1 segment, 1 snapshot
     append_sample_data_overwrite(1, true, fixture).await?;
-    execute_command(qry, ctx.clone()).await?;
+    execute_command(ctx.clone(), qry).await?;
     Ok(())
 }
 
@@ -86,7 +86,7 @@ async fn test_fuse_history_optimize_compact() -> Result<()> {
 
     // optimize compact
     let qry = format!("optimize table '{}'.'{}' compact", db, tbl);
-    execute_command(qry.as_str(), ctx.clone()).await?;
+    execute_command(fixture.ctx(), qry.as_str()).await?;
 
     // optimize compact should keep the histories
     // there should be 6 history items there, 5 for the above insertions, 1 for that compaction
@@ -101,7 +101,7 @@ async fn test_fuse_history_optimize_compact() -> Result<()> {
 
     expects_ok(
         "count_should_be_1",
-        execute_query(qry.as_str(), fixture.ctx()).await,
+        execute_query(fixture.ctx(), qry.as_str()).await,
         expected,
     )
     .await

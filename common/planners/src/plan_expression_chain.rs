@@ -59,7 +59,7 @@ impl ExpressionChain {
 
             fn post_visit(self, expr: &Expression) -> Result<Self> {
                 unsafe {
-                    (&mut *self.0).add_expr(expr)?;
+                    (*self.0).add_expr(expr)?;
                     Ok(self)
                 }
             }

@@ -23,7 +23,7 @@ use pretty_assertions::assert_eq;
 async fn test_drop_database_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = PlanParser::parse("drop database default", ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), "drop database default").await?;
     let executor = InterpreterFactory::get(ctx, plan.clone())?;
     assert_eq!(executor.name(), "DropDatabaseInterpreter");
     let stream = executor.execute(None).await?;

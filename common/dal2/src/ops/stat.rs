@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::error::Result;
-use crate::ops::Object;
+use crate::Object;
 use crate::Operator;
 
 pub struct OpStat {
