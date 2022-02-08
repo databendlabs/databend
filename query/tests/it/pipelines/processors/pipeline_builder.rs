@@ -174,7 +174,7 @@ async fn test_local_pipeline_builds() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
     for test in tests {
         // Plan build check.
-        let plan = PlanParser::parse(test.query, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), test.query).await?;
         let actual_plan = format!("{:?}", plan);
         assert_eq!(test.plan, actual_plan, "{:#?}", test.name);
 

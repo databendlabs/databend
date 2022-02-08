@@ -35,7 +35,7 @@ async fn test_drop_stage_interpreter() -> Result<()> {
     static DROP_STAGE: &str = "DROP STAGE test_stage";
 
     {
-        let plan = PlanParser::parse(CREATE_STAGE, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), CREATE_STAGE).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatStageInterpreter");
         let mut stream = executor.execute(None).await?;
@@ -54,7 +54,7 @@ async fn test_drop_stage_interpreter() -> Result<()> {
     }
 
     {
-        let plan = PlanParser::parse(DROP_STAGE, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), DROP_STAGE).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropStageInterpreter");
         let res = executor.execute(None).await;
@@ -62,7 +62,7 @@ async fn test_drop_stage_interpreter() -> Result<()> {
     }
 
     {
-        let plan = PlanParser::parse(DROP_STAGE_IF_EXISTS, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), DROP_STAGE_IF_EXISTS).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropStageInterpreter");
         let res = executor.execute(None).await;
@@ -70,7 +70,7 @@ async fn test_drop_stage_interpreter() -> Result<()> {
     }
 
     {
-        let plan = PlanParser::parse(DROP_STAGE, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), DROP_STAGE).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropStageInterpreter");
         let res = executor.execute(None).await;
@@ -78,7 +78,7 @@ async fn test_drop_stage_interpreter() -> Result<()> {
     }
 
     {
-        let plan = PlanParser::parse(CREATE_STAGE, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), CREATE_STAGE).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatStageInterpreter");
         let mut stream = executor.execute(None).await?;
@@ -97,7 +97,7 @@ async fn test_drop_stage_interpreter() -> Result<()> {
     }
 
     {
-        let plan = PlanParser::parse(DROP_STAGE_IF_EXISTS, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), DROP_STAGE_IF_EXISTS).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropStageInterpreter");
         let res = executor.execute(None).await;

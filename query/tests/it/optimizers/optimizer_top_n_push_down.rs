@@ -22,7 +22,7 @@ async fn test_simple() -> Result<()> {
     let query = "select number from numbers(1000) order by number limit 10;";
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = PlanParser::parse(query, ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), query).await?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -43,7 +43,7 @@ async fn test_simple_with_offset() -> Result<()> {
     let query = "select number from numbers(1000) order by number limit 10 offset 5;";
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = PlanParser::parse(query, ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), query).await?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -65,7 +65,7 @@ async fn test_nested_projection() -> Result<()> {
         "select number from (select * from numbers(1000) order by number limit 11) limit 10;";
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = PlanParser::parse(query, ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), query).await?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -89,7 +89,7 @@ async fn test_aggregate() -> Result<()> {
         "select sum(number) FROM numbers(1000) group by number % 10 order by sum(number) limit 5;";
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = PlanParser::parse(query, ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), query).await?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -142,7 +142,7 @@ async fn test_monotonic_function() -> Result<()> {
 
     for test in tests {
         let ctx = crate::tests::create_query_context()?;
-        let plan = PlanParser::parse(test.query, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), test.query).await?;
         let mut optimizer = Optimizers::without_scatters(ctx);
 
         let optimized_plan = optimizer.optimize(&plan)?;

@@ -34,7 +34,7 @@ use crate::sql::DfStatement;
 pub struct PlanParser;
 
 impl PlanParser {
-    pub async fn parse(query: &str, ctx: Arc<QueryContext>) -> Result<PlanNode> {
+    pub async fn parse(ctx: Arc<QueryContext>, query: &str) -> Result<PlanNode> {
         let (statements, _) = DfParser::parse_sql(query)?;
         PlanParser::build_plan(statements, ctx).await
     }

@@ -210,7 +210,7 @@ async fn test_scatter_optimizer() -> Result<()> {
                 .with_local_id("dummy_local"),
         )?;
 
-        let plan = PlanParser::parse(test.query, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), test.query).await?;
         let mut optimizer = ScattersOptimizer::create(ctx);
         let optimized = optimizer.optimize(&plan)?;
         let actual = format!("{:?}", optimized);

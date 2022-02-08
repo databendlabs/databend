@@ -52,7 +52,7 @@ async fn test_alter_user_interpreter() -> Result<()> {
         name, hostname, new_password
     );
 
-    let plan = PlanParser::parse(&test_query, ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), &test_query).await?;
     let executor = InterpreterFactory::get(ctx, plan.clone())?;
     assert_eq!(executor.name(), "AlterUserInterpreter");
     let mut stream = executor.execute(None).await?;

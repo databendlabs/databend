@@ -114,14 +114,14 @@ async fn test_management_mode_access() -> Result<()> {
     let ctx = crate::tests::create_query_context_with_config(conf.clone())?;
     // First to set tenant.
     {
-        let plan = PlanParser::parse("SUDO USE TENANT 'test'", ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), "SUDO USE TENANT 'test'").await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
         let _ = interpreter.execute(None).await?;
     }
 
     for group in groups {
         for test in group.tests {
-            let plan = PlanParser::parse(test.query, ctx.clone()).await?;
+            let plan = PlanParser::parse(ctx.clone(), test.query).await?;
             let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
             let res = interpreter.execute(None).await;
             assert_eq!(

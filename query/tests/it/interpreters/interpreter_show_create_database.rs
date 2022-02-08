@@ -25,7 +25,7 @@ async fn test_show_create_database_interpreter() -> Result<()> {
 
     // show create database default
     {
-        let plan = PlanParser::parse("show create database default", ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), "show create database default").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowCreateDatabaseInterpreter");
         let stream = executor.execute(None).await?;
@@ -42,7 +42,7 @@ async fn test_show_create_database_interpreter() -> Result<()> {
 
     // show create database system
     {
-        let plan = PlanParser::parse("show create database system", ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), "show create database system").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowCreateDatabaseInterpreter");
         let stream = executor.execute(None).await?;

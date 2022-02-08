@@ -256,7 +256,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     // do compact
     let query = format!("optimize table {}.{} compact", db_name, tbl_name);
 
-    let plan = PlanParser::parse(&query, ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), &query).await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
     // `PipelineBuilder` will parallelize the table reading according to value of setting `max_threads`,
