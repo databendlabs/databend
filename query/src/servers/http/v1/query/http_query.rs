@@ -47,18 +47,18 @@ pub struct HttpQueryRequest {
 
 #[derive(Deserialize, Debug)]
 pub struct PaginationConf {
-    pub(crate) wait_time: Option<i32>,
+    pub(crate) wait_time_secs: i32,
 }
 
 impl Default for PaginationConf {
     fn default() -> Self {
-        PaginationConf { wait_time: Some(1) }
+        PaginationConf { wait_time_secs: 1 }
     }
 }
 
 impl PaginationConf {
     pub(crate) fn get_wait_type(&self) -> Wait {
-        let t = self.wait_time.unwrap_or(10);
+        let t = self.wait_time_secs;
         match t.cmp(&0) {
             Ordering::Greater => Wait::Deadline(Instant::now() + Duration::from_secs(t as u64)),
             Ordering::Equal => Wait::Async,
@@ -126,7 +126,7 @@ impl HttpQuery {
     }
 
     pub fn is_async(&self) -> bool {
-        self.request.pagination.wait_time == Some(0)
+        self.request.pagination.wait_time_secs == 0
     }
 
     pub async fn get_response_page(

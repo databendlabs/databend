@@ -15,7 +15,6 @@
 use std::fs::File;
 use std::io::Read;
 use std::time::Duration;
-use std::time::Instant;
 
 use base64::encode_config;
 use base64::URL_SAFE_NO_PAD;
@@ -97,7 +96,7 @@ async fn test_bad_sql() -> Result<()> {
 async fn test_async() -> Result<()> {
     let ep = create_endpoint();
     let sql = "select sleep(0.2)";
-    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time": 0}});
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK);
@@ -163,24 +162,19 @@ async fn test_result_timeout() -> Result<()> {
         .nest("/v1/query", query_route())
         .with(HTTPSessionMiddleware { session_manager });
 
-    let t0 = Instant::now();
     let sql = "select sleep(0.1)";
-    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time": 0}});
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK);
     let query_id = result.id;
     let next_uri = make_page_uri(&query_id, 0);
     assert_eq!(result.next_uri, Some(next_uri.clone()));
 
-    println!("t0 {}", t0.elapsed().as_millis());
     sleep(Duration::from_millis(110)).await;
-    println!("t1 {}", t0.elapsed().as_millis());
     let response = get_uri(&ep, &next_uri).await;
     assert_eq!(response.status(), StatusCode::OK);
 
-    println!("t2 {}", t0.elapsed().as_millis());
     sleep(std::time::Duration::from_millis(210)).await;
-    println!("t3 {}", t0.elapsed().as_millis());
     let response = get_uri(&ep, &next_uri).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     Ok(())
@@ -194,7 +188,7 @@ async fn test_multi_page() -> Result<()> {
     let num_parts = num_cpus::get();
     let sql = format!("select * from numbers({})", max_block_size * num_parts);
 
-    let json = serde_json::json!({"sql": sql.to_string(),  "pagination": {"wait_time": 3}});
+    let json = serde_json::json!({"sql": sql.to_string(),  "pagination": {"wait_time_secs": 3}});
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(result.data.len(), max_block_size);
@@ -230,7 +224,7 @@ async fn test_insert() -> Result<()> {
     ];
 
     for (sql, data_len) in sqls {
-        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time": 3}});
+        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 3}});
         let (status, result) = post_json_to_endpoint(&route, &json).await?;
         assert_eq!(status, StatusCode::OK);
         assert!(result.error.is_none(), "{:?}", result.error);
@@ -275,8 +269,8 @@ async fn get_uri_checked(ep: &EndpointType, uri: &str) -> Result<(StatusCode, Qu
     check_response(response).await
 }
 
-async fn post_sql(sql: &str, wait_time: i32) -> Result<(StatusCode, QueryResponse)> {
-    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time": wait_time}});
+async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryResponse)> {
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
     post_json(&json).await
 }
 
@@ -295,9 +289,9 @@ async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryRespons
 async fn post_sql_to_endpoint(
     ep: &EndpointType,
     sql: &str,
-    wait_time: i32,
+    wait_time_secs: u64,
 ) -> Result<(StatusCode, QueryResponse)> {
-    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time": wait_time}});
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
     post_json_to_endpoint(ep, &json).await
 }
 
@@ -408,7 +402,7 @@ async fn test_auth_post(ep: &EndpointType, user_name: &str, header: impl Header)
     let json = serde_json::json!({"sql": sql.to_string()});
 
     let path = "/v1/query";
-    let uri = format!("{}?wait_time={}", path, 3);
+    let uri = format!("{}?wait_time_secs={}", path, 3);
     let content_type = "application/json";
     let body = serde_json::to_vec(&json)?;
 

@@ -52,7 +52,7 @@ pub async fn statement_handler(
     let req = HttpQueryRequest {
         sql,
         session,
-        pagination: PaginationConf { wait_time: Some(0) },
+        pagination: PaginationConf { wait_time_secs: -1 },
     };
     let query = http_query_manager
         .try_create_query(&query_id, req, session_manager, &user_info)
