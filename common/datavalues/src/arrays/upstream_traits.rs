@@ -61,7 +61,8 @@ impl FromIterator<Option<bool>> for DFBooleanArray {
 
 impl FromIterator<bool> for DFBooleanArray {
     fn from_iter<I: IntoIterator<Item = bool>>(iter: I) -> Self {
-        // 2021-02-07: this was ~70% faster than with the builder, even with the extra Option<T> added.
+        // 2021-02-07: this was ~70% faster than with the builder, even with the extra Option<T>
+        // added.
         let arr: BooleanArray = iter.into_iter().map(Some).collect();
 
         arr.into()
@@ -153,7 +154,8 @@ where Ptr: Borrow<Series>
 
         // first take one to get the dtype. We panic if we have an empty iterator
         let v = it.next().unwrap();
-        // We don't know the needed capacity. We arbitrarily choose an average of 5 elements per series.
+        // We don't know the needed capacity. We arbitrarily choose an average of 5 elements per
+        // series.
         let mut builder = get_list_builder(v.borrow().data_type(), capacity * 5, capacity);
 
         builder.append_series(v.borrow());

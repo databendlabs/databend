@@ -65,7 +65,6 @@ static GLOBAL_UT_LOG_GUARD: Lazy<Arc<Mutex<Option<Vec<WorkerGuard>>>>> =
 ///
 /// To adjust batch sending delay, use `OTEL_BSP_SCHEDULE_DELAY`:
 /// RUST_LOG=trace OTEL_BSP_SCHEDULE_DELAY=1 cargo test
-///
 // TODO(xp): use DATABEND_JAEGER to assign jaeger server address.
 pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> Vec<WorkerGuard> {
     let mut guards = vec![];

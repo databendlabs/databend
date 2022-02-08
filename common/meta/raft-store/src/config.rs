@@ -83,7 +83,8 @@ pub struct RaftConfig {
     #[clap(long, env = KVSRV_HEARTBEAT_INTERVAL, default_value = "1000")]
     pub heartbeat_interval: u64,
 
-    /// The max time in milli seconds that a leader wait for install-snapshot ack from a follower or non-voter.
+    /// The max time in milli seconds that a leader wait for install-snapshot ack from a follower
+    /// or non-voter.
     #[clap(long, env = KVSRV_INSTALL_SNAPSHOT_TIMEOUT, default_value = "4000")]
     pub install_snapshot_timeout: u64,
 
@@ -103,7 +104,8 @@ pub struct RaftConfig {
 
     /// Bring up a metasrv node and join a cluster.
     ///
-    /// The value is one or more addresses of a node in the cluster, to which this node sends a `join` request.
+    /// The value is one or more addresses of a node in the cluster, to which this node sends a
+    /// `join` request.
     #[clap(long, env = "METASRV_JOIN")]
     pub join: Vec<String>,
 

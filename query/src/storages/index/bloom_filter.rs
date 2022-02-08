@@ -46,8 +46,8 @@ pub enum BloomFilterExprEvalResult {
 
 /// BloomFilterIndex represents multiple  bloom filters (per column) in data block.
 ///
-/// By default we create bloom filter per column for a parquet data file. For columns whose data_type
-/// are not applicable for a bloom filter, we skip the creation.
+/// By default we create bloom filter per column for a parquet data file. For columns whose
+/// data_type are not applicable for a bloom filter, we skip the creation.
 /// That is to say, it is legal to have a BloomFilterBlock with zero columns.
 ///
 /// For example, for the data block as follows:
@@ -88,7 +88,8 @@ impl BloomFilterIndexer {
 
     /// Create a bloom filter block from input data.
     ///
-    /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
+    /// All input blocks should be belong to a Parquet file, e.g. the block array represents the
+    /// parquet file in memory.
     #[allow(dead_code)]
     pub fn from_data(blocks: &[DataBlock]) -> Result<Self> {
         let seeds = Self::create_seeds();
@@ -97,7 +98,8 @@ impl BloomFilterIndexer {
 
     /// Create a bloom filter block from input data blocks and seeds.
     ///
-    /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
+    /// All input blocks should be belong to a Parquet file, e.g. the block array represents the
+    /// parquet file in memory.
     pub fn from_data_and_seeds(blocks: &[DataBlock], seeds: [u64; 4]) -> Result<Self> {
         if blocks.is_empty() {
             return Err(ErrorCode::BadArguments("data blocks is empty"));
@@ -271,8 +273,8 @@ pub struct BloomFilter {
     container: BitVec,
 
     // The number of hashes for bloom filter. We use double hashing and mix the result
-    // to achieve k hashes. The value doesn't really mean the number of hashing we actually compute.
-    // For more details, see this paper: http://www.eecs.harvard.edu/~michaelm/postscripts/rsa2008.pdf
+    // to achieve k hashes. The value doesn't really mean the number of hashing we actually
+    // compute. For more details, see this paper: http://www.eecs.harvard.edu/~michaelm/postscripts/rsa2008.pdf
     num_hashes: usize,
 
     version: IndexSchemaVersion,
@@ -282,7 +284,8 @@ pub struct BloomFilter {
 }
 
 impl BloomFilter {
-    /// Create a bloom filter instance with estimated number of items and expected false positive rate.
+    /// Create a bloom filter instance with estimated number of items and expected false positive
+    /// rate.
     pub fn with_rate(num_items: u64, false_positive_rate: f64, seeds: [u64; 4]) -> Self {
         let num_bits = Self::optimal_num_bits(num_items, false_positive_rate);
         let num_hashes = Self::optimal_num_hashes(num_items, num_bits as u64);
@@ -500,7 +503,6 @@ impl BloomFilter {
     /// Example:
     /// ```
     ///     let not_exist = BloomFilter::is_supported_value(data_value) && !bloom.find(data_value)?;
-    ///
     /// ```
     pub fn find(&self, val: DataValue) -> Result<bool> {
         if !Self::is_supported_value(&val) {

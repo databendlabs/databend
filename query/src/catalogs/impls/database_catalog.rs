@@ -43,8 +43,8 @@ use crate::table_functions::TableFunction;
 use crate::table_functions::TableFunctionFactory;
 
 /// Combine two catalogs together
-/// - read/search like operations are always performed at
-///   upper layer first, and bottom layer later(if necessary)  
+/// - read/search like operations are always performed at upper layer first, and bottom layer
+///   later(if necessary)
 /// - metadata are written to the bottom layer
 #[derive(Clone)]
 pub struct DatabaseCatalog {

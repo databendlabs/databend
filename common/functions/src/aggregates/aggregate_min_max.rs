@@ -240,7 +240,7 @@ pub struct AggregateMinMaxFunction<T> {
 }
 
 impl<T> AggregateFunction for AggregateMinMaxFunction<T>
-where T: AggregateMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue> + Send + Sync + Clone + 'static,
+where T: AggregateMinMaxState /* std::cmp::PartialOrd + DFTryFrom<DataValue> + Send + Sync + Clone + 'static, */
 {
     fn name(&self) -> &str {
         "AggregateMinMaxFunction"

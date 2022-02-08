@@ -215,8 +215,9 @@ impl NumberResultFunction<u8> for ToMonth {
         DataValue::UInt8(Some(Self::to_number(value)))
     }
 
-    // ToMonth is NOT a monotonic function in general, unless the time range is within the same year.
-    // For example, date(2020-12-01) < date(2021-5-5), while ToMonth(2020-12-01) > ToMonth(2021-5-5).
+    // ToMonth is NOT a monotonic function in general, unless the time range is within the same
+    // year. For example, date(2020-12-01) < date(2021-5-5), while ToMonth(2020-12-01) >
+    // ToMonth(2021-5-5).
     fn factor_function() -> Result<Box<dyn Function>> {
         ToStartOfYearFunction::try_create("toStartOfYear")
     }
@@ -239,8 +240,9 @@ impl NumberResultFunction<u16> for ToDayOfYear {
         DataValue::UInt16(Some(Self::to_number(value)))
     }
 
-    // ToDayOfYear is NOT a monotonic function in general, unless the time range is within the same year.
-    // For example, date(2020-12-01) < date(2021-5-5), while ToDayOfYear(2020-12-01) > ToDayOfYear(2021-5-5).
+    // ToDayOfYear is NOT a monotonic function in general, unless the time range is within the same
+    // year. For example, date(2020-12-01) < date(2021-5-5), while ToDayOfYear(2020-12-01) >
+    // ToDayOfYear(2021-5-5).
     fn factor_function() -> Result<Box<dyn Function>> {
         ToStartOfYearFunction::try_create("toStartOfYear")
     }
@@ -263,8 +265,9 @@ impl NumberResultFunction<u8> for ToDayOfMonth {
         DataValue::UInt8(Some(Self::to_number(value)))
     }
 
-    // ToDayOfMonth is not a monotonic function in general, unless the time range is within the same month.
-    // For example, date(2021-11-20) < date(2021-12-01), while ToDayOfMonth(2021-11-20) > ToDayOfMonth(2021-12-01).
+    // ToDayOfMonth is not a monotonic function in general, unless the time range is within the same
+    // month. For example, date(2021-11-20) < date(2021-12-01), while ToDayOfMonth(2021-11-20) >
+    // ToDayOfMonth(2021-12-01).
     fn factor_function() -> Result<Box<dyn Function>> {
         ToStartOfMonthFunction::try_create("toStartOfMonth")
     }
@@ -287,7 +290,8 @@ impl NumberResultFunction<u8> for ToDayOfWeek {
         DataValue::UInt8(Some(Self::to_number(value)))
     }
 
-    // ToDayOfWeek is NOT a monotonic function in general, unless the time range is within the same week.
+    // ToDayOfWeek is NOT a monotonic function in general, unless the time range is within the same
+    // week.
     fn factor_function() -> Result<Box<dyn Function>> {
         ToMondayFunction::try_create("toMonday")
     }
@@ -333,7 +337,8 @@ impl NumberResultFunction<u8> for ToMinute {
         DataValue::UInt8(Some(Self::to_number(value)))
     }
 
-    // ToMinute is NOT a monotonic function in general, unless the time range is within the same hour.
+    // ToMinute is NOT a monotonic function in general, unless the time range is within the same
+    // hour.
     fn factor_function() -> Result<Box<dyn Function>> {
         RoundFunction::try_create("toStartOfHour", 60 * 60)
     }
@@ -356,7 +361,8 @@ impl NumberResultFunction<u8> for ToSecond {
         DataValue::UInt8(Some(Self::to_number(value)))
     }
 
-    // ToSecond is NOT a monotonic function in general, unless the time range is within the same minute.
+    // ToSecond is NOT a monotonic function in general, unless the time range is within the same
+    // minute.
     fn factor_function() -> Result<Box<dyn Function>> {
         RoundFunction::try_create("toStartOfMinute", 60)
     }

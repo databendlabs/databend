@@ -21,8 +21,8 @@ pub trait IntoNoNullIterator {
     fn into_no_null_iter(self) -> Self::IntoIter;
 }
 
-/// Wrapper struct to convert an iterator of type `T` into one of type `Option<T>`.  It is useful to make the
-/// `IntoIterator` trait, in which every iterator shall return an `Option<T>`.
+/// Wrapper struct to convert an iterator of type `T` into one of type `Option<T>`.  It is useful to
+/// make the `IntoIterator` trait, in which every iterator shall return an `Option<T>`.
 pub struct SomeIterator<I>(I)
 where I: Iterator;
 

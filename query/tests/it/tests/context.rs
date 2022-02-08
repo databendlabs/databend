@@ -112,7 +112,7 @@ pub fn create_catalog_context() -> Result<CatalogContext> {
 
 pub fn create_storage_context() -> Result<StorageContext> {
     let meta_embedded = futures::executor::block_on(MetaEmbedded::new_temp()).unwrap();
-
+    
     Ok(StorageContext {
         meta: Arc::new(meta_embedded),
         in_memory_data: Arc::new(Default::default()),

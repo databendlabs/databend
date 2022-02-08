@@ -107,8 +107,8 @@ impl UserPrivilegeSet {
         BitFlags::from(self).iter()
     }
 
-    /// The all privileges which available to the global grant object. It contains ALL the privileges
-    /// on databases and tables, and has some Global only privileges.
+    /// The all privileges which available to the global grant object. It contains ALL the
+    /// privileges on databases and tables, and has some Global only privileges.
     pub fn available_privileges_on_global() -> Self {
         let database_privs = Self::available_privileges_on_database();
         let privs =

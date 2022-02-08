@@ -607,6 +607,7 @@ mod update {
         );
         let prev_value = serde_json::to_vec(&user_info)?;
 
+        //
         // - get_kv should be called
         let mut kv = MockKV::new();
         {
@@ -667,6 +668,7 @@ mod set_user_privileges {
         );
         let prev_value = serde_json::to_vec(&user_info)?;
 
+        //
         // - get_kv should be called
         let mut kv = MockKV::new();
         {
@@ -676,6 +678,7 @@ mod set_user_privileges {
                 .times(1)
                 .return_once(move |_k| Ok(Some(SeqV::new(0, prev_value))));
         }
+        //
         // - update_kv should be called
         let mut privileges = UserPrivilegeSet::empty();
         privileges.set_privilege(UserPrivilegeType::Select);

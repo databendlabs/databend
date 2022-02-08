@@ -38,7 +38,8 @@ use crate::meta_service::MetaNode;
 /// The container of APIs of a metasrv leader in a metasrv cluster.
 ///
 /// A meta leader does not imply it is actually the leader granted by the cluster.
-/// It just means it believes it is the leader an have not yet perceived there is other newer leader.
+/// It just means it believes it is the leader an have not yet perceived there is other newer
+/// leader.
 pub struct MetaLeader<'a> {
     meta_node: &'a MetaNode,
 }

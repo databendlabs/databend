@@ -129,6 +129,7 @@ async fn test_restart() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_join() -> anyhow::Result<()> {
+    //
     // - Start 2 metasrv.
     // - Join node-1 to node-0
     // - Test metasrv api

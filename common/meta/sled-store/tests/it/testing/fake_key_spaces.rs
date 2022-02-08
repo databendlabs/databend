@@ -42,7 +42,8 @@ impl SledKeySpace for Nodes {
     type V = Node;
 }
 
-/// Key-Value Types for storing meta data of a raft state machine in sled::Tree, e.g. the last applied log id.
+/// Key-Value Types for storing meta data of a raft state machine in sled::Tree, e.g. the last
+/// applied log id.
 pub struct StateMachineMeta {}
 impl SledKeySpace for StateMachineMeta {
     const PREFIX: u8 = 3;

@@ -108,7 +108,7 @@ impl Pipeline {
                             write!(
                                 f,
                                 "{} × {} processor(s)",
-                                name, ways /*, pipeline_display*/
+                                name, ways /* , pipeline_display */
                             )?
                         }
                         _ => {

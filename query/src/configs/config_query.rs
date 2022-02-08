@@ -206,7 +206,8 @@ pub struct QueryConfig {
     #[clap(long, env = QUERY_TABLE_DISK_CACHE_MB_SIZE, default_value = "1024")]
     pub table_disk_cache_mb_size: u64,
 
-    /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
+    /// If in management mode, only can do some meta level operations(database/table/user/stage
+    /// etc.) with metasrv.
     #[clap(long, env = QUERY_MANAGEMENT_MODE)]
     pub management_mode: bool,
 

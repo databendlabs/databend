@@ -526,6 +526,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Result<()> {
+    //
     // - Update a value-meta of None does nothing.
     // - Update a value-meta of Some() only updates the value-meta.
 
@@ -713,6 +714,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_snapshot() -> anyhow::Result<()> {
+    //
     // - Feed logs into state machine.
     // - Take a snapshot and examine the data
 

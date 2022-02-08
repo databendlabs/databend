@@ -31,7 +31,8 @@ use crate::prelude::*;
 /// Same common aggregators
 pub trait ArrayAgg: Debug {
     /// Aggregate the sum of the ChunkedArray.
-    /// Returns `Null` value of current data type if the array is empty or only contains null values.
+    /// Returns `Null` value of current data type if the array is empty or only contains null
+    /// values.
     fn sum(&self) -> Result<DataValue> {
         Err(ErrorCode::BadDataValueType(format!(
             "Sum operation not supported for {:?}",
@@ -40,7 +41,8 @@ pub trait ArrayAgg: Debug {
     }
 
     /// Returns the minimum value in the array, according to the natural order.
-    /// Returns `Null` value of current data type if the array is empty or only contains null values.
+    /// Returns `Null` value of current data type if the array is empty or only contains null
+    /// values.
     fn min(&self) -> Result<DataValue> {
         Err(ErrorCode::BadDataValueType(format!(
             "Min operation not supported for {:?}",
@@ -49,7 +51,8 @@ pub trait ArrayAgg: Debug {
     }
 
     /// Returns the maximum value in the array, according to the natural order.
-    /// Returns `Null` value of current data type if the array is empty or only contains null values.
+    /// Returns `Null` value of current data type if the array is empty or only contains null
+    /// values.
     fn max(&self) -> Result<DataValue> {
         Err(ErrorCode::BadDataValueType(format!(
             "Max operation not supported for {:?}",

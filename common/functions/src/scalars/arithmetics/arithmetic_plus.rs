@@ -198,7 +198,8 @@ impl ArithmeticPlusFunction {
         }
 
         // Now we have f(x) and g(x) both are non-constant.
-        // When both are monotonic, but have different 'is_positive', we can't determine the monotonicity
+        // When both are monotonic, but have different 'is_positive', we can't determine the
+        // monotonicity
         if f_x.is_positive != g_x.is_positive {
             return Ok(Monotonicity::default());
         }

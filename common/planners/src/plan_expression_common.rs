@@ -242,14 +242,12 @@ pub fn find_columns_not_satisfy_exprs(
 ///
 /// The function's return type is `Result<Option<Expression>>>`, where:
 ///
-/// * `Ok(Some(replacement_expr))`: A replacement `expr` is provided; it is
-///       swapped in at the particular node in the tree. Any nested `expr` are
-///       not subject to cloning/replacement.
-/// * `Ok(None)`: A replacement `expr` is not provided. The `expr` is
-///       recreated, with all of its nested `expr`'s subject to
-///       cloning/replacement.
+/// * `Ok(Some(replacement_expr))`: A replacement `expr` is provided; it is swapped in at the
+///   particular node in the tree. Any nested `expr` are not subject to cloning/replacement.
+/// * `Ok(None)`: A replacement `expr` is not provided. The `expr` is recreated, with all of its
+///   nested `expr`'s subject to cloning/replacement.
 /// * `Err(err)`: Any error returned by the function is returned as-is by
-///       `clone_with_replacement()`.
+///   `clone_with_replacement()`.
 fn clone_with_replacement<F>(expr: &Expression, replacement_fn: &F) -> Result<Expression>
 where F: Fn(&Expression) -> Result<Option<Expression>> {
     let replacement_opt = replacement_fn(expr)?;

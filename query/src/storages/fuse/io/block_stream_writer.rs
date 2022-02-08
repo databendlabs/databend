@@ -158,9 +158,8 @@ pub trait Regulator<S, T> {
     ///
     /// for example. given a DataBlock s, a setting of `max_row_per_block`
     ///    - Some<Vec<DataBlock>> might be returned if s contains more rows than `max_row_per_block`
-    ///       in this case, s will been split into vector of (smaller) blocks
-    ///    - or [None] might be returned if s is too small
-    ///       in this case, s will be accumulated
+    ///      in this case, s will been split into vector of (smaller) blocks
+    ///    - or [None] might be returned if s is too small in this case, s will be accumulated
     async fn regulate(&mut self, s: S) -> Result<Option<T>>;
 
     /// Indicate that no more elements remains.

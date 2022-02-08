@@ -26,7 +26,8 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::pipelines::transforms::ExpressionExecutor;
 /// Executes certain expressions over the block and append the result column to the new block.
-/// Aims to transform a block to another format, such as add one or more columns against the Expressions.
+/// Aims to transform a block to another format, such as add one or more columns against the
+/// Expressions.
 ///
 /// Example:
 /// SELECT (number+1) as c1, number as c2 from numbers_mt(10) ORDER BY c1,c2;

@@ -136,8 +136,9 @@ pub struct WithSpan<'a> {
 /// the expression operands and operators to be the input of Pratt parser, by running a
 /// nom parser in advance.
 ///
-/// For example, `a + b AND c is null` is parsed as `[col(a), PLUS, col(b), AND, col(c), ISNULL]` by nom parsers.
-/// Then the Pratt parser is able to parse the expression into `AND(PLUS(col(a), col(b)), ISNULL(col(c)))`.
+/// For example, `a + b AND c is null` is parsed as `[col(a), PLUS, col(b), AND, col(c), ISNULL]` by
+/// nom parsers. Then the Pratt parser is able to parse the expression into `AND(PLUS(col(a),
+/// col(b)), ISNULL(col(c)))`.
 #[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
 pub enum ExprElement {
@@ -168,7 +169,8 @@ pub enum ExprElement {
     CountAll,
     /// Scalar function call
     FunctionCall {
-        /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
+        /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT
+        /// a)`
         distinct: bool,
         name: String,
         args: Vec<Expr>,
@@ -632,7 +634,8 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     )(i)
 }
 
-// TODO (andylokandy): complete the keyword-function list, or remove the functions' name from keywords
+// TODO (andylokandy): complete the keyword-function list, or remove the functions' name from
+// keywords
 pub fn function_name(i: Input) -> IResult<String> {
     map(
         rule! {

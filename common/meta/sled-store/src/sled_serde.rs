@@ -48,7 +48,8 @@ pub trait SledSerde: Serialize + DeserializeOwned {
 /// 9 -> [57], 10 -> [49, 48]
 /// While BigEndian encoding preserve the order.
 ///
-/// A type that is used as a sled db key should be serialized with order preserved, such as log index.
+/// A type that is used as a sled db key should be serialized with order preserved, such as log
+/// index.
 pub trait SledOrderedSerde: Serialize + DeserializeOwned {
     /// (ser)ialize a value to `sled::IVec`.
     fn ser(&self) -> Result<IVec, ErrorCode>;

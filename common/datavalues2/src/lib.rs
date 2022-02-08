@@ -14,7 +14,6 @@
 
 //! *Credits to the work of https://github.com/pola-rs/polars, which served as
 //! insipration for the crate*
-//!
 
 #[macro_use]
 mod macros;

@@ -206,7 +206,8 @@ pub fn arithmetic_mul_div_monotonicity(
                 let g_x_compare_with_zero = g_x.compare_with_zero()?;
                 match (f_x_compare_with_zero, g_x_compare_with_zero) {
                     (1, 1) | (-1, -1) => {
-                        // For case f(x) >= 0 && g(x) >= 0, we have following results. (f(x) <= 0 && g(x) <= 0 just need to flip the is_positive)
+                        // For case f(x) >= 0 && g(x) >= 0, we have following results. (f(x) <= 0 &&
+                        // g(x) <= 0 just need to flip the is_positive)
                         // f(x)⭡ * g(x)⭡ => ⭡
                         // f(x)⭡ / g(x)⭡ => unknown
                         // f(x)⭣ * g(x)⭣ => ⭣
@@ -230,7 +231,8 @@ pub fn arithmetic_mul_div_monotonicity(
                         Ok(Monotonicity::create(is_monotonic, is_positive, false))
                     }
                     (-1, 1) | (1, -1) => {
-                        // For case f(x) >= 0 && g(x) <= 0, we have following results. (f(x) <= 0 && g(x) >= 0 just need to flip the is_positive)
+                        // For case f(x) >= 0 && g(x) <= 0, we have following results. (f(x) <= 0 &&
+                        // g(x) >= 0 just need to flip the is_positive)
                         // f(x)⭡ * g(x)⭡ => unknown
                         // f(x)⭡ / g(x)⭡ => ⭣
                         // f(x)⭣ * g(x)⭣ => unknown

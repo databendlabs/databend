@@ -29,7 +29,8 @@ pub trait Stoppable {
     ///
     /// In case a graceful `stop()` had blocked for too long,
     /// the caller submit a FORCE stop by sending a `()` to `force`.
-    /// An impl should either close everything at once, or just ignore the `force` signal if it does not support force stop.
+    /// An impl should either close everything at once, or just ignore the `force` signal if it does
+    /// not support force stop.
     ///
     /// Calling `stop()` twice should get an error.
     async fn stop(&mut self, mut force: Option<broadcast::Receiver<()>>) -> Result<(), ErrorCode>;

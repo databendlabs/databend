@@ -200,7 +200,8 @@ impl AuthInfo {
         input: &[u8],
         user_password_hash: &[u8],
     ) -> Result<Vec<u8>, ErrorCode> {
-        // SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1( password ) ) )
+        // SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1(
+        // password ) ) )
         let mut m = sha1::Sha1::new();
         m.update(salt);
         m.update(user_password_hash);

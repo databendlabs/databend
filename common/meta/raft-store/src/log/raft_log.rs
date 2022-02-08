@@ -86,15 +86,16 @@ impl RaftLog {
     ///
     /// TODO(xp): in raft deleting logs may not need to be fsync-ed.
     ///
-    /// 1. Deleting happens when cleaning applied logs, in which case, these logs will never be read:
-    ///    The logs to clean are all included in a snapshot and state machine.
-    ///    Replication will use the snapshot for sync, or create a new snapshot from the state machine for sync.
-    ///    Thus these logs will never be read. If an un-fsync-ed delete is lost during server crash, it just wait for next delete to clean them up.
+    /// 1. Deleting happens when cleaning applied logs, in which case, these logs will never be
+    /// read:    The logs to clean are all included in a snapshot and state machine.
+    ///    Replication will use the snapshot for sync, or create a new snapshot from the state
+    /// machine for sync.    Thus these logs will never be read. If an un-fsync-ed delete is
+    /// lost during server crash, it just wait for next delete to clean them up.
     ///
-    /// 2. Overriding uncommitted logs of an old term by some new leader that did not see these logs:
-    ///    In this case, atomic delete is quite enough(to not leave a hole).
-    ///    If the system allows logs hole, non-atomic delete is quite enough(depends on the upper layer).
-    ///
+    /// 2. Overriding uncommitted logs of an old term by some new leader that did not see these
+    /// logs:    In this case, atomic delete is quite enough(to not leave a hole).
+    ///    If the system allows logs hole, non-atomic delete is quite enough(depends on the upper
+    /// layer).
     pub async fn range_remove<R>(&self, range: R) -> common_exception::Result<()>
     where R: RangeBounds<LogIndex> {
         self.logs().range_remove(range, true).await
@@ -124,8 +125,9 @@ impl RaftLog {
     }
 
     /// Append logs into RaftLog.
-    /// There is no consecutiveness check. It is the caller's responsibility to leave no holes(if it runs a standard raft:DDD).
-    /// There is no overriding check either. It always overrides the existent ones.
+    /// There is no consecutiveness check. It is the caller's responsibility to leave no holes(if it
+    /// runs a standard raft:DDD). There is no overriding check either. It always overrides the
+    /// existent ones.
     ///
     /// When this function returns the logs are guaranteed to be fsync-ed.
     pub async fn append(&self, logs: &[Entry<LogEntry>]) -> common_exception::Result<()> {

@@ -117,8 +117,8 @@ impl Processor for GroupByPartialTransform {
     ///
     /// grouping by [A%3]
     /// 1.1)
-    /// For each row, allocate the state if key not exists in the map, and apply accumulate_row row by row
-    ///  row_idx, A % 3 -> state place
+    /// For each row, allocate the state if key not exists in the map, and apply accumulate_row row
+    /// by row  row_idx, A % 3 -> state place
     ///  0, 1 -> state1
     ///  1, 2 -> state2
     ///  2, 3 -> state3

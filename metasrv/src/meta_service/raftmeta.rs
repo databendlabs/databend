@@ -63,7 +63,8 @@ use crate::Opened;
 // MetaRaft is a impl of the generic Raft handling meta data R/W.
 pub type MetaRaft = Raft<LogEntry, AppliedState, Network, MetaRaftStore>;
 
-// MetaNode is the container of meta data related components and threads, such as storage, the raft node and a raft-state monitor.
+// MetaNode is the container of meta data related components and threads, such as storage, the raft
+// node and a raft-state monitor.
 pub struct MetaNode {
     pub sto: Arc<MetaRaftStore>,
     pub raft: MetaRaft,
@@ -229,7 +230,8 @@ impl MetaNode {
     /// Optionally boot a single node cluster.
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
-    /// 3. If `init_cluster` is `Some` and it is just created, try to initialize a single-node cluster.
+    /// 3. If `init_cluster` is `Some` and it is just created, try to initialize a single-node
+    /// cluster.
     ///
     /// TODO(xp): `init_cluster`: pass in a Map<id, address> to initialize the cluster.
     #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
@@ -244,7 +246,8 @@ impl MetaNode {
         // Always disable fsync on mac.
         // Because there are some integration tests running on mac VM.
         //
-        // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
+        // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a
+        // test.
         if cfg!(target_os = "macos") {
             tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
             config.no_sync = true;
@@ -398,7 +401,8 @@ impl MetaNode {
             }
 
             // Try to join a cluster only when this node is just created.
-            // Joining a node with log has risk messing up the data in this node and in the target cluster.
+            // Joining a node with log has risk messing up the data in this node and in the target
+            // cluster.
 
             let addrs = &conf.join;
             #[allow(clippy::never_loop)]
@@ -434,7 +438,8 @@ impl MetaNode {
     pub async fn boot(config: &RaftConfig) -> common_exception::Result<Arc<MetaNode>> {
         // 1. Bring a node up as non voter, start the grpc service for raft communication.
         // 2. Initialize itself as leader, because it is the only one in the new cluster.
-        // 3. Add itself to the cluster storage by committing an `add-node` log so that the cluster members(only this node) is persisted.
+        // 3. Add itself to the cluster storage by committing an `add-node` log so that the cluster
+        // members(only this node) is persisted.
 
         let mn = Self::open_create_boot(config, None, Some(()), Some(vec![])).await?;
 
@@ -464,9 +469,10 @@ impl MetaNode {
         Ok(())
     }
 
-    /// When a leader is established, it is the leader's responsibility to setup replication from itself to non-voters, AKA learners.
-    /// openraft does not persist the node set of non-voters, thus we need to do it manually.
-    /// This fn should be called once a node found it becomes leader.
+    /// When a leader is established, it is the leader's responsibility to setup replication from
+    /// itself to non-voters, AKA learners. openraft does not persist the node set of
+    /// non-voters, thus we need to do it manually. This fn should be called once a node found
+    /// it becomes leader.
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn add_configured_non_voters(&self) -> common_exception::Result<()> {
         // TODO after leader established, add non-voter through apis

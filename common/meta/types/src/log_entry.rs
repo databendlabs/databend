@@ -26,7 +26,8 @@ use crate::RaftTxId;
 /// "client" and "serial", thus the raft engine is able to distinguish if a request is duplicated.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct LogEntry {
-    /// When not None, it is used to filter out duplicated logs, which are caused by retries by client.
+    /// When not None, it is used to filter out duplicated logs, which are caused by retries by
+    /// client.
     pub txid: Option<RaftTxId>,
 
     /// The action a client want to take.

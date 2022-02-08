@@ -145,7 +145,8 @@ fn test_block_regulator() -> common_exception::Result<()> {
             //
             //        - there should be exactly one block B in `generated` where B.num_rows() == r
             //
-            //        - for all block B' in `generated`; B' =/= B implies that B'.row_count() == max_row_per_block,
+            //        - for all block B' in `generated`; B' =/= B implies that B'.row_count() ==
+            //          max_row_per_block,
 
             let remainder = total_rows % max_row_per_block;
             if remainder == 0 {

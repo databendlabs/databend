@@ -31,7 +31,8 @@ pub trait AsyncSource: Send {
 
 // TODO: This can be refactored using proc macros
 // TODO: Most of its current code is consistent with sync. We need refactor this with better async
-// scheduling after supported expand processors. It will be implemented using a similar dynamic window.
+// scheduling after supported expand processors. It will be implemented using a similar dynamic
+// window.
 pub struct AsyncSourcer<T: 'static + AsyncSource> {
     is_finish: bool,
 

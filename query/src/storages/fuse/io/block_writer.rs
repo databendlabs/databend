@@ -76,8 +76,9 @@ pub async fn write_block(
 }
 
 fn col_encoding(_data_type: &ArrowDataType) -> Encoding {
-    // Although encoding does work, parquet2 has not implemented decoding of DeltaLengthByteArray yet, we fallback to Plain
-    // From parquet2: Decoding "DeltaLengthByteArray"-encoded required V2 pages is not yet implemented for Binary.
+    // Although encoding does work, parquet2 has not implemented decoding of DeltaLengthByteArray
+    // yet, we fallback to Plain From parquet2: Decoding "DeltaLengthByteArray"-encoded required
+    // V2 pages is not yet implemented for Binary.
     //
     //match data_type {
     //    ArrowDataType::Binary

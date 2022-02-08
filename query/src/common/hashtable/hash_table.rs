@@ -232,12 +232,13 @@ impl<Key: HashTableKeyable, Entity: HashTableEntity<Key>> HashTable<Key, Entity>
             }
 
             // There is also a special case:
-            //      if the element was to be at the end of the old buffer,                  [        x]
-            //      but is at the beginning because of the collision resolution chain,      [o       x]
-            //      then after resizing, it will first be out of place again,               [        xo        ]
-            //      and in order to transfer it where necessary,
-            //      after transferring all the elements from the old halves you need to     [         o   x    ]
-            //      process tail from the collision resolution chain immediately after it   [        o    x    ]
+            //      if the element was to be at the end of the old buffer,                  [
+            // x]      but is at the beginning because of the collision resolution
+            // chain,      [o       x]      then after resizing, it will first be out of
+            // place again,               [        xo        ]      and in order to
+            // transfer it where necessary,      after transferring all the elements
+            // from the old halves you need to     [         o   x    ]      process
+            // tail from the collision resolution chain immediately after it   [        o    x    ]
             for index in old_size..self.grower.max_size() {
                 let entity = self.entities.offset(index);
 

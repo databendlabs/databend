@@ -26,7 +26,8 @@ pub struct RaftTxId {
     pub client: String,
     /// The serial number of this request.
     /// TODO(xp): a client must generate consistent `client` and globally unique serial.
-    /// TODO(xp): in this impl the state machine records only one serial, which implies serial must be monotonic incremental for every client.
+    /// TODO(xp): in this impl the state machine records only one serial, which implies serial must
+    /// be monotonic incremental for every client.
     pub serial: u64,
 }
 

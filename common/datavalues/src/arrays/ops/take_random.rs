@@ -33,7 +33,8 @@ pub trait TakeRandom {
     ///
     /// # Safety
     ///
-    /// This doesn't check if the underlying type is null or not and may return an uninitialized value.
+    /// This doesn't check if the underlying type is null or not and may return an uninitialized
+    /// value.
     unsafe fn get_unchecked(&self, index: usize) -> Self::Item;
 }
 
@@ -51,7 +52,8 @@ pub trait TakeRandomString {
     /// Get a value by index and ignore the null bit.
     ///
     /// # Safety
-    /// This doesn't check if the underlying type is null or not and may return an uninitialized value.
+    /// This doesn't check if the underlying type is null or not and may return an uninitialized
+    /// value.
     unsafe fn get_unchecked(self, index: usize) -> Self::Item;
 }
 

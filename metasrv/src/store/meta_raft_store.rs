@@ -70,8 +70,8 @@ pub struct MetaRaftStore {
     is_opened: bool,
 
     /// The sled db for log and raft_state.
-    /// state machine is stored in another sled db since it contains user data and needs to be export/import as a whole.
-    /// This db is also used to generate a locally unique id.
+    /// state machine is stored in another sled db since it contains user data and needs to be
+    /// export/import as a whole. This db is also used to generate a locally unique id.
     /// Currently the id is used to create a unique snapshot id.
     _db: sled::Db,
 
@@ -86,9 +86,11 @@ pub struct MetaRaftStore {
     /// The Raft state machine.
     ///
     /// sled db has its own concurrency control, e.g., batch or transaction.
-    /// But we still need a lock, when installing a snapshot, which is done by replacing the state machine:
+    /// But we still need a lock, when installing a snapshot, which is done by replacing the state
+    /// machine:
     ///
-    /// - Acquire a read lock to WRITE or READ. Transactional RW relies on sled concurrency control.
+    /// - Acquire a read lock to WRITE or READ. Transactional RW relies on sled concurrency
+    ///   control.
     /// - Acquire a write lock before installing a snapshot, to prevent any write to the db.
     pub state_machine: RwLock<StateMachine>,
 
@@ -97,7 +99,8 @@ pub struct MetaRaftStore {
 }
 
 impl Opened for MetaRaftStore {
-    /// If the instance is opened(true) from an existent state(e.g. load from disk) or created(false).
+    /// If the instance is opened(true) from an existent state(e.g. load from disk) or
+    /// created(false).
     fn is_opened(&self) -> bool {
         self.is_opened
     }
@@ -153,7 +156,8 @@ impl MetaRaftStore {
         self.state_machine.write().await
     }
 
-    /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
+    /// Install a snapshot to build a state machine from it and replace the old state machine with
+    /// the new one.
     #[tracing::instrument(level = "debug", skip(self, data))]
     pub async fn install_snapshot(&self, data: &[u8]) -> common_exception::Result<()> {
         let mut sm = self.state_machine.write().await;
@@ -511,7 +515,8 @@ impl MetaRaftStore {
         Ok(addr)
     }
 
-    /// A non-voter is a node stored in raft store, but is not configured as a voter in the raft group.
+    /// A non-voter is a node stored in raft store, but is not configured as a voter in the raft
+    /// group.
     pub async fn list_non_voters(&self) -> HashSet<NodeId> {
         // TODO(xp): consistency
         let mut rst = HashSet::new();

@@ -31,8 +31,8 @@ pub struct ReadDataSourcePlan {
 
     /// Required fields to scan.
     ///
-    /// After optimization, only a sub set of the fields in `table_info.schema().fields` are needed.
-    /// The key is the index of the field in original `table_info.schema().fields`.
+    /// After optimization, only a sub set of the fields in `table_info.schema().fields` are
+    /// needed. The key is the index of the field in original `table_info.schema().fields`.
     ///
     /// If it is None, one should use `table_info.schema().fields()`.
     pub scan_fields: Option<BTreeMap<usize, DataField>>,

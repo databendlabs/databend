@@ -150,7 +150,8 @@ impl MetaService for MetaServiceImpl {
     // Export all meta data.
     //
     // Including raft hard state, logs and state machine.
-    // The exported data is a list of json strings in form of `(tree_name, sub_tree_prefix, key, value)`.
+    // The exported data is a list of json strings in form of `(tree_name, sub_tree_prefix, key,
+    // value)`.
     async fn export(
         &self,
         _request: Request<common_meta_types::protobuf::Empty>,

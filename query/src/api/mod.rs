@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The api module only used for internal communication, such as GRPC between cluster and the managed HTTP REST API.
+// The api module only used for internal communication, such as GRPC between cluster and the managed
+// HTTP REST API.
 
 pub use http_service::HttpService;
 pub use rpc::BroadcastAction;

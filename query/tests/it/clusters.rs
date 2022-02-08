@@ -54,10 +54,14 @@ async fn test_single_cluster_discovery() -> Result<()> {
 //     assert_eq!(discover_cluster_nodes_2.len(), 2);
 //     assert_eq!(discover_cluster_1.is_empty(), false);
 //     assert_eq!(discover_cluster_2.is_empty(), false);
-//     assert_eq!(discover_cluster_1.is_local(&discover_cluster_nodes_1[0]) || discover_cluster_1.is_local(&discover_cluster_nodes_1[1]), true);
-//     assert_eq!(discover_cluster_1.is_local(&discover_cluster_nodes_1[0]) && discover_cluster_1.is_local(&discover_cluster_nodes_1[1]), false);
-//     assert_eq!(discover_cluster_2.is_local(&discover_cluster_nodes_2[0]) || discover_cluster_1.is_local(&discover_cluster_nodes_2[1]), true);
-//     assert_eq!(discover_cluster_2.is_local(&discover_cluster_nodes_2[0]) && discover_cluster_1.is_local(&discover_cluster_nodes_2[1]), false);
+//     assert_eq!(discover_cluster_1.is_local(&discover_cluster_nodes_1[0]) ||
+// discover_cluster_1.is_local(&discover_cluster_nodes_1[1]), true);     assert_eq!
+// (discover_cluster_1.is_local(&discover_cluster_nodes_1[0]) &&
+// discover_cluster_1.is_local(&discover_cluster_nodes_1[1]), false);     assert_eq!
+// (discover_cluster_2.is_local(&discover_cluster_nodes_2[0]) ||
+// discover_cluster_1.is_local(&discover_cluster_nodes_2[1]), true);     assert_eq!
+// (discover_cluster_2.is_local(&discover_cluster_nodes_2[0]) &&
+// discover_cluster_1.is_local(&discover_cluster_nodes_2[1]), false);
 //
 //     assert_eq!(discover_cluster_nodes_1, discover_cluster_nodes_2);
 //     Ok(())

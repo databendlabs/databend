@@ -29,8 +29,8 @@ use rusoto_s3::S3 as RusotoS3;
 /// This test suite is not CI ready, and intended to be
 /// used in local dev box, with
 ///
-/// - properly configured S3 env vars
-///    pls take a look at `scripts/ci/ci-run-stateful-tests-standalone-s3.sh`
+/// - properly configured S3 env vars pls take a look at
+///   `scripts/ci/ci-run-stateful-tests-standalone-s3.sh`
 /// - or mocked s3 service, like minio
 ///
 /// To enable this suite, features `ut_mock_s3` should be enabled:

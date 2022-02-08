@@ -292,9 +292,9 @@ where
     }
 
     /// Loop through the entire events_list, update the event timestamp value
-    /// The level path must be 1---2---3---...---check_events_size, find the max event level that satisfied the path in the sliding window.
-    /// If found, returns the max event level, else return 0.
-    /// The Algorithm complexity is O(n).
+    /// The level path must be 1---2---3---...---check_events_size, find the max event level that
+    /// satisfied the path in the sliding window. If found, returns the max event level, else
+    /// return 0. The Algorithm complexity is O(n).
     fn get_event_level(&self, place: StateAddr) -> u8 {
         let state = place.get::<AggregateWindowFunnelState<T>>();
         if state.events_list.is_empty() {

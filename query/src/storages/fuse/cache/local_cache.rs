@@ -69,8 +69,8 @@ where L: Loader<V> + HasTenantLabel
                 let tenant_label = self.loader.tenant_label();
 
                 // in PR #3798, the cache is degenerated to metered by count of cached item,
-                // later, when the size of BlockMeta could be acquired (needs some enhancements of crate `parquet2`)
-                // 1) the `read_bytes` metric should be re-enabled
+                // later, when the size of BlockMeta could be acquired (needs some enhancements of
+                // crate `parquet2`) 1) the `read_bytes` metric should be re-enabled
                 // 2) the metrics need to be labeled by the name of cache as well
 
                 let mut metrics = CacheDeferMetrics {

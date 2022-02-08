@@ -68,7 +68,8 @@ impl UpdateList {
     ///
     /// # Safety
     ///
-    /// Must be thread safe call. In other words, it needs to be called in single thread or in mutex guard.
+    /// Must be thread safe call. In other words, it needs to be called in single thread or in mutex
+    /// guard.
     #[inline(always)]
     pub unsafe fn update_edge(&self, edge: DirectedEdge) {
         let inner = &mut *self.inner.get();
@@ -79,7 +80,8 @@ impl UpdateList {
     ///
     /// # Safety
     ///
-    /// Must be thread safe call. In other words, it needs to be called in single thread or in mutex guard.
+    /// Must be thread safe call. In other words, it needs to be called in single thread or in mutex
+    /// guard.
     pub unsafe fn trigger(&self, queue: &mut VecDeque<DirectedEdge>) {
         let inner = &mut *self.inner.get();
 
@@ -96,7 +98,8 @@ impl UpdateList {
     ///
     /// # Safety
     ///
-    /// Must be thread safe call. In other words, it needs to be called in single thread or in mutex guard.
+    /// Must be thread safe call. In other words, it needs to be called in single thread or in mutex
+    /// guard.
     pub unsafe fn create_trigger(self: &Arc<Self>, edge_index: EdgeIndex) -> *mut UpdateTrigger {
         let inner = &mut *self.inner.get();
         let update_trigger = UpdateTrigger::create(edge_index, self.clone());

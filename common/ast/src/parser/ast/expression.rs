@@ -68,7 +68,8 @@ pub enum Expr {
     CountAll,
     /// Scalar function call
     FunctionCall {
-        /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
+        /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT
+        /// a)`
         distinct: bool,
         name: String,
         args: Vec<Expr>,

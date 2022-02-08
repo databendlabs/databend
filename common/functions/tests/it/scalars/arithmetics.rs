@@ -349,8 +349,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![
-                            -12i64,         /* - 1 year */
-                            -(20 * 12 + 1), /* - 20 years and 1 month */
+                            -12i64, /*
+                                     * - 1 year */
+                            -(20 * 12 + 1), /*
+                                             * - 20 years and 1 month */
                         ])
                         .into(),
                         DataField::new(

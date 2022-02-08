@@ -30,7 +30,8 @@ use common_planners::ExpressionChain;
 use common_tracing::tracing;
 
 /// ExpressionExecutor is a helper struct for expressions and projections
-/// Aggregate functions is not covered, because all expressions in aggregate functions functions are executed.
+/// Aggregate functions is not covered, because all expressions in aggregate functions functions are
+/// executed.
 #[derive(Debug, Clone)]
 pub struct ExpressionExecutor {
     // description of this executor
@@ -188,8 +189,9 @@ impl ExpressionExecutor {
             arg_columns.push(column);
         }
 
-        // 1. With nullable input, if the function is not nullable, e.g. it doesn't output null. We do NOT apply the input masking.
-        // 2. With nullable input, if the function does NOT pass through null. That is, it doesn't simply pass the null input to output.
+        // 1. With nullable input, if the function is not nullable, e.g. it doesn't output null. We
+        // do NOT apply the input masking. 2. With nullable input, if the function does NOT
+        // pass through null. That is, it doesn't simply pass the null input to output.
         // We do NOT apply the masking.
         let column = if f.is_nullable && f.func.passthrough_null() {
             let arg_column_validities = arg_columns

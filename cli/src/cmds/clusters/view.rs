@@ -57,9 +57,9 @@ impl fmt::Display for HealthStatus {
     }
 }
 
-// poll_health would check the health of active meta service and query service, and return their status quo
-// first element is the health status in dashboard service and the second element is the health status of meta services
-// the third element is the health status in query services
+// poll_health would check the health of active meta service and query service, and return their
+// status quo first element is the health status in dashboard service and the second element is the
+// health status of meta services the third element is the health status in query services
 pub async fn poll_health(
     profile: &ClusterProfile,
     status: &Status,

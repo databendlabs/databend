@@ -119,8 +119,8 @@ pub trait ArrayCompare<Rhs>: Debug {
 impl<T> DFPrimitiveArray<T>
 where T: DFPrimitiveType + NumComp + Simd8
 {
-    /// First ensure that the Arrays of lhs and rhs match and then iterates over the Arrays and applies
-    /// the comparison operator.
+    /// First ensure that the Arrays of lhs and rhs match and then iterates over the Arrays and
+    /// applies the comparison operator.
     fn comparison(&self, rhs: &DFPrimitiveArray<T>, op: Operator) -> Result<DFBooleanArray> {
         match op {
             Operator::Eq => Ok(comparison::primitive::eq(&self.array, &rhs.array).into()),
@@ -193,8 +193,8 @@ where
 }
 
 impl DFBooleanArray {
-    /// First ensure that the Arrays of lhs and rhs match and then iterates over the Arrays and applies
-    /// the comparison operator.
+    /// First ensure that the Arrays of lhs and rhs match and then iterates over the Arrays and
+    /// applies the comparison operator.
     fn comparison(&self, rhs: &DFBooleanArray, op: Operator) -> Result<DFBooleanArray> {
         match op {
             Operator::Eq => Ok(comparison::boolean::eq(&self.array, &rhs.array).into()),

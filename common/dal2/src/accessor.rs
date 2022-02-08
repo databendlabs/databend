@@ -47,7 +47,8 @@ pub trait Accessor: Send + Sync {
     ///
     /// ## Behavior
     ///
-    /// - `Delete` is an idempotent operation, it's safe to call `Delete` on the same path multiple times.
+    /// - `Delete` is an idempotent operation, it's safe to call `Delete` on the same path multiple
+    ///   times.
     /// - `Delete` will return `Ok(())` if the path is deleted successfully or not exist.
     async fn delete(&self, args: &OpDelete) -> Result<()> {
         let _ = args;

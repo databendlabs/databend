@@ -36,12 +36,12 @@ pub struct TableIdent {
 
     /// version of this table snapshot.
     ///
-    /// Any change to a table causes the version to increment, e.g. insert or delete rows, update schema etc.
-    /// But renaming a table should not affect the version, since the table itself does not change.
-    /// The tuple (database_id, table_id, version) identifies a unique and consistent table snapshot.
+    /// Any change to a table causes the version to increment, e.g. insert or delete rows, update
+    /// schema etc. But renaming a table should not affect the version, since the table itself
+    /// does not change. The tuple (database_id, table_id, version) identifies a unique and
+    /// consistent table snapshot.
     ///
     /// A version is not guaranteed to be consecutive.
-    ///
     pub version: MetaVersion,
 }
 
