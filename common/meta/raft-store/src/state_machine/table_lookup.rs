@@ -36,11 +36,9 @@ impl SledOrderedSerde for TableLookupKey {
     fn ser(&self) -> Result<IVec, MetaStorageError> {
         let mut buf = BytesMut::new();
         buf.write_uvarint(self.database_id)
-            .map_error_to_meta_storage_error(MetaStorageError::SerializeError, || {
-                "write_uvarint"
-            })?;
+            .map_error_to_meta_storage_error(MetaStorageError::BytesError, || "write_uvarint")?;
         buf.write_string(&self.table_name)
-            .map_error_to_meta_storage_error(MetaStorageError::SerializeError, || "write_string")?;
+            .map_error_to_meta_storage_error(MetaStorageError::BytesError, || "write_string")?;
         Ok(IVec::from(buf.to_vec()))
     }
 
@@ -49,10 +47,10 @@ impl SledOrderedSerde for TableLookupKey {
         let mut buf_read = Cursor::new(v);
         let database_id = buf_read
             .read_uvarint()
-            .map_error_to_meta_storage_error(MetaStorageError::SerializeError, || "read_uvarint")?;
+            .map_error_to_meta_storage_error(MetaStorageError::BytesError, || "read_uvarint")?;
         let table_name = buf_read
             .read_string()
-            .map_error_to_meta_storage_error(MetaStorageError::SerializeError, || "read_string")?;
+            .map_error_to_meta_storage_error(MetaStorageError::BytesError, || "read_string")?;
         Ok(TableLookupKey {
             database_id,
             table_name,

@@ -54,7 +54,7 @@ pub trait SledKeySpace {
     fn deserialize_key<T: AsRef<[u8]>>(iv: T) -> Result<Self::K, MetaStorageError> {
         let b = iv.as_ref();
         if b[0] != Self::PREFIX {
-            return Err(MetaStorageError::MetaStoreDamaged(String::from(
+            return Err(MetaStorageError::SledError(String::from(
                 "invalid prefix",
             )));
         }

@@ -80,7 +80,7 @@ impl SledOrderedSerde for StateMachineMetaKey {
             return Ok(StateMachineMetaKey::LastMembership);
         }
 
-        Err(MetaStorageError::MetaStoreDamaged(String::from(
+        Err(MetaStorageError::SledError(String::from(
             "invalid key IVec",
         )))
     }

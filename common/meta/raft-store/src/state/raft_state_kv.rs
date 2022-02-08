@@ -86,7 +86,7 @@ impl SledOrderedSerde for RaftStateKey {
             return Ok(RaftStateKey::StateMachineId);
         }
 
-        Err(MetaStorageError::MetaStoreDamaged(String::from(
+        Err(MetaStorageError::SledError(String::from(
             "invalid key IVec",
         )))
     }

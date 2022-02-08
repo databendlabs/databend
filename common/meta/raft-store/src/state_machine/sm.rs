@@ -207,7 +207,7 @@ impl StateMachine {
         let mut kvs = Vec::new();
         for rkv in view {
             let (k, v) = rkv
-                .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
+                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
                     "taking snapshot"
                 })?;
             kvs.push(vec![k.to_vec(), v.to_vec()]);

@@ -69,7 +69,7 @@ impl SledTree {
         }
         let t = db
             .open_tree(&tree_name)
-            .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
+            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
                 format!("open tree: {}", tree_name)
             })?;
 
@@ -138,7 +138,7 @@ impl SledTree {
         let got = self
             .tree
             .contains_key(KV::serialize_key(key)?)
-            .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
+            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
                 format!("contains_key: {}:{}", self.name, key)
             })?;
 
@@ -171,7 +171,7 @@ impl SledTree {
                     None => None,
                 }
             })
-            .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, mes)?;
+            .map_error_to_meta_storage_error(MetaStorageError::SledError, mes)?;
 
         self.flush_async(true).await?;
 
@@ -188,7 +188,7 @@ impl SledTree {
         let got = self
             .tree
             .get(KV::serialize_key(key)?)
-            .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
+            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
                 format!("get: {}:{}", self.name, key)
             })?;
 
@@ -214,8 +214,7 @@ impl SledTree {
             Some(res) => res,
         };
 
-        let last =
-            last.map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || "last")?;
+        let last = last.map_error_to_meta_storage_error(MetaStorageError::SledError, || "last")?;
 
         let (k, v) = last;
         let key = KV::deserialize_key(k)?;
@@ -229,7 +228,7 @@ impl SledTree {
         let removed = self
             .tree
             .remove(KV::serialize_key(key)?)
-            .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
+            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
                 format!("removed: {}", key,)
             })?;
 
@@ -259,7 +258,7 @@ impl SledTree {
 
         for item in self.tree.range(sled_range) {
             let (k, _) = item
-                .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
+                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
                     format!("range_remove: {}", range_mes,)
                 })?;
             batch.remove(k);
@@ -267,7 +266,7 @@ impl SledTree {
 
         self.tree
             .apply_batch(batch)
-            .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
+            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
                 format!("batch remove: {}", range_mes,)
             })?;
 
@@ -290,7 +289,7 @@ impl SledTree {
         let range = KV::serialize_range(&range)?;
         for item in self.tree.range(range) {
             let (k, _) = item
-                .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
+                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
                     format!("range_get: {}", range_mes,)
                 })?;
 
@@ -315,7 +314,7 @@ impl SledTree {
         let range = KV::serialize_range(&range)?;
         for item in self.tree.range(range) {
             let (k, v) = item
-                .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
+                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
                     format!("range_get: {}", range_mes,)
                 })?;
 
@@ -344,7 +343,7 @@ impl SledTree {
         let it = self.tree.range(range);
         let it = it.map(move |item| {
             let (k, v) = item
-                .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
+                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
                     format!("range_get: {}", range_mes,)
                 })?;
 
@@ -366,8 +365,7 @@ impl SledTree {
 
         let pref = KV::serialize_key(prefix)?;
         for item in self.tree.scan_prefix(pref) {
-            let (k, v) =
-                item.map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, mes)?;
+            let (k, v) = item.map_error_to_meta_storage_error(MetaStorageError::SledError, mes)?;
 
             let key = KV::deserialize_key(k)?;
             let value = KV::deserialize_value(v)?;
@@ -392,7 +390,7 @@ impl SledTree {
 
         for item in self.tree.range(range) {
             let (_, v) = item
-                .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
+                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
                     format!("range_get: {}", range_mes,)
                 })?;
 
@@ -417,9 +415,7 @@ impl SledTree {
 
         self.tree
             .apply_batch(batch)
-            .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
-                "batch append"
-            })?;
+            .map_error_to_meta_storage_error(MetaStorageError::SledError, || "batch append")?;
 
         self.flush_async(true).await?;
 
@@ -447,7 +443,7 @@ impl SledTree {
 
         self.tree
             .apply_batch(batch)
-            .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
+            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
                 "batch append_values"
             })?;
 
@@ -466,7 +462,7 @@ impl SledTree {
         let prev = self
             .tree
             .insert(k, v)
-            .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
+            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
                 format!("insert_value {}", key)
             })?;
 
@@ -512,7 +508,7 @@ impl SledTree {
             self.tree
                 .flush_async()
                 .await
-                .map_error_to_meta_storage_error(MetaStorageError::MetaStoreDamaged, || {
+                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
                     "flush sled-tree"
                 })?;
         }

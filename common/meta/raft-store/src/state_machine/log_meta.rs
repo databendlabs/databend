@@ -63,7 +63,7 @@ impl SledOrderedSerde for LogMetaKey {
             return Ok(LogMetaKey::LastPurged);
         }
 
-        Err(MetaStorageError::MetaStoreDamaged(String::from(
+        Err(MetaStorageError::SledError(String::from(
             "invalid key IVec",
         )))
     }

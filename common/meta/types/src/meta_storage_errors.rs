@@ -21,18 +21,16 @@ use thiserror::Error;
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum MetaStorageError {
-    // type to represent serialize errors
+    // type to represent bytes format errors
     #[error("{0}")]
-    SerializeError(String),
+    BytesError(String),
 
+    // type to represent serialize/deserialize errors
     #[error("{0}")]
     SerdeError(String),
 
     #[error("{0}")]
     SledError(String),
-
-    #[error("{0}")]
-    MetaStoreDamaged(String),
 
     #[error("{0}")]
     TransactionAbort(String),
@@ -63,14 +61,14 @@ impl From<MetaStorageError> for ErrorCode {
 
 impl From<std::string::FromUtf8Error> for MetaStorageError {
     fn from(error: std::string::FromUtf8Error) -> Self {
-        MetaStorageError::SerializeError(format!(
+        MetaStorageError::BytesError(format!(
             "Bad bytes, cannot parse bytes with UTF8, cause: {}",
             error
         ))
     }
 }
 
-// from serde error to MetaStorageError::SerializeError
+// from serde error to MetaStorageError::SerdeError
 impl From<serde_json::Error> for MetaStorageError {
     fn from(error: serde_json::Error) -> MetaStorageError {
         MetaStorageError::SerdeError(format!("serde json se/de error: {:?}", error))
