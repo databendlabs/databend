@@ -86,6 +86,8 @@ impl HttpQueryManager {
                 }
                 if self_clone.remove_query(&query_id_clone).await.is_none() {
                     tracing::warn!("http query {} timeout", &query_id_clone);
+                } else {
+                    query.kill().await;
                 }
             });
         };
