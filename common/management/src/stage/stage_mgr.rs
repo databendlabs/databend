@@ -36,12 +36,17 @@ pub struct StageMgr {
 }
 
 impl StageMgr {
-    #[allow(dead_code)]
-    pub fn new(kv_api: Arc<dyn KVApi>, tenant: &str) -> Self {
-        StageMgr {
+    pub fn create(kv_api: Arc<dyn KVApi>, tenant: &str) -> Result<Self> {
+        if tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while role mgr create)",
+            ));
+        }
+
+        Ok(StageMgr {
             kv_api,
             stage_prefix: format!("{}/{}", USER_STAGE_API_KEY_PREFIX, tenant),
-        }
+        })
     }
 }
 
@@ -76,7 +81,7 @@ impl StageApi for StageMgr {
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
-            Err(_) => Err(ErrorCode::UnknownUser(format!("Unknown stage {}", name))),
+            Err(_) => Err(ErrorCode::UnknownStage(format!("Unknown stage {}", name))),
         }
     }
 

@@ -209,8 +209,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
                         name: name.to_string(),
                         meta: DatabaseMeta {
                             engine: "default".to_string(),
-                            engine_options: Default::default(),
-                            options: Default::default(),
+                            ..Default::default()
                         },
                     },
                 })

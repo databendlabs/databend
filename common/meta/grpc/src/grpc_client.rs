@@ -65,7 +65,7 @@ impl ItemManager for MetaChannelManager {
     }
 
     async fn check(&self, mut ch: Self::Item) -> std::result::Result<Self::Item, Self::Error> {
-        futures::future::poll_fn(|cx| (&mut ch).poll_ready(cx))
+        futures::future::poll_fn(|cx| ch.poll_ready(cx))
             .await
             .map_err(|e| {
                 ErrorCode::CannotConnectNode(format!("Check rpc connect failed, error: {}", e))
@@ -178,7 +178,7 @@ impl MetaGrpcClient {
         R: DeserializeOwned,
     {
         let act: MetaGrpcWriteReq = v.into();
-        let req: Request<RaftRequest> = (&act.clone()).try_into()?;
+        let req: Request<RaftRequest> = act.clone().try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
         let mut client = self.make_client().await?;
@@ -192,7 +192,7 @@ impl MetaGrpcClient {
                         *token = None;
                     }
                     let mut client = self.make_client().await?;
-                    let req: Request<RaftRequest> = (&act).try_into()?;
+                    let req: Request<RaftRequest> = act.try_into()?;
                     let req = common_tracing::inject_span_to_tonic_request(req);
                     Ok(client.write_msg(req).await?.into_inner())
                 } else {
@@ -220,7 +220,7 @@ impl MetaGrpcClient {
         R: DeserializeOwned,
     {
         let act: MetaGrpcReadReq = v.into();
-        let req: Request<RaftRequest> = (&act.clone()).try_into()?;
+        let req: Request<RaftRequest> = act.clone().try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
         let mut client = self.make_client().await?;
@@ -234,7 +234,7 @@ impl MetaGrpcClient {
                         *token = None;
                     }
                     let mut client = self.make_client().await?;
-                    let req: Request<RaftRequest> = (&act).try_into()?;
+                    let req: Request<RaftRequest> = act.try_into()?;
                     let req = common_tracing::inject_span_to_tonic_request(req);
                     Ok(client.read_msg(req).await?.into_inner())
                 } else {

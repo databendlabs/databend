@@ -138,14 +138,14 @@ impl ViewCommand {
         }
         let s = System::new_all();
 
-        if s.process_by_name("databend-meta").is_empty() {
+        if s.processes_by_name("databend-meta").count() == 0 {
             return Err(CliError::Unknown(
                 "❗ cannot find existing meta service on local machine"
                     .parse()
                     .unwrap(),
             ));
         }
-        if s.process_by_name("databend-query").is_empty() {
+        if s.processes_by_name("databend-query").count() == 0 {
             return Err(CliError::Unknown(
                 "❗ cannot find existing query service on local machine"
                     .parse()

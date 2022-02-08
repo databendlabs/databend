@@ -92,7 +92,7 @@ pub fn test_scalar_functions_with_type(
         let mut rows_size = 0;
         let mut arguments_type = Vec::with_capacity(test.columns.len());
 
-        for (_index, arg_column) in test.columns.iter().enumerate() {
+        for (_, arg_column) in test.columns.iter().enumerate() {
             match arg_column.column() {
                 DataColumn::Constant(v, n) => {
                     rows_size = *n;

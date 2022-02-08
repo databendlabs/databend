@@ -28,7 +28,7 @@ async fn test_add_udf() -> Result<()> {
 
     let udf = create_test_udf();
     udf_api.add_udf(udf.clone()).await?;
-    let value = kv_api.get_kv("__fd_udfs/databend_query/isnotempty").await?;
+    let value = kv_api.get_kv("__fd_udfs/admin/isnotempty").await?;
 
     match value {
         Some(SeqV {
@@ -114,6 +114,6 @@ fn create_test_udf() -> UserDefinedFunction {
 
 async fn new_udf_api() -> Result<(Arc<MetaEmbedded>, UdfMgr)> {
     let test_api = Arc::new(MetaEmbedded::new_temp().await?);
-    let mgr = UdfMgr::new(test_api.clone(), "databend_query");
+    let mgr = UdfMgr::create(test_api.clone(), "admin")?;
     Ok((test_api, mgr))
 }

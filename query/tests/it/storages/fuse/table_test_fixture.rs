@@ -33,7 +33,6 @@ use common_planners::Expression;
 use common_planners::Extras;
 use common_streams::SendableDataBlockStream;
 use databend_query::catalogs::Catalog;
-use databend_query::configs::Config;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::PlanParser;
@@ -59,13 +58,14 @@ pub struct TestFixture {
 impl TestFixture {
     pub async fn new() -> TestFixture {
         let tmp_dir = TempDir::new().unwrap();
-        let mut config = Config::default();
+        let mut conf = crate::tests::ConfigBuilder::create().config();
+
         // make sure we are suing `Disk` storage
-        config.storage.storage_type = "Disk".to_string();
+        conf.storage.storage_type = "Disk".to_string();
         // use `TempDir` as root path (auto clean)
-        config.storage.disk.data_path = tmp_dir.path().to_str().unwrap().to_string();
-        config.storage.disk.temp_data_path = tmp_dir.path().to_str().unwrap().to_string();
-        let ctx = crate::tests::create_query_context_with_config(config).unwrap();
+        conf.storage.disk.data_path = tmp_dir.path().to_str().unwrap().to_string();
+        conf.storage.disk.temp_data_path = tmp_dir.path().to_str().unwrap().to_string();
+        let ctx = crate::tests::create_query_context_with_config(conf).unwrap();
 
         let tenant = ctx.get_tenant();
         let random_prefix: String = Uuid::new_v4().simple().to_string();

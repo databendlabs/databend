@@ -68,11 +68,11 @@ const QUERY_JWT_KEY_FILE: &str = "QUERY_JWT_KEY_FILE";
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct QueryConfig {
-    /// Tenant id for get the information from the MetaStore
-    #[clap(long, env = QUERY_TENANT_ID, default_value = "")]
+    /// Tenant id for get the information from the MetaSrv.
+    #[clap(long, env = QUERY_TENANT_ID, default_value = "admin")]
     pub tenant_id: String,
 
-    /// ID for construct the cluster
+    /// ID for construct the cluster.
     #[clap(long, env = QUERY_CLUSTER_ID, default_value = "")]
     pub cluster_id: String,
 

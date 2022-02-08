@@ -96,7 +96,7 @@ pub enum AuthInfo {
 fn calc_sha1(v: &[u8]) -> [u8; 20] {
     let mut m = ::sha1::Sha1::new();
     m.update(v);
-    m.digest().bytes()
+    m.finalize().into()
 }
 
 fn double_sha1(v: &[u8]) -> [u8; 20] {
@@ -205,7 +205,7 @@ impl AuthInfo {
         m.update(salt);
         m.update(user_password_hash);
 
-        let result = m.digest().bytes();
+        let result: [u8; 20] = m.finalize().into();
         if input.len() != result.len() {
             return Err(ErrorCode::SHA1CheckFailed("SHA1 check failed"));
         }

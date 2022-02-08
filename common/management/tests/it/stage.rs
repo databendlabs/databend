@@ -31,7 +31,7 @@ async fn test_add_stage() -> Result<()> {
 
     let stage_info = create_test_stage_info();
     stage_api.add_stage(stage_info.clone()).await?;
-    let value = kv_api.get_kv("__fd_stages/databend_query/mystage").await?;
+    let value = kv_api.get_kv("__fd_stages/admin/mystage").await?;
 
     match value {
         Some(SeqV {
@@ -120,6 +120,6 @@ fn create_test_stage_info() -> UserStageInfo {
 
 async fn new_stage_api() -> Result<(Arc<MetaEmbedded>, StageMgr)> {
     let test_api = Arc::new(MetaEmbedded::new_temp().await?);
-    let mgr = StageMgr::new(test_api.clone(), "databend_query");
+    let mgr = StageMgr::create(test_api.clone(), "admin")?;
     Ok((test_api, mgr))
 }

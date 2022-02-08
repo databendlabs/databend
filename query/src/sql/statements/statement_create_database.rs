@@ -70,6 +70,7 @@ impl DfCreateDatabase {
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
             options: self.options.clone(),
+            ..Default::default()
         })
     }
 }

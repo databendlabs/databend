@@ -106,14 +106,8 @@ where E: Display + Send + Sync + 'static
 }
 
 // ser/de to/from tonic::Status
-impl From<&tonic::Status> for MetaError {
-    fn from(status: &tonic::Status) -> Self {
-        MetaError::ErrorCode(SerializedError::from(ErrorCode::from(status)))
-    }
-}
-
 impl From<tonic::Status> for MetaError {
     fn from(status: tonic::Status) -> Self {
-        (&status).into()
+        MetaError::ErrorCode(SerializedError::from(ErrorCode::from(status)))
     }
 }

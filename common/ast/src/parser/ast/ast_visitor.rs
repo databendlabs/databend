@@ -38,10 +38,8 @@ use crate::parser::ast::UnaryOperator;
 pub trait AstVisitor {
     fn visit_expr(&mut self, expr: &Expr) -> Result<()> {
         match expr {
-            Expr::Wildcard => self.visit_wildcard(),
             Expr::ColumnRef { .. } => self.visit_column_ref(),
-            Expr::IsNull(expr) => self.visit_is_null(expr),
-            Expr::IsNotNull(expr) => self.visit_is_not_null(expr),
+            Expr::IsNull { expr, not } => self.visit_is_null(expr, not),
             Expr::InList { expr, list, not } => self.visit_in_list(expr, list, not),
             Expr::InSubquery {
                 expr,
@@ -50,14 +48,15 @@ pub trait AstVisitor {
             } => self.visit_in_subquery(expr, subquery, not),
             Expr::Between {
                 expr,
-                negated,
                 low,
                 high,
-            } => self.visit_between(expr, negated, low, high),
+                not,
+            } => self.visit_between(expr, low, high, not),
             Expr::BinaryOp { op, left, right } => self.visit_binary_op(op, left, right),
             Expr::UnaryOp { op, expr } => self.visit_unary_op(op, expr),
             Expr::Cast { expr, target_type } => self.visit_cast(expr, target_type),
             Expr::Literal(_) => self.visit_literal(),
+            Expr::CountAll => self.visit_count_all(),
             Expr::FunctionCall {
                 distinct,
                 name,
@@ -75,24 +74,16 @@ pub trait AstVisitor {
         }
     }
 
-    fn visit_wildcard(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_is_null(&mut self, expr: &Expr) -> Result<()> {
+    fn visit_is_null(&mut self, expr: &Expr, _not: &bool) -> Result<()> {
         self.visit_expr(expr)
     }
 
-    fn visit_is_not_null(&mut self, expr: &Expr) -> Result<()> {
-        self.visit_expr(expr)
-    }
-
-    fn visit_in_list(&mut self, expr: &Expr, exprs: &[Expr], _: &bool) -> Result<()> {
+    fn visit_in_list(&mut self, expr: &Expr, exprs: &[Expr], _not: &bool) -> Result<()> {
         self.visit_expr(expr)?;
         self.visit_exprs(exprs)
     }
 
-    fn visit_in_subquery(&mut self, expr: &Expr, query: &Query, _: &bool) -> Result<()> {
+    fn visit_in_subquery(&mut self, expr: &Expr, query: &Query, _not: &bool) -> Result<()> {
         self.visit_expr(expr)?;
         self.visit_query(query)
     }
@@ -105,12 +96,16 @@ pub trait AstVisitor {
         Ok(())
     }
 
+    fn visit_count_all(&mut self) -> Result<()> {
+        Ok(())
+    }
+
     fn visit_binary_op(&mut self, _: &BinaryOperator, left: &Expr, right: &Expr) -> Result<()> {
         self.visit_expr(left)?;
         self.visit_expr(right)
     }
 
-    fn visit_between(&mut self, expr: &Expr, _: &bool, low: &Expr, high: &Expr) -> Result<()> {
+    fn visit_between(&mut self, expr: &Expr, low: &Expr, high: &Expr, _not: &bool) -> Result<()> {
         self.visit_expr(expr)?;
         self.visit_expr(low)?;
         self.visit_expr(high)
@@ -120,7 +115,7 @@ pub trait AstVisitor {
         self.visit_expr(expr)
     }
 
-    fn visit_cast(&mut self, expr: &Expr, _: &TypeName) -> Result<()> {
+    fn visit_cast(&mut self, expr: &Expr, _type_name: &TypeName) -> Result<()> {
         self.visit_expr(expr)
     }
 

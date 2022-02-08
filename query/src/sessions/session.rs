@@ -39,27 +39,35 @@ pub struct Session {
     pub(in crate::sessions) id: String,
     pub(in crate::sessions) typ: String,
     #[ignore_malloc_size_of = "insignificant"]
-    pub(in crate::sessions) config: Config,
+    pub(in crate::sessions) conf: Config,
     #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) session_mgr: Arc<SessionManager>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) session_ctx: Arc<SessionContext>,
+    #[ignore_malloc_size_of = "insignificant"]
+    session_settings: Settings,
 }
 
 impl Session {
     pub fn try_create(
-        config: Config,
+        conf: Config,
         id: String,
         typ: String,
         session_mgr: Arc<SessionManager>,
     ) -> Result<Arc<Session>> {
+        let user_api = session_mgr.get_user_manager();
+        let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
+        let session_settings = Settings::try_create(&conf, session_ctx.clone(), user_api)?;
+        let ref_count = Arc::new(AtomicUsize::new(0));
+
         Ok(Arc::new(Session {
             id,
             typ,
-            config,
+            conf,
             session_mgr,
-            ref_count: Arc::new(AtomicUsize::new(0)),
-            session_ctx: Arc::new(SessionContext::try_create()?),
+            ref_count,
+            session_ctx,
+            session_settings,
         }))
     }
 
@@ -111,7 +119,7 @@ impl Session {
         Ok(match query_ctx.as_ref() {
             Some(shared) => QueryContext::create_from_shared(shared.clone()),
             None => {
-                let config = self.config.clone();
+                let config = self.conf.clone();
                 let discovery = self.session_mgr.get_cluster_discovery();
 
                 let session = self.clone();
@@ -194,7 +202,7 @@ impl Session {
     }
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
-        self.session_ctx.get_settings()
+        Arc::new(self.session_settings.clone())
     }
 
     pub fn get_session_manager(self: &Arc<Self>) -> Arc<SessionManager> {

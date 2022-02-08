@@ -40,11 +40,17 @@ pub struct UserMgr {
 }
 
 impl UserMgr {
-    pub fn new(kv_api: Arc<dyn KVApi>, tenant: &str) -> Self {
-        UserMgr {
+    pub fn create(kv_api: Arc<dyn KVApi>, tenant: &str) -> Result<Self> {
+        if tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while user mgr create)",
+            ));
+        }
+
+        Ok(UserMgr {
             kv_api,
             user_prefix: format!("{}/{}", USER_API_KEY_PREFIX, tenant),
-        }
+        })
     }
 
     async fn upsert_user_info(

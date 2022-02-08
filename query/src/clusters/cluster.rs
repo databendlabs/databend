@@ -82,7 +82,7 @@ impl ClusterDiscovery {
         let tenant_id = &cfg.query.tenant_id;
         let cluster_id = &cfg.query.cluster_id;
         let lift_time = Duration::from_secs(60);
-        let cluster_manager = ClusterMgr::new(api, tenant_id, cluster_id, lift_time)?;
+        let cluster_manager = ClusterMgr::create(api, tenant_id, cluster_id, lift_time)?;
 
         Ok((lift_time, Arc::new(cluster_manager)))
     }
