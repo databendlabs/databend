@@ -113,23 +113,22 @@ impl SledTree {
     ) -> MetaStorageResult<T> {
         let sync = sync && self.sync;
 
-        let result: TransactionResult<T, MetaStorageError> =
-            (&self.tree).transaction(move |tree| {
-                let txn_sled_tree = TransactionSledTree { txn_tree: tree };
-                let r = f(txn_sled_tree.clone());
-                match r {
-                    Ok(r) => {
-                        if sync {
-                            txn_sled_tree.txn_tree.flush();
-                        }
-                        Ok(r)
+        let result: TransactionResult<T, MetaStorageError> = self.tree.transaction(move |tree| {
+            let txn_sled_tree = TransactionSledTree { txn_tree: tree };
+            let r = f(txn_sled_tree.clone());
+            match r {
+                Ok(r) => {
+                    if sync {
+                        txn_sled_tree.txn_tree.flush();
                     }
-                    Err(e) => {
-                        tracing::warn!("txn abort: {}", e);
-                        abort(e)?
-                    }
+                    Ok(r)
                 }
-            });
+                Err(e) => {
+                    tracing::warn!("txn abort: {}", e);
+                    abort(e)?
+                }
+            }
+        });
         result.map_err(MetaStorageError::from)
     }
 

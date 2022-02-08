@@ -32,7 +32,7 @@ use common_meta_types::DatabaseMeta;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
-use common_meta_types::MetaError;
+use common_meta_types::MetaStorageError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
@@ -299,7 +299,10 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
 
             let err = r.unwrap_err();
 
-            assert_eq!(MetaError::UnknownTableId(String::from("table_id:0")), err);
+            assert_eq!(
+                MetaStorageError::MetaSrvError(String::from("metasrv error: table_id:0")),
+                err
+            );
 
             Ok(AppliedState::None)
         })?;
