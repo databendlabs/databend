@@ -176,7 +176,7 @@ impl ExpressionAnalyzer {
     /// Function to process when args's size is more than 2.
     fn other_function(&self, info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
         let query_context = self.context.clone();
-        let context_args = ContextFunction::build_args_from_ctx(&info.name, query_context)?;
+        let context_args = ContextFunction::build_args_from_ctx(query_context, &info.name)?;
 
         match context_args.is_empty() {
             true => {

@@ -33,7 +33,7 @@ async fn test_fuse_history_truncate_in_drop_stmt() -> Result<()> {
     append_sample_data(10, &fixture).await?;
     // let's Drop
     let qry = format!("drop table '{}'.'{}'", db, tbl);
-    execute_command(qry.as_str(), ctx.clone()).await?;
+    execute_command(ctx.clone(), qry.as_str()).await?;
     // there should be no files left inside test root (dirs are kept, though)
     check_data_dir(
         &fixture,

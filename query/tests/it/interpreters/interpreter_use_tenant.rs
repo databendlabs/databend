@@ -26,7 +26,7 @@ async fn test_use_tenant_interpreter() -> Result<()> {
         .config();
     let ctx = crate::tests::create_query_context_with_config(conf.clone())?;
 
-    let plan = PlanParser::parse("SUDO USE TENANT 't1'", ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), "SUDO USE TENANT 't1'").await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
     assert_eq!(interpreter.name(), "UseTenantInterpreter");
@@ -43,7 +43,7 @@ async fn test_use_tenant_interpreter() -> Result<()> {
 async fn test_use_tenant_interpreter_error() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = PlanParser::parse("SUDO USE TENANT 't1'", ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), "SUDO USE TENANT 't1'").await?;
     let interpreter = InterpreterFactory::get(ctx, plan)?;
 
     if let Err(e) = interpreter.execute(None).await {

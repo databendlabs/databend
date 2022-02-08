@@ -27,11 +27,11 @@ async fn test_create_udf_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
     let tenant = ctx.get_tenant();
 
-    static TEST_QUERY: &str =
+    let query =
         "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(isnull(p)) DESC = 'This is a description'";
 
     {
-        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatUDFInterpreter");
         let mut stream = executor.execute(None).await?;
@@ -49,7 +49,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
 
     {
         // IF NOT EXISTS.
-        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         executor.execute(None).await?;
 
@@ -64,11 +64,10 @@ async fn test_create_udf_interpreter() -> Result<()> {
         assert_eq!(udf.description, "This is a description")
     }
 
-    static TEST_QUERY1: &str =
-        "CREATE FUNCTION isnotempty AS (p) -> not(isnull(p)) DESC = 'This is a description'";
-
     {
-        let plan = PlanParser::parse(TEST_QUERY1, ctx.clone()).await?;
+        let query1 =
+            "CREATE FUNCTION isnotempty AS (p) -> not(isnull(p)) DESC = 'This is a description'";
+        let plan = PlanParser::parse(ctx.clone(), query1).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let r = executor.execute(None).await;
         assert!(r.is_err());
