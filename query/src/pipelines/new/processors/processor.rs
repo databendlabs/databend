@@ -78,22 +78,22 @@ impl ProcessorPtr {
 
     /// # Safety
     pub unsafe fn name(&self) -> &'static str {
-        (&*self.inner.get()).name()
+        (*self.inner.get()).name()
     }
 
     /// # Safety
     pub unsafe fn event(&self) -> Result<Event> {
-        (&mut *self.inner.get()).event()
+        (*self.inner.get()).event()
     }
 
     /// # Safety
     pub unsafe fn process(&self) -> Result<()> {
-        (&mut *self.inner.get()).process()
+        (*self.inner.get()).process()
     }
 
     /// # Safety
     pub unsafe fn async_process(&self) -> BoxFuture<'static, Result<()>> {
-        (&mut *self.inner.get()).async_process().boxed()
+        (*self.inner.get()).async_process().boxed()
     }
 }
 

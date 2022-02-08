@@ -111,7 +111,7 @@ pub async fn streaming_load(
         })
         .unwrap_or(b'\n');
 
-    let plan = PlanParser::parse(insert_sql, context.clone())
+    let plan = PlanParser::parse(context.clone(), insert_sql)
         .await
         .map_err(InternalServerError)?;
     context.attach_query_str(insert_sql);

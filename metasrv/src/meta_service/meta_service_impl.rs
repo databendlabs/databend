@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Meta service impl a grpc server that serves both raft protocol: append_entries, vote and install_snapshot.
-//! It also serves RPC for user-data access.
+//! Meta service impl a grpc server that serves both raft protocol: append_entries, vote and
+//! install_snapshot. It also serves RPC for user-data access.
 
 use std::convert::TryInto;
 use std::pin::Pin;

@@ -75,7 +75,8 @@ pub enum Cmd {
     UpsertKV {
         key: String,
 
-        /// Since a sequence number is always positive, using Exact(0) to perform an add-if-absent operation.
+        /// Since a sequence number is always positive, using Exact(0) to perform an add-if-absent
+        /// operation.
         /// - GE(1) to perform an update-any operation.
         /// - Exact(n) to perform an update on some specified version.
         /// - Any to perform an update or insert that always takes effect.

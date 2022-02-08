@@ -256,15 +256,15 @@ async fn test_fuse_table_optimize() -> Result<()> {
     // do compact
     let query = format!("optimize table {}.{} compact", db_name, tbl_name);
 
-    let plan = PlanParser::parse(&query, ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), &query).await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
-    // `PipelineBuilder` will parallelize the table reading according to value of setting `max_threads`,
-    // and `Table::read` will also try to de-queue read jobs preemptively. thus, the number of blocks
-    // that `Table::append` takes are not deterministic (`append` is also executed parallelly in this case),
-    // therefore, the final number of blocks varies.
-    // To avoid flaky test, the value of setting `max_threads` is set to be 1, so that pipeline_builder will
-    // only arrange one worker for the `ReadDataSourcePlan`.
+    // `PipelineBuilder` will parallelize the table reading according to value of setting
+    // `max_threads`, and `Table::read` will also try to de-queue read jobs preemptively. thus,
+    // the number of blocks that `Table::append` takes are not deterministic (`append` is also
+    // executed parallelly in this case), therefore, the final number of blocks varies.
+    // To avoid flaky test, the value of setting `max_threads` is set to be 1, so that
+    // pipeline_builder will only arrange one worker for the `ReadDataSourcePlan`.
     ctx.get_settings().set_max_threads(1)?;
     let data_stream = interpreter.execute(None).await?;
     let _ = data_stream.try_collect::<Vec<_>>();

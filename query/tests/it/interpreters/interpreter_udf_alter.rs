@@ -27,9 +27,9 @@ async fn test_alter_udf_interpreter() -> Result<()> {
     let tenant = ctx.get_tenant();
 
     {
-        static TEST_QUERY: &str =
+        let query =
             "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(isnull(p)) DESC = 'This is a description'";
-        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatUDFInterpreter");
         let mut stream = executor.execute(None).await?;
@@ -46,9 +46,9 @@ async fn test_alter_udf_interpreter() -> Result<()> {
     }
 
     {
-        static TEST_QUERY1: &str =
+        let query =
         "ALTER FUNCTION isnotempty AS (d) -> not(isnotnull(d)) DESC = 'This is a new description'";
-        let plan = PlanParser::parse(TEST_QUERY1, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "AlterUDFInterpreter");
 

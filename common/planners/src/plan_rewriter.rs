@@ -73,13 +73,13 @@ use crate::UseDatabasePlan;
 use crate::UseTenantPlan;
 
 /// `PlanRewriter` is a visitor that can help to rewrite `PlanNode`
-/// By default, a `PlanRewriter` will traverse the plan tree in pre-order and return rewritten plan tree.
-/// Every `rewrite_xxx` method should return a new `PlanNode`(in default implementation it will return a clone of given plan node)
-/// so its parent can replace original children with rewritten children.
-/// # Example
+/// By default, a `PlanRewriter` will traverse the plan tree in pre-order and return rewritten plan
+/// tree. Every `rewrite_xxx` method should return a new `PlanNode`(in default implementation it
+/// will return a clone of given plan node) so its parent can replace original children with
+/// rewritten children. # Example
 /// `PlanRewriter` is useful when you want to rewrite a part of a plan tree.
-/// For example, if we'd like to rewrite all the `Filter` nodes in a plan tree and keep rest nodes as they are, we can implement a rewriter like:
-/// ```ignore
+/// For example, if we'd like to rewrite all the `Filter` nodes in a plan tree and keep rest nodes
+/// as they are, we can implement a rewriter like: ```ignore
 /// struct FilterRewriter {};
 /// impl PlanRewriter for FilterRewriter {
 ///     fn rewrite_filter(&mut self, plan: &PlanNode) -> Result<PlanNode> {

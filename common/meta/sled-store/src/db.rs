@@ -14,7 +14,8 @@
 
 //! Define a process-wise global sled::Db.
 //! sled::Db does not allow to open multiple db in one process.
-//! One of the known issue is that `flush_asynce()` in different tokio runtime on different db result in a deadlock.
+//! One of the known issue is that `flush_asynce()` in different tokio runtime on different db
+//! result in a deadlock.
 
 use std::sync::Arc;
 use std::sync::Mutex;

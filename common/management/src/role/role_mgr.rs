@@ -39,11 +39,17 @@ pub struct RoleMgr {
 }
 
 impl RoleMgr {
-    pub fn new(kv_api: Arc<dyn KVApi>, tenant: &str) -> Self {
-        RoleMgr {
+    pub fn create(kv_api: Arc<dyn KVApi>, tenant: &str) -> Result<Self> {
+        if tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while role mgr create)",
+            ));
+        }
+
+        Ok(RoleMgr {
             kv_api,
             role_prefix: format!("{}/{}", ROLE_API_KEY_PREFIX, tenant),
-        }
+        })
     }
 
     async fn upsert_role_info(

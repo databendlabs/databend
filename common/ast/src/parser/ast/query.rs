@@ -32,7 +32,8 @@ pub struct Query {
     pub limit: Option<Expr>,
 }
 
-// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
+// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM
+// ...`
 #[derive(Debug, Clone, PartialEq)]
 pub enum SetExpr {
     Select(Box<SelectStmt>),

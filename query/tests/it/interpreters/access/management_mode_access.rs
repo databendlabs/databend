@@ -14,7 +14,6 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use databend_query::configs::Config;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::PlanParser;
 
@@ -109,13 +108,20 @@ async fn test_management_mode_access() -> Result<()> {
         },
     ];
 
-    let mut config = Config::default();
-    config.query.management_mode = true;
+    let conf = crate::tests::ConfigBuilder::create()
+        .with_management_mode()
+        .config();
+    let ctx = crate::tests::create_query_context_with_config(conf.clone())?;
+    // First to set tenant.
+    {
+        let plan = PlanParser::parse(ctx.clone(), "SUDO USE TENANT 'test'").await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
+        let _ = interpreter.execute(None).await?;
+    }
 
     for group in groups {
-        let ctx = crate::tests::create_query_context_with_config(config.clone())?;
         for test in group.tests {
-            let plan = PlanParser::parse(test.query, ctx.clone()).await?;
+            let plan = PlanParser::parse(ctx.clone(), test.query).await?;
             let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
             let res = interpreter.execute(None).await;
             assert_eq!(

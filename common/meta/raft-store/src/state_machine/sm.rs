@@ -194,8 +194,8 @@ impl StateMachine {
     }
 
     /// Serialize a snapshot for transport.
-    /// This step does not require a lock, since sled::Tree::iter() creates a consistent view on a tree
-    /// no matter if there are other writes applied to the tree.
+    /// This step does not require a lock, since sled::Tree::iter() creates a consistent view on a
+    /// tree no matter if there are other writes applied to the tree.
     pub fn serialize_snapshot(
         view: impl Iterator<Item = sled::Result<(IVec, IVec)>>,
     ) -> common_exception::Result<Vec<u8>> {
@@ -992,13 +992,14 @@ impl StateMachine {
         // TODO(xp): Caveat: The cleanup must be consistent across raft nodes:
         //           A conditional update, e.g. an upsert_kv() with MatchSeq::Eq(some_value),
         //           must be applied with the same timestamp on every raft node.
-        //           Otherwise: node-1 could have applied a log with a ts that is smaller than value.expire_at,
-        //           while node-2 may fail to apply the same log if it use a greater ts > value.expire_at.
-        //           Thus:
-        //           1. A raft log must have a field ts assigned by the leader. When applying, use this ts to
-        //              check against expire_at to decide whether to purge it.
-        //           2. A GET operation must not purge any expired entry. Since a GET is only applied to a node itself.
-        //           3. The background task can only be triggered by the raft leader, by submit a "clean expired" log.
+        //           Otherwise: node-1 could have applied a log with a ts that is smaller than
+        // value.expire_at,           while node-2 may fail to apply the same log if it use
+        // a greater ts > value.expire_at.           Thus:
+        //           1. A raft log must have a field ts assigned by the leader. When applying, use
+        // this ts to              check against expire_at to decide whether to purge it.
+        //           2. A GET operation must not purge any expired entry. Since a GET is only
+        // applied to a node itself.           3. The background task can only be triggered
+        // by the raft leader, by submit a "clean expired" log.
 
         // TODO(xp): maybe it needs a expiration queue for efficient cleaning up.
 
@@ -1043,7 +1044,8 @@ impl StateMachine {
 
     /// A kv store of all other general purpose information.
     /// The value is tuple of a monotonic sequence number and userdata value in string.
-    /// The sequence number is guaranteed to increment(by some value greater than 0) everytime the record changes.
+    /// The sequence number is guaranteed to increment(by some value greater than 0) everytime the
+    /// record changes.
     pub fn kvs(&self) -> AsKeySpace<GenericKV> {
         self.sm_tree.key_space()
     }

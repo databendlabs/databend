@@ -14,14 +14,12 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use databend_query::configs::Config;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_setting() -> Result<()> {
-    let mut conf = Config::default();
-    conf.query.tenant_id = "tenant1".to_string();
+    let conf = crate::tests::ConfigBuilder::create().config();
 
     let session_manager = SessionManager::from_conf(conf.clone()).await.unwrap();
 

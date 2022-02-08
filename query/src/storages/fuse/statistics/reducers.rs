@@ -73,7 +73,8 @@ pub fn reduce_block_stats<T: Borrow<BlockStatistics>>(
 
             // TODO
             // for some data types, we shall balance the accuracy and the length
-            // e.g. for a string col, which max value is "abcdef....", we record the max as something like "b"
+            // e.g. for a string col, which max value is "abcdef....", we record the max as
+            // something like "b"
             let min =
                 common_datavalues::DataValue::try_into_data_array(min_stats.as_slice(), data_type)?
                     .min()?;

@@ -73,6 +73,7 @@ fn test_impl_raft_storage() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_store_restart() -> anyhow::Result<()> {
+    //
     // - Create a meta store
     // - Update meta store
     // - Close and reopen it
@@ -136,6 +137,7 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
+    //
     // - Create a metasrv
     // - Apply logs
     // - Create a snapshot check snapshot state
@@ -179,6 +181,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
+    //
     // - Create a metasrv
     // - Apply logs
     // - Create a snapshot check snapshot state
@@ -225,6 +228,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
+    //
     // - Create a metasrv
     // - Feed logs
     // - Create a snapshot

@@ -86,7 +86,8 @@ where
     /// Return an raw pool item.
     ///
     /// The returned one may be an uninitialized one, i.e., it contains a None.
-    /// The lock for `items` should not be held for long, e.g. when `build()` a new connection, it takes dozen ms.
+    /// The lock for `items` should not be held for long, e.g. when `build()` a new connection, it
+    /// takes dozen ms.
     fn get_pool_item(&self, key: &Mgr::Key) -> PoolItem<Mgr::Item> {
         let mut items = self.items.lock().unwrap();
 

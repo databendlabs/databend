@@ -31,6 +31,7 @@ use crate::tests::service::start_metasrv_cluster;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
 
+///
 /// - Start a cluster of 3.
 /// - Test upsert kv and read on different nodes.
 /// - Stop and restart the cluster.
@@ -126,6 +127,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
     Ok(())
 }
 
+///
 /// - Start a cluster of 3.
 /// - Test upsert kv and read on different nodes.
 /// - Stop and restart the cluster.

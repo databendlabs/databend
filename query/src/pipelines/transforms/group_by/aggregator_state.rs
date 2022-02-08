@@ -64,12 +64,14 @@ pub struct ShortFixedKeysAggregatorState<T: ShortFixedKeyable> {
 
 // TODO:(Winter) Hack:
 // The *mut ShortFixedKeysStateEntity needs to be used externally, but we can ensure that *mut
-// ShortFixedKeysStateEntity will not be used multiple async, so ShortFixedKeysAggregatorState is Send
+// ShortFixedKeysStateEntity will not be used multiple async, so ShortFixedKeysAggregatorState is
+// Send
 unsafe impl<T: ShortFixedKeyable + Send> Send for ShortFixedKeysAggregatorState<T> {}
 
 // TODO:(Winter) Hack:
 // The *mut ShortFixedKeysStateEntity needs to be used externally, but we can ensure that &*mut
-// ShortFixedKeysStateEntity will not be used multiple async, so ShortFixedKeysAggregatorState is Sync
+// ShortFixedKeysStateEntity will not be used multiple async, so ShortFixedKeysAggregatorState is
+// Sync
 unsafe impl<T: ShortFixedKeyable + Sync> Sync for ShortFixedKeysAggregatorState<T> {}
 
 impl<T: ShortFixedKeyable> ShortFixedKeysAggregatorState<T> {

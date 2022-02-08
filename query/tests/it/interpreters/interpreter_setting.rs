@@ -23,7 +23,7 @@ use pretty_assertions::assert_eq;
 async fn test_setting_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = PlanParser::parse("SET max_block_size=1", ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), "SET max_block_size=1").await?;
     let executor = InterpreterFactory::get(ctx.clone(), plan)?;
     assert_eq!(executor.name(), "SettingInterpreter");
 
@@ -37,7 +37,7 @@ async fn test_setting_interpreter() -> Result<()> {
 async fn test_setting_interpreter_error() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
-    let plan = PlanParser::parse("SET max_block_size=1", ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), "SET max_block_size=1").await?;
     let executor = InterpreterFactory::get(ctx.clone(), plan)?;
     if let Err(e) = executor.execute(None).await {
         let expect = "Code: 1020, displayText = Unknown variable: \"xx\".";

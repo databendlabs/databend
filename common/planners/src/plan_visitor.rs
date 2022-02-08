@@ -64,10 +64,12 @@ use crate::UseTenantPlan;
 
 /// `PlanVisitor` implements visitor pattern(reference [syn](https://docs.rs/syn/1.0.72/syn/visit/trait.Visit.html)) for `PlanNode`.
 ///
-/// `PlanVisitor` would provide default implementations for each variant of `PlanNode` to visit a plan tree in preorder.
-/// You can customize the way to visit nodes by overriding corresponding methods.
+/// `PlanVisitor` would provide default implementations for each variant of `PlanNode` to visit a
+/// plan tree in preorder. You can customize the way to visit nodes by overriding corresponding
+/// methods.
 ///
-/// Since a visitor will always modify itself during visiting, we pass `&mut self` to each visit method.
+/// Since a visitor will always modify itself during visiting, we pass `&mut self` to each visit
+/// method.
 ///
 /// # Example
 /// Here's an example of printing table names of all `Scan` nodes in a plan tree:
@@ -88,10 +90,10 @@ use crate::UseTenantPlan;
 /// visitor.visit_plan_node(&plan); // Output: table
 /// ```
 ///
-/// By default, `PlanVisitor` will visit all `PlanNode` with depth first traversal(i.e. recursively access children of a node).
-/// In some cases, people want to explicitly traverse the tree in pre-order or post-order, for whom the default implementation
-/// doesn't work. Here we provide an example of pre-order traversal:
-/// ```ignore
+/// By default, `PlanVisitor` will visit all `PlanNode` with depth first traversal(i.e. recursively
+/// access children of a node). In some cases, people want to explicitly traverse the tree in
+/// pre-order or post-order, for whom the default implementation doesn't work. Here we provide an
+/// example of pre-order traversal: ```ignore
 /// struct PreOrder {
 ///     pub process: FnMut(&PlanNode)
 /// }

@@ -95,8 +95,9 @@ impl Function for FloorFunction {
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
-        // Floor function should be monotonically positive. For val_1 > val2, we should have floor(val_1) >= floor(val_2), and vise versa.
-        // So we return the monotonicity same as the input.
+        // Floor function should be monotonically positive. For val_1 > val2, we should have
+        // floor(val_1) >= floor(val_2), and vise versa. So we return the monotonicity same
+        // as the input.
         Ok(Monotonicity::clone_without_range(&args[0]))
     }
 }

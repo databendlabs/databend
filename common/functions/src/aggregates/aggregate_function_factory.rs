@@ -47,8 +47,9 @@ static FACTORY: Lazy<Arc<AggregateFunctionFactory>> = Lazy::new(|| {
 
 pub struct AggregateFunctionDescription {
     aggregate_function_creator: AggregateFunctionCreator,
-    // TODO(Winter): function document, this is very interesting.
-    // TODO(Winter): We can support the SHOW FUNCTION DOCUMENT `function_name` or MAN FUNCTION `function_name` query syntax.
+    /* TODO(Winter): function document, this is very interesting.
+     * TODO(Winter): We can support the SHOW FUNCTION DOCUMENT `function_name` or MAN FUNCTION
+     * `function_name` query syntax. */
 }
 
 impl AggregateFunctionDescription {
@@ -61,8 +62,9 @@ impl AggregateFunctionDescription {
 
 pub struct CombinatorDescription {
     creator: AggregateFunctionCombinatorCreator,
-    // TODO(Winter): function document, this is very interesting.
-    // TODO(Winter): We can support the SHOW FUNCTION DOCUMENT `function_name` or MAN FUNCTION `function_name` query syntax.
+    /* TODO(Winter): function document, this is very interesting.
+     * TODO(Winter): We can support the SHOW FUNCTION DOCUMENT `function_name` or MAN FUNCTION
+     * `function_name` query syntax. */
 }
 
 impl CombinatorDescription {

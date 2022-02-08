@@ -96,7 +96,7 @@ pub enum AuthInfo {
 fn calc_sha1(v: &[u8]) -> [u8; 20] {
     let mut m = ::sha1::Sha1::new();
     m.update(v);
-    m.digest().bytes()
+    m.finalize().into()
 }
 
 fn double_sha1(v: &[u8]) -> [u8; 20] {
@@ -200,12 +200,13 @@ impl AuthInfo {
         input: &[u8],
         user_password_hash: &[u8],
     ) -> Result<Vec<u8>, ErrorCode> {
-        // SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1( password ) ) )
+        // SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1(
+        // password ) ) )
         let mut m = sha1::Sha1::new();
         m.update(salt);
         m.update(user_password_hash);
 
-        let result = m.digest().bytes();
+        let result: [u8; 20] = m.finalize().into();
         if input.len() != result.len() {
             return Err(ErrorCode::SHA1CheckFailed("SHA1 check failed"));
         }

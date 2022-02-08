@@ -29,13 +29,13 @@ use crate::credential::Credential;
 use crate::error::Error;
 use crate::error::Result;
 use crate::ops::HeaderRange;
-use crate::ops::Object;
 use crate::ops::OpDelete;
 use crate::ops::OpRead;
 use crate::ops::OpStat;
 use crate::ops::OpWrite;
 use crate::readers::ReaderStream;
 use crate::Accessor;
+use crate::Object;
 use crate::Reader;
 
 /// # TODO

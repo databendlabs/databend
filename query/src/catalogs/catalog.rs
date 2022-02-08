@@ -31,6 +31,7 @@ use common_meta_types::UpsertTableOptionReq;
 use dyn_clone::DynClone;
 
 use crate::databases::Database;
+use crate::storages::StorageDescription;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
@@ -39,7 +40,6 @@ use crate::table_functions::TableFunction;
 pub trait Catalog: DynClone + Send + Sync {
     ///
     /// Database.
-    ///
 
     // Get the database by name.
     async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>>;
@@ -67,7 +67,6 @@ pub trait Catalog: DynClone + Send + Sync {
 
     ///
     /// Table.
-    ///
 
     // Build a `Arc<dyn Table>` from `TableInfo`.
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
@@ -110,7 +109,6 @@ pub trait Catalog: DynClone + Send + Sync {
 
     ///
     /// Table function
-    ///
 
     // Get function by name.
     fn get_table_function(
@@ -118,6 +116,11 @@ pub trait Catalog: DynClone + Send + Sync {
         _func_name: &str,
         _tbl_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
+        unimplemented!()
+    }
+
+    // Get table engines
+    fn get_table_engines(&self) -> Vec<StorageDescription> {
         unimplemented!()
     }
 }

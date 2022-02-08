@@ -35,6 +35,7 @@ use nix::unistd::Pid;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
+use sysinfo::Pid as SysPid;
 use sysinfo::System;
 use sysinfo::SystemExt;
 
@@ -242,7 +243,7 @@ impl LocalRuntime for LocalDashboardConfig {
         }
         let s = System::new_all();
         let pid = self.pid.unwrap();
-        return s.process(pid).is_none();
+        return s.process(SysPid::from(pid)).is_none();
     }
 
     async fn verify(&self, _retries: Option<u32>, _duration: Option<Duration>) -> Result<()> {
@@ -374,7 +375,7 @@ impl LocalRuntime for LocalMetaConfig {
                     ))
                     .port(),
             )
-            && s.process(pid).is_none();
+            && s.process(SysPid::from(pid)).is_none();
     }
     // retrieve the configured url for health check
     // TODO(zhihanz): http TLS endpoint
@@ -533,7 +534,7 @@ impl LocalRuntime for LocalQueryConfig {
         let pid = self.pid.unwrap();
         portpicker::is_free(self.config.query.mysql_handler_port)
             && portpicker::is_free(self.config.query.clickhouse_handler_port)
-            && s.process(pid).is_none()
+            && s.process(SysPid::from(pid)).is_none()
     }
     // retrieve the configured url for health check
     fn get_health_probe(&self) -> (reqwest::Client, String) {

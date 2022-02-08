@@ -19,8 +19,8 @@ use common_exception::Result;
 use crate::parser::ast::Statement;
 use crate::parser::transformer::transform_sqlparser::TransformerSqlparser;
 
-// `AstTransformer` is a utility to transform an SQL AST produced by other parsers(e.g. sqlparser-rs)
-// into Databend `Statement`.
+// `AstTransformer` is a utility to transform an SQL AST produced by other parsers(e.g.
+// sqlparser-rs) into Databend `Statement`.
 pub trait AstTransformer {
     fn transform(&self) -> Result<Statement>;
 }

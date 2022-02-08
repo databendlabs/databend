@@ -21,6 +21,7 @@ use crate::testing::new_raft_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_state_create() -> anyhow::Result<()> {
+    //
     // - create a raft state
     // - creating another raft state in the same sled db should fail
 
@@ -56,6 +57,7 @@ async fn test_raft_state_create() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_state_open() -> anyhow::Result<()> {
+    //
     // - create a raft state
     // - open it.
 
@@ -98,6 +100,7 @@ async fn test_raft_state_open_or_create() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_state_write_read_hard_state() -> anyhow::Result<()> {
+    //
     // - create a raft state
     // - write hard_state and the read it.
     let (_log_guards, ut_span) = init_raft_store_ut!();
@@ -133,6 +136,7 @@ async fn test_raft_state_write_read_hard_state() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_raft_state_write_read_state_machine_id() -> anyhow::Result<()> {
+    //
     // - create a raft state
     // - write state machine id and the read it.
     let (_log_guards, ut_span) = init_raft_store_ut!();

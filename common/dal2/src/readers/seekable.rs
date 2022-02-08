@@ -29,7 +29,8 @@ use crate::Reader;
 
 /// If we already know a file's total size, we can implement Seek for it.
 ///
-/// - Every time we call `read` we will send a new http request to fetch data from cloud storage like s3.
+/// - Every time we call `read` we will send a new http request to fetch data from cloud storage
+///   like s3.
 /// - Every time we call `seek` we will update the `pos` field just in memory.
 /// # NOTE
 ///

@@ -64,7 +64,6 @@ where
     /// Returns the value corresponding to the item by policy or `None` if the
     /// cache is empty. Like `peek`, `peek_by_policy` does not update the Cache state so the item's
     /// position will be unchanged.
-    ///
     // TODO: change to fn peek_by_policy<'a>(&self) -> Option<(&'a K, &'a V)>;
     fn peek_by_policy(&self) -> Option<(&K, &V)>;
 

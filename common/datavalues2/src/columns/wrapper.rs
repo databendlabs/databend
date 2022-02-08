@@ -25,11 +25,13 @@ pub struct ColumnWrapper<'a, T: ScalarType> {
     pub data: &'a [T],
     pub validity: Bitmap,
 
-    // for not nullable column, it's 0. we only need keep one sign bit to tell `null_at` that it's not null.
-    // for nullable column, it's usize::max, validity will be cloned from nullable column.
+    // for not nullable column, it's 0. we only need keep one sign bit to tell `null_at` that it's
+    // not null. for nullable column, it's usize::max, validity will be cloned from nullable
+    // column.
     null_mask: usize,
     // for const column, it's 0, `value` function will fetch the first value of the column.
-    // for not const column, it's usize::max, `value` function will fetch the value of the row in the column.
+    // for not const column, it's usize::max, `value` function will fetch the value of the row in
+    // the column.
     non_const_mask: usize,
     size: usize,
 }

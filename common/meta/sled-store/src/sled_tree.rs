@@ -82,7 +82,8 @@ impl SledTree {
         Ok(rl)
     }
 
-    /// Borrows the SledTree and creates a wrapper with access limited to a specified key space `KV`.
+    /// Borrows the SledTree and creates a wrapper with access limited to a specified key space
+    /// `KV`.
     pub fn key_space<KV: SledKeySpace>(&self) -> AsKeySpace<KV> {
         AsKeySpace::<KV> {
             inner: self,
@@ -112,7 +113,7 @@ impl SledTree {
     ) -> common_exception::Result<T> {
         let sync = sync && self.sync;
 
-        let result: TransactionResult<T, ErrorCode> = (&self.tree).transaction(move |tree| {
+        let result: TransactionResult<T, ErrorCode> = self.tree.transaction(move |tree| {
             let txn_sled_tree = TransactionSledTree { txn_tree: tree };
             let r = f(txn_sled_tree.clone());
             match r {
@@ -423,7 +424,8 @@ impl SledTree {
     }
 
     /// Append many values into SledTree.
-    /// This could be used in cases the key is included in value and a value should impl trait `IntoKey` to retrieve the key from a value.
+    /// This could be used in cases the key is included in value and a value should impl trait
+    /// `IntoKey` to retrieve the key from a value.
     #[tracing::instrument(level = "debug", skip(self, values))]
     pub async fn append_values<KV>(&self, values: &[KV::V]) -> common_exception::Result<()>
     where

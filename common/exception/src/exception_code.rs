@@ -132,6 +132,9 @@ build_exceptions! {
 
     // Network error codes.
     NetworkRequestError(1073),
+
+    // Tenant error codes.
+    TenantIsEmpty(1101),
 }
 
 // Metasvr errors [2001, 3000].

@@ -61,7 +61,7 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
                 FlightAction::PrepareShuffleAction(ShuffleAction {
                     query_id: query_id.clone(),
                     stage_id: stage_id.clone(),
-                    plan: PlanParser::parse("SELECT number FROM numbers(5)", ctx.clone()).await?,
+                    plan: PlanParser::parse(ctx.clone(), "SELECT number FROM numbers(5)").await?,
                     sinks: vec![stream_id.clone()],
                     scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
                 }),
@@ -106,7 +106,7 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
                 FlightAction::PrepareShuffleAction(ShuffleAction {
                     query_id: query_id.clone(),
                     stage_id: stage_id.clone(),
-                    plan: PlanParser::parse("SELECT number FROM numbers(5)", ctx.clone()).await?,
+                    plan: PlanParser::parse(ctx.clone(), "SELECT number FROM numbers(5)").await?,
                     sinks: vec!["stream_1".to_string(), "stream_2".to_string()],
                     scatters_expression: Expression::Column("number".to_string()),
                 }),

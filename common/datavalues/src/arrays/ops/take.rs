@@ -16,7 +16,6 @@
 //! This prevents downcasting every iteration.
 //! IntoTakeRandom provides structs that implement the TakeRandom trait.
 //! There are several structs that implement the fastest path for random access.
-//!
 
 use std::fmt::Debug;
 

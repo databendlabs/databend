@@ -46,7 +46,7 @@ pub trait ArrayApply<'a, A, B> {
     /// Apply a closure elementwise and cast to a Numeric DFPrimitiveArray.
     /// This is fastest when the null check branching is more expensive
     /// than the closure application.
-    ///
+
     /// Null values remain null.
     fn apply_cast_numeric<F, S>(&'a self, f: F) -> DFPrimitiveArray<S>
     where

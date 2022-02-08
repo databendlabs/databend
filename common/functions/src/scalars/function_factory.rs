@@ -108,8 +108,9 @@ impl FunctionFeatures {
 pub struct FunctionDescription {
     features: FunctionFeatures,
     function_creator: FactoryCreator,
-    // TODO(Winter): function document, this is very interesting.
-    // TODO(Winter): We can support the SHOW FUNCTION DOCUMENT `function_name` or MAN FUNCTION `function_name` query syntax.
+    /* TODO(Winter): function document, this is very interesting.
+     * TODO(Winter): We can support the SHOW FUNCTION DOCUMENT `function_name` or MAN FUNCTION
+     * `function_name` query syntax. */
 }
 
 impl FunctionDescription {
@@ -200,7 +201,8 @@ impl FunctionFactory {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
         match self.case_insensitive_desc.get(&lowercase_name) {
-            // TODO(Winter): we should write similar function names into error message if function name is not found.
+            // TODO(Winter): we should write similar function names into error message if function
+            // name is not found.
             None => match self.case_insensitive_arithmetic_desc.get(&lowercase_name) {
                 None => Err(ErrorCode::UnknownFunction(format!(
                     "Unsupported Function: {}",
@@ -216,7 +218,8 @@ impl FunctionFactory {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
         match self.case_insensitive_desc.get(&lowercase_name) {
-            // TODO(Winter): we should write similar function names into error message if function name is not found.
+            // TODO(Winter): we should write similar function names into error message if function
+            // name is not found.
             None => match self.case_insensitive_arithmetic_desc.get(&lowercase_name) {
                 None => Err(ErrorCode::UnknownFunction(format!(
                     "Unsupported Function: {}",

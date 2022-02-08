@@ -66,7 +66,7 @@ impl InteractiveWorkerBase {
         let ctx = session.create_query_context().await?;
         ctx.attach_query_str(query);
 
-        let plan = PlanParser::parse(query, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         match plan {
             PlanNode::Insert(ref insert) => {
                 // It has select plan, so we do not need to consume data from client

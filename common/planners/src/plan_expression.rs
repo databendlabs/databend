@@ -106,17 +106,19 @@ pub enum Expression {
         asc: bool,
         /// Whether to put Nulls before all other data values
         nulls_first: bool,
-        /// The original expression from parser. Because sort 'expr' field maybe overwritten by a Column expression, like
-        /// from BinaryExpression { +, number, number} to Column(number+number), the orig_expr is for keeping the original
-        /// one that is before overwritten. This field is mostly for function monotonicity optimization purpose.
+        /// The original expression from parser. Because sort 'expr' field maybe overwritten by a
+        /// Column expression, like from BinaryExpression { +, number, number} to
+        /// Column(number+number), the orig_expr is for keeping the original one that is
+        /// before overwritten. This field is mostly for function monotonicity optimization
+        /// purpose.
         origin_expr: Box<Expression>,
     },
 
     /// All fields(*) in a schema.
     Wildcard,
 
-    /// Casts the expression to a given type and will return a runtime error if the expression cannot be cast.
-    /// This expression is guaranteed to have a fixed type.
+    /// Casts the expression to a given type and will return a runtime error if the expression
+    /// cannot be cast. This expression is guaranteed to have a fixed type.
     Cast {
         /// The expression being cast
         expr: Box<Expression>,

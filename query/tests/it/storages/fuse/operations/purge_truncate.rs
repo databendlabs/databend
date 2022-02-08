@@ -38,7 +38,7 @@ async fn test_fuse_truncate_purge_stmt() -> Result<()> {
 
     // let's truncate
     let qry = format!("truncate table '{}'.'{}' purge", db, tbl);
-    execute_command(qry.as_str(), ctx.clone()).await?;
+    execute_command(ctx.clone(), qry.as_str()).await?;
 
     // one history item left there
     history_should_have_only_one_item(

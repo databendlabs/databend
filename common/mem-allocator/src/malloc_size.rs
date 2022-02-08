@@ -22,39 +22,37 @@
 //! integrates with Firefox's memory reporting, particularly the use of
 //! mozjemalloc and DMD. In particular, it has the following features.
 //! - It isn't bound to a particular heap allocator.
-//! - It provides traits for both "shallow" and "deep" measurement, which gives
-//!   flexibility in the cases where the traits can't be used.
-//! - It allows for measuring blocks even when only an interior pointer can be
-//!   obtained for heap allocations, e.g. `HashSet` and `HashMap`. (This relies
-//!   on the heap allocator having suitable support, which mozjemalloc has.)
-//! - It allows handling of types like `Rc` and `Arc` by providing traits that
-//!   are different to the ones for non-graph structures.
+//! - It provides traits for both "shallow" and "deep" measurement, which gives flexibility in the
+//!   cases where the traits can't be used.
+//! - It allows for measuring blocks even when only an interior pointer can be obtained for heap
+//!   allocations, e.g. `HashSet` and `HashMap`. (This relies on the heap allocator having suitable
+//!   support, which mozjemalloc has.)
+//! - It allows handling of types like `Rc` and `Arc` by providing traits that are different to the
+//!   ones for non-graph structures.
 //!
 //! Suggested uses are as follows.
-//! - When possible, use the `MallocSizeOf` trait. (Deriving support is
-//!   provided by the `malloc_size_of_derive` crate.)
-//! - If you need an additional synchronization argument, provide a function
-//!   that is like the standard trait method, but with the extra argument.
-//! - If you need multiple measurements for a type, provide a function named
-//!   `add_size_of` that takes a mutable reference to a struct that contains
-//!   the multiple measurement fields.
-//! - When deep measurement (via `MallocSizeOf`) cannot be implemented for a
-//!   type, shallow measurement (via `MallocShallowSizeOf`) in combination with
-//!   iteration can be a useful substitute.
-//! - `Rc` and `Arc` are always tricky, which is why `MallocSizeOf` is not (and
-//!   should not be) implemented for them.
-//! - If an `Rc` or `Arc` is known to be a "primary" reference and can always
-//!   be measured, it should be measured via the `MallocUnconditionalSizeOf`
-//!   trait.
-//! - If an `Rc` or `Arc` should be measured only if it hasn't been seen
-//!   before, it should be measured via the `MallocConditionalSizeOf` trait.
-//! - Using universal function call syntax is a good idea when measuring boxed
-//!   fields in structs, because it makes it clear that the Box is being
-//!   measured as well as the thing it points to. E.g.
-//!   `<Box<_> as MallocSizeOf>::size_of(field, ops)`.
+//! - When possible, use the `MallocSizeOf` trait. (Deriving support is provided by the
+//!   `malloc_size_of_derive` crate.)
+//! - If you need an additional synchronization argument, provide a function that is like the
+//!   standard trait method, but with the extra argument.
+//! - If you need multiple measurements for a type, provide a function named `add_size_of` that
+//!   takes a mutable reference to a struct that contains the multiple measurement fields.
+//! - When deep measurement (via `MallocSizeOf`) cannot be implemented for a type, shallow
+//!   measurement (via `MallocShallowSizeOf`) in combination with iteration can be a useful
+//!   substitute.
+//! - `Rc` and `Arc` are always tricky, which is why `MallocSizeOf` is not (and should not be)
+//!   implemented for them.
+//! - If an `Rc` or `Arc` is known to be a "primary" reference and can always be measured, it should
+//!   be measured via the `MallocUnconditionalSizeOf` trait.
+//! - If an `Rc` or `Arc` should be measured only if it hasn't been seen before, it should be
+//!   measured via the `MallocConditionalSizeOf` trait.
+//! - Using universal function call syntax is a good idea when measuring boxed fields in structs,
+//!   because it makes it clear that the Box is being measured as well as the thing it points to.
+//!   E.g. `<Box<_> as MallocSizeOf>::size_of(field, ops)`.
 
 //! This is an extended version of the Servo internal malloc_size crate.
-//! We should occasionally track the upstream changes/fixes and reintroduce them here, whenever applicable.
+//! We should occasionally track the upstream changes/fixes and reintroduce them here, whenever
+//! applicable.
 
 use std::hash::BuildHasher;
 use std::hash::Hash;

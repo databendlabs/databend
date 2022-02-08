@@ -15,14 +15,13 @@
 use common_base::tokio;
 use common_exception::Result;
 use databend_query::clusters::ClusterDiscovery;
-use databend_query::configs::Config;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_single_cluster_discovery() -> Result<()> {
-    let config = Config::default();
-    let cluster_discovery = ClusterDiscovery::create_global(config.clone()).await?;
-    cluster_discovery.register_to_metastore(&config).await?;
+    let conf = crate::tests::ConfigBuilder::create().config();
+    let cluster_discovery = ClusterDiscovery::create_global(conf.clone()).await?;
+    cluster_discovery.register_to_metastore(&conf).await?;
     let discover_cluster = cluster_discovery.discover().await?;
 
     let discover_cluster_nodes = discover_cluster.get_nodes();
@@ -55,10 +54,14 @@ async fn test_single_cluster_discovery() -> Result<()> {
 //     assert_eq!(discover_cluster_nodes_2.len(), 2);
 //     assert_eq!(discover_cluster_1.is_empty(), false);
 //     assert_eq!(discover_cluster_2.is_empty(), false);
-//     assert_eq!(discover_cluster_1.is_local(&discover_cluster_nodes_1[0]) || discover_cluster_1.is_local(&discover_cluster_nodes_1[1]), true);
-//     assert_eq!(discover_cluster_1.is_local(&discover_cluster_nodes_1[0]) && discover_cluster_1.is_local(&discover_cluster_nodes_1[1]), false);
-//     assert_eq!(discover_cluster_2.is_local(&discover_cluster_nodes_2[0]) || discover_cluster_1.is_local(&discover_cluster_nodes_2[1]), true);
-//     assert_eq!(discover_cluster_2.is_local(&discover_cluster_nodes_2[0]) && discover_cluster_1.is_local(&discover_cluster_nodes_2[1]), false);
+//     assert_eq!(discover_cluster_1.is_local(&discover_cluster_nodes_1[0]) ||
+// discover_cluster_1.is_local(&discover_cluster_nodes_1[1]), true);     assert_eq!
+// (discover_cluster_1.is_local(&discover_cluster_nodes_1[0]) &&
+// discover_cluster_1.is_local(&discover_cluster_nodes_1[1]), false);     assert_eq!
+// (discover_cluster_2.is_local(&discover_cluster_nodes_2[0]) ||
+// discover_cluster_1.is_local(&discover_cluster_nodes_2[1]), true);     assert_eq!
+// (discover_cluster_2.is_local(&discover_cluster_nodes_2[0]) &&
+// discover_cluster_1.is_local(&discover_cluster_nodes_2[1]), false);
 //
 //     assert_eq!(discover_cluster_nodes_1, discover_cluster_nodes_2);
 //     Ok(())

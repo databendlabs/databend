@@ -56,3 +56,4 @@ venv/
 *.pyc
 __pycache__/
 
+Cargo.lock

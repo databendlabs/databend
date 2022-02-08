@@ -19,11 +19,11 @@ use common_exception::Result;
 /// Holds the location and length information of a given [Part].
 ///
 /// It is intended to be encoded as string, and assigned to the field `name` of a given [`Part`],
-/// then passed around to the `read` method of [FuseTable], where the name filed will be decoded back to [PartInfo]
+/// then passed around to the `read` method of [FuseTable], where the name filed will be decoded
+/// back to [PartInfo]
 ///
 /// [Part]: common_planners::Part
 /// [FuseTable]: crate::storages::fuse::FuseTable
-///
 #[derive(PartialEq, Debug)]
 pub struct PartInfo<'a>(&'a str, u64);
 

@@ -65,7 +65,6 @@ pub type TableSnapshotReader<'a> = CachedReader<TableSnapshot, &'a QueryContext>
 ///
 /// To make it "lifetime-compliant", `Arc<QueryContext>` is used as the `Loader` of [CachedReader],
 /// instead of `&QueryContext`.  (BlockMetaReader is used in constructing async streams)
-///
 pub type BlockMetaReader = CachedReader<BlockMeta, Arc<QueryContext>>;
 
 /// Aux struct, factory of common readers

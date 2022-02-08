@@ -197,8 +197,8 @@ impl From<SerializedError> for ErrorCode {
     }
 }
 
-impl From<&tonic::Status> for ErrorCode {
-    fn from(status: &tonic::Status) -> Self {
+impl From<tonic::Status> for ErrorCode {
+    fn from(status: tonic::Status) -> Self {
         match status.code() {
             tonic::Code::Unknown => {
                 let details = status.details();
@@ -227,12 +227,6 @@ impl From<&tonic::Status> for ErrorCode {
             }
             _ => ErrorCode::UnImplement(status.to_string()),
         }
-    }
-}
-
-impl From<tonic::Status> for ErrorCode {
-    fn from(status: tonic::Status) -> Self {
-        (&status).into()
     }
 }
 

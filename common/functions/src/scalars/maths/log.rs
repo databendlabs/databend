@@ -87,8 +87,9 @@ impl Function for GenericLogFunction {
                     let base_series = base_column.to_minimal_array()?;
                     let num_series = num_column.to_minimal_array()?;
 
-                    // The log function has default null behavior for null input, that is, LOG(null) = null.
-                    // So the passthrough_null method has default behavior to be true, we don't need to zip validity.
+                    // The log function has default null behavior for null input, that is, LOG(null)
+                    // = null. So the passthrough_null method has default
+                    // behavior to be true, we don't need to zip validity.
                     binary_with_validity(
                         num_series.f64()?,
                         base_series.f64()?,

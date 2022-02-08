@@ -95,7 +95,8 @@ impl MetaSrvTestContext {
 
         let mut config = configs::Config::empty();
 
-        // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
+        // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a
+        // test.
         if cfg!(target_os = "macos") {
             tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
             config.raft_config.no_sync = true;
@@ -112,7 +113,8 @@ impl MetaSrvTestContext {
 
         let host = "127.0.0.1";
 
-        // We use a single sled db for all unit test. Every unit test need a unique prefix so that it opens different tree.
+        // We use a single sled db for all unit test. Every unit test need a unique prefix so that
+        // it opens different tree.
         config.raft_config.sled_tree_prefix = format!("test-{}-", config_id);
 
         {
@@ -184,7 +186,8 @@ impl MetaSrvTestContext {
 
 /// 1. Open a temp sled::Db for all tests.
 /// 2. Initialize a global tracing.
-/// 3. Create a span for a test case. One needs to enter it by `span.enter()` and keeps the guard held.
+/// 3. Create a span for a test case. One needs to enter it by `span.enter()` and keeps the guard
+/// held.
 #[macro_export]
 macro_rules! init_meta_ut {
     () => {{

@@ -33,7 +33,8 @@ pub struct ColumnBinding {
     pub expr: Option<ScalarExpr>,
 }
 
-/// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
+/// `BindContext` stores all the free variables in a query and tracks the context of binding
+/// procedure.
 #[derive(Clone, Default)]
 pub struct BindContext {
     _parent: Option<Box<BindContext>>,

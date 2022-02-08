@@ -306,7 +306,8 @@ macro_rules! impl_dyn_array {
                 Ok(ArrayTake::take_unchecked(&self.0, iter.into())?.into_series())
             }
 
-            /// scatter the arrays by indices, the size of indices must be equal to the size of array
+            /// scatter the arrays by indices, the size of indices must be equal to the size of
+            /// array
             unsafe fn scatter_unchecked(
                 &self,
                 indices: &mut dyn Iterator<Item = u64>,

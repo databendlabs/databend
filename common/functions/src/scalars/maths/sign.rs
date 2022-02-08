@@ -117,9 +117,9 @@ impl Function for SignFunction {
             }
         };
 
-        // sign operator is monotonically non-decreasing for numeric values. However,'String' input is an exception.
-        // For example, query like "SELECT sign('-1'), sign('+1'), '-1' >= '+1';" returns -1, 1, 1(true),
-        // which is not monotonically increasing.
+        // sign operator is monotonically non-decreasing for numeric values. However,'String' input
+        // is an exception. For example, query like "SELECT sign('-1'), sign('+1'), '-1' >=
+        // '+1';" returns -1, 1, 1(true), which is not monotonically increasing.
         if is_boundary_numeric(mono.left) || is_boundary_numeric(mono.right) {
             return Ok(Monotonicity::clone_without_range(&args[0]));
         }

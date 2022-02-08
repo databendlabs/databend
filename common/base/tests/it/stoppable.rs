@@ -45,6 +45,7 @@ impl Stoppable for FooTask {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_stoppable() -> Result<()> {
+    //
     // - Create a task and start it.
     // - Stop but the task would block.
     // - Signal the task to force stop.
@@ -88,6 +89,7 @@ async fn test_stoppable() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_stop_handle() -> Result<()> {
+    //
     // - Create 2 tasks and start them.
     // - Stop but the task would block.
     // - Signal the task to force stop.
@@ -144,6 +146,7 @@ async fn test_stop_handle() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_stop_handle_drop() -> Result<()> {
+    //
     // - Create a task and start it.
     // - Then quit and the Drop should forcibly stop it and the test should not block.
 

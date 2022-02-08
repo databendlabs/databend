@@ -153,7 +153,8 @@ pub type SecondsArithmeticFunction = IntegerTypedIntervalFunction<SecondsArithme
 pub type IntervalArithmeticFunction =
     fn(&DataValueBinaryOperator, &DataColumnWithField, &DataColumnWithField) -> Result<DataColumn>;
 
-// The function type for handling arithmetic operation of integer column representing number of months
+// The function type for handling arithmetic operation of integer column representing number of
+// months
 pub type IntegerMonthsArithmeticFunction = fn(
     &DataValueBinaryOperator,
     &DataColumnWithField,
@@ -161,7 +162,8 @@ pub type IntegerMonthsArithmeticFunction = fn(
     weight: i64, /* for year please pass in 12 */
 ) -> Result<DataColumn>;
 
-// The function type for handling arithmetic operation of integer column representing number of seconds
+// The function type for handling arithmetic operation of integer column representing number of
+// seconds
 pub type IntegerSecondsArithmeticFunction = fn(
     &DataValueBinaryOperator,
     &DataColumnWithField,
@@ -444,7 +446,8 @@ impl IntervalFunctionFactory {
             dt.second(),
         );
 
-        // Handle month last day overflow, "2020-2-29" + "1 year" should be "2021-2-28", or "1990-1-31" + "3 month" should be "1990-4-30".
+        // Handle month last day overflow, "2020-2-29" + "1 year" should be "2021-2-28", or
+        // "1990-1-31" + "3 month" should be "1990-4-30".
         let new_day = std::cmp::min::<u32>(
             d,
             Self::last_day_of_year_month(new_year, (new_month0 + 1) as u32),

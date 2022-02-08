@@ -16,6 +16,7 @@ use common_meta_raft_store::state_machine::placement::rand_n_from_m;
 
 #[test]
 fn test_rand_n_from_m() -> anyhow::Result<()> {
+    //
     // - Randomly choose n elts from total elts.
     // - Assert that the count of the result.
     // - Assert every elt is different.

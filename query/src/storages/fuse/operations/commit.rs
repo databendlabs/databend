@@ -60,18 +60,19 @@ impl FuseTable {
         // The initial retry delay in millisecond. By default,  it is 5 ms.
         let init_delay = Duration::from_millis(settings.get_storage_occ_backoff_init_delay_ms()?);
 
-        // The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing.
-        // By default, it is 20 seconds.
+        // The maximum  back off delay in millisecond, once the retry interval reaches this value,
+        // it stops increasing. By default, it is 20 seconds.
         let max_delay = Duration::from_millis(settings.get_storage_occ_backoff_max_delay_ms()?);
 
-        // The maximum elapsed time after the occ starts, beyond which there will be no more retries.
-        // By default, it is 2 minutes
+        // The maximum elapsed time after the occ starts, beyond which there will be no more
+        // retries. By default, it is 2 minutes
         let max_elapsed = Duration::from_millis(settings.get_storage_occ_backoff_max_elapsed_ms()?);
 
         // see https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/ for more
         // informations. (The strategy that crate backoff implements is “Equal Jitter”)
 
-        // To simplify the settings, using fixed common values for randomization_factor and multiplier
+        // To simplify the settings, using fixed common values for randomization_factor and
+        // multiplier
         let mut backoff = ExponentialBackoffBuilder::new()
             .with_initial_interval(init_delay)
             .with_max_interval(max_delay)

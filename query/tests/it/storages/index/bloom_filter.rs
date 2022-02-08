@@ -176,13 +176,15 @@ fn test_bloom_hash_collision() -> Result<()> {
     let indexer = BloomFilterIndexer::from_data_and_seeds(table.as_ref(), create_seeds())?;
     let bloom = indexer.try_get_bloom("ColumnUInt8")?;
 
-    // Values [2, 4, 6, 8] doesn't exist and doesn't cause collision, so bloom.contains should return false
+    // Values [2, 4, 6, 8] doesn't exist and doesn't cause collision, so bloom.contains should
+    // return false
     for num in [2_u8, 4, 6, 8] {
         let single_value_bloom = create_bloom(DataType::UInt8, Series::new(vec![num]), &bloom)?;
         assert!(!bloom.contains(&single_value_bloom), "{}", num);
     }
 
-    // When hash collision happens, although number 32 doesn't exist in data_blocks, the hash bits say yes.
+    // When hash collision happens, although number 32 doesn't exist in data_blocks, the hash bits
+    // say yes.
     let single_value_bloom = create_bloom(DataType::UInt8, Series::new(vec![32_u8]), &bloom)?;
     assert!(bloom.contains(&single_value_bloom));
     Ok(())

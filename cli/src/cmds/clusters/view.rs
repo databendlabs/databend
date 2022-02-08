@@ -57,9 +57,9 @@ impl fmt::Display for HealthStatus {
     }
 }
 
-// poll_health would check the health of active meta service and query service, and return their status quo
-// first element is the health status in dashboard service and the second element is the health status of meta services
-// the third element is the health status in query services
+// poll_health would check the health of active meta service and query service, and return their
+// status quo first element is the health status in dashboard service and the second element is the
+// health status of meta services the third element is the health status in query services
 pub async fn poll_health(
     profile: &ClusterProfile,
     status: &Status,
@@ -138,14 +138,14 @@ impl ViewCommand {
         }
         let s = System::new_all();
 
-        if s.process_by_name("databend-meta").is_empty() {
+        if s.processes_by_name("databend-meta").count() == 0 {
             return Err(CliError::Unknown(
                 "❗ cannot find existing meta service on local machine"
                     .parse()
                     .unwrap(),
             ));
         }
-        if s.process_by_name("databend-query").is_empty() {
+        if s.processes_by_name("databend-query").count() == 0 {
             return Err(CliError::Unknown(
                 "❗ cannot find existing query service on local machine"
                     .parse()

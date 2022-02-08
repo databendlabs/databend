@@ -409,7 +409,8 @@ impl TransformerSqlparser {
         &self,
         table_with_joins: &TableWithJoins,
     ) -> Result<TableReference> {
-        // Take `table_with_joins.relation` as initial left table, then we can build a left-deep tree.
+        // Take `table_with_joins.relation` as initial left table, then we can build a left-deep
+        // tree.
         let mut left_table = self.transform_table_factor(&table_with_joins.relation)?;
 
         // Join the tables and finally produce a left-deep tree

@@ -167,9 +167,9 @@ async fn test_resize_pipeline_init_queue() -> Result<()> {
 //         let thread2 = std::thread::spawn(move || {
 //             let tx = tx.remove(0);
 //             for index in 0..5 {
-//                 let schema = DataSchema::new(vec![DataField::new("field", DataType::Int8, false)]);
-//                 tx.blocking_send(Ok(DataBlock::create(Arc::new(schema), vec![DataColumn::Constant(DataValue::Int8(Some(index)), 2)])));
-//             }
+//                 let schema = DataSchema::new(vec![DataField::new("field", DataType::Int8,
+// false)]);                 tx.blocking_send(Ok(DataBlock::create(Arc::new(schema),
+// vec![DataColumn::Constant(DataValue::Int8(Some(index)), 2)])));             }
 //         });
 //
 //         let thread3 = std::thread::spawn(move || {

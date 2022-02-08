@@ -96,8 +96,9 @@ impl Function for CeilFunction {
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
-        // Ceil function should be monotonically positive. For val_1 > val2, we should have ceil(val_1) >= ceil(val_2), and vise versa.
-        // So we return the monotonicity same as the input.
+        // Ceil function should be monotonically positive. For val_1 > val2, we should have
+        // ceil(val_1) >= ceil(val_2), and vise versa. So we return the monotonicity same as
+        // the input.
         Ok(Monotonicity::clone_without_range(&args[0]))
     }
 }

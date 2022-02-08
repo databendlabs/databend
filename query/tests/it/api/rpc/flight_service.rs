@@ -166,7 +166,7 @@ async fn do_action_request(query_id: &str, stage_id: &str) -> Result<Request<Act
     let flight_action = FlightAction::PrepareShuffleAction(ShuffleAction {
         query_id: String::from(query_id),
         stage_id: String::from(stage_id),
-        plan: PlanParser::parse("SELECT number FROM numbers(5)", ctx.clone()).await?,
+        plan: PlanParser::parse(ctx.clone(), "SELECT number FROM numbers(5)").await?,
         sinks: vec![String::from("stream_id")],
         scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
     });

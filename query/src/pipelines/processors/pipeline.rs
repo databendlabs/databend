@@ -78,7 +78,6 @@ impl Pipeline {
     /// processor2 --> processor2_1
     ///
     /// processor3 --> processor3_1
-    ///
     pub fn add_simple_transform(
         &mut self,
         f: impl Fn() -> Result<Box<dyn Processor>>,
@@ -101,7 +100,6 @@ impl Pipeline {
     /// processor2      --> processor
     ///               /
     /// processor3 --
-    ///
     pub fn merge_processor(&mut self) -> Result<()> {
         let last_pipe = self.last_pipe()?;
         if last_pipe.nums() > 1 {
@@ -123,7 +121,6 @@ impl Pipeline {
     /// processor2      -->
     ///               /      \
     /// processor3 --          processor2
-    ///
     pub fn mixed_processor(&mut self, n: usize) -> Result<()> {
         if n == 1 {
             return self.merge_processor();

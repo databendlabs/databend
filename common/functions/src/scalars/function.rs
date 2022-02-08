@@ -46,10 +46,11 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     /// Return true if the function just return null with any given null input.
     /// Return false if the function may return non-null with null input.
     ///
-    /// For example, arithmetic plus('+') will output null for any null input, like '12 + null = null'.
-    /// It has no idea of how to handle null, but just pass through.
+    /// For example, arithmetic plus('+') will output null for any null input, like '12 + null =
+    /// null'. It has no idea of how to handle null, but just pass through.
     ///
-    /// While ISNULL function  treats null input as a valid one. For example ISNULL(NULL, 'test') will return 'test'.
+    /// While ISNULL function  treats null input as a valid one. For example ISNULL(NULL, 'test')
+    /// will return 'test'.
     fn passthrough_null(&self) -> bool {
         true
     }

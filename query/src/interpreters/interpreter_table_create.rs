@@ -77,15 +77,17 @@ impl CreateTableInterpreter {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog();
 
-        // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
+        // TODO: maybe the table creation and insertion should be a transaction, but it may require
+        // create_table support 2pc.
         catalog.create_table(self.plan.clone().into()).await?;
         let table = catalog
             .get_table(tenant.as_str(), &self.plan.db, &self.plan.table)
             .await?;
 
-        // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',
-        // we use the definitions to create the table schema. It may happen that the "AS SELECT" query's schema doesn't
-        // match the table's schema. For example,
+        // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS
+        // SELECT * from t2', we use the definitions to create the table schema. It may
+        // happen that the "AS SELECT" query's schema doesn't match the table's schema. For
+        // example,
         //
         //   mysql> create table t2(a int, b int);
         //   mysql> create table t1(x string, y string) as select * from t2;

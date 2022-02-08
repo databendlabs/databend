@@ -268,8 +268,9 @@ impl AzureBlobInputStream {
             _ => unreachable!(),
         };
 
-        // According to Rust doc, "It is possible to seek beyond the end of an object, but it’s an error to seek before byte 0.",
-        // we allow seeking beyond the file size and only return error when seeking to negative or overflow u64 max.
+        // According to Rust doc, "It is possible to seek beyond the end of an object, but it’s an
+        // error to seek before byte 0.", we allow seeking beyond the file size and only
+        // return error when seeking to negative or overflow u64 max.
         let new_pos: Option<u64>;
         if offset < 0 {
             new_pos = base.checked_sub(offset.abs() as u64);

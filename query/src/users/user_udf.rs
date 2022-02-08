@@ -27,7 +27,7 @@ impl UserApiProvider {
         info: UserDefinedFunction,
         if_not_exists: bool,
     ) -> Result<u64> {
-        let udf_api_client = self.get_udf_api_client(tenant);
+        let udf_api_client = self.get_udf_api_client(tenant)?;
         let add_udf = udf_api_client.add_udf(info);
         match add_udf.await {
             Ok(res) => Ok(res),
@@ -43,7 +43,7 @@ impl UserApiProvider {
 
     // Update a UDF.
     pub async fn update_udf(&self, tenant: &str, info: UserDefinedFunction) -> Result<u64> {
-        let udf_api_client = self.get_udf_api_client(tenant);
+        let udf_api_client = self.get_udf_api_client(tenant)?;
         let update_udf = udf_api_client.update_udf(info, None);
         match update_udf.await {
             Ok(res) => Ok(res),
@@ -53,14 +53,14 @@ impl UserApiProvider {
 
     // Get a UDF by name.
     pub async fn get_udf(&self, tenant: &str, udf_name: &str) -> Result<UserDefinedFunction> {
-        let udf_api_client = self.get_udf_api_client(tenant);
+        let udf_api_client = self.get_udf_api_client(tenant)?;
         let get_udf = udf_api_client.get_udf(udf_name, None);
         Ok(get_udf.await?.data)
     }
 
     // Get all UDFs for the tenant.
     pub async fn get_udfs(&self, tenant: &str) -> Result<Vec<UserDefinedFunction>> {
-        let udf_api_client = self.get_udf_api_client(tenant);
+        let udf_api_client = self.get_udf_api_client(tenant)?;
         let get_udfs = udf_api_client.get_udfs();
 
         match get_udfs.await {
@@ -71,7 +71,7 @@ impl UserApiProvider {
 
     // Drop a UDF by name.
     pub async fn drop_udf(&self, tenant: &str, udf_name: &str, if_exists: bool) -> Result<()> {
-        let udf_api_client = self.get_udf_api_client(tenant);
+        let udf_api_client = self.get_udf_api_client(tenant)?;
         let drop_udf = udf_api_client.drop_udf(udf_name, None);
         match drop_udf.await {
             Ok(res) => Ok(res),

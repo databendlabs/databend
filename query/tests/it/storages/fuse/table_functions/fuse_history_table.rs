@@ -118,7 +118,7 @@ async fn test_fuse_history_table_read() -> Result<()> {
 
         expects_ok(
             "count_should_be_1",
-            execute_query(qry.as_str(), ctx.clone()).await,
+            execute_query(ctx.clone(), qry.as_str()).await,
             expected,
         )
         .await?;
@@ -138,7 +138,7 @@ async fn test_fuse_history_table_read() -> Result<()> {
         );
         expects_ok(
             "check_row_and_block_count",
-            execute_query(qry.as_str(), ctx.clone()).await,
+            execute_query(ctx.clone(), qry.as_str()).await,
             expected,
         )
         .await?;
@@ -161,7 +161,7 @@ async fn test_fuse_history_table_read() -> Result<()> {
         );
         expects_ok(
             "check_row_and_block_count_after_append",
-            execute_query(qry.as_str(), ctx.clone()).await,
+            execute_query(ctx.clone(), qry.as_str()).await,
             expected,
         )
         .await?;
@@ -170,13 +170,13 @@ async fn test_fuse_history_table_read() -> Result<()> {
     {
         // incompatible table engine
         let qry = format!("create table {}.in_mem (a int) engine =Memory", db);
-        execute_query(qry.as_str(), ctx.clone()).await?;
+        execute_query(ctx.clone(), qry.as_str()).await?;
 
         let qry = format!("select * from fuse_history('{}', '{}')", db, "in_mem");
         expects_err(
             "check_row_and_block_count_after_append",
             ErrorCode::bad_arguments_code(),
-            execute_query(qry.as_str(), ctx.clone()).await,
+            execute_query(ctx.clone(), qry.as_str()).await,
         );
     }
 

@@ -180,8 +180,9 @@ pub fn numerical_arithmetic_coercion(
                 return Ok(DataType::Float64);
             }
             // From clickhouse: NumberTraits.h
-            // If modulo of division can yield negative number, we need larger type to accommodate it.
-            // Example: toInt32(-199) % toUInt8(200) will return -199 that does not fit in Int8, only in Int16.
+            // If modulo of division can yield negative number, we need larger type to accommodate
+            // it. Example: toInt32(-199) % toUInt8(200) will return -199 that does not
+            // fit in Int8, only in Int16.
             let result_is_signed = lhs_type.is_signed_numeric();
             let right_size = rhs_type.numeric_byte_size()?;
             let size_of_result = if result_is_signed {

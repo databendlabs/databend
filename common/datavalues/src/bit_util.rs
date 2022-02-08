@@ -15,7 +15,6 @@
 /// Forked from Arrow until their API stabilizes.
 ///
 /// Note that the bound checks are optimized away.
-///
 #[cfg(feature = "simd")]
 use packed_simd::u8x64;
 

@@ -60,7 +60,8 @@ impl DataColumnValidity {
         }
     }
 
-    // Keep the function here, mostly for error checking -- the validity's length should be the same as column length.
+    // Keep the function here, mostly for error checking -- the validity's length should be the same
+    // as column length.
     #[allow(dead_code)]
     #[inline(always)]
     fn len(&self) -> usize {
@@ -293,7 +294,8 @@ impl DataColumn {
             return Ok(self);
         }
 
-        // 2. If the validity to apply is all null, just need to return an constant type with null value.
+        // 2. If the validity to apply is all null, just need to return an constant type with null
+        // value.
         if validity_to_apply.all_null() {
             let data_type = self.data_type();
             let null_value = DataValue::new_from_data_type(&data_type, true);

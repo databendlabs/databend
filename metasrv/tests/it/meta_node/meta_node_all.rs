@@ -50,6 +50,7 @@ use crate::tests::service::MetaSrvTestContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_boot() -> anyhow::Result<()> {
+    //
     // - Start a single node meta service cluster.
     // - Test the single node is recorded by this cluster.
 
@@ -69,6 +70,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
+    //
     // - Start a leader then shutdown.
 
     let (_log_guards, ut_span) = init_meta_ut!();
@@ -98,6 +100,7 @@ async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
+    //
     // - Start a leader and a non-voter;
     // - Write to leader, check on non-voter.
 
@@ -122,6 +125,7 @@ async fn test_meta_node_leader_and_non_voter() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
+    //
     // - Start a leader, 2 followers and a non-voter;
     // - Write to the raft node on the leader, expect Ok.
     // - Write to the raft node on the non-leader, expect ForwardToLeader error.
@@ -177,6 +181,7 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_add_database() -> anyhow::Result<()> {
+    //
     // - Start a leader, 2 followers and a non-voter;
     // - Assert that every node handles AddDatabase request correctly.
 
@@ -191,6 +196,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
         // ensure cluster works
         assert_upsert_kv_synced(all.clone(), "foo").await?;
 
+        //
         // - db name to create
         // - expected db id
         let cases: Vec<(&str, u64)> = vec![("foo", 1), ("bar", 2), ("foo", 1), ("bar", 2)];
@@ -209,8 +215,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
                         name: name.to_string(),
                         meta: DatabaseMeta {
                             engine: "default".to_string(),
-                            engine_options: Default::default(),
-                            options: Default::default(),
+                            ..Default::default()
                         },
                     },
                 })
@@ -237,6 +242,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
+    //
     // - Bring up a cluster of 3.
     // - Write just enough logs to trigger a snapshot.
     // - Add a non-voter, test the snapshot is sync-ed
@@ -341,6 +347,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_join() -> anyhow::Result<()> {
+    //
     // - Bring up a cluster
     // - Join a new node by sending a Join request to leader.
     // - Join a new node by sending a Join request to a non-voter.
@@ -440,6 +447,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
+    //
     // - Bring up a cluster
     // - Join a new node.
     // - Join another new node twice.
@@ -576,7 +584,8 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
-    // TODO(xp): This function will replace `test_meta_node_restart` after disk backed state machine is ready.
+    // TODO(xp): This function will replace `test_meta_node_restart` after disk backed state machine
+    // is ready.
 
     // Test disk backed meta node restart.
     // - Start a cluster of a solo leader;
@@ -587,7 +596,8 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     //   - raft logs.
     //   - state machine:
     //     - Nodes
-    //   - TODO(xp): snapshot is empty, since snapshot is not persisted in this version see `MetaStore`.
+    //   - TODO(xp): snapshot is empty, since snapshot is not persisted in this version see
+    //     `MetaStore`.
     // - Check cluster:
     //   - Leader is elected.
     //   - TODO(xp): Leader starts replication to follower and non-voter.
@@ -869,7 +879,8 @@ async fn assert_get_kv(
     Ok(())
 }
 
-/// Wait for the known leader of a raft to become the expected `leader_id` until a default 2000 ms time out.
+/// Wait for the known leader of a raft to become the expected `leader_id` until a default 2000 ms
+/// time out.
 #[tracing::instrument(level = "info", skip(mn))]
 pub async fn wait_for_current_leader(
     mn: &MetaNode,

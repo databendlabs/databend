@@ -21,7 +21,8 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 struct MetadataMapInjector<'a>(&'a mut tonic::metadata::MetadataMap);
 
 impl<'a> Injector for MetadataMapInjector<'a> {
-    /// Set a key and value in the MetadataMap.  Does nothing if the key or value are not valid inputs
+    /// Set a key and value in the MetadataMap.  Does nothing if the key or value are not valid
+    /// inputs
     fn set(&mut self, key: &str, value: String) {
         if let Ok(key) = tonic::metadata::MetadataKey::from_bytes(key.as_bytes()) {
             if let Ok(val) = tonic::metadata::MetadataValue::from_str(&value) {
@@ -35,7 +36,8 @@ impl<'a> Injector for MetadataMapInjector<'a> {
 struct MetadataMapExtractor<'a>(&'a tonic::metadata::MetadataMap);
 
 impl<'a> Extractor for MetadataMapExtractor<'a> {
-    /// Get a value for a key from the MetadataMap.  If the value can't be converted to &str, returns None
+    /// Get a value for a key from the MetadataMap.  If the value can't be converted to &str,
+    /// returns None
     fn get(&self, key: &str) -> Option<&str> {
         self.0.get(key).and_then(|metadata| metadata.to_str().ok())
     }

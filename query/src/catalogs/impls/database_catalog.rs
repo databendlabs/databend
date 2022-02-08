@@ -29,20 +29,22 @@ use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
+use common_tracing::tracing;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::impls::ImmutableCatalog;
 use crate::catalogs::impls::MutableCatalog;
 use crate::configs::Config;
 use crate::databases::Database;
+use crate::storages::StorageDescription;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 use crate::table_functions::TableFunctionFactory;
 
 /// Combine two catalogs together
-/// - read/search like operations are always performed at
-///   upper layer first, and bottom layer later(if necessary)  
+/// - read/search like operations are always performed at upper layer first, and bottom layer
+///   later(if necessary)
 /// - metadata are written to the bottom layer
 #[derive(Clone)]
 pub struct DatabaseCatalog {
@@ -83,10 +85,16 @@ impl DatabaseCatalog {
 #[async_trait::async_trait]
 impl Catalog for DatabaseCatalog {
     async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
+        if tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while get database)",
+            ));
+        }
+
         let r = self.immutable_catalog.get_database(tenant, db_name).await;
         match r {
             Err(e) => {
-                if e.code() == ErrorCode::UnknownDatabase("").code() {
+                if e.code() == ErrorCode::unknown_database_code() {
                     self.mutable_catalog.get_database(tenant, db_name).await
                 } else {
                     Err(e)
@@ -97,6 +105,12 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+        if tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while list databases)",
+            ));
+        }
+
         let mut dbs = self.immutable_catalog.list_databases(tenant).await?;
         let mut other = self.mutable_catalog.list_databases(tenant).await?;
         dbs.append(&mut other);
@@ -104,6 +118,13 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
+        if req.tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while create database)",
+            ));
+        }
+        tracing::info!("Create database from req:{:?}", req);
+
         if self
             .immutable_catalog
             .exists_database(&req.tenant, &req.db)
@@ -119,6 +140,13 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {
+        if req.tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while drop database)",
+            ));
+        }
+        tracing::info!("Drop database from req:{:?}", req);
+
         // drop db in BOTTOM layer only
         if self
             .immutable_catalog
@@ -135,7 +163,7 @@ impl Catalog for DatabaseCatalog {
         match res {
             Ok(t) => Ok(t),
             Err(e) => {
-                if e.code() == ErrorCode::UnknownTable("").code() {
+                if e.code() == ErrorCode::unknown_table_code() {
                     self.mutable_catalog.get_table_by_info(table_info)
                 } else {
                     Err(e)
@@ -160,6 +188,12 @@ impl Catalog for DatabaseCatalog {
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
+        if tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while get table)",
+            ));
+        }
+
         let res = self
             .immutable_catalog
             .get_table(tenant, db_name, table_name)
@@ -179,6 +213,12 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        if tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while list tables)",
+            ));
+        }
+
         let r = self.immutable_catalog.list_tables(tenant, db_name).await;
         match r {
             Ok(x) => Ok(x),
@@ -193,6 +233,13 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()> {
+        if req.tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while create table)",
+            ));
+        }
+        tracing::info!("Create table from req:{:?}", req);
+
         if self
             .immutable_catalog
             .exists_database(&req.tenant, &req.db)
@@ -204,6 +251,13 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
+        if req.tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while drop table)",
+            ));
+        }
+        tracing::info!("Drop table from req:{:?}", req);
+
         if self
             .immutable_catalog
             .exists_database(&req.tenant, &req.db)
@@ -228,5 +282,10 @@ impl Catalog for DatabaseCatalog {
         tbl_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         self.table_function_factory.get(func_name, tbl_args)
+    }
+
+    fn get_table_engines(&self) -> Vec<StorageDescription> {
+        // only return mutable_catalog storage table engines
+        self.mutable_catalog.get_table_engines()
     }
 }

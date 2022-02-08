@@ -20,7 +20,8 @@ use common_meta_sled_store::get_sled_db;
 
 /// 1. Open a temp sled::Db for all tests.
 /// 2. Initialize a global tracing.
-/// 3. Create a span for a test case. One needs to enter it by `span.enter()` and keeps the guard held.
+/// 3. Create a span for a test case. One needs to enter it by `span.enter()` and keeps the guard
+/// held.
 #[macro_export]
 macro_rules! init_sled_ut {
     () => {{

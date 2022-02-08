@@ -149,7 +149,8 @@ impl ExpressionMonotonicityVisitor {
             }
         };
 
-        // Neither a monotonic expression nor constant, interrupt the traversal and return an error directly.
+        // Neither a monotonic expression nor constant, interrupt the traversal and return an error
+        // directly.
         if !monotonic.is_monotonic && !monotonic.is_constant {
             return Err(ErrorCode::UnknownException(format!(
                 "Function '{}' is not monotonic in the variables range",

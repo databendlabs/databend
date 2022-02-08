@@ -49,7 +49,8 @@ impl ActionHandler {
     }
 
     pub async fn execute_write(&self, action: MetaGrpcWriteReq) -> RaftReply {
-        // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
+        // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one
+        // by one
 
         match action {
             MetaGrpcWriteReq::UpsertKV(a) => {
@@ -87,7 +88,8 @@ impl ActionHandler {
     }
 
     pub async fn execute_read(&self, action: MetaGrpcReadReq) -> common_exception::Result<String> {
-        // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
+        // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one
+        // by one
 
         let r = match action {
             MetaGrpcReadReq::GetKV(a) => {

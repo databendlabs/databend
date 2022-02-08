@@ -23,7 +23,8 @@ use crate::SeqV;
 
 /// Describes what `seq` an operation must match to take effect.
 /// Every value written to meta data has a unique `seq` bound.
-/// Any conditioned or non-conditioned write operation can be done through the corresponding MatchSeq.
+/// Any conditioned or non-conditioned write operation can be done through the corresponding
+/// MatchSeq.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum MatchSeq {
     /// Any value is acceptable, i.e. does not check seq at all.
@@ -41,15 +42,9 @@ pub enum MatchSeq {
 
 impl From<Option<u64>> for MatchSeq {
     fn from(s: Option<u64>) -> Self {
-        (&s).into()
-    }
-}
-
-impl From<&Option<u64>> for MatchSeq {
-    fn from(s: &Option<u64>) -> Self {
         match s {
             None => MatchSeq::Any,
-            Some(s) => MatchSeq::Exact(*s),
+            Some(s) => MatchSeq::Exact(s),
         }
     }
 }

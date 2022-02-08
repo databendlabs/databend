@@ -344,14 +344,15 @@ impl PlanRewriter for ExprTransformImpl {
 
     fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
         if self.should_skip_scan() {
-            // if the filter is literal false, like 'where 1+2=4' (constant folding optimizer will overwrite it to literal false),
-            // or the limit is zero, like 'limit 0',
+            // if the filter is literal false, like 'where 1+2=4' (constant folding optimizer will
+            // overwrite it to literal false), or the limit is zero, like 'limit 0',
             // of the having is literal false like 'having 1=2'
             // then we overwrites the ReadDataSourcePlan to an empty one.
             let node = PlanNode::ReadSource(ReadDataSourcePlan {
                 table_info: plan.table_info.clone(),
                 scan_fields: plan.scan_fields.clone(),
-                parts: vec![], // set parts to empty vector, read_table should return None immediately
+                parts: vec![], /* set parts to empty vector, read_table should return None
+                                * immediately */
                 statistics: Statistics {
                     read_rows: 0,
                     read_bytes: 0,

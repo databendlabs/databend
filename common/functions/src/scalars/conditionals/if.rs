@@ -47,8 +47,9 @@ impl Function for IfFunction {
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        // IF(condition, value_if_true, value_if_false) is nullable if 'value_if_true' is nullable or 'value_if_false' is nullable.
-        // The condition of 'Null' is treated as false. SELECT IF(NULL, "YES", "NO") -> "No"
+        // IF(condition, value_if_true, value_if_false) is nullable if 'value_if_true' is nullable
+        // or 'value_if_false' is nullable. The condition of 'Null' is treated as false.
+        // SELECT IF(NULL, "YES", "NO") -> "No"
         let nullable = args[1].is_nullable() || args[2].is_nullable();
 
         let mut aggregate_args = Vec::with_capacity(args.len() - 1);

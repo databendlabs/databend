@@ -98,7 +98,7 @@ impl tonic::IntoRequest<RaftRequest> for MetaGrpcWriteReq {
 }
 
 /// Try convert DoActionAction to tonic::Request<RaftRequest>.
-impl TryInto<Request<RaftRequest>> for &MetaGrpcWriteReq {
+impl TryInto<Request<RaftRequest>> for MetaGrpcWriteReq {
     type Error = ErrorCode;
 
     fn try_into(self) -> common_exception::Result<Request<RaftRequest>> {
@@ -124,7 +124,7 @@ impl TryInto<MetaGrpcReadReq> for Request<RaftRequest> {
     }
 }
 
-impl TryInto<Request<RaftRequest>> for &MetaGrpcReadReq {
+impl TryInto<Request<RaftRequest>> for MetaGrpcReadReq {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<Request<RaftRequest>, Self::Error> {
@@ -148,6 +148,7 @@ impl RequestFor for GetKVAction {
     type Reply = GetKVActionReply;
 }
 
+//
 // - MGetKV
 
 // Again, impl chooses to wrap it up
@@ -161,6 +162,7 @@ impl RequestFor for MGetKVAction {
     type Reply = MGetKVActionReply;
 }
 
+//
 // - prefix list
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct PrefixListReq(pub String);
