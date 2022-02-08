@@ -36,7 +36,7 @@ impl Series {
         })
     }
 
-    pub fn serialize(column: &ColumnRef, vec: &mut Vec<Vec<u8>>) -> Result<()> {
+    pub fn serialize(column: &ColumnRef, vec: &mut [Vec<u8>]) -> Result<()> {
         let column = column.convert_full_column();
         // TODO support nullable
         let column = Series::remove_nullable(&column);
@@ -66,7 +66,7 @@ pub trait GroupHash: Debug {
         )))
     }
 
-    fn serialize(&self, _vec: &mut Vec<Vec<u8>>) -> Result<()> {
+    fn serialize(&self, _vec: &mut [Vec<u8>]) -> Result<()> {
         Err(ErrorCode::BadDataValueType(format!(
             "Unsupported apply fn serialize operation for {:?}",
             self,
@@ -95,7 +95,7 @@ where
         Ok(())
     }
 
-    fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
+    fn serialize(&self, vec: &mut [Vec<u8>]) -> Result<()> {
         assert_eq!(vec.len(), self.len());
         for (value, vec) in self.iter().zip(vec.iter_mut()) {
             BinaryWrite::write_scalar(vec, value)?;
@@ -117,7 +117,7 @@ impl GroupHash for BooleanColumn {
         Ok(())
     }
 
-    fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
+    fn serialize(&self, vec: &mut [Vec<u8>]) -> Result<()> {
         assert_eq!(vec.len(), self.len());
         for (value, vec) in self.iter().zip(vec.iter_mut()) {
             BinaryWrite::write_scalar(vec, &value)?;
@@ -127,7 +127,7 @@ impl GroupHash for BooleanColumn {
 }
 
 impl GroupHash for StringColumn {
-    fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
+    fn serialize(&self, vec: &mut [Vec<u8>]) -> Result<()> {
         assert_eq!(vec.len(), self.len());
         for (value, vec) in self.iter().zip(vec.iter_mut()) {
             BinaryWrite::write_binary(vec, value)?;
