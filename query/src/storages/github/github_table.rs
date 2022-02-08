@@ -88,7 +88,7 @@ impl GithubTable {
             GithubTableType::Issues => RepoIssuesTable::create(self.options.clone()),
             GithubTableType::PullRequests => RepoPRsTable::create(self.options.clone()),
         };
-        Ok(table.get_data_from_github().await?)
+        table.get_data_from_github().await
     }
 
     pub fn description() -> StorageDescription {

@@ -116,15 +116,6 @@ fn test_from_and_to_status() -> anyhow::Result<()> {
     );
 
     {
-        // test from &Status
-
-        let e2: ErrorCode = (&status).into();
-
-        assert_eq!(1007, e2.code());
-        assert_eq!("foo", e2.message());
-    }
-
-    {
         // test from Status
 
         let e2: ErrorCode = status.into();
@@ -136,13 +127,6 @@ fn test_from_and_to_status() -> anyhow::Result<()> {
     // test empty details
     let status1 = Status::unknown("foo");
     assert_eq!(r#""#.as_bytes(), status1.details());
-
-    {
-        // test from &Status
-        let e1: ErrorCode = (&status1).into();
-        assert_eq!(1067, e1.code());
-        assert_eq!("foo", e1.message());
-    }
 
     {
         // test from Status

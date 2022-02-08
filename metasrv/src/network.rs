@@ -51,7 +51,7 @@ impl ItemManager for ChannelManager {
     }
 
     async fn check(&self, mut ch: Channel) -> Result<Channel, tonic::transport::Error> {
-        futures::future::poll_fn(|cx| (&mut ch).poll_ready(cx)).await?;
+        futures::future::poll_fn(|cx| ch.poll_ready(cx)).await?;
         Ok(ch)
     }
 }

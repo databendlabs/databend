@@ -7,6 +7,8 @@ publish = false
 [[bin]]
 name = "fuzz_parse_sql"
 path = "fuzz_targets/fuzz_parse_sql.rs"
+doctest = false
+test = false
 
 [dependencies]
 honggfuzz = "0.5.54"

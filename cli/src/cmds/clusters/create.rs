@@ -27,6 +27,7 @@ use clap::ValueHint;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use lexical_util::num::AsPrimitive;
+use sysinfo::Pid;
 use sysinfo::ProcessExt;
 use sysinfo::System;
 use sysinfo::SystemExt;
@@ -60,7 +61,7 @@ pub struct LocalBinaryPaths {
 async fn reconcile_local_meta(status: &mut Status) -> Result<()> {
     let s = System::new_all();
     if let Some((_, meta)) = status.get_local_meta_config() {
-        if meta.pid.is_none() || s.process(meta.pid.unwrap()).is_none() {
+        if meta.pid.is_none() || s.process(Pid::from(meta.pid.unwrap())).is_none() {
             return Err(CliError::Unknown(
                 "meta service process not found".to_string(),
             ));
@@ -75,7 +76,7 @@ async fn reconcile_local_meta(status: &mut Status) -> Result<()> {
 async fn reconcile_local_query(status: &mut Status) -> Result<()> {
     let s = System::new_all();
     for (_, query) in status.get_local_query_configs() {
-        if query.pid.is_none() || s.process(query.pid.unwrap()).is_none() {
+        if query.pid.is_none() || s.process(Pid::from(query.pid.unwrap())).is_none() {
             return Err(CliError::Unknown(
                 "query service process not found".to_string(),
             ));
@@ -646,13 +647,13 @@ impl CreateCommand {
                 .await
                 .expect("cannot stop current services");
             let s = System::new_all();
-            for elem in s.process_by_name("databend-meta") {
+            for elem in s.processes_by_name("databend-meta") {
                 elem.kill();
             }
-            for elem in s.process_by_name("databend-query") {
+            for elem in s.processes_by_name("databend-query") {
                 elem.kill();
             }
-            for elem in s.process_by_name("databend-dashboard") {
+            for elem in s.processes_by_name("databend-dashboard") {
                 elem.kill();
             }
         }
@@ -674,14 +675,14 @@ impl CreateCommand {
         }
         let s = System::new_all();
 
-        if !s.process_by_name("databend-meta").is_empty() {
+        if s.processes_by_name("databend-meta").count() != 0 {
             return Err(CliError::Unknown(
                 "❗ have installed databend-meta process before, please stop them and retry"
                     .parse()
                     .unwrap(),
             ));
         }
-        if !s.process_by_name("databend-query").is_empty() {
+        if s.processes_by_name("databend-query").count() != 0 {
             return Err(CliError::Unknown(
                 "❗ have installed databend-query process before, please stop them and retry"
                     .parse()

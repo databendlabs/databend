@@ -49,11 +49,13 @@ pub fn init_default_metrics_recorder() {
 
 /// Init prometheus recorder.
 fn init_prometheus_recorder() {
-    let recorder = PrometheusBuilder::new().build();
+    let recorder = PrometheusBuilder::new()
+        .build()
+        .expect("failed to build Prometheus recorder");
     let mut h = PROMETHEUS_HANDLE.as_ref().write();
-    *h = Some(recorder.handle());
+    *h = Some(recorder.0.handle());
     metrics::clear_recorder();
-    match metrics::set_boxed_recorder(Box::new(recorder)) {
+    match metrics::set_boxed_recorder(Box::new(recorder.0)) {
         Ok(_) => (),
         Err(err) => tracing::warn!("Install prometheus recorder failed, cause: {}", err),
     };

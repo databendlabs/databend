@@ -28,9 +28,9 @@ common-tracing = {path = "../tracing"}
 async-stream = "0.3.2"
 async-trait = "0.1.52"
 csv-async = "1.2.4"
-futures = "0.3.19"
+futures = "0.3.21"
 pin-project-lite = "0.2.8"
-tempfile = "3.2.0"
+tempfile = "3.3.0"
 tokio-stream = { version = "0.1.8", features = ["net"] }
 
 [dev-dependencies]
