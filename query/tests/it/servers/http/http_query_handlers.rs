@@ -180,12 +180,15 @@ async fn test_result_timeout() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_multi_page() -> Result<()> {
-    let ep = create_endpoint();
+    let session_manager = SessionManagerBuilder::create().build().unwrap();
+    let num_parts = session_manager.get_conf().query.num_cpus as usize;
+    let ep = Route::new()
+        .nest("/v1/query", query_route())
+        .with(HTTPSessionMiddleware { session_manager });
 
     let max_block_size = 10000;
-    let num_parts = num_cpus::get();
     let sql = format!("select * from numbers({})", max_block_size * num_parts);
 
     let json = serde_json::json!({"sql": sql.to_string(),  "pagination": {"wait_time_secs": 3}});
@@ -206,7 +209,7 @@ async fn test_multi_page() -> Result<()> {
             assert_eq!(result.state, ExecuteStateName::Succeeded);
         } else {
             next_uri = make_page_uri(&query_id, p + 1);
-            assert_eq!(result.data.len(), 10000);
+            assert_eq!(result.data.len(), max_block_size);
             assert_eq!(result.next_uri, Some(next_uri.clone()));
         }
     }
