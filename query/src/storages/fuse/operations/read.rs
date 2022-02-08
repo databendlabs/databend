@@ -15,7 +15,6 @@
 
 use std::sync::Arc;
 
-use common_datavalues2::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;
@@ -60,8 +59,7 @@ impl FuseTable {
             )
             .flatten();
         let da = ctx.get_storage_accessor()?;
-        let arrow_schema = self.table_info.schema().to_arrow();
-        let table_schema = self.table_info.schema(); // TODO is this self.table_info?
+        let table_schema = self.table_info.schema();
 
         let part_stream = futures::stream::iter(iter);
 
