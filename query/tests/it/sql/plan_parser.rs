@@ -231,8 +231,7 @@ async fn test_plan_parser() -> Result<()> {
             name: "show-processlist",
             sql: "show processlist",
             expect: "\
-            Projection: id:String, type:String, host:String, user:String, state:String, database:String, extra_info:String, memory_usage:Int64, dal_metrics_read_bytes:UInt64, dal_metrics_write_bytes:UInt64, scan_progress_read_rows:UInt64, scan_progress_read_bytes:UInt64\
-            \n  ReadDataSource: scan schema: [id:String, type:String, host:String;N, user:String;N, state:String, database:String, extra_info:String;N, memory_usage:Int64;N, dal_metrics_read_bytes:UInt64;N, dal_metrics_write_bytes:UInt64;N, scan_progress_read_rows:UInt64;N, scan_progress_read_bytes:UInt64;N], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]]",
+            Projection: id:String, type:String, host:Nullable(String), user:Nullable(String), state:String, database:String, extra_info:Nullable(String), memory_usage:Nullable(Int64), dal_metrics_read_bytes:Nullable(UInt64), dal_metrics_write_bytes:Nullable(UInt64), scan_progress_read_rows:Nullable(UInt64), scan_progress_read_bytes:Nullable(UInt64)\n  ReadDataSource: scan schema: [id:String, type:String, host:String;N, user:String;N, state:String, database:String, extra_info:String;N, memory_usage:Int64;N, dal_metrics_read_bytes:UInt64;N, dal_metrics_write_bytes:UInt64;N, scan_progress_read_rows:UInt64;N, scan_progress_read_bytes:UInt64;N], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]]",
             error: "",
         },
     ];

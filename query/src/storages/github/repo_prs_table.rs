@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
@@ -71,15 +71,15 @@ impl RepoPRsTable {
 
     fn schema() -> Arc<DataSchema> {
         let fields = vec![
-            DataField::new(NUMBER, DataType::UInt64, false),
-            DataField::new(TITLE, DataType::String, true),
-            DataField::new(STATE, DataType::String, true),
-            DataField::new(USER, DataType::String, true),
-            DataField::new(LABELS, DataType::String, true),
-            DataField::new(ASSIGNESS, DataType::String, true),
-            DataField::new(CREATED_AT, DataType::DateTime32(None), true),
-            DataField::new(UPDATED_AT, DataType::DateTime32(None), true),
-            DataField::new(CLOSED_AT, DataType::DateTime32(None), true),
+            DataField::new(NUMBER, u64::to_data_type()),
+            DataField::new(TITLE, Vu8::to_data_type()),
+            DataField::new(STATE, Vu8::to_data_type()),
+            DataField::new(USER, Vu8::to_data_type()),
+            DataField::new(LABELS, Vu8::to_data_type()),
+            DataField::new(ASSIGNESS, Vu8::to_data_type()),
+            DataField::new_nullable(CREATED_AT, DateTime32Type::arc(None)),
+            DataField::new_nullable(UPDATED_AT, DateTime32Type::arc(None)),
+            DataField::new_nullable(CLOSED_AT, DateTime32Type::arc(None)),
         ];
 
         Arc::new(DataSchema::new(fields))
@@ -88,7 +88,7 @@ impl RepoPRsTable {
 
 #[async_trait::async_trait]
 impl GithubDataGetter for RepoPRsTable {
-    async fn get_data_from_github(&self) -> Result<Vec<Series>> {
+    async fn get_data_from_github(&self) -> Result<Vec<ColumnRef>> {
         // init array
         let mut issue_numer_array: Vec<u64> = Vec::new();
         let mut title_array: Vec<Vec<u8>> = Vec::new();
@@ -192,15 +192,15 @@ impl GithubDataGetter for RepoPRsTable {
         }
 
         Ok(vec![
-            Series::new(issue_numer_array),
-            Series::new(title_array),
-            Series::new(state_array),
-            Series::new(user_array),
-            Series::new(labels_array),
-            Series::new(assigness_array),
-            Series::new(created_at_array),
-            Series::new(updated_at_array),
-            Series::new(closed_at_array),
+            Series::from_data(issue_numer_array),
+            Series::from_data(title_array),
+            Series::from_data(state_array),
+            Series::from_data(user_array),
+            Series::from_data(labels_array),
+            Series::from_data(assigness_array),
+            Series::from_data(created_at_array),
+            Series::from_data(updated_at_array),
+            Series::from_data(closed_at_array),
         ])
     }
 }

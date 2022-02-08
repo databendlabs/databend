@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::DescribeTablePlan;
 use common_streams::DataBlockStream;
@@ -56,7 +56,7 @@ impl Interpreter for DescribeTableInterpreter {
         let mut nulls: Vec<String> = vec![];
         for field in schema.fields().iter() {
             names.push(field.name().to_string());
-            types.push(format!("{:?}", field.data_type()));
+            types.push(format!("{:?}", remove_nullable(field.data_type())));
             nulls.push(if field.is_nullable() {
                 "YES".to_string()
             } else {
@@ -69,10 +69,10 @@ impl Interpreter for DescribeTableInterpreter {
 
         let desc_schema = self.plan.schema();
 
-        let block = DataBlock::create_by_array(desc_schema.clone(), vec![
-            Series::new(names),
-            Series::new(types),
-            Series::new(nulls),
+        let block = DataBlock::create(desc_schema.clone(), vec![
+            Series::from_data(names),
+            Series::from_data(types),
+            Series::from_data(nulls),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(desc_schema, None, vec![

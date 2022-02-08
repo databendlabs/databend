@@ -25,8 +25,14 @@ pub struct ConstColumn {
     column: ColumnRef,
 }
 
+// const(nullable) is ok, nullable(const) is not allowed
 impl ConstColumn {
     pub fn new(column: ColumnRef, length: usize) -> Self {
+        // Avoid const recursion.
+        if column.is_const() {
+            let col: &ConstColumn = unsafe { Series::static_cast(&column) };
+            return Self::new(col.inner().clone(), length);
+        }
         Self { column, length }
     }
 
@@ -98,6 +104,17 @@ impl Column for ConstColumn {
             return Arc::new(self.clone());
         }
         Arc::new(Self::new(self.inner().clone(), length))
+    }
+
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        let mut cnt = vec![0usize; scattered_size];
+        for i in indices {
+            cnt[*i] += 1;
+        }
+
+        cnt.iter()
+            .map(|c| Arc::new(Self::new(self.inner().clone(), *c)) as ColumnRef)
+            .collect()
     }
 
     // just for resize

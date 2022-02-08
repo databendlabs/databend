@@ -15,8 +15,10 @@
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_macros::MallocSizeOf;
 
+use crate::remove_nullable;
 use crate::types::data_type::from_arrow_field;
 use crate::types::data_type::DataTypePtr;
+use crate::wrap_nullable;
 use crate::TypeID;
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Clone, MallocSizeOf)]
@@ -30,6 +32,15 @@ pub struct DataField {
 
 impl DataField {
     pub fn new(name: &str, data_type: DataTypePtr) -> Self {
+        DataField {
+            name: name.to_string(),
+            default_expr: None,
+            data_type,
+        }
+    }
+
+    pub fn new_nullable(name: &str, data_type: DataTypePtr) -> Self {
+        let data_type = wrap_nullable(&data_type);
         DataField {
             name: name.to_string(),
             default_expr: None,
@@ -100,9 +111,10 @@ impl From<&ArrowField> for DataField {
 impl std::fmt::Debug for DataField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut debug_struct = f.debug_struct("DataField");
+        let remove_nullable = remove_nullable(self.data_type());
         debug_struct
             .field("name", &self.name)
-            .field("data_type", self.data_type())
+            .field("data_type", &remove_nullable)
             .field("nullable", &self.is_nullable());
         if let Some(ref default_expr) = self.default_expr {
             debug_struct.field(

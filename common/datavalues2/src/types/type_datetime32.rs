@@ -37,6 +37,9 @@ impl DateTime32Type {
     pub fn arc(tz: Option<String>) -> DataTypePtr {
         Arc::new(DateTime32Type { tz })
     }
+    pub fn tz(&self) -> Option<&String> {
+        self.tz.as_ref()
+    }
 }
 
 #[typetag::serde]
@@ -93,7 +96,11 @@ impl DataType for DateTime32Type {
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(DateTimeSerializer::<u32>::default())
+        let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
+        Box::new(DateTimeSerializer::<u32>::create(
+            tz.parse::<Tz>().unwrap(),
+            0,
+        ))
     }
 
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -72,6 +73,10 @@ impl DataType for NullableType {
 
     fn arrow_type(&self) -> ArrowType {
         self.inner.arrow_type()
+    }
+
+    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
+        self.inner.custom_arrow_meta()
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {

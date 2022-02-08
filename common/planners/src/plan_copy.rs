@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::DataSchemaRef;
 use common_meta_types::MetaId;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]

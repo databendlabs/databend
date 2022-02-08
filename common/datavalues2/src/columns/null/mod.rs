@@ -55,7 +55,7 @@ impl Column for NullColumn {
         Arc::new(NullType {})
     }
 
-    fn is_nullable(&self) -> bool {
+    fn is_null(&self) -> bool {
         true
     }
 
@@ -94,6 +94,17 @@ impl Column for NullColumn {
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
         let length = filter.values().len() - filter.values().null_count();
         Arc::new(Self { length })
+    }
+
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        let mut cnt = vec![0usize; scattered_size];
+        for i in indices {
+            cnt[*i] += 1;
+        }
+
+        cnt.iter()
+            .map(|c| Arc::new(Self::new(*c)) as ColumnRef)
+            .collect()
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {

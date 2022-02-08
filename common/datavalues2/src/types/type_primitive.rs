@@ -27,6 +27,7 @@ use crate::prelude::*;
 pub struct PrimitiveDataType<
     T: PrimitiveType + Clone + Copy + std::fmt::Debug + Into<DataValue> + serde::Serialize,
 > {
+    #[serde(skip)]
     _t: PhantomData<T>,
 }
 
@@ -50,17 +51,6 @@ pub fn create_primitive_datatype<T: PrimitiveType>() -> Arc<dyn DataType> {
     }
 }
 
-pub type Int8Type = PrimitiveDataType<i8>;
-pub type Int16Type = PrimitiveDataType<i16>;
-pub type Int32Type = PrimitiveDataType<i32>;
-pub type Int64Type = PrimitiveDataType<i64>;
-pub type UInt8Type = PrimitiveDataType<u8>;
-pub type UInt16Type = PrimitiveDataType<u16>;
-pub type UInt32Type = PrimitiveDataType<u32>;
-pub type UInt64Type = PrimitiveDataType<u64>;
-pub type Float32Type = PrimitiveDataType<f32>;
-pub type Float64Type = PrimitiveDataType<f64>;
-
 macro_rules! impl_numeric {
     ($ty:ident, $tname:ident, $name: expr, $alias: expr) => {
         impl PrimitiveDataType<$ty> {
@@ -69,7 +59,6 @@ macro_rules! impl_numeric {
             }
         }
 
-        #[typetag::serde]
         impl DataType for PrimitiveDataType<$ty> {
             fn data_type_id(&self) -> TypeID {
                 TypeID::$tname
@@ -124,6 +113,22 @@ macro_rules! impl_numeric {
             fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
                 Box::new(MutablePrimitiveColumn::<$ty>::with_capacity(capacity))
             }
+
+            #[doc(hidden)]
+            fn typetag_name(&self) -> &'static str {
+                concat!($name, "Type")
+            }
+
+            #[doc(hidden)]
+            fn typetag_deserialize(&self) {}
+        }
+
+         paste::paste!{
+                pub type [<$tname Type>] = PrimitiveDataType<$ty>;
+         }
+
+        typetag::inventory::submit! {
+            <dyn DataType> ::typetag_register(concat!($name, "Type"),(|deserializer|std::result::Result::Ok(std::boxed::Box::new(typetag::erased_serde::deserialize:: <PrimitiveDataType<$ty>>(deserializer)?),))as typetag::DeserializeFn<<dyn DataType as typetag::Strictest> ::Object> ,)
         }
 
         impl std::fmt::Debug for PrimitiveDataType<$ty> {

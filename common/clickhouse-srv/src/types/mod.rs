@@ -47,7 +47,7 @@ pub use self::from_sql::FromSql;
 pub use self::from_sql::FromSqlResult;
 pub use self::options::*;
 pub use self::query::Query;
-pub(crate) use self::stat_buffer::StatBuffer;
+pub use self::stat_buffer::StatBuffer;
 pub use self::value::Value;
 pub use self::value_ref::ValueRef;
 use crate::binary::Encoder;

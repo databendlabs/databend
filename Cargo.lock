@@ -853,7 +853,7 @@ dependencies = [
  "comfy-table",
  "common-base",
  "common-building",
- "common-datavalues",
+ "common-datavalues2",
  "common-meta-raft-store",
  "common-tracing",
  "csv",
@@ -957,9 +957,6 @@ name = "bit-vec"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "bitflags"
@@ -1599,7 +1596,7 @@ dependencies = [
  "ahash",
  "comfy-table",
  "common-arrow",
- "common-datavalues",
+ "common-datavalues2",
  "common-exception",
  "common-io",
  "pretty_assertions",
@@ -1637,6 +1634,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "common-arrow",
+ "common-clickhouse-srv",
  "common-datavalues",
  "common-exception",
  "common-io",
@@ -1651,6 +1649,7 @@ dependencies = [
  "paste",
  "pretty_assertions",
  "serde",
+ "serde_json",
  "typetag",
 ]
 
@@ -1771,7 +1770,7 @@ dependencies = [
  "async-trait",
  "common-ast",
  "common-base",
- "common-datavalues",
+ "common-datavalues2",
  "common-exception",
  "common-functions",
  "common-meta-api",
@@ -1802,7 +1801,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "common-base",
- "common-datavalues",
+ "common-datavalues2",
  "common-exception",
  "common-meta-types",
  "common-tracing",
@@ -1818,7 +1817,6 @@ dependencies = [
  "async-trait",
  "common-arrow",
  "common-base",
- "common-datavalues",
  "common-exception",
  "common-meta-api",
  "common-meta-raft-store",
@@ -1908,7 +1906,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common-building",
- "common-datavalues",
+ "common-datavalues2",
  "common-exception",
  "derive_more",
  "enumflags2",
@@ -1948,7 +1946,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
  "common-datablocks",
- "common-datavalues",
+ "common-datavalues2",
  "common-exception",
  "common-functions",
  "common-infallible",
@@ -1969,7 +1967,7 @@ dependencies = [
  "common-base",
  "common-dal2",
  "common-datablocks",
- "common-datavalues",
+ "common-datavalues2",
  "common-exception",
  "common-functions",
  "common-io",
@@ -2441,7 +2439,6 @@ dependencies = [
  "common-base",
  "common-building",
  "common-containers",
- "common-datavalues",
  "common-exception",
  "common-grpc",
  "common-infallible",
@@ -2494,7 +2491,6 @@ dependencies = [
  "backoff",
  "base64 0.13.0",
  "bincode 1.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "bit-vec",
  "bumpalo",
  "byteorder",
  "bytes",
@@ -2513,7 +2509,6 @@ dependencies = [
  "common-dal",
  "common-dal2",
  "common-datablocks",
- "common-datavalues",
  "common-datavalues2",
  "common-exception",
  "common-functions",

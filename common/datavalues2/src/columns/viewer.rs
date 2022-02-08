@@ -39,23 +39,27 @@ impl<'a, T: Scalar> ColumnViewer<'a, T> {
         let non_const_mask = non_const_mask(column);
         let size = column.len();
 
-        let (column, validity) = if column.is_nullable() {
+        let (column, validity) = if column.is_const() {
+            let mut bitmap = MutableBitmap::with_capacity(1);
+            bitmap.push(true);
+
+            let c: &ConstColumn = unsafe { Series::static_cast(column) };
+            (c.inner(), bitmap.into())
+        } else if column.is_nullable() {
             let c: &NullableColumn = unsafe { Series::static_cast(column) };
             (c.inner(), c.ensure_validity().clone())
         } else {
             let mut bitmap = MutableBitmap::with_capacity(1);
             bitmap.push(true);
-
-            if column.is_const() {
-                let c: &ConstColumn = unsafe { Series::static_cast(column) };
-                (c.inner(), bitmap.into())
-            } else {
-                (column, bitmap.into())
-            }
+            (column, bitmap.into())
         };
 
-        let column: &T::ColumnType = if column.is_const() {
-            let column = column.as_any().downcast_ref::<ConstColumn>().unwrap();
+        // apply these twice to cover the cases: nullable(const) or const(nullable)
+        let column = if column.is_const() {
+            let column: &ConstColumn = unsafe { Series::static_cast(column) };
+            Series::check_get_scalar_column::<T>(column.inner())?
+        } else if column.is_nullable() {
+            let column: &NullableColumn = unsafe { Series::static_cast(column) };
             Series::check_get_scalar_column::<T>(column.inner())?
         } else {
             Series::check_get_scalar_column::<T>(column)?

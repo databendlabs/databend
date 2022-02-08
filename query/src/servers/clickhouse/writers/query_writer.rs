@@ -14,23 +14,17 @@
 
 use std::borrow::Cow;
 
-use chrono::Date;
-use chrono::DateTime;
-use chrono_tz::Tz;
 use common_base::ProgressValues;
 use common_clickhouse_srv::connection::Connection;
 use common_clickhouse_srv::errors::Error as CHError;
 use common_clickhouse_srv::errors::Result as CHResult;
 use common_clickhouse_srv::errors::ServerError;
-use common_clickhouse_srv::types::column::ArcColumnData;
-use common_clickhouse_srv::types::column::ArcColumnWrapper;
-use common_clickhouse_srv::types::column::ColumnFrom;
 use common_clickhouse_srv::types::column::{self};
 use common_clickhouse_srv::types::Block;
 use common_clickhouse_srv::types::DateTimeType;
 use common_clickhouse_srv::types::SqlType;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
@@ -96,7 +90,7 @@ impl<'a> QueryWriter<'a> {
 
         match self.conn.write_block(&block).await {
             Ok(_) => Ok(()),
-            Err(error) => Err(ErrorCode::UnknownException(format!("{}", error))),
+            Err(error) => Err(ErrorCode::UnknownException(format!("{:?}", error))),
         }
     }
 
@@ -145,102 +139,75 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
     }
 
     for column_index in 0..block.num_columns() {
-        let column = block.column(column_index).to_array()?;
+        let column = block.column(column_index);
         let field = block.schema().field(column_index);
         let name = field.name();
+        let serializer = field.data_type().create_serializer();
         result.append_column(column::new_column(
             name,
-            to_clickhouse_column(field, &column)?,
+            serializer.serialize_clickhouse_format(column)?,
         ));
     }
     Ok(result)
 }
 
 pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<DataBlock> {
-    let get_series = |block: &Block, index: usize| -> CHResult<Series> {
+    let get_series = |block: &Block, index: usize| -> CHResult<ColumnRef> {
         let col = &block.columns()[index];
         match col.sql_type() {
-            SqlType::UInt8 => {
-                Ok(DFUInt8Array::new_from_iter(col.iter::<u8>()?.copied()).into_series())
-            }
+            SqlType::UInt8 => Ok(UInt8Column::from_iterator(col.iter::<u8>()?.copied()).arc()),
             SqlType::UInt16 | SqlType::Date => {
-                Ok(DFUInt16Array::new_from_iter(col.iter::<u16>()?.copied()).into_series())
+                Ok(UInt16Column::from_iterator(col.iter::<u16>()?.copied()).arc())
             }
             SqlType::UInt32 | SqlType::DateTime(DateTimeType::DateTime32) => {
-                Ok(DFUInt32Array::new_from_iter(col.iter::<u32>()?.copied()).into_series())
+                Ok(UInt32Column::from_iterator(col.iter::<u32>()?.copied()).arc())
             }
-            SqlType::UInt64 => {
-                Ok(DFUInt64Array::new_from_iter(col.iter::<u64>()?.copied()).into_series())
-            }
-            SqlType::Int8 => {
-                Ok(DFInt8Array::new_from_iter(col.iter::<i8>()?.copied()).into_series())
-            }
-            SqlType::Int16 => {
-                Ok(DFInt16Array::new_from_iter(col.iter::<i16>()?.copied()).into_series())
-            }
-            SqlType::Int32 => {
-                Ok(DFInt32Array::new_from_iter(col.iter::<i32>()?.copied()).into_series())
-            }
-            SqlType::Int64 => {
-                Ok(DFInt64Array::new_from_iter(col.iter::<i64>()?.copied()).into_series())
-            }
-            SqlType::Float32 => {
-                Ok(DFFloat32Array::new_from_iter(col.iter::<f32>()?.copied()).into_series())
-            }
-            SqlType::Float64 => {
-                Ok(DFFloat64Array::new_from_iter(col.iter::<f64>()?.copied()).into_series())
-            }
-            SqlType::String => Ok(DFStringArray::new_from_iter(col.iter::<&[u8]>()?).into_series()),
-            SqlType::FixedString(_) => {
-                Ok(DFStringArray::new_from_iter(col.iter::<&[u8]>()?).into_series())
-            }
+            SqlType::UInt64 => Ok(UInt64Column::from_iterator(col.iter::<u64>()?.copied()).arc()),
+            SqlType::Int8 => Ok(Int8Column::from_iterator(col.iter::<i8>()?.copied()).arc()),
+            SqlType::Int16 => Ok(Int16Column::from_iterator(col.iter::<i16>()?.copied()).arc()),
+            SqlType::Int32 => Ok(Int32Column::from_iterator(col.iter::<i32>()?.copied()).arc()),
+            SqlType::Int64 => Ok(Int64Column::from_iterator(col.iter::<i64>()?.copied()).arc()),
+            SqlType::Float32 => Ok(Float32Column::from_iterator(col.iter::<f32>()?.copied()).arc()),
+            SqlType::Float64 => Ok(Float64Column::from_iterator(col.iter::<f64>()?.copied()).arc()),
+            SqlType::String => Ok(StringColumn::from_iterator(col.iter::<&[u8]>()?).arc()),
+            SqlType::FixedString(_) => Ok(StringColumn::from_iterator(col.iter::<&[u8]>()?).arc()),
 
-            SqlType::Nullable(SqlType::UInt8) => Ok(DFUInt8Array::new_from_opt_iter(
+            SqlType::Nullable(SqlType::UInt8) => Ok(Series::from_data(
                 col.iter::<Option<u8>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
+            )),
             SqlType::Nullable(SqlType::UInt16) | SqlType::Nullable(SqlType::Date) => Ok(
-                DFUInt16Array::new_from_opt_iter(col.iter::<Option<u16>>()?.map(|c| c.copied()))
-                    .into_series(),
+                Series::from_data(col.iter::<Option<u16>>()?.map(|c| c.copied())),
             ),
             SqlType::Nullable(SqlType::UInt32)
             | SqlType::Nullable(SqlType::DateTime(DateTimeType::DateTime32)) => Ok(
-                DFUInt32Array::new_from_opt_iter(col.iter::<Option<u32>>()?.map(|c| c.copied()))
-                    .into_series(),
+                Series::from_data(col.iter::<Option<u32>>()?.map(|c| c.copied())),
             ),
-            SqlType::Nullable(SqlType::UInt64) => Ok(DFUInt64Array::new_from_opt_iter(
+            SqlType::Nullable(SqlType::UInt64) => Ok(Series::from_data(
                 col.iter::<Option<u64>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
-            SqlType::Nullable(SqlType::Int8) => Ok(DFInt8Array::new_from_opt_iter(
+            )),
+            SqlType::Nullable(SqlType::Int8) => Ok(Series::from_data(
                 col.iter::<Option<i8>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
-            SqlType::Nullable(SqlType::Int16) => Ok(DFInt16Array::new_from_opt_iter(
+            )),
+            SqlType::Nullable(SqlType::Int16) => Ok(Series::from_data(
                 col.iter::<Option<i16>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
-            SqlType::Nullable(SqlType::Int32) => Ok(DFInt32Array::new_from_opt_iter(
+            )),
+            SqlType::Nullable(SqlType::Int32) => Ok(Series::from_data(
                 col.iter::<Option<i32>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
-            SqlType::Nullable(SqlType::Int64) => Ok(DFInt64Array::new_from_opt_iter(
+            )),
+            SqlType::Nullable(SqlType::Int64) => Ok(Series::from_data(
                 col.iter::<Option<i64>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
-            SqlType::Nullable(SqlType::Float32) => Ok(DFFloat32Array::new_from_opt_iter(
+            )),
+            SqlType::Nullable(SqlType::Float32) => Ok(Series::from_data(
                 col.iter::<Option<f32>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
-            SqlType::Nullable(SqlType::Float64) => Ok(DFFloat64Array::new_from_opt_iter(
+            )),
+            SqlType::Nullable(SqlType::Float64) => Ok(Series::from_data(
                 col.iter::<Option<f64>>()?.map(|c| c.copied()),
-            )
-            .into_series()),
+            )),
             SqlType::Nullable(SqlType::String) => {
-                Ok(DFStringArray::new_from_opt_iter(col.iter::<Option<&[u8]>>()?).into_series())
+                Ok(Series::from_data(col.iter::<Option<&[u8]>>()?))
             }
             SqlType::Nullable(SqlType::FixedString(_)) => {
-                Ok(DFStringArray::new_from_opt_iter(col.iter::<Option<&[u8]>>()?).into_series())
+                Ok(Series::from_data(col.iter::<Option<&[u8]>>()?))
             }
 
             other => Err(CHError::Other(Cow::from(format!(
@@ -250,193 +217,11 @@ pub fn from_clickhouse_block(schema: DataSchemaRef, block: Block) -> Result<Data
         }
     };
 
-    let mut arrays = vec![];
+    let mut columns = vec![];
     for index in 0..block.column_count() {
         let array = get_series(&block, index);
         let a2 = array.map_err(from_clickhouse_err);
-        arrays.push(a2?);
+        columns.push(a2?);
     }
-    Ok(DataBlock::create_by_array(schema, arrays))
-}
-
-fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnData> {
-    let is_nullable = field.is_nullable();
-    let utc: Tz = "UTC".parse().unwrap();
-    let result = match is_nullable {
-        true => match field.data_type() {
-            DataType::Int8 => Vec::column_from::<ArcColumnWrapper>(column.i8()?.collect_values()),
-            DataType::Int16 => Vec::column_from::<ArcColumnWrapper>(column.i16()?.collect_values()),
-            DataType::Int32 => Vec::column_from::<ArcColumnWrapper>(column.i32()?.collect_values()),
-            DataType::Int64 => Vec::column_from::<ArcColumnWrapper>(column.i64()?.collect_values()),
-            DataType::UInt8 => Vec::column_from::<ArcColumnWrapper>(column.u8()?.collect_values()),
-            DataType::UInt16 => {
-                Vec::column_from::<ArcColumnWrapper>(column.u16()?.collect_values())
-            }
-            DataType::Date16 => {
-                let c: Vec<Option<Date<Tz>>> = column
-                    .u16()?
-                    .into_iter()
-                    .map(|x| x.map(|v| v.to_date(&utc)))
-                    .collect();
-                Vec::column_from::<ArcColumnWrapper>(c)
-            }
-            DataType::UInt32 => {
-                Vec::column_from::<ArcColumnWrapper>(column.u32()?.collect_values())
-            }
-            DataType::Date32 => {
-                let c: Vec<Option<Date<Tz>>> = column
-                    .i32()?
-                    .into_iter()
-                    .map(|x| x.map(|v| v.to_date(&utc)))
-                    .collect();
-                Vec::column_from::<ArcColumnWrapper>(c)
-            }
-            DataType::DateTime32(tz) => {
-                let tz = tz.clone();
-                let tz = tz.unwrap_or_else(|| "UTC".to_string());
-                let tz: Tz = tz.parse().unwrap();
-
-                let c: Vec<Option<DateTime<Tz>>> = column
-                    .u32()?
-                    .into_iter()
-                    .map(|x| x.map(|v| v.to_date_time(&tz)))
-                    .collect();
-
-                Vec::column_from::<ArcColumnWrapper>(c)
-            }
-            DataType::UInt64 => {
-                Vec::column_from::<ArcColumnWrapper>(column.u64()?.collect_values())
-            }
-            DataType::Float32 => {
-                Vec::column_from::<ArcColumnWrapper>(column.f32()?.collect_values())
-            }
-            DataType::Float64 => {
-                Vec::column_from::<ArcColumnWrapper>(column.f64()?.collect_values())
-            }
-            DataType::String => {
-                Vec::column_from::<ArcColumnWrapper>(column.string()?.collect_values())
-            }
-            DataType::Boolean => {
-                let v: Vec<Option<u8>> = column
-                    .bool()?
-                    .into_iter()
-                    .map(|f| f.map(|v| v as u8))
-                    .collect();
-
-                Vec::column_from::<ArcColumnWrapper>(v)
-            }
-            DataType::Struct(fields) => Vec::column_from::<ArcColumnWrapper>(
-                fields
-                    .iter()
-                    .zip(column.tuple()?.inner().values().iter())
-                    .map(|(f, v)| {
-                        let series = v.clone().into_series();
-                        to_clickhouse_column(f, &series)
-                    })
-                    .collect::<Result<Vec<_>>>()?,
-            ),
-            _ => {
-                return Err(ErrorCode::BadDataValueType(format!(
-                    "Unsupported column type:{:?}",
-                    column.data_type()
-                )));
-            }
-        },
-        false => match field.data_type() {
-            DataType::Int8 => Vec::column_from::<ArcColumnWrapper>(
-                column.i8()?.inner().values().as_slice().to_vec(),
-            ),
-            DataType::Int16 => Vec::column_from::<ArcColumnWrapper>(
-                column.i16()?.inner().values().as_slice().to_vec(),
-            ),
-            DataType::Int32 => Vec::column_from::<ArcColumnWrapper>(
-                column.i32()?.inner().values().as_slice().to_vec(),
-            ),
-            DataType::Int64 => Vec::column_from::<ArcColumnWrapper>(
-                column.i64()?.inner().values().as_slice().to_vec(),
-            ),
-            DataType::UInt8 => Vec::column_from::<ArcColumnWrapper>(
-                column.u8()?.inner().values().as_slice().to_vec(),
-            ),
-            DataType::UInt16 => Vec::column_from::<ArcColumnWrapper>(
-                column.u16()?.inner().values().as_slice().to_vec(),
-            ),
-            DataType::Date16 => {
-                let c: Vec<Date<Tz>> = column
-                    .u16()?
-                    .into_no_null_iter()
-                    .map(|v| v.to_date(&utc))
-                    .collect();
-
-                Vec::column_from::<ArcColumnWrapper>(c)
-            }
-            DataType::UInt32 => Vec::column_from::<ArcColumnWrapper>(
-                column.u32()?.inner().values().as_slice().to_vec(),
-            ),
-            DataType::Date32 => {
-                let c: Vec<Date<Tz>> = column
-                    .i32()?
-                    .into_no_null_iter()
-                    .map(|v| v.to_date(&utc))
-                    .collect();
-
-                Vec::column_from::<ArcColumnWrapper>(c)
-            }
-            DataType::DateTime32(tz) => {
-                let tz = tz.clone();
-                let tz = tz.unwrap_or_else(|| "UTC".to_string());
-                let tz: Tz = tz.parse().unwrap();
-
-                let c: Vec<DateTime<Tz>> = column
-                    .u32()?
-                    .into_no_null_iter()
-                    .map(|v| v.to_date_time(&tz))
-                    .collect();
-
-                Vec::column_from::<ArcColumnWrapper>(c)
-            }
-
-            DataType::UInt64 => Vec::column_from::<ArcColumnWrapper>(
-                column.u64()?.inner().values().as_slice().to_vec(),
-            ),
-            DataType::Float32 => Vec::column_from::<ArcColumnWrapper>(
-                column.f32()?.inner().values().as_slice().to_vec(),
-            ),
-            DataType::Float64 => Vec::column_from::<ArcColumnWrapper>(
-                column.f64()?.inner().values().as_slice().to_vec(),
-            ),
-            DataType::String => {
-                let vs: Vec<&[u8]> = column.string()?.into_no_null_iter().collect();
-                Vec::column_from::<ArcColumnWrapper>(vs)
-            }
-            DataType::Boolean => {
-                let vs: Vec<u8> = column
-                    .bool()?
-                    .into_no_null_iter()
-                    .map(|c| c as u8)
-                    .collect();
-                Vec::column_from::<ArcColumnWrapper>(vs)
-            }
-            DataType::Interval(_) => Vec::column_from::<ArcColumnWrapper>(
-                column.i64()?.inner().values().as_slice().to_vec(),
-            ),
-            DataType::Struct(fields) => Vec::column_from::<ArcColumnWrapper>(
-                fields
-                    .iter()
-                    .zip(column.tuple()?.inner().values().iter())
-                    .map(|(f, v)| {
-                        let series = v.clone().into_series();
-                        to_clickhouse_column(f, &series)
-                    })
-                    .collect::<Result<Vec<_>>>()?,
-            ),
-            _ => {
-                return Err(ErrorCode::BadDataValueType(format!(
-                    "Unsupported column type:{:?}",
-                    column.data_type()
-                )));
-            }
-        },
-    };
-    Ok(result)
+    Ok(DataBlock::create(schema, columns))
 }

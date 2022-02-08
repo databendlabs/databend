@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-
+use common_datavalues2::prelude::*;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DescribeStagePlan {
     pub name: String,
@@ -25,12 +21,12 @@ pub struct DescribeStagePlan {
 impl DescribeStagePlan {
     pub fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("parent_properties", DataType::String, false),
-            DataField::new("properties", DataType::String, false),
-            DataField::new("property_types", DataType::String, false),
-            DataField::new("property_values", DataType::String, false),
-            DataField::new("property_defaults", DataType::String, false),
-            DataField::new("property_changed", DataType::Boolean, false),
+            DataField::new("parent_properties", Vu8::to_data_type()),
+            DataField::new("properties", Vu8::to_data_type()),
+            DataField::new("property_types", Vu8::to_data_type()),
+            DataField::new("property_values", Vu8::to_data_type()),
+            DataField::new("property_defaults", Vu8::to_data_type()),
+            DataField::new("property_changed", bool::to_data_type()),
         ])
     }
 }

@@ -15,8 +15,7 @@
 use std::pin::Pin;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::PhysicalDataType;
+use common_datavalues2::DataSchemaRef;
 use common_exception::Result;
 use futures::task::Context;
 use futures::task::Poll;
@@ -47,8 +46,9 @@ impl CorrectWithSchemaStream {
         let mut new_columns = Vec::with_capacity(schema_fields.len());
         for schema_field in schema_fields {
             let column = data_block.try_column_by_name(schema_field.name())?;
-            let physical_type: PhysicalDataType = column.data_type().into();
-            let physical_type_expect: PhysicalDataType = schema_field.data_type().clone().into();
+            let physical_type = column.data_type_id().to_physical_type();
+            let physical_type_expect = schema_field.data_type().data_type_id().to_physical_type();
+
             if physical_type == physical_type_expect {
                 new_columns.push(column.clone())
             }

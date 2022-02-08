@@ -56,6 +56,15 @@ where for<'a> Self::OwnedItem: Scalar<RefType<'a> = Self::RefItem<'a>>
         }
         builder.finish()
     }
+
+    fn from_vecs(values: Vec<Self::OwnedItem>) -> Self {
+        let it = values.iter();
+        let mut builder = Self::Builder::with_capacity(get_iter_capacity(&it));
+        for item in it {
+            builder.push(item.as_scalar_ref());
+        }
+        builder.finish()
+    }
 }
 
 pub trait ScalarColumnBuilder: MutableColumn {

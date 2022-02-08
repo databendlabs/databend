@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchema;
+use common_datavalues2::DataSchemaRef;
 
 use crate::Expression;
 use crate::PlanNode;
@@ -34,14 +34,12 @@ impl SubQueriesSetPlan {
         for expression in &self.expressions {
             match expression {
                 Expression::Subquery { name, query_plan } => {
-                    let subquery_field_type = Expression::to_subquery_type(query_plan);
-                    let subquery_data_type = subquery_field_type.data_type().clone();
-                    schema_fields.push(DataField::new(name, subquery_data_type, false));
+                    let subquery_data_type = Expression::to_subquery_type(query_plan);
+                    schema_fields.push(DataField::new(name, subquery_data_type));
                 }
                 Expression::ScalarSubquery { name, query_plan } => {
-                    let subquery_field_type = Expression::to_scalar_subquery_type(query_plan);
-                    let subquery_data_type = subquery_field_type.data_type().clone();
-                    schema_fields.push(DataField::new(name, subquery_data_type, false));
+                    let subquery_data_type = Expression::to_scalar_subquery_type(query_plan);
+                    schema_fields.push(DataField::new(name, subquery_data_type));
                 }
                 _ => panic!("Logical error, expressions must be Subquery or ScalarSubquery"),
             };

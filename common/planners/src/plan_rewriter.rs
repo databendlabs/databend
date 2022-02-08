@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 

@@ -102,6 +102,13 @@ pub fn cast_with_type(
         ));
     }
 
+    if column.is_const() {
+        let col: &ConstColumn = Series::check_get(column)?;
+        let inner = col.inner();
+        let res = cast_with_type(inner, from_type, data_type, cast_options)?;
+        return Ok(ConstColumn::new(res, column.len()).arc());
+    }
+
     let nonull_from_type = remove_nullable(from_type);
     let nonull_data_type = remove_nullable(data_type);
 

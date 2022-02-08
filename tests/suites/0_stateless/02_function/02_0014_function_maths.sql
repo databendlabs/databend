@@ -48,8 +48,6 @@ SELECT exp('a');
 SELECT '===trigonometric===';
 
 SELECT sin(0);
-SELECT sin('0');
-SELECT sin('foo');
 SELECT cos(0);
 SELECT tan(0);
 SELECT tan(pi()/4);

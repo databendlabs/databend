@@ -23,7 +23,7 @@ test = false
 # Workspace dependencies
 databend-query = { path = "../query" }
 common-base = { path = "../common/base" }
-common-datavalues = { path = "../common/datavalues" }
+common-datavalues2 = { path = "../common/datavalues2" }
 common-tracing = { path = "../common/tracing" }
 
 itertools = "0.10.3"

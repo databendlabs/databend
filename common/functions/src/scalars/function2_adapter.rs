@@ -20,6 +20,7 @@ use common_datavalues2::combine_validities;
 use common_datavalues2::combine_validities_2;
 use common_datavalues2::remove_nullable;
 use common_datavalues2::wrap_nullable;
+use common_datavalues2::Column;
 use common_datavalues2::ColumnRef;
 use common_datavalues2::ColumnWithField;
 use common_datavalues2::ColumnsWithField;
@@ -34,7 +35,7 @@ use common_datavalues2::TypeID;
 use common_exception::Result;
 
 use super::Function2;
-use crate::scalars::Monotonicity;
+use super::Monotonicity2;
 
 #[derive(Clone)]
 pub struct Function2Adapter {
@@ -159,8 +160,10 @@ impl Function2 for Function2Adapter {
             let col = self.eval(&columns, 1)?;
             let col = if col.is_const() && col.len() == 1 {
                 col.replicate(&[input_rows])
+            } else if col.is_null() {
+                NullColumn::new(input_rows).arc()
             } else {
-                Arc::new(ConstColumn::new(col, input_rows))
+                ConstColumn::new(col, input_rows).arc()
             };
 
             return Ok(col);
@@ -169,12 +172,16 @@ impl Function2 for Function2Adapter {
         self.inner.eval(columns, input_rows)
     }
 
-    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+    fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
         self.inner.get_monotonicity(args)
     }
 
     fn passthrough_null(&self) -> bool {
         self.inner.passthrough_null()
+    }
+
+    fn passthrough_constant(&self) -> bool {
+        self.inner.passthrough_constant()
     }
 }
 

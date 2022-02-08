@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -38,7 +38,7 @@ impl DataBlock {
                 columns.push(block.column(i).clone());
             }
 
-            concat_columns.push(DataColumnCommon::concat(&columns)?);
+            concat_columns.push(Series::concat(&columns)?);
         }
 
         Ok(DataBlock::create(

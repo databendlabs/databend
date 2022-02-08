@@ -14,7 +14,7 @@ test = false
 
 [dependencies]
 common-base= {path = "../base" }
-common-datavalues = {path = "../datavalues" }
+common-datavalues2 = {path = "../datavalues2" }
 common-exception= {path = "../exception"}
 common-meta-api= {path = "../meta/api" }
 common-meta-types= {path = "../meta/types"}

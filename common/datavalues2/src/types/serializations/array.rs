@@ -14,6 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use serde_json::Value;
 
 use crate::prelude::*;
 
@@ -58,5 +59,16 @@ impl TypeSerializer for ArraySerializer {
             result.push(s);
         }
         Ok(result)
+    }
+
+    fn serialize_json(&self, _column: &ColumnRef) -> Result<Vec<Value>> {
+        todo!()
+    }
+
+    fn serialize_clickhouse_format(
+        &self,
+        _column: &ColumnRef,
+    ) -> Result<common_clickhouse_srv::types::column::ArcColumnData> {
+        todo!()
     }
 }

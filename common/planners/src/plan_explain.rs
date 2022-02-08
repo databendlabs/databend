@@ -14,10 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 
 use crate::PlanNode;
 
@@ -36,7 +33,7 @@ pub struct ExplainPlan {
 
 impl ExplainPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String, false)])
+        DataSchemaRefExt::create(vec![DataField::new("explain", Vu8::to_data_type())])
     }
 
     pub fn set_input(&mut self, node: &PlanNode) {

@@ -42,5 +42,6 @@ pub trait TypeDeserializer: Send + Sync {
     fn de_null(&mut self) -> bool {
         false
     }
+
     fn finish_to_column(&mut self) -> ColumnRef;
 }

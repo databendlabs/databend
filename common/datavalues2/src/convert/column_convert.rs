@@ -24,6 +24,7 @@ use crate::ConstColumn;
 use crate::DataField;
 use crate::IntoColumn;
 use crate::NullableColumn;
+use crate::Series;
 
 pub fn convert2_new_column(column: &OldDataColumnWithField) -> ColumnWithField {
     let result = convert2_new_column_nonull(column);
@@ -66,14 +67,20 @@ fn convert2_new_column_nonull(column: &OldDataColumnWithField) -> ColumnWithFiel
 }
 
 pub fn convert2_old_column(column: &ColumnRef) -> OldDataColumn {
+    if column.is_const() {
+        let c: &ConstColumn = unsafe { Series::static_cast(column) };
+        let e = convert2_old_column(c.inner());
+        let v = e.try_get(0).unwrap();
+        return OldDataColumn::Constant(v, column.len());
+    }
+
     let arrow_c = column.as_arrow_array();
     OldDataColumn::from(arrow_c)
 }
 
-pub fn convert2_old_column_with_fiekd(column: &ColumnWithField) -> OldDataColumnWithField {
+pub fn convert2_old_column_with_field(column: &ColumnWithField) -> OldDataColumnWithField {
     let new_f = column.field().clone();
     let old_field = new_f.into();
 
-    let arrow_c = column.column().as_arrow_array();
-    OldDataColumnWithField::new(OldDataColumn::from(arrow_c), old_field)
+    OldDataColumnWithField::new(convert2_old_column(column.column()), old_field)
 }

@@ -51,21 +51,21 @@ impl Function for SubstringFunction {
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        if !args[0].is_numeric() && !args[0].is_string() && !args[0].is_null() {
+        if !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
                 args[0]
             )));
         }
-        if !args[1].is_integer() && !args[1].is_string() && !args[1].is_null() {
+        if !args[1].is_integer() && !args[1].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[1]
             )));
         }
-        if args.len() > 2 && !args[2].is_integer() && !args[2].is_string() && !args[2].is_null() {
+        if args.len() > 2 && !args[2].is_integer() && !args[2].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
-                "Expected integer or string or null, but got {}",
+                "Expected integer or null, but got {}",
                 args[2]
             )));
         }

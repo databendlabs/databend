@@ -341,8 +341,8 @@ fn test_try_inet_ntoa_function() -> Result<()> {
         },
         ScalarFunction2Test {
             name: "integer_input_i32_negative",
-            columns: vec![Series::from_data(vec!["-1"])],
-            expect: Series::from_data(vec![Option::<Vec<u8>>::None]),
+            columns: vec![Series::from_data(vec![-1])],
+            expect: Series::from_data(vec![Some("255.255.255.255")]),
             error: "",
         },
         ScalarFunction2Test {
@@ -366,40 +366,10 @@ fn test_try_inet_ntoa_function() -> Result<()> {
         },
         // string input test cases
         ScalarFunction2Test {
-            name: "string_input_empty",
-            columns: vec![Series::from_data(vec![""])],
-            expect: Series::from_data(vec![Option::<Vec<u8>>::None]),
-            error: "",
-        },
-        ScalarFunction2Test {
             name: "string_input_u32",
             columns: vec![Series::from_data(vec!["3232235777"])],
             expect: Series::from_data(vec![Some("192.168.1.1")]),
-            error: "",
-        },
-        ScalarFunction2Test {
-            name: "string_input_f64",
-            columns: vec![Series::from_data(vec!["3232235777.72319"])],
-            expect: Series::from_data(vec![Some("192.168.1.1")]),
-            error: "",
-        },
-        ScalarFunction2Test {
-            name: "string_input_starts_with_integer",
-            columns: vec![Series::from_data(vec!["323a"])],
-            expect: Series::from_data(vec![Some("0.0.1.67")]),
-            error: "",
-        },
-        ScalarFunction2Test {
-            name: "string_input_char_inside_integer",
-            columns: vec![Series::from_data(vec!["323a111"])],
-            expect: Series::from_data(vec![Some("0.0.1.67")]),
-            error: "",
-        },
-        ScalarFunction2Test {
-            name: "string_input_invalid_string",
-            columns: vec![Series::from_data(["-sad"])],
-            expect: Series::from_data(vec![Option::<Vec<u8>>::None]),
-            error: "",
+            error: "Expected numeric or null type, but got String",
         },
     ];
 
@@ -421,9 +391,9 @@ fn test_inet_ntoa_function() -> Result<()> {
         },
         ScalarFunction2Test {
             name: "integer_input_i32_negative",
-            columns: vec![Series::from_data(["-1"])],
-            expect: Series::from_data([""]),
-            error: "Cast error happens in casting from String to UInt32",
+            columns: vec![Series::from_data([-1])],
+            expect: Series::from_data(["255.255.255.255"]),
+            error: "",
         },
         ScalarFunction2Test {
             name: "integer_input_u8",
@@ -444,42 +414,12 @@ fn test_inet_ntoa_function() -> Result<()> {
             expect: Series::from_data(["127.0.0.1"]),
             error: "",
         },
-        ScalarFunction2Test {
-            name: "string_input_u32",
-            columns: vec![Series::from_data([Some("3232235777")])],
-            expect: Series::from_data([Some("192.168.1.1")]),
-            error: "",
-        },
         // string input test cases
         ScalarFunction2Test {
             name: "string_input_empty",
             columns: vec![Series::from_data([""])],
             expect: Series::from_data([""]),
-            error: "Cast error happens in casting from String to UInt32",
-        },
-        ScalarFunction2Test {
-            name: "string_input_f64",
-            columns: vec![Series::from_data(["3232235777.72319"])],
-            expect: Series::from_data([""]),
-            error: "Cast error happens in casting from String to UInt32",
-        },
-        ScalarFunction2Test {
-            name: "string_input_starts_with_integer",
-            columns: vec![Series::from_data(["323a"])],
-            expect: Series::from_data([""]),
-            error: "Cast error happens in casting from String to UInt32",
-        },
-        ScalarFunction2Test {
-            name: "string_input_char_inside_integer",
-            columns: vec![Series::from_data(["323a111"])],
-            expect: Series::from_data([""]),
-            error: "Cast error happens in casting from String to UInt32",
-        },
-        ScalarFunction2Test {
-            name: "string_input_invalid_string",
-            columns: vec![Series::from_data(["-sad"])],
-            expect: Series::from_data([""]),
-            error: "Cast error happens in casting from String to UInt32",
+            error: "Expected numeric or null type, but got String",
         },
     ];
 

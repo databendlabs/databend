@@ -19,7 +19,7 @@ use std::usize;
 
 use common_datablocks::DataBlock;
 use common_datablocks::SortColumnDescription;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use futures::stream::Stream;
 
@@ -141,8 +141,8 @@ impl NumbersStream {
         } else {
             let av = (current.begin..current.end).collect();
 
-            let series = DFUInt64Array::new_from_vec(av).into_series();
-            let block = DataBlock::create_by_array(self.schema.clone(), vec![series]);
+            let col = UInt64Column::new_from_vec(av);
+            let block = DataBlock::create(self.schema.clone(), vec![Arc::new(col)]);
             Some(block)
         })
     }

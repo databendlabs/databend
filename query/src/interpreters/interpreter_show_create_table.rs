@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::ShowCreateTablePlan;
 use common_streams::DataBlockStream;
@@ -61,7 +61,11 @@ impl Interpreter for ShowCreateTableInterpreter {
 
         let mut table_info = format!("CREATE TABLE `{}` (\n", name);
         for field in schema.fields().iter() {
-            let column = format!("  `{}` {},\n", field.name(), field.data_type());
+            let column = format!(
+                "  `{}` {},\n",
+                field.name(),
+                format_data_type_sql(field.data_type())
+            );
             table_info.push_str(column.as_str());
         }
         let table_engine = format!(") ENGINE={}", engine);
@@ -77,14 +81,14 @@ impl Interpreter for ShowCreateTableInterpreter {
         );
 
         let show_fields = vec![
-            DataField::new("Table", DataType::String, false),
-            DataField::new("Create Table", DataType::String, false),
+            DataField::new("Table", Vu8::to_data_type()),
+            DataField::new("Create Table", Vu8::to_data_type()),
         ];
         let show_schema = DataSchemaRefExt::create(show_fields);
 
-        let block = DataBlock::create_by_array(show_schema.clone(), vec![
-            Series::new(vec![name.as_bytes()]),
-            Series::new(vec![table_info.into_bytes()]),
+        let block = DataBlock::create(show_schema.clone(), vec![
+            Series::from_data(vec![name.as_bytes()]),
+            Series::from_data(vec![table_info.into_bytes()]),
         ]);
         tracing::debug!("Show create table executor result: {:?}", block);
 

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::prelude::*;
@@ -38,6 +39,10 @@ pub trait Column: Send + Sync {
     fn data_type(&self) -> DataTypePtr;
 
     fn is_nullable(&self) -> bool {
+        false
+    }
+
+    fn is_null(&self) -> bool {
         false
     }
 
@@ -71,6 +76,17 @@ pub trait Column: Send + Sync {
     fn slice(&self, offset: usize, length: usize) -> ColumnRef;
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef;
 
+    /// scatter() partitions the input array into multiple arrays.
+    /// indices: a slice whose length is the same as the array.
+    /// The element of indices indicates which group the corresponding row
+    /// in the input array belongs to.
+    /// scattered_size: the number of partitions
+    ///
+    /// Example: if the input array has four rows [1, 2, 3, 4] and
+    /// _indices = [0, 1, 0, 1] and _scatter_size = 2,
+    /// then the output would be a vector of two arrays: [1, 3] and [2, 4].
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef>;
+
     // Copies each element according offsets parameter.
     // (i-th element should be copied offsets[i] - offsets[i - 1] times.)
     fn replicate(&self, offsets: &[usize]) -> ColumnRef;
@@ -80,6 +96,17 @@ pub trait Column: Send + Sync {
     /// # Safety
     /// Assumes that the `index` is smaller than size.
     fn get(&self, index: usize) -> DataValue;
+
+    fn get_checked(&self, index: usize) -> Result<DataValue> {
+        if index > self.len() {
+            return Err(ErrorCode::BadDataArrayLength(format!(
+                "Index out of bounds: {}, col size: {}",
+                index,
+                self.len()
+            )));
+        }
+        Ok(self.get(index))
+    }
 
     /// # Safety
     /// Assumes that the `index` is smaller than size.
@@ -95,17 +122,43 @@ pub trait Column: Send + Sync {
         DFTryFrom::try_from(&value)
     }
 
+    fn get_f64(&self, index: usize) -> Result<f64> {
+        let value = self.get(index);
+        DFTryFrom::try_from(&value)
+    }
+
+    /// # Safety
+    /// Assumes that the `index` is smaller than size.
+    fn get_bool(&self, index: usize) -> Result<bool> {
+        let value = self.get(index);
+        DFTryFrom::try_from(&value)
+    }
+
     /// # Safety
     /// Assumes that the `index` is smaller than size.
     fn get_string(&self, index: usize) -> Result<Vec<u8>> {
         let value = self.get(index);
         DFTryFrom::try_from(value)
     }
+
+    fn to_values(&self) -> Vec<DataValue> {
+        (0..self.len()).map(|i| self.get(i)).collect()
+    }
 }
 
 pub trait IntoColumn {
     fn into_column(self) -> ColumnRef;
     fn into_nullable_column(self) -> ColumnRef;
+}
+
+impl IntoColumn for &ArrayRef {
+    fn into_column(self) -> ColumnRef {
+        IntoColumn::into_column(self.clone())
+    }
+
+    fn into_nullable_column(self) -> ColumnRef {
+        IntoColumn::into_nullable_column(self.clone())
+    }
 }
 
 impl IntoColumn for ArrayRef {
@@ -184,28 +237,29 @@ macro_rules! fmt_dyn {
 impl std::fmt::Debug for dyn Column + '_ {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let dt = self.data_type().data_type_id();
+        let col = self.convert_full_column();
         with_match_primitive_type_id!(dt, |$T| {
             fmt_dyn!(&self, PrimitiveColumn<$T>, f)
         }, {
             use crate::types::type_id::TypeID::*;
             match dt {
                 Null => {
-                    fmt_dyn!(self, NullColumn, f)
+                    fmt_dyn!(col, NullColumn, f)
                 }
                 Nullable => {
-                    fmt_dyn!(self, NullableColumn, f)
+                    fmt_dyn!(col, NullableColumn, f)
                 },
                 Boolean => {
-                    fmt_dyn!(self, BooleanColumn, f)
+                    fmt_dyn!(col, BooleanColumn, f)
                 },
                 String => {
-                    fmt_dyn!(self, StringColumn, f)
+                    fmt_dyn!(col, StringColumn, f)
                 },
                 Array => {
-                    fmt_dyn!(self, ArrayColumn, f)
+                    fmt_dyn!(col, ArrayColumn, f)
                 },
                 Struct => {
-                    fmt_dyn!(self, StructColumn, f)
+                    fmt_dyn!(col, StructColumn, f)
                 },
                 _ => {
                     unimplemented!()

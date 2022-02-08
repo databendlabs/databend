@@ -15,10 +15,12 @@
 use std::fmt;
 
 use common_datavalues::prelude::DataColumn;
+use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::prelude::DataField as OldDataField;
 use common_datavalues::DataTypeAndNullable;
 use common_datavalues2::column_convert::convert2_new_column;
 use common_datavalues2::column_convert::convert2_old_column;
+use common_datavalues2::column_convert::convert2_old_column_with_field;
 use common_datavalues2::ColumnRef;
 use common_datavalues2::ColumnWithField;
 use common_datavalues2::ColumnsWithField;
@@ -27,9 +29,10 @@ use common_datavalues2::DataTypePtr;
 use common_exception::Result;
 use dyn_clone::DynClone;
 
-use super::function2_adapter::Function2Adapter;
 use super::Function;
-use crate::scalars::Monotonicity;
+use super::Function2Adapter;
+use super::Monotonicity;
+use super::Monotonicity2;
 
 pub trait Function2: fmt::Display + Sync + Send + DynClone {
     /// Returns the name of the function, should be unique.
@@ -41,8 +44,8 @@ pub trait Function2: fmt::Display + Sync + Send + DynClone {
     /// For unary function, the input should be an array of the only argument's monotonicity.
     /// The returned monotonicity should have 'left' and 'right' fields None -- the boundary
     /// calculation relies on the function.eval method.
-    fn get_monotonicity(&self, _args: &[Monotonicity]) -> Result<Monotonicity> {
-        Ok(Monotonicity::default())
+    fn get_monotonicity(&self, _args: &[Monotonicity2]) -> Result<Monotonicity2> {
+        Ok(Monotonicity2::default())
     }
 
     /// The method returns the return_type of this function.
@@ -79,7 +82,6 @@ pub struct Function2Convertor {
 
 impl Function2Convertor {
     pub fn create(inner: Box<dyn Function2>) -> Box<dyn Function> {
-        let inner = Function2Adapter::create(inner);
         Box::new(Self { inner })
     }
 }
@@ -126,7 +128,10 @@ impl Function for Function2Convertor {
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
-        self.inner.get_monotonicity(args)
+        let args: Vec<Monotonicity2> = args.iter().map(|m| m.clone().into()).collect();
+        let m = self.inner.get_monotonicity(&args)?;
+
+        Ok(m.into())
     }
 
     fn passthrough_null(&self) -> bool {
@@ -135,6 +140,90 @@ impl Function for Function2Convertor {
 }
 
 impl std::fmt::Display for Function2Convertor {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}
+
+/// convert function into function2
+#[derive(Clone)]
+pub struct Function1Convertor {
+    inner: Box<dyn Function>,
+}
+
+impl Function1Convertor {
+    pub fn create(inner: Box<dyn Function>) -> Box<dyn Function2> {
+        let inner = Box::new(Self { inner });
+        Function2Adapter::create(inner)
+    }
+}
+impl Function2 for Function1Convertor {
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        let args = args
+            .iter()
+            .map(|arg| DataField::new("xx", (*arg).clone()))
+            .collect::<Vec<_>>();
+
+        let mut types = vec![];
+        let fs: Vec<OldDataField> = args.iter().map(|f| f.clone().into()).collect();
+        for t in fs.iter() {
+            types.push(DataTypeAndNullable::create(t.data_type(), t.is_nullable()));
+        }
+
+        let typ = self.inner.return_type(&types)?;
+        let old_field = OldDataField::new("xx", typ.data_type().clone(), typ.is_nullable());
+
+        let new_field: DataField = old_field.into();
+        Ok(new_field.data_type().clone())
+    }
+
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        let args = columns
+            .iter()
+            .map(|c| DataField::new("xx", c.data_type().clone()))
+            .collect::<Vec<_>>();
+
+        let mut types = vec![];
+        let fs: Vec<OldDataField> = args.iter().map(|f| f.clone().into()).collect();
+        for t in fs.iter() {
+            types.push(DataTypeAndNullable::create(t.data_type(), t.is_nullable()));
+        }
+
+        let typ = self.inner.return_type(&types)?;
+        let data_field = OldDataField::new("xx", typ.data_type().clone(), typ.is_nullable());
+
+        let columns: Vec<DataColumnWithField> = columns
+            .iter()
+            .map(convert2_old_column_with_field)
+            .collect::<Vec<_>>();
+
+        let col = self.inner.eval(&columns, input_rows)?;
+
+        let col = DataColumnWithField::new(col, data_field);
+        let column = convert2_new_column(&col);
+        Ok(column.column().clone())
+    }
+
+    fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
+        let args: Vec<Monotonicity> = args.iter().map(|m| m.clone().into()).collect();
+        let m = self.inner.get_monotonicity(&args)?;
+        Ok(m.into())
+    }
+
+    fn passthrough_null(&self) -> bool {
+        self.inner.passthrough_null()
+    }
+
+    fn passthrough_constant(&self) -> bool {
+        self.inner.passthrough_constant()
+    }
+}
+
+impl std::fmt::Display for Function1Convertor {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.inner)
     }

@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Part;
@@ -31,8 +29,7 @@ impl Test {
     }
 
     pub fn generate_source_plan_for_test(&self, total: usize) -> Result<PlanNode> {
-        let schema =
-            DataSchemaRefExt::create(vec![DataField::new("number", DataType::UInt64, false)]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new("number", u64::to_data_type())]);
 
         let statistics = Statistics {
             read_rows: total,

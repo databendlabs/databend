@@ -25,7 +25,7 @@ use crate::scalars::ArithmeticMinusFunction;
 use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::Function2;
-use crate::scalars::Monotonicity;
+use crate::scalars::Monotonicity2;
 use crate::scalars::ScalarBinaryExpression;
 use crate::scalars::ScalarBinaryFunction;
 use crate::scalars::DEFAULT_CAST_OPTIONS;
@@ -83,7 +83,7 @@ where
         Ok(result)
     }
 
-    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+    fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
         if args.len() != 2 {
             return Err(ErrorCode::BadArguments(format!(
                 "Invalid argument lengths {} for get_monotonicity",

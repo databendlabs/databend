@@ -14,15 +14,15 @@
 
 use common_base::tokio;
 use common_datablocks::*;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_streams::*;
 use futures::stream::StreamExt;
 
 #[tokio::test]
 async fn test_skipstream() {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("id", DataType::Int32, false),
-        DataField::new("name", DataType::String, false),
+        DataField::new("id", i32::to_data_type()),
+        DataField::new("name", Vu8::to_data_type()),
     ]);
 
     // create a data block with 'id' from 0 to 20
@@ -33,8 +33,10 @@ async fn test_skipstream() {
             str.into_bytes()
         })
         .collect::<Vec<Vec<u8>>>();
-    let block0 =
-        DataBlock::create_by_array(schema.clone(), vec![Series::new(ids), Series::new(names)]);
+    let block0 = DataBlock::create(schema.clone(), vec![
+        Series::from_data(ids),
+        Series::from_data(names),
+    ]);
 
     // create a data block with 'id' from 20 to 40
     let ids = (20..40).collect::<Vec<i32>>();
@@ -44,8 +46,10 @@ async fn test_skipstream() {
             str.into_bytes()
         })
         .collect::<Vec<Vec<u8>>>();
-    let block1 =
-        DataBlock::create_by_array(schema.clone(), vec![Series::new(ids), Series::new(names)]);
+    let block1 = DataBlock::create(schema.clone(), vec![
+        Series::from_data(ids),
+        Series::from_data(names),
+    ]);
 
     let stream = DataBlockStream::create(schema, None, vec![block0, block1]);
 

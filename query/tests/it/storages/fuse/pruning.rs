@@ -17,12 +17,7 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
@@ -62,8 +57,8 @@ async fn test_block_pruner() -> Result<()> {
 
     let test_tbl_name = "test_index_helper";
     let test_schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::UInt64, false),
-        DataField::new("b", DataType::UInt64, false),
+        DataField::new("a", u64::to_data_type()),
+        DataField::new("b", u64::to_data_type()),
     ]);
 
     let num_blocks = 10;
@@ -102,7 +97,7 @@ async fn test_block_pruner() -> Result<()> {
         .await?;
 
     let gen_col =
-        |value, rows| Series::new(std::iter::repeat(value).take(rows).collect::<Vec<u64>>());
+        |value, rows| Series::from_data(std::iter::repeat(value).take(rows).collect::<Vec<u64>>());
 
     // prepare test blocks
     // - there will be `num_blocks` blocks, for each block, it comprises of `row_per_block` rows,
@@ -110,7 +105,7 @@ async fn test_block_pruner() -> Result<()> {
     let blocks = (0..num_blocks)
         .into_iter()
         .map(|idx| {
-            Ok(DataBlock::create_by_array(test_schema.clone(), vec![
+            Ok(DataBlock::create(test_schema.clone(), vec![
                 // value of column a always equals  1
                 gen_col(1, row_per_block),
                 // for column b
@@ -199,8 +194,8 @@ async fn test_block_pruner_monotonic() -> Result<()> {
 
     let test_tbl_name = "test_index_helper";
     let test_schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::UInt64, false),
-        DataField::new("b", DataType::UInt64, false),
+        DataField::new("a", u64::to_data_type()),
+        DataField::new("b", u64::to_data_type()),
     ]);
 
     let row_per_block = 3;
@@ -238,17 +233,17 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         .await?;
 
     let blocks = vec![
-        Ok(DataBlock::create_by_array(test_schema.clone(), vec![
-            Series::new(vec![1u64, 2, 3]),
-            Series::new(vec![11u64, 12, 13]),
+        Ok(DataBlock::create(test_schema.clone(), vec![
+            Series::from_data(vec![1u64, 2, 3]),
+            Series::from_data(vec![11u64, 12, 13]),
         ])),
-        Ok(DataBlock::create_by_array(test_schema.clone(), vec![
-            Series::new(vec![4u64, 5, 6]),
-            Series::new(vec![21u64, 22, 23]),
+        Ok(DataBlock::create(test_schema.clone(), vec![
+            Series::from_data(vec![4u64, 5, 6]),
+            Series::from_data(vec![21u64, 22, 23]),
         ])),
-        Ok(DataBlock::create_by_array(test_schema, vec![
-            Series::new(vec![7u64, 8, 9]),
-            Series::new(vec![31u64, 32, 33]),
+        Ok(DataBlock::create(test_schema, vec![
+            Series::from_data(vec![7u64, 8, 9]),
+            Series::from_data(vec![31u64, 32, 33]),
         ])),
     ];
 

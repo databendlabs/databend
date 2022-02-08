@@ -203,6 +203,22 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         Arc::new(col)
     }
 
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        let mut builders = Vec::with_capacity(scattered_size);
+        for _i in 0..scattered_size {
+            builders.push(MutablePrimitiveColumn::<T>::with_capacity(self.len()));
+        }
+
+        indices
+            .iter()
+            .zip(self.values())
+            .for_each(|(index, value)| {
+                builders[*index].append_value(*value);
+            });
+
+        builders.iter_mut().map(|b| b.to_column()).collect()
+    }
+
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
         debug_assert!(
             offsets.len() == self.len(),
@@ -274,6 +290,12 @@ where
 
     fn from_owned_iterator(it: impl Iterator<Item = Self::OwnedItem>) -> Self {
         let values: Vec<T> = it.collect();
+        PrimitiveColumn {
+            values: values.into(),
+        }
+    }
+
+    fn from_vecs(values: Vec<Self::OwnedItem>) -> Self {
         PrimitiveColumn {
             values: values.into(),
         }

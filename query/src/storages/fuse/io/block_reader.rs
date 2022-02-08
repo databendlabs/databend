@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::DataType;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read::decompress;
 use common_arrow::arrow::io::parquet::read::page_stream_to_array;
@@ -23,9 +23,7 @@ use common_arrow::parquet::read::get_page_stream;
 use common_dal::DataAccessor;
 use common_dal::InputStream;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::DataColumn;
-use common_datavalues::prelude::IntoSeries;
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
@@ -41,6 +39,7 @@ pub struct BlockReader {
     data_accessor: Arc<dyn DataAccessor>,
     path: String,
     block_schema: DataSchemaRef,
+    table_schema: DataSchemaRef,
     arrow_table_schema: ArrowSchema,
     projection: Vec<usize>,
     file_len: u64,
@@ -59,11 +58,13 @@ impl BlockReader {
         reader: BlockMetaReader,
     ) -> Self {
         let block_schema = Arc::new(table_schema.project(projection.clone()));
+        let arrow_table_schema = table_schema.to_arrow();
         Self {
             data_accessor,
             path,
             block_schema,
-            arrow_table_schema: table_schema.to_arrow(),
+            table_schema,
+            arrow_table_schema,
             projection,
             file_len,
             read_buffer_size,
@@ -94,7 +95,8 @@ impl BlockReader {
             .into_iter()
             .map(|idx| (row_group.column(idx).clone(), idx));
 
-        let fields = self.arrow_table_schema.fields();
+        let fields = self.table_schema.fields();
+        let arrow_fields = self.arrow_table_schema.fields();
         let stream_len = self.file_len;
         let read_buffer_size = self.read_buffer_size;
 
@@ -104,8 +106,9 @@ impl BlockReader {
             async move {
                 let reader = data_accessor.get_input_stream(path.as_str(), Some(stream_len))?;
                 let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
-                let data_type = fields[idx].data_type.clone();
-                Self::read_column(reader, &col_meta, data_type).await
+                let data_type = fields[idx].data_type();
+                let arrow_type = arrow_fields[idx].data_type();
+                Self::read_column(reader, &col_meta, data_type.clone(), arrow_type.clone()).await
             }
             .instrument(debug_span!("block_reader_read_column").or_current())
         });
@@ -122,8 +125,9 @@ impl BlockReader {
     async fn read_column(
         mut reader: BufReader<InputStream>,
         column_chunk_meta: &ColumnChunkMetaData,
-        data_type: DataType,
-    ) -> Result<DataColumn> {
+        data_type: DataTypePtr,
+        arrow_type: ArrowType,
+    ) -> Result<ColumnRef> {
         let col_pages = get_page_stream(
             column_chunk_meta,
             &mut reader,
@@ -137,10 +141,14 @@ impl BlockReader {
             debug_span!("block_reader_decompress_page")
                 .in_scope(|| decompress(compressed_page?, &mut vec![]))
         });
-        let array = page_stream_to_array(pages, column_chunk_meta, data_type)
+        let array = page_stream_to_array(pages, column_chunk_meta, arrow_type)
             .instrument(debug_span!("block_reader_page_stream_to_array"))
             .await?;
         let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
-        Ok::<_, ErrorCode>(DataColumn::Array(array.into_series()))
+
+        match data_type.is_nullable() {
+            true => Ok(array.into_nullable_column()),
+            false => Ok(array.into_column()),
+        }
     }
 }

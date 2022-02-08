@@ -20,6 +20,7 @@ use std::sync::Arc;
 use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_scalar_types_error;
 use common_datavalues2::MutableColumn;
 use common_datavalues2::Scalar;
 use common_exception::ErrorCode;
@@ -35,7 +36,6 @@ use super::aggregate_scalar_state::ScalarStateFunc;
 use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
-use crate::with_match_scalar_type;
 
 /// S: ScalarType
 /// A: Aggregate State
@@ -162,9 +162,9 @@ pub fn try_create_aggregate_minmax_function<const IS_MIN: bool>(
     arguments: Vec<DataField>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, arguments.len())?;
-    let data_type = arguments[0].data_type();
-
-    with_match_scalar_type!(data_type.data_type_id(), |$T| {
+    let data_type = arguments[0].data_type().clone();
+    let phid = data_type.data_type_id().to_physical_type();
+    let result = with_match_scalar_types_error!(phid, |$T| {
         if IS_MIN {
             type State = ScalarState<$T, CmpMin>;
             AggregateMinMaxFunction::<$T, CmpMin, State>::try_create(display_name, arguments)
@@ -172,15 +172,13 @@ pub fn try_create_aggregate_minmax_function<const IS_MIN: bool>(
             type State = ScalarState<$T, CmpMax>;
             AggregateMinMaxFunction::<$T, CmpMax, State>::try_create(display_name, arguments)
         }
-    },
-    {
-        // no matching branch
-        Err(ErrorCode::BadDataValueType(format!(
+    });
+
+    result.map_err(|_|  // no matching branch
+       ErrorCode::BadDataValueType(format!(
             "AggregateMinMaxFunction does not support type '{:?}'",
             data_type
         )))
-    }
-    )
 }
 
 pub fn aggregate_min_function_desc() -> AggregateFunctionDescription {

@@ -68,7 +68,7 @@ impl Function for TrigonometricFunction {
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
+        let data_type = if args[0].is_numeric() || args[0].is_null() {
             Ok(DataType::Float64)
         } else {
             Err(ErrorCode::IllegalDataType(format!(
@@ -91,20 +91,9 @@ impl Function for TrigonometricFunction {
                     Trigonometric::SIN => Some(v.sin()),
                     Trigonometric::COT => Some(1.0 / v.tan()),
                     Trigonometric::TAN => Some(v.tan()),
-                    Trigonometric::ACOS => {
-                        if (-1_f64..=1_f64).contains(&v) {
-                            Some(v.acos())
-                        } else {
-                            None
-                        }
-                    }
-                    Trigonometric::ASIN => {
-                        if (-1_f64..=1_f64).contains(&v) {
-                            Some(v.asin())
-                        } else {
-                            None
-                        }
-                    }
+                    // the range [0, pi] or NaN if the number is outside the range
+                    Trigonometric::ACOS => Some(v.acos()),
+                    Trigonometric::ASIN => Some(v.asin()),
                     Trigonometric::ATAN => Some(v.atan()),
                     _ => unreachable!(),
                 })

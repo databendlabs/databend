@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::ShowCreateDatabasePlan;
 use common_streams::DataBlockStream;
@@ -70,9 +70,9 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
             }
         }
         let schema = self.plan.schema();
-        let block = DataBlock::create_by_array(schema.clone(), vec![
-            Series::new(vec![name.as_bytes()]),
-            Series::new(vec![info.into_bytes()]),
+        let block = DataBlock::create(schema.clone(), vec![
+            Series::from_data(vec![name.as_bytes()]),
+            Series::from_data(vec![info.into_bytes()]),
         ]);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))
     }
