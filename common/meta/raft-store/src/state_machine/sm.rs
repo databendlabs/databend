@@ -579,8 +579,9 @@ impl StateMachine {
         let prev = table_tree.get(&req.table_id)?;
 
         // Unlike other Cmd, prev to be None is not allowed for upsert-options.
-        let prev =
-            prev.ok_or_else(|| MetaError::UnknownTableId(format!("table_id:{}", req.table_id)))?;
+        let prev = prev.ok_or_else(|| {
+            MetaStorageError::UnknownTableId(format!("table_id:{}", req.table_id))
+        })?;
 
         if req.seq.match_seq(&prev).is_err() {
             let res = AppliedState::TableMeta(Change::new(Some(prev.clone()), Some(prev)));
@@ -739,7 +740,7 @@ impl StateMachine {
         Ok(Some(seq_kv_value))
     }
 
-    fn txn_incr_seq(&self, key: &str, txn_tree: &TransactionSledTree) -> MetaResult<u64> {
+    fn txn_incr_seq(&self, key: &str, txn_tree: &TransactionSledTree) -> MetaStorageResult<u64> {
         let seq_sub_tree = txn_tree.key_space::<Sequences>();
 
         let key = key.to_string();
@@ -759,7 +760,7 @@ impl StateMachine {
         seq: &MatchSeq,
         value_op: Operation<V>,
         value_meta: Option<KVMeta>,
-    ) -> MetaResult<(Option<SeqV<V>>, Option<SeqV<V>>)>
+    ) -> MetaStorageResult<(Option<SeqV<V>>, Option<SeqV<V>>)>
     where
         V: Clone + Debug,
         KS: SledKeySpace<V = SeqV<V>>,
@@ -791,7 +792,7 @@ impl StateMachine {
         prev: Option<SeqV<V>>,
         value_meta: Option<KVMeta>,
         value_op: Operation<V>,
-    ) -> MetaResult<Option<SeqV<V>>>
+    ) -> MetaStorageResult<Option<SeqV<V>>>
     where
         V: Clone + Debug,
         KS: SledKeySpace<V = SeqV<V>>,
@@ -844,7 +845,7 @@ impl StateMachine {
         key: &str,
         value: (u64, AppliedState),
         txn_tree: &TransactionSledTree,
-    ) -> MetaResult<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let v = ClientLastRespValue {
             req_serial_num: value.0,
             res: value.1.clone(),
@@ -888,7 +889,7 @@ impl StateMachine {
         &self,
         key: &str,
         txn_tree: &TransactionSledTree,
-    ) -> MetaResult<(u64, AppliedState)> {
+    ) -> MetaStorageResult<(u64, AppliedState)> {
         let client_last_resps = txn_tree.key_space::<ClientLastResps>();
         let v = client_last_resps.get(&key.to_string())?;
 
@@ -931,7 +932,7 @@ impl StateMachine {
         &self,
         db_id: &u64,
         txn_tree: &TransactionSledTree,
-    ) -> MetaResult<Option<SeqV<DatabaseMeta>>> {
+    ) -> MetaStorageResult<Option<SeqV<DatabaseMeta>>> {
         let txn_databases = txn_tree.key_space::<Databases>();
         let x = txn_databases.get(db_id)?;
 
@@ -954,7 +955,7 @@ impl StateMachine {
         &self,
         tid: &u64,
         txn_tree: &TransactionSledTree,
-    ) -> MetaResult<Option<SeqV<TableMeta>>> {
+    ) -> MetaStorageResult<Option<SeqV<TableMeta>>> {
         let txn_table = txn_tree.key_space::<Tables>();
         let x = txn_table.get(tid)?;
 

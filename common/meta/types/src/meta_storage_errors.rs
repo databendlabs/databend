@@ -17,10 +17,7 @@ use std::fmt::Display;
 use common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
-use sled::Error as SledError;
 use thiserror::Error;
-
-use crate::MetaError;
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum MetaStorageError {
@@ -29,10 +26,10 @@ pub enum MetaStorageError {
     SerializeError(String),
 
     #[error("{0}")]
-    BadBytes(String),
+    SerdeError(String),
 
     #[error("{0}")]
-    StorageError(String),
+    SledError(String),
 
     #[error("{0}")]
     MetaStoreDamaged(String),
@@ -51,15 +48,12 @@ pub enum MetaStorageError {
 
     #[error("{0}")]
     UnknownDatabaseId(String),
+
+    #[error("{0}")]
+    UnknownTableId(String),
 }
 
 pub type MetaStorageResult<T> = std::result::Result<T, MetaStorageError>;
-
-impl From<MetaError> for MetaStorageError {
-    fn from(e: MetaError) -> Self {
-        MetaStorageError::MetaSrvError(format!("metasrv error: {:?}", e))
-    }
-}
 
 impl From<MetaStorageError> for ErrorCode {
     fn from(e: MetaStorageError) -> Self {
@@ -69,7 +63,7 @@ impl From<MetaStorageError> for ErrorCode {
 
 impl From<std::string::FromUtf8Error> for MetaStorageError {
     fn from(error: std::string::FromUtf8Error) -> Self {
-        MetaStorageError::BadBytes(format!(
+        MetaStorageError::SerializeError(format!(
             "Bad bytes, cannot parse bytes with UTF8, cause: {}",
             error
         ))
@@ -79,14 +73,14 @@ impl From<std::string::FromUtf8Error> for MetaStorageError {
 // from serde error to MetaStorageError::SerializeError
 impl From<serde_json::Error> for MetaStorageError {
     fn from(error: serde_json::Error) -> MetaStorageError {
-        MetaStorageError::SerializeError(format!("json se/de error: {:?}", error))
+        MetaStorageError::SerdeError(format!("serde json se/de error: {:?}", error))
     }
 }
 
 // from sled error to MetaStorageError::StorageError
-impl From<SledError> for MetaStorageError {
-    fn from(error: SledError) -> MetaStorageError {
-        MetaStorageError::StorageError(format!("sled error: {:?}", error))
+impl From<sled::Error> for MetaStorageError {
+    fn from(error: sled::Error) -> MetaStorageError {
+        MetaStorageError::SledError(format!("sled error: {:?}", error))
     }
 }
 
