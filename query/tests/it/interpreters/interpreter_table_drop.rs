@@ -25,20 +25,20 @@ async fn test_drop_table_interpreter() -> Result<()> {
 
     // Create table.
     {
-        static TEST_CREATE_QUERY: &str = "\
+        let query = "\
             CREATE TABLE default.a(\
                 a bigint, b int, c varchar(255), d smallint, e Date\
             ) Engine = Null\
         ";
 
-        let plan = PlanParser::parse(TEST_CREATE_QUERY, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = executor.execute(None).await?;
     }
 
     // Drop table.
     {
-        let plan = PlanParser::parse("DROP TABLE a", ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), "DROP TABLE a").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropTableInterpreter");
         let stream = executor.execute(None).await?;

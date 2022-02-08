@@ -42,8 +42,8 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
     let user_mgr = ctx.get_user_manager();
     user_mgr.add_user(&tenant, user_info).await?;
 
-    let test_query = format!("REVOKE ALL ON *.* FROM '{}'@'{}'", name, hostname);
-    let plan = PlanParser::parse(&test_query, ctx.clone()).await?;
+    let query = format!("REVOKE ALL ON *.* FROM '{}'@'{}'", name, hostname);
+    let plan = PlanParser::parse(ctx.clone(), &query).await?;
     let executor = InterpreterFactory::get(ctx, plan.clone())?;
     assert_eq!(executor.name(), "RevokePrivilegeInterpreter");
     let mut stream = executor.execute(None).await?;

@@ -257,15 +257,15 @@ pub async fn expects_ok(
     Ok(())
 }
 
-pub async fn execute_query(query: &str, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
-    let plan = PlanParser::parse(query, ctx.clone()).await?;
+pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<SendableDataBlockStream> {
+    let plan = PlanParser::parse(ctx.clone(), query).await?;
     InterpreterFactory::get(ctx.clone(), plan)?
         .execute(None)
         .await
 }
 
-pub async fn execute_command(query: &str, ctx: Arc<QueryContext>) -> Result<()> {
-    let res = execute_query(query, ctx).await?;
+pub async fn execute_command(ctx: Arc<QueryContext>, query: &str) -> Result<()> {
+    let res = execute_query(ctx, query).await?;
     res.try_collect::<Vec<DataBlock>>().await?;
     Ok(())
 }
@@ -357,7 +357,7 @@ pub async fn history_should_have_only_one_item(
 
     expects_ok(
         format!("{}: count_of_history_item_should_be_1", case_name),
-        execute_query(qry.as_str(), fixture.ctx()).await,
+        execute_query(fixture.ctx(), qry.as_str()).await,
         expected,
     )
     .await

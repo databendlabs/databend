@@ -25,8 +25,8 @@ async fn test_create_user_interpreter() -> Result<()> {
 
     let ctx = crate::tests::create_query_context()?;
 
-    static TEST_QUERY: &str = "CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'";
-    let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+    let query = "CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'";
+    let plan = PlanParser::parse(ctx.clone(), query).await?;
     let executor = InterpreterFactory::get(ctx, plan.clone())?;
     assert_eq!(executor.name(), "CreateUserInterpreter");
     let mut stream = executor.execute(None).await?;

@@ -29,8 +29,8 @@ async fn test_drop_user_interpreter() -> Result<()> {
     let tenant = ctx.get_tenant();
 
     {
-        static TEST_QUERY: &str = "DROP USER 'test'@'localhost'";
-        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let query = "DROP USER 'test'@'localhost'";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUserInterpreter");
         let ret = executor.execute(None).await;
@@ -38,8 +38,8 @@ async fn test_drop_user_interpreter() -> Result<()> {
     }
 
     {
-        static TEST_QUERY: &str = "DROP USER IF EXISTS 'test'@'localhost'";
-        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let query = "DROP USER IF EXISTS 'test'@'localhost'";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUserInterpreter");
         let ret = executor.execute(None).await;
@@ -65,8 +65,8 @@ async fn test_drop_user_interpreter() -> Result<()> {
             Vec::from(password)
         );
 
-        static TEST_QUERY: &str = "DROP USER 'test'@'localhost'";
-        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let query = "DROP USER 'test'@'localhost'";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx, plan.clone())?;
         assert_eq!(executor.name(), "DropUserInterpreter");
         executor.execute(None).await?;

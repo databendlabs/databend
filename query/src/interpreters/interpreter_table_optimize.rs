@@ -62,7 +62,7 @@ impl Interpreter for OptimizeTableInterpreter {
             let rewritten_query =
                 format!("INSERT OVERWRITE {} SELECT * FROM {}", obj_name, obj_name);
             let rewritten_plan =
-                PlanParser::parse(rewritten_query.as_str(), self.ctx.clone()).await?;
+                PlanParser::parse(self.ctx.clone(), rewritten_query.as_str()).await?;
             let interpreter = InterpreterFactory::get(self.ctx.clone(), rewritten_plan)?;
             let mut stream = interpreter.execute(None).await?;
             while let Some(Ok(_)) = stream.next().await {}
