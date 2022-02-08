@@ -21,10 +21,8 @@ use std::time::Instant;
 use bumpalo::Bump;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethodKind;
-use common_datavalues::prelude::*;
-use common_datavalues2::column_convert::convert2_old_column;
 use common_datavalues2::prelude::MutableColumn;
-use common_datavalues2::type_convert::create_mutable_builder;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::StateAddr;
@@ -118,7 +116,7 @@ impl Processor for GroupByFinalTransform {
         let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&funcs) };
 
         macro_rules! apply {
-            ($hash_method: ident, $key_array_type: ty, $downcast_fn: ident, $group_func_table: ty) => {{
+            ($hash_method: ident, $key_column_type: ty, $group_func_table: ty) => {{
                 type GroupFuncTable = $group_func_table;
                 let groups_locker = GroupFuncTable::default();
 
@@ -126,18 +124,17 @@ impl Processor for GroupByFinalTransform {
                     let mut groups = groups_locker.write();
                     let block = block?;
 
-                    let key_array = block.column(aggr_funcs_len).to_array()?;
-                    let key_array: $key_array_type = key_array.$downcast_fn()?;
+                    let key_array = block.column(aggr_funcs_len);
+                    let key_array: $key_column_type = Series::check_get(key_array)?;
 
-                    let states_series = (0..aggr_funcs_len)
-                        .map(|i| block.column(i).to_array())
-                        .collect::<Result<Vec<_>>>()?;
-                    let mut states_binary_arrays = Vec::with_capacity(states_series.len());
+                    let states_columns = (0..aggr_funcs_len)
+                        .map(|i| block.column(i))
+                        .collect::<Vec<_>>();
+                    let mut states_binary_columns = Vec::with_capacity(states_columns.len());
 
-                    for agg in states_series.iter().take(aggr_funcs_len) {
-                        let aggr_array: &DFStringArray = agg.string()?;
-                        let aggr_array = aggr_array.inner();
-                        states_binary_arrays.push(aggr_array);
+                    for agg in states_columns.iter().take(aggr_funcs_len) {
+                        let aggr_column: &StringColumn = Series::check_get(agg)?;
+                        states_binary_columns.push(aggr_column);
                     }
 
                     for row in 0..block.num_rows() {
@@ -151,7 +148,7 @@ impl Processor for GroupByFinalTransform {
                                     for (idx, func) in funcs.iter().enumerate() {
                                         let arg_place = place.next(offsets_aggregate_states[idx]);
 
-                                        let mut data = states_binary_arrays[idx].value(row);
+                                        let mut data = states_binary_columns[idx].get_data(row);
                                         func.init_state(arg_place);
                                         func.deserialize(arg_place, &mut data)?;
                                     }
@@ -164,7 +161,7 @@ impl Processor for GroupByFinalTransform {
                                 for (idx, func) in funcs.iter().enumerate() {
                                     let arg_place = place.next(offsets_aggregate_states[idx]);
 
-                                    let mut data = states_binary_arrays[idx].value(row);
+                                    let mut data = states_binary_columns[idx].get_data(row);
                                     let temp = arena.alloc_layout(funcs[idx].state_layout());
                                     let temp_addr = temp.into();
 
@@ -182,14 +179,11 @@ impl Processor for GroupByFinalTransform {
                 // Collect the merge states.
                 let groups = groups_locker.read();
 
-                let mut aggr_values: Vec<Box<dyn MutableColumn>> = {
+                let mut aggr_builders: Vec<Box<dyn MutableColumn>> = {
                     let mut values = vec![];
                     for func in &funcs {
-                        let array = create_mutable_builder(
-                            func.return_type()?,
-                            func.nullable(&DataSchema::empty())?,
-                        );
-                        values.push(array)
+                        let builder = func.return_type()?.create_mutable(1024);
+                        values.push(builder)
                     }
                     values
                 };
@@ -201,17 +195,17 @@ impl Processor for GroupByFinalTransform {
                     let place: StateAddr = (*place).into();
                     for (idx, func) in funcs.iter().enumerate() {
                         let arg_place = place.next(offsets_aggregate_states[idx]);
-                        let array: &mut dyn MutableColumn = aggr_values[idx].borrow_mut();
-                        func.merge_result(arg_place, array)?;
+                        let builder: &mut dyn MutableColumn = aggr_builders[idx].borrow_mut();
+                        func.merge_result(arg_place, builder)?;
                     }
                 }
 
                 // Build final state block.
-                let mut columns: Vec<Series> = Vec::with_capacity(aggr_funcs_len + group_expr_len);
-                for mut array in aggr_values {
+                let mut columns: Vec<ColumnRef> =
+                    Vec::with_capacity(aggr_funcs_len + group_expr_len);
+                for mut array in aggr_builders {
                     let col = array.to_column();
-                    let old_c = convert2_old_column(&col);
-                    columns.push(old_c.to_array()?);
+                    columns.push(col);
                 }
 
                 {
@@ -221,7 +215,7 @@ impl Processor for GroupByFinalTransform {
 
                 let mut blocks = vec![];
                 if !columns.is_empty() {
-                    let block = DataBlock::create_by_array(self.schema.clone(), columns);
+                    let block = DataBlock::create(self.schema.clone(), columns);
                     blocks = DataBlock::split_block_by_size(&block, self.max_block_size)?;
                 }
 
@@ -237,19 +231,19 @@ impl Processor for GroupByFinalTransform {
             ($method: ident, $apply: ident) => {{
                 match $method {
                     HashMethodKind::Serializer(hash_method) => {
-                        apply! { hash_method,  &DFStringArray, string, RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>>}
+                        apply! { hash_method,  &StringColumn, RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>>}
                     }
                     HashMethodKind::KeysU8(hash_method) => {
-                        apply! { hash_method , &DFUInt8Array, u8, RwLock<HashMap<u8, usize, ahash::RandomState>> }
+                        apply! { hash_method , &UInt8Column, RwLock<HashMap<u8, usize, ahash::RandomState>> }
                     }
                     HashMethodKind::KeysU16(hash_method) => {
-                        apply! { hash_method , &DFUInt16Array, u16, RwLock<HashMap<u16, usize, ahash::RandomState>> }
+                        apply! { hash_method , &UInt16Column, RwLock<HashMap<u16, usize, ahash::RandomState>> }
                     }
                     HashMethodKind::KeysU32(hash_method) => {
-                        apply! { hash_method , &DFUInt32Array, u32, RwLock<HashMap<u32, usize, ahash::RandomState>> }
+                        apply! { hash_method , &UInt32Column, RwLock<HashMap<u32, usize, ahash::RandomState>> }
                     }
                     HashMethodKind::KeysU64(hash_method) => {
-                        apply! { hash_method , &DFUInt64Array, u64, RwLock<HashMap<u64, usize, ahash::RandomState>> }
+                        apply! { hash_method , &UInt64Column, RwLock<HashMap<u64, usize, ahash::RandomState>> }
                     }
                 }
             }};

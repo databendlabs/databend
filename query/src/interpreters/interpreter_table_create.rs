@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRefExt;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;

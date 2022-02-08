@@ -49,10 +49,10 @@ fn test_plan_builds() -> Result<()> {
                 .project(&[add(lit(4), lit(5)).alias("4_5")])?
                 .build()),
             expect: "\
-            Projection: (4 + 5) as 4_5:Int64\
-            \n  Expression: (4 + 5):Int64, ((4 + 5) + 2):Int64 ()\
+            Projection: (4 + 5) as 4_5:Int16\
+            \n  Expression: (4 + 5):Int16, ((4 + 5) + 2):Int32 ()\
             \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000, partitions_scanned: 8, partitions_total: 8]",
-            err : "",
+             err : "",
         },
         TestCase {
             name: "projection-simple-pass",

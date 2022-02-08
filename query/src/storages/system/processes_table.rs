@@ -19,11 +19,7 @@ use std::sync::Arc;
 use common_base::ProgressValues;
 use common_dal::DalMetrics;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -43,18 +39,18 @@ pub struct ProcessesTable {
 impl ProcessesTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("id", DataType::String, false),
-            DataField::new("type", DataType::String, false),
-            DataField::new("host", DataType::String, true),
-            DataField::new("user", DataType::String, true),
-            DataField::new("state", DataType::String, false),
-            DataField::new("database", DataType::String, false),
-            DataField::new("extra_info", DataType::String, true),
-            DataField::new("memory_usage", DataType::Int64, true),
-            DataField::new("dal_metrics_read_bytes", DataType::UInt64, true),
-            DataField::new("dal_metrics_write_bytes", DataType::UInt64, true),
-            DataField::new("scan_progress_read_rows", DataType::UInt64, true),
-            DataField::new("scan_progress_read_bytes", DataType::UInt64, true),
+            DataField::new("id", Vu8::to_data_type()),
+            DataField::new("type", Vu8::to_data_type()),
+            DataField::new_nullable("host", Vu8::to_data_type()),
+            DataField::new_nullable("user", Vu8::to_data_type()),
+            DataField::new("state", Vu8::to_data_type()),
+            DataField::new("database", Vu8::to_data_type()),
+            DataField::new_nullable("extra_info", Vu8::to_data_type()),
+            DataField::new_nullable("memory_usage", i64::to_data_type()),
+            DataField::new_nullable("dal_metrics_read_bytes", u64::to_data_type()),
+            DataField::new_nullable("dal_metrics_write_bytes", u64::to_data_type()),
+            DataField::new_nullable("scan_progress_read_rows", u64::to_data_type()),
+            DataField::new_nullable("scan_progress_read_bytes", u64::to_data_type()),
         ]);
 
         let table_info = TableInfo {
@@ -162,19 +158,19 @@ impl Table for ProcessesTable {
         }
 
         let schema = self.table_info.schema();
-        let block = DataBlock::create_by_array(schema.clone(), vec![
-            Series::new(processes_id),
-            Series::new(processes_type),
-            Series::new(processes_host),
-            Series::new(processes_user),
-            Series::new(processes_state),
-            Series::new(processes_database),
-            Series::new(processes_extra_info),
-            Series::new(processes_memory_usage),
-            Series::new(processes_dal_metrics_read_bytes),
-            Series::new(processes_dal_metrics_write_bytes),
-            Series::new(processes_scan_progress_read_rows),
-            Series::new(processes_scan_progress_read_bytes),
+        let block = DataBlock::create(schema.clone(), vec![
+            Series::from_data(processes_id),
+            Series::from_data(processes_type),
+            Series::from_data(processes_host),
+            Series::from_data(processes_user),
+            Series::from_data(processes_state),
+            Series::from_data(processes_database),
+            Series::from_data(processes_extra_info),
+            Series::from_data(processes_memory_usage),
+            Series::from_data(processes_dal_metrics_read_bytes),
+            Series::from_data(processes_dal_metrics_write_bytes),
+            Series::from_data(processes_scan_progress_read_rows),
+            Series::from_data(processes_scan_progress_read_bytes),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))

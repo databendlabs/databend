@@ -26,7 +26,7 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function2;
-use crate::scalars::Monotonicity;
+use crate::scalars::Monotonicity2;
 
 fn add_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>) -> O
 where
@@ -136,7 +136,7 @@ impl ArithmeticPlusFunction {
         )
     }
 
-    pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+    pub fn get_monotonicity(args: &[Monotonicity2]) -> Result<Monotonicity2> {
         // For expression f(x) + g(x), only when both f(x) and g(x) are monotonic and have
         // same 'is_positive' can we get a monotonic expression.
         let f_x = &args[0];
@@ -144,12 +144,12 @@ impl ArithmeticPlusFunction {
 
         // if either one is non-monotonic, return non-monotonic
         if !f_x.is_monotonic || !g_x.is_monotonic {
-            return Ok(Monotonicity::default());
+            return Ok(Monotonicity2::default());
         }
 
         // if f(x) is a constant value, return the monotonicity of g(x)
         if f_x.is_constant {
-            return Ok(Monotonicity::create(
+            return Ok(Monotonicity2::create(
                 g_x.is_monotonic,
                 g_x.is_positive,
                 g_x.is_constant,
@@ -158,7 +158,7 @@ impl ArithmeticPlusFunction {
 
         // if g(x) is a constant value, return the monotonicity of f(x)
         if g_x.is_constant {
-            return Ok(Monotonicity::create(
+            return Ok(Monotonicity2::create(
                 f_x.is_monotonic,
                 f_x.is_positive,
                 f_x.is_constant,
@@ -168,9 +168,9 @@ impl ArithmeticPlusFunction {
         // Now we have f(x) and g(x) both are non-constant.
         // When both are monotonic, but have different 'is_positive', we can't determine the monotonicity
         if f_x.is_positive != g_x.is_positive {
-            return Ok(Monotonicity::default());
+            return Ok(Monotonicity2::default());
         }
 
-        Ok(Monotonicity::create(true, f_x.is_positive, false))
+        Ok(Monotonicity2::create(true, f_x.is_positive, false))
     }
 }

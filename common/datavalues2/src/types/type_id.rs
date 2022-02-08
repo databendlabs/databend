@@ -187,18 +187,18 @@ impl TypeID {
             Nullable => PhysicalTypeID::Nullable,
             Null => PhysicalTypeID::Null,
             Boolean => PhysicalTypeID::Boolean,
-            Int8 => PhysicalTypeID::Primitive(PrimitiveTypeID::Int8),
-            Int16 => PhysicalTypeID::Primitive(PrimitiveTypeID::Int16),
+            Int8 => PhysicalTypeID::Int8,
+            Int16 => PhysicalTypeID::Int16,
 
-            Int32 | Date32 => PhysicalTypeID::Primitive(PrimitiveTypeID::Int32),
-            Int64 | Interval => PhysicalTypeID::Primitive(PrimitiveTypeID::Int64),
+            Int32 | Date32 => PhysicalTypeID::Int32,
+            Int64 | Interval => PhysicalTypeID::Int64,
 
-            UInt8 => PhysicalTypeID::Primitive(PrimitiveTypeID::UInt8),
-            Date16 | UInt16 => PhysicalTypeID::Primitive(PrimitiveTypeID::UInt16),
-            DateTime32 | UInt32 => PhysicalTypeID::Primitive(PrimitiveTypeID::UInt32),
-            DateTime64 | UInt64 => PhysicalTypeID::Primitive(PrimitiveTypeID::UInt64),
-            Float32 => PhysicalTypeID::Primitive(PrimitiveTypeID::Float32),
-            Float64 => PhysicalTypeID::Primitive(PrimitiveTypeID::Float64),
+            UInt8 => PhysicalTypeID::UInt8,
+            Date16 | UInt16 => PhysicalTypeID::UInt16,
+            DateTime32 | UInt32 => PhysicalTypeID::UInt32,
+            DateTime64 | UInt64 => PhysicalTypeID::UInt64,
+            Float32 => PhysicalTypeID::Float32,
+            Float64 => PhysicalTypeID::Float64,
 
             String => PhysicalTypeID::String,
             Array => PhysicalTypeID::Array,
@@ -220,13 +220,9 @@ pub enum PhysicalTypeID {
     Boolean,
     String,
 
-    Primitive(PrimitiveTypeID),
     Array,
     Struct,
-}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum PrimitiveTypeID {
     /// A signed 8-bit integer.
     Int8,
     /// A signed 16-bit integer.

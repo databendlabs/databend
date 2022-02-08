@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_scalar_type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -33,7 +34,6 @@ use super::AggregateFunctionRef;
 use super::StateAddr;
 use crate::aggregates::assert_binary_arguments;
 use crate::aggregates::AggregateFunction;
-use crate::with_match_scalar_type;
 
 pub trait AggregateArgMinMaxState<S: Scalar>: Send + Sync + 'static {
     fn new() -> Self;
@@ -291,7 +291,7 @@ pub fn try_create_aggregate_arg_minmax_function<const IS_MIN: bool>(
     assert_binary_arguments(display_name, arguments.len())?;
     let data_type = arguments[1].data_type();
 
-    with_match_scalar_type!(data_type.data_type_id(), |$T| {
+    with_match_scalar_type!(data_type.data_type_id().to_physical_type(), |$T| {
         if IS_MIN {
             type State = ArgMinMaxState<$T, CmpMin>;
              AggregateArgMinMaxFunction::<$T, CmpMin, State>::try_create(

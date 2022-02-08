@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRefExt;
+use common_datavalues2::DataSchemaRefExt;
 use common_exception::Result;
 use common_planners::CopyPlan;
 use common_planners::PlanNode;

@@ -15,11 +15,7 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -51,7 +47,10 @@ impl FlightScatter for HashFlightScatter {
         let expression_executor = self.scatter_expression_executor.clone();
         let evaluated_data_block = expression_executor.execute(data_block)?;
         let indices = evaluated_data_block.try_column_by_name(&self.scatter_expression_name)?;
-        DataBlock::scatter_block(data_block, indices, self.scattered_size)
+
+        let col: &PrimitiveColumn<u64> = Series::check_get(indices)?;
+        let indices: Vec<usize> = col.iter().map(|c| *c as usize).collect();
+        DataBlock::scatter_block(data_block, &indices, self.scattered_size)
     }
 }
 
@@ -69,7 +68,7 @@ impl HashFlightScatter {
     }
 
     fn indices_expr_schema(output_name: &str) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new(output_name, DataType::UInt64, false)])
+        DataSchemaRefExt::create(vec![DataField::new(output_name, u64::to_data_type())])
     }
 
     fn expr_executor(schema: DataSchemaRef, expr: &Expression) -> Result<ExpressionExecutor> {
@@ -88,10 +87,13 @@ impl HashFlightScatter {
             args: vec![
                 Expression::Cast {
                     expr: Box::new(expr),
-                    data_type: DataType::UInt64,
-                    is_nullable: true,
+                    data_type: u64::to_data_type(),
+                    is_nullable: false,
                 },
-                Expression::create_literal(DataValue::UInt64(Some(num as u64))),
+                Expression::create_literal_with_type(
+                    DataValue::UInt64(num as u64),
+                    u64::to_data_type(),
+                ),
             ],
         }
     }

@@ -21,10 +21,7 @@ mod macros;
 
 use aggregates::AggregateFunctionFactory;
 use scalars::Function2Factory;
-use scalars::FunctionFactory;
 
 pub fn is_builtin_function(name: &str) -> bool {
-    Function2Factory::instance().check(name)
-        || FunctionFactory::instance().check(name)
-        || AggregateFunctionFactory::instance().check(name)
+    Function2Factory::instance().check(name) || AggregateFunctionFactory::instance().check(name)
 }

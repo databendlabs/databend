@@ -53,6 +53,10 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     fn passthrough_null(&self) -> bool {
         true
     }
+
+    fn passthrough_constant(&self) -> bool {
+        false
+    }
 }
 
 dyn_clone::clone_trait_object!(Function);

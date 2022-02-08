@@ -82,6 +82,7 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         None
     }
+
     fn to_arrow_field(&self, name: &str) -> ArrowField {
         let ret = ArrowField::new(name, self.arrow_type(), self.is_nullable());
         if let Some(meta) = self.custom_arrow_meta() {
@@ -141,14 +142,15 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
 
 pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
     if let Some(m) = f.metadata() {
-        if let Some(custom_name) = m.get("ARROW:extension:databend_name") {
-            let metatada = m.get("ARROW:extension:databend_metadata").cloned();
+        if let Some(custom_name) = m.get(ARROW_EXTENSION_NAME) {
+            let metatada = m.get(ARROW_EXTENSION_META).cloned();
             match custom_name.as_str() {
                 "Date" | "Date16" => return Date16Type::arc(),
                 "Date32" => return Date32Type::arc(),
                 "DateTime" | "DateTime32" => return DateTime32Type::arc(metatada),
                 "DateTime64" => return DateTime64Type::arc(3, metatada),
-                "Interval" => return IntervalType::arc(),
+                "IntervalDayTime" => return IntervalType::arc(IntervalUnit::DayTime),
+                "IntervalYearMonth" => return IntervalType::arc(IntervalUnit::YearMonth),
                 _ => {}
             }
         }
@@ -198,4 +200,12 @@ pub fn remove_nullable(data_type: &DataTypePtr) -> DataTypePtr {
         return nullable.inner_type().clone();
     }
     data_type.clone()
+}
+
+pub fn format_data_type_sql(data_type: &DataTypePtr) -> String {
+    let notnull_type = remove_nullable(data_type);
+    match data_type.is_nullable() {
+        true => format!("{:?}", notnull_type),
+        false => format!("{:?} NOT NULL", notnull_type),
+    }
 }

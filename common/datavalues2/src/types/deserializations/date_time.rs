@@ -32,6 +32,10 @@ where
     i64: AsPrimitive<T>,
     T: PrimitiveType,
     T: Unmarshal<T> + StatBuffer + FromLexical,
+    for<'a> T: common_clickhouse_srv::types::column::iter::Iterable<
+        'a,
+        common_clickhouse_srv::types::Simple,
+    >,
 {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;

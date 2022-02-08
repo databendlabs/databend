@@ -72,44 +72,39 @@ fn databend_if_else_then(
         $key_type:expr, | $_:tt $T:ident | $($body:tt)*
     ) => ({
         macro_rules! __with_ty__ {( $_ $T:ident ) => ( $($body)* )}
-        use crate::PrimitiveTypeID::*;
         match $key_type {
-            Int8 => __with_ty__! { i8 },
-            Int16 => __with_ty__! { i16 },
-            Int32 => __with_ty__! { i32 },
-            Int64 => __with_ty__! { i64 },
-            UInt8 => __with_ty__! { u8 },
-            UInt16 => __with_ty__! { u16 },
-            UInt32 => __with_ty__! { u32 },
-            UInt64 => __with_ty__! { u64 },
-            Float32 => __with_ty__! { f32 },
-            Float64 => __with_ty__! { f64 },
+             PhysicalTypeID::Int8 => __with_ty__! { i8 },
+             PhysicalTypeID::Int16 => __with_ty__! { i16 },
+             PhysicalTypeID::Int32 => __with_ty__! { i32 },
+             PhysicalTypeID::Int64 => __with_ty__! { i64 },
+             PhysicalTypeID::UInt8 => __with_ty__! { u8 },
+             PhysicalTypeID::UInt16 => __with_ty__! { u16 },
+             PhysicalTypeID::UInt32 => __with_ty__! { u32 },
+             PhysicalTypeID::UInt64 => __with_ty__! { u64 },
+             PhysicalTypeID::Float32 => __with_ty__! { f32 },
+             PhysicalTypeID::Float64 => __with_ty__! { f64 },
+             _ => unreachable!()
         }
     })}
 
-    match physical_id {
-        PhysicalTypeID::Primitive(t) => with_match_physical_primitive_type!(t, |$T| {
-            let lhs_wrapper = ColumnViewer::<$T>::create(lhs)?;
-            let rhs_wrapper = ColumnViewer::<$T>::create(rhs)?;
-            let size = lhs_wrapper.len();
+    with_match_physical_primitive_type!(physical_id, |$T| {
+        let lhs_wrapper = ColumnViewer::<$T>::create(lhs)?;
+        let rhs_wrapper = ColumnViewer::<$T>::create(rhs)?;
+        let size = lhs_wrapper.len();
 
-            let mut builder = NullableColumnBuilder::<$T>::with_capacity(size);
+        let mut builder = NullableColumnBuilder::<$T>::with_capacity(size);
 
-            for row in 0..size {
-                let valid = validity_predict.get_bit(row);
-                if bools.get_bit(row) {
-                    builder.append(lhs_wrapper.value(row), valid & lhs_wrapper.valid_at(row));
-                } else {
-                    builder.append(rhs_wrapper.value(row), valid & rhs_wrapper.valid_at(row));
-                };
-            }
+        for row in 0..size {
+            let valid = validity_predict.get_bit(row);
+            if bools.get_bit(row) {
+                builder.append(lhs_wrapper.value(row), valid & lhs_wrapper.valid_at(row));
+            } else {
+                builder.append(rhs_wrapper.value(row), valid & rhs_wrapper.valid_at(row));
+            };
+        }
 
-            Ok(builder.build(size))
-        }),
-        PhysicalTypeID::Boolean => todo!(),
-        PhysicalTypeID::String => todo!(),
-        _ => unimplemented!(),
-    }
+        Ok(builder.build(size))
+    })
 }
 
 criterion_group!(benches, add_benchmark);

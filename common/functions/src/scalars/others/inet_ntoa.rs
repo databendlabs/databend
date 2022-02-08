@@ -23,7 +23,8 @@ use common_datavalues2::ColumnRef;
 use common_datavalues2::ColumnViewer;
 use common_datavalues2::ColumnsWithField;
 use common_datavalues2::DataTypePtr;
-use common_datavalues2::Float64Type;
+use common_datavalues2::DataValue;
+use common_datavalues2::NullType;
 use common_datavalues2::NullableColumnBuilder;
 use common_datavalues2::NullableType;
 use common_datavalues2::TypeID;
@@ -39,10 +40,10 @@ use crate::scalars::Function2;
 use crate::scalars::Function2Description;
 use crate::scalars::ParsingMode;
 
-#[doc(alias = "TryIPv4StringToNumFunction")]
+#[doc(alias = "TryNumToIPv4StringFunction")]
 pub type TryInetNtoaFunction = InetNtoaFunctionImpl<true>;
 
-#[doc(alias = "IPv4StringToNumFunction")]
+#[doc(alias = "TryNumToIPv4StringFunction")]
 pub type InetNtoaFunction = InetNtoaFunctionImpl<false>;
 
 #[derive(Clone)]
@@ -70,14 +71,15 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function2 for InetNtoaFunctionImpl<SUPPRES
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         let input_type = args[0];
-        let output_type = if input_type.data_type_id().is_numeric()
-            || input_type.data_type_id().is_string()
-            || input_type.data_type_id() == TypeID::Null
-        {
+        if input_type.data_type_id() == TypeID::Null {
+            return Ok(NullType::arc());
+        }
+
+        let output_type = if input_type.data_type_id().is_numeric() {
             Ok(StringType::arc())
         } else {
             Err(ErrorCode::IllegalDataType(format!(
-                "Expected numeric, string or null type, but got {}",
+                "Expected numeric or null type, but got {}",
                 args[0].name()
             )))
         }?;
@@ -91,13 +93,16 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function2 for InetNtoaFunctionImpl<SUPPRES
     }
 
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
-        if SUPPRESS_CAST_ERROR {
-            let cast_to: DataTypePtr = Arc::new(NullableType::create(Float64Type::arc()));
+        if columns[0].column().data_type_id() == TypeID::Null {
+            return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
+        }
 
+        if SUPPRESS_CAST_ERROR {
+            let cast_to: DataTypePtr = Arc::new(NullableType::create(UInt32Type::arc()));
             let cast_options = CastOptions {
                 // we allow cast failure
                 exception_mode: ExceptionMode::Zero,
-                parsing_mode: ParsingMode::Partial,
+                parsing_mode: ParsingMode::Strict,
             };
             let column = cast_with_type(
                 columns[0].column(),
@@ -105,20 +110,15 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function2 for InetNtoaFunctionImpl<SUPPRES
                 &cast_to,
                 &cast_options,
             )?;
-            let viewer = ColumnViewer::<f64>::create(&column)?;
+            let viewer = ColumnViewer::<u32>::create(&column)?;
 
             let mut builder: NullableColumnBuilder<Vec<u8>> =
                 NullableColumnBuilder::with_capacity(input_rows);
 
             for i in 0..input_rows {
                 let val = viewer.value(i);
-
-                if val.is_nan() || val < 0.0 || val > u32::MAX as f64 {
-                    builder.append_null();
-                } else {
-                    let addr_str = Ipv4Addr::from((val as u32).to_be_bytes()).to_string();
-                    builder.append(addr_str.as_bytes(), viewer.valid_at(i));
-                }
+                let addr_str = Ipv4Addr::from((val as u32).to_be_bytes()).to_string();
+                builder.append(addr_str.as_bytes(), viewer.valid_at(i));
             }
             Ok(builder.build(input_rows))
         } else {
@@ -136,7 +136,6 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function2 for InetNtoaFunctionImpl<SUPPRES
             let viewer = ColumnViewer::<u32>::create(&column)?;
 
             let mut builder = ColumnBuilder::<Vec<u8>>::with_capacity(input_rows);
-
             for i in 0..input_rows {
                 let val = viewer.value(i);
                 let addr_str = Ipv4Addr::from((val).to_be_bytes()).to_string();

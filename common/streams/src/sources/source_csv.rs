@@ -14,7 +14,7 @@
 
 use async_trait::async_trait;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -75,7 +75,7 @@ where R: AsyncRead + Unpin + Send
             .fields()
             .iter()
             .map(|f| f.data_type().create_deserializer(self.block_size))
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Vec<_>>();
 
         let mut rows = 0;
         let mut records = self.reader.byte_records();
@@ -91,7 +91,7 @@ where R: AsyncRead + Unpin + Send
             for (col, deser) in desers.iter_mut().enumerate() {
                 match record.get(col) {
                     Some(bytes) => deser.de_text(bytes)?,
-                    None => deser.de_null(),
+                    None => deser.de_default(),
                 }
             }
             rows += 1;
@@ -108,12 +108,9 @@ where R: AsyncRead + Unpin + Send
 
         let series = desers
             .iter_mut()
-            .map(|deser| deser.finish_to_series())
+            .map(|deser| deser.finish_to_column())
             .collect::<Vec<_>>();
 
-        Ok(Some(DataBlock::create_by_array(
-            self.schema.clone(),
-            series,
-        )))
+        Ok(Some(DataBlock::create(self.schema.clone(), series)))
     }
 }

@@ -16,9 +16,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use common_base::tokio;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
@@ -129,8 +127,7 @@ async fn test_catalogs_table() -> Result<()> {
         // Table schema with metadata(due to serde issue).
         let schema = Arc::new(DataSchema::new(vec![DataField::new(
             "number",
-            DataType::UInt64,
-            false,
+            u64::to_data_type(),
         )]));
 
         let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};

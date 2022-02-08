@@ -8,16 +8,9 @@ NULL
 === INET_ATON ===
 167773449
 NULL
-ERROR 1105 (HY000) at line 11: Code: 1060, displayText = Failed to parse 'hello' into a IPV4 address, invalid IP address syntax.
 === TRY_INET_NTOA ===
 10.0.5.9
-10.0.5.9
-0.0.0.0
-NULL
 NULL
 === INET_NTOA ===
 10.0.5.9
-10.0.5.9
-0.0.0.0
-ERROR 1105 (HY000) at line 22: Code: 1010, displayText = Cast error happens in casting from String to UInt32.
 NULL

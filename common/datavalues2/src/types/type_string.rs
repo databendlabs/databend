@@ -58,8 +58,9 @@ impl DataType for StringType {
         size: usize,
     ) -> common_exception::Result<ColumnRef> {
         let value = data.as_string()?;
+        let bytes = value.as_slice();
 
-        let column = Series::from_data(&[value]);
+        let column = Series::from_data(&[bytes]);
         Ok(Arc::new(ConstColumn::new(column, size)))
     }
 

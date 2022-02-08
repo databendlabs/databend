@@ -14,8 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 use pretty_assertions::assert_eq;
@@ -43,8 +42,7 @@ fn test_explain_plan() -> Result<()> {
     assert_eq!(expect, actual);
     assert_eq!(explain.schema().fields().clone(), vec![DataField::new(
         "explain",
-        DataType::String,
-        false
+        Vu8::to_data_type()
     )]);
 
     Ok(())

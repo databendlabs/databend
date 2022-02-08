@@ -161,3 +161,12 @@ fn test_serializers() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_convert_arrow() {
+    let t = DateTime32Type::arc(None);
+    let arrow_y = t.to_arrow_field("x");
+    let new_t = from_arrow_field(&arrow_y);
+
+    assert_eq!(new_t.name(), t.name())
+}

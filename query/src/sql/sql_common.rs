@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::DataType as SQLDataType;
@@ -21,52 +21,36 @@ pub struct SQLCommon;
 
 impl SQLCommon {
     /// Maps the SQL type to the corresponding Arrow `DataType`
-    pub fn make_data_type(sql_type: &SQLDataType) -> Result<DataType> {
+    pub fn make_data_type(sql_type: &SQLDataType) -> Result<DataTypePtr> {
         match sql_type {
-            SQLDataType::BigInt(_) => Ok(DataType::Int64),
-            SQLDataType::Int(_) => Ok(DataType::Int32),
-            SQLDataType::TinyInt(_) => Ok(DataType::Int8),
-            SQLDataType::SmallInt(_) => Ok(DataType::Int16),
-            SQLDataType::Char(_) => Ok(DataType::String),
-            SQLDataType::Varchar(_) => Ok(DataType::String),
-            SQLDataType::String => Ok(DataType::String),
-            SQLDataType::Text => Ok(DataType::String),
-            SQLDataType::Decimal(_, _) => Ok(DataType::Float64),
-            SQLDataType::Float(_) => Ok(DataType::Float32),
-            SQLDataType::Real | SQLDataType::Double => Ok(DataType::Float64),
-            SQLDataType::Boolean => Ok(DataType::Boolean),
-            SQLDataType::Date => Ok(DataType::Date16),
-            SQLDataType::Timestamp => Ok(DataType::DateTime32(None)),
+            SQLDataType::BigInt(_) => Ok(i64::to_data_type()),
+            SQLDataType::Int(_) => Ok(i32::to_data_type()),
+            SQLDataType::SmallInt(_) => Ok(i16::to_data_type()),
+            SQLDataType::TinyInt(_) => Ok(i8::to_data_type()),
+            SQLDataType::Char(_)
+            | SQLDataType::Varchar(_)
+            | SQLDataType::String
+            | SQLDataType::Text => Ok(Vu8::to_data_type()),
+
+            SQLDataType::Decimal(_, _) => Ok(f64::to_data_type()),
+            SQLDataType::Float(_) => Ok(f32::to_data_type()),
+            SQLDataType::Real | SQLDataType::Double => Ok(f64::to_data_type()),
+            SQLDataType::Boolean => Ok(bool::to_data_type()),
+            SQLDataType::Date => Ok(Date16Type::arc()),
+            SQLDataType::Timestamp => Ok(DateTime32Type::arc(None)),
 
             //custom types for databend
             // Custom(ObjectName([Ident { value: "uint8", quote_style: None }])
             SQLDataType::Custom(obj) if !obj.0.is_empty() => {
                 match obj.0[0].value.to_uppercase().as_str() {
-                    "UINT8" => Ok(DataType::UInt8),
-                    "UINT16" => Ok(DataType::UInt16),
-                    "UINT32" => Ok(DataType::UInt32),
-                    "UINT64" => Ok(DataType::UInt64),
+                    "SIGNED" => Ok(i64::to_data_type()),
+                    "UNSIGNED" => Ok(u64::to_data_type()),
 
-                    "INT8" => Ok(DataType::Int8),
-                    "INT16" => Ok(DataType::Int16),
-                    "INT32" => Ok(DataType::Int32),
-                    "INT64" => Ok(DataType::Int64),
-                    "FLOAT32" => Ok(DataType::Float32),
-                    "FLOAT64" => Ok(DataType::Float64),
-                    "STRING" => Ok(DataType::String),
-                    "DATE16" => Ok(DataType::Date16),
-                    "DATE32" => Ok(DataType::Date32),
-                    "DATETIME" => Ok(DataType::DateTime32(None)),
-                    "DATETIME32" => Ok(DataType::DateTime32(None)),
-                    // TODO parse precision
-                    "DATETIME64" => Ok(DataType::DateTime64(3, None)),
-                    "SIGNED" => Ok(DataType::Int64),
-                    "UNSIGNED" => Ok(DataType::UInt64),
-
-                    _ => Result::Err(ErrorCode::IllegalDataType(format!(
-                        "The SQL data type {:?} is not implemented",
-                        sql_type
-                    ))),
+                    name => {
+                        let factory = TypeFactory::instance();
+                        let data_type = factory.get(name)?;
+                        Ok(data_type.clone())
+                    }
                 }
             }
             _ => Result::Err(ErrorCode::IllegalDataType(format!(

@@ -84,12 +84,6 @@ pub fn equal(lhs: &dyn Column, rhs: &dyn Column) -> bool {
 
             lhs.values() == rhs.values() && lhs.offsets() == rhs.offsets()
         }
-        Primitive(e) => with_match_physical_primitive_type!(e, |$T| {
-            let lhs: &PrimitiveColumn<$T> = lhs.as_any().downcast_ref().unwrap();
-            let rhs: &PrimitiveColumn<$T> = rhs.as_any().downcast_ref().unwrap();
-
-            lhs.values() == rhs.values()
-        }),
         Array => {
             let lhs: &ArrayColumn = lhs.as_any().downcast_ref().unwrap();
             let rhs: &ArrayColumn = rhs.as_any().downcast_ref().unwrap();
@@ -102,5 +96,12 @@ pub fn equal(lhs: &dyn Column, rhs: &dyn Column) -> bool {
 
             lhs.values() == rhs.values()
         }
+
+        other => with_match_physical_primitive_type!(other, |$T| {
+            let lhs: &PrimitiveColumn<$T> = lhs.as_any().downcast_ref().unwrap();
+            let rhs: &PrimitiveColumn<$T> = rhs.as_any().downcast_ref().unwrap();
+
+            lhs.values() == rhs.values()
+        }),
     }
 }

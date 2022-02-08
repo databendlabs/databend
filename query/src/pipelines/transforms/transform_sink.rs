@@ -15,11 +15,9 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
+use common_datavalues2::DataSchemaRef;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
-use common_functions::scalars::Function2Convertor;
 use common_meta_types::TableInfo;
 use common_streams::CastStream;
 use common_streams::SendableDataBlockStream;
@@ -90,14 +88,8 @@ impl Processor for SinkTransform {
         if let Some(cast_schema) = &self.cast_schema {
             let mut functions = Vec::with_capacity(cast_schema.fields().len());
             for field in cast_schema.fields() {
-                let name = if field.is_nullable() && field.data_type() != &DataType::Null {
-                    format!("Nullable({})", field.data_type())
-                } else {
-                    format!("{}", field.data_type())
-                };
-
-                let cast_function =
-                    Function2Convertor::create(CastFunction::create("cast", &name).unwrap());
+                let name = format!("{:?}", field.data_type());
+                let cast_function = CastFunction::create("cast", &name).unwrap();
                 functions.push(cast_function);
             }
             input_stream = Box::pin(CastStream::try_create(

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -21,12 +22,20 @@ use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct IntervalType {}
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
+pub struct IntervalType {
+    unit: IntervalUnit,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub enum IntervalUnit {
+    YearMonth,
+    DayTime,
+}
 
 impl IntervalType {
-    pub fn arc() -> DataTypePtr {
-        Arc::new(Self {})
+    pub fn arc(unit: IntervalUnit) -> DataTypePtr {
+        Arc::new(Self { unit })
     }
 }
 
@@ -78,6 +87,21 @@ impl DataType for IntervalType {
         })
     }
 
+    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
+        let mut mp = BTreeMap::new();
+        match self.unit {
+            IntervalUnit::YearMonth => mp.insert(
+                ARROW_EXTENSION_NAME.to_string(),
+                "IntervalYearMonth".to_string(),
+            ),
+            IntervalUnit::DayTime => mp.insert(
+                ARROW_EXTENSION_NAME.to_string(),
+                "IntervalDayTime".to_string(),
+            ),
+        };
+        Some(mp)
+    }
+
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
         Box::new(MutablePrimitiveColumn::<i64>::with_capacity(capacity))
     }
@@ -85,6 +109,6 @@ impl DataType for IntervalType {
 
 impl std::fmt::Debug for IntervalType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
+        write!(f, "{}({:?})", self.name(), self.unit)
     }
 }

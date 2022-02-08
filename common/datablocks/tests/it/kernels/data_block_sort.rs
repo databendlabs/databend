@@ -13,19 +13,19 @@
 // limitations under the License.
 
 use common_datablocks::*;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 
 #[test]
 fn test_data_block_sort() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int64, false),
-        DataField::new("b", DataType::String, false),
+        DataField::new("a", i64::to_data_type()),
+        DataField::new("b", Vu8::to_data_type()),
     ]);
 
-    let raw = DataBlock::create_by_array(schema, vec![
-        Series::new(vec![6, 4, 3, 2, 1, 7]),
-        Series::new(vec!["b1", "b2", "b3", "b4", "b5", "b6"]),
+    let raw = DataBlock::create(schema, vec![
+        Series::from_data(vec![6, 4, 3, 2, 1, 7]),
+        Series::from_data(vec!["b1", "b2", "b3", "b4", "b5", "b6"]),
     ]);
 
     {
@@ -75,18 +75,18 @@ fn test_data_block_sort() -> Result<()> {
 #[test]
 fn test_data_block_merge_sort() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int64, false),
-        DataField::new("b", DataType::String, false),
+        DataField::new("a", i64::to_data_type()),
+        DataField::new("b", Vu8::to_data_type()),
     ]);
 
-    let raw1 = DataBlock::create_by_array(schema.clone(), vec![
-        Series::new(vec![3, 5, 7]),
-        Series::new(vec!["b1", "b2", "b3"]),
+    let raw1 = DataBlock::create(schema.clone(), vec![
+        Series::from_data(vec![3, 5, 7]),
+        Series::from_data(vec!["b1", "b2", "b3"]),
     ]);
 
-    let raw2 = DataBlock::create_by_array(schema, vec![
-        Series::new(vec![2, 4, 6]),
-        Series::new(vec!["b4", "b5", "b6"]),
+    let raw2 = DataBlock::create(schema, vec![
+        Series::from_data(vec![2, 4, 6]),
+        Series::from_data(vec!["b4", "b5", "b6"]),
     ]);
 
     {

@@ -42,6 +42,10 @@ impl DateTime64Type {
         Arc::new(DateTime64Type { precision, tz })
     }
 
+    pub fn tz(&self) -> Option<&String> {
+        self.tz.as_ref()
+    }
+
     pub fn precision(&self) -> usize {
         self.precision
     }
@@ -106,7 +110,11 @@ impl DataType for DateTime64Type {
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(DateTimeSerializer::<u64>::default())
+        let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
+        Box::new(DateTimeSerializer::<u64>::create(
+            tz.parse::<Tz>().unwrap(),
+            self.precision as u32,
+        ))
     }
 
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {

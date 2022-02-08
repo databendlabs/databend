@@ -127,6 +127,30 @@ impl Column for NullableColumn {
         Arc::new(Self::new(inner, validity.into()))
     }
 
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        let inner_values = self.inner().scatter(indices, scattered_size);
+        let mut bitmaps = Vec::with_capacity(scattered_size);
+        for _ in 0..scattered_size {
+            let bitmap = MutableBitmap::with_capacity(self.len());
+            bitmaps.push(bitmap);
+        }
+        unsafe {
+            indices.iter().zip(self.validity.iter()).for_each(|(i, f)| {
+                bitmaps[*i].push_unchecked(f);
+            });
+        }
+
+        let mut results = Vec::with_capacity(scattered_size);
+
+        for (index, value) in inner_values.iter().enumerate().take(scattered_size) {
+            let bitmap = bitmaps.get_mut(index).unwrap();
+            let bitmap = std::mem::take(bitmap).into();
+            results.push(Arc::new(NullableColumn::new(value.clone(), bitmap)) as ColumnRef);
+        }
+
+        results
+    }
+
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
         debug_assert!(
             offsets.len() == self.len(),

@@ -16,13 +16,13 @@ use std::sync::Arc;
 use common_datavalues2::prelude::*;
 use common_datavalues2::remove_nullable;
 use common_datavalues2::type_coercion::aggregate_types;
+use common_datavalues2::with_match_scalar_type;
 use common_exception::Result;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
 use crate::scalars::Function2Description;
-use crate::with_match_scalar_type;
 
 #[derive(Clone, Debug)]
 pub struct IfFunction {
@@ -50,13 +50,7 @@ impl Function2 for IfFunction {
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         let dts = vec![args[1].clone(), args[2].clone()];
-
-        let mut least_supertype = aggregate_types(dts.as_slice())?;
-        if (args[0].is_nullable() || args[1].is_nullable() || args[2].is_nullable())
-            && !least_supertype.is_nullable()
-        {
-            least_supertype = Arc::new(NullableType::create(least_supertype));
-        }
+        let least_supertype = aggregate_types(dts.as_slice())?;
 
         Ok(least_supertype)
     }
@@ -79,20 +73,13 @@ impl Function2 for IfFunction {
         let rhs = &columns[2];
         let dts = vec![lhs.data_type().clone(), rhs.data_type().clone()];
 
-        let mut least_supertype = aggregate_types(dts.as_slice())?;
-
-        if (lhs.data_type().is_nullable() || rhs.data_type().is_nullable())
-            && !least_supertype.is_nullable()
-        {
-            least_supertype = Arc::new(NullableType::create(least_supertype));
-        }
+        let least_supertype = aggregate_types(dts.as_slice())?;
         if least_supertype.is_nullable() {
             nullable = true;
         }
 
         let lhs = cast_column_field(lhs, &least_supertype)?;
         let rhs = cast_column_field(rhs, &least_supertype)?;
-
         let type_id = remove_nullable(&lhs.data_type()).data_type_id();
 
         macro_rules! scalar_build {
@@ -134,7 +121,7 @@ impl Function2 for IfFunction {
             }};
         }
 
-        with_match_scalar_type!(type_id, |$T| {
+        with_match_scalar_type!(type_id.to_physical_type(), |$T| {
             scalar_build!($T)
         }, {
             unimplemented!()

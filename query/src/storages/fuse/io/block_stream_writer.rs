@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
+use common_datavalues2::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;

@@ -16,10 +16,10 @@
 use std::convert::TryFrom;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::Series;
+use common_datavalues2::prelude::SeriesFrom;
+use common_datavalues2::DataSchemaRef;
+use common_datavalues2::DataValue;
 use common_exception::ErrorCode;
 
 use crate::storages::fuse::meta::SegmentInfo;
@@ -49,13 +49,10 @@ impl AppendOperationLogEntry {
 impl TryFrom<AppendOperationLogEntry> for DataBlock {
     type Error = common_exception::ErrorCode;
     fn try_from(value: AppendOperationLogEntry) -> std::result::Result<Self, Self::Error> {
-        Ok(DataBlock::create_by_array(
-            AppendOperationLogEntry::schema(),
-            vec![
-                Series::new(vec![value.segment_location.as_str()]),
-                Series::new(vec![serde_json::to_string(&value.segment_info)?.as_str()]),
-            ],
-        ))
+        Ok(DataBlock::create(AppendOperationLogEntry::schema(), vec![
+            Series::from_data(vec![value.segment_location.as_str()]),
+            Series::from_data(vec![serde_json::to_string(&value.segment_info)?.as_str()]),
+        ]))
     }
 }
 
@@ -82,8 +79,8 @@ impl TryFrom<&DataBlock> for AppendOperationLogEntry {
 
 impl AppendOperationLogEntry {
     fn parse_col(idx: usize, val: &DataBlock) -> common_exception::Result<String> {
-        let col = &val.column(idx).to_values()?[0];
-        if let DataValue::String(Some(v)) = col {
+        let col = &val.column(idx).to_values()[0];
+        if let DataValue::String(v) = col {
             Ok(String::from_utf8(v.clone())?)
         } else {
             Err(ErrorCode::LogicalError(format!(

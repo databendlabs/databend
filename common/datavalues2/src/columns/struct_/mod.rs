@@ -111,6 +111,27 @@ impl Column for StructColumn {
         })
     }
 
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        let values: Vec<Vec<ColumnRef>> = self
+            .values
+            .iter()
+            .map(|v| v.scatter(indices, scattered_size))
+            .collect();
+
+        let mut result = Vec::with_capacity(scattered_size);
+
+        for s in 0..scattered_size {
+            let mut arrays = Vec::with_capacity(self.values.len());
+            for value in values.iter() {
+                arrays.push(value[s].clone());
+            }
+            result.push(
+                Arc::new(StructColumn::from_data(arrays, self.data_type.clone())) as ColumnRef,
+            );
+        }
+        result
+    }
+
     fn get(&self, index: usize) -> DataValue {
         let values = self.values.iter().map(|v| v.get(index)).collect();
         DataValue::Struct(values)

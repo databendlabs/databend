@@ -59,6 +59,16 @@ impl DataValue {
         matches!(self, DataValue::Null)
     }
 
+    pub fn custom_display(&self, single_quote: bool) -> String {
+        let s = self.to_string();
+        if single_quote {
+            if let DataValue::String(_) = self {
+                return format!("'{}'", s);
+            }
+        }
+        s
+    }
+
     pub fn value_type(&self) -> ValueType {
         match self {
             DataValue::Null => ValueType::Null,
@@ -89,17 +99,42 @@ impl DataValue {
                 Int64Type::arc()
             }
             DataValue::UInt64(n) => {
-                if *n <= u8::MIN as u64 {
+                if *n <= u8::MAX as u64 {
                     return UInt8Type::arc();
                 }
-                if *n <= u16::MIN as u64 {
+                if *n <= u16::MAX as u64 {
                     return UInt16Type::arc();
                 }
-                if *n <= u32::MIN as u64 {
+                if *n <= u32::MAX as u64 {
                     return UInt32Type::arc();
                 }
                 UInt64Type::arc()
             }
+            DataValue::Float64(_) => Float64Type::arc(),
+            DataValue::String(_) => StringType::arc(),
+            DataValue::Array(x) => {
+                let inner_type = if x.is_empty() {
+                    UInt8Type::arc()
+                } else {
+                    x[0].data_type()
+                };
+                Arc::new(ArrayType::create(inner_type))
+            }
+            DataValue::Struct(x) => {
+                let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
+                let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
+                Arc::new(StructType::create(names, types))
+            }
+        }
+    }
+
+    // convert to maxialized data type
+    pub fn max_data_type(&self) -> DataTypePtr {
+        match self {
+            DataValue::Null => Arc::new(NullType {}),
+            DataValue::Boolean(_) => BooleanType::arc(),
+            DataValue::Int64(_) => Int64Type::arc(),
+            DataValue::UInt64(_) => UInt64Type::arc(),
             DataValue::Float64(_) => Float64Type::arc(),
             DataValue::String(_) => StringType::arc(),
             DataValue::Array(x) => {
@@ -131,10 +166,6 @@ impl DataValue {
     #[inline]
     pub fn is_unsigned_integer(&self) -> bool {
         matches!(self, DataValue::UInt64(_))
-    }
-
-    pub fn to_values(&self, size: usize) -> Result<Vec<DataValue>> {
-        Ok((0..size).map(|_| self.clone()).collect())
     }
 
     pub fn as_u64(&self) -> Result<u64> {
@@ -197,6 +228,24 @@ impl DataValue {
     pub fn as_const_column(&self, data_type: &DataTypePtr, size: usize) -> Result<ColumnRef> {
         data_type.create_constant_column(self, size)
     }
+
+    #[allow(clippy::needless_late_init)]
+    pub fn try_from_literal(literal: &str, radix: Option<u32>) -> Result<DataValue> {
+        let radix = radix.unwrap_or(10);
+        let ret = if literal.starts_with(char::from_u32(45).unwrap()) {
+            match i64::from_str_radix(literal, radix) {
+                Ok(n) => DataValue::Int64(n),
+                Err(_) => DataValue::Float64(literal.parse::<f64>()?),
+            }
+        } else {
+            match u64::from_str_radix(literal, radix) {
+                Ok(n) => DataValue::UInt64(n),
+                Err(_) => DataValue::Float64(literal.parse::<f64>()?),
+            }
+        };
+
+        Ok(ret)
+    }
 }
 
 // Did not use std::convert:TryFrom
@@ -229,7 +278,7 @@ try_cast_data_value_to_std!(i32, as_i64);
 try_cast_data_value_to_std!(i64, as_i64);
 
 try_cast_data_value_to_std!(f32, as_f64);
-try_cast_data_value_to_std!(f64, as_i64);
+try_cast_data_value_to_std!(f64, as_f64);
 try_cast_data_value_to_std!(bool, as_bool);
 
 std_to_data_value!(Int64, i8, i64);

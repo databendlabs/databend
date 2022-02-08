@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRef;
+use common_datavalues2::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableMeta;
@@ -156,8 +156,13 @@ impl DfCreateTable {
                         }
                     }
                     let field = SQLCommon::make_data_type(&column.data_type).map(|data_type| {
-                        DataField::new(&column.name.value, data_type, nullable)
-                            .with_default_expr(default_expr)
+                        if nullable {
+                            DataField::new_nullable(&column.name.value, data_type)
+                                .with_default_expr(default_expr)
+                        } else {
+                            DataField::new(&column.name.value, data_type)
+                                .with_default_expr(default_expr)
+                        }
                     })?;
                     fields.push(field);
                 }

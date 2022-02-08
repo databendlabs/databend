@@ -34,7 +34,7 @@ impl ArrayColumn {
     pub fn new(array: LargeListArray) -> Self {
         let ty = array.data_type();
 
-        let data_type = if let ArrowType::List(f) = ty {
+        let data_type = if let ArrowType::LargeList(f) = ty {
             let ty = from_arrow_field(f);
             Arc::new(ArrayType::create(ty))
         } else {
@@ -123,6 +123,10 @@ impl Column for ArrayColumn {
                 values: self.values.clone(),
             })
         }
+    }
+
+    fn scatter(&self, _indices: &[usize], _scattered_size: usize) -> Vec<ColumnRef> {
+        todo!()
     }
 
     fn filter(&self, _filter: &BooleanColumn) -> ColumnRef {

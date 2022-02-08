@@ -14,7 +14,7 @@
 
 use common_base::tokio;
 use common_datablocks::assert_blocks_eq;
-use common_datavalues::DataValue;
+use common_datavalues2::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
 use databend_query::api::DatabendQueryFlightDispatcher;
@@ -63,7 +63,7 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
                     stage_id: stage_id.clone(),
                     plan: PlanParser::parse("SELECT number FROM numbers(5)", ctx.clone()).await?,
                     sinks: vec![stream_id.clone()],
-                    scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
+                    scatters_expression: Expression::create_literal(DataValue::UInt64(1)),
                 }),
             )
             .await?;
