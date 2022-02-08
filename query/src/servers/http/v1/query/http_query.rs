@@ -12,30 +12,65 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
 use common_base::tokio::sync::mpsc;
 use common_base::tokio::sync::Mutex as TokioMutex;
-use common_base::tokio::time::sleep;
+use common_base::tokio::sync::RwLock;
 use common_base::ProgressValues;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserInfo;
+use serde::Deserialize;
 
+use crate::servers::http::v1::query::http_query_manager::HttpQueryConfig;
 use crate::servers::http::v1::query::ExecuteState;
 use crate::servers::http::v1::query::ExecuteStateName;
 use crate::servers::http::v1::query::Executor;
-use crate::servers::http::v1::query::ExecutorRef;
-use crate::servers::http::v1::query::HttpQueryRequest;
 use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::ResultDataManager;
 use crate::servers::http::v1::query::Wait;
 use crate::sessions::SessionManager;
 
-const HTTP_QUERY_TIMEOUT: u64 = 10;
+#[derive(Deserialize, Debug)]
+pub struct HttpQueryRequest {
+    #[serde(default)]
+    pub session: HttpSessionConf,
+    pub sql: String,
+    #[serde(default)]
+    pub pagination: PaginationConf,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct PaginationConf {
+    pub(crate) wait_time: Option<i32>,
+}
+
+impl Default for PaginationConf {
+    fn default() -> Self {
+        PaginationConf { wait_time: Some(1) }
+    }
+}
+
+impl PaginationConf {
+    pub(crate) fn get_wait_type(&self) -> Wait {
+        let t = self.wait_time.unwrap_or(10);
+        match t.cmp(&0) {
+            Ordering::Greater => Wait::Deadline(Instant::now() + Duration::from_secs(t as u64)),
+            Ordering::Equal => Wait::Async,
+            Ordering::Less => Wait::Sync,
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, Default)]
+pub struct HttpSessionConf {
+    pub database: Option<String>,
+}
 
 pub struct ResponseInitialState {
     pub schema: Option<DataSchemaRef>,
@@ -58,17 +93,19 @@ pub struct HttpQuery {
     pub(crate) id: String,
     #[allow(dead_code)]
     request: HttpQueryRequest,
-    state: ExecutorRef,
+    state: Arc<RwLock<Executor>>,
     data: Arc<TokioMutex<ResultDataManager>>,
-    timeout: Arc<TokioMutex<Option<Instant>>>,
+    config: HttpQueryConfig,
+    expire_at: Arc<TokioMutex<Option<Instant>>>,
 }
 
 impl HttpQuery {
     pub(crate) async fn try_create(
-        id: String,
+        id: &str,
         request: HttpQueryRequest,
         session_manager: &Arc<SessionManager>,
         user_info: &UserInfo,
+        config: HttpQueryConfig,
     ) -> Result<Arc<HttpQuery>> {
         //TODO(youngsofun): support config/set channel size
         let (block_tx, block_rx) = mpsc::channel(10);
@@ -77,24 +114,28 @@ impl HttpQuery {
             ExecuteState::try_create(&request, session_manager, user_info, block_tx).await?;
         let data = Arc::new(TokioMutex::new(ResultDataManager::new(schema, block_rx)));
         let query = HttpQuery {
-            id,
+            id: id.to_string(),
             request,
             state,
             data,
-            timeout: Arc::new(TokioMutex::new(None)),
+            config,
+            expire_at: Arc::new(TokioMutex::new(None)),
         };
         let query = Arc::new(query);
         Ok(query)
     }
 
+    pub fn is_async(&self) -> bool {
+        self.request.pagination.wait_time == Some(0)
+    }
+
     pub async fn get_response_page(
         &self,
         page_no: usize,
-        wait: &Wait,
         init: bool,
     ) -> Result<HttpQueryResponseInternal> {
         Ok(HttpQueryResponseInternal {
-            data: Some(self.get_page(page_no, wait).await?),
+            data: Some(self.get_page(page_no).await?),
             initial_state: if init {
                 Some(self.get_initial_state().await)
             } else {
@@ -131,9 +172,11 @@ impl HttpQuery {
         }
     }
 
-    async fn get_page(&self, page_no: usize, tp: &Wait) -> Result<ResponseData> {
+    async fn get_page(&self, page_no: usize) -> Result<ResponseData> {
         let mut data = self.data.lock().await;
-        let page = data.get_a_page(page_no, tp).await?;
+        let page = data
+            .get_a_page(page_no, &self.request.pagination.get_wait_type())
+            .await?;
         let response = ResponseData {
             page,
             next_page_no: data.next_page_no(),
@@ -151,24 +194,27 @@ impl HttpQuery {
         self.data.lock().await.block_rx.close();
     }
 
-    pub async fn update_timeout(&self) {
-        let mut t = self.timeout.lock().await;
-        *t = Some(Instant::now() + Duration::new(HTTP_QUERY_TIMEOUT, 0))
+    pub async fn clear_expire_time(&self) {
+        let mut t = self.expire_at.lock().await;
+        *t = None;
     }
 
-    pub async fn check_timeout(&self) -> bool {
-        let t = self.timeout.lock().await;
-        if let Some(t) = *t {
+    pub async fn update_expire_time(&self) {
+        let mut t = self.expire_at.lock().await;
+        *t = Some(Instant::now() + Duration::from_millis(self.config.result_timeout_millis));
+    }
+
+    pub async fn check_expire(&self) -> Option<Duration> {
+        let expire_at = self.expire_at.lock().await;
+        if let Some(expire_at) = *expire_at {
             let now = Instant::now();
-            if now >= t {
-                true
+            if now >= expire_at {
+                None
             } else {
-                sleep(t + Duration::from_secs(HTTP_QUERY_TIMEOUT) - now).await;
-                false
+                Some(expire_at - now)
             }
         } else {
-            sleep(Duration::from_secs(HTTP_QUERY_TIMEOUT)).await;
-            false
+            Some(Duration::from_millis(self.config.result_timeout_millis))
         }
     }
 }

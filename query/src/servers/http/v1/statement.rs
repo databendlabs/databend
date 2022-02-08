@@ -25,11 +25,10 @@ use poem::Endpoint;
 use poem::Route;
 use serde::Deserialize;
 
-use crate::servers::http::v1::query::HttpQuery;
-use crate::servers::http::v1::query::HttpQueryRequest;
-use crate::servers::http::v1::query::HttpSessionConf;
-use crate::servers::http::v1::query::Wait;
-use crate::servers::http::v1::QueryResponse;
+use super::query::HttpQueryRequest;
+use super::query::HttpSessionConf;
+use super::query::PaginationConf;
+use super::QueryResponse;
 use crate::sessions::SessionManager;
 
 #[derive(Deserialize)]
@@ -50,15 +49,21 @@ pub async fn statement_handler(
     let session = HttpSessionConf {
         database: params.db.filter(|x| !x.is_empty()),
     };
-    let req = HttpQueryRequest { sql, session };
-    let query = HttpQuery::try_create(query_id.clone(), req, session_manager, user_info.0).await;
-
+    let req = HttpQueryRequest {
+        sql,
+        session,
+        pagination: PaginationConf { wait_time: Some(0) },
+    };
+    let query = http_query_manager
+        .try_create_query(&query_id, req, session_manager, &user_info)
+        .await;
     match query {
         Ok(query) => {
             let resp = query
-                .get_response_page(0, &Wait::Sync, true)
+                .get_response_page(0, true)
                 .await
                 .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
+            http_query_manager.remove_query(&query_id).await;
             Ok(Json(QueryResponse::from_internal(query_id, resp)))
         }
         Err(e) => Ok(Json(QueryResponse::fail_to_start_sql(query_id, &e))),

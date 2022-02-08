@@ -30,7 +30,7 @@ use crate::servers::http::v1::JsonBlockRef;
 
 const TARGET_ROWS_PER_PAGE: usize = 10000;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Wait {
     Async,
     Sync,
