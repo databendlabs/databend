@@ -14,6 +14,8 @@
 
 use std::fs::File;
 use std::io::Read;
+use std::time::Duration;
+use std::time::Instant;
 
 use base64::encode_config;
 use base64::URL_SAFE_NO_PAD;
@@ -38,7 +40,6 @@ use jwt_simple::algorithms::RSAKeyPairLike;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::claims::NoCustomClaims;
 use jwt_simple::prelude::Clock;
-use jwt_simple::prelude::Duration;
 use poem::http::Method;
 use poem::http::StatusCode;
 use poem::Endpoint;
@@ -47,6 +48,7 @@ use poem::Request;
 use poem::Response;
 use poem::Route;
 use pretty_assertions::assert_eq;
+use tokio::time::sleep;
 
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
@@ -63,14 +65,6 @@ type EndpointType = HTTPSessionEndpoint<Route>;
 
 // TODO(youngsofun): add test for
 // 1. query fail after started
-
-pub fn get_page_uri(query_id: &str, page_no: usize, wait_time: u32) -> String {
-    format!(
-        "{}?wait_time={}",
-        make_page_uri(query_id, page_no),
-        wait_time
-    )
-}
 
 #[tokio::test]
 async fn test_simple_sql() -> Result<()> {
@@ -102,10 +96,10 @@ async fn test_bad_sql() -> Result<()> {
 #[tokio::test]
 async fn test_async() -> Result<()> {
     let ep = create_endpoint();
-    let sql = "select sleep(2)";
-    let json = serde_json::json!({"sql": sql.to_string()});
+    let sql = "select sleep(0.2)";
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time": 0}});
 
-    let (status, result) = post_json_to_endpoint(&ep, &json, 0).await?;
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK);
     let query_id = result.id;
     let next_uri = make_page_uri(&query_id, 0);
@@ -115,10 +109,11 @@ async fn test_async() -> Result<()> {
     assert!(result.stats.progress.is_some());
     assert!(result.schema.is_some());
     assert_eq!(result.state, ExecuteStateName::Running,);
+    sleep(Duration::from_millis(300)).await;
 
     // get page, support retry
     for _ in 1..3 {
-        let uri = get_page_uri(&query_id, 0, 3);
+        let uri = make_page_uri(&query_id, 0);
 
         let (status, result) = get_uri_checked(&ep, &uri).await?;
         assert_eq!(status, StatusCode::OK);
@@ -142,7 +137,7 @@ async fn test_async() -> Result<()> {
     assert_eq!(result.state, ExecuteStateName::Succeeded);
 
     // get page not expected
-    let uri = get_page_uri(&query_id, 1, 3);
+    let uri = make_page_uri(&query_id, 1);
     let response = get_uri(&ep, &uri).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let body = response.into_body().into_string().await.unwrap();
@@ -158,6 +153,39 @@ async fn test_async() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_result_timeout() -> Result<()> {
+    let session_manager = SessionManagerBuilder::create()
+        .http_handler_result_time_out(200u64)
+        .build()
+        .unwrap();
+    let ep = Route::new()
+        .nest("/v1/query", query_route())
+        .with(HTTPSessionMiddleware { session_manager });
+
+    let t0 = Instant::now();
+    let sql = "select sleep(0.1)";
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time": 0}});
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    assert_eq!(status, StatusCode::OK);
+    let query_id = result.id;
+    let next_uri = make_page_uri(&query_id, 0);
+    assert_eq!(result.next_uri, Some(next_uri.clone()));
+
+    println!("t0 {}", t0.elapsed().as_millis());
+    sleep(Duration::from_millis(110)).await;
+    println!("t1 {}", t0.elapsed().as_millis());
+    let response = get_uri(&ep, &next_uri).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    println!("t2 {}", t0.elapsed().as_millis());
+    sleep(std::time::Duration::from_millis(210)).await;
+    println!("t3 {}", t0.elapsed().as_millis());
+    let response = get_uri(&ep, &next_uri).await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    Ok(())
+}
+
 #[tokio::test]
 async fn test_multi_page() -> Result<()> {
     let ep = create_endpoint();
@@ -166,12 +194,12 @@ async fn test_multi_page() -> Result<()> {
     let num_parts = num_cpus::get();
     let sql = format!("select * from numbers({})", max_block_size * num_parts);
 
-    let json = serde_json::json!({"sql": sql.to_string()});
-    let (status, result) = post_json_to_endpoint(&ep, &json, 3).await?;
+    let json = serde_json::json!({"sql": sql.to_string(),  "pagination": {"wait_time": 3}});
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(result.data.len(), max_block_size);
     let query_id = result.id;
-    let mut next_uri = get_page_uri(&query_id, 1, 3);
+    let mut next_uri = make_page_uri(&query_id, 1);
 
     for p in 1..(num_parts + 1) {
         let (status, result) = get_uri_checked(&ep, &next_uri).await?;
@@ -183,9 +211,9 @@ async fn test_multi_page() -> Result<()> {
             assert_eq!(result.next_uri, None);
             assert_eq!(result.state, ExecuteStateName::Succeeded);
         } else {
+            next_uri = make_page_uri(&query_id, p + 1);
             assert_eq!(result.data.len(), 10000);
-            assert_eq!(result.next_uri, Some(make_page_uri(&query_id, p + 1)));
-            next_uri = get_page_uri(&query_id, p + 1, 3);
+            assert_eq!(result.next_uri, Some(next_uri.clone()));
         }
     }
     Ok(())
@@ -202,8 +230,8 @@ async fn test_insert() -> Result<()> {
     ];
 
     for (sql, data_len) in sqls {
-        let json = serde_json::json!({"sql": sql.to_string()});
-        let (status, result) = post_json_to_endpoint(&route, &json, 3).await?;
+        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time": 3}});
+        let (status, result) = post_json_to_endpoint(&route, &json).await?;
         assert_eq!(status, StatusCode::OK);
         assert!(result.error.is_none(), "{:?}", result.error);
         assert_eq!(result.data.len(), data_len);
@@ -248,8 +276,8 @@ async fn get_uri_checked(ep: &EndpointType, uri: &str) -> Result<(StatusCode, Qu
 }
 
 async fn post_sql(sql: &str, wait_time: i32) -> Result<(StatusCode, QueryResponse)> {
-    let json = serde_json::json!({"sql": sql.to_string()});
-    post_json(&json, wait_time).await
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time": wait_time}});
+    post_json(&json).await
 }
 
 pub fn create_endpoint() -> EndpointType {
@@ -259,12 +287,9 @@ pub fn create_endpoint() -> EndpointType {
         .with(HTTPSessionMiddleware { session_manager })
 }
 
-async fn post_json(
-    json: &serde_json::Value,
-    wait_time: i32,
-) -> Result<(StatusCode, QueryResponse)> {
+async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryResponse)> {
     let ep = create_endpoint();
-    post_json_to_endpoint(&ep, json, wait_time).await
+    post_json_to_endpoint(&ep, json).await
 }
 
 async fn post_sql_to_endpoint(
@@ -272,17 +297,15 @@ async fn post_sql_to_endpoint(
     sql: &str,
     wait_time: i32,
 ) -> Result<(StatusCode, QueryResponse)> {
-    let json = serde_json::json!({"sql": sql.to_string()});
-    post_json_to_endpoint(ep, &json, wait_time).await
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time": wait_time}});
+    post_json_to_endpoint(ep, &json).await
 }
 
 async fn post_json_to_endpoint(
     ep: &EndpointType,
     json: &serde_json::Value,
-    wait_time: i32,
 ) -> Result<(StatusCode, QueryResponse)> {
-    let path = "/v1/query";
-    let uri = format!("{}?wait_time={}", path, wait_time);
+    let uri = "/v1/query";
     let content_type = "application/json";
     let body = serde_json::to_vec(&json)?;
 
@@ -362,7 +385,7 @@ async fn test_auth_jwt() -> Result<()> {
     let now = Some(Clock::now_since_epoch());
     let claims = JWTClaims {
         issued_at: now,
-        expires_at: Some(now.unwrap() + Duration::from_secs(10)),
+        expires_at: Some(now.unwrap() + jwt_simple::prelude::Duration::from_secs(10)),
         invalid_before: now,
         audiences: None,
         issuer: None,
