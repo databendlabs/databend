@@ -22,14 +22,14 @@ use pretty_assertions::assert_eq;
 async fn test_pipeline_walker() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
-    static TEST_SELECT_QUERY: &str = "\
+    let query = "\
         SELECT sum(number + 1) + 2 AS sumx \
         FROM numbers_mt(80000) \
         WHERE (number + 1) = 4 \
         LIMIT 1\
     ";
 
-    let plan = PlanParser::parse(TEST_SELECT_QUERY, ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), query).await?;
     let pipeline_builder = PipelineBuilder::create(ctx);
     let pipeline = pipeline_builder.build(&plan)?;
 

@@ -25,8 +25,8 @@ async fn test_select_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
     {
-        static TEST_QUERY_1: &str = "select number from numbers_mt(10)";
-        let plan = PlanParser::parse(TEST_QUERY_1, ctx.clone()).await?;
+        let query = "select number from numbers_mt(10)";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan)?;
         assert_eq!(executor.name(), "SelectInterpreter");
 
@@ -55,8 +55,8 @@ async fn test_select_interpreter() -> Result<()> {
     }
 
     {
-        static TEST_QUERY_2: &str = "select 1 + 1, 2 + 2, 3 * 3, 4 * 4";
-        let plan = PlanParser::parse(TEST_QUERY_2, ctx.clone()).await?;
+        let query = "select 1 + 1, 2 + 2, 3 * 3, 4 * 4";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan)?;
         assert_eq!(executor.name(), "SelectInterpreter");
 

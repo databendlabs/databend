@@ -25,20 +25,20 @@ async fn interpreter_show_create_table_test() -> Result<()> {
 
     // Create table.
     {
-        static TEST_CREATE_QUERY: &str = "\
+        let query = "\
             CREATE TABLE default.a(\
                 a bigint, b int, c varchar(255), d smallint, e Date\
             ) Engine = Null COMMENT = 'test create'\
         ";
 
-        let plan = PlanParser::parse(TEST_CREATE_QUERY, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = executor.execute(None).await?;
     }
 
     // Show create table.
     {
-        let plan = PlanParser::parse("SHOW CREATE TABLE a", ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), "SHOW CREATE TABLE a").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowCreateTableInterpreter");
         let stream = executor.execute(None).await?;

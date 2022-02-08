@@ -25,20 +25,20 @@ async fn interpreter_describe_table_test() -> Result<()> {
 
     // Create table.
     {
-        static TEST_CREATE_QUERY: &str = "\
+        let query = "\
             CREATE TABLE default.a(\
                 a bigint, b int, c varchar(255), d smallint, e Date \
             ) Engine = Null\
         ";
 
-        let plan = PlanParser::parse(TEST_CREATE_QUERY, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = interpreter.execute(None).await?;
     }
 
     // describe table.
     {
-        let plan = PlanParser::parse("DESCRIBE a", ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), "DESCRIBE a").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DescribeTableInterpreter");
 

@@ -22,19 +22,19 @@ fn test_context_function_build_arg_from_ctx() -> Result<()> {
 
     // Ok.
     {
-        let args = ContextFunction::build_args_from_ctx("database", ctx.clone())?;
+        let args = ContextFunction::build_args_from_ctx(ctx.clone(), "database")?;
         assert_eq!("default", format!("{:?}", args[0]));
     }
 
     // Ok.
     {
-        let args = ContextFunction::build_args_from_ctx("current_user", ctx.clone())?;
+        let args = ContextFunction::build_args_from_ctx(ctx.clone(), "current_user")?;
         assert_eq!("'root'@'127.0.0.1'", format!("{:?}", args[0]));
     }
 
     // Error.
     {
-        let result = ContextFunction::build_args_from_ctx("databasexx", ctx).is_err();
+        let result = ContextFunction::build_args_from_ctx(ctx, "databasexx").is_err();
         assert!(result);
     }
 

@@ -154,17 +154,17 @@ impl ExecuteState {
     ) -> Result<(ExecutorRef, DataSchemaRef)> {
         let sql = &request.sql;
         let session = session_manager.create_session("http-statement")?;
-        let context = session.create_query_context().await?;
+        let ctx = session.create_query_context().await?;
         if let Some(db) = &request.session.database {
-            context.set_current_database(db.clone()).await?;
+            ctx.set_current_database(db.clone()).await?;
         };
-        context.attach_query_str(sql);
+        ctx.attach_query_str(sql);
         session.set_current_user(user_info.clone());
 
-        let plan = PlanParser::parse(sql, context.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), sql).await?;
         let schema = plan.schema();
 
-        let interpreter = InterpreterFactory::get(context.clone(), plan.clone())?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         // Write Start to query log table.
         let _ = interpreter
             .start()
@@ -172,16 +172,16 @@ impl ExecuteState {
             .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
 
         let data_stream = interpreter.execute(None).await?;
-        let mut data_stream = context.try_create_abortable(data_stream)?;
+        let mut data_stream = ctx.try_create_abortable(data_stream)?;
 
         let (abort_tx, mut abort_rx) = mpsc::channel(2);
-        context.attach_http_query(HttpQueryHandle {
+        ctx.attach_http_query(HttpQueryHandle {
             abort_sender: abort_tx,
         });
 
         let running_state = ExecuteRunning {
             session,
-            context: context.clone(),
+            context: ctx.clone(),
             interpreter: interpreter.clone(),
         };
         let executor = Arc::new(RwLock::new(Executor {
@@ -190,7 +190,7 @@ impl ExecuteState {
         }));
 
         let executor_clone = executor.clone();
-        context
+        ctx
             .try_spawn(async move {
                 loop {
                     if let Some(block_r) = data_stream.next().await {

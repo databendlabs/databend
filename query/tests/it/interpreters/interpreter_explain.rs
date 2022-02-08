@@ -23,12 +23,12 @@ use pretty_assertions::assert_eq;
 async fn test_explain_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
-    static TEST_QUERY: &str = "\
+    let query = "\
         EXPLAIN SELECT number FROM numbers_mt(10) \
         WHERE (number + 1) = 4 HAVING (number + 1) = 4\
     ";
 
-    let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), query).await?;
     let executor = InterpreterFactory::get(ctx, plan)?;
     assert_eq!(executor.name(), "ExplainInterpreter");
 

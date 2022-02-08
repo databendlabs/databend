@@ -23,13 +23,13 @@ async fn test_create_table_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
     {
-        static TEST_CREATE_QUERY: &str = "\
+        let query = "\
         CREATE TABLE default.a(\
             a bigint not null default 3, b int default a + 3, c varchar(255), d smallint, e Date\
         ) Engine = Null\
     ";
 
-        let plan = PlanParser::parse(TEST_CREATE_QUERY, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let mut stream = interpreter.execute(None).await?;
         while let Some(_block) = stream.next().await {}
@@ -56,7 +56,7 @@ async fn test_create_table_interpreter() -> Result<()> {
             ) Engine = Null\
         ";
 
-        let plan = PlanParser::parse(TEST_CREATE_QUERY, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), TEST_CREATE_QUERY).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = executor.execute(None).await?;
     }
@@ -65,7 +65,7 @@ async fn test_create_table_interpreter() -> Result<()> {
         static TEST_CREATE_QUERY_SELECT: &str =
             "CREATE TABLE default.test_b(a varchar, x int) select b, a from default.test_a";
 
-        let plan = PlanParser::parse(TEST_CREATE_QUERY_SELECT, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), TEST_CREATE_QUERY_SELECT).await?;
         let interpreter = InterpreterFactory::get(ctx, plan.clone())?;
         let mut stream = interpreter.execute(None).await?;
         while let Some(_block) = stream.next().await {}
