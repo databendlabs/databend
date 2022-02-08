@@ -26,12 +26,12 @@ use tokio::io::AsyncSeekExt;
 
 use crate::error::Error;
 use crate::error::Result;
-use crate::ops::Object;
 use crate::ops::OpDelete;
 use crate::ops::OpRead;
 use crate::ops::OpStat;
 use crate::ops::OpWrite;
 use crate::Accessor;
+use crate::Object;
 use crate::Reader;
 
 #[derive(Default)]

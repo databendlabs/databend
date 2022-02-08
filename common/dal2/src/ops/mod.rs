@@ -15,17 +15,12 @@
 mod header;
 pub use header::HeaderRange;
 
-pub use crate::object::Object;
-
 // Supported operations
 mod read;
 pub use read::OpRead;
-
 mod write;
 pub use write::OpWrite;
-
 mod stat;
 pub use stat::OpStat;
-
 mod delete;
 pub use delete::OpDelete;

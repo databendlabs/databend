@@ -18,11 +18,11 @@ use async_trait::async_trait;
 use futures::AsyncRead;
 
 use crate::error::Result;
-use crate::ops::Object;
 use crate::ops::OpDelete;
 use crate::ops::OpRead;
 use crate::ops::OpStat;
 use crate::ops::OpWrite;
+use crate::Object;
 
 pub type Reader = Box<dyn AsyncRead + Unpin + Send>;
 
