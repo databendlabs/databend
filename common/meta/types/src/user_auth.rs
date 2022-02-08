@@ -13,10 +13,9 @@
 // limitations under the License.
 use std::str::FromStr;
 
+use common_exception::ErrorCode;
 use sha2::Digest;
 use sha2::Sha256;
-
-use crate::MetaError;
 
 const NO_PASSWORD_STR: &str = "no_password";
 const PLAINTEXT_PASSWORD_STR: &str = "plaintext_password";
@@ -200,7 +199,7 @@ impl AuthInfo {
         salt: &[u8],
         input: &[u8],
         user_password_hash: &[u8],
-    ) -> Result<Vec<u8>, MetaError> {
+    ) -> Result<Vec<u8>, ErrorCode> {
         // SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1( password ) ) )
         let mut m = sha1::Sha1::new();
         m.update(salt);
@@ -208,9 +207,7 @@ impl AuthInfo {
 
         let result = m.digest().bytes();
         if input.len() != result.len() {
-            return Err(MetaError::SHA1CheckFailed(String::from(
-                "SHA1 check failed",
-            )));
+            return Err(ErrorCode::SHA1CheckFailed("SHA1 check failed"));
         }
         let mut s = Vec::with_capacity(result.len());
         for i in 0..result.len() {
@@ -219,7 +216,7 @@ impl AuthInfo {
         Ok(s)
     }
 
-    pub fn auth_mysql(&self, password_input: &[u8], salt: &[u8]) -> Result<bool, MetaError> {
+    pub fn auth_mysql(&self, password_input: &[u8], salt: &[u8]) -> Result<bool, ErrorCode> {
         match self {
             AuthInfo::None => Ok(true),
             AuthInfo::Password {
@@ -231,11 +228,11 @@ impl AuthInfo {
                     let password_sha1 = AuthInfo::restore_sha1_mysql(salt, password_input, p)?;
                     Ok(*p == calc_sha1(&password_sha1))
                 }
-                PasswordHashMethod::Sha256 => Err(MetaError::AuthenticateFailure(String::from(
+                PasswordHashMethod::Sha256 => Err(ErrorCode::AuthenticateFailure(
                     "login with sha256_password user for mysql protocol not supported yet.",
-                ))),
+                )),
             },
-            _ => Err(MetaError::AuthenticateFailure(format!(
+            _ => Err(ErrorCode::AuthenticateFailure(format!(
                 "user require auth type {}",
                 self.get_type().to_str()
             ))),

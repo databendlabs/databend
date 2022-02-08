@@ -69,10 +69,7 @@ impl From<MetaStorageError> for ErrorCode {
     fn from(e: MetaStorageError) -> Self {
         match e {
             MetaStorageError::ErrorCode(err_code) => err_code.into(),
-            _ => {
-                //println!("MetaStorageError:{:?}", e);
-                ErrorCode::MetaServiceError(e.to_string())
-            }
+            _ => ErrorCode::MetaStorageError(e.to_string()),
         }
     }
 }

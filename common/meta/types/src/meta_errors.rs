@@ -104,12 +104,6 @@ pub enum MetaError {
     IllegalRoleInfoFormat(String),
 
     #[error("{0}")]
-    SHA1CheckFailed(String),
-
-    #[error("{0}")]
-    AuthenticateFailure(String),
-
-    #[error("{0}")]
     IllegalUserInfoFormat(String),
 
     #[error("{0}")]
