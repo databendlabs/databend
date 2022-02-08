@@ -61,7 +61,7 @@ impl FuseTable {
             .flatten();
         let da = ctx.get_storage_accessor()?;
         let arrow_schema = self.table_info.schema().to_arrow();
-        let table_schema = Arc::new(DataSchema::from(arrow_schema)); // TODO is this self.table_info?
+        let table_schema = self.table_info.schema(); // TODO is this self.table_info?
 
         let part_stream = futures::stream::iter(iter);
 
