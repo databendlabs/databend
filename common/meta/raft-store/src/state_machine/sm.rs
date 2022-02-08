@@ -830,11 +830,11 @@ impl StateMachine {
         tenant: &str,
         db_name: &str,
         txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<u64> {
+    ) -> MetaStorageResult<u64> {
         let txn_db_lookup = txn_tree.key_space::<DatabaseLookup>();
         let seq_dbi = txn_db_lookup
             .get(&(DatabaseLookupKey::new(tenant.to_string(), db_name.to_string())))?
-            .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
+            .ok_or_else(|| MetaStorageError::UnknownDatabase(db_name.to_string()))?;
 
         Ok(seq_dbi.data)
     }
@@ -920,11 +920,10 @@ impl StateMachine {
         }
     }
 
-    pub fn get_database_meta_by_id(&self, db_id: &u64) -> MetaResult<SeqV<DatabaseMeta>> {
-        let x = self
-            .databases()
-            .get(db_id)?
-            .ok_or_else(|| MetaError::UnknownDatabaseId(format!("database_id: {}", db_id)))?;
+    pub fn get_database_meta_by_id(&self, db_id: &u64) -> MetaStorageResult<SeqV<DatabaseMeta>> {
+        let x = self.databases().get(db_id)?.ok_or_else(|| {
+            MetaStorageError::UnknownDatabaseId(format!("database_id: {}", db_id))
+        })?;
         Ok(x)
     }
 

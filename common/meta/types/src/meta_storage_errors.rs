@@ -15,7 +15,6 @@
 use std::fmt::Display;
 
 use common_exception::ErrorCode;
-use common_exception::SerializedError;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::Error as SledError;
@@ -28,9 +27,6 @@ pub enum MetaStorageError {
     // type to represent serialize errors
     #[error("{0}")]
     SerializeError(String),
-
-    #[error(transparent)]
-    ErrorCode(#[from] SerializedError),
 
     #[error("{0}")]
     BadBytes(String),
@@ -49,6 +45,12 @@ pub enum MetaStorageError {
 
     #[error("{0}")]
     MetaSrvError(String),
+
+    #[error("{0}")]
+    UnknownDatabase(String),
+
+    #[error("{0}")]
+    UnknownDatabaseId(String),
 }
 
 pub type MetaStorageResult<T> = std::result::Result<T, MetaStorageError>;
@@ -59,18 +61,9 @@ impl From<MetaError> for MetaStorageError {
     }
 }
 
-impl From<ErrorCode> for MetaStorageError {
-    fn from(e: ErrorCode) -> Self {
-        MetaStorageError::ErrorCode(SerializedError::from(e))
-    }
-}
-
 impl From<MetaStorageError> for ErrorCode {
     fn from(e: MetaStorageError) -> Self {
-        match e {
-            MetaStorageError::ErrorCode(err_code) => err_code.into(),
-            _ => ErrorCode::MetaStorageError(e.to_string()),
-        }
+        ErrorCode::MetaStorageError(e.to_string())
     }
 }
 

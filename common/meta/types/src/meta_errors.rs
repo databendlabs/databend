@@ -74,12 +74,6 @@ pub enum MetaError {
     BadAddressFormat(String),
 
     #[error("{0}")]
-    UnknownDatabase(String),
-
-    #[error("{0}")]
-    UnknownDatabaseId(String),
-
-    #[error("{0}")]
     UnknownTable(String),
 
     #[error("{0}")]
