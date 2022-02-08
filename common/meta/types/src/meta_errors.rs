@@ -74,9 +74,6 @@ pub enum MetaError {
     BadAddressFormat(String),
 
     #[error("{0}")]
-    MetaSrvError(String),
-
-    #[error("{0}")]
     ConcurrentSnapshotInstall(String),
 
     #[error("{0}")]

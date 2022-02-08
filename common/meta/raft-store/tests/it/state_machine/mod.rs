@@ -300,7 +300,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
             let err = r.unwrap_err();
 
             assert_eq!(
-                MetaStorageError::MetaSrvError(String::from("metasrv error: table_id:0")),
+                MetaStorageError::UnknownTableId(String::from("table_id:0")),
                 err
             );
 

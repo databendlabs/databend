@@ -142,7 +142,7 @@ build_exceptions! {
     // Meta service does not work.
     MetaServiceError(2001),
     InvalidConfig(2002),
-    MetaStorageError(2001),
+    MetaStorageError(2003),
 
     TableVersionMismatched(2009),
     OCCRetryFailure(2011),

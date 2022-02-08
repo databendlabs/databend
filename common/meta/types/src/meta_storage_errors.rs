@@ -39,9 +39,6 @@ pub enum MetaStorageError {
     TransactionError(String),
 
     #[error("{0}")]
-    MetaSrvError(String),
-
-    #[error("{0}")]
     UnknownDatabase(String),
 
     #[error("{0}")]
