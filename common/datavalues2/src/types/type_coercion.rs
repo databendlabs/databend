@@ -380,7 +380,8 @@ pub fn merge_types(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Result<Dat
     if lhs_type.is_nullable() || rhs_type.is_nullable() {
         let lhs_type = remove_nullable(lhs_type);
         let rhs_type = remove_nullable(rhs_type);
-        return merge_types(&lhs_type, &rhs_type);
+        let merge_types = merge_types(&lhs_type, &rhs_type)?;
+        return Ok(wrap_nullable(&merge_types));
     }
 
     let lhs_id = lhs_type.data_type_id();

@@ -21,9 +21,13 @@ use crate::prelude::*;
 
 impl Series {
     pub fn fixed_hash(column: &ColumnRef, ptr: *mut u8, step: usize) -> Result<()> {
-        let type_id = column.data_type_id();
+        let column = column.convert_full_column();
+        // TODO support nullable
+        let column = Series::remove_nullable(&column);
+        let type_id = column.data_type_id().to_physical_type();
+
         with_match_scalar_type!(type_id, |$T| {
-            let col: &<$T as Scalar>::ColumnType = Series::check_get(column)?;
+            let col: &<$T as Scalar>::ColumnType = Series::check_get(&column)?;
             GroupHash::fixed_hash(col, ptr, step)
         }, {
             Err(ErrorCode::BadDataValueType(
@@ -33,9 +37,13 @@ impl Series {
     }
 
     pub fn serialize(column: &ColumnRef, vec: &mut Vec<Vec<u8>>) -> Result<()> {
-        let type_id = column.data_type_id();
+        let column = column.convert_full_column();
+        // TODO support nullable
+        let column = Series::remove_nullable(&column);
+        let type_id = column.data_type_id().to_physical_type();
+
         with_match_scalar_type!(type_id, |$T| {
-            let col: &<$T as Scalar>::ColumnType = Series::check_get(column)?;
+            let col: &<$T as Scalar>::ColumnType = Series::check_get(&column)?;
             GroupHash::serialize(col, vec)
         }, {
              Err(ErrorCode::BadDataValueType(

@@ -30,6 +30,7 @@ use common_exception::Result;
 use dyn_clone::DynClone;
 
 use super::Function;
+use super::Function2Adapter;
 use super::Monotonicity;
 use super::Monotonicity2;
 
@@ -152,7 +153,8 @@ pub struct Function1Convertor {
 
 impl Function1Convertor {
     pub fn create(inner: Box<dyn Function>) -> Box<dyn Function2> {
-        Box::new(Self { inner })
+        let inner = Box::new(Self { inner });
+        Function2Adapter::create(inner)
     }
 }
 impl Function2 for Function1Convertor {
@@ -198,6 +200,7 @@ impl Function2 for Function1Convertor {
             .iter()
             .map(convert2_old_column_with_field)
             .collect::<Vec<_>>();
+
         let col = self.inner.eval(&columns, input_rows)?;
 
         let col = DataColumnWithField::new(col, data_field);
@@ -216,7 +219,7 @@ impl Function2 for Function1Convertor {
     }
 
     fn passthrough_constant(&self) -> bool {
-        false
+        self.inner.passthrough_constant()
     }
 }
 

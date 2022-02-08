@@ -24,7 +24,6 @@ use common_datavalues2::ColumnViewer;
 use common_datavalues2::ColumnsWithField;
 use common_datavalues2::DataTypePtr;
 use common_datavalues2::DataValue;
-use common_datavalues2::Float64Type;
 use common_datavalues2::NullType;
 use common_datavalues2::NullableColumnBuilder;
 use common_datavalues2::NullableType;

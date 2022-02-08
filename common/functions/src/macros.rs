@@ -11,34 +11,3 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-#[macro_export]
-macro_rules! with_match_scalar_type {
-    (
-    $key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt
-) => {{
-        macro_rules! __with_ty__ {
-            ( $_ $T:ident ) => {
-                $body
-            };
-        }
-        use common_datavalues2::prelude::TypeID::*;
-
-        match $key_type {
-            Int8 => __with_ty__! { i8 },
-            Int16 => __with_ty__! { i16 },
-            Int32 | TypeID::Date32 => __with_ty__! { i32 },
-            Int64 => __with_ty__! { i64 },
-            UInt8 => __with_ty__! { u8 },
-            UInt16 | TypeID::Date16 => __with_ty__! { u16 },
-            UInt32 | TypeID::DateTime32 => __with_ty__! { u32 },
-            UInt64 | TypeID::DateTime64 => __with_ty__! { u64 },
-            Float32 => __with_ty__! { f32 },
-            Float64 => __with_ty__! { f64 },
-            String => __with_ty__! { Vu8 },
-            Boolean => __with_ty__! { bool },
-
-            _ => $nbody,
-        }
-    }};
-}

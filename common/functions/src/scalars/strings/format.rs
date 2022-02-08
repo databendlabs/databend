@@ -135,7 +135,7 @@ impl Function for FormatFunction {
     }
 
     fn passthrough_null(&self) -> bool {
-        false
+        true
     }
 }
 

@@ -35,7 +35,7 @@ impl Series {
 
             Ok(Arc::new(NullableColumn::new(inner_result, validity_result)))
         } else {
-            let type_id = column.data_type_id();
+            let type_id = column.data_type_id().to_physical_type();
 
             with_match_scalar_type!(type_id, |$T| {
                 let col: &<$T as Scalar>::ColumnType = Series::check_get(column)?;

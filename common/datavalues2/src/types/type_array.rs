@@ -111,7 +111,7 @@ impl DataType for ArrayType {
 
     fn arrow_type(&self) -> ArrowType {
         let field = Field::new("list".to_string(), self.inner.arrow_type(), false);
-        ArrowType::List(Box::new(field))
+        ArrowType::LargeList(Box::new(field))
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {

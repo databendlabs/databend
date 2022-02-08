@@ -25,6 +25,7 @@ pub struct ConstColumn {
     column: ColumnRef,
 }
 
+// const(nullable) is ok, nullable(const) is not allowed
 impl ConstColumn {
     pub fn new(column: ColumnRef, length: usize) -> Self {
         // Avoid const recursion.

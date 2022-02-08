@@ -114,8 +114,31 @@ impl DataType for StructType {
         todo!()
     }
 
-    fn create_column(&self, _data: &[DataValue]) -> common_exception::Result<ColumnRef> {
-        todo!()
+    fn create_column(&self, datas: &[DataValue]) -> common_exception::Result<ColumnRef> {
+        let mut values = Vec::with_capacity(self.types.len());
+        for _ in 0..self.types.len() {
+            values.push(Vec::<DataValue>::with_capacity(datas.len()));
+        }
+
+        for data in datas.iter() {
+            if let DataValue::Struct(value) = data {
+                debug_assert!(value.len() == self.types.len());
+                for (i, v) in value.iter().enumerate() {
+                    values[i].push(v.clone());
+                }
+            }
+            return Result::Err(ErrorCode::BadDataValueType(format!(
+                "Unexpected type:{:?}, expect to be struct",
+                data.value_type()
+            )));
+        }
+
+        let mut columns = Vec::with_capacity(self.types.len());
+        for (idx, value) in values.iter().enumerate() {
+            columns.push(self.types[idx].create_column(value)?);
+        }
+
+        Ok(StructColumn::from_data(columns, Arc::new(self.clone())).arc())
     }
 }
 

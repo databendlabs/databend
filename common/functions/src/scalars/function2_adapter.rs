@@ -179,6 +179,10 @@ impl Function2 for Function2Adapter {
     fn passthrough_null(&self) -> bool {
         self.inner.passthrough_null()
     }
+
+    fn passthrough_constant(&self) -> bool {
+        self.inner.passthrough_constant()
+    }
 }
 
 impl std::fmt::Display for Function2Adapter {

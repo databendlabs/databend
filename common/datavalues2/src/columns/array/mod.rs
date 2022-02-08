@@ -34,7 +34,7 @@ impl ArrayColumn {
     pub fn new(array: LargeListArray) -> Self {
         let ty = array.data_type();
 
-        let data_type = if let ArrowType::List(f) = ty {
+        let data_type = if let ArrowType::LargeList(f) = ty {
             let ty = from_arrow_field(f);
             Arc::new(ArrayType::create(ty))
         } else {

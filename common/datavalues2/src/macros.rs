@@ -115,18 +115,18 @@ macro_rules! with_match_physical_primitive_type {(
     $key_type:expr, | $_:tt $T:ident | $($body:tt)*
 ) => ({
     macro_rules! __with_ty__ {( $_ $T:ident ) => ( $($body)* )}
-    use crate::PrimitiveTypeID::*;
     match $key_type {
-        Int8 => __with_ty__! { i8 },
-        Int16 => __with_ty__! { i16 },
-        Int32 => __with_ty__! { i32 },
-        Int64 => __with_ty__! { i64 },
-        UInt8 => __with_ty__! { u8 },
-        UInt16 => __with_ty__! { u16 },
-        UInt32 => __with_ty__! { u32 },
-        UInt64 => __with_ty__! { u64 },
-        Float32 => __with_ty__! { f32 },
-        Float64 => __with_ty__! { f64 },
+        PhysicalTypeID::Int8 => __with_ty__! { i8 },
+        PhysicalTypeID::Int16 => __with_ty__! { i16 },
+        PhysicalTypeID::Int32 => __with_ty__! { i32 },
+        PhysicalTypeID::Int64 => __with_ty__! { i64 },
+        PhysicalTypeID::UInt8 => __with_ty__! { u8 },
+        PhysicalTypeID::UInt16 => __with_ty__! { u16 },
+        PhysicalTypeID::UInt32 => __with_ty__! { u32 },
+        PhysicalTypeID::UInt64 => __with_ty__! { u64 },
+        PhysicalTypeID::Float32 => __with_ty__! { f32 },
+        PhysicalTypeID::Float64 => __with_ty__! { f64 },
+        _ => unreachable!()
     }
 })}
 
@@ -141,19 +141,22 @@ macro_rules! with_match_scalar_type {
             };
         }
 
+        type C = Vec<u8>;
+
         match $key_type {
-            TypeID::Int8 => __with_ty__! { i8 },
-            TypeID::Int16 => __with_ty__! { i16 },
-            TypeID::Int32 | TypeID::Date32 => __with_ty__! { i32 },
-            TypeID::Int64 => __with_ty__! { i64 },
-            TypeID::UInt8 => __with_ty__! { u8 },
-            TypeID::UInt16 | TypeID::Date16 => __with_ty__! { u16 },
-            TypeID::UInt32 | TypeID::DateTime32 => __with_ty__! { u32 },
-            TypeID::UInt64 | TypeID::DateTime64 => __with_ty__! { u64 },
-            TypeID::Float32 => __with_ty__! { f32 },
-            TypeID::Float64 => __with_ty__! { f64 },
-            TypeID::String => __with_ty__! { Vu8 },
-            TypeID::Boolean => __with_ty__! { bool },
+            PhysicalTypeID::Boolean => __with_ty__! { bool },
+            PhysicalTypeID::String => __with_ty__! { C },
+
+            PhysicalTypeID::Int8 => __with_ty__! { i8 },
+            PhysicalTypeID::Int16 => __with_ty__! { i16 },
+            PhysicalTypeID::Int32 => __with_ty__! { i32 },
+            PhysicalTypeID::Int64 => __with_ty__! { i64 },
+            PhysicalTypeID::UInt8 => __with_ty__! { u8 },
+            PhysicalTypeID::UInt16 => __with_ty__! { u16 },
+            PhysicalTypeID::UInt32 => __with_ty__! { u32 },
+            PhysicalTypeID::UInt64 => __with_ty__! { u64 },
+            PhysicalTypeID::Float32 => __with_ty__! { f32 },
+            PhysicalTypeID::Float64 => __with_ty__! { f64 },
 
             _ => $nbody,
         }
@@ -165,24 +168,22 @@ macro_rules! with_match_scalar_types_error {(
     $key_type:expr, | $_:tt $T:ident | $($body:tt)*
 ) => ({
     macro_rules! __with_ty__ {( $_ $T:ident ) => ( $($body)* )}
-    use common_datavalues2::PhysicalTypeID::*;
-    use common_datavalues2::PrimitiveTypeID;
     use common_exception::ErrorCode;
     type C = Vec<u8>;
     match $key_type {
         PhysicalTypeID::Boolean => __with_ty__! { bool },
        	PhysicalTypeID::String => __with_ty__! { C },
 
-       	Primitive(PrimitiveTypeID::Int8) => __with_ty__! { i8 },
-        Primitive(PrimitiveTypeID::Int16) => __with_ty__! { i16 },
-        Primitive(PrimitiveTypeID::Int32) => __with_ty__! { i32 },
-        Primitive(PrimitiveTypeID::Int64) => __with_ty__! { i64 },
-        Primitive(PrimitiveTypeID::UInt8) => __with_ty__! { u8 },
-        Primitive(PrimitiveTypeID::UInt16) => __with_ty__! { u16 },
-        Primitive(PrimitiveTypeID::UInt32) => __with_ty__! { u32 },
-        Primitive(PrimitiveTypeID::UInt64) => __with_ty__! { u64 },
-        Primitive(PrimitiveTypeID::Float32) => __with_ty__! { f32 },
-        Primitive(PrimitiveTypeID::Float64) => __with_ty__! { f64 },
+       	PhysicalTypeID::Int8 => __with_ty__! { i8 },
+        PhysicalTypeID::Int16 => __with_ty__! { i16 },
+        PhysicalTypeID::Int32 => __with_ty__! { i32 },
+        PhysicalTypeID::Int64 => __with_ty__! { i64 },
+        PhysicalTypeID::UInt8 => __with_ty__! { u8 },
+        PhysicalTypeID::UInt16 => __with_ty__! { u16 },
+        PhysicalTypeID::UInt32 => __with_ty__! { u32 },
+        PhysicalTypeID::UInt64 => __with_ty__! { u64 },
+        PhysicalTypeID::Float32 => __with_ty__! { f32 },
+        PhysicalTypeID::Float64 => __with_ty__! { f64 },
         v => return Err(ErrorCode::BadDataValueType(
             format!("Ops is not support on datatype: {:?}",v)
         ))
@@ -203,12 +204,12 @@ macro_rules! with_match_primitive_type_id {
         match $key_type {
             TypeID::Int8 => __with_ty__! { i8 },
             TypeID::Int16 => __with_ty__! { i16 },
-            TypeID::Int32 | TypeID::Date32 => __with_ty__! { i32 },
+            TypeID::Int32 => __with_ty__! { i32 },
             TypeID::Int64 => __with_ty__! { i64 },
             TypeID::UInt8 => __with_ty__! { u8 },
-            TypeID::UInt16 | TypeID::Date16 => __with_ty__! { u16 },
-            TypeID::UInt32 | TypeID::DateTime32 => __with_ty__! { u32 },
-            TypeID::UInt64 | TypeID::DateTime64 => __with_ty__! { u64 },
+            TypeID::UInt16 => __with_ty__! { u16 },
+            TypeID::UInt32 => __with_ty__! { u32 },
+            TypeID::UInt64 => __with_ty__! { u64 },
             TypeID::Float32 => __with_ty__! { f32 },
             TypeID::Float64 => __with_ty__! { f64 },
 

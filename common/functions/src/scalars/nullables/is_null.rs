@@ -14,15 +14,12 @@
 
 use std::fmt;
 
-use common_datavalues::columns::DataColumn;
-use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataType;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 #[derive(Clone)]
 pub struct IsNullFunction {
@@ -30,14 +27,14 @@ pub struct IsNullFunction {
 }
 
 impl IsNullFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(IsNullFunction {
             _display_name: "isNull".to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("isnotnull")
@@ -47,18 +44,39 @@ impl IsNullFunction {
     }
 }
 
-impl Function for IsNullFunction {
+impl Function2 for IsNullFunction {
     fn name(&self) -> &str {
         "IsNullFunction"
     }
 
-    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::Boolean;
-        Ok(DataTypeAndNullable::create(&dt, false))
+    fn return_type(
+        &self,
+        _args: &[&common_datavalues2::DataTypePtr],
+    ) -> Result<common_datavalues2::DataTypePtr> {
+        Ok(bool::to_data_type())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        columns[0].column().is_null()
+    fn eval(
+        &self,
+        columns: &common_datavalues2::ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<common_datavalues2::ColumnRef> {
+        let (all_null, validity) = columns[0].column().validity();
+        if all_null {
+            return Ok(ConstColumn::new(Series::from_data(vec![true]), input_rows).arc());
+        }
+
+        match validity {
+            Some(validity) => {
+                let iter = validity.iter().map(|v| !v);
+                Ok(BooleanColumn::from_iterator(iter).arc())
+            }
+            None => Ok(ConstColumn::new(Series::from_data(vec![false]), input_rows).arc()),
+        }
+    }
+
+    fn passthrough_null(&self) -> bool {
+        false
     }
 }
 
