@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(hash_raw_entry)]
+use std::collections::HashMap;
+use std::sync::Arc;
 
-mod data_block;
-mod data_block_debug;
-mod kernels;
-mod memory;
+use common_infallible::RwLock;
 
-pub use data_block::DataBlock;
-pub use data_block_debug::*;
-pub use kernels::*;
-pub use memory::InMemoryData;
+use crate::DataBlock;
+
+/// Shared store to support memory tables.
+///
+/// Indexed by table id etc.
+pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;

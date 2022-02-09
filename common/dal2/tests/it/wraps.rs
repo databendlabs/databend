@@ -55,7 +55,7 @@ async fn callback_reader() {
 
 #[tokio::test]
 async fn test_seekable_reader() {
-    let f = Operator::new(fs::Backend::build().finish());
+    let f = Operator::new(fs::Backend::build().finish().unwrap());
 
     let path = format!("/tmp/{}", uuid::Uuid::new_v4());
 

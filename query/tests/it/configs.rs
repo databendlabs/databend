@@ -226,7 +226,6 @@ fn test_fuse_commit_version() -> Result<()> {
 fn test_initial_dir() -> Result<()> {
     let mut conf = Config::default();
     conf.storage.storage_type = "disk".to_string();
-    conf.initial_dir()?;
 
     // Remove.
     if !conf.storage.disk.data_path.is_empty() {

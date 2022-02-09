@@ -324,7 +324,8 @@ impl QueryContext {
             }
             DalSchema::Fs => fs::Backend::build()
                 .root(&storage_conf.disk.data_path)
-                .finish(),
+                .finish()
+                .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?,
         };
 
         Ok(Operator::new(da).layer(self.shared.dal_ctx.clone()))

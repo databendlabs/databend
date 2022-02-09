@@ -50,11 +50,11 @@ impl Accessor for Test {
 #[tokio::test]
 async fn test_layer() {
     let test = Test {
-        inner: Arc::new(fs::Backend::build().finish()),
+        inner: Arc::new(fs::Backend::build().finish().unwrap()),
         deleted: Arc::new(Mutex::new(false)),
     };
 
-    let op = Operator::new(fs::Backend::build().finish()).layer(&test);
+    let op = Operator::new(fs::Backend::build().finish().unwrap()).layer(&test);
 
     op.delete("xxxxx").run().await.unwrap();
 

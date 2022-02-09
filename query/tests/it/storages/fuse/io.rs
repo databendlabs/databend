@@ -39,7 +39,8 @@ async fn test_fuse_table_block_appender() {
     let local_fs = Operator::new(
         fs::Backend::build()
             .root(tmp_dir.path().to_str().unwrap())
-            .finish(),
+            .finish()
+            .unwrap(),
     );
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
 

@@ -28,7 +28,6 @@ common-arrow = { path = "../common/arrow" }
 common-base = { path = "../common/base" }
 common-cache = { path = "../common/cache" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
-common-dal = { path = "../common/dal" }
 common-dal2 = { path = "../common/dal2" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues2 = { path = "../common/datavalues2" }

@@ -93,7 +93,8 @@ async fn test_parse_csvs() {
             let local = Operator::new(
                 fs::Backend::build()
                     .root(dir.path().to_str().unwrap())
-                    .finish(),
+                    .finish()
+                    .unwrap(),
             );
             let stream = local.read(name).run().await.unwrap();
             let mut csv_source =
@@ -149,7 +150,8 @@ async fn test_parse_csv2() {
     let local = Operator::new(
         fs::Backend::build()
             .root(dir.path().to_str().unwrap())
-            .finish(),
+            .finish()
+            .unwrap(),
     );
     let stream = local.read(name).run().await.unwrap();
     let mut csv_source = CsvSource::try_create(stream, schema, false, b',', b'\n', 10).unwrap();
@@ -231,7 +233,8 @@ async fn test_source_parquet() -> Result<()> {
     let local = Operator::new(
         fs::Backend::build()
             .root(dir.path().to_str().unwrap())
-            .finish(),
+            .finish()
+            .unwrap(),
     );
     let stream = SeekableReader::new(local, name, len);
     let stream = BufReader::with_capacity(4 * 1024 * 1024, stream);
