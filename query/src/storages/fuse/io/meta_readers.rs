@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::schema::FileMetaData;
-
 use common_dal2::readers::SeekableReader;
 use common_exception::ErrorCode;
 use common_exception::Result;

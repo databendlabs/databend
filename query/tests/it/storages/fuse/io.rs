@@ -16,15 +16,9 @@
 use std::sync::Arc;
 
 use common_base::tokio;
-
-
-
-
-
 use common_dal2::ops::OpWrite;
 use common_dal2::services::fs;
 use common_dal2::Accessor;
-
 use common_dal2::Operator;
 use common_dal2::Reader;
 use common_datablocks::DataBlock;
@@ -34,7 +28,6 @@ use common_exception::Result;
 use databend_query::storages::fuse::io::BlockRegulator;
 use databend_query::storages::fuse::io::BlockStreamWriter;
 use databend_query::storages::fuse::DEFAULT_CHUNK_BLOCK_NUM;
-
 use futures::StreamExt;
 use futures::TryStreamExt;
 use num::Integer;
