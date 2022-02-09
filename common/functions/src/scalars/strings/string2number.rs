@@ -80,11 +80,8 @@ where
         &self,
         args: &[&common_datavalues2::DataTypePtr],
     ) -> Result<common_datavalues2::DataTypePtr> {
-        // We allow string, numeric AND null as input
-        if args[0].data_type_id().is_string()
-            || args[0].data_type_id().is_numeric()
-            || args[0].data_type_id() == TypeID::Null
-        {
+        // We allow string AND null as input
+        if args[0].data_type_id().is_string() {
             Ok(R::to_data_type())
         } else {
             Err(ErrorCode::IllegalDataType(format!(
