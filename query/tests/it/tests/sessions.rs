@@ -72,6 +72,12 @@ impl SessionManagerBuilder {
         SessionManagerBuilder::create_with_conf(new_config)
     }
 
+    pub fn http_handler_result_time_out(self, value: impl Into<u64>) -> SessionManagerBuilder {
+        let mut new_config = self.config;
+        new_config.query.http_handler_result_timeout_millis = value.into();
+        SessionManagerBuilder::create_with_conf(new_config)
+    }
+
     pub fn http_handler_tls_server_key(self, value: impl Into<String>) -> SessionManagerBuilder {
         let mut new_config = self.config;
         new_config.query.http_handler_tls_server_key = value.into();

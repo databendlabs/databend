@@ -29,6 +29,8 @@ pub const QUERY_CLICKHOUSE_HANDLER_HOST: &str = "QUERY_CLICKHOUSE_HANDLER_HOST";
 pub const QUERY_CLICKHOUSE_HANDLER_PORT: &str = "QUERY_CLICKHOUSE_HANDLER_PORT";
 pub const QUERY_HTTP_HANDLER_HOST: &str = "QUERY_HTTP_HANDLER_HOST";
 pub const QUERY_HTTP_HANDLER_PORT: &str = "QUERY_HTTP_HANDLER_PORT";
+pub const QUERY_HTTP_HANDLER_RESULT_TIMEOUT_MILLIS: &str =
+    "QUERY_HTTP_HANDLER_RESULT_TIMEOUT_MILLIS";
 pub const QUERY_FLIGHT_API_ADDRESS: &str = "QUERY_FLIGHT_API_ADDRESS";
 pub const QUERY_HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
 pub const QUERY_METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
@@ -99,6 +101,9 @@ pub struct QueryConfig {
 
     #[clap(long, env = QUERY_HTTP_HANDLER_PORT, default_value = "8000")]
     pub http_handler_port: u16,
+
+    #[clap(long, env = QUERY_HTTP_HANDLER_RESULT_TIMEOUT_MILLIS, default_value = "10000")]
+    pub http_handler_result_timeout_millis: u64,
 
     #[clap(long, env = QUERY_FLIGHT_API_ADDRESS, default_value = "127.0.0.1:9090")]
     pub flight_api_address: String,
@@ -227,6 +232,7 @@ impl Default for QueryConfig {
             clickhouse_handler_port: 9000,
             http_handler_host: "127.0.0.1".to_string(),
             http_handler_port: 8000,
+            http_handler_result_timeout_millis: 10000,
             flight_api_address: "127.0.0.1:9090".to_string(),
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
@@ -361,6 +367,14 @@ impl QueryConfig {
             http_handler_tls_server_root_ca_cert,
             String,
             QUERY_HTTP_HANDLER_TLS_SERVER_ROOT_CA_CERT
+        );
+
+        env_helper!(
+            mut_config,
+            query,
+            http_handler_result_timeout_millis,
+            u64,
+            QUERY_HTTP_HANDLER_RESULT_TIMEOUT_MILLIS
         );
 
         // for query rpc server

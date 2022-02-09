@@ -35,7 +35,7 @@ async fn test_configs_table() -> Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
-    assert_eq!(block.num_rows(), 59);
+    assert_eq!(block.num_rows(), 60);
 
     let expected = vec![
         "+--------------------------------------+------------------+---------+-------------+",
@@ -57,6 +57,7 @@ async fn test_configs_table() -> Result<()> {
         "| http_api_address                     | 127.0.0.1:8080   | query   |             |",
         "| http_handler_host                    | 127.0.0.1        | query   |             |",
         "| http_handler_port                    | 8000             | query   |             |",
+        "| http_handler_result_timeout_millis   | 10000            | query   |             |",
         "| http_handler_tls_server_cert         |                  | query   |             |",
         "| http_handler_tls_server_key          |                  | query   |             |",
         "| http_handler_tls_server_root_ca_cert |                  | query   |             |",
