@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 
 use crate::sql::common::IndexType;
 use crate::storages::Table;
@@ -48,7 +48,7 @@ impl TableEntry {
 pub struct ColumnEntry {
     pub column_index: IndexType,
     pub name: String,
-    pub data_type: DataType,
+    pub data_type: DataTypePtr,
     pub nullable: bool,
 
     // Table index of column entry. None if column is derived from a subquery.
@@ -58,7 +58,7 @@ pub struct ColumnEntry {
 impl ColumnEntry {
     pub fn create(
         name: String,
-        data_type: DataType,
+        data_type: DataTypePtr,
         nullable: bool,
         column_index: IndexType,
         table_index: Option<IndexType>,
@@ -128,7 +128,7 @@ impl Metadata {
     pub fn add_column(
         &mut self,
         name: String,
-        data_type: DataType,
+        data_type: DataTypePtr,
         nullable: bool,
         table_index: IndexType,
     ) -> IndexType {
@@ -142,7 +142,7 @@ impl Metadata {
     pub fn add_derived_column(
         &mut self,
         name: String,
-        data_type: DataType,
+        data_type: DataTypePtr,
         nullable: bool,
     ) -> IndexType {
         let column_index = self.next_column_index();

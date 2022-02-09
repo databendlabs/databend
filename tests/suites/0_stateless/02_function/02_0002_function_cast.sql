@@ -10,17 +10,18 @@ SELECT toTypeName(toUInt32('64')) FROM numbers_mt(1);
 SELECT CAST(1 + 1, Float64);
 SELECT CAST(CAST(1 + 1 + 1, String) AS Int8);
 
-SELECT CAST(Null as Int64);
-SELECT CAST(Null as Boolean);
-SELECT CAST(Null as Varchar);
+SELECT CAST(Null as Int64); -- {ErrorCode 1010}
+SELECT CAST(Null as Varchar); -- {ErrorCode 1010}
 
+-- Null can only be cast successfully to type boolean(false)
+SELECT CAST(Null as Boolean);
 SELECT CAST('33' as signed) = 33;
 SELECT CAST('33' as unsigned) = 33;
-SELECT CAST('-33aa' as signed) = 33;
-SELECT CAST('33 aa' as unsigned) = 33;
-SELECT CAST('-33' as unsigned) = 0;
-SELECT CAST('aa' as unsigned) = 0;
-SELECT CAST('aa' as Float64) = 0;
+SELECT CAST('-33aa' as signed) = 33; -- {ErrorCode 1010}
+SELECT CAST('33 aa' as unsigned) = 33; -- {ErrorCode 1010}
+SELECT CAST('-33' as unsigned) = 0; -- {ErrorCode 1010}
+SELECT CAST('aa' as unsigned) = 0; -- {ErrorCode 1010}
+SELECT CAST('aa' as Float64) = 0; -- {ErrorCode 1010}
 
 SELECT '===DATE/DATETIME===';
 SELECT  toDateTime('2021-03-05 01:01:01') + 1 = toDateTime('2021-03-05 01:01:02');

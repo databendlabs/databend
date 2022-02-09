@@ -38,8 +38,10 @@ pub trait TypeDeserializer: Send + Sync {
     fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()>;
     /// If error occurrs, append a null by default
     fn de_text(&mut self, reader: &[u8]) -> Result<()>;
+
     fn de_null(&mut self) -> bool {
         false
     }
+
     fn finish_to_column(&mut self) -> ColumnRef;
 }

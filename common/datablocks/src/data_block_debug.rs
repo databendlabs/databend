@@ -74,7 +74,7 @@ pub fn assert_blocks_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, blo
     );
 }
 
-///! Convert a series of record batches into a table
+///! Convert a column of record batches into a table
 fn create_table(results: &[DataBlock]) -> Result<Table> {
     let mut table = Table::new();
     table.load_preset("||--+-++|    ++++++");
@@ -95,8 +95,8 @@ fn create_table(results: &[DataBlock]) -> Result<Table> {
         for row in 0..batch.num_rows() {
             let mut cells = Vec::new();
             for col in 0..batch.num_columns() {
-                let series = batch.column(col).to_array()?;
-                let str = format!("{}", series.try_get(row)?);
+                let column = batch.column(col);
+                let str = format!("{}", column.get_checked(row)?);
                 cells.push(Cell::new(&str));
             }
             table.add_row(cells);

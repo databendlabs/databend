@@ -17,11 +17,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableIdent;
@@ -60,13 +56,13 @@ impl FuseHistoryTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("snapshot_id", DataType::String, false),
-            DataField::new("prev_snapshot_id", DataType::String, true),
-            DataField::new("segment_count", DataType::UInt64, false),
-            DataField::new("block_count", DataType::UInt64, false),
-            DataField::new("row_count", DataType::UInt64, false),
-            DataField::new("bytes_uncompressed", DataType::UInt64, false),
-            DataField::new("bytes_compressed", DataType::UInt64, false),
+            DataField::new("snapshot_id", Vu8::to_data_type()),
+            DataField::new_nullable("prev_snapshot_id", Vu8::to_data_type()),
+            DataField::new("segment_count", u64::to_data_type()),
+            DataField::new("block_count", u64::to_data_type()),
+            DataField::new("row_count", u64::to_data_type()),
+            DataField::new("bytes_uncompressed", u64::to_data_type()),
+            DataField::new("bytes_compressed", u64::to_data_type()),
         ]);
 
         let (arg_database_name, arg_table_name) = parse_func_history_args(&table_args)?;
@@ -113,14 +109,14 @@ impl FuseHistoryTable {
             uncompressed.push(s.summary.uncompressed_byte_size);
         }
 
-        DataBlock::create_by_array(self.table_info.schema(), vec![
-            Series::new(snapshot_ids),
-            Series::new(prev_snapshot_ids),
-            Series::new(segment_count),
-            Series::new(block_count),
-            Series::new(row_count),
-            Series::new(uncompressed),
-            Series::new(compressed),
+        DataBlock::create(self.table_info.schema(), vec![
+            Series::from_data(snapshot_ids),
+            Series::from_data(prev_snapshot_ids),
+            Series::from_data(segment_count),
+            Series::from_data(block_count),
+            Series::from_data(row_count),
+            Series::from_data(uncompressed),
+            Series::from_data(compressed),
         ])
     }
 }

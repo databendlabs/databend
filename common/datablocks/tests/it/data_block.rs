@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::record_batch::RecordBatch;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 #[test]
 fn test_data_block() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i64::to_data_type())]);
 
-    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
+    let block = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1, 2, 3])]);
     assert_eq!(&schema, block.schema());
 
     assert_eq!(3, block.num_rows());
@@ -36,5 +37,41 @@ fn test_data_block() -> Result<()> {
     assert_eq!(1, block.first("a")?.as_i64()?);
     assert_eq!(3, block.last("a")?.as_i64()?);
 
+    Ok(())
+}
+
+#[test]
+fn test_data_block_convert() -> Result<()> {
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", Date16Type::arc()),
+        DataField::new("b", Date32Type::arc()),
+        DataField::new("c", DateTime32Type::arc(None)),
+        DataField::new("c", DateTime64Type::arc(3, None)),
+    ]);
+
+    let block = DataBlock::create(schema.clone(), vec![
+        Series::from_data(vec![1u16, 2, 3]),
+        Series::from_data(vec![1i32, 2, 3]),
+        Series::from_data(vec![1u32, 2, 3]),
+        Series::from_data(vec![1u64, 2, 3]),
+    ]);
+    assert_eq!(&schema, block.schema());
+
+    assert_eq!(3, block.num_rows());
+    assert_eq!(4, block.num_columns());
+
+    let record_batch: RecordBatch = block.try_into().unwrap();
+
+    // first and last test.
+    assert_eq!(3, record_batch.num_rows());
+    assert_eq!(4, record_batch.num_columns());
+
+    let new_block: DataBlock = record_batch.try_into().unwrap();
+    assert_eq!(3, new_block.num_rows());
+    assert_eq!(4, new_block.num_columns());
+
+    let new_schema = new_block.schema();
+
+    assert_eq!(new_schema, &schema);
     Ok(())
 }

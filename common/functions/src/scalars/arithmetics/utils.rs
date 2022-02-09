@@ -14,68 +14,62 @@
 
 use std::ops::Rem;
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
+use common_exception::Result;
 use num::cast::AsPrimitive;
 use strength_reduce::StrengthReducedU16;
 use strength_reduce::StrengthReducedU32;
 use strength_reduce::StrengthReducedU64;
 use strength_reduce::StrengthReducedU8;
 
-pub fn validate_input<'a>(
-    col0: &'a DataColumnWithField,
-    col1: &'a DataColumnWithField,
-) -> (&'a DataColumnWithField, &'a DataColumnWithField) {
-    if col0.data_type().is_integer() || col0.data_type().is_interval() {
-        (col0, col1)
-    } else {
-        (col1, col0)
-    }
-}
-
 // https://github.com/jorgecarleitao/arrow2/blob/main/src/compute/arithmetics/basic/rem.rs#L95
-pub fn rem_scalar<T, D, R>(lhs: &DFPrimitiveArray<T>, rhs: &D) -> DFPrimitiveArray<R>
+pub fn rem_scalar<L, R, O>(lhs: &PrimitiveColumn<L>, rhs: &R) -> Result<<O as Scalar>::ColumnType>
 where
-    T: DFPrimitiveType + AsPrimitive<D>,
-    D: DFPrimitiveType + AsPrimitive<R> + Rem<Output = D>,
-    R: DFPrimitiveType,
-    u8: AsPrimitive<R>,
-    u16: AsPrimitive<R>,
-    u32: AsPrimitive<R>,
-    u64: AsPrimitive<R>,
+    L: PrimitiveType + AsPrimitive<R>,
+    R: PrimitiveType + AsPrimitive<O> + Rem<Output = R> + ToDataType,
+    O: PrimitiveType,
+    u8: AsPrimitive<O>,
+    u16: AsPrimitive<O>,
+    u32: AsPrimitive<O>,
+    u64: AsPrimitive<O>,
 {
     let rhs = *rhs;
-    match D::data_type() {
-        DataType::UInt64 => {
+    match R::to_data_type().data_type_id() {
+        TypeID::UInt64 => {
             let rhs = rhs.to_u64().unwrap();
             let reduced_rem = StrengthReducedU64::new(rhs);
-            unary(lhs, |a| {
-                AsPrimitive::<R>::as_(a.to_u64().unwrap() % reduced_rem)
-            })
+            let it = lhs
+                .iter()
+                .map(|lhs| AsPrimitive::<O>::as_(lhs.to_u64().unwrap() % reduced_rem));
+            Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
         }
-        DataType::UInt32 => {
+        TypeID::UInt32 => {
             let rhs = rhs.to_u32().unwrap();
             let reduced_rem = StrengthReducedU32::new(rhs);
-            unary(lhs, |a| {
-                AsPrimitive::<R>::as_(a.to_u32().unwrap() % reduced_rem)
-            })
+            let it = lhs
+                .iter()
+                .map(|lhs| AsPrimitive::<O>::as_(lhs.to_u32().unwrap() % reduced_rem));
+            Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
         }
-        DataType::UInt16 => {
+        TypeID::UInt16 => {
             let rhs = rhs.to_u16().unwrap();
             let reduced_rem = StrengthReducedU16::new(rhs);
-            unary(lhs, |a| {
-                AsPrimitive::<R>::as_(a.to_u16().unwrap() % reduced_rem)
-            })
+            let it = lhs
+                .iter()
+                .map(|lhs| AsPrimitive::<O>::as_(lhs.to_u16().unwrap() % reduced_rem));
+            Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
         }
-        DataType::UInt8 => {
+        TypeID::UInt8 => {
             let rhs = rhs.to_u8().unwrap();
             let reduced_rem = StrengthReducedU8::new(rhs);
-            unary(lhs, |a| {
-                AsPrimitive::<R>::as_(a.to_u8().unwrap() % reduced_rem)
-            })
+            let it = lhs
+                .iter()
+                .map(|lhs| AsPrimitive::<O>::as_(lhs.to_u8().unwrap() % reduced_rem));
+            Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
         }
-        _ => unary(lhs, |a| {
-            let a: D = a.as_();
-            AsPrimitive::<R>::as_(a % rhs)
-        }),
+        _ => {
+            let it = lhs.iter().map(|lhs| AsPrimitive::<O>::as_(lhs.as_() % rhs));
+            Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
+        }
     }
 }

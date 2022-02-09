@@ -17,8 +17,8 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
+use common_datavalues2::prelude::Series;
+use common_datavalues2::prelude::SeriesFrom;
 use common_exception::Result;
 use common_planners::PlanNode;
 
@@ -103,53 +103,53 @@ impl InterpreterQueryLog {
         let query_log = self.ctx.get_table("system", "query_log").await?;
         let schema = query_log.get_table_info().meta.schema.clone();
 
-        let block = DataBlock::create_by_array(schema.clone(), vec![
+        let block = DataBlock::create(schema.clone(), vec![
             // Type.
-            Series::new(vec![event.log_type as i8]),
-            Series::new(vec![event.handler_type.as_str()]),
+            Series::from_data(vec![event.log_type as i8]),
+            Series::from_data(vec![event.handler_type.as_str()]),
             // User.
-            Series::new(vec![event.tenant_id.as_str()]),
-            Series::new(vec![event.cluster_id.as_str()]),
-            Series::new(vec![event.sql_user.as_str()]),
-            Series::new(vec![event.sql_user_quota.as_str()]),
-            Series::new(vec![event.sql_user_privileges.as_str()]),
+            Series::from_data(vec![event.tenant_id.as_str()]),
+            Series::from_data(vec![event.cluster_id.as_str()]),
+            Series::from_data(vec![event.sql_user.as_str()]),
+            Series::from_data(vec![event.sql_user_quota.as_str()]),
+            Series::from_data(vec![event.sql_user_privileges.as_str()]),
             // Query.
-            Series::new(vec![event.query_id.as_str()]),
-            Series::new(vec![event.query_kind.as_str()]),
-            Series::new(vec![event.query_text.as_str()]),
-            Series::new(vec![event.event_date as i32]),
-            Series::new(vec![event.event_time as u64]),
+            Series::from_data(vec![event.query_id.as_str()]),
+            Series::from_data(vec![event.query_kind.as_str()]),
+            Series::from_data(vec![event.query_text.as_str()]),
+            Series::from_data(vec![event.event_date as i32]),
+            Series::from_data(vec![event.event_time as u64]),
             // Schema.
-            Series::new(vec![event.current_database.as_str()]),
-            Series::new(vec![event.databases.as_str()]),
-            Series::new(vec![event.tables.as_str()]),
-            Series::new(vec![event.columns.as_str()]),
-            Series::new(vec![event.projections.as_str()]),
+            Series::from_data(vec![event.current_database.as_str()]),
+            Series::from_data(vec![event.databases.as_str()]),
+            Series::from_data(vec![event.tables.as_str()]),
+            Series::from_data(vec![event.columns.as_str()]),
+            Series::from_data(vec![event.projections.as_str()]),
             // Stats.
-            Series::new(vec![event.written_rows as u64]),
-            Series::new(vec![event.written_bytes as u64]),
-            Series::new(vec![event.scan_rows as u64]),
-            Series::new(vec![event.scan_bytes as u64]),
-            Series::new(vec![event.scan_byte_cost_ms as u64]),
-            Series::new(vec![event.scan_seeks as u64]),
-            Series::new(vec![event.scan_seek_cost_ms as u64]),
-            Series::new(vec![event.scan_partitions as u64]),
-            Series::new(vec![event.total_partitions as u64]),
-            Series::new(vec![event.result_rows as u64]),
-            Series::new(vec![event.result_bytes as u64]),
-            Series::new(vec![event.cpu_usage]),
-            Series::new(vec![event.memory_usage as u64]),
+            Series::from_data(vec![event.written_rows as u64]),
+            Series::from_data(vec![event.written_bytes as u64]),
+            Series::from_data(vec![event.scan_rows as u64]),
+            Series::from_data(vec![event.scan_bytes as u64]),
+            Series::from_data(vec![event.scan_byte_cost_ms as u64]),
+            Series::from_data(vec![event.scan_seeks as u64]),
+            Series::from_data(vec![event.scan_seek_cost_ms as u64]),
+            Series::from_data(vec![event.scan_partitions as u64]),
+            Series::from_data(vec![event.total_partitions as u64]),
+            Series::from_data(vec![event.result_rows as u64]),
+            Series::from_data(vec![event.result_bytes as u64]),
+            Series::from_data(vec![event.cpu_usage]),
+            Series::from_data(vec![event.memory_usage as u64]),
             // Client.
-            Series::new(vec![event.client_info.as_str()]),
-            Series::new(vec![event.client_address.as_str()]),
+            Series::from_data(vec![event.client_info.as_str()]),
+            Series::from_data(vec![event.client_address.as_str()]),
             // Exception.
-            Series::new(vec![event.exception_code]),
-            Series::new(vec![event.exception.as_str()]),
-            Series::new(vec![event.stack_trace.as_str()]),
+            Series::from_data(vec![event.exception_code]),
+            Series::from_data(vec![event.exception.as_str()]),
+            Series::from_data(vec![event.stack_trace.as_str()]),
             // Server.
-            Series::new(vec![event.server_version.as_str()]),
+            Series::from_data(vec![event.server_version.as_str()]),
             // Extra.
-            Series::new(vec![event.extra.as_str()]),
+            Series::from_data(vec![event.extra.as_str()]),
         ]);
         let blocks = vec![Ok(block)];
         let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks);

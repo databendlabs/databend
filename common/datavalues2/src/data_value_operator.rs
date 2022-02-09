@@ -44,6 +44,10 @@ pub enum DataValueComparisonOperator {
     NotEq,
     Like,
     NotLike,
+    Regexp,
+    NotRegexp,
+    RLike,
+    NotRLike,
 }
 
 impl std::fmt::Display for DataValueComparisonOperator {
@@ -57,6 +61,10 @@ impl std::fmt::Display for DataValueComparisonOperator {
             DataValueComparisonOperator::NotEq => "!=",
             DataValueComparisonOperator::Like => "LIKE",
             DataValueComparisonOperator::NotLike => "NOT LIKE",
+            DataValueComparisonOperator::Regexp => "REGEXP",
+            DataValueComparisonOperator::NotRegexp => "NOT REGEXP",
+            DataValueComparisonOperator::RLike => "RLIKE",
+            DataValueComparisonOperator::NotRLike => "NOT RLIKE",
         };
         write!(f, "{}", display)
     }

@@ -16,10 +16,10 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::Function2Factory;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -38,11 +38,11 @@ pub struct FunctionsTable {
 impl FunctionsTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("is_builtin", DataType::Boolean, false),
-            DataField::new("is_aggregate", DataType::Boolean, false),
-            DataField::new("definition", DataType::String, false),
-            DataField::new("description", DataType::String, false),
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("is_builtin", bool::to_data_type()),
+            DataField::new("is_aggregate", bool::to_data_type()),
+            DataField::new("definition", Vu8::to_data_type()),
+            DataField::new("description", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {
@@ -81,7 +81,7 @@ impl Table for FunctionsTable {
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let function_factory = FunctionFactory::instance();
+        let function_factory = Function2Factory::instance();
         let aggregate_function_factory = AggregateFunctionFactory::instance();
         let func_names = function_factory.registered_names();
         let aggr_func_names = aggregate_function_factory.registered_names();
@@ -125,12 +125,12 @@ impl Table for FunctionsTable {
             })
             .collect::<Vec<&str>>();
 
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
-            Series::new(names),
-            Series::new(is_builtin),
-            Series::new(is_aggregate),
-            Series::new(definitions),
-            Series::new(descriptions),
+        let block = DataBlock::create(self.table_info.schema(), vec![
+            Series::from_data(names),
+            Series::from_data(is_builtin),
+            Series::from_data(is_aggregate),
+            Series::from_data(definitions),
+            Series::from_data(descriptions),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(

@@ -14,6 +14,7 @@
 
 use bstr::ByteSlice;
 use bytes::BufMut;
+use common_exception::Result;
 
 use super::string2string::String2StringFunction;
 use super::string2string::StringOperator;
@@ -23,7 +24,7 @@ pub struct Upper;
 
 impl StringOperator for Upper {
     #[inline]
-    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], mut buffer: &mut [u8]) -> usize {
+    fn try_apply<'a>(&'a mut self, s: &'a [u8], mut buffer: &mut [u8]) -> Result<usize> {
         for (start, end, ch) in s.char_indices() {
             if ch == '\u{FFFD}' {
                 // If char is not valid, just copy it.
@@ -36,7 +37,7 @@ impl StringOperator for Upper {
                 }
             }
         }
-        s.len()
+        Ok(s.len())
     }
 }
 

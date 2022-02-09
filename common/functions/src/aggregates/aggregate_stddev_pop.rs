@@ -17,7 +17,8 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -30,7 +31,6 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
-use crate::with_match_primitive_type;
 
 #[derive(Serialize, Deserialize)]
 struct AggregateStddevPopState {
@@ -80,18 +80,14 @@ pub struct AggregateStddevPopFunction<T> {
 }
 
 impl<T> AggregateFunction for AggregateStddevPopFunction<T>
-where T: DFPrimitiveType + AsPrimitive<f64>
+where T: PrimitiveType + AsPrimitive<f64>
 {
     fn name(&self) -> &str {
         "AggregateStddevPopFunction"
     }
 
-    fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::Float64)
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
+    fn return_type(&self) -> Result<DataTypePtr> {
+        Ok(f64::to_data_type())
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -106,23 +102,31 @@ where T: DFPrimitiveType + AsPrimitive<f64>
         Layout::new::<AggregateStddevPopState>()
     }
 
-    fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
+    fn accumulate(
+        &self,
+        place: StateAddr,
+        columns: &[ColumnRef],
+        validity: Option<&common_arrow::arrow::bitmap::Bitmap>,
+        _input_rows: usize,
+    ) -> Result<()> {
         let state = place.get::<AggregateStddevPopState>();
-        let array: &DFPrimitiveArray<T> = arrays[0].static_cast();
+        let column: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
 
-        if array.null_count() == 0 {
-            for value in array.into_no_null_iter() {
-                let v: f64 = value.as_();
-                state.add(v);
-            }
-        } else {
-            array.iter().for_each(|value| {
-                if let Some(value) = value {
-                    let v: f64 = value.as_();
-                    state.add(v);
+        match validity {
+            Some(bitmap) => {
+                for (value, is_valid) in column.iter().zip(bitmap.iter()) {
+                    if is_valid {
+                        state.add(value.as_());
+                    }
                 }
-            });
+            }
+            None => {
+                for value in column.iter() {
+                    state.add(value.as_());
+                }
+            }
         }
+
         Ok(())
     }
 
@@ -130,32 +134,26 @@ where T: DFPrimitiveType + AsPrimitive<f64>
         &self,
         places: &[StateAddr],
         offset: usize,
-        arrays: &[Series],
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<()> {
-        let array: &DFPrimitiveArray<T> = arrays[0].static_cast();
-        if array.null_count() == 0 {
-            array
-                .into_no_null_iter()
-                .zip(places.iter())
-                .for_each(|(value, place)| {
-                    let place = place.next(offset);
-                    let state = place.get::<AggregateStddevPopState>();
+        let column: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
 
-                    let v: f64 = value.as_();
-                    state.add(v);
-                });
-        } else {
-            array.iter().zip(places.iter()).for_each(|(value, place)| {
-                let place = place.next(offset);
-                let state = place.get::<AggregateStddevPopState>();
+        column.iter().zip(places.iter()).for_each(|(value, place)| {
+            let place = place.next(offset);
+            let state = place.get::<AggregateStddevPopState>();
+            let v: f64 = value.as_();
+            state.add(v);
+        });
+        Ok(())
+    }
 
-                if let Some(value) = value {
-                    let v: f64 = value.as_();
-                    state.add(v);
-                }
-            });
-        }
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let column: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+
+        let state = place.get::<AggregateStddevPopState>();
+        let v: f64 = unsafe { column.value_unchecked(row).as_() };
+        state.add(v);
         Ok(())
     }
 
@@ -179,20 +177,11 @@ where T: DFPrimitiveType + AsPrimitive<f64>
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, column: &mut dyn MutableColumn) -> Result<()> {
         let state = place.get::<AggregateStddevPopState>();
-        if state.count == 0 {
-            array.push_null();
-            return Ok(());
-        }
-        let mut array = array
-            .as_mut_any()
-            .downcast_mut::<MutablePrimitiveArrayBuilder<f64, true>>()
-            .ok_or_else(|| {
-                ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
-            })?;
+        let column: &mut MutablePrimitiveColumn<f64> = Series::check_get_mutable_column(column)?;
         let variance = state.variance / state.count as f64;
-        array.push(variance.sqrt());
+        column.push(variance.sqrt());
         Ok(())
     }
 }
@@ -204,7 +193,7 @@ impl<T> fmt::Display for AggregateStddevPopFunction<T> {
 }
 
 impl<T> AggregateStddevPopFunction<T>
-where T: DFPrimitiveType + AsPrimitive<f64>
+where T: PrimitiveType + AsPrimitive<f64>
 {
     pub fn try_create(
         display_name: &str,
@@ -227,7 +216,7 @@ pub fn try_create_aggregate_stddev_pop_function(
 
     let data_type = arguments[0].data_type();
 
-    with_match_primitive_type!(data_type, |$T| {
+    with_match_primitive_type_id!(data_type.data_type_id(), |$T| {
         AggregateStddevPopFunction::<$T>::try_create(display_name, arguments)
     },
 

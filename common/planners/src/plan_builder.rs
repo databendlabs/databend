@@ -15,11 +15,7 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 
 use crate::col;
@@ -130,7 +126,7 @@ impl PlanBuilder {
 
                 let mut partial_fields = fields
                     .iter()
-                    .map(|f| DataField::new(f.name(), DataType::String, false))
+                    .map(|f| DataField::new(f.name(), Vu8::to_data_type()))
                     .collect::<Vec<_>>();
 
                 if !group_expr.is_empty() {
@@ -142,7 +138,7 @@ impl PlanBuilder {
                         group_expr.iter().map(|expr| expr.column_name()).collect();
                     let sample_block = DataBlock::empty_with_schema(schema_before_groupby);
                     let method = DataBlock::choose_hash_method(&sample_block, &group_cols)?;
-                    partial_fields.push(DataField::new("_group_by_key", method.data_type(), false));
+                    partial_fields.push(DataField::new("_group_by_key", method.data_type()));
                 }
 
                 Self::from(&PlanNode::AggregatorPartial(AggregatorPartialPlan {

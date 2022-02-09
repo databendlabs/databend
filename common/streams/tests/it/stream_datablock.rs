@@ -14,29 +14,29 @@
 
 use common_base::tokio;
 use common_datablocks::*;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_streams::*;
 use futures::stream::StreamExt;
 
 #[tokio::test]
 async fn test_datablock_stream() {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("name", DataType::Int32, false),
-        DataField::new("age", DataType::String, false),
+        DataField::new("name", i32::to_data_type()),
+        DataField::new("age", Vu8::to_data_type()),
     ]);
 
     let data_blocks = vec![
-        DataBlock::create_by_array(schema.clone(), vec![
-            Series::new(vec!["a1", "a2", "a3"]),
-            Series::new(vec![1i32, 1, 1]),
+        DataBlock::create(schema.clone(), vec![
+            Series::from_data(vec!["a1", "a2", "a3"]),
+            Series::from_data(vec![1i32, 1, 1]),
         ]),
-        DataBlock::create_by_array(schema.clone(), vec![
-            Series::new(vec!["b1", "b2", "b3"]),
-            Series::new(vec![2i32, 2, 2]),
+        DataBlock::create(schema.clone(), vec![
+            Series::from_data(vec!["b1", "b2", "b3"]),
+            Series::from_data(vec![2i32, 2, 2]),
         ]),
-        DataBlock::create_by_array(schema.clone(), vec![
-            Series::new(vec!["c1", "c2", "c3"]),
-            Series::new(vec![3i32, 3, 3]),
+        DataBlock::create(schema.clone(), vec![
+            Series::from_data(vec!["c1", "c2", "c3"]),
+            Series::from_data(vec![3i32, 3, 3]),
         ]),
     ];
 

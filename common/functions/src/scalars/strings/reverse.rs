@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::Result;
+
 use super::string2string::String2StringFunction;
 use super::string2string::StringOperator;
 
@@ -20,11 +22,11 @@ pub struct Reverse {}
 
 impl StringOperator for Reverse {
     #[inline]
-    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
+    fn try_apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> Result<usize> {
         let buffer = &mut buffer[0..s.len()];
         buffer.copy_from_slice(s);
         buffer.reverse();
-        s.len()
+        Ok(s.len())
     }
 }
 

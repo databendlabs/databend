@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -36,10 +36,10 @@ pub struct TablesTable {
 impl TablesTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("database", DataType::String, false),
-            DataField::new("name", DataType::String, false),
-            DataField::new("engine", DataType::String, false),
-            DataField::new("created_on", DataType::String, false),
+            DataField::new("database", Vu8::to_data_type()),
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("engine", Vu8::to_data_type()),
+            DataField::new("created_on", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {
@@ -106,11 +106,11 @@ impl Table for TablesTable {
             .collect();
         let created_ons: Vec<&[u8]> = created_ons.iter().map(|s| s.as_bytes()).collect();
 
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
-            Series::new(databases),
-            Series::new(names),
-            Series::new(engines),
-            Series::new(created_ons),
+        let block = DataBlock::create(self.table_info.schema(), vec![
+            Series::from_data(databases),
+            Series::from_data(names),
+            Series::from_data(engines),
+            Series::from_data(created_ons),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(

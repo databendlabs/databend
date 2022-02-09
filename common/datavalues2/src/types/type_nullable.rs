@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -23,14 +24,19 @@ use super::data_type::DataTypePtr;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct NullableType {
     inner: DataTypePtr,
+    name: String,
 }
 
 impl NullableType {
     pub fn create(inner: DataTypePtr) -> Self {
-        NullableType { inner }
+        debug_assert!(inner.can_inside_nullable());
+        NullableType {
+            name: format!("Nullable({})", inner.name()),
+            inner,
+        }
     }
 
     pub fn inner_type(&self) -> &DataTypePtr {
@@ -49,8 +55,16 @@ impl DataType for NullableType {
         self
     }
 
+    fn name(&self) -> &str {
+        &self.name
+    }
+
     fn is_nullable(&self) -> bool {
         true
+    }
+
+    fn can_inside_nullable(&self) -> bool {
+        false
     }
 
     fn default_value(&self) -> DataValue {
@@ -59,6 +73,10 @@ impl DataType for NullableType {
 
     fn arrow_type(&self) -> ArrowType {
         self.inner.arrow_type()
+    }
+
+    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
+        self.inner.custom_arrow_meta()
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
@@ -74,6 +92,13 @@ impl DataType for NullableType {
         })
     }
 
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutableNullableColumn::new(
+            self.inner.create_mutable(capacity),
+            Arc::new(self.clone()),
+        ))
+    }
+
     fn create_constant_column(
         &self,
         data: &DataValue,
@@ -84,7 +109,7 @@ impl DataType for NullableType {
         if self.inner.data_type_id() == TypeID::Null {
             return Ok(Arc::new(NullColumn::new(size)));
         }
-        if self.inner.data_type_id() == TypeID::Null {
+        if self.inner.data_type_id() == TypeID::Nullable {
             return Result::Err(ErrorCode::BadDataValueType(
                 "Nullable type can't be inside nullable type".to_string(),
             ));
@@ -115,5 +140,11 @@ impl DataType for NullableType {
         }
         let column = self.inner.create_column(&res)?;
         Ok(Arc::new(NullableColumn::new(column, bitmap.into())))
+    }
+}
+
+impl std::fmt::Debug for NullableType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }

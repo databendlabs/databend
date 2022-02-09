@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use bytes::BufMut;
+use common_datavalues2::Column;
+use common_datavalues2::StringColumn;
+use common_exception::Result;
 
 use super::String2StringFunction;
 use super::StringOperator;
@@ -53,7 +56,7 @@ impl Soundex {
 
 impl StringOperator for Soundex {
     #[inline]
-    fn apply_with_no_null<'a>(&'a mut self, data: &'a [u8], mut buffer: &mut [u8]) -> usize {
+    fn try_apply<'a>(&'a mut self, data: &'a [u8], mut buffer: &mut [u8]) -> Result<usize> {
         let mut last = None;
         let mut count = 0;
 
@@ -90,11 +93,11 @@ impl StringOperator for Soundex {
         }
         let bytes = self.buf.as_bytes();
         buffer.put_slice(bytes);
-        bytes.len()
+        Ok(bytes.len())
     }
 
-    fn estimate_bytes(&self, array: &common_datavalues::prelude::DFStringArray) -> usize {
-        usize::max(array.inner().values().len(), 4 * array.len())
+    fn estimate_bytes(&self, array: &StringColumn) -> usize {
+        usize::max(array.values().len(), 4 * array.len())
     }
 }
 

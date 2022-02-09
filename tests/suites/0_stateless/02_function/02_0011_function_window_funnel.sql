@@ -1,7 +1,7 @@
 drop table if exists funnel_test;
 
 create table funnel_test (timestamp UInt32, d Date, dt DateTime, event UInt32) engine=Memory;
-insert into funnel_test values 
+insert into funnel_test values
 (0, '2021-01-01', '2021-01-01 00:00:00', 1000),
 (1, '2021-01-02', '2021-01-01 00:00:01', 1001),
 (2, '2021-01-03', '2021-01-01 00:00:02', 1002),

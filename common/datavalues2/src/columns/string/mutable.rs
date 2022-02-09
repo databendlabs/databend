@@ -23,17 +23,7 @@ pub struct MutableStringColumn {
 }
 
 impl MutableStringColumn {
-    pub fn with_capacity(capacity: usize, offset_capacity: usize) -> Self {
-        let mut offsets = Vec::with_capacity(offset_capacity + 1);
-        offsets.push(0);
-
-        Self {
-            last_size: 0,
-            offsets,
-            values: Vec::with_capacity(capacity),
-        }
-    }
-
+    #[inline]
     pub fn append_value(&mut self, v: impl AsRef<[u8]>) {
         let bytes = v.as_ref();
         self.last_size += bytes.len();
@@ -41,20 +31,21 @@ impl MutableStringColumn {
         self.values.extend_from_slice(bytes);
     }
 
-    pub fn finish(&mut self) -> StringColumn {
-        self.last_size = 0;
-        unsafe {
-            StringColumn::from_data_unchecked(
-                std::mem::take(&mut self.offsets).into(),
-                std::mem::take(&mut self.values).into(),
-            )
+    pub fn with_values_capacity(values_capacity: usize, capacity: usize) -> Self {
+        let mut offsets = Vec::with_capacity(capacity + 1);
+        offsets.push(0);
+
+        Self {
+            last_size: 0,
+            offsets,
+            values: Vec::with_capacity(values_capacity),
         }
     }
 }
 
 impl Default for MutableStringColumn {
     fn default() -> Self {
-        Self::with_capacity(0, 0)
+        Self::with_capacity(0)
     }
 }
 
@@ -71,10 +62,6 @@ impl MutableColumn for MutableStringColumn {
         self
     }
 
-    fn as_column(&mut self) -> ColumnRef {
-        Arc::new(self.finish())
-    }
-
     fn append_default(&mut self) {
         self.append_value("");
     }
@@ -86,5 +73,44 @@ impl MutableColumn for MutableStringColumn {
     fn shrink_to_fit(&mut self) {
         self.offsets.shrink_to_fit();
         self.values.shrink_to_fit();
+    }
+
+    fn len(&self) -> usize {
+        self.offsets.len() - 1
+    }
+
+    fn to_column(&mut self) -> ColumnRef {
+        Arc::new(self.finish())
+    }
+
+    fn append_data_value(&mut self, value: DataValue) -> common_exception::Result<()> {
+        self.append_value(value.as_string()?);
+        Ok(())
+    }
+}
+
+impl ScalarColumnBuilder for MutableStringColumn {
+    type ColumnType = StringColumn;
+
+    fn with_capacity(capacity: usize) -> Self {
+        Self::with_values_capacity(capacity * 3, capacity)
+    }
+
+    fn push(&mut self, value: &[u8]) {
+        self.last_size += value.len();
+        self.offsets.push(self.last_size as i64);
+        self.values.extend_from_slice(value);
+    }
+
+    fn finish(&mut self) -> Self::ColumnType {
+        self.shrink_to_fit();
+        unsafe {
+            let column = StringColumn::from_data_unchecked(
+                std::mem::take(&mut self.offsets).into(),
+                std::mem::take(&mut self.values).into(),
+            );
+            self.offsets.push(0);
+            column
+        }
     }
 }

@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -36,10 +36,10 @@ pub struct ConfigsTable {
 impl ConfigsTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("value", DataType::String, false),
-            DataField::new("group", DataType::String, false),
-            DataField::new("description", DataType::String, false),
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("value", Vu8::to_data_type()),
+            DataField::new("group", Vu8::to_data_type()),
+            DataField::new("description", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {
@@ -225,11 +225,11 @@ impl Table for ConfigsTable {
         let values: Vec<&str> = values.iter().map(|x| x.as_str()).collect();
         let groups: Vec<&str> = groups.iter().map(|x| x.as_str()).collect();
         let descs: Vec<&str> = descs.iter().map(|x| x.as_str()).collect();
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
-            Series::new(names),
-            Series::new(values),
-            Series::new(groups),
-            Series::new(descs),
+        let block = DataBlock::create(self.table_info.schema(), vec![
+            Series::from_data(names),
+            Series::from_data(values),
+            Series::from_data(groups),
+            Series::from_data(descs),
         ]);
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),

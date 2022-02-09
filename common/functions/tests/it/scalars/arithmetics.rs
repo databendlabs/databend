@@ -12,6 +12,110 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues2::prelude::*;
+use common_exception::Result;
+use common_functions::scalars::*;
+
+use super::scalar_function2_test::test_scalar_functions2;
+use super::scalar_function2_test::ScalarFunction2Test;
+
+#[test]
+fn test_arithmetic_function() -> Result<()> {
+    let tests = vec![
+        (
+            ArithmeticPlusFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
+            ScalarFunction2Test {
+                name: "add-int64-passed",
+                columns: vec![
+                    Series::from_data(vec![4i64, 3, 2, 1]),
+                    Series::from_data(vec![1i64, 2, 3, 4]),
+                ],
+                expect: Series::from_data(vec![5i64, 5, 5, 5]),
+                error: "",
+            },
+        ),
+        (
+            ArithmeticPlusFunction::try_create_func("", &[&Int16Type::arc(), &Int64Type::arc()])?,
+            ScalarFunction2Test {
+                name: "add-diff-passed",
+                columns: vec![
+                    Series::from_data(vec![1i16, 2, 3, 4]),
+                    Series::from_data(vec![1i64, 2, 3, 4]),
+                ],
+                expect: Series::from_data(vec![2i64, 4, 6, 8]),
+                error: "",
+            },
+        ),
+        (
+            ArithmeticMinusFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
+            ScalarFunction2Test {
+                name: "sub-int64-passed",
+                columns: vec![
+                    Series::from_data(vec![4i64, 3, 2]),
+                    Series::from_data(vec![1i64, 2, 3]),
+                ],
+                expect: Series::from_data(vec![3i64, 1, -1]),
+                error: "",
+            },
+        ),
+        (
+            ArithmeticMulFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
+            ScalarFunction2Test {
+                name: "mul-int64-passed",
+                columns: vec![
+                    Series::from_data(vec![4i64, 3, 2]),
+                    Series::from_data(vec![1i64, 2, 3]),
+                ],
+                expect: Series::from_data(vec![4i64, 6, 6]),
+                error: "",
+            },
+        ),
+        (
+            ArithmeticDivFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
+            ScalarFunction2Test {
+                name: "div-int64-passed",
+                columns: vec![
+                    Series::from_data(vec![4i64, 3, 2]),
+                    Series::from_data(vec![1i64, 2, 3]),
+                ],
+                expect: Series::from_data(vec![4.0, 1.5, 0.6666666666666666]),
+                error: "",
+            },
+        ),
+        (
+            ArithmeticIntDivFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
+            ScalarFunction2Test {
+                name: "intdiv-int64-passed",
+                columns: vec![
+                    Series::from_data(vec![4i64, 3, 2]),
+                    Series::from_data(vec![1i64, 2, 3]),
+                ],
+                expect: Series::from_data(vec![4i64, 1, 0]),
+                error: "",
+            },
+        ),
+        (
+            ArithmeticModuloFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
+            ScalarFunction2Test {
+                name: "mod-int64-passed",
+                columns: vec![
+                    Series::from_data(vec![4i64, 3, 2]),
+                    Series::from_data(vec![1i64, 2, 3]),
+                ],
+                expect: Series::from_data(vec![0i64, 1, 2]),
+                error: "",
+            },
+        ),
+    ];
+
+    for (test_function, test) in tests {
+        test_scalar_functions2(test_function, &[test])?
+    }
+
+    Ok(())
+}
+
+/*
 use common_datavalues::chrono;
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
@@ -20,132 +124,7 @@ use common_functions::scalars::*;
 
 use crate::scalars::scalar_function_test::test_scalar_functions;
 use crate::scalars::scalar_function_test::test_scalar_functions_with_type;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
 use crate::scalars::scalar_function_test::ScalarFunctionTestWithType;
-
-#[test]
-fn test_arithmetic_function() -> Result<()> {
-    let tests = vec![
-        (
-            ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Int64, false),
-                DataTypeAndNullable::create(&DataType::Int64, false),
-            ])?,
-            ScalarFunctionTest {
-                name: "add-int64-passed",
-                nullable: false,
-                columns: vec![
-                    Series::new(vec![4i64, 3, 2, 1]).into(),
-                    Series::new(vec![1i64, 2, 3, 4]).into(),
-                ],
-                expect: Series::new(vec![5i64, 5, 5, 5]).into(),
-                error: "",
-            },
-        ),
-        (
-            ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Int16, false),
-                DataTypeAndNullable::create(&DataType::Int64, false),
-            ])?,
-            ScalarFunctionTest {
-                name: "add-diff-passed",
-                nullable: false,
-                columns: vec![
-                    Series::new(vec![1i16, 2, 3, 4]).into(),
-                    Series::new(vec![1i64, 2, 3, 4]).into(),
-                ],
-                expect: Series::new(vec![2i64, 4, 6, 8]).into(),
-                error: "",
-            },
-        ),
-        (
-            ArithmeticMinusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Int64, false),
-                DataTypeAndNullable::create(&DataType::Int64, false),
-            ])?,
-            ScalarFunctionTest {
-                name: "sub-int64-passed",
-                nullable: false,
-                columns: vec![
-                    Series::new(vec![4i64, 3, 2]).into(),
-                    Series::new(vec![1i64, 2, 3]).into(),
-                ],
-                expect: Series::new(vec![3i64, 1, -1]).into(),
-                error: "",
-            },
-        ),
-        (
-            ArithmeticMulFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Int64, false),
-                DataTypeAndNullable::create(&DataType::Int64, false),
-            ])?,
-            ScalarFunctionTest {
-                name: "mul-int64-passed",
-                nullable: false,
-                columns: vec![
-                    Series::new(vec![4i64, 3, 2]).into(),
-                    Series::new(vec![1i64, 2, 3]).into(),
-                ],
-                expect: Series::new(vec![4i64, 6, 6]).into(),
-                error: "",
-            },
-        ),
-        (
-            ArithmeticDivFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Int64, false),
-                DataTypeAndNullable::create(&DataType::Int64, false),
-            ])?,
-            ScalarFunctionTest {
-                name: "div-int64-passed",
-                nullable: false,
-                columns: vec![
-                    Series::new(vec![4i64, 3, 2]).into(),
-                    Series::new(vec![1i64, 2, 3]).into(),
-                ],
-                expect: Series::new(vec![4.0, 1.5, 0.6666666666666666]).into(),
-                error: "",
-            },
-        ),
-        (
-            ArithmeticIntDivFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Int64, false),
-                DataTypeAndNullable::create(&DataType::Int64, false),
-            ])?,
-            ScalarFunctionTest {
-                name: "intdiv-int64-passed",
-                nullable: false,
-                columns: vec![
-                    Series::new(vec![4i64, 3, 2]).into(),
-                    Series::new(vec![1i64, 2, 3]).into(),
-                ],
-                expect: Series::new(vec![4i64, 1, 0]).into(),
-                error: "",
-            },
-        ),
-        (
-            ArithmeticModuloFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Int64, false),
-                DataTypeAndNullable::create(&DataType::Int64, false),
-            ])?,
-            ScalarFunctionTest {
-                name: "mod-int64-passed",
-                nullable: false,
-                columns: vec![
-                    Series::new(vec![4i64, 3, 2]).into(),
-                    Series::new(vec![1i64, 2, 3]).into(),
-                ],
-                expect: Series::new(vec![0i64, 1, 2]).into(),
-                error: "",
-            },
-        ),
-    ];
-
-    for (test_function, test) in tests {
-        test_scalar_functions(test_function, &[test])?
-    }
-
-    Ok(())
-}
 
 #[test]
 fn test_arithmetic_date_interval() -> Result<()> {
@@ -487,3 +466,4 @@ fn test_arithmetic_date_interval() -> Result<()> {
 
     Ok(())
 }
+ */

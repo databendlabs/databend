@@ -12,16 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::DFStringArray;
+use common_datavalues2::StringColumn;
+use common_exception::Result;
 
 use super::string2string::String2StringFunction;
 use super::string2string::StringOperator;
+
 #[derive(Clone, Default)]
 pub struct Quote {}
 
 impl StringOperator for Quote {
     #[inline]
-    fn apply_with_no_null<'a>(&'a mut self, value: &'a [u8], buffer: &mut [u8]) -> usize {
+    fn try_apply<'a>(&'a mut self, value: &'a [u8], buffer: &mut [u8]) -> Result<usize> {
         let mut offset = 0;
         for ch in value {
             match *ch {
@@ -72,11 +74,11 @@ impl StringOperator for Quote {
                 }
             };
         }
-        offset
+        Ok(offset)
     }
 
-    fn estimate_bytes(&self, array: &DFStringArray) -> usize {
-        array.inner().values().len() * 2
+    fn estimate_bytes(&self, array: &StringColumn) -> usize {
+        array.values().len() * 2
     }
 }
 

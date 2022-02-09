@@ -17,15 +17,8 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_arrow::arrow;
-use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::record_batch::RecordBatch;
-use common_datavalues::columns::DataColumn;
-use common_datavalues::prelude::IntoSeries;
-use common_datavalues::prelude::Series;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -34,18 +27,12 @@ use crate::pretty_format_blocks;
 #[derive(Clone)]
 pub struct DataBlock {
     schema: DataSchemaRef,
-    columns: Vec<DataColumn>,
+    columns: Vec<ColumnRef>,
 }
 
 impl DataBlock {
     #[inline]
-    pub fn create(schema: DataSchemaRef, columns: Vec<DataColumn>) -> Self {
-        DataBlock { schema, columns }
-    }
-
-    #[inline]
-    pub fn create_by_array(schema: DataSchemaRef, arrays: Vec<Series>) -> Self {
-        let columns = arrays.into_iter().map(DataColumn::Array).collect();
+    pub fn create(schema: DataSchemaRef, columns: Vec<ColumnRef>) -> Self {
         DataBlock { schema, columns }
     }
 
@@ -61,9 +48,8 @@ impl DataBlock {
     pub fn empty_with_schema(schema: DataSchemaRef) -> Self {
         let mut columns = vec![];
         for f in schema.fields().iter() {
-            let array = arrow::array::new_empty_array(f.data_type().to_arrow());
-            let array: ArrayRef = Arc::from(array);
-            columns.push(DataColumn::Array(array.into_series()))
+            let col = f.data_type().create_column(&[]).unwrap();
+            columns.push(col)
         }
         DataBlock { schema, columns }
     }
@@ -95,21 +81,21 @@ impl DataBlock {
     /// Data Block physical memory size
     #[inline]
     pub fn memory_size(&self) -> usize {
-        self.columns.iter().map(|x| x.get_array_memory_size()).sum()
+        self.columns.iter().map(|x| x.memory_size()).sum()
     }
 
     #[inline]
-    pub fn column(&self, index: usize) -> &DataColumn {
+    pub fn column(&self, index: usize) -> &ColumnRef {
         &self.columns[index]
     }
 
     #[inline]
-    pub fn columns(&self) -> &[DataColumn] {
+    pub fn columns(&self) -> &[ColumnRef] {
         &self.columns
     }
 
     #[inline]
-    pub fn try_column_by_name(&self, name: &str) -> Result<&DataColumn> {
+    pub fn try_column_by_name(&self, name: &str) -> Result<&ColumnRef> {
         if name == "*" {
             Ok(&self.columns[0])
         } else {
@@ -118,28 +104,18 @@ impl DataBlock {
         }
     }
 
-    #[inline]
-    pub fn try_array_by_name(&self, name: &str) -> Result<Series> {
-        if name == "*" {
-            self.columns[0].to_array()
-        } else {
-            let idx = self.schema.index_of(name)?;
-            self.columns[idx].to_array()
-        }
-    }
-
     /// Take the first data value of the column.
     #[inline]
     pub fn first(&self, col: &str) -> Result<DataValue> {
         let column = self.try_column_by_name(col)?;
-        column.try_get(0)
+        column.get_checked(0)
     }
 
     /// Take the last data value of the column.
     #[inline]
     pub fn last(&self, col: &str) -> Result<DataValue> {
         let column = self.try_column_by_name(col)?;
-        column.try_get(column.len() - 1)
+        column.get_checked(column.len() - 1)
     }
 
     #[inline]
@@ -157,7 +133,7 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn add_column(self, column: DataColumn, field: DataField) -> Result<Self> {
+    pub fn add_column(self, column: ColumnRef, field: DataField) -> Result<Self> {
         let mut columns = self.columns.clone();
         let mut fields = self.schema().fields().clone();
 
@@ -207,8 +183,8 @@ impl TryFrom<DataBlock> for RecordBatch {
         let arrays = v
             .columns()
             .iter()
-            .map(|c| c.to_array().map(|series| series.get_array_ref()))
-            .collect::<Result<Vec<_>>>()?;
+            .map(|c| c.as_arrow_array())
+            .collect::<Vec<_>>();
 
         Ok(RecordBatch::try_new(Arc::new(v.schema.to_arrow()), arrays)?)
     }
@@ -218,13 +194,18 @@ impl TryFrom<arrow::record_batch::RecordBatch> for DataBlock {
     type Error = ErrorCode;
 
     fn try_from(v: arrow::record_batch::RecordBatch) -> Result<DataBlock> {
-        let schema = Arc::new(v.schema().as_ref().into());
-        let series = v
+        let schema: DataSchemaRef = Arc::new(v.schema().as_ref().into());
+        let columns = v
             .columns()
             .iter()
-            .map(|array| array.clone().into_series())
+            .zip(schema.fields().iter())
+            .map(|(col, f)| match f.is_nullable() {
+                true => col.into_nullable_column(),
+                false => col.into_column(),
+            })
             .collect();
-        Ok(DataBlock::create_by_array(schema, series))
+
+        Ok(DataBlock::create(schema, columns))
     }
 }
 

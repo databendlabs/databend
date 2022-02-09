@@ -14,7 +14,8 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::ToDataType;
+use common_datavalues2::DataValue;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
@@ -65,9 +66,10 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                         let source_plan = table.read_plan(self.ctx.clone(), None).await?;
                         let dummy_read_plan = PlanNode::ReadSource(source_plan);
 
-                        let expr = Expression::create_literal(DataValue::UInt64(Some(
-                            read_source_plan.statistics.read_rows as u64,
-                        )));
+                        let expr = Expression::create_literal_with_type(
+                            DataValue::UInt64(read_source_plan.statistics.read_rows as u64),
+                            u64::to_data_type(),
+                        );
 
                         self.rewritten = true;
                         let alias_name = plan.aggr_expr[0].column_name();

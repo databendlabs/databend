@@ -14,11 +14,10 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -75,64 +74,64 @@ impl Settings {
         let values = vec![
             // max_block_size
             SettingValue {
-                default_value:DataValue::UInt64(Some(10000)),
-                user_setting: UserSetting::create("max_block_size", DataValue::UInt64(Some(10000))),
+                default_value:DataValue::UInt64(10000),
+                user_setting: UserSetting::create("max_block_size", DataValue::UInt64(10000)),
                 level: ScopeLevel::Session,
                 desc: "Maximum block size for reading",
             },
 
             // max_threads
             SettingValue {
-                default_value:DataValue::UInt64(Some(16)),
-                user_setting: UserSetting::create("max_threads", DataValue::UInt64(Some(16))),
+                default_value:DataValue::UInt64(16),
+                user_setting: UserSetting::create("max_threads", DataValue::UInt64(16)),
                 level: ScopeLevel::Session,
                 desc: "The maximum number of threads to execute the request. By default, it is determined automatically.",
             },
 
             // flight_client_timeout
             SettingValue {
-                default_value:DataValue::UInt64(Some(60)),
-                user_setting: UserSetting::create("flight_client_timeout", DataValue::UInt64(Some(60))),
+                default_value:DataValue::UInt64(60),
+                user_setting: UserSetting::create("flight_client_timeout", DataValue::UInt64(60)),
                 level: ScopeLevel::Session,
                 desc:"Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds",
             },
 
             // parallel_read_threads
             SettingValue {
-                default_value: DataValue::UInt64(Some(1)),
-                user_setting: UserSetting::create("parallel_read_threads", DataValue::UInt64(Some(1))),
+                default_value: DataValue::UInt64(1),
+                user_setting: UserSetting::create("parallel_read_threads", DataValue::UInt64(1)),
                 level: ScopeLevel::Session,
                 desc:"The maximum number of parallelism for reading data. By default, it is 1.",
             },
 
             // storage_read_buffer_size
             SettingValue {
-                default_value: DataValue::UInt64(Some(1024*1024)),
-                user_setting: UserSetting::create("storage_read_buffer_size", DataValue::UInt64(Some(1024*1024))),
+                default_value: DataValue::UInt64(1024*1024),
+                user_setting: UserSetting::create("storage_read_buffer_size", DataValue::UInt64(1024*1024)),
                 level: ScopeLevel::Session,
                 desc:"The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.",
             },
 
             // storage_backoff_init_delay_ms
             SettingValue {
-                default_value: DataValue::UInt64(Some(5)),
-                user_setting: UserSetting::create("storage_occ_backoff_init_delay_ms", DataValue::UInt64(Some(5))),
+                default_value: DataValue::UInt64(5),
+                user_setting: UserSetting::create("storage_occ_backoff_init_delay_ms", DataValue::UInt64(5)),
                 level: ScopeLevel::Session,
                 desc:"The initial retry delay in millisecond. By default, it is 5 ms.",
             },
 
             // storage_occ_backoff_max_delay_ms
             SettingValue {
-                default_value:DataValue::UInt64(Some(20*1000)),
-                user_setting: UserSetting::create("storage_occ_backoff_max_delay_ms", DataValue::UInt64(Some(20*1000))),
+                default_value:DataValue::UInt64(20*1000),
+                user_setting: UserSetting::create("storage_occ_backoff_max_delay_ms", DataValue::UInt64(20*1000)),
                 level: ScopeLevel::Session,
                 desc:"The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing. By default, it is 20 seconds.",
             },
 
             // storage_occ_backoff_max_elapsed_ms
             SettingValue {
-                default_value:DataValue::UInt64(Some(120*1000)),
-                user_setting: UserSetting::create("storage_occ_backoff_max_elapsed_ms", DataValue::UInt64(Some(120*1000))),
+                default_value:DataValue::UInt64(120*1000),
+                user_setting: UserSetting::create("storage_occ_backoff_max_elapsed_ms", DataValue::UInt64(120*1000)),
                 level: ScopeLevel::Session,
                 desc:"The maximum elapsed time after the occ starts, beyond which there will be no more retries. By default, it is 2 minutes.",
             },
@@ -243,7 +242,7 @@ impl Settings {
         let mut setting = settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
-        setting.user_setting.value = DataValue::UInt64(Some(val));
+        setting.user_setting.value = DataValue::UInt64(val);
 
         if is_global {
             let tenant = self.session_ctx.get_current_tenant();
@@ -265,15 +264,15 @@ impl Settings {
         for (k, v) in settings.iter() {
             let res = DataValue::Struct(vec![
                 // Name.
-                DataValue::String(Some(k.as_bytes().to_vec())),
+                DataValue::String(k.as_bytes().to_vec()),
                 // Value.
                 v.user_setting.value.clone(),
                 // Default Value.
                 v.default_value.clone(),
                 // Scope level.
-                DataValue::String(Some(format!("{:?}", v.level).into_bytes())),
+                DataValue::String(format!("{:?}", v.level).into_bytes()),
                 // Desc.
-                DataValue::String(Some(v.desc.as_bytes().to_vec())),
+                DataValue::String(v.desc.as_bytes().to_vec()),
             ]);
             result.push(res);
         }
@@ -283,8 +282,8 @@ impl Settings {
     pub fn set_settings(&self, key: String, val: String, is_global: bool) -> Result<()> {
         let setting = self.check_and_get_setting_value(&key)?;
 
-        match setting.user_setting.value.data_type() {
-            DataType::UInt64 => {
+        match setting.user_setting.value.max_data_type().data_type_id() {
+            TypeID::UInt64 => {
                 let u64_val = val.parse::<u64>()?;
                 self.try_set_u64(&key, u64_val, is_global)?;
             }

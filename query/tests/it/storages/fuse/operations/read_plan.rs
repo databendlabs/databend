@@ -15,7 +15,7 @@
 
 use std::collections::HashMap;
 
-use common_datavalues::DataValue;
+use common_datavalues2::DataValue;
 use common_exception::Result;
 use common_planners::Extras;
 use databend_query::storages::fuse::meta::BlockLocation;
@@ -30,8 +30,8 @@ fn test_to_partitions() -> Result<()> {
     let num_of_block = 5;
 
     let col_stats_gen = |col_size| ColumnStatistics {
-        min: DataValue::Int8(Some(1)),
-        max: DataValue::Int8(Some(2)),
+        min: DataValue::Int64(1),
+        max: DataValue::Int64(2),
         null_count: 0,
         in_memory_size: col_size as u64,
     };

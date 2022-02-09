@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::DFStringArray;
+use common_datavalues2::Column;
+use common_datavalues2::StringColumn;
+use common_exception::ErrorCode;
+use common_exception::Result;
 
 use super::string2string::String2StringFunction;
 use super::string2string::StringOperator;
@@ -22,12 +25,12 @@ pub struct Encode {}
 
 impl StringOperator for Encode {
     #[inline]
-    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
-        base64::encode_config_slice(s, base64::STANDARD, buffer)
+    fn try_apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> Result<usize> {
+        Ok(base64::encode_config_slice(s, base64::STANDARD, buffer))
     }
 
-    fn estimate_bytes(&self, array: &DFStringArray) -> usize {
-        array.inner().values().len() * 4 / 3 + array.len() * 4
+    fn estimate_bytes(&self, array: &StringColumn) -> usize {
+        array.values().len() * 4 / 3 + array.len() * 4
     }
 }
 
@@ -36,19 +39,13 @@ pub struct Decode {}
 
 impl StringOperator for Decode {
     #[inline]
-    fn apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> Option<usize> {
-        match base64::decode_config_slice(s, base64::STANDARD, buffer) {
-            Ok(len) => Some(len),
-            Err(_) => None,
-        }
+    fn try_apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> Result<usize> {
+        base64::decode_config_slice(s, base64::STANDARD, buffer)
+            .map_err(|e| ErrorCode::StrParseError(e.to_string()))
     }
 
-    fn may_turn_to_null(&self) -> bool {
-        true
-    }
-
-    fn estimate_bytes(&self, array: &DFStringArray) -> usize {
-        array.inner().values().len() * 4 / 3 + array.len() * 4
+    fn estimate_bytes(&self, array: &StringColumn) -> usize {
+        array.values().len() * 4 / 3 + array.len() * 4
     }
 }
 

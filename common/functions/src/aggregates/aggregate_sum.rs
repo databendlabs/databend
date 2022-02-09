@@ -18,7 +18,9 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use bytes::BytesMut;
-use common_datavalues::prelude::*;
+use common_arrow::arrow::bitmap::Bitmap;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -26,28 +28,22 @@ use num::traits::AsPrimitive;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use super::AggregateFunctionRef;
+use super::aggregate_function::AggregateFunction;
+use super::aggregate_function::AggregateFunctionRef;
+use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::StateAddr;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
-use crate::aggregates::AggregateFunction;
-use crate::with_match_primitive_type;
 
 struct AggregateSumState<T> {
-    pub value: Option<T>,
+    pub value: T,
 }
 
 impl<T> AggregateSumState<T>
-where
-    T: std::ops::Add<Output = T> + Copy + Clone,
-    Option<T>: Serialize + DeserializeOwned,
+where T: std::ops::AddAssign + Serialize + DeserializeOwned + Copy + Clone
 {
     #[inline(always)]
     fn add(&mut self, other: T) {
-        match &self.value {
-            Some(a) => self.value = Some(a.add(other)),
-            None => self.value = Some(other),
-        }
+        self.value += other;
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
@@ -56,7 +52,6 @@ where
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         self.value = deserialize_from_slice(reader)?;
-
         Ok(())
     }
 }
@@ -71,75 +66,63 @@ pub struct AggregateSumFunction<T, SumT> {
 
 impl<T, SumT> AggregateFunction for AggregateSumFunction<T, SumT>
 where
-    T: DFPrimitiveType + AsPrimitive<SumT>,
-    SumT: DFPrimitiveType + std::ops::Add<Output = SumT>,
-    Option<SumT>: Into<DataValue>,
+    T: PrimitiveType + AsPrimitive<SumT>,
+    SumT: PrimitiveType + ToDataType + std::ops::AddAssign,
 {
     fn name(&self) -> &str {
         "AggregateSumFunction"
     }
 
-    fn return_type(&self) -> Result<DataType> {
-        Ok(SumT::data_type())
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
+    fn return_type(&self) -> Result<DataTypePtr> {
+        Ok(SumT::to_data_type())
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(|| AggregateSumState::<SumT> { value: None });
+        place.write(|| AggregateSumState::<SumT> {
+            value: SumT::default(),
+        });
     }
 
     fn state_layout(&self) -> Layout {
         Layout::new::<AggregateSumState<SumT>>()
     }
 
-    fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
-        let value = arrays[0].sum()?;
-        let opt_sum: Result<SumT> = DFTryFrom::try_from(value);
-
-        if let Ok(s) = opt_sum {
-            let state = place.get::<AggregateSumState<SumT>>();
-            state.add(s);
-        }
-
+    fn accumulate(
+        &self,
+        place: StateAddr,
+        columns: &[ColumnRef],
+        validity: Option<&Bitmap>,
+        _input_rows: usize,
+    ) -> Result<()> {
+        let value = sum_primitive::<T, SumT>(&columns[0], validity)?;
+        let state = place.get::<AggregateSumState<SumT>>();
+        state.add(value);
         Ok(())
     }
 
+    // null bits can be ignored above the level of the aggregate function
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
         offset: usize,
-        arrays: &[Series],
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<()> {
-        let darray: &DFPrimitiveArray<T> = arrays[0].static_cast();
-        if darray.null_count() == 0 {
-            darray
-                .inner()
-                .values()
-                .as_slice()
-                .iter()
-                .zip(places.iter())
-                .for_each(|(v, place)| {
-                    let place = place.next(offset);
-                    let state = place.get::<AggregateSumState<SumT>>();
-                    state.add(v.as_());
-                });
-        } else {
-            darray
-                .into_iter()
-                .zip(places.iter())
-                .for_each(|(c, place)| {
-                    if let Some(v) = c {
-                        let place = place.next(offset);
-                        let state = place.get::<AggregateSumState<SumT>>();
-                        state.add(v.as_());
-                    }
-                });
-        }
+        let darray: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+        darray.iter().zip(places.iter()).for_each(|(c, place)| {
+            let place = place.next(offset);
+            let state = place.get::<AggregateSumState<SumT>>();
+            state.add(c.as_());
+        });
+        Ok(())
+    }
 
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let column: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+
+        let state = place.get::<AggregateSumState<SumT>>();
+        let v: SumT = unsafe { column.value_unchecked(row).as_() };
+        state.add(v);
         Ok(())
     }
 
@@ -155,29 +138,16 @@ where
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         let rhs = rhs.get::<AggregateSumState<SumT>>();
-        if let Some(s) = &rhs.value {
-            let state = place.get::<AggregateSumState<SumT>>();
-            state.add(*s);
-        }
+        let state = place.get::<AggregateSumState<SumT>>();
+        state.add(rhs.value);
         Ok(())
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
         let state = place.get::<AggregateSumState<SumT>>();
-        if let Some(val) = state.value {
-            let mut array = array
-                .as_mut_any()
-                .downcast_mut::<MutablePrimitiveArrayBuilder<SumT, true>>()
-                .ok_or_else(|| {
-                    ErrorCode::UnexpectedError(
-                        "error occured when downcast MutableArray".to_string(),
-                    )
-                })?;
-            array.push(val);
-        } else {
-            array.push_null();
-        }
+        let builder: &mut MutablePrimitiveColumn<SumT> = Series::check_get_mutable_column(array)?;
+        builder.append_value(state.value);
         Ok(())
     }
 }
@@ -190,9 +160,8 @@ impl<T, SumT> fmt::Display for AggregateSumFunction<T, SumT> {
 
 impl<T, SumT> AggregateSumFunction<T, SumT>
 where
-    T: DFPrimitiveType + AsPrimitive<SumT>,
-    SumT: DFPrimitiveType + std::ops::Add<Output = SumT>,
-    Option<SumT>: Into<DataValue>,
+    T: PrimitiveType + AsPrimitive<SumT>,
+    SumT: PrimitiveType + ToDataType + std::ops::AddAssign,
 {
     pub fn try_create(
         display_name: &str,
@@ -215,8 +184,8 @@ pub fn try_create_aggregate_sum_function(
     assert_unary_arguments(display_name, arguments.len())?;
 
     let data_type = arguments[0].data_type();
-    with_match_primitive_type!(data_type, |$T| {
-        AggregateSumFunction::<$T, <$T as DFPrimitiveType>::LargestType>::try_create(
+    with_match_primitive_type_id!(data_type.data_type_id(), |$T| {
+        AggregateSumFunction::<$T, <$T as PrimitiveType>::LargestType>::try_create(
              display_name,
              arguments,
         )
@@ -233,4 +202,31 @@ pub fn try_create_aggregate_sum_function(
 
 pub fn aggregate_sum_function_desc() -> AggregateFunctionDescription {
     AggregateFunctionDescription::creator(Box::new(try_create_aggregate_sum_function))
+}
+
+pub fn sum_primitive<T, SumT>(column: &ColumnRef, validity: Option<&Bitmap>) -> Result<SumT>
+where
+    T: PrimitiveType + AsPrimitive<SumT>,
+    SumT: PrimitiveType + std::ops::AddAssign,
+{
+    let inner: &PrimitiveColumn<T> = Series::check_get(column)?;
+
+    if let Some(validity) = validity {
+        let mut sum = SumT::default();
+        // TODO use simd version
+        inner.iter().zip(validity.iter()).for_each(|(t, b)| {
+            if b {
+                sum += t.as_();
+            }
+        });
+
+        Ok(sum)
+    } else {
+        let mut sum = SumT::default();
+        inner.iter().for_each(|t| {
+            sum += t.as_();
+        });
+
+        Ok(sum)
+    }
 }

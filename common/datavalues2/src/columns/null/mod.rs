@@ -23,7 +23,7 @@ use crate::prelude::*;
 mod mutable;
 
 pub use mutable::*;
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct NullColumn {
     length: usize,
 }
@@ -55,7 +55,7 @@ impl Column for NullColumn {
         Arc::new(NullType {})
     }
 
-    fn is_nullable(&self) -> bool {
+    fn is_null(&self) -> bool {
         true
     }
 
@@ -83,8 +83,28 @@ impl Column for NullColumn {
         Arc::new(NullArray::new_null(ArrowType::Null, self.length))
     }
 
+    fn arc(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
     fn slice(&self, _offset: usize, length: usize) -> ColumnRef {
         Arc::new(Self { length })
+    }
+
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        let length = filter.values().len() - filter.values().null_count();
+        Arc::new(Self { length })
+    }
+
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        let mut cnt = vec![0usize; scattered_size];
+        for i in indices {
+            cnt[*i] += 1;
+        }
+
+        cnt.iter()
+            .map(|c| Arc::new(Self::new(*c)) as ColumnRef)
+            .collect()
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
@@ -102,7 +122,20 @@ impl Column for NullColumn {
         Arc::new(self.clone())
     }
 
-    unsafe fn get_unchecked(&self, _index: usize) -> DataValue {
+    fn get(&self, _index: usize) -> DataValue {
         DataValue::Null
+    }
+}
+
+impl std::fmt::Debug for NullColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let data = if self.len() > 0 {
+            vec!["NULL...".to_string()]
+        } else {
+            vec![]
+        };
+        let iter = data.iter();
+        let head = "NullColumn";
+        display_fmt(iter, head, self.len(), self.data_type_id(), f)
     }
 }

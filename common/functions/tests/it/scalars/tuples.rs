@@ -12,34 +12,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use super::scalar_function2_test::test_eval;
+use super::scalar_function2_test::ScalarFunction2Test;
 
 #[test]
 fn test_tuple_function() -> Result<()> {
     let tests = vec![
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "one element to tuple",
-            nullable: false,
-            columns: vec![Series::new([0_u8]).into()],
-            expect: DataColumn::Constant(DataValue::Struct(vec![DataValue::UInt8(Some(0))]), 1),
+            columns: vec![Series::from_data([0_u8])],
+            expect: Series::from_data([0_u8]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "more element to tuple",
-            nullable: false,
-            columns: vec![Series::new([0_u8]).into(), Series::new([0_u8]).into()],
-            expect: DataColumn::Constant(
-                DataValue::Struct(vec![DataValue::UInt8(Some(0)), DataValue::UInt8(Some(0))]),
-                1,
-            ),
+            columns: vec![Series::from_data([0_u8]), Series::from_data([0_u8])],
+            expect: Series::from_data([0_u8]),
             error: "",
         },
     ];
 
-    test_scalar_functions(TupleFunction::try_create_func("")?, &tests)
+    let v1 = vec![DataValue::Struct(vec![DataValue::UInt64(0)])];
+    let v2 = vec![DataValue::Struct(vec![
+        DataValue::UInt64(0),
+        DataValue::UInt64(0),
+    ])];
+
+    let values = vec![v1, v2];
+
+    for (t, v) in tests.iter().zip(values.iter()) {
+        let func = TupleFunction::try_create_func("")?;
+        let result = test_eval(&func, &t.columns)?;
+        let result = result.convert_full_column();
+
+        let result = (0..result.len()).map(|i| result.get(i)).collect::<Vec<_>>();
+        assert!(&result == v)
+    }
+
+    Ok(())
 }

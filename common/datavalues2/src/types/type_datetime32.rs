@@ -25,22 +25,25 @@ use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DateTimeType {
+#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
+pub struct DateTime32Type {
     tz: Option<String>,
 }
 
-impl DateTimeType {
+impl DateTime32Type {
     pub fn create(tz: Option<String>) -> Self {
-        DateTimeType { tz }
+        DateTime32Type { tz }
     }
     pub fn arc(tz: Option<String>) -> DataTypePtr {
-        Arc::new(DateTimeType { tz })
+        Arc::new(DateTime32Type { tz })
+    }
+    pub fn tz(&self) -> Option<&String> {
+        self.tz.as_ref()
     }
 }
 
 #[typetag::serde]
-impl DataType for DateTimeType {
+impl DataType for DateTime32Type {
     fn data_type_id(&self) -> TypeID {
         TypeID::DateTime32
     }
@@ -48,6 +51,14 @@ impl DataType for DateTimeType {
     #[inline]
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn name(&self) -> &str {
+        "DateTime32"
+    }
+
+    fn aliases(&self) -> &[&str] {
+        &["DateTime"]
     }
 
     fn default_value(&self) -> DataValue {
@@ -85,7 +96,11 @@ impl DataType for DateTimeType {
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(DateTimeSerializer::<u32>::default())
+        let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
+        Box::new(DateTimeSerializer::<u32>::create(
+            tz.parse::<Tz>().unwrap(),
+            0,
+        ))
     }
 
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
@@ -94,5 +109,15 @@ impl DataType for DateTimeType {
             builder: MutablePrimitiveColumn::<u32>::with_capacity(capacity),
             tz: tz.parse::<Tz>().unwrap(),
         })
+    }
+
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutablePrimitiveColumn::<u32>::with_capacity(capacity))
+    }
+}
+
+impl std::fmt::Debug for DateTime32Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }

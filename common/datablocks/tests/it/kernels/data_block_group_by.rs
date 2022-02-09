@@ -13,19 +13,19 @@
 // limitations under the License.
 
 use common_datablocks::*;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 
 #[test]
 fn test_data_block_group_by() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::String, false),
+        DataField::new("a", i8::to_data_type()),
+        DataField::new("b", Vu8::to_data_type()),
     ]);
 
-    let block = DataBlock::create_by_array(schema, vec![
-        Series::new(vec![1i8, 1, 2, 1, 2, 3]),
-        Series::new(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
+    let block = DataBlock::create(schema, vec![
+        Series::from_data(vec![1i8, 1, 2, 1, 2, 3]),
+        Series::from_data(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
     ]);
 
     let columns = &["a".to_string(), "b".to_string()];

@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::prelude::DataColumnWithField;
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::prelude::ColumnWithField;
+use common_datavalues2::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::*;
@@ -34,7 +34,7 @@ struct TopNPushDownImpl {
     before_group_by_schema: Option<DataSchemaRef>,
     limit: Option<usize>,
     order_by: Vec<Expression>,
-    variables_range: HashMap<String, (Option<DataColumnWithField>, Option<DataColumnWithField>)>,
+    variables_range: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
 }
 
 impl PlanRewriter for TopNPushDownImpl {

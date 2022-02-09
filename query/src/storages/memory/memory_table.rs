@@ -18,7 +18,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::columns::DataColumn;
+use common_datavalues2::ColumnRef;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::TableInfo;
@@ -108,7 +108,7 @@ impl Table for MemoryTable {
                             .collect::<Vec<usize>>()
                             .iter()
                             .filter(|cid| projection_filter(**cid))
-                            .map(|cid| block.columns()[*cid].get_array_memory_size() as u64)
+                            .map(|cid| block.columns()[*cid].memory_size() as u64)
                             .sum::<u64>() as usize;
 
                         stats
@@ -146,7 +146,7 @@ impl Table for MemoryTable {
 
                     for raw_block in raw_blocks {
                         let raw_columns = raw_block.columns();
-                        let columns: Vec<DataColumn> =
+                        let columns: Vec<ColumnRef> =
                             prj.iter().map(|idx| raw_columns[*idx].clone()).collect();
 
                         pruned_blocks.push(DataBlock::create(pruned_schema.clone(), columns))

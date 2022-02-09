@@ -87,7 +87,7 @@ impl QueryCollectPushDowns {
         let mut smallest_size = usize::MAX;
         let columns_desc = table_desc.get_columns_desc();
         for (column_index, column_desc) in columns_desc.iter().enumerate() {
-            if let Ok(bytes) = column_desc.data_type.numeric_byte_size() {
+            if let Ok(bytes) = column_desc.data_type.data_type_id().numeric_byte_size() {
                 if smallest_size > bytes {
                     smallest_size = bytes;
                     smallest_index = column_index;

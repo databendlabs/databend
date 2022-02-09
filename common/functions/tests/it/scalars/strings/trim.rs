@@ -12,72 +12,67 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::LTrimFunction;
 use common_functions::scalars::RTrimFunction;
 use common_functions::scalars::TrimFunction;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions2;
+use crate::scalars::scalar_function2_test::ScalarFunction2Test;
 
 #[test]
 fn test_ltrim_function() -> Result<()> {
-    let tests = vec![ScalarFunctionTest {
+    let tests = vec![ScalarFunction2Test {
         name: "ltrim-abc-passed",
-        nullable: false,
-        columns: vec![Series::new(vec!["  abc"]).into()],
-        expect: DataColumn::Constant(DataValue::String(Some("abc".as_bytes().to_vec())), 1),
+        columns: vec![Series::from_data(vec!["  abc"])],
+        expect: Series::from_data(vec!["abc"]),
         error: "",
     }];
 
-    test_scalar_functions(LTrimFunction::try_create("ltrim")?, &tests)
+    test_scalar_functions2(LTrimFunction::try_create("ltrim")?, &tests)
 }
 
 #[test]
 fn test_rtrim_function() -> Result<()> {
-    let tests = vec![ScalarFunctionTest {
+    let tests = vec![ScalarFunction2Test {
         name: "rtrim-abc-passed",
-        nullable: false,
-        columns: vec![Series::new(vec!["abc  "]).into()],
-        expect: DataColumn::Constant(DataValue::String(Some("abc".as_bytes().to_vec())), 1),
+        columns: vec![Series::from_data(vec!["abc  "])],
+        expect: Series::from_data(vec!["abc"]),
         error: "",
     }];
 
-    test_scalar_functions(RTrimFunction::try_create("rtrim")?, &tests)
+    test_scalar_functions2(RTrimFunction::try_create("rtrim")?, &tests)
 }
 
 #[test]
 fn test_trim_function() -> Result<()> {
     let tests = vec![
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "trim-abc-passed",
-            nullable: false,
-            columns: vec![Series::new(vec!["   abc  "]).into()],
-            expect: DataColumn::Constant(DataValue::String(Some("abc".as_bytes().to_vec())), 1),
+            columns: vec![Series::from_data(vec!["   abc  "])],
+            expect: Series::from_data(vec!["abc"]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "trim-blank-passed",
-            nullable: false,
-            columns: vec![Series::new(vec!["     "]).into()],
-            expect: DataColumn::Constant(DataValue::String(Some("".as_bytes().to_vec())), 1),
+            columns: vec![Series::from_data(vec!["     "])],
+            expect: Series::from_data(vec![""]),
             error: "",
         },
     ];
 
-    test_scalar_functions(TrimFunction::try_create("trim")?, &tests)
+    test_scalar_functions2(TrimFunction::try_create("trim")?, &tests)
 }
 
 #[test]
 fn test_trim_nullable() -> Result<()> {
-    let tests = vec![ScalarFunctionTest {
+    let tests = vec![ScalarFunction2Test {
         name: "trim-nullable-passed",
-        nullable: true,
-        columns: vec![Series::new(vec![Option::<Vec<u8>>::None]).into()],
-        expect: DataColumn::Constant(DataValue::String(None), 1),
+        columns: vec![Series::from_data(vec![Option::<Vec<u8>>::None])],
+        expect: Series::from_data(vec![Option::<Vec<u8>>::None]),
         error: "",
     }];
 
-    test_scalar_functions(TrimFunction::try_create("trim")?, &tests)
+    test_scalar_functions2(TrimFunction::try_create("trim")?, &tests)
 }

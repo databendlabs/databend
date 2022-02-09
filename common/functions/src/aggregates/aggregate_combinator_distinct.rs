@@ -19,20 +19,20 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
+use common_arrow::arrow::bitmap::Bitmap;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_io::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::aggregate_function::AggregateFunction;
+use super::aggregate_function_factory::AggregateFunctionCreator;
+use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_function_factory::CombinatorDescription;
 use super::StateAddr;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::CombinatorDescription;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 use crate::aggregates::AggregateCountFunction;
-use crate::aggregates::AggregateFunction;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 struct DataGroupValues(Vec<DataGroupValue>);
@@ -73,7 +73,13 @@ impl AggregateDistinctCombinator {
     }
 
     pub fn uniq_desc() -> AggregateFunctionDescription {
-        AggregateFunctionDescription::creator(Box::new(Self::try_create_uniq))
+        let properties = super::aggregate_function_factory::AggregateFunctionProperties {
+            returns_default_when_only_null: true,
+        };
+        AggregateFunctionDescription::creator_with_properties(
+            Box::new(Self::try_create_uniq),
+            properties,
+        )
     }
 
     pub fn try_create(
@@ -109,12 +115,8 @@ impl AggregateFunction for AggregateDistinctCombinator {
         &self.name
     }
 
-    fn return_type(&self) -> Result<DataType> {
+    fn return_type(&self) -> Result<DataTypePtr> {
         self.nested.return_type()
-    }
-
-    fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
-        self.nested.nullable(input_schema)
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -133,50 +135,53 @@ impl AggregateFunction for AggregateDistinctCombinator {
         Layout::from_size_align(layout.size() + netesed.size(), layout.align()).unwrap()
     }
 
-    fn accumulate(&self, place: StateAddr, arrays: &[Series], input_rows: usize) -> Result<()> {
+    fn accumulate(
+        &self,
+        place: StateAddr,
+        columns: &[ColumnRef],
+        validity: Option<&Bitmap>,
+        input_rows: usize,
+    ) -> Result<()> {
         for row in 0..input_rows {
-            let values = arrays
-                .iter()
-                .map(|s| s.try_get(row))
-                .collect::<Result<Vec<_>>>()?;
+            let values = columns.iter().map(|s| s.get(row)).collect::<Vec<_>>();
 
-            if !values.iter().any(|c| c.is_null()) {
-                let state = place.get::<AggregateDistinctState>();
-                state.set.insert(DataGroupValues(
-                    values
-                        .iter()
-                        .map(DataGroupValue::try_from)
-                        .collect::<Result<Vec<_>>>()?,
-                ));
+            match validity {
+                Some(v) => {
+                    if v.get_bit(row) {
+                        let data_values = DataGroupValues(
+                            values
+                                .iter()
+                                .map(DataGroupValue::try_from)
+                                .collect::<Result<Vec<_>>>()?,
+                        );
+                        let state = place.get::<AggregateDistinctState>();
+                        state.set.insert(data_values);
+                    }
+                }
+                None => {
+                    let data_values = DataGroupValues(
+                        values
+                            .iter()
+                            .map(DataGroupValue::try_from)
+                            .collect::<Result<Vec<_>>>()?,
+                    );
+                    let state = place.get::<AggregateDistinctState>();
+                    state.set.insert(data_values);
+                }
             }
         }
         Ok(())
     }
 
-    fn accumulate_keys(
-        &self,
-        places: &[StateAddr],
-        offset: usize,
-        arrays: &[Series],
-        _input_rows: usize,
-    ) -> Result<()> {
-        for (row, place) in places.iter().enumerate() {
-            let values = arrays
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let values = columns.iter().map(|s| s.get(row)).collect::<Vec<_>>();
+        let state = place.get::<AggregateDistinctState>();
+        state.set.insert(DataGroupValues(
+            values
                 .iter()
-                .map(|s| s.try_get(row))
-                .collect::<Result<Vec<_>>>()?;
-
-            if !values.iter().any(|c| c.is_null()) {
-                let place = place.next(offset);
-                let state = place.get::<AggregateDistinctState>();
-                state.set.insert(DataGroupValues(
-                    values
-                        .iter()
-                        .map(DataGroupValue::try_from)
-                        .collect::<Result<Vec<_>>>()?,
-                ));
-            }
-        }
+                .map(DataGroupValue::try_from)
+                .collect::<Result<Vec<_>>>()?,
+        ));
 
         Ok(())
     }
@@ -200,7 +205,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
         let state = place.get::<AggregateDistinctState>();
 
         let layout = Layout::new::<AggregateDistinctState>();
@@ -208,22 +213,15 @@ impl AggregateFunction for AggregateDistinctCombinator {
 
         // faster path for count
         if self.nested.name() == "AggregateFunctionCount" {
-            let mut array = array
-                .as_mut_any()
-                .downcast_mut::<MutablePrimitiveArrayBuilder<u64, true>>()
-                .ok_or_else(|| {
-                    ErrorCode::UnexpectedError(
-                        "error occured when downcast MutableArray".to_string(),
-                    )
-                })?;
-            array.push(state.set.len() as u64);
+            let mut builder: &mut MutablePrimitiveColumn<u64> =
+                Series::check_get_mutable_column(array)?;
+            builder.append_value(state.set.len() as u64);
             Ok(())
         } else {
             if state.set.is_empty() {
                 return self.nested.merge_result(netest_place, array);
             }
             let mut results = Vec::with_capacity(state.set.len());
-
             state.set.iter().for_each(|group_values| {
                 let mut v = Vec::with_capacity(group_values.0.len());
                 group_values.0.iter().for_each(|group_value| {
@@ -242,14 +240,17 @@ impl AggregateFunction for AggregateDistinctCombinator {
                 })
                 .collect::<Vec<_>>();
 
-            let arrays = results
+            let columns = results
                 .iter()
                 .enumerate()
-                .map(|(i, v)| DataValue::try_into_data_array(v, self.arguments[i].data_type()))
+                .map(|(i, v)| {
+                    let data_type = self.arguments[i].data_type();
+                    data_type.create_column(v)
+                })
                 .collect::<Result<Vec<_>>>()?;
 
             self.nested
-                .accumulate(netest_place, &arrays, state.set.len())?;
+                .accumulate(netest_place, &columns, None, state.set.len())?;
             // merge_result
             self.nested.merge_result(netest_place, array)
         }
@@ -258,6 +259,9 @@ impl AggregateFunction for AggregateDistinctCombinator {
 
 impl fmt::Display for AggregateDistinctCombinator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.nested_name)
+        match self.nested_name.as_str() {
+            "uniq" => write!(f, "uniq"),
+            _ => write!(f, "{}distinct", self.nested_name),
+        }
     }
 }

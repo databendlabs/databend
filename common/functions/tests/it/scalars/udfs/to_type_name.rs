@@ -12,22 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions2;
+use crate::scalars::scalar_function2_test::ScalarFunction2Test;
 
 #[test]
 fn test_to_type_name_function() -> Result<()> {
-    let tests = vec![ScalarFunctionTest {
+    let tests = vec![ScalarFunction2Test {
         name: "to_type_name-example-passed",
-        nullable: false,
-        columns: vec![Series::new([true, true, true, false]).into()],
-        expect: Series::new(["Boolean", "Boolean", "Boolean", "Boolean"]).into(),
+        columns: vec![Series::from_data([true, true, true, false])],
+        expect: Series::from_data(["Boolean", "Boolean", "Boolean", "Boolean"]),
         error: "",
     }];
 
-    test_scalar_functions(ToTypeNameFunction::try_create("toTypeName")?, &tests)
+    test_scalar_functions2(ToTypeNameFunction::try_create("toTypeName")?, &tests)
 }

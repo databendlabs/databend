@@ -42,10 +42,12 @@ macro_rules! with_match_primitive_type {
 }
 
 #[macro_export]
-macro_rules! with_match_primitive_types {
+macro_rules! with_match_primitive_type_ids {
     (
     $type0:expr, $type1:expr, | $_a:tt $T0:ident, $_b:tt $T1:ident | $body:tt,  $nbody:tt
 ) => {{
+        use common_datavalues2::prelude::TypeID::*;
+
         macro_rules! __with_types__ {
             ( $_a $T0:ident, $_b $T1:ident ) => {
                 $body
@@ -70,8 +72,6 @@ macro_rules! with_match_primitive_types {
             };
         }
 
-        use common_datavalues::prelude::DataType::*;
-
         match $type0 {
             Int8 => __match_type__! { i8 },
             Int16 => __match_type__! { i16 },
@@ -91,13 +91,15 @@ macro_rules! with_match_primitive_types {
 #[macro_export]
 macro_rules! with_match_date_date_time_types {
     ($dispatch: ident, $data_type: expr,  $($args:expr),*) => {
-        use common_datavalues::prelude::DataType;
         match $data_type {
-            DataType::Date16 => {
-                $dispatch! { u16, DataType::UInt16, $($args),* }
+            TypeID::Date16 => {
+                $dispatch! { u16,  $($args),* }
             },
-            DataType::DateTime32(_) => {
-                $dispatch! { u32, DataType::UInt32, $($args),* }
+            TypeID::Date32 => {
+                $dispatch! { i32,  $($args),* }
+            }
+            TypeID::DateTime32 => {
+                $dispatch! { u32,  $($args),* }
             },
             _ => {},
         }
@@ -107,9 +109,21 @@ macro_rules! with_match_date_date_time_types {
 #[macro_export]
 macro_rules! with_match_unsigned_numeric_types {
     ($dispatch: ident, $data_type: expr,  $($args:expr),*) => {
-        $dispatch! { u8, $data_type,      $($args),* }
-        $dispatch! { u16, $data_type,     $($args),* }
-        $dispatch! { u32, $data_type,     $($args),* }
-        $dispatch! { u64, $data_type,     $($args),* }
+
+        match $data_type {
+            TypeID::UInt8 => {
+                $dispatch! { u8,  $($args),* }
+            },
+            TypeID::UInt16 => {
+                $dispatch! { u16,  $($args),* }
+            }
+            TypeID::UInt32 => {
+                $dispatch! { u32,  $($args),* }
+            },
+            TypeID::UInt64 => {
+                $dispatch! { u64,  $($args),* }
+            },
+            _ => {},
+        }
     };
 }

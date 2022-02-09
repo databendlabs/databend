@@ -17,7 +17,8 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
+use common_arrow::arrow::bitmap::Bitmap;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -30,7 +31,7 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_binary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
-use crate::with_match_primitive_types;
+use crate::with_match_primitive_type_ids;
 
 #[derive(Serialize, Deserialize)]
 pub struct AggregateCovarianceState {
@@ -130,20 +131,16 @@ pub struct AggregateCovarianceFunction<T0, T1, R> {
 
 impl<T0, T1, R> AggregateFunction for AggregateCovarianceFunction<T0, T1, R>
 where
-    T0: DFPrimitiveType + AsPrimitive<f64>,
-    T1: DFPrimitiveType + AsPrimitive<f64>,
+    T0: PrimitiveType + AsPrimitive<f64>,
+    T1: PrimitiveType + AsPrimitive<f64>,
     R: AggregateCovariance,
 {
     fn name(&self) -> &str {
         R::name()
     }
 
-    fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::Float64)
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
+    fn return_type(&self) -> Result<DataTypePtr> {
+        Ok(f64::to_data_type())
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -159,32 +156,35 @@ where
         Layout::new::<AggregateCovarianceState>()
     }
 
-    fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
+    fn accumulate(
+        &self,
+        place: StateAddr,
+        columns: &[common_datavalues2::ColumnRef],
+        validity: Option<&Bitmap>,
+        _input_rows: usize,
+    ) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        let left: &DFPrimitiveArray<T0> = arrays[0].static_cast();
-        let right: &DFPrimitiveArray<T1> = arrays[1].static_cast();
+        let left: &PrimitiveColumn<T0> = unsafe { Series::static_cast(&columns[0]) };
+        let right: &PrimitiveColumn<T1> = unsafe { Series::static_cast(&columns[1]) };
 
-        if left.null_count() == left.len() || right.null_count() == right.len() {
-            // do nothing for all None case
-            return Ok(());
+        match validity {
+            Some(bitmap) => {
+                left.iter().zip(right.iter()).zip(bitmap.iter()).for_each(
+                    |((left_val, right_val), valid)| {
+                        if valid {
+                            state.add(left_val.as_(), right_val.as_());
+                        }
+                    },
+                );
+            }
+            None => {
+                left.iter()
+                    .zip(right.iter())
+                    .for_each(|(left_val, right_val)| {
+                        state.add(left_val.as_(), right_val.as_());
+                    });
+            }
         }
-
-        if left.null_count() == 0 && right.null_count() == 0 {
-            left.into_no_null_iter()
-                .zip(right.into_no_null_iter())
-                .for_each(|(left_val, right_val)| {
-                    state.add(left_val.as_(), right_val.as_());
-                });
-            return Ok(());
-        }
-
-        left.iter()
-            .zip(right.iter())
-            .for_each(|(left_opt, right_opt)| {
-                if let (Some(left_val), Some(right_val)) = (left_opt, right_opt) {
-                    state.add(left_val.as_(), right_val.as_());
-                }
-            });
         Ok(())
     }
 
@@ -192,39 +192,31 @@ where
         &self,
         places: &[StateAddr],
         offset: usize,
-        arrays: &[Series],
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<()> {
-        let left: &DFPrimitiveArray<T0> = arrays[0].static_cast();
-        let right: &DFPrimitiveArray<T1> = arrays[1].static_cast();
-
-        if left.null_count() == left.len() || right.null_count() == right.len() {
-            // do nothing for all None case
-            return Ok(());
-        }
-
-        if left.null_count() == 0 && right.null_count() == 0 {
-            left.into_no_null_iter()
-                .zip(right.into_no_null_iter())
-                .zip(places.iter())
-                .for_each(|((left_val, right_val), place)| {
-                    let place = place.next(offset);
-                    let state = place.get::<AggregateCovarianceState>();
-                    state.add(left_val.as_(), right_val.as_());
-                });
-            return Ok(());
-        }
+        let left: &PrimitiveColumn<T0> = unsafe { Series::static_cast(&columns[0]) };
+        let right: &PrimitiveColumn<T1> = unsafe { Series::static_cast(&columns[1]) };
 
         left.iter().zip(right.iter()).zip(places.iter()).for_each(
-            |((left_opt, right_opt), place)| {
-                if let (Some(left_val), Some(right_val)) = (left_opt, right_opt) {
-                    let place = place.next(offset);
-                    let state = place.get::<AggregateCovarianceState>();
-                    state.add(left_val.as_(), right_val.as_());
-                }
+            |((left_val, right_val), place)| {
+                let place = place.next(offset);
+                let state = place.get::<AggregateCovarianceState>();
+                state.add(left_val.as_(), right_val.as_());
             },
         );
+        Ok(())
+    }
 
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let left: &PrimitiveColumn<T0> = unsafe { Series::static_cast(&columns[0]) };
+        let right: &PrimitiveColumn<T1> = unsafe { Series::static_cast(&columns[1]) };
+
+        let left_val = unsafe { left.value_unchecked(row) };
+        let right_val = unsafe { right.value_unchecked(row) };
+
+        let state = place.get::<AggregateCovarianceState>();
+        state.add(left_val.as_(), right_val.as_());
         Ok(())
     }
 
@@ -248,15 +240,10 @@ where
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
-        let mut array = array
-            .as_mut_any()
-            .downcast_mut::<MutablePrimitiveArrayBuilder<f64, true>>()
-            .ok_or_else(|| {
-                ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
-            })?;
+    fn merge_result(&self, place: StateAddr, column: &mut dyn MutableColumn) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        array.push_option(R::apply(state));
+        let column: &mut MutablePrimitiveColumn<f64> = Series::check_get_mutable_column(column)?;
+        column.append_value(R::apply(state));
         Ok(())
     }
 }
@@ -269,8 +256,8 @@ impl<T0, T1, R> fmt::Display for AggregateCovarianceFunction<T0, T1, R> {
 
 impl<T0, T1, R> AggregateCovarianceFunction<T0, T1, R>
 where
-    T0: DFPrimitiveType + AsPrimitive<f64>,
-    T1: DFPrimitiveType + AsPrimitive<f64>,
+    T0: PrimitiveType + AsPrimitive<f64>,
+    T1: PrimitiveType + AsPrimitive<f64>,
     R: AggregateCovariance,
 {
     pub fn try_create(
@@ -297,7 +284,7 @@ pub fn try_create_aggregate_covariance<R: AggregateCovariance>(
     let data_type0 = arguments[0].data_type();
     let data_type1 = arguments[1].data_type();
 
-    with_match_primitive_types!(data_type0, data_type1, |$T0, $T1| {
+    with_match_primitive_type_ids!(data_type0.data_type_id(), data_type1.data_type_id(), |$T0, $T1| {
         AggregateCovarianceFunction::<$T0, $T1, R>::try_create(display_name, arguments)
     },
     {
@@ -311,7 +298,7 @@ pub fn try_create_aggregate_covariance<R: AggregateCovariance>(
 pub trait AggregateCovariance: Send + Sync + 'static {
     fn name() -> &'static str;
 
-    fn apply(state: &AggregateCovarianceState) -> Option<f64>;
+    fn apply(state: &AggregateCovarianceState) -> f64;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -323,11 +310,11 @@ impl AggregateCovariance for AggregateCovarianceSampleImpl {
         "AggregateCovarianceSampleFunction"
     }
 
-    fn apply(state: &AggregateCovarianceState) -> Option<f64> {
+    fn apply(state: &AggregateCovarianceState) -> f64 {
         if state.count < 2 {
-            Some(f64::INFINITY)
+            f64::INFINITY
         } else {
-            Some(state.co_moments / (state.count - 1) as f64)
+            state.co_moments / (state.count - 1) as f64
         }
     }
 }
@@ -349,13 +336,13 @@ impl AggregateCovariance for AggregateCovariancePopulationImpl {
         "AggregateCovariancePopulationFunction"
     }
 
-    fn apply(state: &AggregateCovarianceState) -> Option<f64> {
+    fn apply(state: &AggregateCovarianceState) -> f64 {
         if state.count == 0 {
-            Some(f64::INFINITY)
+            f64::INFINITY
         } else if state.count == 1 {
-            Some(0.0)
+            0.0
         } else {
-            Some(state.co_moments / state.count as f64)
+            state.co_moments / state.count as f64
         }
     }
 }

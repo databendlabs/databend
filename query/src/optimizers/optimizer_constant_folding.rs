@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::Function2Factory;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
@@ -47,7 +47,7 @@ impl ConstantFoldingImpl {
 
     fn rewrite_function<F>(op: &str, args: Expressions, name: String, f: F) -> Result<Expression>
     where F: Fn(&str, Expressions) -> Expression {
-        let factory = FunctionFactory::instance();
+        let factory = Function2Factory::instance();
         let function_features = factory.get_features(op)?;
 
         if function_features.is_deterministic && Self::constants_arguments(&args) {
@@ -74,12 +74,13 @@ impl ConstantFoldingImpl {
     }
 
     fn execute_expression(expression: Expression, origin_name: String) -> Result<Expression> {
-        let input_fields = vec![DataField::new("_dummy", DataType::UInt8, false)];
+        let input_fields = vec![DataField::new("_dummy", u8::to_data_type())];
         let input_schema = Arc::new(DataSchema::new(input_fields));
 
         let data_type = expression.to_data_type(&input_schema)?;
         let expression_executor = Self::expr_executor(&input_schema, expression)?;
-        let dummy_columns = vec![DataColumn::Constant(DataValue::UInt8(Some(1)), 1)];
+        let const_col = ConstColumn::new(Series::from_data(vec![1u8]), 1);
+        let dummy_columns = vec![Arc::new(const_col) as ColumnRef];
         let data_block = DataBlock::create(input_schema, dummy_columns);
         let executed_data_block = expression_executor.execute(&data_block)?;
 
@@ -89,13 +90,13 @@ impl ConstantFoldingImpl {
     fn convert_to_expression(
         column_name: String,
         data_block: DataBlock,
-        data_type: DataType,
+        data_type: DataTypePtr,
     ) -> Result<Expression> {
         debug_assert!(data_block.num_rows() == 1);
         debug_assert!(data_block.num_columns() == 1);
 
         let column_name = Some(column_name);
-        let value = data_block.column(0).try_get(0)?;
+        let value = data_block.column(0).get_checked(0)?;
         Ok(Expression::Literal {
             value,
             column_name,
@@ -162,14 +163,16 @@ impl PlanRewriter for ConstantFoldingImpl {
 
             fn mutate_cast(
                 &mut self,
-                typ: &DataType,
+                typ: &DataTypePtr,
                 expr: Expression,
                 origin_expr: &Expression,
+                is_nullable: bool,
             ) -> Result<Expression> {
                 if matches!(&expr, Expression::Literal { .. }) {
                     let optimize_expr = Expression::Cast {
                         expr: Box::new(expr),
                         data_type: typ.clone(),
+                        is_nullable,
                     };
 
                     return ConstantFoldingImpl::execute_expression(
@@ -181,6 +184,7 @@ impl PlanRewriter for ConstantFoldingImpl {
                 Ok(Expression::Cast {
                     expr: Box::new(expr),
                     data_type: typ.clone(),
+                    is_nullable,
                 })
             }
         }
