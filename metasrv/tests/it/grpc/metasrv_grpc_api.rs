@@ -98,8 +98,6 @@ async fn test_restart() -> anyhow::Result<()> {
 
         tokio::time::sleep(Duration::from_millis(1000)).await;
 
-        // restart by opening existent meta db
-        tc.config.raft_config.boot = false;
         crate::tests::start_metasrv_with_context(&mut tc).await?;
     }
 

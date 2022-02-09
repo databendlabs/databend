@@ -379,12 +379,6 @@ impl MetaNode {
     }
 
     async fn do_start(conf: &RaftConfig) -> Result<Arc<MetaNode>, MetaError> {
-        // TODO(xp): remove boot mode
-        if conf.boot {
-            let mn = Self::open_create_boot(conf, None, Some(()), Some(vec![])).await?;
-            return Ok(mn);
-        }
-
         if conf.single {
             let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), Some(vec![])).await?;
             return Ok(mn);
