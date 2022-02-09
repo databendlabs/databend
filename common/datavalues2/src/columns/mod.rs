@@ -21,6 +21,7 @@ mod column;
 mod column_with_field;
 mod const_;
 mod eq;
+#[allow(clippy::ptr_arg)]
 mod group_hash;
 mod mutable;
 mod null;

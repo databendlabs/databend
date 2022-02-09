@@ -50,8 +50,8 @@ where F: ScalarUnaryFunction<L, O>
 
     /// Evaluate the expression with the given array.
     pub fn eval(&self, l: &'a ColumnRef) -> Result<<O as Scalar>::ColumnType> {
-        let left = ColumnViewerIter::<L>::try_create(l)?;
-        let it = left.map(|a| (self.f).eval(a));
+        let left = Series::check_get_scalar::<L>(l)?;
+        let it = left.scalar_iter().map(|a| (self.f).eval(a));
         Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
     }
 }

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::bitmap::utils::BitmapIter;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -172,13 +173,15 @@ impl ScalarColumn for BooleanColumn {
     type Builder = MutableBooleanColumn;
     type OwnedItem = bool;
     type RefItem<'a> = bool;
+    type Iterator<'a> = BitmapIter<'a>;
 
+    #[inline]
     fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
         self.values.get_bit(idx)
     }
 
-    fn iter(&self) -> ScalarColumnIterator<Self> {
-        ScalarColumnIterator::new(self)
+    fn scalar_iter(&self) -> Self::Iterator<'_> {
+        self.values.iter()
     }
 
     fn from_slice(data: &[Self::RefItem<'_>]) -> Self {

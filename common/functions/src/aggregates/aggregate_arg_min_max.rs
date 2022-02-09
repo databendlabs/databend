@@ -125,7 +125,7 @@ where
                 self.add(v.as_scalar_ref(), data_value)?;
             }
         } else {
-            let v = col.iter().enumerate().reduce(|acc, (idx, val)| {
+            let v = col.scalar_iter().enumerate().reduce(|acc, (idx, val)| {
                 if C::change_if(acc.1, val) {
                     (idx, val)
                 } else {
@@ -219,7 +219,7 @@ where
     ) -> Result<()> {
         let col: &<S as Scalar>::ColumnType = unsafe { Series::static_cast(&columns[1]) };
 
-        col.iter()
+        col.scalar_iter()
             .enumerate()
             .zip(places.iter())
             .try_for_each(|((row, item), place)| {

@@ -95,7 +95,6 @@ where
         let lhs = columns[0].column();
         let rhs = columns[1].column();
 
-        let left = ColumnViewerIter::<L>::try_create(lhs)?;
         let right = ColumnViewerIter::<R>::try_create(rhs)?;
 
         match (lhs.is_const(), rhs.is_const()) {
@@ -104,10 +103,12 @@ where
                 if r == M::zero() {
                     return Err(ErrorCode::BadArguments("Division by zero"));
                 }
+                let left: &PrimitiveColumn<L> = Series::check_get(lhs)?;
                 let col = rem_scalar::<L, M, O>(left, &r)?;
                 Ok(Arc::new(col))
             }
             _ => {
+                let left = ColumnViewerIter::<L>::try_create(lhs)?;
                 let mut col_builder = MutablePrimitiveColumn::<O>::with_capacity(left.size);
                 for (l, r) in left.zip(right) {
                     let l = l.to_owned_scalar().as_();

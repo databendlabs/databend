@@ -141,7 +141,7 @@ where
             }
         } else {
             let v = col
-                .iter()
+                .scalar_iter()
                 .reduce(|a, b| if !C::change_if(a, b) { a } else { b });
 
             if let Some(v) = v {

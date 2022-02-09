@@ -94,7 +94,7 @@ impl ScalarColumnBuilder for MutableBooleanColumn {
         }
     }
 
-    fn push(&mut self, value: <Self::ColumnType as crate::ScalarColumn>::RefItem<'_>) {
+    fn push(&mut self, value: bool) {
         self.values.push(value);
     }
 

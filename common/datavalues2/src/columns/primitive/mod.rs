@@ -265,13 +265,15 @@ where
     type Builder = MutablePrimitiveColumn<T>;
     type OwnedItem = T;
     type RefItem<'a> = T;
+    type Iterator<'a> = PrimitiveIter<'a, T>;
 
+    #[inline]
     fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
         self.values[idx]
     }
 
-    fn iter(&self) -> ScalarColumnIterator<Self> {
-        ScalarColumnIterator::new(self)
+    fn scalar_iter(&self) -> Self::Iterator<'_> {
+        PrimitiveIter::new(self)
     }
 
     fn from_slice(data: &[Self::RefItem<'_>]) -> Self {

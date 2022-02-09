@@ -27,10 +27,12 @@ where for<'a> Self::OwnedItem: Scalar<RefType<'a> = Self::RefItem<'a>>
     type OwnedItem: Scalar<ColumnType = Self>;
     type RefItem<'a>: ScalarRef<'a, ScalarType = Self::OwnedItem, ColumnType = Self>
     where Self: 'a;
+    type Iterator<'a>: Iterator<Item = Self::RefItem<'a>>;
 
     fn get_data(&self, idx: usize) -> Self::RefItem<'_>;
+
     /// Get iterator of this column.
-    fn iter(&self) -> ScalarColumnIterator<Self>;
+    fn scalar_iter(&self) -> Self::Iterator<'_>;
 
     /// Bulid array from slice
     fn from_slice(data: &[Self::RefItem<'_>]) -> Self {
@@ -75,34 +77,18 @@ pub trait ScalarColumnBuilder: MutableColumn {
     /// Append a value to builder.
     fn push(&mut self, value: <Self::ColumnType as ScalarColumn>::RefItem<'_>);
 
+    /// Append a value to builder.
+    fn build_const(
+        &mut self,
+        value: <Self::ColumnType as ScalarColumn>::RefItem<'_>,
+        size: usize,
+    ) -> ColumnRef {
+        self.push(value);
+        let col = self.finish();
+        ConstColumn::new(col.arc(), size).arc()
+    }
+
     /// Finish build and return a new array.
     /// Did not consume itself, we can reuse this builder
     fn finish(&mut self) -> Self::ColumnType;
-}
-
-/// An iterator that iterators on any [`ScalarColumn`] type.
-pub struct ScalarColumnIterator<'a, A: ScalarColumn> {
-    column: &'a A,
-    pos: usize,
-}
-
-impl<'a, A: ScalarColumn> Iterator for ScalarColumnIterator<'a, A> {
-    type Item = A::RefItem<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.pos >= self.column.len() {
-            None
-        } else {
-            let item = self.column.get_data(self.pos);
-            self.pos += 1;
-            Some(item)
-        }
-    }
-}
-
-impl<'a, A: ScalarColumn> ScalarColumnIterator<'a, A> {
-    /// Create an [`ScalarColumnIterator`] from [`column`].
-    pub fn new(column: &'a A) -> Self {
-        Self { column, pos: 0 }
-    }
 }

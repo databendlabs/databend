@@ -90,11 +90,13 @@ where
     ) -> Result<()> {
         let col: &<S as Scalar>::ColumnType = unsafe { Series::static_cast(&columns[0]) };
 
-        col.iter().zip(places.iter()).for_each(|(item, place)| {
-            let addr = place.next(offset);
-            let state = addr.get::<State>();
-            state.add(item)
-        });
+        col.scalar_iter()
+            .zip(places.iter())
+            .for_each(|(item, place)| {
+                let addr = place.next(offset);
+                let state = addr.get::<State>();
+                state.add(item)
+            });
         Ok(())
     }
 

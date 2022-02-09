@@ -245,7 +245,9 @@ impl ScalarColumn for StringColumn {
     type Builder = MutableStringColumn;
     type OwnedItem = Vec<u8>;
     type RefItem<'a> = &'a [u8];
+    type Iterator<'a> = StringValueIter<'a>;
 
+    #[inline]
     fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
         let start = self.offsets[idx].to_usize();
         let end = self.offsets[idx + 1].to_usize();
@@ -254,8 +256,8 @@ impl ScalarColumn for StringColumn {
         unsafe { self.values.get_unchecked(start..end) }
     }
 
-    fn iter(&self) -> ScalarColumnIterator<Self> {
-        ScalarColumnIterator::new(self)
+    fn scalar_iter(&self) -> Self::Iterator<'_> {
+        StringValueIter::new(self)
     }
 }
 

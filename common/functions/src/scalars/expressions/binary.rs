@@ -50,10 +50,48 @@ where F: ScalarBinaryFunction<L, R, O>
 
     /// Evaluate the expression with the given array.
     pub fn eval(&self, l: &ColumnRef, r: &ColumnRef) -> Result<<O as Scalar>::ColumnType> {
-        let left = ColumnViewerIter::<L>::try_create(l)?;
-        let right = ColumnViewerIter::<R>::try_create(r)?;
+        debug_assert!(
+            l.len() == r.len(),
+            "Size of columns must match to apply binary expression"
+        );
 
-        let it = left.zip(right).map(|(a, b)| self.func.eval(a, b));
-        Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
+        match (l.is_const(), r.is_const()) {
+            (false, true) => {
+                let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(l) };
+                let right = ColumnViewer::<R>::create(r)?;
+
+                let b = right.value(0);
+                let it = left.scalar_iter().map(|a| self.func.eval(a, b));
+                Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
+            }
+
+            (false, false) => {
+                let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(l) };
+                let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
+
+                let it = left
+                    .scalar_iter()
+                    .zip(right.scalar_iter())
+                    .map(|(a, b)| self.func.eval(a, b));
+                Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
+            }
+
+            (true, false) => {
+                let left = ColumnViewer::<L>::create(r)?;
+                let a = left.value(0);
+
+                let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
+                let it = right.scalar_iter().map(|b| self.func.eval(a, b));
+                Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
+            }
+
+            (_, _) => {
+                let left = ColumnViewerIter::<L>::try_create(l)?;
+                let right = ColumnViewerIter::<R>::try_create(r)?;
+
+                let it = left.zip(right).map(|(a, b)| self.func.eval(a, b));
+                Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
+            }
+        }
     }
 }

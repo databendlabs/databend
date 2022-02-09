@@ -23,7 +23,7 @@ use strength_reduce::StrengthReducedU64;
 use strength_reduce::StrengthReducedU8;
 
 // https://github.com/jorgecarleitao/arrow2/blob/main/src/compute/arithmetics/basic/rem.rs#L95
-pub fn rem_scalar<L, R, O>(lhs: ColumnViewerIter<L>, rhs: &R) -> Result<<O as Scalar>::ColumnType>
+pub fn rem_scalar<L, R, O>(lhs: &PrimitiveColumn<L>, rhs: &R) -> Result<<O as Scalar>::ColumnType>
 where
     L: PrimitiveType + AsPrimitive<R>,
     R: PrimitiveType + AsPrimitive<O> + Rem<Output = R> + ToDataType,
@@ -38,37 +38,37 @@ where
         TypeID::UInt64 => {
             let rhs = rhs.to_u64().unwrap();
             let reduced_rem = StrengthReducedU64::new(rhs);
-            let it = lhs.map(|lhs| {
-                AsPrimitive::<O>::as_(lhs.to_owned_scalar().to_u64().unwrap() % reduced_rem)
-            });
+            let it = lhs
+                .iter()
+                .map(|lhs| AsPrimitive::<O>::as_(lhs.to_u64().unwrap() % reduced_rem));
             Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
         }
         TypeID::UInt32 => {
             let rhs = rhs.to_u32().unwrap();
             let reduced_rem = StrengthReducedU32::new(rhs);
-            let it = lhs.map(|lhs| {
-                AsPrimitive::<O>::as_(lhs.to_owned_scalar().to_u32().unwrap() % reduced_rem)
-            });
+            let it = lhs
+                .iter()
+                .map(|lhs| AsPrimitive::<O>::as_(lhs.to_u32().unwrap() % reduced_rem));
             Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
         }
         TypeID::UInt16 => {
             let rhs = rhs.to_u16().unwrap();
             let reduced_rem = StrengthReducedU16::new(rhs);
-            let it = lhs.map(|lhs| {
-                AsPrimitive::<O>::as_(lhs.to_owned_scalar().to_u16().unwrap() % reduced_rem)
-            });
+            let it = lhs
+                .iter()
+                .map(|lhs| AsPrimitive::<O>::as_(lhs.to_u16().unwrap() % reduced_rem));
             Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
         }
         TypeID::UInt8 => {
             let rhs = rhs.to_u8().unwrap();
             let reduced_rem = StrengthReducedU8::new(rhs);
-            let it = lhs.map(|lhs| {
-                AsPrimitive::<O>::as_(lhs.to_owned_scalar().to_u8().unwrap() % reduced_rem)
-            });
+            let it = lhs
+                .iter()
+                .map(|lhs| AsPrimitive::<O>::as_(lhs.to_u8().unwrap() % reduced_rem));
             Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
         }
         _ => {
-            let it = lhs.map(|lhs| AsPrimitive::<O>::as_(lhs.to_owned_scalar().as_() % rhs));
+            let it = lhs.iter().map(|lhs| AsPrimitive::<O>::as_(lhs.as_() % rhs));
             Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
         }
     }
