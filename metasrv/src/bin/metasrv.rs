@@ -44,8 +44,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     init_default_metrics_recorder();
 
     tracing::info!(
-        "Starting MetaNode boot:{} single: {} with config: {:?}",
-        conf.raft_config.boot,
+        "Starting MetaNode single: {} with config: {:?}",
         conf.raft_config.single,
         conf
     );

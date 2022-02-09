@@ -182,7 +182,6 @@ impl Config {
             u64,
             raft_config::KVSRV_INSTALL_SNAPSHOT_TIMEOUT
         );
-        load_field_from_env!(cfg.raft_config.boot, bool, raft_config::KVSRV_BOOT);
         load_field_from_env!(cfg.raft_config.single, bool, raft_config::KVSRV_SINGLE);
         load_field_from_env!(cfg.raft_config.id, u64, raft_config::KVSRV_ID);
     }
