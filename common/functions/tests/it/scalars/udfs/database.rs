@@ -12,22 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions2;
+use crate::scalars::scalar_function2_test::ScalarFunction2Test;
 
 #[test]
 fn test_database_function() -> Result<()> {
-    let tests = vec![ScalarFunctionTest {
+    let tests = vec![ScalarFunction2Test {
         name: "database-function-passed",
-        nullable: false,
-        columns: vec![Series::new(["default"]).into(), Series::new([4]).into()],
-        expect: Series::new(["default"]).into(),
+        columns: vec![Series::from_data(["default"]), Series::from_data([4])],
+        expect: Series::from_data(["default"]),
         error: "",
     }];
 
-    test_scalar_functions(DatabaseFunction::try_create("database")?, &tests)
+    test_scalar_functions2(DatabaseFunction::try_create("database")?, &tests)
 }

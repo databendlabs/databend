@@ -22,11 +22,12 @@ use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Default, Clone, Copy, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, Copy, serde::Deserialize, serde::Serialize)]
 
 pub struct PrimitiveDataType<
     T: PrimitiveType + Clone + Copy + std::fmt::Debug + Into<DataValue> + serde::Serialize,
 > {
+    #[serde(skip)]
     _t: PhantomData<T>,
 }
 
@@ -50,26 +51,14 @@ pub fn create_primitive_datatype<T: PrimitiveType>() -> Arc<dyn DataType> {
     }
 }
 
-pub type Int8Type = PrimitiveDataType<i8>;
-pub type Int16Type = PrimitiveDataType<i16>;
-pub type Int32Type = PrimitiveDataType<i32>;
-pub type Int64Type = PrimitiveDataType<i64>;
-pub type UInt8Type = PrimitiveDataType<u8>;
-pub type UInt16Type = PrimitiveDataType<u16>;
-pub type UInt32Type = PrimitiveDataType<u32>;
-pub type UInt64Type = PrimitiveDataType<u64>;
-pub type Float32Type = PrimitiveDataType<f32>;
-pub type Float64Type = PrimitiveDataType<f64>;
-
 macro_rules! impl_numeric {
-    ($ty:ident, $tname:ident) => {
+    ($ty:ident, $tname:ident, $name: expr, $alias: expr) => {
         impl PrimitiveDataType<$ty> {
             pub fn arc() -> DataTypePtr {
                 Arc::new(Self { _t: PhantomData })
             }
         }
 
-        #[typetag::serde]
         impl DataType for PrimitiveDataType<$ty> {
             fn data_type_id(&self) -> TypeID {
                 TypeID::$tname
@@ -78,6 +67,14 @@ macro_rules! impl_numeric {
             #[inline]
             fn as_any(&self) -> &dyn std::any::Any {
                 self
+            }
+
+            fn name(&self) -> &str {
+                $name
+            }
+
+            fn aliases(&self) -> &[&str] {
+                $alias
             }
 
             fn default_value(&self) -> DataValue {
@@ -112,19 +109,45 @@ macro_rules! impl_numeric {
                     builder: MutablePrimitiveColumn::<$ty>::with_capacity(capacity),
                 })
             }
+
+            fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+                Box::new(MutablePrimitiveColumn::<$ty>::with_capacity(capacity))
+            }
+
+            #[doc(hidden)]
+            fn typetag_name(&self) -> &'static str {
+                concat!($name, "Type")
+            }
+
+            #[doc(hidden)]
+            fn typetag_deserialize(&self) {}
+        }
+
+         paste::paste!{
+                pub type [<$tname Type>] = PrimitiveDataType<$ty>;
+         }
+
+        typetag::inventory::submit! {
+            <dyn DataType> ::typetag_register(concat!($name, "Type"),(|deserializer|std::result::Result::Ok(std::boxed::Box::new(typetag::erased_serde::deserialize:: <PrimitiveDataType<$ty>>(deserializer)?),))as typetag::DeserializeFn<<dyn DataType as typetag::Strictest> ::Object> ,)
+        }
+
+        impl std::fmt::Debug for PrimitiveDataType<$ty> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.name())
+            }
         }
     };
 }
+//
+impl_numeric!(u8, UInt8, "UInt8", &[]);
+impl_numeric!(u16, UInt16, "UInt16", &[]);
+impl_numeric!(u32, UInt32, "UInt32", &[]);
+impl_numeric!(u64, UInt64, "UInt64", &[]);
 
-impl_numeric!(u8, UInt8);
-impl_numeric!(u16, UInt16);
-impl_numeric!(u32, UInt32);
-impl_numeric!(u64, UInt64);
+impl_numeric!(i8, Int8, "Int8", &["tinyint"]);
+impl_numeric!(i16, Int16, "Int16", &["smallint"]);
+impl_numeric!(i32, Int32, "Int32", &["int"]);
+impl_numeric!(i64, Int64, "Int64", &["bigint"]);
 
-impl_numeric!(i8, Int8);
-impl_numeric!(i16, Int16);
-impl_numeric!(i32, Int32);
-impl_numeric!(i64, Int64);
-
-impl_numeric!(f32, Float32);
-impl_numeric!(f64, Float64);
+impl_numeric!(f32, Float32, "Float32", &["float"]);
+impl_numeric!(f64, Float64, "Float64", &["double"]);

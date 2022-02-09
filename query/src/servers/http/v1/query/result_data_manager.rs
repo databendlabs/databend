@@ -19,7 +19,7 @@ use common_base::tokio;
 use common_base::tokio::sync::mpsc;
 use common_base::tokio::sync::mpsc::error::TryRecvError;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
@@ -30,7 +30,7 @@ use crate::servers::http::v1::JsonBlockRef;
 
 const TARGET_ROWS_PER_PAGE: usize = 10000;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Wait {
     Async,
     Sync,

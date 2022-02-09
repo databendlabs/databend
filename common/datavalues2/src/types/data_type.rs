@@ -23,9 +23,9 @@ use dyn_clone::DynClone;
 
 use super::type_array::ArrayType;
 use super::type_boolean::BooleanType;
-use super::type_date::DateType;
-use super::type_date32::Date32Type32;
-use super::type_datetime::DateTimeType;
+use super::type_date16::Date16Type;
+use super::type_date32::Date32Type;
+use super::type_datetime32::DateTime32Type;
 use super::type_datetime64::DateTime64Type;
 use super::type_id::TypeID;
 use super::type_nullable::NullableType;
@@ -58,9 +58,19 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
         false
     }
 
+    fn name(&self) -> &str;
+
+    fn aliases(&self) -> &[&str] {
+        &[]
+    }
+
     fn as_any(&self) -> &dyn Any;
 
     fn default_value(&self) -> DataValue;
+
+    fn can_inside_nullable(&self) -> bool {
+        true
+    }
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef>;
 
@@ -72,6 +82,7 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         None
     }
+
     fn to_arrow_field(&self, name: &str) -> ArrowField {
         let ret = ArrowField::new(name, self.arrow_type(), self.is_nullable());
         if let Some(meta) = self.custom_arrow_meta() {
@@ -81,13 +92,14 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
         }
     }
 
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn>;
     fn create_serializer(&self) -> Box<dyn TypeSerializer>;
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer>;
 }
 
 pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
     match dt {
-        ArrowType::Null => Arc::new(NullableType::create(Arc::new(NullType {}))),
+        ArrowType::Null => Arc::new(NullType {}),
         ArrowType::UInt8 => Arc::new(UInt8Type::default()),
         ArrowType::UInt16 => Arc::new(UInt16Type::default()),
         ArrowType::UInt32 => Arc::new(UInt32Type::default()),
@@ -110,9 +122,9 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
             Arc::new(StringType::default())
         }
 
-        ArrowType::Timestamp(_, tz) => Arc::new(DateTimeType::create(tz.clone())),
-        ArrowType::Date32 => Arc::new(DateType::default()),
-        ArrowType::Date64 => Arc::new(Date32Type32::default()),
+        ArrowType::Timestamp(_, tz) => Arc::new(DateTime32Type::create(tz.clone())),
+        ArrowType::Date32 => Arc::new(Date16Type::default()),
+        ArrowType::Date64 => Arc::new(Date32Type::default()),
 
         ArrowType::Struct(fields) => {
             let names = fields.iter().map(|f| f.name().to_string()).collect();
@@ -130,13 +142,15 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
 
 pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
     if let Some(m) = f.metadata() {
-        if let Some(custom_name) = m.get("ARROW:extension:databend_name") {
-            let metatada = m.get("ARROW:extension:databend_metadata").cloned();
+        if let Some(custom_name) = m.get(ARROW_EXTENSION_NAME) {
+            let metatada = m.get(ARROW_EXTENSION_META).cloned();
             match custom_name.as_str() {
-                "Date" | "Date16" => return Arc::new(DateType::default()),
-                "Date32" => return Arc::new(Date32Type32::default()),
-                "DateTime" | "DateTime32" => return DateTimeType::arc(metatada),
-                "DateTime64" => return DateTime64Type::arc(metatada),
+                "Date" | "Date16" => return Date16Type::arc(),
+                "Date32" => return Date32Type::arc(),
+                "DateTime" | "DateTime32" => return DateTime32Type::arc(metatada),
+                "DateTime64" => return DateTime64Type::arc(3, metatada),
+                "IntervalDayTime" => return IntervalType::arc(IntervalUnit::DayTime),
+                "IntervalYearMonth" => return IntervalType::arc(IntervalUnit::YearMonth),
                 _ => {}
             }
         }
@@ -146,24 +160,52 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
     let ty = from_arrow_type(dt);
 
     let is_nullable = f.is_nullable();
-    if is_nullable {
+    if is_nullable && ty.can_inside_nullable() {
         Arc::new(NullableType::create(ty))
     } else {
         ty
     }
 }
 
+pub trait ToDataType {
+    fn to_data_type() -> DataTypePtr;
+}
+
+macro_rules! impl_to_data_type {
+    ([], $( { $S: ident, $TY: ident} ),*) => {
+        $(
+            paste::paste!{
+                impl ToDataType for $S {
+                    fn to_data_type() -> DataTypePtr {
+                        [<$TY Type>]::arc()
+                    }
+                }
+            }
+        )*
+    }
+}
+
+for_all_scalar_varints! { impl_to_data_type }
+
 pub fn wrap_nullable(data_type: &DataTypePtr) -> DataTypePtr {
-    if matches!(data_type.data_type_id(), TypeID::Nullable | TypeID::Null) {
+    if !data_type.can_inside_nullable() {
         return data_type.clone();
     }
     Arc::new(NullableType::create(data_type.clone()))
 }
 
-pub fn unwrap_nullable(data_type: &DataTypePtr) -> DataTypePtr {
+pub fn remove_nullable(data_type: &DataTypePtr) -> DataTypePtr {
     if matches!(data_type.data_type_id(), TypeID::Nullable) {
         let nullable = data_type.as_any().downcast_ref::<NullableType>().unwrap();
         return nullable.inner_type().clone();
     }
     data_type.clone()
+}
+
+pub fn format_data_type_sql(data_type: &DataTypePtr) -> String {
+    let notnull_type = remove_nullable(data_type);
+    match data_type.is_nullable() {
+        true => format!("{:?}", notnull_type),
+        false => format!("{:?} NOT NULL", notnull_type),
+    }
 }

@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 use pretty_assertions::assert_eq;
@@ -22,9 +20,9 @@ use pretty_assertions::assert_eq;
 #[test]
 fn test_describe_table_plan() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("Field", DataType::String, false),
-        DataField::new("Type", DataType::String, false),
-        DataField::new("Null", DataType::String, false),
+        DataField::new("Field", Vu8::to_data_type()),
+        DataField::new("Type", Vu8::to_data_type()),
+        DataField::new("Null", Vu8::to_data_type()),
     ]);
 
     let describe = PlanNode::DescribeTable(DescribeTablePlan {

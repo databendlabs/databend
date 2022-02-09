@@ -15,7 +15,9 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::bitmap::utils::BitmapIter;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 
 use crate::prelude::*;
@@ -26,16 +28,14 @@ mod mutable;
 pub use iterator::*;
 pub use mutable::*;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct BooleanColumn {
     values: Bitmap,
 }
 
 impl From<BooleanArray> for BooleanColumn {
     fn from(array: BooleanArray) -> Self {
-        Self {
-            values: array.values().clone(),
-        }
+        Self::new(array)
     }
 }
 
@@ -56,12 +56,8 @@ impl BooleanColumn {
         )
     }
 
-    pub fn from_arrow_data(values: Bitmap, validity: Option<Bitmap>) -> Self {
-        Self::from_arrow_array(&BooleanArray::from_data(
-            ArrowType::Boolean,
-            values,
-            validity,
-        ))
+    pub fn from_arrow_data(values: Bitmap) -> Self {
+        Self::from_arrow_array(&BooleanArray::from_data(ArrowType::Boolean, values, None))
     }
 
     pub fn values(&self) -> &Bitmap {
@@ -91,6 +87,10 @@ impl Column for BooleanColumn {
         Arc::new(array)
     }
 
+    fn arc(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
         assert!(
             offset + length <= self.len(),
@@ -101,6 +101,37 @@ impl Column for BooleanColumn {
                 values: self.values.clone().slice_unchecked(offset, length),
             })
         }
+    }
+
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        if filter.values().null_count() == 0 {
+            return Arc::new(self.clone());
+        }
+        let iter = self
+            .values()
+            .iter()
+            .zip(filter.values().iter())
+            .filter(|(_, b)| *b)
+            .map(|(a, _)| a);
+
+        let col = Self::from_iterator(iter);
+        Arc::new(col)
+    }
+
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        let mut builders = Vec::with_capacity(scattered_size);
+        for _i in 0..scattered_size {
+            builders.push(MutableBooleanColumn::with_capacity(self.len()));
+        }
+
+        indices
+            .iter()
+            .zip(self.values())
+            .for_each(|(index, value)| {
+                builders[*index].append_value(value);
+            });
+
+        builders.iter_mut().map(|b| b.to_column()).collect()
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
@@ -126,14 +157,59 @@ impl Column for BooleanColumn {
             previous_offset = offset;
         });
 
-        builder.as_column()
+        builder.to_column()
     }
 
     fn convert_full_column(&self) -> ColumnRef {
         Arc::new(self.clone())
     }
 
-    unsafe fn get_unchecked(&self, index: usize) -> DataValue {
+    fn get(&self, index: usize) -> DataValue {
         DataValue::Boolean(self.values.get_bit(index))
+    }
+}
+
+impl ScalarColumn for BooleanColumn {
+    type Builder = MutableBooleanColumn;
+    type OwnedItem = bool;
+    type RefItem<'a> = bool;
+    type Iterator<'a> = BitmapIter<'a>;
+
+    #[inline]
+    fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
+        self.values.get_bit(idx)
+    }
+
+    fn scalar_iter(&self) -> Self::Iterator<'_> {
+        self.values.iter()
+    }
+
+    fn from_slice(data: &[Self::RefItem<'_>]) -> Self {
+        let bitmap = MutableBitmap::from_iter(data.as_ref().iter().cloned());
+        BooleanColumn {
+            values: bitmap.into(),
+        }
+    }
+
+    fn from_iterator<'a>(it: impl Iterator<Item = Self::RefItem<'a>>) -> Self {
+        let bitmap = MutableBitmap::from_iter(it);
+        BooleanColumn {
+            values: bitmap.into(),
+        }
+    }
+
+    fn from_owned_iterator(it: impl Iterator<Item = Self::OwnedItem>) -> Self {
+        let bitmap = MutableBitmap::from_iter(it);
+        BooleanColumn {
+            values: bitmap.into(),
+        }
+    }
+}
+
+impl std::fmt::Debug for BooleanColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let iter = self.iter().map(|x| if x { "true" } else { "false" });
+        let head = "BooleanColumn";
+        display_fmt(iter, head, self.len(), self.data_type_id(), f)
     }
 }

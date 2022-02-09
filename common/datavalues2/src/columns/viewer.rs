@@ -20,9 +20,8 @@ use crate::prelude::*;
 
 /// A wrapper for a column.
 /// It can help to better access the data without cast into nullable/const column.
-pub struct ColumnWrapper<'a, T: ScalarType> {
+pub struct ColumnViewer<'a, T: Scalar> {
     pub column: &'a T::ColumnType,
-    pub data: &'a [T],
     pub validity: Bitmap,
 
     // for not nullable column, it's 0. we only need keep one sign bit to tell `null_at` that it's not null.
@@ -34,41 +33,40 @@ pub struct ColumnWrapper<'a, T: ScalarType> {
     size: usize,
 }
 
-pub trait GetDatas<E> {
-    fn get_data(&self) -> &[E];
-}
-
-impl<'a, T> ColumnWrapper<'a, T>
-where
-    T: ScalarType + Default,
-    T::ColumnType: Clone + GetDatas<T> + 'static,
-{
+impl<'a, T: Scalar> ColumnViewer<'a, T> {
     pub fn create(column: &'a ColumnRef) -> Result<Self> {
         let null_mask = get_null_mask(column);
         let non_const_mask = non_const_mask(column);
         let size = column.len();
 
-        let (column, validity) = if column.is_nullable() {
+        let (column, validity) = if column.is_const() {
+            let mut bitmap = MutableBitmap::with_capacity(1);
+            bitmap.push(true);
+
+            let c: &ConstColumn = unsafe { Series::static_cast(column) };
+            (c.inner(), bitmap.into())
+        } else if column.is_nullable() {
             let c: &NullableColumn = unsafe { Series::static_cast(column) };
             (c.inner(), c.ensure_validity().clone())
         } else {
             let mut bitmap = MutableBitmap::with_capacity(1);
-            bitmap.extend_constant(1, true);
-
-            if column.is_const() {
-                let c: &ConstColumn = unsafe { Series::static_cast(column) };
-                (c.inner(), bitmap.into())
-            } else {
-                (column, bitmap.into())
-            }
+            bitmap.push(true);
+            (column, bitmap.into())
         };
 
-        let column: &T::ColumnType = Series::check_get(column)?;
-        let data = column.get_data();
+        // apply these twice to cover the cases: nullable(const) or const(nullable)
+        let column = if column.is_const() {
+            let column: &ConstColumn = unsafe { Series::static_cast(column) };
+            Series::check_get_scalar_column::<T>(column.inner())?
+        } else if column.is_nullable() {
+            let column: &NullableColumn = unsafe { Series::static_cast(column) };
+            Series::check_get_scalar_column::<T>(column.inner())?
+        } else {
+            Series::check_get_scalar_column::<T>(column)?
+        };
 
         Ok(Self {
             column,
-            data,
             validity,
             null_mask,
             non_const_mask,
@@ -77,13 +75,18 @@ where
     }
 
     #[inline]
-    pub fn null_at(&self, i: usize) -> bool {
-        unsafe { !self.validity.get_bit_unchecked(i & self.null_mask) }
+    pub fn valid_at(&self, i: usize) -> bool {
+        unsafe { self.validity.get_bit_unchecked(i & self.null_mask) }
     }
 
     #[inline]
-    pub fn value(&self, i: usize) -> &T {
-        &self.data[i & self.non_const_mask]
+    pub fn null_at(&self, i: usize) -> bool {
+        !self.valid_at(i)
+    }
+
+    #[inline]
+    pub fn value(&self, i: usize) -> <T as Scalar>::RefType<'a> {
+        self.column.get_data(i & self.non_const_mask)
     }
 
     #[inline]
@@ -117,5 +120,37 @@ fn non_const_mask(column: &ColumnRef) -> usize {
         usize::MAX
     } else {
         0
+    }
+}
+
+pub struct ColumnViewerIter<'a, T: Scalar> {
+    pub viewer: ColumnViewer<'a, T>,
+    pub size: usize,
+    pub pos: usize,
+}
+
+impl<'a, T: Scalar> ColumnViewerIter<'a, T> {
+    pub fn try_create(col: &'a ColumnRef) -> Result<Self> {
+        let viewer = ColumnViewer::create(col)?;
+        let size = viewer.len();
+        Ok(Self {
+            viewer,
+            size,
+            pos: 0,
+        })
+    }
+}
+
+impl<'a, T: Scalar> Iterator for ColumnViewerIter<'a, T> {
+    type Item = T::RefType<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pos >= self.size {
+            None
+        } else {
+            let item = self.viewer.value(self.pos);
+            self.pos += 1;
+            Some(item)
+        }
     }
 }

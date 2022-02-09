@@ -14,8 +14,14 @@
 
 use std::fmt::Display;
 
+use bumpalo::Bump;
+use common_datavalues2::ColumnRef;
+use common_datavalues2::ColumnWithField;
+use common_datavalues2::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+
+use super::AggregateFunctionFactory;
 
 pub fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 1 {
@@ -69,4 +75,29 @@ pub fn assert_variadic_arguments<D: Display>(
         )));
     }
     Ok(())
+}
+
+pub fn eval_aggr(
+    name: &str,
+    params: Vec<DataValue>,
+    columns: &[ColumnWithField],
+    rows: usize,
+) -> Result<ColumnRef> {
+    let factory = AggregateFunctionFactory::instance();
+    let arguments = columns.iter().map(|c| c.field().clone()).collect();
+    let cols: Vec<ColumnRef> = columns.iter().map(|c| c.column().clone()).collect();
+
+    let func = factory.get_new(name, params, arguments)?;
+
+    let arena = Bump::new();
+    let place = arena.alloc_layout(func.state_layout());
+    let addr = place.into();
+    func.init_state(addr);
+    func.accumulate(addr, &cols, None, rows)?;
+
+    let data_type = func.return_type()?;
+    let mut builder = data_type.create_mutable(1024);
+    func.merge_result(addr, builder.as_mut())?;
+
+    Ok(builder.to_column())
 }

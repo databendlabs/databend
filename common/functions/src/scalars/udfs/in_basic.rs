@@ -53,11 +53,15 @@ macro_rules! basic_contains {
         let mut vals_set = HashSet::new();
         for array in $CHECK_ARRAY {
             let array = array.column().cast_with_type($INPUT_DT)?;
-            match array {
-                DataColumn::Constant(DataValue::$CAST_TYPE(Some(val)), _) => {
+            let data = array.try_get(0)?;
+            match data {
+                DataValue::$CAST_TYPE(Some(val)) => {
                     vals_set.insert(val);
                 }
-                DataColumn::Constant(DataValue::$CAST_TYPE(None), _) => {
+                DataValue::$CAST_TYPE(None) => {
+                    continue;
+                }
+                DataValue::Null => {
                     continue;
                 }
                 _ => {
@@ -75,11 +79,15 @@ macro_rules! basic_contains {
         let mut vals_set = HashSet::new();
         for array in $CHECK_ARRAY {
             let array = array.column().cast_with_type($INPUT_DT)?;
-            match array {
-                DataColumn::Constant(DataValue::$CAST_TYPE(Some(val)), _) => {
+            let data = array.try_get(0)?;
+            match data {
+                DataValue::$CAST_TYPE(Some(val)) => {
                     vals_set.insert(val);
                 }
-                DataColumn::Constant(DataValue::$CAST_TYPE(None), _) => {
+                DataValue::$CAST_TYPE(None) => {
+                    continue;
+                }
+                DataValue::Null => {
                     continue;
                 }
                 _ => {
@@ -102,11 +110,15 @@ macro_rules! float_contains {
         let mut vals_set = Vec::new();
         for array in $CHECK_ARRAY {
             let array = array.column().cast_with_type($INPUT_DT)?;
-            match array {
-                DataColumn::Constant(DataValue::$CAST_TYPE(Some(val)), _) => {
+            let data = array.try_get(0)?;
+            match data {
+                DataValue::$CAST_TYPE(Some(val)) => {
                     vals_set.push(val);
                 }
-                DataColumn::Constant(DataValue::$CAST_TYPE(None), _) => {
+                DataValue::$CAST_TYPE(None) => {
+                    continue;
+                }
+                DataValue::Null => {
                     continue;
                 }
                 _ => {
@@ -137,7 +149,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         Ok(DataTypeAndNullable::create(&dt, false))
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let input_column = columns[0].column();
 
         let input_array = match input_column {
@@ -147,11 +159,7 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
 
         let input_dt = input_array.data_type();
         if input_dt == &DataType::Null {
-            let mut array = MutableBooleanArrayBuilder::<false>::with_capacity(input_array.len());
-            for _ in 0..input_array.len() {
-                array.push_null();
-            }
-            return Ok(DataColumn::Array(array.as_series()));
+            return Ok(DataColumn::Constant(DataValue::Null, input_rows));
         }
         let mut builder = MutableBooleanArrayBuilder::<false>::with_capacity(input_column.len());
 
@@ -303,6 +311,10 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
         }
 
         Ok(DataColumn::Array(builder.as_series()))
+    }
+
+    fn passthrough_null(&self) -> bool {
+        false
     }
 }
 

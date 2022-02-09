@@ -17,7 +17,12 @@ use common_arrow::arrow::array::BinaryArray;
 use common_arrow::arrow::array::MutableBinaryArray;
 
 pub use crate::columns::*;
+pub use crate::convert::*;
+pub use crate::data_group_value::*;
 pub use crate::data_value::DFTryFrom;
+pub use crate::data_value::*;
+pub use crate::macros::*;
+pub use crate::scalars::*;
 pub use crate::types::*;
 pub use crate::utils::*;
 // common structs
@@ -26,6 +31,13 @@ pub use crate::DataSchema;
 pub use crate::DataSchemaRef;
 pub use crate::DataSchemaRefExt;
 pub use crate::DataValue;
+//operators
+pub use crate::DataValueBinaryOperator;
+pub use crate::DataValueComparisonOperator;
+pub use crate::DataValueLogicOperator;
+pub use crate::DataValueUnaryOperator;
 
 pub type MutableLargeBinaryArray = MutableBinaryArray<i64>;
 pub type LargeBinaryArray = BinaryArray<i64>;
+
+pub type Vu8 = Vec<u8>;

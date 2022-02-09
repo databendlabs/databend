@@ -15,6 +15,7 @@
 mod iterator;
 mod mutable;
 
+use std::iter::Copied;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
@@ -29,11 +30,10 @@ use common_arrow::arrow::datatypes::TimeUnit;
 pub use iterator::*;
 pub use mutable::*;
 
-use super::wrapper::GetDatas;
 use crate::prelude::*;
 
 /// PrimitiveColumn is generic struct which wrapped arrow's PrimitiveArray
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PrimitiveColumn<T: PrimitiveType> {
     values: Buffer<T>,
 }
@@ -175,9 +175,49 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         ))
     }
 
+    fn arc(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
         let values = self.values.clone().slice(offset, length);
         Arc::new(Self { values })
+    }
+
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        let length = filter.values().len() - filter.values().null_count();
+        if length == self.len() {
+            return Arc::new(self.clone());
+        }
+        let iter = self
+            .values()
+            .iter()
+            .zip(filter.values().iter())
+            .filter(|(_, f)| *f)
+            .map(|(v, _)| *v);
+
+        let values: Vec<T> = iter.collect();
+        let col = PrimitiveColumn {
+            values: values.into(),
+        };
+
+        Arc::new(col)
+    }
+
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        let mut builders = Vec::with_capacity(scattered_size);
+        for _i in 0..scattered_size {
+            builders.push(MutablePrimitiveColumn::<T>::with_capacity(self.len()));
+        }
+
+        indices
+            .iter()
+            .zip(self.values())
+            .for_each(|(index, value)| {
+                builders[*index].append_value(*value);
+            });
+
+        builders.iter_mut().map(|b| b.to_column()).collect()
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
@@ -203,7 +243,7 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
             }
             previous_offset = offset;
         });
-        builder.as_column()
+        builder.to_column()
     }
 
     fn convert_full_column(&self) -> ColumnRef {
@@ -211,15 +251,57 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
     }
 
     /// Note this doesn't do any bound checking, for performance reason.
-    unsafe fn get_unchecked(&self, index: usize) -> DataValue {
-        let v = self.value_unchecked(index);
+    fn get(&self, index: usize) -> DataValue {
+        let v = unsafe { self.value_unchecked(index) };
         v.into()
     }
 }
 
-impl<T: PrimitiveType> GetDatas<T> for PrimitiveColumn<T> {
-    fn get_data(&self) -> &[T] {
-        self.values()
+impl<T> ScalarColumn for PrimitiveColumn<T>
+where
+    T: Scalar<ColumnType = Self> + PrimitiveType,
+    for<'a> T: ScalarRef<'a, ScalarType = T, ColumnType = Self>,
+    for<'a> T: Scalar<RefType<'a> = T>,
+{
+    type Builder = MutablePrimitiveColumn<T>;
+    type OwnedItem = T;
+    type RefItem<'a> = T;
+    type Iterator<'a> = Copied<std::slice::Iter<'a, T>>;
+
+    #[inline]
+    fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
+        self.values[idx]
+    }
+
+    fn scalar_iter(&self) -> Self::Iterator<'_> {
+        self.iter().copied()
+    }
+
+    fn from_slice(data: &[Self::RefItem<'_>]) -> Self {
+        let values = Vec::<T>::from(data);
+        PrimitiveColumn {
+            values: values.into(),
+        }
+    }
+
+    fn from_iterator<'a>(it: impl Iterator<Item = Self::RefItem<'a>>) -> Self {
+        let values: Vec<T> = it.collect();
+        PrimitiveColumn {
+            values: values.into(),
+        }
+    }
+
+    fn from_owned_iterator(it: impl Iterator<Item = Self::OwnedItem>) -> Self {
+        let values: Vec<T> = it.collect();
+        PrimitiveColumn {
+            values: values.into(),
+        }
+    }
+
+    fn from_vecs(values: Vec<Self::OwnedItem>) -> Self {
+        PrimitiveColumn {
+            values: values.into(),
+        }
     }
 }
 
@@ -235,3 +317,11 @@ pub type Int64Column = PrimitiveColumn<i64>;
 
 pub type Float32Column = PrimitiveColumn<f32>;
 pub type Float64Column = PrimitiveColumn<f64>;
+
+impl<T: PrimitiveType> std::fmt::Debug for PrimitiveColumn<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let iter = self.iter();
+        let head = "PrimitiveColumn";
+        display_fmt(iter, head, self.len(), self.data_type_id(), f)
+    }
+}

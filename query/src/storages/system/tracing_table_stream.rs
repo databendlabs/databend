@@ -18,7 +18,7 @@ use std::io::BufReader;
 use std::task::Poll;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use futures::Stream;
 
@@ -94,14 +94,14 @@ impl TracingTableStream {
         let hosts: Vec<&[u8]> = host_col.iter().map(|x| x.as_bytes()).collect();
         let times: Vec<&[u8]> = time_col.iter().map(|x| x.as_bytes()).collect();
 
-        let block = DataBlock::create_by_array(self.schema.clone(), vec![
-            Series::new(version_col),
-            Series::new(names),
-            Series::new(msgs),
-            Series::new(level_col),
-            Series::new(hosts),
-            Series::new(pid_col),
-            Series::new(times),
+        let block = DataBlock::create(self.schema.clone(), vec![
+            Series::from_data(version_col),
+            Series::from_data(names),
+            Series::from_data(msgs),
+            Series::from_data(level_col),
+            Series::from_data(hosts),
+            Series::from_data(pid_col),
+            Series::from_data(times),
         ]);
 
         Ok(Some(block))

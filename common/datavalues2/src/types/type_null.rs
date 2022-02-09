@@ -19,8 +19,14 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 use super::data_type::DataType;
 use crate::prelude::*;
 
-#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct NullType {}
+
+impl NullType {
+    pub fn arc() -> DataTypePtr {
+        Arc::new(Self {})
+    }
+}
 
 #[typetag::serde]
 impl DataType for NullType {
@@ -31,6 +37,14 @@ impl DataType for NullType {
     #[inline]
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn name(&self) -> &str {
+        "Null"
+    }
+
+    fn can_inside_nullable(&self) -> bool {
+        false
     }
 
     // it's nothing, so we can't create any default value
@@ -63,5 +77,15 @@ impl DataType for NullType {
 
     fn create_column(&self, data: &[DataValue]) -> common_exception::Result<ColumnRef> {
         Ok(Arc::new(NullColumn::new(data.len())))
+    }
+
+    fn create_mutable(&self, _capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutableNullColumn::default())
+    }
+}
+
+impl std::fmt::Debug for NullType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }

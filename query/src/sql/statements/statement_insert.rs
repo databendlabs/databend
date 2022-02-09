@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
+use common_datavalues2::DataSchemaRef;
+use common_datavalues2::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -151,6 +151,7 @@ impl DfInsertStatement {
                     Expression::Cast {
                         expr: Box::new(expr),
                         data_type: schema.field(i).data_type().clone(),
+                        is_nullable: schema.field(i).is_nullable(),
                     }
                 } else {
                     expr

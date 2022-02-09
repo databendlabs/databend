@@ -18,10 +18,12 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::check_pattern_type;
+use common_functions::scalars::Function2Factory;
+use common_functions::scalars::PatternType;
 use common_planners::lit;
 use common_planners::Expression;
 use common_planners::ExpressionMonotonicityVisitor;
@@ -83,12 +85,15 @@ impl RangeFilter {
             if val_opt.is_none() {
                 return Ok(true);
             }
-            columns.push(val_opt.unwrap().to_array()?);
+            columns.push(val_opt.unwrap());
         }
-        let data_block = DataBlock::create_by_array(self.schema.clone(), columns);
+        let data_block = DataBlock::create(self.schema.clone(), columns);
         let executed_data_block = self.executor.execute(&data_block)?;
 
-        executed_data_block.column(0).try_get(0)?.as_bool()
+        match executed_data_block.column(0).get(0) {
+            DataValue::Null => Ok(false),
+            other => other.as_bool(),
+        }
     }
 }
 
@@ -178,11 +183,11 @@ impl StatColumn {
     ) -> Self {
         let column_new = format!("{}_{}", stat_type, field.name());
         let data_type = if matches!(stat_type, StatType::Nulls) {
-            DataType::UInt64
+            u64::to_data_type()
         } else {
             field.data_type().clone()
         };
-        let stat_field = DataField::new(column_new.as_str(), data_type, field.is_nullable());
+        let stat_field = DataField::new(column_new.as_str(), data_type);
 
         Self {
             column_fields,
@@ -196,7 +201,7 @@ impl StatColumn {
         &self,
         stats: &BlockStatistics,
         schema: DataSchemaRef,
-    ) -> Result<Option<DataValue>> {
+    ) -> Result<Option<ColumnRef>> {
         if self.stat_type == StatType::Nulls {
             // The len of column_fields is 1.
             let (k, _) = self.column_fields.iter().next().unwrap();
@@ -206,7 +211,7 @@ impl StatColumn {
                     k
                 ))
             })?;
-            return Ok(Some(DataValue::UInt64(Some(stat.null_count))));
+            return Ok(Some(Series::from_data(vec![stat.null_count])));
         }
 
         let mut single_point = true;
@@ -223,14 +228,11 @@ impl StatColumn {
                 single_point = false;
             }
 
-            let variable_left = Some(DataColumnWithField::new(
-                DataColumn::Constant(stat.min.clone(), 1),
-                v.clone(),
-            ));
-            let variable_right = Some(DataColumnWithField::new(
-                DataColumn::Constant(stat.max.clone(), 1),
-                v.clone(),
-            ));
+            let min_col = v.data_type().create_constant_column(&stat.min, 1)?;
+            let variable_left = Some(ColumnWithField::new(min_col, v.clone()));
+
+            let max_col = v.data_type().create_constant_column(&stat.max, 1)?;
+            let variable_right = Some(ColumnWithField::new(max_col, v.clone()));
             variables.insert(v.name().clone(), (variable_left, variable_right));
         }
 
@@ -262,7 +264,7 @@ impl StatColumn {
             _ => unreachable!(),
         };
 
-        Ok(column_with_field_opt.map(|v| v.column().try_get(0).unwrap()))
+        Ok(column_with_field_opt.map(|v| v.column().slice(0, 1)))
     }
 }
 
@@ -456,7 +458,7 @@ impl<'a> VerifiableExprBuilder<'a> {
             }
             "like" => {
                 if let Expression::Literal {
-                    value: DataValue::String(Some(v)),
+                    value: DataValue::String(v),
                     ..
                 } = &self.args[1]
                 {
@@ -479,7 +481,7 @@ impl<'a> VerifiableExprBuilder<'a> {
             }
             "not like" => {
                 if let Expression::Literal {
-                    value: DataValue::String(Some(v)),
+                    value: DataValue::String(v),
                     ..
                 } = &self.args[1]
                 {
@@ -598,7 +600,7 @@ pub fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
 }
 
 fn get_maybe_monotonic(op: &str, args: Expressions) -> Result<bool> {
-    let factory = FunctionFactory::instance();
+    let factory = Function2Factory::instance();
     let function_features = factory.get_features(op)?;
     if !function_features.maybe_monotonic {
         return Ok(false);

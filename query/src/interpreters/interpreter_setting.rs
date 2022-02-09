@@ -14,9 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::SettingPlan;
 use common_streams::DataBlockStream;
@@ -60,7 +58,7 @@ impl Interpreter for SettingInterpreter {
             }
         }
 
-        let schema = DataSchemaRefExt::create(vec![DataField::new("set", DataType::String, false)]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new("set", Vu8::to_data_type())]);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
     }
 }

@@ -14,10 +14,8 @@
 
 use std::fmt;
 
-use common_datavalues::DataType;
-use common_datavalues::DataTypeAndNullable;
-use common_datavalues::DataValue;
-use common_functions::scalars::Function;
+use common_datavalues2::prelude::*;
+use common_functions::scalars::Function2;
 
 #[derive(Debug, Clone)]
 pub enum ExpressionAction {
@@ -32,34 +30,33 @@ pub enum ExpressionAction {
 #[derive(Debug, Clone)]
 pub struct ActionInput {
     pub name: String,
-    pub return_type: DataType,
+    pub return_type: DataTypePtr,
 }
 
 #[derive(Debug, Clone)]
 pub struct ActionConstant {
     pub name: String,
     pub value: DataValue,
-    pub data_type: DataType,
+    pub data_type: DataTypePtr,
 }
 
 #[derive(Debug, Clone)]
 pub struct ActionAlias {
     pub name: String,
     pub arg_name: String,
-    pub arg_type: DataType,
+    pub arg_type: DataTypePtr,
 }
 
 #[derive(Clone)]
 pub struct ActionFunction {
     pub name: String,
     pub func_name: String,
-    pub return_type: DataType,
-    pub is_nullable: bool,
-    pub func: Box<dyn Function>,
+    pub return_type: DataTypePtr,
+    pub func: Box<dyn Function2>,
 
     // for functions
     pub arg_names: Vec<String>,
-    pub arg_types: Vec<DataTypeAndNullable>,
+    pub arg_types: Vec<DataTypePtr>,
 }
 
 impl ExpressionAction {
@@ -79,7 +76,6 @@ impl fmt::Debug for ActionFunction {
             .field("name", &self.name)
             .field("func_name", &self.func_name)
             .field("return_type", &self.return_type)
-            .field("is_nullable", &self.is_nullable)
             .field("arg_names", &self.arg_names)
             .field("arg_types", &self.arg_types)
             .finish()

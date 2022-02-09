@@ -17,8 +17,6 @@ SELECT SOUNDEX('teacher');
 SELECT SOUNDEX('TEACHER');
 SELECT SOUNDEX('much');
 SELECT SOUNDEX('MUCH');
-SELECT SOUNDEX(123);
-SELECT SOUNDEX(1.23);
 SELECT SOUNDEX('1.23');
 SELECT SOUNDEX('pneumonoultramicroscopicsilicovolcanoconiosis');
 SELECT SOUNDEX('pneumonoultramicroscopicsilicovolcanoconiosis hello world');

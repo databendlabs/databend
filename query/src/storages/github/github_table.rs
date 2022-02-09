@@ -17,7 +17,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
@@ -80,7 +80,7 @@ impl GithubTable {
         }
     }
 
-    async fn get_data_from_github(&self) -> Result<Vec<Series>> {
+    async fn get_data_from_github(&self) -> Result<Vec<ColumnRef>> {
         let table_type = self.get_table_type()?;
         let table = match table_type {
             GithubTableType::Comments => RepoCommentsTable::create(self.options.clone()),
@@ -115,7 +115,7 @@ impl Table for GithubTable {
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let arrays = self.get_data_from_github().await?;
-        let block = DataBlock::create_by_array(self.table_info.schema(), arrays);
+        let block = DataBlock::create(self.table_info.schema(), arrays);
 
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),
@@ -127,5 +127,5 @@ impl Table for GithubTable {
 
 #[async_trait::async_trait]
 pub trait GithubDataGetter: Sync + Send {
-    async fn get_data_from_github(&self) -> Result<Vec<Series>>;
+    async fn get_data_from_github(&self) -> Result<Vec<ColumnRef>>;
 }

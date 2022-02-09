@@ -26,7 +26,6 @@ tokio-console = ["common-tracing/console", "common-base/tracing"]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
 common-containers = { path = "../common/containers" }
-common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
 common-grpc = { path = "../common/grpc" }
 common-infallible = { path = "../common/infallible" }

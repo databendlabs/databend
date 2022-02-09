@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::DataBlock;
@@ -20,24 +19,15 @@ use crate::DataBlock;
 impl DataBlock {
     pub fn scatter_block(
         block: &DataBlock,
-        indices: &DataColumn,
+        indices: &[usize],
         scatter_size: usize,
     ) -> Result<Vec<DataBlock>> {
-        let array = indices.to_array()?;
-        let array = array.u64()?;
-
         let columns_size = block.num_columns();
         let mut scattered_columns = Vec::with_capacity(scatter_size);
 
         for column_index in 0..columns_size {
-            let mut indices = array.into_no_null_iter().copied();
-
-            let columns = unsafe {
-                block
-                    .column(column_index)
-                    .scatter_unchecked(&mut indices, scatter_size)
-            }?;
-            scattered_columns.push(columns);
+            let column = block.column(column_index).scatter(indices, scatter_size);
+            scattered_columns.push(column);
         }
 
         let mut scattered_blocks = Vec::with_capacity(scatter_size);

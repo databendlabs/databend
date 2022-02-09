@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -35,9 +35,9 @@ pub struct ClustersTable {
 impl ClustersTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("host", DataType::String, false),
-            DataField::new("port", DataType::UInt16, false),
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("host", Vu8::to_data_type()),
+            DataField::new("port", u16::to_data_type()),
         ]);
 
         let table_info = TableInfo {
@@ -72,9 +72,9 @@ impl Table for ClustersTable {
     ) -> Result<SendableDataBlockStream> {
         let cluster_nodes = ctx.get_cluster().get_nodes();
 
-        let mut names = StringArrayBuilder::with_capacity(cluster_nodes.len());
-        let mut addresses = StringArrayBuilder::with_capacity(cluster_nodes.len());
-        let mut addresses_port = DFUInt16ArrayBuilder::with_capacity(cluster_nodes.len());
+        let mut names = MutableStringColumn::with_capacity(cluster_nodes.len());
+        let mut addresses = MutableStringColumn::with_capacity(cluster_nodes.len());
+        let mut addresses_port = MutablePrimitiveColumn::<u16>::with_capacity(cluster_nodes.len());
 
         for cluster_node in &cluster_nodes {
             let (ip, port) = cluster_node.ip_port()?;
@@ -87,10 +87,10 @@ impl Table for ClustersTable {
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),
             None,
-            vec![DataBlock::create_by_array(self.table_info.schema(), vec![
-                names.finish().into_series(),
-                addresses.finish().into_series(),
-                addresses_port.finish().into_series(),
+            vec![DataBlock::create(self.table_info.schema(), vec![
+                names.finish().arc(),
+                addresses.finish().arc(),
+                addresses_port.finish().arc(),
             ])],
         )))
     }

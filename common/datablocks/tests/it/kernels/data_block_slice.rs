@@ -13,19 +13,19 @@
 // limitations under the License.
 
 use common_datablocks::*;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 
 #[test]
 fn test_data_block_slice() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int64, false),
-        DataField::new("b", DataType::Float64, false),
+        DataField::new("a", i64::to_data_type()),
+        DataField::new("b", f64::to_data_type()),
     ]);
 
     let raw = DataBlock::create(schema, vec![
-        Series::new(vec![1i64, 2, 3, 4, 5]).into(),
-        Series::new(vec![1.0f64, 2., 3., 4., 5.]).into(),
+        Series::from_data(vec![1i64, 2, 3, 4, 5]),
+        Series::from_data(vec![1.0f64, 2., 3., 4., 5.]),
     ]);
 
     let sliced = DataBlock::split_block_by_size(&raw, 1)?;

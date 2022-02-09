@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -21,17 +22,17 @@ use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct DateType {}
+#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
+pub struct Date16Type {}
 
-impl DateType {
+impl Date16Type {
     pub fn arc() -> DataTypePtr {
-        Arc::new(DateType {})
+        Arc::new(Date16Type {})
     }
 }
 
 #[typetag::serde]
-impl DataType for DateType {
+impl DataType for Date16Type {
     fn data_type_id(&self) -> TypeID {
         TypeID::Date16
     }
@@ -39,6 +40,14 @@ impl DataType for DateType {
     #[inline]
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn name(&self) -> &str {
+        "Date16"
+    }
+
+    fn aliases(&self) -> &[&str] {
+        &["Date"]
     }
 
     fn default_value(&self) -> DataValue {
@@ -65,12 +74,29 @@ impl DataType for DateType {
         ArrowType::UInt16
     }
 
+    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
+        let mut mp = BTreeMap::new();
+        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Date16".to_string());
+        Some(mp)
+    }
+
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
         Box::new(DateSerializer::<u16>::default())
     }
+
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
         Box::new(DateDeserializer::<u16> {
             builder: MutablePrimitiveColumn::<u16>::with_capacity(capacity),
         })
+    }
+
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutablePrimitiveColumn::<u16>::with_capacity(capacity))
+    }
+}
+
+impl std::fmt::Debug for Date16Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }

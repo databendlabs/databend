@@ -17,11 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableIdent;
@@ -43,10 +39,10 @@ pub struct MetricsTable {
 impl MetricsTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("metric", DataType::String, false),
-            DataField::new("kind", DataType::String, false),
-            DataField::new("labels", DataType::String, false),
-            DataField::new("value", DataType::String, false),
+            DataField::new("metric", Vu8::to_data_type()),
+            DataField::new("kind", Vu8::to_data_type()),
+            DataField::new("labels", Vu8::to_data_type()),
+            DataField::new("value", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {
@@ -120,11 +116,11 @@ impl Table for MetricsTable {
             values.push(self.display_sample_value(&sample.value)?.into_bytes());
         }
 
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
-            Series::new(metrics),
-            Series::new(kinds),
-            Series::new(labels),
-            Series::new(values),
+        let block = DataBlock::create(self.table_info.schema(), vec![
+            Series::from_data(metrics),
+            Series::from_data(kinds),
+            Series::from_data(labels),
+            Series::from_data(values),
         ]);
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),

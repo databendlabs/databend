@@ -54,9 +54,8 @@ impl Function for UnhexFunction {
             )));
         }
 
-        let nullable = args.iter().any(|arg| arg.is_nullable());
         let dt = DataType::String;
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+        Ok(DataTypeAndNullable::create(&dt, true))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

@@ -28,9 +28,9 @@ use crate::types::SqlType;
 use crate::types::Value;
 use crate::types::ValueRef;
 
-pub(crate) struct NullableColumnData {
-    pub(crate) inner: ArcColumnData,
-    pub(crate) nulls: Vec<u8>,
+pub struct NullableColumnData {
+    pub inner: ArcColumnData,
+    pub nulls: Vec<u8>,
 }
 
 impl NullableColumnData {

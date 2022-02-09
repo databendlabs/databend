@@ -16,7 +16,7 @@ use common_datavalues2::prelude::*;
 
 #[test]
 fn test_empty_boolean_column() {
-    let mut builder = MutableStringColumn::with_capacity(16, 16);
+    let mut builder = MutableStringColumn::with_values_capacity(16, 16);
     let data_column: StringColumn = builder.finish();
     let mut iter = data_column.iter();
     assert_eq!(None, iter.next());
@@ -42,8 +42,8 @@ fn test_boolean_column() {
 
     assert!(!data_column.null_at(1));
 
-    unsafe {
-        let nihao = data_column.get_unchecked(512).as_string().unwrap();
+    {
+        let nihao = data_column.get(512).as_string().unwrap();
         assert_eq!(nihao, "你好".as_bytes().to_vec());
     }
     let slice = data_column.slice(0, N / 2);

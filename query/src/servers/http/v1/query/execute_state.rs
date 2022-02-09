@@ -22,7 +22,7 @@ use common_base::tokio::sync::RwLock;
 use common_base::ProgressValues;
 use common_base::TrySpawn;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserInfo;
@@ -32,24 +32,13 @@ use serde::Deserialize;
 use serde::Serialize;
 use ExecuteState::*;
 
+use super::http_query::HttpQueryRequest;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
-
-#[derive(Deserialize, Debug)]
-pub struct HttpQueryRequest {
-    #[serde(default)]
-    pub session: HttpSessionConf,
-    pub sql: String,
-}
-
-#[derive(Deserialize, Debug, Default)]
-pub struct HttpSessionConf {
-    pub database: Option<String>,
-}
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
 pub enum ExecuteStateName {
@@ -75,8 +64,6 @@ impl ExecuteState {
     }
 }
 
-pub(crate) type ExecutorRef = Arc<RwLock<Executor>>;
-
 pub(crate) struct ExecuteStopped {
     progress: Option<ProgressValues>,
     reason: Result<()>,
@@ -101,7 +88,7 @@ impl Executor {
             Stopped(f) => f.stop_time - self.start_time,
         }
     }
-    pub(crate) async fn stop(this: &ExecutorRef, reason: Result<()>, kill: bool) {
+    pub(crate) async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>, kill: bool) {
         let mut guard = this.write().await;
         if let Running(r) = &guard.state {
             // release session
@@ -151,7 +138,7 @@ impl ExecuteState {
         session_manager: &Arc<SessionManager>,
         user_info: &UserInfo,
         block_tx: mpsc::Sender<DataBlock>,
-    ) -> Result<(ExecutorRef, DataSchemaRef)> {
+    ) -> Result<(Arc<RwLock<Executor>>, DataSchemaRef)> {
         let sql = &request.sql;
         let session = session_manager.create_session("http-statement")?;
         let ctx = session.create_query_context().await?;

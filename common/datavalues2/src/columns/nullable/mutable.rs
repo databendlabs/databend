@@ -12,71 +12,79 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::Result;
 
+use crate::columns::mutable::MutableColumn;
+use crate::types::DataTypePtr;
 use crate::ColumnRef;
-use crate::DataTypePtr;
-use crate::MutableColumn;
 use crate::NullableColumn;
-use crate::NullableType;
 
 pub struct MutableNullableColumn {
-    bitmap: MutableBitmap,
-    values: Box<dyn MutableColumn>,
+    values: MutableBitmap,
+    inner: Box<dyn MutableColumn>,
     data_type: DataTypePtr,
 }
 
-impl MutableNullableColumn {
-    pub fn new(values: Box<dyn MutableColumn>) -> Self {
-        let inner_type = values.data_type();
-        Self {
-            bitmap: MutableBitmap::with_capacity(0),
-            values,
-            data_type: Arc::new(NullableType::create(inner_type)),
-        }
-    }
-}
-
 impl MutableColumn for MutableNullableColumn {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
     fn data_type(&self) -> DataTypePtr {
         self.data_type.clone()
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn as_column(&mut self) -> ColumnRef {
-        let column = self.values.as_column();
-        let bitmap = std::mem::take(&mut self.bitmap);
-        Arc::new(NullableColumn::new(column, bitmap.into()))
-    }
-
-    #[inline]
-    fn append_default(&mut self) {
-        self.bitmap.push(false);
-        self.values.append_default();
-    }
-
-    #[inline]
-    fn append_null(&mut self) -> bool {
-        self.append_default();
-        true
-    }
-
-    fn validity(&self) -> Option<&MutableBitmap> {
-        Some(&self.bitmap)
-    }
-
     fn shrink_to_fit(&mut self) {
-        self.bitmap.shrink_to_fit();
-        self.values.shrink_to_fit();
+        self.inner.shrink_to_fit()
+    }
+
+    fn append_default(&mut self) {
+        self.values.push(false);
+        self.inner.append_default();
+    }
+
+    fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    fn to_column(&mut self) -> ColumnRef {
+        let col = self.inner.to_column();
+        let validity = std::mem::take(&mut self.values);
+        Arc::new(NullableColumn::new(col, validity.into()))
+    }
+
+    fn append_data_value(&mut self, value: crate::DataValue) -> Result<()> {
+        self.values.push(true);
+        self.inner.append_data_value(value)
+    }
+}
+
+impl MutableNullableColumn {
+    pub fn new(inner: Box<dyn MutableColumn>, data_type: DataTypePtr) -> Self {
+        Self {
+            inner,
+            values: MutableBitmap::with_capacity(0),
+            data_type,
+        }
+    }
+
+    #[inline]
+    pub fn append_value(&mut self, value: bool) {
+        self.values.push(value);
+    }
+
+    pub fn inner_mut(&mut self) -> &mut Box<dyn MutableColumn> {
+        &mut self.inner
+    }
+
+    pub fn validity_mut(&mut self) -> &mut MutableBitmap {
+        &mut self.values
     }
 }

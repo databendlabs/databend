@@ -46,6 +46,13 @@ pub fn equal(lhs: &dyn Column, rhs: &dyn Column) -> bool {
         return false;
     }
 
+    if lhs.is_const() || rhs.is_const() {
+        return equal(
+            lhs.convert_full_column().as_ref(),
+            rhs.convert_full_column().as_ref(),
+        );
+    }
+
     use crate::PhysicalTypeID::*;
 
     match lhs.data_type_id().to_physical_type() {
@@ -54,7 +61,16 @@ pub fn equal(lhs: &dyn Column, rhs: &dyn Column) -> bool {
             let lhs: &NullableColumn = lhs.as_any().downcast_ref().unwrap();
             let rhs: &NullableColumn = rhs.as_any().downcast_ref().unwrap();
 
-            lhs.validity() == rhs.validity() && lhs.inner() == rhs.inner()
+            if lhs.validity() != rhs.validity() {
+                return false;
+            }
+
+            for row in 0..lhs.len() {
+                if lhs.get(row) != rhs.get(row) {
+                    return false;
+                }
+            }
+            true
         }
         Boolean => {
             let lhs: &BooleanColumn = lhs.as_any().downcast_ref().unwrap();
@@ -68,12 +84,6 @@ pub fn equal(lhs: &dyn Column, rhs: &dyn Column) -> bool {
 
             lhs.values() == rhs.values() && lhs.offsets() == rhs.offsets()
         }
-        Primitive(e) => with_match_physical_primitive_type!(e, |$T| {
-            let lhs: &PrimitiveColumn<$T> = lhs.as_any().downcast_ref().unwrap();
-            let rhs: &PrimitiveColumn<$T> = rhs.as_any().downcast_ref().unwrap();
-
-            lhs.values() == rhs.values()
-        }),
         Array => {
             let lhs: &ArrayColumn = lhs.as_any().downcast_ref().unwrap();
             let rhs: &ArrayColumn = rhs.as_any().downcast_ref().unwrap();
@@ -86,5 +96,12 @@ pub fn equal(lhs: &dyn Column, rhs: &dyn Column) -> bool {
 
             lhs.values() == rhs.values()
         }
+
+        other => with_match_physical_primitive_type!(other, |$T| {
+            let lhs: &PrimitiveColumn<$T> = lhs.as_any().downcast_ref().unwrap();
+            let rhs: &PrimitiveColumn<$T> = rhs.as_any().downcast_ref().unwrap();
+
+            lhs.values() == rhs.values()
+        }),
     }
 }

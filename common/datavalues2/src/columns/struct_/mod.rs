@@ -53,10 +53,6 @@ impl StructColumn {
         )
     }
 
-    pub fn data_type(&self) -> DataTypePtr {
-        self.data_type.clone()
-    }
-
     pub fn from_data(values: Vec<ColumnRef>, data_type: DataTypePtr) -> Self {
         Self { values, data_type }
     }
@@ -89,6 +85,10 @@ impl Column for StructColumn {
         Arc::new(StructArray::from_data(arrow_type, arrays, None))
     }
 
+    fn arc(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
         let values = self
             .values
@@ -102,8 +102,38 @@ impl Column for StructColumn {
         })
     }
 
-    unsafe fn get_unchecked(&self, index: usize) -> DataValue {
-        let values = self.values.iter().map(|v| v.get_unchecked(index)).collect();
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        let values = self.values.iter().map(|v| v.filter(filter)).collect();
+
+        Arc::new(Self {
+            values,
+            data_type: self.data_type.clone(),
+        })
+    }
+
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        let values: Vec<Vec<ColumnRef>> = self
+            .values
+            .iter()
+            .map(|v| v.scatter(indices, scattered_size))
+            .collect();
+
+        let mut result = Vec::with_capacity(scattered_size);
+
+        for s in 0..scattered_size {
+            let mut arrays = Vec::with_capacity(self.values.len());
+            for value in values.iter() {
+                arrays.push(value[s].clone());
+            }
+            result.push(
+                Arc::new(StructColumn::from_data(arrays, self.data_type.clone())) as ColumnRef,
+            );
+        }
+        result
+    }
+
+    fn get(&self, index: usize) -> DataValue {
+        let values = self.values.iter().map(|v| v.get(index)).collect();
         DataValue::Struct(values)
     }
 
@@ -118,5 +148,18 @@ impl Column for StructColumn {
 
     fn convert_full_column(&self) -> ColumnRef {
         Arc::new(self.clone())
+    }
+}
+
+impl std::fmt::Debug for StructColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut data = Vec::new();
+        for idx in 0..self.len() {
+            let x = self.get(idx);
+            data.push(format!("{:?}", x));
+        }
+        let head = "StructColumn";
+        let iter = data.iter();
+        display_fmt(iter, head, self.len(), self.data_type_id(), f)
     }
 }

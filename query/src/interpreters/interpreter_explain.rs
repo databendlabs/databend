@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::ExplainPlan;
 use common_planners::ExplainType;
@@ -71,13 +71,13 @@ impl ExplainInterpreter {
             Optimizers::create(self.ctx.clone()),
             &self.explain.input,
         )?;
-        let formatted_plan = Series::new(
+        let formatted_plan = Series::from_data(
             format!("{}", plan.display_graphviz())
                 .lines()
                 .map(|s| s.as_bytes())
                 .collect::<Vec<_>>(),
         );
-        Ok(DataBlock::create_by_array(schema, vec![formatted_plan]))
+        Ok(DataBlock::create(schema, vec![formatted_plan]))
     }
 
     fn explain_syntax(&self) -> Result<DataBlock> {
@@ -86,13 +86,13 @@ impl ExplainInterpreter {
             Optimizers::create(self.ctx.clone()),
             &self.explain.input,
         )?;
-        let formatted_plan = Series::new(
+        let formatted_plan = Series::from_data(
             format!("{:?}", plan)
                 .lines()
                 .map(|s| s.as_bytes())
                 .collect::<Vec<_>>(),
         );
-        Ok(DataBlock::create_by_array(schema, vec![formatted_plan]))
+        Ok(DataBlock::create(schema, vec![formatted_plan]))
     }
 
     fn explain_pipeline(&self) -> Result<DataBlock> {
@@ -102,12 +102,12 @@ impl ExplainInterpreter {
 
         let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
         let pipeline = pipeline_builder.build(&plan)?;
-        let formatted_pipeline = Series::new(
+        let formatted_pipeline = Series::from_data(
             format!("{:?}", pipeline)
                 .lines()
                 .map(|s| s.as_bytes())
                 .collect::<Vec<_>>(),
         );
-        Ok(DataBlock::create_by_array(schema, vec![formatted_pipeline]))
+        Ok(DataBlock::create(schema, vec![formatted_pipeline]))
     }
 }

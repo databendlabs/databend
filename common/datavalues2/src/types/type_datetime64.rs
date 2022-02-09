@@ -15,6 +15,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::TimeZone;
+use chrono::Utc;
 use chrono_tz::Tz;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
@@ -25,17 +28,37 @@ use super::data_type::ARROW_EXTENSION_NAME;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DateTime64Type {
+    precision: usize,
     tz: Option<String>,
 }
 
 impl DateTime64Type {
-    pub fn create(tz: Option<String>) -> Self {
-        DateTime64Type { tz }
+    pub fn create(precision: usize, tz: Option<String>) -> Self {
+        DateTime64Type { precision, tz }
     }
-    pub fn arc(tz: Option<String>) -> DataTypePtr {
-        Arc::new(DateTime64Type { tz })
+    pub fn arc(precision: usize, tz: Option<String>) -> DataTypePtr {
+        Arc::new(DateTime64Type { precision, tz })
+    }
+
+    pub fn tz(&self) -> Option<&String> {
+        self.tz.as_ref()
+    }
+
+    pub fn precision(&self) -> usize {
+        self.precision
+    }
+
+    #[inline]
+    pub fn utc_timestamp(&self, v: u64) -> DateTime<Utc> {
+        // ns
+        Utc.timestamp(v as i64 / 1_000_000_000, (v % 1_000_000_000) as u32)
+    }
+
+    #[inline]
+    pub fn seconds(&self, v: u64) -> u64 {
+        v / 1_000_000_000
     }
 }
 
@@ -48,6 +71,10 @@ impl DataType for DateTime64Type {
     #[inline]
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn name(&self) -> &str {
+        "DateTime64"
     }
 
     fn default_value(&self) -> DataValue {
@@ -83,7 +110,11 @@ impl DataType for DateTime64Type {
     }
 
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
-        Box::new(DateTimeSerializer::<u64>::default())
+        let tz = self.tz.clone().unwrap_or_else(|| "UTC".to_string());
+        Box::new(DateTimeSerializer::<u64>::create(
+            tz.parse::<Tz>().unwrap(),
+            self.precision as u32,
+        ))
     }
 
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
@@ -92,5 +123,15 @@ impl DataType for DateTime64Type {
             builder: MutablePrimitiveColumn::<u64>::with_capacity(capacity),
             tz: tz.parse::<Tz>().unwrap(),
         })
+    }
+
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutablePrimitiveColumn::<u64>::with_capacity(capacity))
+    }
+}
+
+impl std::fmt::Debug for DateTime64Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}({})", self.name(), self.precision())
     }
 }

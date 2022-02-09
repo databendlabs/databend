@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
 use crate::types::DataTypePtr;
@@ -25,15 +26,6 @@ use crate::NullType;
 #[derive(Debug, Default)]
 pub struct MutableNullColumn {
     length: usize,
-}
-
-impl MutableNullColumn {
-    pub fn finish(&mut self) -> NullColumn {
-        self.length = 0;
-        NullColumn {
-            length: self.length,
-        }
-    }
 }
 
 impl MutableColumn for MutableNullColumn {
@@ -49,22 +41,30 @@ impl MutableColumn for MutableNullColumn {
         self
     }
 
-    fn as_column(&mut self) -> ColumnRef {
-        Arc::new(self.finish())
-    }
-
     fn append_default(&mut self) {
         self.length += 1;
     }
 
     fn shrink_to_fit(&mut self) {}
 
-    fn append_null(&mut self) -> bool {
-        self.length += 1;
-        true
-    }
-
     fn validity(&self) -> Option<&MutableBitmap> {
         None
+    }
+
+    fn len(&self) -> usize {
+        self.length
+    }
+
+    fn to_column(&mut self) -> ColumnRef {
+        let ret: ColumnRef = Arc::new(NullColumn {
+            length: self.length,
+        });
+        self.length = 0;
+        ret
+    }
+
+    fn append_data_value(&mut self, _value: crate::DataValue) -> Result<()> {
+        self.length += 1;
+        Ok(())
     }
 }

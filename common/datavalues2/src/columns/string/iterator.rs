@@ -55,13 +55,19 @@ impl<'a> StringColumn {
     }
 }
 
+pub trait NewColumn<N> {
+    /// create non-nullable column by values
+    fn new_from_slice<P: AsRef<[N]>>(v: P) -> Self;
+    fn new_from_iter(it: impl Iterator<Item = N>) -> Self;
+}
+
 impl<S> NewColumn<S> for StringColumn
 where S: AsRef<[u8]>
 {
     fn new_from_slice<P: AsRef<[S]>>(slice: P) -> Self {
         let slice = slice.as_ref();
         let values_size = slice.iter().fold(0, |acc, s| acc + s.as_ref().len());
-        let mut builder = MutableStringColumn::with_capacity(values_size, slice.len());
+        let mut builder = MutableStringColumn::with_values_capacity(values_size, slice.len());
 
         slice.iter().for_each(|val| {
             builder.append_value(val.as_ref());
@@ -72,7 +78,7 @@ where S: AsRef<[u8]>
     /// Create a new DataArray from an iterator.
     fn new_from_iter(it: impl Iterator<Item = S>) -> Self {
         let cap = get_iter_capacity(&it);
-        let mut builder = MutableStringColumn::with_capacity(cap * 5, cap);
+        let mut builder = MutableStringColumn::with_capacity(cap);
         it.for_each(|v| builder.append_value(v));
         builder.finish()
     }

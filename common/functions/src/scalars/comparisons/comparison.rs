@@ -13,13 +13,18 @@
 // limitations under the License.
 
 use std::fmt;
+use std::sync::Arc;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_arrow::arrow::compute::comparison;
+use common_datavalues2::prelude::*;
+use common_datavalues2::type_coercion::compare_coercion;
+use common_datavalues2::BooleanType;
+use common_datavalues2::DataValueComparisonOperator;
+use common_datavalues2::TypeID;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionFactory;
-use crate::scalars::CastFunction;
+use crate::scalars::cast_column_field;
 use crate::scalars::ComparisonEqFunction;
 use crate::scalars::ComparisonGtEqFunction;
 use crate::scalars::ComparisonGtFunction;
@@ -27,8 +32,9 @@ use crate::scalars::ComparisonLikeFunction;
 use crate::scalars::ComparisonLtEqFunction;
 use crate::scalars::ComparisonLtFunction;
 use crate::scalars::ComparisonNotEqFunction;
-use crate::scalars::ComparisonNotLikeFunction;
-use crate::scalars::Function;
+use crate::scalars::ComparisonRegexpFunction;
+use crate::scalars::Function2;
+use crate::scalars::Function2Factory;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
@@ -36,7 +42,7 @@ pub struct ComparisonFunction {
 }
 
 impl ComparisonFunction {
-    pub fn register(factory: &mut FunctionFactory) {
+    pub fn register(factory: &mut Function2Factory) {
         factory.register("=", ComparisonEqFunction::desc());
         factory.register("<", ComparisonLtFunction::desc());
         factory.register(">", ComparisonGtFunction::desc());
@@ -44,39 +50,84 @@ impl ComparisonFunction {
         factory.register(">=", ComparisonGtEqFunction::desc());
         factory.register("!=", ComparisonNotEqFunction::desc());
         factory.register("<>", ComparisonNotEqFunction::desc());
-        factory.register("like", ComparisonLikeFunction::desc());
-        factory.register("not like", ComparisonNotLikeFunction::desc());
+        factory.register("like", ComparisonLikeFunction::desc_like());
+        factory.register("not like", ComparisonLikeFunction::desc_unlike());
+        factory.register("regexp", ComparisonRegexpFunction::desc_regexp());
+        factory.register("not regexp", ComparisonRegexpFunction::desc_unregexp());
+        factory.register("rlike", ComparisonRegexpFunction::desc_regexp());
+        factory.register("not rlike", ComparisonRegexpFunction::desc_unregexp());
     }
 
-    pub fn try_create_func(op: DataValueComparisonOperator) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(op: DataValueComparisonOperator) -> Result<Box<dyn Function2>> {
         Ok(Box::new(ComparisonFunction { op }))
     }
 }
 
-impl Function for ComparisonFunction {
+impl Function2 for ComparisonFunction {
     fn name(&self) -> &str {
         "ComparisonFunction"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::Boolean;
-        Ok(DataTypeAndNullable::create(&dt, nullable))
-    }
+    fn return_type(
+        &self,
+        args: &[&common_datavalues2::DataTypePtr],
+    ) -> Result<common_datavalues2::DataTypePtr> {
+        // expect array & struct
+        let has_array_struct = args
+            .iter()
+            .any(|arg| matches!(arg.data_type_id(), TypeID::Struct | TypeID::Array));
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        if columns[0].data_type() != columns[1].data_type() {
-            let compare_coercion_type =
-                compare_coercion(columns[0].data_type(), columns[1].data_type())?;
-
-            let col0 = cast_column(&columns[0], compare_coercion_type.clone(), input_rows)?;
-            let col1 = cast_column(&columns[1], compare_coercion_type, input_rows)?;
-            return self.eval(&[col0, col1], input_rows);
+        if has_array_struct {
+            return Err(ErrorCode::BadArguments(format!(
+                "Illegal types {:?} of argument of function {}, can not be struct or array",
+                args,
+                self.name()
+            )));
         }
 
-        columns[0]
-            .column()
-            .compare(self.op.clone(), columns[1].column())
+        Ok(BooleanType::arc())
+    }
+
+    fn eval(
+        &self,
+        columns: &common_datavalues2::ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<common_datavalues2::ColumnRef> {
+        if columns[0].data_type() != columns[1].data_type() {
+            // TODO cached it inside the function
+            let least_supertype = compare_coercion(columns[0].data_type(), columns[1].data_type())?;
+            let col0 = cast_column_field(&columns[0], &least_supertype)?;
+            let col1 = cast_column_field(&columns[1], &least_supertype)?;
+
+            let f0 = DataField::new(columns[0].field().name(), least_supertype.clone());
+            let f1 = DataField::new(columns[1].field().name(), least_supertype.clone());
+
+            let columns = vec![
+                ColumnWithField::new(col0, f0),
+                ColumnWithField::new(col1, f1),
+            ];
+            return self.eval(&columns, input_rows);
+        }
+
+        // TODO, this already convert to full column
+        // Better to use comparator with scalar of arrow2
+
+        let array0 = columns[0].column().as_arrow_array();
+        let array1 = columns[1].column().as_arrow_array();
+
+        let f = match self.op {
+            DataValueComparisonOperator::Eq => comparison::eq,
+            DataValueComparisonOperator::Lt => comparison::lt,
+            DataValueComparisonOperator::LtEq => comparison::lt_eq,
+            DataValueComparisonOperator::Gt => comparison::gt,
+            DataValueComparisonOperator::GtEq => comparison::gt_eq,
+            DataValueComparisonOperator::NotEq => comparison::neq,
+            _ => unreachable!(),
+        };
+
+        let result = f(array0.as_ref(), array1.as_ref());
+        let result = BooleanColumn::new(result);
+        Ok(Arc::new(result))
     }
 }
 
@@ -84,17 +135,4 @@ impl fmt::Display for ComparisonFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.op)
     }
-}
-
-fn cast_column(
-    column: &DataColumnWithField,
-    data_type: DataType,
-    input_rows: usize,
-) -> Result<DataColumnWithField> {
-    let new_col = CastFunction::create("cast".to_string(), data_type.clone())
-        .unwrap()
-        .eval(&[column.clone()], input_rows)?;
-
-    let new_field = DataField::new(column.field().name(), data_type, false);
-    Ok(DataColumnWithField::new(new_col, new_field))
 }

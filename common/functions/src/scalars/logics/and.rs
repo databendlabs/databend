@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,28 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataValueLogicOperator;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
+use super::logic::LogicOperator;
+use super::LogicFunction;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
-use crate::scalars::LogicFunction;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
+#[derive(Clone)]
 pub struct LogicAndFunction;
 
 impl LogicAndFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
-        LogicFunction::try_create_func(DataValueLogicOperator::And)
+    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function2>> {
+        LogicFunction::try_create(LogicOperator::And)
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .negative_function("or")
-                .bool_function()
-                .num_arguments(2),
-        )
+    pub fn desc() -> Function2Description {
+        let mut features = FunctionFeatures::default().num_arguments(2);
+        features = features.deterministic();
+        Function2Description::creator(Box::new(Self::try_create)).features(features)
     }
 }

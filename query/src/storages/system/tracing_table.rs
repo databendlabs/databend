@@ -15,9 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableIdent;
@@ -41,13 +39,13 @@ impl TracingTable {
         // {"v":0,"name":"databend-query","msg":"Group by partial cost: 9.071158ms","level":20,"hostname":"databend","pid":56776,"time":"2021-06-24T02:17:28.679642889+00:00"}
 
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("v", DataType::Int64, false),
-            DataField::new("name", DataType::String, false),
-            DataField::new("msg", DataType::String, false),
-            DataField::new("level", DataType::Int8, false),
-            DataField::new("hostname", DataType::String, false),
-            DataField::new("pid", DataType::Int64, false),
-            DataField::new("time", DataType::String, false),
+            DataField::new("v", i64::to_data_type()),
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("msg", Vu8::to_data_type()),
+            DataField::new("level", i8::to_data_type()),
+            DataField::new("hostname", Vu8::to_data_type()),
+            DataField::new("pid", i64::to_data_type()),
+            DataField::new("time", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {

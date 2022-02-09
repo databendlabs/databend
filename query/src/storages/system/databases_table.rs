@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -35,8 +35,7 @@ pub struct DatabasesTable {
 
 impl DatabasesTable {
     pub fn create(table_id: u64) -> Self {
-        let schema =
-            DataSchemaRefExt::create(vec![DataField::new("name", DataType::String, false)]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new("name", Vu8::to_data_type())]);
 
         let table_info = TableInfo {
             desc: "'system'.'databases'".to_string(),
@@ -76,8 +75,7 @@ impl Table for DatabasesTable {
             .map(|database| database.name().as_bytes())
             .collect();
 
-        let block =
-            DataBlock::create_by_array(self.table_info.schema(), vec![Series::new(db_names)]);
+        let block = DataBlock::create(self.table_info.schema(), vec![Series::from_data(db_names)]);
 
         let s = Box::pin(DataBlockStream::create(
             self.table_info.schema(),

@@ -15,12 +15,14 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::Result;
 
 use crate::columns::mutable::MutableColumn;
 use crate::types::BooleanType;
 use crate::types::DataTypePtr;
 use crate::BooleanColumn;
 use crate::ColumnRef;
+use crate::ScalarColumnBuilder;
 
 pub struct MutableBooleanColumn {
     values: MutableBitmap,
@@ -36,10 +38,6 @@ impl MutableColumn for MutableBooleanColumn {
         self
     }
 
-    fn as_column(&mut self) -> ColumnRef {
-        Arc::new(self.finish())
-    }
-
     fn data_type(&self) -> DataTypePtr {
         self.data_type.clone()
     }
@@ -51,26 +49,28 @@ impl MutableColumn for MutableBooleanColumn {
     fn append_default(&mut self) {
         self.append_value(false);
     }
+
+    fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    fn to_column(&mut self) -> ColumnRef {
+        Arc::new(self.finish())
+    }
+
+    fn append_data_value(&mut self, value: crate::DataValue) -> Result<()> {
+        self.append_value(value.as_bool()?);
+        Ok(())
+    }
 }
 
 impl Default for MutableBooleanColumn {
     fn default() -> Self {
-        Self::new()
+        Self::with_capacity(0)
     }
 }
 
 impl MutableBooleanColumn {
-    pub fn new() -> Self {
-        Self::with_capacity(0)
-    }
-
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            values: MutableBitmap::with_capacity(capacity),
-            data_type: BooleanType::arc(),
-        }
-    }
-
     pub fn from_data(values: MutableBitmap) -> Self {
         Self {
             values,
@@ -82,8 +82,23 @@ impl MutableBooleanColumn {
     pub fn append_value(&mut self, value: bool) {
         self.values.push(value);
     }
+}
 
-    pub fn finish(&mut self) -> BooleanColumn {
+impl ScalarColumnBuilder for MutableBooleanColumn {
+    type ColumnType = BooleanColumn;
+
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            values: MutableBitmap::with_capacity(capacity),
+            data_type: BooleanType::arc(),
+        }
+    }
+
+    fn push(&mut self, value: bool) {
+        self.values.push(value);
+    }
+
+    fn finish(&mut self) -> Self::ColumnType {
         self.shrink_to_fit();
         BooleanColumn {
             values: std::mem::take(&mut self.values).into(),

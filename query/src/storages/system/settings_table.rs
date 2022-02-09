@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -35,12 +35,12 @@ pub struct SettingsTable {
 impl SettingsTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("value", DataType::String, false),
-            DataField::new("default", DataType::String, false),
-            DataField::new("level", DataType::String, false),
-            DataField::new("description", DataType::String, false),
-            DataField::new("type", DataType::String, false),
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("value", Vu8::to_data_type()),
+            DataField::new("default", Vu8::to_data_type()),
+            DataField::new("level", Vu8::to_data_type()),
+            DataField::new("description", Vu8::to_data_type()),
+            DataField::new("type", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {
@@ -95,7 +95,7 @@ impl Table for SettingsTable {
                 // Desc.
                 descs.push(format!("{:?}", vals[4]));
                 // Types.
-                types.push(format!("{:?}", vals[2].data_type()));
+                types.push(format!("{:?}", vals[2].max_data_type()));
             }
         }
 
@@ -105,13 +105,13 @@ impl Table for SettingsTable {
         let levels: Vec<&[u8]> = levels.iter().map(|x| x.as_bytes()).collect();
         let descs: Vec<&[u8]> = descs.iter().map(|x| x.as_bytes()).collect();
         let types: Vec<&[u8]> = types.iter().map(|x| x.as_bytes()).collect();
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
-            Series::new(names),
-            Series::new(values),
-            Series::new(defaults),
-            Series::new(levels),
-            Series::new(descs),
-            Series::new(types),
+        let block = DataBlock::create(self.table_info.schema(), vec![
+            Series::from_data(names),
+            Series::from_data(values),
+            Series::from_data(defaults),
+            Series::from_data(levels),
+            Series::from_data(descs),
+            Series::from_data(types),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(

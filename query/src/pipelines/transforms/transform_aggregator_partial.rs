@@ -18,7 +18,7 @@ use std::time::Instant;
 
 use bumpalo::Bump;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
@@ -118,10 +118,10 @@ impl Processor for AggregatorPartialTransform {
             for (idx, func) in funcs.iter().enumerate() {
                 let mut arg_columns = vec![];
                 for name in arg_names[idx].iter() {
-                    arg_columns.push(block.try_column_by_name(name)?.to_array()?);
+                    arg_columns.push(block.try_column_by_name(name)?.clone());
                 }
                 let place = places[idx].into();
-                func.accumulate(place, &arg_columns, rows)?;
+                func.accumulate(place, &arg_columns, None, rows)?;
             }
         }
         let delta = start.elapsed();
@@ -133,15 +133,14 @@ impl Processor for AggregatorPartialTransform {
         for (idx, func) in funcs.iter().enumerate() {
             let place = places[idx].into();
             func.serialize(place, &mut bytes)?;
-            let mut array_builder = StringArrayBuilder::with_capacity(4);
+            let mut array_builder = MutableStringColumn::with_capacity(4);
             array_builder.append_value(&bytes[..]);
             bytes.clear();
-            let array = array_builder.finish();
-            let col = array.into_series();
+            let col = array_builder.to_column();
             columns.push(col);
         }
 
-        let block = DataBlock::create_by_array(self.schema.clone(), columns);
+        let block = DataBlock::create(self.schema.clone(), columns);
 
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),

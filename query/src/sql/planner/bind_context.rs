@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_ast::parser::ast::TableAlias;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -28,7 +28,7 @@ pub struct ColumnBinding {
     /// Column name of this `ColumnBinding` in current context
     pub column_name: String,
     pub index: IndexType,
-    pub data_type: DataType,
+    pub data_type: DataTypePtr,
     pub nullable: bool,
     pub expr: Option<ScalarExpr>,
 }
@@ -92,7 +92,7 @@ impl BindContext {
         index: IndexType,
         table_name: String,
         column_name: String,
-        data_type: DataType,
+        data_type: DataTypePtr,
         nullable: bool,
         expr: Option<ScalarExpr>,
     ) {

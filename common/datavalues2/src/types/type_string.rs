@@ -20,7 +20,7 @@ use super::data_type::DataType;
 use super::type_id::TypeID;
 use crate::prelude::*;
 
-#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct StringType {}
 
 impl StringType {
@@ -40,6 +40,14 @@ impl DataType for StringType {
         self
     }
 
+    fn name(&self) -> &str {
+        "String"
+    }
+
+    fn aliases(&self) -> &[&str] {
+        &["Binary", "Varchar", "Char", "Text", "Blob"]
+    }
+
     fn default_value(&self) -> DataValue {
         DataValue::String(vec![])
     }
@@ -50,8 +58,9 @@ impl DataType for StringType {
         size: usize,
     ) -> common_exception::Result<ColumnRef> {
         let value = data.as_string()?;
+        let bytes = value.as_slice();
 
-        let column = Series::from_data(&[value]);
+        let column = Series::from_data(&[bytes]);
         Ok(Arc::new(ConstColumn::new(column, size)))
     }
 
@@ -65,6 +74,10 @@ impl DataType for StringType {
 
     fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
         Box::new(StringDeserializer::with_capacity(capacity))
+    }
+
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
+        Box::new(MutableStringColumn::with_capacity(capacity))
     }
 
     fn create_column(&self, data: &[DataValue]) -> common_exception::Result<ColumnRef> {
@@ -82,5 +95,11 @@ impl DataType for StringType {
                 values.into(),
             )))
         }
+    }
+}
+
+impl std::fmt::Debug for StringType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }

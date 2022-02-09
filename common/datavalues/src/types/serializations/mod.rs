@@ -55,6 +55,7 @@ impl DataType {
             DataType::Date16 => Box::new(DateSerializer::<u16>::default()),
             DataType::Date32 => Box::new(DateSerializer::<i32>::default()),
             DataType::DateTime32(_) => Box::new(DateTimeSerializer::<u32>::default()),
+            DataType::DateTime64(_, _) => Box::new(DateTimeSerializer::<u64>::default()),
             DataType::String => Box::new(StringSerializer {}),
             DataType::Struct(fields) => Box::new(StructSerializer {
                 fields: fields.to_vec(),

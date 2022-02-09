@@ -11,7 +11,7 @@ doctest = false
 test = false
 
 [dependencies]
-common-datavalues = { path = "../../datavalues" }
+common-datavalues2 = { path = "../../datavalues2" }
 common-exception = { path = "../../exception" }
 
 anyerror = "0.1.1"

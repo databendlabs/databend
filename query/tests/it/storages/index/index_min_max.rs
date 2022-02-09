@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::col;
 use common_planners::lit;
@@ -26,31 +26,31 @@ use pretty_assertions::assert_eq;
 #[test]
 fn test_min_max_index() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("name", DataType::String, true),
-        DataField::new("age", DataType::Int32, false),
+        DataField::new_nullable("name", Vu8::to_data_type()),
+        DataField::new("age", i32::to_data_type()),
     ]);
 
-    let block1 = DataBlock::create_by_array(schema.clone(), vec![
-        Series::new(vec!["jack", "ace", "bohu"]),
-        Series::new(vec![11, 6, 24]),
+    let block1 = DataBlock::create(schema.clone(), vec![
+        Series::from_data(vec!["jack", "ace", "bohu"]),
+        Series::from_data(vec![11, 6, 24]),
     ]);
 
-    let block2 = DataBlock::create_by_array(schema, vec![
-        Series::new(vec!["xjack", "xace", "xbohu"]),
-        Series::new(vec![11, 6, 24]),
+    let block2 = DataBlock::create(schema, vec![
+        Series::from_data(vec!["xjack", "xace", "xbohu"]),
+        Series::from_data(vec![11, 6, 24]),
     ]);
 
     let idx_slice = vec![
         MinMaxIndex {
             col: "name".to_string(),
-            min: DataValue::String(Some("jack".as_bytes().to_vec())),
-            max: DataValue::String(Some("xbohu".as_bytes().to_vec())),
+            min: DataValue::String("jack".as_bytes().to_vec()),
+            max: DataValue::String("xbohu".as_bytes().to_vec()),
             version: IndexSchemaVersion::V1,
         },
         MinMaxIndex {
             col: "age".to_string(),
-            min: DataValue::Int32(Some(11)),
-            max: DataValue::Int32(Some(24)),
+            min: DataValue::Int64(11),
+            max: DataValue::Int64(24),
             version: IndexSchemaVersion::V1,
         },
     ];

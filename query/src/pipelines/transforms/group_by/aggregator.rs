@@ -14,12 +14,7 @@
 
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
-use common_datavalues::arrays::StringArrayBuilder;
-use common_datavalues::columns::DataColumn;
-use common_datavalues::prelude::IntoSeries;
-use common_datavalues::prelude::Series;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
@@ -28,7 +23,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
-use crate::pipelines::transforms::group_by::aggregator_keys_builder::KeysArrayBuilder;
+use crate::pipelines::transforms::group_by::aggregator_keys_builder::KeysColumnBuilder;
 use crate::pipelines::transforms::group_by::aggregator_params::AggregatorParams;
 use crate::pipelines::transforms::group_by::aggregator_params::AggregatorParamsRef;
 use crate::pipelines::transforms::group_by::aggregator_state::AggregatorState;
@@ -145,18 +140,18 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
     }
 
     #[inline(always)]
-    fn group_columns<'a>(names: &[String], block: &'a DataBlock) -> Result<Vec<&'a DataColumn>> {
+    fn group_columns<'a>(names: &[String], block: &'a DataBlock) -> Result<Vec<&'a ColumnRef>> {
         names
             .iter()
             .map(|column_name| block.try_column_by_name(column_name))
-            .collect::<Result<Vec<&DataColumn>>>()
+            .collect::<Result<Vec<&ColumnRef>>>()
     }
 
     #[inline(always)]
     fn aggregate_arguments(
         block: &DataBlock,
         params: &AggregatorParams,
-    ) -> Result<Vec<Vec<Series>>> {
+    ) -> Result<Vec<Vec<ColumnRef>>> {
         let aggregate_functions_arguments = &params.aggregate_functions_arguments_name;
         let mut aggregate_arguments_columns =
             Vec::with_capacity(aggregate_functions_arguments.len());
@@ -165,7 +160,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
 
             for argument_name in function_arguments {
                 let argument_column = block.try_column_by_name(argument_name)?;
-                function_arguments_column.push(argument_column.to_array()?);
+                function_arguments_column.push(argument_column.clone());
             }
 
             aggregate_arguments_columns.push(function_arguments_column);
@@ -194,8 +189,8 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
         let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
 
         // Builders.
-        let mut state_builders: Vec<StringArrayBuilder> = (0..aggr_len)
-            .map(|_| StringArrayBuilder::with_capacity(groups.len() * 4))
+        let mut state_builders: Vec<MutableStringColumn> = (0..aggr_len)
+            .map(|_| MutableStringColumn::with_capacity(groups.len() * 4))
             .collect();
 
         let mut group_key_builder = self.method.state_array_builder(groups.len());
@@ -214,14 +209,13 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
             group_key_builder.append_value(group_entity.get_state_key());
         }
 
-        let mut columns: Vec<Series> = Vec::with_capacity(schema.fields().len());
+        let mut columns: Vec<ColumnRef> = Vec::with_capacity(schema.fields().len());
         for mut builder in state_builders {
-            columns.push(builder.finish().into_series());
+            columns.push(builder.to_column());
         }
 
         columns.push(group_key_builder.finish());
-
-        let block = DataBlock::create_by_array(schema.clone(), columns);
+        let block = DataBlock::create(schema.clone(), columns);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))
     }
 }
