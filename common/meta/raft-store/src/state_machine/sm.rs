@@ -586,7 +586,7 @@ impl StateMachine {
         let prev = prev.ok_or_else(|| {
             MetaStorageError::AppError(AppError::UnknownTableId(UnknownTableId::new(
                 req.table_id,
-                format!("apply_upsert_table_options_cmd"),
+                "apply_upsert_table_options_cmd".to_string(),
             )))
         })?;
 
@@ -845,7 +845,7 @@ impl StateMachine {
             .ok_or_else(|| {
                 MetaStorageError::AppError(AppError::UnknownDatabase(UnknownDatabase::new(
                     db_name.to_string(),
-                    format! {"txn_get_database_id"},
+                    "txn_get_database_id".to_string(),
                 )))
             })?;
 
@@ -937,7 +937,7 @@ impl StateMachine {
         let x = self.databases().get(db_id)?.ok_or_else(|| {
             MetaStorageError::AppError(AppError::UnknownDatabaseId(UnknownDatabaseId::new(
                 *db_id,
-                format!("get_database_meta_by_id"),
+                "get_database_meta_by_id".to_string(),
             )))
         })?;
         Ok(x)
