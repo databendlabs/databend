@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
+
+
 use thiserror::Error;
 
 // TODO: implement From<Result> for `common_exception::Result`.s
@@ -26,6 +29,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// As an exception, `Error::Unexpected` is used for all unexpected errors.
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("backend not supported: (type {0})")]
+    BackendNotSupported(String),
     #[error("backend configuration invalid: (key {key}, value {value})")]
     BackendConfigurationInvalid { key: String, value: String },
 

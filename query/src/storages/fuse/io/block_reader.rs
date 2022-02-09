@@ -20,8 +20,10 @@ use common_arrow::arrow::io::parquet::read::decompress;
 use common_arrow::arrow::io::parquet::read::page_stream_to_array;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_arrow::parquet::read::get_page_stream;
-use common_dal::DataAccessor;
-use common_dal::InputStream;
+
+use common_dal2::readers::SeekableReader;
+use common_dal2::Operator;
+
 use common_datablocks::DataBlock;
 use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
@@ -36,7 +38,7 @@ use futures::TryStreamExt;
 use crate::storages::fuse::io::meta_readers::BlockMetaReader;
 
 pub struct BlockReader {
-    data_accessor: Arc<dyn DataAccessor>,
+    data_accessor: Operator,
     path: String,
     block_schema: DataSchemaRef,
     table_schema: DataSchemaRef,
@@ -49,7 +51,7 @@ pub struct BlockReader {
 
 impl BlockReader {
     pub fn new(
-        data_accessor: Arc<dyn DataAccessor>,
+        data_accessor: Operator,
         path: String,
         table_schema: DataSchemaRef,
         projection: Vec<usize>,
@@ -97,14 +99,20 @@ impl BlockReader {
 
         let fields = self.table_schema.fields();
         let arrow_fields = self.arrow_table_schema.fields();
-        let stream_len = self.file_len;
+        let _stream_len = self.file_len;
         let read_buffer_size = self.read_buffer_size;
 
         let stream = futures::stream::iter(cols).map(|(col_meta, idx)| {
             let data_accessor = self.data_accessor.clone();
             let path = self.path.clone();
             async move {
-                let reader = data_accessor.get_input_stream(path.as_str(), Some(stream_len))?;
+                let object = data_accessor
+                    .stat(path.as_str())
+                    .run()
+                    .await
+                    // TODO: we should map the error to `ErrorCode` correctly.
+                    .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
+                let reader = SeekableReader::new(data_accessor, path.as_str(), object.size);
                 let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
                 let data_type = fields[idx].data_type();
                 let arrow_type = arrow_fields[idx].data_type();
@@ -123,7 +131,7 @@ impl BlockReader {
     }
 
     async fn read_column(
-        mut reader: BufReader<InputStream>,
+        mut reader: BufReader<SeekableReader>,
         column_chunk_meta: &ColumnChunkMetaData,
         data_type: DataTypePtr,
         arrow_type: ArrowType,

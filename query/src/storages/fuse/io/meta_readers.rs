@@ -17,11 +17,13 @@ use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::schema::FileMetaData;
-use common_dal::InputStream;
+
+use common_dal2::readers::SeekableReader;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
+use futures::executor::block_on;
 use futures::io::BufReader;
 use serde::de::DeserializeOwned;
 
@@ -40,7 +42,7 @@ use crate::storages::fuse::meta::TableSnapshot;
 /// Mainly used as a auxiliary facility in the implementation of [Loader], such that the acquirement
 /// of an [BufReader] can be deferred or avoided (e.g. if hits cache).
 pub trait BufReaderProvider {
-    fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<InputStream>>;
+    fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<SeekableReader>>;
 }
 
 /// A Newtype for [FileMetaData].
@@ -160,19 +162,24 @@ where T: BufReaderProvider + Sync
 }
 
 impl BufReaderProvider for &QueryContext {
-    fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<InputStream>> {
+    fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<SeekableReader>> {
         let accessor = self.get_storage_accessor()?;
-        let input_stream = accessor.get_input_stream(path, len)?;
+        let len = match len {
+            Some(l) => l,
+            None => {
+                let object = block_on(async { accessor.stat(path).run().await })
+                    .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
+                object.size
+            }
+        };
+        let reader = SeekableReader::new(accessor, path, len);
         let read_buffer_size = self.get_settings().get_storage_read_buffer_size()?;
-        Ok(BufReader::with_capacity(
-            read_buffer_size as usize,
-            input_stream,
-        ))
+        Ok(BufReader::with_capacity(read_buffer_size as usize, reader))
     }
 }
 
 impl BufReaderProvider for Arc<QueryContext> {
-    fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<InputStream>> {
+    fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<SeekableReader>> {
         self.as_ref().buf_reader(path, len)
     }
 }

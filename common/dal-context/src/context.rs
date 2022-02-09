@@ -27,16 +27,16 @@ use common_infallible::RwLock;
 
 use crate::metrics::DalMetrics;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct DalContext {
-    inner: Arc<dyn Accessor>,
+    inner: Option<Arc<dyn Accessor>>,
     metrics: Arc<RwLock<DalMetrics>>,
 }
 
 impl DalContext {
     pub fn new(inner: Arc<dyn Accessor>) -> Self {
         DalContext {
-            inner,
+            inner: Some(inner),
             metrics: Arc::new(Default::default()),
         }
     }
@@ -118,18 +118,18 @@ impl Layer for DalContext {
 impl Accessor for DalContext {
     async fn read(&self, args: &OpRead) -> DalResult<Reader> {
         // TODO(xuanwo): Implement context callback reader to collect metrics.
-        self.inner.read(args).await
+        self.inner.as_ref().unwrap().read(args).await
     }
     async fn write(&self, r: Reader, args: &OpWrite) -> DalResult<usize> {
-        self.inner.write(r, args).await.map(|n| {
+        self.inner.as_ref().unwrap().write(r, args).await.map(|n| {
             self.inc_write_bytes(n);
             n
         })
     }
     async fn stat(&self, args: &OpStat) -> DalResult<Object> {
-        self.inner.stat(args).await
+        self.inner.as_ref().unwrap().stat(args).await
     }
     async fn delete(&self, args: &OpDelete) -> DalResult<()> {
-        self.inner.delete(args).await
+        self.inner.as_ref().unwrap().delete(args).await
     }
 }

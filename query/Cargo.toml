@@ -51,6 +51,7 @@ common-planners = { path = "../common/planners" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
 common-ast = { path = "../common/ast" }
+common-dal-context = { path = "../common/dal-context" }
 
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "70aa0b2" }

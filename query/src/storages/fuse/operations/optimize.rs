@@ -17,7 +17,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_cache::Cache;
-use common_dal::DataAccessor;
+use common_dal2::Operator;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::sessions::QueryContext;
@@ -121,9 +122,13 @@ impl FuseTable {
 
     async fn remove_location(
         &self,
-        data_accessor: Arc<dyn DataAccessor>,
+        data_accessor: Operator,
         location: impl AsRef<str>,
     ) -> Result<()> {
-        data_accessor.remove(location.as_ref()).await
+        data_accessor
+            .delete(location.as_ref())
+            .run()
+            .await
+            .map_err(|e| ErrorCode::DalTransportError(e.to_string()))
     }
 }

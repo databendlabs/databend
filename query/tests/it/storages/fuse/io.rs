@@ -16,8 +16,17 @@
 use std::sync::Arc;
 
 use common_base::tokio;
-use common_dal::AsyncSeekableReader;
-use common_dal::DataAccessor;
+
+
+
+
+
+use common_dal2::ops::OpWrite;
+use common_dal2::services::fs;
+use common_dal2::Accessor;
+
+use common_dal2::Operator;
+use common_dal2::Reader;
 use common_datablocks::DataBlock;
 use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
@@ -25,7 +34,7 @@ use common_exception::Result;
 use databend_query::storages::fuse::io::BlockRegulator;
 use databend_query::storages::fuse::io::BlockStreamWriter;
 use databend_query::storages::fuse::DEFAULT_CHUNK_BLOCK_NUM;
-use futures::stream::Stream;
+
 use futures::StreamExt;
 use futures::TryStreamExt;
 use num::Integer;
@@ -34,8 +43,11 @@ use tempfile::TempDir;
 #[tokio::test]
 async fn test_fuse_table_block_appender() {
     let tmp_dir = TempDir::new().unwrap();
-    let local_fs = common_dal::Local::with_path(tmp_dir.path().to_owned());
-    let local_fs = Arc::new(local_fs);
+    let local_fs = Operator::new(
+        fs::Backend::build()
+            .root(tmp_dir.path().to_str().unwrap())
+            .finish(),
+    );
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
 
     // single segment
@@ -254,9 +266,10 @@ async fn test_block_stream_writer() -> common_exception::Result<()> {
             futures::stream::iter(std::iter::repeat(Ok(sample_block)).take(num_blocks));
 
         let data_accessor = Arc::new(MockDataAccessor::new());
+        let operator = Operator::new(data_accessor.clone());
 
         let stream = BlockStreamWriter::write_block_stream(
-            data_accessor.clone(),
+            operator,
             Box::pin(block_stream),
             schema,
             max_rows_per_block,
@@ -328,41 +341,11 @@ impl MockDataAccessor {
         *self.put_stream_called.lock()
     }
 }
-
 #[async_trait::async_trait]
-impl DataAccessor for MockDataAccessor {
-    fn get_input_stream(
-        &self,
-        _: &str,
-        _: std::option::Option<u64>,
-    ) -> std::result::Result<
-        Box<(dyn AsyncSeekableReader + Unpin + std::marker::Send + 'static)>,
-        ErrorCode,
-    > {
-        todo!()
-    }
-
-    async fn put(&self, _path: &str, _content: Vec<u8>) -> Result<()> {
-        todo!()
-    }
-
-    async fn put_stream(
-        &self,
-        _path: &str,
-        _input_stream: Box<
-            dyn Stream<Item = std::result::Result<bytes::Bytes, std::io::Error>>
-                + Send
-                + Unpin
-                + 'static,
-        >,
-        _stream_len: usize,
-    ) -> Result<()> {
+impl Accessor for MockDataAccessor {
+    async fn write(&self, _r: Reader, args: &OpWrite) -> common_dal2::error::Result<usize> {
         let called = &mut *self.put_stream_called.lock();
         *called += 1;
-        Ok(())
-    }
-
-    async fn remove(&self, _path: &str) -> Result<()> {
-        todo!()
+        Ok(args.size as usize)
     }
 }
