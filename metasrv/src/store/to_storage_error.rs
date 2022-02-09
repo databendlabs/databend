@@ -13,19 +13,19 @@
 // limitations under the License.
 
 use anyerror::AnyError;
-use common_exception::ErrorCode;
 use common_meta_sled_store::openraft;
+use common_meta_types::MetaStorageError;
 use openraft::ErrorSubject;
 use openraft::ErrorVerb;
 use openraft::StorageError;
 use openraft::StorageIOError;
 
-/// Convert error to openraft::StorageError;  
+/// Convert MetaStorageError to openraft::StorageError;  
 pub trait ToStorageError<T> {
     fn map_to_sto_err(self, subject: ErrorSubject, verb: ErrorVerb) -> Result<T, StorageError>;
 }
 
-impl<T> ToStorageError<T> for Result<T, ErrorCode> {
+impl<T> ToStorageError<T> for Result<T, MetaStorageError> {
     fn map_to_sto_err(self, subject: ErrorSubject, verb: ErrorVerb) -> Result<T, StorageError> {
         match self {
             Ok(x) => Ok(x),

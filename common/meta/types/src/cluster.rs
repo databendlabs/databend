@@ -17,11 +17,13 @@ use std::fmt;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-use common_exception::exception::ErrorCode;
 use common_exception::exception::Result;
 use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
+
+use crate::MetaError;
+use crate::MetaResult;
 
 /// A slot is a virtual and intermediate allocation unit in a distributed storage.
 /// The key of an object is mapped to a slot by some hashing algo.
@@ -54,12 +56,12 @@ pub struct NodeInfo {
 }
 
 impl TryFrom<Vec<u8>> for NodeInfo {
-    type Error = ErrorCode;
+    type Error = MetaError;
 
-    fn try_from(value: Vec<u8>) -> Result<Self> {
+    fn try_from(value: Vec<u8>) -> MetaResult<Self> {
         match serde_json::from_slice(&value) {
             Ok(user_info) => Ok(user_info),
-            Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
+            Err(serialize_error) => Err(MetaError::IllegalUserInfoFormat(format!(
                 "Cannot deserialize cluster id from bytes. cause {}",
                 serialize_error
             ))),

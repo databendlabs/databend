@@ -56,6 +56,7 @@ build_exceptions! {
     UnknownTypeOfQuery(1001),
     UnImplement(1002),
     UnknownDatabase(1003),
+    UnknownDatabaseId(1004),
     SyntaxException(1005),
     BadArguments(1006),
     IllegalDataType(1007),
@@ -71,6 +72,7 @@ build_exceptions! {
     DataStructMissMatch(1017),
     BadDataArrayLength(1018),
     UnknownContextID(1019),
+    UnknownTableId(1020),
     UnknownTableFunction(1021),
     BadOption(1022),
     CannotReadFile(1023),
@@ -142,35 +144,20 @@ build_exceptions! {
     // Meta service does not work.
     MetaServiceError(2001),
     InvalidConfig(2002),
-    UnknownNode(2003),
+    MetaStorageError(2003),
 
-    // Meta store error codes.
-    MetaStoreDamaged(2004),
-    MetaStoreAlreadyExists(2005),
-    MetaStoreNotFound(2006),
-
-    ConcurrentSnapshotInstall(2007),
-    UnknownTableId(2008),
     TableVersionMismatched(2009),
-    UnknownDatabaseId(2010),
     OCCRetryFailure(2011),
-
-    // KVSrv server error codes.
-    MetaSrvError(2101),
-    TransactionAbort(2102),
-    TransactionError(2103),
 
     // User api error codes.
     UnknownUser(2201),
     UserAlreadyExists(2202),
     IllegalUserInfoFormat(2203),
     UnknownRole(2204),
-    IllegalRoleInfoFormat(2205),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),
     TableAlreadyExists(2302),
-    IllegalMetaOperationArgument(2303),
     IllegalMetaState(2304),
     MetaNodeInternalError(2305),
 

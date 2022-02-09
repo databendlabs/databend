@@ -1666,7 +1666,6 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
- "sled",
  "sqlparser",
  "thiserror",
  "tonic",
@@ -1904,6 +1903,7 @@ dependencies = [
 name = "common-meta-types"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "anyhow",
  "common-building",
  "common-datavalues2",
@@ -1920,6 +1920,7 @@ dependencies = [
  "serde_json",
  "sha1 0.10.0",
  "sha2 0.10.1",
+ "sled",
  "thiserror",
  "tonic",
  "tonic-build",

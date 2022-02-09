@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use clap::Parser;
-use common_exception::ErrorCode;
+use common_meta_types::MetaError;
+use common_meta_types::MetaResult;
 use common_meta_types::NodeId;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
@@ -158,11 +159,11 @@ impl RaftConfig {
         !self.no_sync
     }
 
-    pub fn check(&self) -> common_exception::Result<()> {
+    pub fn check(&self) -> MetaResult<()> {
         if self.boot && self.single {
-            return Err(ErrorCode::InvalidConfig(
+            return Err(MetaError::InvalidConfig(String::from(
                 "--boot and --single can not be both set",
-            ));
+            )));
         }
 
         Ok(())

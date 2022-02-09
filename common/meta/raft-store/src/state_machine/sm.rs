@@ -18,7 +18,6 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_exception::ErrorCode;
-use common_exception::ToErrorCode;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::EffectiveMembership;
@@ -30,6 +29,7 @@ use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_sled_store::Store;
 use common_meta_sled_store::TransactionSledTree;
+use common_meta_types::AppError;
 use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
@@ -39,11 +39,20 @@ use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
+use common_meta_types::MetaError;
+use common_meta_types::MetaResult;
+use common_meta_types::MetaStorageError;
+use common_meta_types::MetaStorageResult;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
+use common_meta_types::ToMetaError;
+use common_meta_types::ToMetaStorageError;
+use common_meta_types::UnknownDatabase;
+use common_meta_types::UnknownDatabaseId;
+use common_meta_types::UnknownTableId;
 use common_tracing::tracing;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
@@ -122,20 +131,20 @@ impl StateMachine {
     }
 
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub fn clean(config: &RaftConfig, sm_id: u64) -> common_exception::Result<()> {
+    pub fn clean(config: &RaftConfig, sm_id: u64) -> MetaResult<()> {
         let tree_name = StateMachine::tree_name(config, sm_id);
 
         let db = get_sled_db();
 
         // it blocks and slow
         db.drop_tree(tree_name)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "drop prev state machine")?;
+            .map_error_to_meta_error(MetaError::MetaStoreDamaged, || "drop prev state machine")?;
 
         Ok(())
     }
 
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub async fn open(config: &RaftConfig, sm_id: u64) -> common_exception::Result<StateMachine> {
+    pub async fn open(config: &RaftConfig, sm_id: u64) -> MetaResult<StateMachine> {
         let db = get_sled_db();
 
         let tree_name = StateMachine::tree_name(config, sm_id);
@@ -168,7 +177,7 @@ impl StateMachine {
     /// - and a snapshot id
     pub fn snapshot(
         &self,
-    ) -> common_exception::Result<(
+    ) -> MetaStorageResult<(
         impl Iterator<Item = sled::Result<(IVec, IVec)>>,
         LogId,
         String,
@@ -198,10 +207,13 @@ impl StateMachine {
     /// no matter if there are other writes applied to the tree.
     pub fn serialize_snapshot(
         view: impl Iterator<Item = sled::Result<(IVec, IVec)>>,
-    ) -> common_exception::Result<Vec<u8>> {
+    ) -> MetaStorageResult<Vec<u8>> {
         let mut kvs = Vec::new();
         for rkv in view {
-            let (k, v) = rkv.map_err_to_code(ErrorCode::MetaStoreDamaged, || "taking snapshot")?;
+            let (k, v) = rkv
+                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
+                    "taking snapshot"
+                })?;
             kvs.push(vec![k.to_vec(), v.to_vec()]);
         }
         let snap = SerializableSnapshot { kvs };
@@ -214,7 +226,7 @@ impl StateMachine {
     /// a unique id such as Cmd::AddDatabase which needs make a new database id.
     ///
     /// Note: this can only be called inside apply().
-    async fn incr_seq(&self, key: &str) -> common_exception::Result<u64> {
+    async fn incr_seq(&self, key: &str) -> MetaResult<u64> {
         let sequences = self.sequences();
 
         let curr = sequences
@@ -234,7 +246,7 @@ impl StateMachine {
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "debug", skip(self, entry), fields(log_id=%entry.log_id))]
-    pub async fn apply(&self, entry: &Entry<LogEntry>) -> common_exception::Result<AppliedState> {
+    pub async fn apply(&self, entry: &Entry<LogEntry>) -> MetaStorageResult<AppliedState> {
         tracing::debug!("apply: summary: {}", entry.summary());
         tracing::debug!("apply: payload: {:?}", entry.payload);
 
@@ -299,7 +311,7 @@ impl StateMachine {
         key: &str,
 
         txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let r = self.txn_incr_seq(key, txn_tree)?;
 
         Ok(r.into())
@@ -312,7 +324,7 @@ impl StateMachine {
         node: &Node,
 
         txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let sm_nodes = txn_tree.key_space::<Nodes>();
 
         let prev = sm_nodes.get(node_id)?;
@@ -333,7 +345,7 @@ impl StateMachine {
         name: &str,
         meta: &DatabaseMeta,
         txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let db_id = self.txn_incr_seq(SEQ_DATABASE_ID, txn_tree)?;
 
         let db_lookup_tree = txn_tree.key_space::<DatabaseLookup>();
@@ -394,9 +406,8 @@ impl StateMachine {
         &self,
         tenant: &str,
         name: &str,
-
         txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let dbs = txn_tree.key_space::<DatabaseLookup>();
 
         let (prev, result) = self.sub_txn_tree_upsert(
@@ -445,9 +456,8 @@ impl StateMachine {
         db_name: &str,
         table_name: &str,
         table_meta: &TableMeta,
-
         txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let db_id = self.txn_get_database_id(tenant, db_name, txn_tree)?;
 
         let lookup_key = TableLookupKey {
@@ -505,9 +515,8 @@ impl StateMachine {
         tenant: &str,
         db_name: &str,
         table_name: &str,
-
         txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let db_id = self.txn_get_database_id(tenant, db_name, txn_tree)?;
 
         let lookup_key = TableLookupKey {
@@ -549,9 +558,8 @@ impl StateMachine {
         seq: &MatchSeq,
         value_op: &Operation<Vec<u8>>,
         value_meta: &Option<KVMeta>,
-
         txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
         let (prev, result) = self.sub_txn_tree_upsert(
             &sub_tree,
@@ -569,15 +577,18 @@ impl StateMachine {
     fn apply_upsert_table_options_cmd(
         &self,
         req: &common_meta_types::UpsertTableOptionReq,
-
         txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let table_tree = txn_tree.key_space::<Tables>();
         let prev = table_tree.get(&req.table_id)?;
 
         // Unlike other Cmd, prev to be None is not allowed for upsert-options.
-        let prev =
-            prev.ok_or_else(|| ErrorCode::UnknownTableId(format!("table_id:{}", req.table_id)))?;
+        let prev = prev.ok_or_else(|| {
+            MetaStorageError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                req.table_id,
+                "apply_upsert_table_options_cmd".to_string(),
+            )))
+        })?;
 
         if req.seq.match_seq(&prev).is_err() {
             let res = AppliedState::TableMeta(Change::new(Some(prev.clone()), Some(prev)));
@@ -625,7 +636,7 @@ impl StateMachine {
         &self,
         cmd: &Cmd,
         txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         tracing::debug!("apply_cmd: {:?}", cmd);
 
         match cmd {
@@ -678,7 +689,7 @@ impl StateMachine {
         seq: &MatchSeq,
         value_op: Operation<V>,
         value_meta: Option<KVMeta>,
-    ) -> common_exception::Result<(Option<SeqV<V>>, Option<SeqV<V>>)>
+    ) -> MetaResult<(Option<SeqV<V>>, Option<SeqV<V>>)>
     where
         V: Clone + Debug,
         KS: SledKeySpace<V = SeqV<V>>,
@@ -710,7 +721,7 @@ impl StateMachine {
         prev: Option<SeqV<V>>,
         value_meta: Option<KVMeta>,
         value_op: Operation<V>,
-    ) -> common_exception::Result<Option<SeqV<V>>>
+    ) -> MetaResult<Option<SeqV<V>>>
     where
         V: Clone + Debug,
         KS: SledKeySpace<V = SeqV<V>>,
@@ -736,11 +747,7 @@ impl StateMachine {
         Ok(Some(seq_kv_value))
     }
 
-    fn txn_incr_seq(
-        &self,
-        key: &str,
-        txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<u64> {
+    fn txn_incr_seq(&self, key: &str, txn_tree: &TransactionSledTree) -> MetaStorageResult<u64> {
         let seq_sub_tree = txn_tree.key_space::<Sequences>();
 
         let key = key.to_string();
@@ -760,7 +767,7 @@ impl StateMachine {
         seq: &MatchSeq,
         value_op: Operation<V>,
         value_meta: Option<KVMeta>,
-    ) -> common_exception::Result<(Option<SeqV<V>>, Option<SeqV<V>>)>
+    ) -> MetaStorageResult<(Option<SeqV<V>>, Option<SeqV<V>>)>
     where
         V: Clone + Debug,
         KS: SledKeySpace<V = SeqV<V>>,
@@ -792,7 +799,7 @@ impl StateMachine {
         prev: Option<SeqV<V>>,
         value_meta: Option<KVMeta>,
         value_op: Operation<V>,
-    ) -> common_exception::Result<Option<SeqV<V>>>
+    ) -> MetaStorageResult<Option<SeqV<V>>>
     where
         V: Clone + Debug,
         KS: SledKeySpace<V = SeqV<V>>,
@@ -831,11 +838,16 @@ impl StateMachine {
         tenant: &str,
         db_name: &str,
         txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<u64> {
+    ) -> MetaStorageResult<u64> {
         let txn_db_lookup = txn_tree.key_space::<DatabaseLookup>();
         let seq_dbi = txn_db_lookup
             .get(&(DatabaseLookupKey::new(tenant.to_string(), db_name.to_string())))?
-            .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
+            .ok_or_else(|| {
+                MetaStorageError::AppError(AppError::UnknownDatabase(UnknownDatabase::new(
+                    db_name.to_string(),
+                    "txn_get_database_id".to_string(),
+                )))
+            })?;
 
         Ok(seq_dbi.data)
     }
@@ -845,7 +857,7 @@ impl StateMachine {
         key: &str,
         value: (u64, AppliedState),
         txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<AppliedState> {
+    ) -> MetaStorageResult<AppliedState> {
         let v = ClientLastRespValue {
             req_serial_num: value.0,
             res: value.1.clone(),
@@ -856,7 +868,7 @@ impl StateMachine {
         Ok(value.1)
     }
 
-    pub fn get_membership(&self) -> common_exception::Result<Option<EffectiveMembership>> {
+    pub fn get_membership(&self) -> MetaStorageResult<Option<EffectiveMembership>> {
         let sm_meta = self.sm_meta();
         let mem = sm_meta
             .get(&StateMachineMetaKey::LastMembership)?
@@ -865,7 +877,7 @@ impl StateMachine {
         Ok(mem)
     }
 
-    pub fn get_last_applied(&self) -> common_exception::Result<Option<LogId>> {
+    pub fn get_last_applied(&self) -> MetaStorageResult<Option<LogId>> {
         let sm_meta = self.sm_meta();
         let last_applied = sm_meta
             .get(&LastApplied)?
@@ -874,10 +886,7 @@ impl StateMachine {
         Ok(last_applied)
     }
 
-    pub fn get_client_last_resp(
-        &self,
-        key: &str,
-    ) -> common_exception::Result<Option<(u64, AppliedState)>> {
+    pub fn get_client_last_resp(&self, key: &str) -> MetaResult<Option<(u64, AppliedState)>> {
         let client_last_resps = self.client_last_resps();
         let v: Option<ClientLastRespValue> = client_last_resps.get(&key.to_string())?;
 
@@ -892,7 +901,7 @@ impl StateMachine {
         &self,
         key: &str,
         txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<(u64, AppliedState)> {
+    ) -> MetaStorageResult<(u64, AppliedState)> {
         let client_last_resps = txn_tree.key_space::<ClientLastResps>();
         let v = client_last_resps.get(&key.to_string())?;
 
@@ -908,24 +917,29 @@ impl StateMachine {
         sm_nodes.range_keys(..).expect("fail to list nodes")
     }
 
-    pub fn get_node(&self, node_id: &NodeId) -> common_exception::Result<Option<Node>> {
+    pub fn get_node(&self, node_id: &NodeId) -> MetaResult<Option<Node>> {
         let sm_nodes = self.nodes();
-        sm_nodes.get(node_id)
+        match sm_nodes.get(node_id) {
+            Ok(e) => Ok(e),
+            Err(e) => Err(e.into()),
+        }
     }
 
-    pub fn get_nodes(&self) -> common_exception::Result<Vec<Node>> {
+    pub fn get_nodes(&self) -> MetaResult<Vec<Node>> {
         let sm_nodes = self.nodes();
-        sm_nodes.range_values(..)
+        match sm_nodes.range_values(..) {
+            Ok(e) => Ok(e),
+            Err(e) => Err(e.into()),
+        }
     }
 
-    pub fn get_database_meta_by_id(
-        &self,
-        db_id: &u64,
-    ) -> common_exception::Result<SeqV<DatabaseMeta>> {
-        let x = self
-            .databases()
-            .get(db_id)?
-            .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", db_id)))?;
+    pub fn get_database_meta_by_id(&self, db_id: &u64) -> MetaStorageResult<SeqV<DatabaseMeta>> {
+        let x = self.databases().get(db_id)?.ok_or_else(|| {
+            MetaStorageError::AppError(AppError::UnknownDatabaseId(UnknownDatabaseId::new(
+                *db_id,
+                "get_database_meta_by_id".to_string(),
+            )))
+        })?;
         Ok(x)
     }
 
@@ -933,24 +947,21 @@ impl StateMachine {
         &self,
         db_id: &u64,
         txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<Option<SeqV<DatabaseMeta>>> {
+    ) -> MetaStorageResult<Option<SeqV<DatabaseMeta>>> {
         let txn_databases = txn_tree.key_space::<Databases>();
         let x = txn_databases.get(db_id)?;
 
         Ok(x)
     }
 
-    pub fn get_database_meta_ver(&self) -> common_exception::Result<Option<u64>> {
+    pub fn get_database_meta_ver(&self) -> MetaResult<Option<u64>> {
         let sequences = self.sequences();
         let res = sequences.get(&SEQ_DATABASE_META_ID.to_string())?;
         Ok(res.map(|x| x.0))
     }
 
     // TODO(xp): need a better name.
-    pub fn get_table_meta_by_id(
-        &self,
-        tid: &u64,
-    ) -> common_exception::Result<Option<SeqV<TableMeta>>> {
+    pub fn get_table_meta_by_id(&self, tid: &u64) -> MetaResult<Option<SeqV<TableMeta>>> {
         let x = self.tables().get(tid)?;
         Ok(x)
     }
@@ -959,7 +970,7 @@ impl StateMachine {
         &self,
         tid: &u64,
         txn_tree: &TransactionSledTree,
-    ) -> common_exception::Result<Option<SeqV<TableMeta>>> {
+    ) -> MetaStorageResult<Option<SeqV<TableMeta>>> {
         let txn_table = txn_tree.key_space::<Tables>();
         let x = txn_table.get(tid)?;
 
@@ -971,7 +982,7 @@ impl StateMachine {
         table_id: u64,
         tbl: TableMeta,
         seq: &MatchSeq,
-    ) -> Result<Option<SeqV<TableMeta>>, ErrorCode> {
+    ) -> Result<Option<SeqV<TableMeta>>, MetaError> {
         let tables = self.tables();
         let (_prev, result) = self
             .sub_tree_upsert(tables, &table_id, seq, Operation::Update(tbl), None)
@@ -1021,13 +1032,16 @@ impl StateMachine {
         &self,
         db_id: u64,
         name: &str,
-    ) -> Result<Option<SeqV<TableLookupValue>>, ErrorCode> {
-        self.table_lookup().get(
+    ) -> Result<Option<SeqV<TableLookupValue>>, MetaError> {
+        match self.table_lookup().get(
             &(TableLookupKey {
                 database_id: db_id,
                 table_name: name.to_string(),
             }),
-        )
+        ) {
+            Ok(e) => Ok(e),
+            Err(e) => Err(e.into()),
+        }
     }
 }
 
