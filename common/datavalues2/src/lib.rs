@@ -17,8 +17,6 @@
 //!
 
 #![feature(generic_associated_types)]
-#![feature(core_intrinsics)]
-#![feature(iter_advance_by)]
 
 #[macro_use]
 mod macros;

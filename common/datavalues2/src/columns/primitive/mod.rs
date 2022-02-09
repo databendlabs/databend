@@ -15,6 +15,7 @@
 mod iterator;
 mod mutable;
 
+use std::iter::Copied;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
@@ -265,7 +266,7 @@ where
     type Builder = MutablePrimitiveColumn<T>;
     type OwnedItem = T;
     type RefItem<'a> = T;
-    type Iterator<'a> = PrimitiveIter<'a, T>;
+    type Iterator<'a> = Copied<std::slice::Iter<'a, T>>;
 
     #[inline]
     fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
@@ -273,7 +274,7 @@ where
     }
 
     fn scalar_iter(&self) -> Self::Iterator<'_> {
-        PrimitiveIter::new(self)
+        self.iter().copied()
     }
 
     fn from_slice(data: &[Self::RefItem<'_>]) -> Self {
