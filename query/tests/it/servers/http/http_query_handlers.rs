@@ -93,6 +93,7 @@ async fn test_bad_sql() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_async() -> Result<()> {
     let ep = create_endpoint();
     let sql = "select sleep(0.2)";
