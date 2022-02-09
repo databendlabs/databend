@@ -56,6 +56,7 @@ build_exceptions! {
     UnknownTypeOfQuery(1001),
     UnImplement(1002),
     UnknownDatabase(1003),
+    UnknownDatabaseId(1004),
     SyntaxException(1005),
     BadArguments(1006),
     IllegalDataType(1007),
@@ -71,6 +72,7 @@ build_exceptions! {
     DataStructMissMatch(1017),
     BadDataArrayLength(1018),
     UnknownContextID(1019),
+    UnknownTableId(1020),
     UnknownTableFunction(1021),
     BadOption(1022),
     CannotReadFile(1023),
@@ -146,9 +148,6 @@ build_exceptions! {
 
     TableVersionMismatched(2009),
     OCCRetryFailure(2011),
-
-    // KVSrv server error
-    MetaSrvError(2101),
 
     // User api error codes.
     UnknownUser(2201),

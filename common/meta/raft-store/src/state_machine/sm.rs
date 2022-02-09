@@ -29,6 +29,7 @@ use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_sled_store::Store;
 use common_meta_sled_store::TransactionSledTree;
+use common_meta_types::AppError;
 use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
@@ -49,6 +50,9 @@ use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
 use common_meta_types::ToMetaError;
 use common_meta_types::ToMetaStorageError;
+use common_meta_types::UnknownDatabase;
+use common_meta_types::UnknownDatabaseId;
+use common_meta_types::UnknownTableId;
 use common_tracing::tracing;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
@@ -580,7 +584,10 @@ impl StateMachine {
 
         // Unlike other Cmd, prev to be None is not allowed for upsert-options.
         let prev = prev.ok_or_else(|| {
-            MetaStorageError::UnknownTableId(format!("table_id:{}", req.table_id))
+            MetaStorageError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                req.table_id,
+                format!("apply_upsert_table_options_cmd"),
+            )))
         })?;
 
         if req.seq.match_seq(&prev).is_err() {
@@ -835,7 +842,12 @@ impl StateMachine {
         let txn_db_lookup = txn_tree.key_space::<DatabaseLookup>();
         let seq_dbi = txn_db_lookup
             .get(&(DatabaseLookupKey::new(tenant.to_string(), db_name.to_string())))?
-            .ok_or_else(|| MetaStorageError::UnknownDatabase(db_name.to_string()))?;
+            .ok_or_else(|| {
+                MetaStorageError::AppError(AppError::UnknownDatabase(UnknownDatabase::new(
+                    db_name.to_string(),
+                    format! {"txn_get_database_id"},
+                )))
+            })?;
 
         Ok(seq_dbi.data)
     }
@@ -923,7 +935,10 @@ impl StateMachine {
 
     pub fn get_database_meta_by_id(&self, db_id: &u64) -> MetaStorageResult<SeqV<DatabaseMeta>> {
         let x = self.databases().get(db_id)?.ok_or_else(|| {
-            MetaStorageError::UnknownDatabaseId(format!("database_id: {}", db_id))
+            MetaStorageError::AppError(AppError::UnknownDatabaseId(UnknownDatabaseId::new(
+                *db_id,
+                format!("get_database_meta_by_id"),
+            )))
         })?;
         Ok(x)
     }

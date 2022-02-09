@@ -39,20 +39,72 @@ pub enum MetaStorageError {
     TransactionError(String),
 
     #[error("{0}")]
-    UnknownDatabase(String),
+    AppError(#[from] AppError),
+}
 
-    #[error("{0}")]
-    UnknownDatabaseId(String),
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[error("UnknownDatabase: `{db_name}` while `{context}`")]
+pub struct UnknownDatabase {
+    db_name: String,
+    context: String,
+}
 
-    #[error("{0}")]
-    UnknownTableId(String),
+impl UnknownDatabase {
+    pub fn new(db_name: String, context: String) -> Self {
+        Self { db_name, context }
+    }
+}
+
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[error("UnknownDatabaseId: `{db_id}` while `{context}`")]
+pub struct UnknownDatabaseId {
+    db_id: u64,
+    context: String,
+}
+
+impl UnknownDatabaseId {
+    pub fn new(db_id: u64, context: String) -> UnknownDatabaseId {
+        Self { db_id, context }
+    }
+}
+
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[error("UnknownTableId: `{table_id}` while `{context}`")]
+pub struct UnknownTableId {
+    table_id: u64,
+    context: String,
+}
+
+impl UnknownTableId {
+    pub fn new(table_id: u64, context: String) -> UnknownTableId {
+        Self { table_id, context }
+    }
+}
+
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum AppError {
+    #[error(transparent)]
+    UnknownDatabase(#[from] UnknownDatabase),
+
+    #[error(transparent)]
+    UnknownDatabaseId(#[from] UnknownDatabaseId),
+
+    #[error(transparent)]
+    UnknownTableId(#[from] UnknownTableId),
 }
 
 pub type MetaStorageResult<T> = std::result::Result<T, MetaStorageError>;
 
 impl From<MetaStorageError> for ErrorCode {
     fn from(e: MetaStorageError) -> Self {
-        ErrorCode::MetaStorageError(e.to_string())
+        match e {
+            MetaStorageError::AppError(app_err) => match app_err {
+                AppError::UnknownDatabase(err) => ErrorCode::UnknownDatabase(err.to_string()),
+                AppError::UnknownDatabaseId(err) => ErrorCode::UnknownDatabaseId(err.to_string()),
+                AppError::UnknownTableId(err) => ErrorCode::UnknownTableId(err.to_string()),
+            },
+            _ => ErrorCode::MetaStorageError(e.to_string()),
+        }
     }
 }
 

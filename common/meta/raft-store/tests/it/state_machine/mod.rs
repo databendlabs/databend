@@ -25,6 +25,7 @@ use common_meta_raft_store::state_machine::testing::snapshot_logs;
 use common_meta_raft_store::state_machine::SerializableSnapshot;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
+use common_meta_types::AppError;
 use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
@@ -36,6 +37,7 @@ use common_meta_types::MetaStorageError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
+use common_meta_types::UnknownTableId;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 use maplit::hashmap;
@@ -298,9 +300,11 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
             );
 
             let err = r.unwrap_err();
-
             assert_eq!(
-                MetaStorageError::UnknownTableId(String::from("table_id:0")),
+                MetaStorageError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                    0,
+                    String::from("apply_upsert_table_options_cmd")
+                ))),
                 err
             );
 
