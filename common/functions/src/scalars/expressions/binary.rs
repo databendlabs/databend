@@ -77,7 +77,7 @@ where F: ScalarBinaryFunction<L, R, O>
             }
 
             (true, false) => {
-                let left = ColumnViewer::<L>::create(r)?;
+                let left = ColumnViewer::<L>::create(l)?;
                 let a = left.value(0);
 
                 let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
@@ -85,7 +85,8 @@ where F: ScalarBinaryFunction<L, R, O>
                 Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
             }
 
-            (_, _) => {
+            // True True ?
+            (true, true) => {
                 let left = ColumnViewerIter::<L>::try_create(l)?;
                 let right = ColumnViewerIter::<R>::try_create(r)?;
 
