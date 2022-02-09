@@ -12,24 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataType;
-use common_exception::Result;
-
-use super::NumberResultFunction;
+use super::NumberOperator;
 use super::String2NumberFunction;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Ord {}
 
-impl NumberResultFunction<u64> for Ord {
+impl NumberOperator<u64> for Ord {
     const IS_DETERMINISTIC: bool = true;
     const MAYBE_MONOTONIC: bool = false;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt64)
-    }
-
-    fn to_number(str: &[u8]) -> u64 {
+    fn apply<'a>(&'a mut self, str: &'a [u8]) -> u64 {
         let mut res: u64 = 0;
         if !str.is_empty() {
             if str[0].is_ascii() {

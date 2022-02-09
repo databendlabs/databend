@@ -13,26 +13,24 @@
 // limitations under the License.
 use std::fmt;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
-/// we can change this into the style of String2StringFunction in the future
-pub trait NumberResultFunction<R> {
+pub trait NumberOperator<R>: Send + Sync + Clone + Default + 'static {
     const IS_DETERMINISTIC: bool;
     const MAYBE_MONOTONIC: bool;
 
-    fn return_type() -> Result<DataType>;
-    fn to_number(_value: &[u8]) -> R;
+    fn apply<'a>(&'a mut self, _: &'a [u8]) -> R;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct String2NumberFunction<T, R> {
     display_name: String,
     t: PhantomData<T>,
@@ -41,19 +39,18 @@ pub struct String2NumberFunction<T, R> {
 
 impl<T, R> String2NumberFunction<T, R>
 where
-    T: NumberResultFunction<R> + Clone + Sync + Send + 'static,
-    R: DFPrimitiveType + Clone,
-    DFPrimitiveArray<R>: IntoSeries,
+    T: NumberOperator<R>,
+    R: PrimitiveType + Clone + ToDataType,
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(String2NumberFunction::<T, R> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+        Ok(Box::new(Self {
             display_name: display_name.to_string(),
             t: PhantomData,
             r: PhantomData,
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
+    pub fn desc() -> Function2Description {
         let mut features = FunctionFeatures::default().num_arguments(1);
 
         if T::IS_DETERMINISTIC {
@@ -64,44 +61,50 @@ where
             features = features.monotonicity();
         }
 
-        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
+        Function2Description::creator(Box::new(Self::try_create)).features(features)
     }
 }
 
-/// A common function template that transform string column into string column
-/// Eg: trim, lower, upper, etc.
-impl<T, R> Function for String2NumberFunction<T, R>
+/// A common function template that transform string column into number column
+/// Eg: length
+impl<T, R> Function2 for String2NumberFunction<T, R>
 where
-    T: NumberResultFunction<R> + Clone + Sync + Send,
-    R: DFPrimitiveType + Clone,
-    DFPrimitiveArray<R>: IntoSeries,
+    T: NumberOperator<R> + Clone,
+    R: PrimitiveType + Clone + ToDataType,
 {
     fn name(&self) -> &str {
-        self.display_name.as_str()
+        &self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        if !args[0].is_numeric() && !args[0].is_string() && !args[0].is_null() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected string or null, but got {}",
+    fn return_type(
+        &self,
+        args: &[&common_datavalues2::DataTypePtr],
+    ) -> Result<common_datavalues2::DataTypePtr> {
+        // We allow string AND null as input
+        if args[0].data_type_id() == TypeID::String || args[0].data_type_id() == TypeID::Null {
+            Ok(R::to_data_type())
+        } else {
+            Err(ErrorCode::IllegalDataType(format!(
+                "Expected string or null, but got {:?}",
                 args[0]
-            )));
+            )))
         }
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = T::return_type()?;
-        Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let column = columns[0]
-            .column()
-            .cast_with_type(&DataType::String)?
-            .to_minimal_array()?
-            .string()?
-            .apply_cast_numeric(T::to_number);
+    fn eval(
+        &self,
+        columns: &common_datavalues2::ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<common_datavalues2::ColumnRef> {
+        let mut op = T::default();
+        let column: &StringColumn = Series::check_get(columns[0].column())?;
+        let mut array = Vec::with_capacity(input_rows);
+        for x in column.iter() {
+            let r = op.apply(x);
+            array.push(r);
+        }
 
-        let column: DataColumn = column.into();
-        Ok(column.resize_constant(input_rows))
+        Ok(Arc::new(PrimitiveColumn::new_from_vec(array)))
     }
 }
 
