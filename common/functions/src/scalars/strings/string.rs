@@ -64,7 +64,6 @@ impl StringFunction {
     pub fn register2(factory: &mut Function2Factory) {
         factory.register("to_base64", Base64EncodeFunction::desc());
         factory.register("from_base64", Base64DecodeFunction::desc());
-
         factory.register("rtrim", RTrimFunction::desc());
         factory.register("trim", TrimFunction::desc());
         factory.register("ltrim", LTrimFunction::desc());
@@ -75,12 +74,17 @@ impl StringFunction {
         factory.register("ucase", UpperFunction::desc());
         factory.register("reverse", ReverseFunction::desc());
         factory.register("soundex", SoundexFunction::desc());
+        factory.register("ascii", AsciiFunction::desc());
+        factory.register("bit_length", BitLengthFunction::desc());
+        factory.register("octet_length", OctetLengthFunction::desc());
+        factory.register("char_length", CharLengthFunction::desc());
+        factory.register("character_length", CharLengthFunction::desc());
+        factory.register("ord", OrdFunction::desc());
+        factory.register("length", LengthFunction::desc());
     }
 
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("bit_length", BitLengthFunction::desc());
         factory.register("bin", BinFunction::desc());
-        factory.register("ascii", AsciiFunction::desc());
         factory.register("hex", HexFunction::desc());
         factory.register("oct", OctFunction::desc());
         factory.register("repeat", RepeatFunction::desc());
@@ -94,9 +98,7 @@ impl StringFunction {
         factory.register("instr", InstrFunction::desc());
         factory.register("insert", InsertFunction::desc());
         factory.register("field", FieldFunction::desc());
-        factory.register("octet_length", OctetLengthFunction::desc());
         factory.register("concat", ConcatFunction::desc());
-
         factory.register("replace", ReplaceFunction::desc());
         factory.register("strcmp", StrcmpFunction::desc());
         factory.register("left", LeftFunction::desc());
@@ -106,12 +108,8 @@ impl StringFunction {
         factory.register("space", SpaceFunction::desc());
         factory.register("lpad", LeftPadFunction::desc());
         factory.register("rpad", RightPadFunction::desc());
-        factory.register("char_length", CharLengthFunction::desc());
-        factory.register("character_length", CharLengthFunction::desc());
-        factory.register("ord", OrdFunction::desc());
         factory.register("export_set", ExportSetFunction::desc());
         factory.register("find_in_set", FindInSetFunction::desc());
-        factory.register("length", LengthFunction::desc());
         factory.register("format", FormatFunction::desc());
         factory.register("char", CharFunction::desc());
     }
