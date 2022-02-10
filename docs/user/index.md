@@ -77,7 +77,7 @@ mysql> SELECT avg(number) FROM numbers(1000000000);
 <TabItem value="clickhouse" label="ClickHouse Client">
 
 ```
-clickhouse client --host 0.0.0.0 --port 9001
+clickhouse client --host 0.0.0.0 --port 9000
 ```
 
 ```
