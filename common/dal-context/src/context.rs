@@ -111,7 +111,10 @@ impl DalContext {
 
 impl Layer for DalContext {
     fn layer(&self, inner: Arc<dyn Accessor>) -> Arc<dyn Accessor> {
-        Arc::new(DalContext::new(inner))
+        Arc::new(DalContext {
+            inner: Some(inner),
+            metrics: self.metrics.clone(),
+        })
     }
 }
 
