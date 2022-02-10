@@ -247,7 +247,7 @@ impl StateMachine {
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "debug", skip(self, entry), fields(log_id=%entry.log_id))]
-    pub async fn apply(&self, entry: &Entry<LogEntry>) -> MetaStorageResult<AppliedState> {
+    pub async fn apply(&self, entry: &Entry<LogEntry>) -> Result<AppliedState, MetaStorageError> {
         tracing::debug!("apply: summary: {}", entry.summary());
         tracing::debug!("apply: payload: {:?}", entry.payload);
 
@@ -270,16 +270,17 @@ impl StateMachine {
                         }
                     }
 
-                    let resp = self.apply_cmd(&data.cmd, &txn_tree)?;
+                    let res = self.apply_cmd(&data.cmd, &txn_tree);
+                    let applied_state = res?;
 
                     if let Some(ref txid) = data.txid {
                         self.txn_client_last_resp_update(
                             &txid.client,
-                            (txid.serial, resp.clone()),
+                            (txid.serial, applied_state.clone()),
                             &txn_tree,
                         )?;
                     }
-                    return Ok(Some(resp));
+                    return Ok(Some(applied_state));
                 }
                 EntryPayload::Membership(ref mem) => {
                     txn_sm_meta.insert(
@@ -294,16 +295,26 @@ impl StateMachine {
             };
 
             Ok(None)
-        })?;
+        });
+
+        let opt_applied_state = match result {
+            Ok(x) => x,
+            Err(meta_sto_err) => {
+                return match meta_sto_err {
+                    MetaStorageError::AppError(app_err) => Ok(AppliedState::AppError(app_err)),
+                    _ => Err(meta_sto_err),
+                }
+            }
+        };
 
         tracing::debug!("sled tx done: {:?}", entry);
 
-        let result = match result {
+        let applied_state = match opt_applied_state {
             Some(r) => r,
             None => AppliedState::None,
         };
 
-        Ok(result)
+        Ok(applied_state)
     }
 
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
@@ -637,7 +648,7 @@ impl StateMachine {
         &self,
         cmd: &Cmd,
         txn_tree: &TransactionSledTree,
-    ) -> MetaStorageResult<AppliedState> {
+    ) -> Result<AppliedState, MetaStorageError> {
         tracing::debug!("apply_cmd: {:?}", cmd);
 
         match cmd {
