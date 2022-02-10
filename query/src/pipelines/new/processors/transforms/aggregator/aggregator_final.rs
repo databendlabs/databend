@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use common_datablocks::{DataBlock, HashMethod};
+use common_datavalues2::Series;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::new::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::transforms::group_by::{PolymorphicKeysHelper};
@@ -17,7 +18,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for F
     const NAME: &'static str = "";
 
     fn consume(&mut self, data: DataBlock) -> Result<()> {
-        // TODO:
         todo!()
     }
 
@@ -30,6 +30,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for F
     const NAME: &'static str = "";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
+        let keys_column = block.column(self.params.aggregate_functions.len());
+
+        // let key_array: $key_column_type = Series::check_get(keys_column)?;
+
         // let key_array = block.column(self.params.aggregate_functions.len()).to_array()?;
         // let key_array = block.column(aggr_funcs_len).to_array()?;
 

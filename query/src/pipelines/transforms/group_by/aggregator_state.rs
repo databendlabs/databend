@@ -43,7 +43,7 @@ use crate::pipelines::transforms::group_by::AggregatorParams;
 pub trait AggregatorState<Method: HashMethod>: Sync + Send {
     type Key;
     type Entity: StateEntity<Self::Key>;
-    type Iterator: Iterator<Item = *mut Self::Entity>;
+    type Iterator: Iterator<Item=*mut Self::Entity>;
 
     fn len(&self) -> usize;
 
@@ -105,10 +105,10 @@ impl<T: ShortFixedKeyable> Drop for ShortFixedKeysAggregatorState<T> {
 }
 
 impl<T> AggregatorState<HashMethodFixedKeys<T>> for ShortFixedKeysAggregatorState<T>
-where
-    T: PrimitiveType + ShortFixedKeyable,
-    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
-    <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
+    where
+        T: PrimitiveType + ShortFixedKeyable,
+        HashMethodFixedKeys<T>: HashMethod<HashKey=T>,
+        <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
 {
     type Key = T;
     type Entity = ShortFixedKeysStateEntity<T>;
@@ -174,10 +174,10 @@ unsafe impl<T: HashTableKeyable + Send> Send for LongerFixedKeysAggregatorState<
 unsafe impl<T: HashTableKeyable + Sync> Sync for LongerFixedKeysAggregatorState<T> {}
 
 impl<T> AggregatorState<HashMethodFixedKeys<T>> for LongerFixedKeysAggregatorState<T>
-where
-    T: PrimitiveType,
-    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
-    <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
+    where
+        T: PrimitiveType,
+        HashMethodFixedKeys<T>: HashMethod<HashKey=T>,
+        <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
 {
     type Key = T;
     type Entity = KeyValueEntity<T, usize>;

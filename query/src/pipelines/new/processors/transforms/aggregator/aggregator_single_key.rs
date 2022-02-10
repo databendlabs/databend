@@ -12,13 +12,11 @@ use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::transforms::transform_aggregator::Aggregator;
 
-pub type FinalSingleKeyAggregator = SingleKeyAggregatorImpl<true>;
-pub type PartialSingleKeyAggregator = SingleKeyAggregatorImpl<false>;
+pub type FinalSingleKeyAggregator = SingleKeyAggregator<true>;
+pub type PartialSingleKeyAggregator = SingleKeyAggregator<false>;
 
 /// SELECT COUNT | SUM FROM table;
-pub struct SingleKeyAggregator;
-
-pub struct SingleKeyAggregatorImpl<const FINAL: bool> {
+pub struct SingleKeyAggregator<const FINAL: bool> {
     funcs: Vec<AggregateFunctionRef>,
     arg_names: Vec<Vec<String>>,
     schema: DataSchemaRef,
@@ -27,7 +25,7 @@ pub struct SingleKeyAggregatorImpl<const FINAL: bool> {
     is_finished: bool,
 }
 
-impl<const FINAL: bool> SingleKeyAggregatorImpl<FINAL> {
+impl<const FINAL: bool> SingleKeyAggregator<FINAL> {
     pub fn try_create(params: &Arc<AggregatorParams>) -> Result<Self> {
         let arena = Bump::new();
         let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&params.aggregate_functions) };
@@ -57,7 +55,7 @@ impl<const FINAL: bool> SingleKeyAggregatorImpl<FINAL> {
 }
 
 
-impl Aggregator for SingleKeyAggregatorImpl<true> {
+impl Aggregator for SingleKeyAggregator<true> {
     const NAME: &'static str = "FinalSingleKeyAggregator";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
@@ -110,7 +108,7 @@ impl Aggregator for SingleKeyAggregatorImpl<true> {
     }
 }
 
-impl Aggregator for SingleKeyAggregatorImpl<false> {
+impl Aggregator for SingleKeyAggregator<false> {
     const NAME: &'static str = "PartialSingleKeyAggregator";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
@@ -149,43 +147,3 @@ impl Aggregator for SingleKeyAggregatorImpl<false> {
         Ok(Some(DataBlock::create(self.schema.clone(), columns)))
     }
 }
-
-// impl Aggregator for SingleKeyAggregator {
-//     const NAME: &'static str = "WithoutGroupByAggregator";
-//
-//     fn consume(&mut self, block: DataBlock) -> Result<()> {
-//         // let rows = block.num_rows();
-//         // for (idx, func) in self.funcs.iter().enumerate() {
-//         //     let mut arg_columns = vec![];
-//         //     for name in self.arg_names[idx].iter() {
-//         //         arg_columns.push(block.try_column_by_name(name)?.to_array()?);
-//         //     }
-//         //     let place = self.places[idx].into();
-//         //     func.accumulate(place, &arg_columns, rows)?;
-//         // }
-//
-//         Ok(())
-//     }
-//
-//     fn generate(&mut self) -> Result<Option<DataBlock>> {
-//         // if self.is_finished {
-//         //     return Ok(None);
-//         // }
-//         //
-//         // self.is_finished = true;
-//         // let mut columns = Vec::with_capacity(self.funcs.len());
-//         // let mut bytes = BytesMut::new();
-//         //
-//         // for (idx, func) in self.funcs.iter().enumerate() {
-//         //     let place = self.places[idx].into();
-//         //     func.serialize(place, &mut bytes)?;
-//         //     let mut array_builder = StringArrayBuilder::with_capacity(4);
-//         //     array_builder.append_value(&bytes[..]);
-//         //     bytes.clear();
-//         //     columns.push(array_builder.finish().into_series());
-//         // }
-//
-//         unimplemented!()
-//         // Ok(Some(DataBlock::create_by_array(self.schema.clone(), columns)))
-//     }
-// }

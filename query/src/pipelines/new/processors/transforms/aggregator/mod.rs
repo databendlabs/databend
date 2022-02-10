@@ -3,7 +3,7 @@ mod aggregator_partial;
 mod aggregator_final;
 mod aggregator_params;
 
-pub use aggregator_single_key::SingleKeyAggregatorImpl;
+pub use aggregator_single_key::SingleKeyAggregator;
 pub use aggregator_single_key::FinalSingleKeyAggregator;
 pub use aggregator_single_key::PartialSingleKeyAggregator;
 pub use aggregator_partial::PartialAggregator;
