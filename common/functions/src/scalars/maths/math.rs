@@ -45,7 +45,6 @@ pub struct MathsFunction;
 
 impl MathsFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("pi", PiFunction::desc());
         factory.register("abs", AbsFunction::desc());
         factory.register("sin", TrigonometricSinFunction::desc());
         factory.register("cos", TrigonometricCosFunction::desc());
@@ -75,5 +74,7 @@ impl MathsFunction {
         factory.register("truncate", TruncNumberFunction::desc());
     }
 
-    pub fn register2(_factory: &mut Function2Factory) {}
+    pub fn register2(factory: &mut Function2Factory) {
+        factory.register("pi", PiFunction::desc());
+    }
 }
