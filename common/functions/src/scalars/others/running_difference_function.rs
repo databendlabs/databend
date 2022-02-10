@@ -17,21 +17,7 @@ use std::ops::Sub;
 use std::str;
 use std::sync::Arc;
 
-use common_datavalues2::remove_nullable;
-use common_datavalues2::type_primitive;
-use common_datavalues2::ColumnBuilder;
-use common_datavalues2::ColumnRef;
-use common_datavalues2::ColumnViewer;
-use common_datavalues2::ColumnsWithField;
-use common_datavalues2::DataTypePtr;
-use common_datavalues2::DataValue;
-use common_datavalues2::Float64Type;
-use common_datavalues2::Int16Type;
-use common_datavalues2::Int32Type;
-use common_datavalues2::Int64Type;
-use common_datavalues2::NullableColumnBuilder;
-use common_datavalues2::NullableType;
-use common_datavalues2::TypeID;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -131,33 +117,40 @@ macro_rules! run_difference_compute {
                 return Ok(column);
             }
 
-            let viewer = ColumnViewer::<$source_primitive_type>::create(column)?;
+            let viewer = <$source_primitive_type>::try_create_viewer(column)?;
+            let viewer_iter_a = viewer.iter();
+            let viewer_iter_b = viewer.iter();
 
+            let size = viewer.len();
             if column.is_nullable() {
                 let mut builder: NullableColumnBuilder<$result_primitive_type> =
                     NullableColumnBuilder::with_capacity(input_rows);
 
-                for index in 0..input_rows {
-                    if index == 0 {
-                        builder.append(0 as $result_primitive_type, viewer.valid_at(index));
-                    } else if viewer.null_at(index - 1) || viewer.null_at(index) {
+                builder.append(0 as $result_primitive_type, viewer.valid_at(0));
+                for (a, (index, b)) in viewer_iter_a
+                    .skip(1)
+                    .zip(viewer_iter_b.take(size - 1).enumerate())
+                {
+                    if viewer.null_at(index - 1) || viewer.null_at(index) {
                         builder.append_null();
                     } else {
-                        let a = viewer.value(index) as $result_primitive_type;
-                        let b = viewer.value(index - 1) as $result_primitive_type;
+                        let a = a as $result_primitive_type;
+                        let b = b as $result_primitive_type;
                         // For Int64/UInt64 subtraction we need to use wrapping
                         let diff = a.$sub_op(b);
                         builder.append(diff, true);
                     }
                 }
+
                 Ok(builder.build(input_rows))
             } else {
                 let mut builder: ColumnBuilder<$result_primitive_type> =
                     ColumnBuilder::with_capacity(input_rows);
                 builder.append(0 as $result_primitive_type);
-                for index in 1..input_rows {
-                    let a = viewer.value(index) as $result_primitive_type;
-                    let b = viewer.value(index - 1) as $result_primitive_type;
+
+                for (a, b) in viewer_iter_a.skip(1).zip(viewer_iter_b.take(size - 1)) {
+                    let a = a as $result_primitive_type;
+                    let b = b as $result_primitive_type;
                     // For Int64/UInt64 subtraction we need to use wrapping
                     let diff = a.$sub_op(b);
                     builder.append(diff);

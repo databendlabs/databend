@@ -86,10 +86,11 @@ where
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        let left = ColumnViewerIter::<L>::try_create(columns[0].column())?;
-        let right = ColumnViewerIter::<R>::try_create(columns[1].column())?;
-        let mut col_builder = MutablePrimitiveColumn::<O>::with_capacity(left.size);
-        for (l, r) in left.zip(right) {
+        let left = L::try_create_viewer(columns[0].column())?;
+        let right = R::try_create_viewer(columns[1].column())?;
+
+        let mut col_builder = MutablePrimitiveColumn::<O>::with_capacity(left.len());
+        for (l, r) in left.iter().zip(right.iter()) {
             let l = l.to_owned_scalar().as_();
             let r = r.to_owned_scalar().as_();
             if std::intrinsics::unlikely(r == 0.0) {
