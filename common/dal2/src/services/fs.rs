@@ -47,6 +47,7 @@ impl Builder {
     }
 
     pub fn finish(&mut self) -> Result<Arc<dyn Accessor>> {
+        // Make `/` as the default of root.
         let root = self.root.clone().unwrap_or_else(|| "/".to_string());
 
         // If root dir is not exist, we must create it.
@@ -57,10 +58,7 @@ impl Builder {
             }
         }
 
-        Ok(Arc::new(Backend {
-            // Make `/` as the default of root.
-            root,
-        }))
+        Ok(Arc::new(Backend { root }))
     }
 }
 
@@ -77,6 +75,8 @@ impl Backend {
 #[async_trait]
 impl Accessor for Backend {
     async fn read(&self, args: &OpRead) -> Result<Reader> {
+        println!("try to read {}", args.path);
+
         let path = PathBuf::from(&self.root).join(&args.path);
 
         let mut f = fs::OpenOptions::new()
@@ -100,7 +100,22 @@ impl Accessor for Backend {
     }
 
     async fn write(&self, mut r: Reader, args: &OpWrite) -> Result<usize> {
+        println!("try to write {}", args.path);
+
         let path = PathBuf::from(&self.root).join(&args.path);
+
+        // Create dir before write path.
+        //
+        // TODO(xuanwo): There are many works to do here:
+        //   - Is it safe to create dir concurrently?
+        //   - Do we need to extract this logic as new util functions?
+        //   - Is it better to check the parent dir exists before call mkdir?
+        let parent = path
+            .parent()
+            .ok_or_else(|| Error::Unexpected(format!("malformed path: {:?}", path.to_str())))?;
+        fs::create_dir_all(parent)
+            .await
+            .map_err(|e| parse_io_error(&e, &parent))?;
 
         let mut f = fs::OpenOptions::new()
             .create(true)
@@ -114,10 +129,19 @@ impl Accessor for Backend {
             .await
             .map_err(|e| parse_io_error(&e, &path))?;
 
+        // `std::fs::File`'s errors detected on closing are ignored by
+        // the implementation of Drop.
+        // So we need to call `sync_all` to make sure all internal metadata
+        // have been flushed to fs successfully.
+        f.sync_all().await.map_err(|e| parse_io_error(&e, &path))?;
+
+        println!("finished write {}", args.path);
         Ok(s as usize)
     }
 
     async fn stat(&self, args: &OpStat) -> Result<Object> {
+        println!("try to stat {}", args.path);
+
         let path = PathBuf::from(&self.root).join(&args.path);
 
         let meta = fs::metadata(&path)
@@ -132,6 +156,8 @@ impl Accessor for Backend {
     }
 
     async fn delete(&self, args: &OpDelete) -> Result<()> {
+        println!("try to delete {}", args.path);
+
         let path = PathBuf::from(&self.root).join(&args.path);
 
         // PathBuf.is_dir() is not free, call metadata directly instead.
@@ -168,5 +194,7 @@ fn parse_io_error(err: &std::io::Error, path: &Path) -> Error {
         ErrorKind::NotFound => Error::ObjectNotExist(path.to_string_lossy().into_owned()),
         ErrorKind::PermissionDenied => Error::PermissionDenied(path.to_string_lossy().into_owned()),
         _ => Error::Unexpected(err.to_string()),
-    }
+    };
+
+    panic!("we meet error here: {:?}, {}", path, err)
 }
