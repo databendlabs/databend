@@ -194,7 +194,5 @@ fn parse_io_error(err: &std::io::Error, path: &Path) -> Error {
         ErrorKind::NotFound => Error::ObjectNotExist(path.to_string_lossy().into_owned()),
         ErrorKind::PermissionDenied => Error::PermissionDenied(path.to_string_lossy().into_owned()),
         _ => Error::Unexpected(err.to_string()),
-    };
-
-    panic!("we meet error here: {:?}, {}", path, err)
+    }
 }
