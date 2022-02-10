@@ -52,15 +52,6 @@ pub enum MetaError {
     #[error("raft state absent, can not open")]
     MetaStoreNotFound,
 
-    #[error("serde_json error: {0}")]
-    SerdeJsonError(String),
-
-    #[error("{0}")]
-    MetaStoreDamaged(String),
-
-    #[error("{0}")]
-    BadBytes(String),
-
     #[error("{0}")]
     LoadConfigError(String),
 

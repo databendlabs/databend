@@ -48,7 +48,6 @@ use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
-use common_meta_types::ToMetaError;
 use common_meta_types::ToMetaStorageError;
 use common_meta_types::UnknownDatabase;
 use common_meta_types::UnknownDatabaseId;
@@ -138,7 +137,9 @@ impl StateMachine {
 
         // it blocks and slow
         db.drop_tree(tree_name)
-            .map_error_to_meta_error(MetaError::MetaStoreDamaged, || "drop prev state machine")?;
+            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
+                "drop prev state machine"
+            })?;
 
         Ok(())
     }
