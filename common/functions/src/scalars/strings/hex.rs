@@ -15,14 +15,14 @@
 use std::cmp::Ordering;
 use std::fmt;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 #[derive(Clone)]
 pub struct HexFunction {
@@ -30,91 +30,78 @@ pub struct HexFunction {
 }
 
 impl HexFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(HexFunction {
             _display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
-impl Function for HexFunction {
+impl Function2 for HexFunction {
     fn name(&self) -> &str {
         "hex"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        if !args[0].is_integer() && !args[0].is_string() && !args[0].is_null() {
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        if !args[0].data_type_id().is_numeric() && !args[0].data_type_id().is_string() {
             return Err(ErrorCode::IllegalDataType(format!(
-                "Expected integer or string or null, but got {}",
-                args[0]
+                "Expected integer or string but got {}",
+                args[0].data_type_id()
             )));
         }
 
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+        Ok(StringType::arc())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        match columns[0].data_type() {
-            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
-                let mut string_array = StringArrayBuilder::with_capacity(columns[0].column().len());
-                for value in columns[0]
-                    .column()
-                    .cast_with_type(&DataType::UInt64)?
-                    .to_minimal_array()?
-                    .u64()?
-                {
-                    string_array.append_option(value.map(|n| format!("{:x}", n)));
-                }
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        let mut builder: ColumnBuilder<Vu8> = ColumnBuilder::with_capacity(input_rows);
 
-                let column: DataColumn = string_array.finish().into();
-                Ok(column.resize_constant(columns[0].column().len()))
+        match columns[0].data_type().data_type_id() {
+            TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
+                let col = cast_column_field(&columns[0], &UInt64Type::arc())?;
+                let col = col.as_any().downcast_ref::<UInt64Column>().unwrap();
+                for val in col.iter() {
+                    builder.append(format!("{:x}", val).as_bytes());
+                }
             }
-            DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => {
-                let mut string_array = StringArrayBuilder::with_capacity(columns[0].column().len());
-                for value in columns[0]
-                    .column()
-                    .cast_with_type(&DataType::Int64)?
-                    .to_minimal_array()?
-                    .i64()?
-                {
-                    string_array.append_option(value.map(|n| match n.cmp(&0) {
+            TypeID::Int8 | TypeID::Int16 | TypeID::Int32 | TypeID::Int64 => {
+                let col = cast_column_field(&columns[0], &Int64Type::arc())?;
+                let col = col.as_any().downcast_ref::<Int64Column>().unwrap();
+                for val in col.iter() {
+                    let val = match val.cmp(&0) {
                         Ordering::Less => {
-                            format!("-{:x}", n.unsigned_abs())
+                            format!("-{:x}", val.unsigned_abs())
                         }
-                        _ => format!("{:x}", n),
-                    }));
+                        _ => {
+                            format!("{:x}", val)
+                        }
+                    };
+                    builder.append(val.as_bytes());
                 }
-
-                let column: DataColumn = string_array.finish().into();
-                Ok(column.resize_constant(columns[0].column().len()))
+            }
+            TypeID::String => {
+                let col = cast_column_field(&columns[0], &StringType::arc())?;
+                let col = col.as_any().downcast_ref::<StringColumn>().unwrap();
+                for val in col.iter() {
+                    let mut buffer = vec![0u8; val.len() * 2];
+                    let buffer = &mut buffer[0..val.len() * 2];
+                    let _ = hex::encode_to_slice(val, buffer);
+                    builder.append(buffer)
+                }
             }
             _ => {
-                let array = columns[0]
-                    .column()
-                    .cast_with_type(&DataType::String)?
-                    .to_minimal_array()?;
-
-                let array = array.string()?;
-
-                let column: DataColumn =
-                    transform_with_no_null(array, array.inner().values().len() * 2, |x, buffer| {
-                        let len = x.len() * 2;
-                        let buffer = &mut buffer[0..len];
-
-                        let _ = hex::encode_to_slice(x, buffer);
-                        len
-                    })
-                    .into();
-                Ok(column)
+                return Err(ErrorCode::IllegalDataType(format!(
+                    "Expected integer but got {}",
+                    columns[0].data_type().data_type_id()
+                )));
             }
         }
+        Ok(builder.build(input_rows))
     }
 }
 

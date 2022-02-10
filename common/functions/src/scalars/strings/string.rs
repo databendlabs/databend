@@ -83,10 +83,10 @@ impl StringFunction {
         factory.register("length", LengthFunction::desc());
         factory.register("bin", BinFunction::desc());
         factory.register("oct", OctFunction::desc());
+        factory.register("hex", HexFunction::desc());
     }
 
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("hex", HexFunction::desc());
         factory.register("repeat", RepeatFunction::desc());
         factory.register("mid", SubstringFunction::desc());
         factory.register("substr", SubstringFunction::desc());
