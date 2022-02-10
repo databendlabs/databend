@@ -1,10 +1,11 @@
 use std::sync::Arc;
 use common_datablocks::{DataBlock, HashMethod};
-use common_datavalues2::Series;
-use crate::pipelines::new::processors::AggregatorParams;
-use crate::pipelines::new::processors::transforms::transform_aggregator::Aggregator;
-use crate::pipelines::transforms::group_by::{PolymorphicKeysHelper};
+use common_datavalues2::{ColumnRef, MutableColumn, Series};
 use common_exception::Result;
+use crate::pipelines::new::processors::AggregatorParams;
+use crate::pipelines::transforms::group_by::StateEntity;
+use crate::pipelines::new::processors::transforms::transform_aggregator::Aggregator;
+use crate::pipelines::transforms::group_by::{AggregatorState, GroupColumnsBuilder, KeysColumnIter, PolymorphicKeysHelper};
 
 pub struct FinalAggregator<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> {
     is_generated: bool,
@@ -18,11 +19,11 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for F
     const NAME: &'static str = "";
 
     fn consume(&mut self, data: DataBlock) -> Result<()> {
-        todo!()
+        unimplemented!()
     }
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        todo!()
+        unimplemented!()
     }
 }
 
@@ -30,23 +31,30 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for F
     const NAME: &'static str = "";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
-        let keys_column = block.column(self.params.aggregate_functions.len());
+        let key_array = block.column(0);
+        let keys_iter = self.method.keys_iter_from_column(&key_array)?;
 
-        // let key_array: $key_column_type = Series::check_get(keys_column)?;
+        let mut inserted = true;
+        for keys_ref in keys_iter.get_slice() {
+            self.state.entity_by_key(keys_ref, &mut inserted);
+        }
 
-        // let key_array = block.column(self.params.aggregate_functions.len()).to_array()?;
-        // let key_array = block.column(aggr_funcs_len).to_array()?;
-
-        // let key_array: $key_array_type = key_array.$downcast_fn()?;
-        //
-        // let states_series = (0..aggr_funcs_len)
-        //     .map(|i| block.column(i).to_array())
-        //     .collect::<Result<Vec<_>>>()?;
-        // let mut states_binary_arrays = Vec::with_capacity(states_series.len());
-        todo!()
+        Ok(())
     }
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        todo!()
+        match self.state.len() == 0 || self.is_generated {
+            true => Ok(None),
+            false => {
+                self.is_generated = true;
+                let mut columns_builder = self.method.group_columns_builder(self.state.len(), &self.params);
+                for group_entity in self.state.iter() {
+                    columns_builder.append_value(group_entity.get_state_key());
+                }
+
+                let columns = columns_builder.finish()?;
+                Ok(Some(DataBlock::create(self.params.before_schema.clone(), columns)))
+            }
+        }
     }
 }

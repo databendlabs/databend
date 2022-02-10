@@ -15,7 +15,7 @@
 use std::alloc::Layout;
 use std::sync::Arc;
 use common_datablocks::{DataBlock, HashMethodKind};
-use common_datavalues2::DataSchemaRef;
+use common_datavalues2::{DataField, DataSchemaRef};
 
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
@@ -27,6 +27,7 @@ pub struct AggregatorParams {
     pub schema: DataSchemaRef,
     pub before_schema: DataSchemaRef,
     pub group_columns_name: Vec<String>,
+    pub group_data_fields: Vec<DataField>,
 
     pub aggregate_functions: Vec<AggregateFunctionRef>,
     pub aggregate_functions_column_name: Vec<String>,
@@ -61,7 +62,13 @@ impl AggregatorParams {
         let (states_layout, states_offsets) = unsafe { get_layout_offsets(&aggregate_functions) };
 
 
+        let group_data_fields = plan.group_expr
+            .iter()
+            .map(|c| c.to_data_field(&plan.schema_before_group_by))
+            .collect::<Result<Vec<_>>>()?;
+
         Ok(Arc::new(AggregatorParams {
+            group_data_fields,
             aggregate_functions,
             aggregate_functions_column_name,
             aggregate_functions_arguments_name,
@@ -88,9 +95,14 @@ impl AggregatorParams {
 
         let (states_layout, states_offsets) = unsafe { get_layout_offsets(&aggregate_functions) };
 
+        let group_data_fields = plan.group_expr
+            .iter()
+            .map(|c| c.to_data_field(&before_schema))
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(Arc::new(AggregatorParams {
             before_schema,
+            group_data_fields,
             aggregate_functions,
             aggregate_functions_column_name,
             aggregate_functions_arguments_name,

@@ -33,6 +33,7 @@ use crate::pipelines::transforms::group_by::aggregator_state_entity::StateEntity
 use crate::pipelines::transforms::group_by::aggregator_state_iterator::ShortFixedKeysStateIterator;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 use crate::pipelines::transforms::group_by::AggregatorParams;
+use crate::pipelines::new::processors::AggregatorParams as NewAggregatorParams;
 
 /// Aggregate state of the SELECT query, destroy when group by is completed.
 ///
@@ -51,9 +52,11 @@ pub trait AggregatorState<Method: HashMethod>: Sync + Send {
 
     fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr;
 
-    // fn alloc_layout2(&self, params: &AggregatorParams) -> StateAddr;
+    fn alloc_layout2(&self, params: &NewAggregatorParams) -> StateAddr;
 
     fn entity(&mut self, key: &Method::HashKey, inserted: &mut bool) -> *mut Self::Entity;
+
+    fn entity_by_key(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity;
 }
 
 /// The fixed length array is used as the data structure to locate the key by subscript
@@ -137,6 +140,18 @@ impl<T> AggregatorState<HashMethodFixedKeys<T>> for ShortFixedKeysAggregatorStat
         place
     }
 
+    fn alloc_layout2(&self, params: &NewAggregatorParams) -> StateAddr {
+        let place: StateAddr = self.area.alloc_layout(params.layout).into();
+
+        for idx in 0..params.offsets_aggregate_states.len() {
+            let aggr_state = params.offsets_aggregate_states[idx];
+            let aggr_state_place = place.next(aggr_state);
+            params.aggregate_functions[idx].init_state(aggr_state_place);
+        }
+
+        place
+    }
+
     #[inline(always)]
     fn entity(&mut self, key: &T, inserted: &mut bool) -> *mut Self::Entity {
         unsafe {
@@ -154,6 +169,11 @@ impl<T> AggregatorState<HashMethodFixedKeys<T>> for ShortFixedKeysAggregatorStat
             (*value).fill = true;
             value
         }
+    }
+
+    #[inline(always)]
+    fn entity_by_key(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
+        self.entity(key, inserted)
     }
 }
 
@@ -206,9 +226,26 @@ impl<T> AggregatorState<HashMethodFixedKeys<T>> for LongerFixedKeysAggregatorSta
         place
     }
 
+    fn alloc_layout2(&self, params: &NewAggregatorParams) -> StateAddr {
+        let place: StateAddr = self.area.alloc_layout(params.layout).into();
+
+        for idx in 0..params.offsets_aggregate_states.len() {
+            let aggr_state = params.offsets_aggregate_states[idx];
+            let aggr_state_place = place.next(aggr_state);
+            params.aggregate_functions[idx].init_state(aggr_state_place);
+        }
+
+        place
+    }
+
     #[inline(always)]
     fn entity(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
         self.data.insert_key(key, inserted)
+    }
+
+    #[inline(always)]
+    fn entity_by_key(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity {
+        self.entity(key, inserted)
     }
 }
 
@@ -255,6 +292,19 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
         place
     }
 
+    fn alloc_layout2(&self, params: &NewAggregatorParams) -> StateAddr {
+        let place: StateAddr = self.state_area.alloc_layout(params.layout).into();
+
+        for idx in 0..params.offsets_aggregate_states.len() {
+            let aggr_state = params.offsets_aggregate_states[idx];
+            let aggr_state_place = place.next(aggr_state);
+            params.aggregate_functions[idx].init_state(aggr_state_place);
+        }
+
+        place
+    }
+
+    #[inline(always)]
     fn entity(&mut self, keys: &Vec<u8>, inserted: &mut bool) -> *mut Self::Entity {
         let mut keys_ref = KeysRef::create(keys.as_ptr() as usize, keys.len());
         let state_entity = self.data_state_map.insert_key(&keys_ref, inserted);
@@ -267,6 +317,26 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
                 keys_ref.address = global_keys.as_ptr() as usize;
                 // TODO: maybe need set key method.
                 state_entity.set_key_and_hash(&keys_ref, inserted_hash)
+            }
+        }
+
+        state_entity
+    }
+
+    #[inline(always)]
+    fn entity_by_key(&mut self, keys_ref: &KeysRef, inserted: &mut bool) -> *mut Self::Entity {
+        let state_entity = self.data_state_map.insert_key(&keys_ref, inserted);
+
+        if *inserted {
+            unsafe {
+                // Keys will be destroyed after call we need copy the keys to the memory pool.
+                let data_ptr = keys_ref.address as *mut u8;
+                let keys = std::slice::from_raw_parts_mut(data_ptr, keys_ref.length);
+                let global_keys = self.keys_area.alloc_slice_copy(keys);
+                let inserted_hash = state_entity.get_hash();
+                let address = global_keys.as_ptr() as usize;
+                let new_keys_ref = KeysRef::create(address, keys_ref.length);
+                state_entity.set_key_and_hash(&new_keys_ref, inserted_hash)
             }
         }
 

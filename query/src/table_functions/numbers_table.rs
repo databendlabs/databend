@@ -229,7 +229,6 @@ impl SyncSource for NumbersSource {
     const NAME: &'static str = "numbers";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        println!("{:?}: source generate.", std::thread::current().name());
         let source_remain_size = self.end - self.begin;
 
         match source_remain_size {

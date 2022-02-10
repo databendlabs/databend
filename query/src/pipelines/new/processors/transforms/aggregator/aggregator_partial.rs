@@ -48,17 +48,17 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         for key in keys.iter() {
             let entity = state.entity(key, &mut inserted);
 
-            // match inserted {
-            //     true => {
-            //         let place = state.alloc_layout(params);
-            //         places.push(place);
-            //         entity.set_state_value(place.addr());
-            //     }
-            //     false => {
-            //         let place: StateAddr = (*entity.get_state_value()).into();
-            //         places.push(place);
-            //     }
-            // }
+            match inserted {
+                true => {
+                    let place = state.alloc_layout2(params);
+                    places.push(place);
+                    entity.set_state_value(place.addr());
+                }
+                false => {
+                    let place: StateAddr = (*entity.get_state_value()).into();
+                    places.push(place);
+                }
+            }
         }
         places
     }
@@ -129,7 +129,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             .map(|_| MutableStringColumn::with_capacity(state_groups_len * 4))
             .collect();
 
-        let mut group_key_builder = self.method.state_array_builder(state_groups_len);
+        let mut group_key_builder = self.method.keys_column_builder(state_groups_len);
 
         let mut bytes = BytesMut::new();
         for group_entity in self.state.iter() {
@@ -185,6 +185,18 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for P
     }
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        self.generate_data()
+        match self.state.len() == 0 || self.is_generated {
+            true => Ok(None),
+            false => {
+                self.is_generated = true;
+                let mut keys_column_builder = self.method.keys_column_builder(self.state.len());
+                for group_entity in self.state.iter() {
+                    keys_column_builder.append_value(group_entity.get_state_key());
+                }
+
+                let columns = keys_column_builder.finish();
+                Ok(Some(DataBlock::create(self.params.schema.clone(), vec![columns])))
+            }
+        }
     }
 }
