@@ -19,6 +19,7 @@ use common_dal2::ops::OpDelete;
 use common_dal2::ops::OpRead;
 use common_dal2::ops::OpStat;
 use common_dal2::ops::OpWrite;
+use common_dal2::readers::CallbackReader;
 use common_dal2::Accessor;
 use common_dal2::Layer;
 use common_dal2::Object;
@@ -117,8 +118,17 @@ impl Layer for DalContext {
 #[async_trait]
 impl Accessor for DalContext {
     async fn read(&self, args: &OpRead) -> DalResult<Reader> {
-        // TODO(xuanwo): Implement context callback reader to collect metrics.
-        self.inner.as_ref().unwrap().read(args).await
+        let metrics = self.metrics.clone();
+
+        // TODO(xuanwo): Maybe it's better to move into metrics.
+        self.inner.as_ref().unwrap().read(args).await.map(|reader| {
+            let r = CallbackReader::new(reader, move |n| {
+                let mut metrics = metrics.write();
+                metrics.read_bytes += n;
+            });
+
+            Box::new(r) as Reader
+        })
     }
     async fn write(&self, r: Reader, args: &OpWrite) -> DalResult<usize> {
         self.inner.as_ref().unwrap().write(r, args).await.map(|n| {
