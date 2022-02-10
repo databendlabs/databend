@@ -89,7 +89,7 @@ where
         let left = L::try_create_viewer(columns[0].column())?;
         let right = R::try_create_viewer(columns[1].column())?;
 
-        let mut col_builder = MutablePrimitiveColumn::<O>::with_capacity(left.len());
+        let mut col_builder = MutablePrimitiveColumn::<O>::with_capacity(left.size());
         for (l, r) in left.iter().zip(right.iter()) {
             let l = l.to_owned_scalar().as_();
             let r = r.to_owned_scalar().as_();

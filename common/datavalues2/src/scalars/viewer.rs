@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
@@ -22,6 +20,7 @@ use crate::prelude::*;
 
 pub trait ScalarViewer<'a>: Clone + Sized {
     type ScalarItem: Scalar<Viewer<'a> = Self>;
+    type Iterator: Iterator<Item = <Self::ScalarItem as Scalar>::RefType<'a>>;
 
     fn try_create(col: &'a ColumnRef) -> Result<Self>;
 
@@ -29,24 +28,18 @@ pub trait ScalarViewer<'a>: Clone + Sized {
 
     fn valid_at(&self, i: usize) -> bool;
 
-    fn len(&self) -> usize;
+    /// len is implemented in ExactSizeIterator
+    fn size(&self) -> usize;
 
     fn null_at(&self, i: usize) -> bool {
         !self.valid_at(i)
     }
 
     fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.size() == 0
     }
 
-    fn iter(&'a self) -> ScalarViewerIter<Self, Self::ScalarItem> {
-        ScalarViewerIter {
-            viewer: self,
-            size: self.len(),
-            pos: 0,
-            _t: PhantomData,
-        }
-    }
+    fn iter(&self) -> Self::Iterator;
 }
 
 #[derive(Clone)]
@@ -58,7 +51,8 @@ pub struct PrimitiveViewer<'a, T: PrimitiveType> {
     // for const column, it's 0, `value` function will fetch the first value of the column.
     // for not const column, it's usize::max, `value` function will fetch the value of the row in the column.
     non_const_mask: usize,
-    size: usize,
+    pub(crate) size: usize,
+    pub(crate) pos: usize,
     validity: Bitmap,
 }
 
@@ -69,6 +63,7 @@ where
     T: Scalar<RefType<'a> = T>,
 {
     type ScalarItem = T;
+    type Iterator = Self;
 
     fn try_create(column: &'a ColumnRef) -> Result<Self> {
         let (inner, validity) = try_extract_inner(column)?;
@@ -85,6 +80,7 @@ where
             non_const_mask,
             validity,
             size,
+            pos: 0,
         })
     }
 
@@ -99,8 +95,12 @@ where
     }
 
     #[inline]
-    fn len(&self) -> usize {
+    fn size(&self) -> usize {
         self.size
+    }
+
+    fn iter(&self) -> Self {
+        self.clone()
     }
 }
 
@@ -110,12 +110,14 @@ pub struct BooleanViewer {
     values: Vec<bool>,
     null_mask: usize,
     non_const_mask: usize,
-    size: usize,
+    pub(crate) size: usize,
+    pub(crate) pos: usize,
     validity: Bitmap,
 }
 
 impl<'a> ScalarViewer<'a> for BooleanViewer {
     type ScalarItem = bool;
+    type Iterator = Self;
 
     fn try_create(column: &ColumnRef) -> Result<Self> {
         let (inner, validity) = try_extract_inner(column)?;
@@ -132,6 +134,7 @@ impl<'a> ScalarViewer<'a> for BooleanViewer {
             non_const_mask,
             validity,
             size,
+            pos: 0,
         })
     }
 
@@ -146,8 +149,12 @@ impl<'a> ScalarViewer<'a> for BooleanViewer {
     }
 
     #[inline]
-    fn len(&self) -> usize {
+    fn size(&self) -> usize {
         self.size
+    }
+
+    fn iter(&self) -> Self {
+        self.clone()
     }
 }
 
@@ -156,12 +163,14 @@ pub struct StringViewer<'a> {
     col: &'a StringColumn,
     null_mask: usize,
     non_const_mask: usize,
-    size: usize,
+    pub(crate) size: usize,
+    pub(crate) pos: usize,
     validity: Bitmap,
 }
 
 impl<'a> ScalarViewer<'a> for StringViewer<'a> {
     type ScalarItem = Vu8;
+    type Iterator = Self;
 
     fn try_create(column: &'a ColumnRef) -> Result<Self> {
         let (inner, validity) = try_extract_inner(column)?;
@@ -177,6 +186,7 @@ impl<'a> ScalarViewer<'a> for StringViewer<'a> {
             non_const_mask,
             validity,
             size,
+            pos: 0,
         })
     }
 
@@ -191,8 +201,12 @@ impl<'a> ScalarViewer<'a> for StringViewer<'a> {
     }
 
     #[inline]
-    fn len(&self) -> usize {
+    fn size(&self) -> usize {
         self.size
+    }
+
+    fn iter(&self) -> Self {
+        self.clone()
     }
 }
 

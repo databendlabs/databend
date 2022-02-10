@@ -13,52 +13,87 @@
 // limitations under the License.
 
 use std::iter::TrustedLen;
-use std::marker::PhantomData;
 
 use crate::prelude::*;
 
-pub struct ScalarViewerIter<'a, Viewer, T> {
-    pub(crate) viewer: &'a Viewer,
-    pub(crate) size: usize,
-    pub(crate) pos: usize,
-    pub(crate) _t: PhantomData<T>,
-}
-
-impl<'a, Viewer, T> Iterator for ScalarViewerIter<'a, Viewer, T>
+impl<'a, T> Iterator for PrimitiveViewer<'a, T>
 where
-    Viewer: ScalarViewer<'a, ScalarItem = T>,
-    T: Scalar,
+    T: Scalar<Viewer<'a> = Self> + PrimitiveType,
+    T: ScalarRef<'a, ScalarType = T>,
+    T: Scalar<RefType<'a> = T>,
 {
     type Item = T::RefType<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pos >= self.size {
+            return None;
+        }
+        let value = self.value_at(self.pos);
+
+        self.pos += 1;
+        Some(value)
+    }
+}
+
+impl Iterator for BooleanViewer {
+    type Item = bool;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pos >= self.size {
+            return None;
+        }
+        let value = self.value_at(self.pos);
+
+        self.pos += 1;
+        Some(value)
+    }
+}
+
+impl<'a> Iterator for StringViewer<'a> {
+    type Item = &'a [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.pos >= self.size {
-            None
-        } else {
-            let item = self.viewer.value_at(self.pos);
-            self.pos += 1;
-            Some(item)
+            return None;
         }
-    }
+        let value = self.value_at(self.pos);
 
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.size - self.pos, Some(self.size - self.pos))
+        self.pos += 1;
+        Some(value)
     }
 }
 
-impl<'a, Viewer, T> ExactSizeIterator for ScalarViewerIter<'a, Viewer, T>
+/// Some trait impls to improve the performance of iteration
+
+impl<'a, T> ExactSizeIterator for PrimitiveViewer<'a, T>
 where
-    Viewer: ScalarViewer<'a, ScalarItem = T>,
-    T: Scalar,
+    T: Scalar<Viewer<'a> = Self> + PrimitiveType,
+    T: ScalarRef<'a, ScalarType = T>,
+    T: Scalar<RefType<'a> = T>,
 {
     fn len(&self) -> usize {
         self.size - self.pos
     }
 }
 
-unsafe impl<'a, Viewer, T> TrustedLen for ScalarViewerIter<'a, Viewer, T>
+unsafe impl<'a, T> TrustedLen for PrimitiveViewer<'a, T>
 where
-    Viewer: ScalarViewer<'a, ScalarItem = T>,
-    T: Scalar,
+    T: Scalar<Viewer<'a> = Self> + PrimitiveType,
+    T: ScalarRef<'a, ScalarType = T>,
+    T: Scalar<RefType<'a> = T>,
 {
 }
+
+impl ExactSizeIterator for BooleanViewer {
+    fn len(&self) -> usize {
+        self.size - self.pos
+    }
+}
+
+unsafe impl TrustedLen for BooleanViewer {}
+
+impl<'a> ExactSizeIterator for StringViewer<'a> {
+    fn len(&self) -> usize {
+        self.size - self.pos
+    }
+}
+
+unsafe impl<'a> TrustedLen for StringViewer<'a> {}

@@ -239,7 +239,7 @@ impl std::fmt::Debug for dyn Column + '_ {
         let dt = self.data_type().data_type_id();
         let col = self.convert_full_column();
         with_match_primitive_type_id!(dt, |$T| {
-            fmt_dyn!(&self, PrimitiveColumn<$T>, f)
+            fmt_dyn!(col, PrimitiveColumn<$T>, f)
         }, {
             use crate::types::type_id::TypeID::*;
             match dt {

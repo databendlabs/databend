@@ -39,7 +39,7 @@ where for<'a> Self::ColumnType: ScalarColumn<RefItem<'a> = Self::RefType<'a>>
     /// Upcast GAT type's lifetime.
     fn upcast_gat<'short, 'long: 'short>(long: Self::RefType<'long>) -> Self::RefType<'short>;
 
-    fn try_create_viewer<'a>(col: &'a ColumnRef) -> Result<Self::Viewer<'a>> {
+    fn try_create_viewer(col: &ColumnRef) -> Result<Self::Viewer<'_>> {
         Self::Viewer::try_create(col)
     }
 }
