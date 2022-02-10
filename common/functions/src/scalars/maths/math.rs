@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::scalars::function2_factory::Function2Factory;
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::AbsFunction;
 use crate::scalars::CRC32Function;
@@ -73,4 +74,6 @@ impl MathsFunction {
         factory.register("round", RoundNumberFunction::desc());
         factory.register("truncate", TruncNumberFunction::desc());
     }
+
+    pub fn register2(_factory: &mut Function2Factory) {}
 }
