@@ -166,8 +166,13 @@ impl BufReaderProvider for &QueryContext {
         let len = match len {
             Some(l) => l,
             None => {
-                let object = block_on(async { accessor.stat(path).run().await })
-                    .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
+                let object =
+                    block_on(async { accessor.stat(path).run().await }).map_err(|e| match e {
+                        common_dal2::error::Error::ObjectNotExist(msg) => {
+                            ErrorCode::DalPathNotFound(msg)
+                        }
+                        _ => ErrorCode::DalTransportError(e.to_string()),
+                    })?;
                 object.size
             }
         };
