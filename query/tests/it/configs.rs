@@ -221,18 +221,3 @@ fn test_fuse_commit_version() -> Result<()> {
     assert!(v.len() > 0);
     Ok(())
 }
-
-#[test]
-fn test_initial_dir() -> Result<()> {
-    let mut conf = Config::default();
-    conf.storage.storage_type = "disk".to_string();
-
-    // Remove.
-    if !conf.storage.disk.data_path.is_empty() {
-        std::fs::remove_dir_all(conf.storage.disk.data_path)?;
-    }
-    if !conf.storage.disk.temp_data_path.is_empty() {
-        std::fs::remove_dir_all(conf.storage.disk.temp_data_path)?;
-    }
-    Ok(())
-}
