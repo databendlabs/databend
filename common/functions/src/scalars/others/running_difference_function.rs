@@ -121,7 +121,7 @@ macro_rules! run_difference_compute {
             let viewer_iter_a = viewer.iter();
             let viewer_iter_b = viewer.iter();
 
-            let size = viewer.len();
+            let size = viewer.size();
             if column.is_nullable() {
                 let mut builder: NullableColumnBuilder<$result_primitive_type> =
                     NullableColumnBuilder::with_capacity(input_rows);

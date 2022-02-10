@@ -80,7 +80,7 @@ fn test_builder() -> Result<()> {
             let mut builder = NullableColumnBuilder::<T>::with_capacity(size);
             let viewer = T::try_create_viewer(column)?;
 
-            for i in 0..viewer.len() {
+            for i in 0..viewer.size() {
                 builder.append(viewer.value_at(i), viewer.valid_at(i));
             }
             let result = builder.build(size);
@@ -89,7 +89,7 @@ fn test_builder() -> Result<()> {
             let mut builder = ColumnBuilder::<T>::with_capacity(size);
             let viewer = T::try_create_viewer(column)?;
 
-            for i in 0..viewer.len() {
+            for i in 0..viewer.size() {
                 builder.append(viewer.value_at(i));
             }
 

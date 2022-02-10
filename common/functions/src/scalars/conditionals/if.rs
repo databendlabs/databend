@@ -90,7 +90,7 @@ impl Function2 for IfFunction {
                 let lhs_viewer = $T::try_create_viewer(&lhs)?;
                 let rhs_viewer = $T::try_create_viewer(&rhs)?;
 
-                let size = lhs_viewer.len();
+                let size = lhs_viewer.size();
 
                 if nullable {
                     let mut builder = NullableColumnBuilder::<$T>::with_capacity(size);

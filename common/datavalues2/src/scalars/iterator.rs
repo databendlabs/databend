@@ -32,6 +32,10 @@ where
         self.pos += 1;
         Some(value)
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.size - self.pos, Some(self.size - self.pos))
+    }
 }
 
 impl Iterator for BooleanViewer {
@@ -44,6 +48,10 @@ impl Iterator for BooleanViewer {
 
         self.pos += 1;
         Some(value)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.size - self.pos, Some(self.size - self.pos))
     }
 }
 
@@ -58,6 +66,10 @@ impl<'a> Iterator for StringViewer<'a> {
 
         self.pos += 1;
         Some(value)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.size - self.pos, Some(self.size - self.pos))
     }
 }
 

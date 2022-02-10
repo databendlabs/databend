@@ -21,7 +21,7 @@ fn test_primitive_viewer() -> Result<()> {
     let column = Series::from_data(vec![1i8, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     let viewer = i8::try_create_viewer(&column)?;
 
-    assert_eq!(viewer.len(), 10);
+    assert_eq!(viewer.size(), 10);
     assert!(!viewer.null_at(0));
     for (i, value) in viewer.iter().enumerate() {
         assert_eq!(value, (i + 1) as i8);
@@ -34,7 +34,7 @@ fn test_nullable_viewer() -> Result<()> {
     let column = Series::from_data(vec![Some(1i8), None, Some(3), Some(4), Some(5)]);
     let viewer = i8::try_create_viewer(&column)?;
 
-    assert_eq!(viewer.len(), 5);
+    assert_eq!(viewer.size(), 5);
     assert!(!viewer.null_at(0));
     assert!(viewer.null_at(1));
 
@@ -55,7 +55,7 @@ fn test_constant_viewer() -> Result<()> {
 
     let viewer = i16::try_create_viewer(&column)?;
 
-    assert_eq!(viewer.len(), 1024);
+    assert_eq!(viewer.size(), 1024);
     assert!(!viewer.null_at(0));
     assert!(!viewer.null_at(99));
 
