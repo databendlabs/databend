@@ -16,13 +16,14 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::Function2Factory;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::UserDefinedFunction;
 use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -37,8 +38,11 @@ pub struct FunctionsTable {
 impl FunctionsTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("is_aggregate", DataType::Boolean, false),
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("is_builtin", bool::to_data_type()),
+            DataField::new("is_aggregate", bool::to_data_type()),
+            DataField::new("definition", Vu8::to_data_type()),
+            DataField::new("description", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {
@@ -54,6 +58,12 @@ impl FunctionsTable {
         };
         FunctionsTable { table_info }
     }
+
+    async fn get_udfs(ctx: Arc<QueryContext>) -> Result<Vec<UserDefinedFunction>> {
+        let tenant = ctx.get_tenant();
+        let user_mgr = ctx.get_user_manager();
+        user_mgr.get_udfs(&tenant).await
+    }
 }
 
 #[async_trait::async_trait]
@@ -68,27 +78,59 @@ impl Table for FunctionsTable {
 
     async fn read(
         &self,
-        _ctx: Arc<QueryContext>,
+        ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let function_factory = FunctionFactory::instance();
+        let function_factory = Function2Factory::instance();
         let aggregate_function_factory = AggregateFunctionFactory::instance();
         let func_names = function_factory.registered_names();
         let aggr_func_names = aggregate_function_factory.registered_names();
+        let udfs = FunctionsTable::get_udfs(ctx).await?;
 
         let names: Vec<&[u8]> = func_names
             .iter()
             .chain(aggr_func_names.iter())
+            .chain(udfs.iter().map(|udf| &udf.name))
             .map(|x| x.as_bytes())
             .collect();
+        let builtin_func_len = func_names.len() + aggr_func_names.len();
 
-        let is_aggregate = (0..names.len())
-            .map(|i| i >= func_names.len())
+        let is_builtin = (0..names.len())
+            .map(|i| i < builtin_func_len)
             .collect::<Vec<bool>>();
 
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
-            Series::new(names),
-            Series::new(is_aggregate),
+        let is_aggregate = (0..names.len())
+            .map(|i| i >= func_names.len() && i < builtin_func_len)
+            .collect::<Vec<bool>>();
+
+        let definitions = (0..names.len())
+            .map(|i| {
+                if i < builtin_func_len {
+                    ""
+                } else {
+                    udfs.get(i - builtin_func_len)
+                        .map_or("", |udf| udf.definition.as_str())
+                }
+            })
+            .collect::<Vec<&str>>();
+
+        let descriptions = (0..names.len())
+            .map(|i| {
+                if i < builtin_func_len {
+                    ""
+                } else {
+                    udfs.get(i - builtin_func_len)
+                        .map_or("", |udf| udf.description.as_str())
+                }
+            })
+            .collect::<Vec<&str>>();
+
+        let block = DataBlock::create(self.table_info.schema(), vec![
+            Series::from_data(names),
+            Series::from_data(is_builtin),
+            Series::from_data(is_aggregate),
+            Series::from_data(definitions),
+            Series::from_data(descriptions),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(

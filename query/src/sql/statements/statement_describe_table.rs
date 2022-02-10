@@ -14,10 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DescribeTablePlan;
@@ -65,9 +62,9 @@ impl DfDescribeTable {
 
     fn schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("Field", DataType::String, false),
-            DataField::new("Type", DataType::String, false),
-            DataField::new("Null", DataType::String, false),
+            DataField::new("Field", Vu8::to_data_type()),
+            DataField::new("Type", Vu8::to_data_type()),
+            DataField::new("Null", Vu8::to_data_type()),
         ])
     }
 }

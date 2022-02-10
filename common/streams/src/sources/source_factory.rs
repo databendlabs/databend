@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::AsyncRead;

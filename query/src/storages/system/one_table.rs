@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::{MetaId, TableIdent};
 use common_meta_types::TableInfo;
@@ -43,8 +43,7 @@ pub struct OneTable {
 
 impl OneTable {
     pub fn create(table_id: u64) -> Self {
-        let schema =
-            DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);
 
         let table_info = TableInfo {
             desc: "'system'.'one'".to_string(),
@@ -86,8 +85,7 @@ impl Table for OneTable {
         _ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let block =
-            DataBlock::create_by_array(self.table_info.schema(), vec![Series::new(vec![1u8])]);
+        let block = DataBlock::create(self.table_info.schema(), vec![Series::from_data(vec![1u8])]);
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),
             None,
@@ -112,7 +110,8 @@ struct OneSource(Option<DataBlock>);
 
 impl OneSource {
     pub fn create(output: Arc<OutputPort>, schema: DataSchemaRef) -> Result<ProcessorPtr> {
-        let data_block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1u8])]);
+        let column = UInt8Column::new_from_vec(vec![1u8]);
+        let data_block = DataBlock::create(schema.clone(), vec![Arc::new(column)]);
         SyncSourcer::create(output, OneSource(Some(data_block)))
     }
 }

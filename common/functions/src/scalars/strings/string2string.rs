@@ -13,29 +13,25 @@
 // limitations under the License.
 use std::fmt;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
+use common_datavalues2::StringType;
+use common_datavalues2::TypeID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 // use common_tracing::tracing;
-use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 pub trait StringOperator: Send + Sync + Clone + Default + 'static {
-    fn apply<'a>(&'a mut self, _: &'a [u8], _: &mut [u8]) -> Option<usize> {
-        None
-    }
-    fn apply_with_no_null<'a>(&'a mut self, _: &'a [u8], _: &mut [u8]) -> usize {
-        0
-    }
-    fn may_turn_to_null(&self) -> bool {
-        false
-    }
-    fn estimate_bytes(&self, array: &DFStringArray) -> usize {
-        array.inner().values().len()
+    fn try_apply<'a>(&'a mut self, _: &'a [u8], _: &mut [u8]) -> Result<usize>;
+
+    // as much as the original bytes
+    fn estimate_bytes(&self, array: &StringColumn) -> usize {
+        array.values().len()
     }
 }
 
@@ -48,63 +44,49 @@ pub struct String2StringFunction<T> {
 }
 
 impl<T: StringOperator> String2StringFunction<T> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
             _marker: PhantomData,
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
-impl<T: StringOperator> Function for String2StringFunction<T> {
+impl<T: StringOperator> Function2 for String2StringFunction<T> {
     fn name(&self) -> &str {
         &self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        if !args[0].is_numeric() && !args[0].is_string() && !args[0].is_null() {
+    fn return_type(
+        &self,
+        args: &[&common_datavalues2::DataTypePtr],
+    ) -> Result<common_datavalues2::DataTypePtr> {
+        if args[0].data_type_id() != TypeID::String {
             return Err(ErrorCode::IllegalDataType(format!(
-                "Expected string or null, but got {}",
+                "Expected string arg, but got {:?}",
                 args[0]
             )));
         }
-
-        let nullable = match T::default().may_turn_to_null() {
-            true => true,
-            false => args.iter().any(|arg| arg.is_nullable()),
-        };
-        let dt = DataType::String;
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+        Ok(StringType::arc())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+    fn eval(
+        &self,
+        columns: &common_datavalues2::ColumnsWithField,
+        _input_rows: usize,
+    ) -> Result<common_datavalues2::ColumnRef> {
         let mut op = T::default();
-
-        let array = columns[0]
-            .column()
-            .cast_with_type(&DataType::String)?
-            .to_minimal_array()?;
-
-        let estimate_bytes = op.estimate_bytes(array.string()?);
-
-        let column: DataColumn = if op.may_turn_to_null() {
-            transform(array.string()?, estimate_bytes, |val, buffer| {
-                op.apply(val, buffer)
-            })
-            .into()
-        } else {
-            transform_with_no_null(array.string()?, estimate_bytes, |val, buffer| {
-                op.apply_with_no_null(val, buffer)
-            })
-            .into()
-        };
-
-        Ok(column.resize_constant(input_rows))
+        let column: &StringColumn = Series::check_get(columns[0].column())?;
+        let estimate_bytes = op.estimate_bytes(column);
+        let col = StringColumn::try_transform(column, estimate_bytes, |val, buffer| {
+            op.try_apply(val, buffer)
+        })?;
+        Ok(Arc::new(col))
     }
 }
 

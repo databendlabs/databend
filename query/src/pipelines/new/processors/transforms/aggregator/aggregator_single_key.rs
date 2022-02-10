@@ -3,9 +3,8 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use bytes::BytesMut;
 use common_datablocks::DataBlock;
-use common_datavalues::arrays::DFStringArray;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::prelude::{create_mutable_array, IntoSeries, MutableArrayBuilder, Series, StringArrayBuilder};
+use common_datavalues2::{ColumnRef, DataSchemaRef, MutableColumn, MutableStringColumn, ScalarColumn, Series, StringColumn};
+use common_datavalues2::prelude::column::ScalarColumnBuilder;
 use common_exception::Result;
 use common_functions::aggregates::{AggregateFunctionRef, get_layout_offsets, StateAddr};
 use common_planners::Expression;
@@ -65,11 +64,10 @@ impl Aggregator for SingleKeyAggregatorImpl<true> {
         for (index, func) in self.funcs.iter().enumerate() {
             let place = self.places[index].into();
 
-            let binary_array = block.column(index).to_array()?;
-            let binary_array: &DFStringArray = binary_array.string()?;
-            let array = binary_array.inner();
+            let binary_array = block.column(index);
+            let binary_array: &StringColumn = Series::check_get(binary_array)?;
 
-            let mut data = array.value(0);
+            let mut data = binary_array.get_data(0);
             let s = self.funcs[index].state_layout();
             let temp = self.arena.alloc_layout(s);
             let temp_addr = temp.into();
@@ -88,27 +86,27 @@ impl Aggregator for SingleKeyAggregatorImpl<true> {
         }
 
         self.is_finished = true;
-        let mut aggr_values: Vec<Box<dyn MutableArrayBuilder>> = {
-            let mut values = vec![];
+        let mut aggr_values: Vec<Box<dyn MutableColumn>> = {
+            let mut builders = vec![];
             for func in &self.funcs {
-                let array = create_mutable_array(func.return_type()?);
-                values.push(array)
+                let data_type = func.return_type()?;
+                builders.push(data_type.create_mutable(1024));
             }
-            values
+            builders
         };
 
         for (index, func) in self.funcs.iter().enumerate() {
             let place = self.places[index].into();
-            let array: &mut dyn MutableArrayBuilder = aggr_values[index].borrow_mut();
+            let array: &mut dyn MutableColumn = aggr_values[index].borrow_mut();
             let _ = func.merge_result(place, array)?;
         }
 
-        let mut columns: Vec<Series> = Vec::with_capacity(self.funcs.len());
+        let mut columns: Vec<ColumnRef> = Vec::with_capacity(self.funcs.len());
         for mut array in aggr_values {
-            columns.push(array.as_series());
+            columns.push(array.to_column());
         }
 
-        Ok(Some(DataBlock::create_by_array(self.schema.clone(), columns)))
+        Ok(Some(DataBlock::create(self.schema.clone(), columns)))
     }
 }
 
@@ -120,10 +118,10 @@ impl Aggregator for SingleKeyAggregatorImpl<false> {
         for (idx, func) in self.funcs.iter().enumerate() {
             let mut arg_columns = vec![];
             for name in self.arg_names[idx].iter() {
-                arg_columns.push(block.try_column_by_name(name)?.to_array()?);
+                arg_columns.push(block.try_column_by_name(name)?.clone());
             }
             let place = self.places[idx].into();
-            func.accumulate(place, &arg_columns, rows)?;
+            func.accumulate(place, &arg_columns, None, rows)?;
         }
 
         Ok(())
@@ -141,14 +139,14 @@ impl Aggregator for SingleKeyAggregatorImpl<false> {
         for (idx, func) in self.funcs.iter().enumerate() {
             let place = self.places[idx].into();
             func.serialize(place, &mut bytes)?;
-            let mut array_builder = StringArrayBuilder::with_capacity(4);
+            let mut array_builder = MutableStringColumn::with_capacity(4);
             array_builder.append_value(&bytes[..]);
             bytes.clear();
-            columns.push(array_builder.finish().into_series());
+            columns.push(array_builder.to_column());
         }
 
         // TODO: create with temp schema
-        Ok(Some(DataBlock::create_by_array(self.schema.clone(), columns)))
+        Ok(Some(DataBlock::create(self.schema.clone(), columns)))
     }
 }
 

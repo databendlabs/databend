@@ -134,34 +134,6 @@ impl From<octocrab::Error> for ErrorCode {
     }
 }
 
-// ===  sled error ===
-impl<T: Display> From<sled::transaction::ConflictableTransactionError<T>> for ErrorCode {
-    fn from(error: sled::transaction::ConflictableTransactionError<T>) -> Self {
-        match error {
-            sled::transaction::ConflictableTransactionError::Abort(e) => {
-                ErrorCode::TransactionAbort(format!("Transaction abort, cause: {}", e))
-            }
-            sled::transaction::ConflictableTransactionError::Storage(e) => {
-                ErrorCode::TransactionError(format!("Transaction storage error, cause: {}", e))
-            }
-            _ => ErrorCode::MetaSrvError("Unexpect transaction error"),
-        }
-    }
-}
-
-impl<E: Display> From<sled::transaction::TransactionError<E>> for ErrorCode {
-    fn from(error: sled::transaction::TransactionError<E>) -> Self {
-        match error {
-            sled::transaction::TransactionError::Abort(e) => {
-                ErrorCode::TransactionAbort(format!("Transaction abort, cause: {}", e))
-            }
-            sled::transaction::TransactionError::Storage(e) => {
-                ErrorCode::TransactionError(format!("Transaction storage error, cause :{}", e))
-            }
-        }
-    }
-}
-
 // ===  ser/de to/from tonic::Status ===
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct SerializedError {
@@ -197,8 +169,8 @@ impl From<SerializedError> for ErrorCode {
     }
 }
 
-impl From<&tonic::Status> for ErrorCode {
-    fn from(status: &tonic::Status) -> Self {
+impl From<tonic::Status> for ErrorCode {
+    fn from(status: tonic::Status) -> Self {
         match status.code() {
             tonic::Code::Unknown => {
                 let details = status.details();
@@ -227,12 +199,6 @@ impl From<&tonic::Status> for ErrorCode {
             }
             _ => ErrorCode::UnImplement(status.to_string()),
         }
-    }
-}
-
-impl From<tonic::Status> for ErrorCode {
-    fn from(status: tonic::Status) -> Self {
-        (&status).into()
     }
 }
 

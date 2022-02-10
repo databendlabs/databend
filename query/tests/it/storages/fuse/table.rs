@@ -150,6 +150,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
     Ok(())
 }
 
+// TODO move this to test/it/storages/fuse/operations
 #[tokio::test]
 async fn test_fuse_table_truncate() -> Result<()> {
     let fixture = TestFixture::new().await;
@@ -216,6 +217,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     Ok(())
 }
 
+// TODO move this to test/it/storages/fuse/operations
 #[tokio::test]
 async fn test_fuse_table_optimize() -> Result<()> {
     let fixture = TestFixture::new().await;
@@ -254,7 +256,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     // do compact
     let query = format!("optimize table {}.{} compact", db_name, tbl_name);
 
-    let plan = PlanParser::parse(&query, ctx.clone()).await?;
+    let plan = PlanParser::parse(ctx.clone(), &query).await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
     // `PipelineBuilder` will parallelize the table reading according to value of setting `max_threads`,

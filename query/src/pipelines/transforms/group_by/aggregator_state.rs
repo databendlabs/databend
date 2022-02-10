@@ -19,7 +19,7 @@ use bumpalo::Bump;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodSerializer;
-use common_datavalues::DFPrimitiveType;
+use common_datavalues2::prelude::*;
 use common_functions::aggregates::StateAddr;
 
 use crate::common::HashMap;
@@ -106,7 +106,7 @@ impl<T: ShortFixedKeyable> Drop for ShortFixedKeysAggregatorState<T> {
 
 impl<T> AggregatorState<HashMethodFixedKeys<T>> for ShortFixedKeysAggregatorState<T>
 where
-    T: DFPrimitiveType + ShortFixedKeyable,
+    T: PrimitiveType + ShortFixedKeyable,
     HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
 {
@@ -175,7 +175,7 @@ unsafe impl<T: HashTableKeyable + Sync> Sync for LongerFixedKeysAggregatorState<
 
 impl<T> AggregatorState<HashMethodFixedKeys<T>> for LongerFixedKeysAggregatorState<T>
 where
-    T: DFPrimitiveType,
+    T: PrimitiveType,
     HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
     <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
 {

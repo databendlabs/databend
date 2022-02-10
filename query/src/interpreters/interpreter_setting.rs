@@ -14,9 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::SettingPlan;
 use common_streams::DataBlockStream;
@@ -52,19 +50,15 @@ impl Interpreter for SettingInterpreter {
             match var.variable.to_lowercase().as_str() {
                 // To be compatible with some drivers
                 "sql_mode" | "autocommit" => {}
-                "max_threads" => {
-                    let threads: u64 = var.value.parse()?;
-                    self.ctx.get_settings().set_max_threads(threads)?;
-                }
                 _ => {
                     self.ctx
                         .get_settings()
-                        .update_settings(&var.variable, var.value)?;
+                        .set_settings(var.variable, var.value, false)?;
                 }
             }
         }
 
-        let schema = DataSchemaRefExt::create(vec![DataField::new("set", DataType::String, false)]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new("set", Vu8::to_data_type())]);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
     }
 }

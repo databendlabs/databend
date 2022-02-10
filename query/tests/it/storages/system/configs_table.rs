@@ -16,19 +16,16 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_exception::Result;
-use databend_query::configs::Config;
 use databend_query::storages::system::ConfigsTable;
 use databend_query::storages::Table;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
-use crate::tests::create_query_context_with_config;
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_configs_table() -> Result<()> {
-    let config = Config::default();
-    let ctx = create_query_context_with_config(config)?;
+    let conf = crate::tests::ConfigBuilder::create().config();
+    let ctx = crate::tests::create_query_context_with_config(conf)?;
     ctx.get_settings().set_max_threads(8)?;
 
     let table: Arc<dyn Table> = Arc::new(ConfigsTable::create(1));
@@ -38,7 +35,7 @@ async fn test_configs_table() -> Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
-    assert_eq!(block.num_rows(), 58);
+    assert_eq!(block.num_rows(), 60);
 
     let expected = vec![
         "+--------------------------------------+------------------+---------+-------------+",
@@ -60,9 +57,11 @@ async fn test_configs_table() -> Result<()> {
         "| http_api_address                     | 127.0.0.1:8080   | query   |             |",
         "| http_handler_host                    | 127.0.0.1        | query   |             |",
         "| http_handler_port                    | 8000             | query   |             |",
+        "| http_handler_result_timeout_millis   | 10000            | query   |             |",
         "| http_handler_tls_server_cert         |                  | query   |             |",
         "| http_handler_tls_server_key          |                  | query   |             |",
         "| http_handler_tls_server_root_ca_cert |                  | query   |             |",
+        "| jwt_key_file                         |                  | query   |             |",
         "| log_dir                              | ./_logs          | log     |             |",
         "| log_level                            | INFO             | log     |             |",
         "| max_active_sessions                  | 256              | query   |             |",
@@ -100,7 +99,7 @@ async fn test_configs_table() -> Result<()> {
         "| table_engine_memory_enabled          | true             | query   |             |",
         "| table_engine_parquet_enabled         | false            | query   |             |",
         "| table_memory_cache_mb_size           | 256              | query   |             |",
-        "| tenant_id                            |                  | query   |             |",
+        "| tenant_id                            | test             | query   |             |",
         "| wait_timeout_mills                   | 5000             | query   |             |",
         "+--------------------------------------+------------------+---------+-------------+",
     ];

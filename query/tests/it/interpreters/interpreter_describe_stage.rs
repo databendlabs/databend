@@ -27,8 +27,8 @@ async fn test_desc_stageinterpreter() -> Result<()> {
 
     // create stage
     {
-        static TEST_QUERY: &str = "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP  record_delimiter='|') comments='test'";
-        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let query = "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP  record_delimiter='|') comments='test'";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatStageInterpreter");
         let _ = executor.execute(None).await?;
@@ -36,7 +36,7 @@ async fn test_desc_stageinterpreter() -> Result<()> {
 
     // desc stage
     {
-        let plan = PlanParser::parse("desc stage test_stage", ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), "desc stage test_stage").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;

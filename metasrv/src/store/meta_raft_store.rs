@@ -19,8 +19,6 @@ use std::ops::RangeBounds;
 
 use common_base::tokio::sync::RwLock;
 use common_base::tokio::sync::RwLockWriteGuard;
-use common_exception::ErrorCode;
-use common_exception::ToErrorCode;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::log::RaftLog;
 use common_meta_raft_store::state::RaftState;
@@ -36,8 +34,11 @@ use common_meta_sled_store::openraft::ErrorVerb;
 use common_meta_sled_store::openraft::StateMachineChanges;
 use common_meta_types::AppliedState;
 use common_meta_types::LogEntry;
+use common_meta_types::MetaError;
+use common_meta_types::MetaResult;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
+use common_meta_types::ToMetaError;
 use common_tracing::tracing;
 use openraft::async_trait::async_trait;
 use openraft::raft::Entry;
@@ -113,7 +114,7 @@ impl MetaRaftStore {
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
-    ) -> common_exception::Result<MetaRaftStore> {
+    ) -> MetaResult<MetaRaftStore> {
         tracing::info!("open: {:?}, create: {:?}", open, create);
 
         let db = get_sled_db();
@@ -155,12 +156,12 @@ impl MetaRaftStore {
 
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
     #[tracing::instrument(level = "debug", skip(self, data))]
-    pub async fn install_snapshot(&self, data: &[u8]) -> common_exception::Result<()> {
+    pub async fn install_snapshot(&self, data: &[u8]) -> MetaResult<()> {
         let mut sm = self.state_machine.write().await;
 
         let (sm_id, prev_sm_id) = self.raft_state.read_state_machine_id()?;
         if sm_id != prev_sm_id {
-            return Err(ErrorCode::ConcurrentSnapshotInstall(format!(
+            return Err(MetaError::ConcurrentSnapshotInstall(format!(
                 "another snapshot install is not finished yet: {} {}",
                 sm_id, prev_sm_id
             )));
@@ -189,7 +190,9 @@ impl MetaRaftStore {
             let k = &x[0];
             let v = &x[1];
             tree.insert(k, v.clone())
-                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "fail to insert snapshot")?;
+                .map_error_to_meta_error(MetaError::MetaStoreDamaged, || {
+                    "fail to insert snapshot"
+                })?;
         }
 
         tracing::info!(
@@ -200,7 +203,7 @@ impl MetaRaftStore {
 
         tree.flush_async()
             .await
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "fail to flush snapshot")?;
+            .map_error_to_meta_error(MetaError::MetaStoreDamaged, || "fail to flush snapshot")?;
 
         tracing::info!("flushed tree, no_kvs: {}", nkvs);
 
@@ -465,13 +468,13 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
 }
 
 impl MetaRaftStore {
-    pub async fn get_node(&self, node_id: &NodeId) -> common_exception::Result<Option<Node>> {
+    pub async fn get_node(&self, node_id: &NodeId) -> MetaResult<Option<Node>> {
         let sm = self.state_machine.read().await;
 
         sm.get_node(node_id)
     }
 
-    pub async fn get_voters(&self) -> common_exception::Result<Vec<Node>> {
+    pub async fn get_voters(&self) -> MetaResult<Vec<Node>> {
         let sm = self.state_machine.read().await;
         let ms = self.get_membership().await.expect("get membership config");
 
@@ -486,7 +489,7 @@ impl MetaRaftStore {
         Ok(voters)
     }
 
-    pub async fn get_non_voters(&self) -> common_exception::Result<Vec<Node>> {
+    pub async fn get_non_voters(&self) -> MetaResult<Vec<Node>> {
         let sm = self.state_machine.read().await;
         let ms = self.get_membership().await.expect("get membership config");
 
@@ -501,12 +504,12 @@ impl MetaRaftStore {
         Ok(non_voters)
     }
 
-    pub async fn get_node_addr(&self, node_id: &NodeId) -> common_exception::Result<String> {
+    pub async fn get_node_addr(&self, node_id: &NodeId) -> MetaResult<String> {
         let addr = self
             .get_node(node_id)
             .await?
             .map(|n| n.address)
-            .ok_or_else(|| ErrorCode::UnknownNode(format!("node id: {}", node_id)))?;
+            .ok_or_else(|| MetaError::UnknownNode(format!("node id: {}", node_id)))?;
 
         Ok(addr)
     }

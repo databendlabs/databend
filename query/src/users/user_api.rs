@@ -15,14 +15,16 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_management::RoleApi;
 use common_management::RoleMgr;
-use common_management::RoleMgrApi;
+use common_management::SettingApi;
+use common_management::SettingMgr;
+use common_management::StageApi;
 use common_management::StageMgr;
-use common_management::StageMgrApi;
+use common_management::UdfApi;
 use common_management::UdfMgr;
-use common_management::UdfMgrApi;
+use common_management::UserApi;
 use common_management::UserMgr;
-use common_management::UserMgrApi;
 use common_meta_api::KVApi;
 
 use crate::common::MetaClientProvider;
@@ -33,35 +35,31 @@ pub struct UserApiProvider {
 }
 
 impl UserApiProvider {
-    async fn create_kv_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
-        match MetaClientProvider::new(cfg.meta.to_grpc_client_config())
-            .try_get_kv_client()
-            .await
-        {
-            Ok(client) => Ok(client),
-            Err(cause) => Err(cause.add_message_back("(while create user api).")),
-        }
-    }
-
     pub async fn create_global(conf: Config) -> Result<Arc<UserApiProvider>> {
-        let client = UserApiProvider::create_kv_client(&conf).await?;
+        let client = MetaClientProvider::new(conf.meta.to_grpc_client_config())
+            .try_get_kv_client()
+            .await?;
 
         Ok(Arc::new(UserApiProvider { client }))
     }
 
-    pub fn get_user_api_client(&self, tenant: &str) -> Arc<dyn UserMgrApi> {
-        Arc::new(UserMgr::new(self.client.clone(), tenant))
+    pub fn get_user_api_client(&self, tenant: &str) -> Result<Arc<dyn UserApi>> {
+        Ok(Arc::new(UserMgr::create(self.client.clone(), tenant)?))
     }
 
-    pub fn get_role_api_client(&self, tenant: &str) -> Arc<dyn RoleMgrApi> {
-        Arc::new(RoleMgr::new(self.client.clone(), tenant))
+    pub fn get_role_api_client(&self, tenant: &str) -> Result<Arc<dyn RoleApi>> {
+        Ok(Arc::new(RoleMgr::create(self.client.clone(), tenant)?))
     }
 
-    pub fn get_stage_api_client(&self, tenant: &str) -> Arc<dyn StageMgrApi> {
-        Arc::new(StageMgr::new(self.client.clone(), tenant))
+    pub fn get_stage_api_client(&self, tenant: &str) -> Result<Arc<dyn StageApi>> {
+        Ok(Arc::new(StageMgr::create(self.client.clone(), tenant)?))
     }
 
-    pub fn get_udf_api_client(&self, tenant: &str) -> Arc<dyn UdfMgrApi> {
-        Arc::new(UdfMgr::new(self.client.clone(), tenant))
+    pub fn get_udf_api_client(&self, tenant: &str) -> Result<Arc<dyn UdfApi>> {
+        Ok(Arc::new(UdfMgr::create(self.client.clone(), tenant)?))
+    }
+
+    pub fn get_setting_api_client(&self, tenant: &str) -> Result<Arc<dyn SettingApi>> {
+        Ok(Arc::new(SettingMgr::create(self.client.clone(), tenant)?))
     }
 }

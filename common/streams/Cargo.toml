@@ -15,7 +15,7 @@ test = false
 common-arrow = { path = "../arrow" }
 common-base = { path = "../base" }
 common-datablocks = { path = "../datablocks" }
-common-datavalues = { path = "../datavalues" }
+common-datavalues2 = { path = "../datavalues2" }
 common-exception = { path = "../exception" }
 common-functions = { path = "../functions" }
 common-io = { path = "../io" }
@@ -28,10 +28,10 @@ common-tracing = {path = "../tracing"}
 async-stream = "0.3.2"
 async-trait = "0.1.52"
 csv-async = "1.2.4"
-futures = "0.3.19"
+futures = "0.3.21"
 pin-project-lite = "0.2.8"
-tempfile = "3.2.0"
+tempfile = "3.3.0"
 tokio-stream = { version = "0.1.8", features = ["net"] }
 
 [dev-dependencies]
-common-dal =  {path = "../dal"}
+common-dal2 = { path = "../dal2" }

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 use databend_query::storages::index::BloomFilter;
@@ -22,11 +22,12 @@ use databend_query::storages::index::BloomFilterIndexer;
 use pretty_assertions::assert_eq;
 
 fn create_seeds() -> [u64; 4] {
-    let seed0: u64 = rand::random();
-    let seed1: u64 = rand::random();
-    let seed2: u64 = rand::random();
-    let seed3: u64 = rand::random();
-    [seed0, seed1, seed2, seed3]
+    [
+        0x16f11fe89b0d677c,
+        0xb480a793d8e6c86c,
+        0x6fe2e5aaf078ebc9,
+        0x14f994a4c5259381,
+    ]
 }
 
 #[test]
@@ -44,8 +45,9 @@ fn test_num_bits_hashes() -> Result<()> {
 
 #[test]
 fn test_bloom_add_find_string() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("name", DataType::String, true)]);
-    let block = DataBlock::create_by_array(schema, vec![Series::new(vec![
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new_nullable("name", Vu8::to_data_type())]);
+    let block = DataBlock::create(schema, vec![Series::from_data(vec![
         "Alice", "Bob", "Batman", "Superman",
     ])]);
 
@@ -75,7 +77,7 @@ fn test_bloom_interval() -> Result<()> {
         true,
     )]);
 
-    let block = DataBlock::create_by_array(schema, vec![Series::new([
+    let block = DataBlock::create(schema, vec![Series::from_data([
         None,
         None,
         None,
@@ -90,16 +92,17 @@ fn test_bloom_interval() -> Result<()> {
 
     // this case false positive not exist
     bloom.add(col)?;
-    assert!(bloom.find(DataValue::Int64(Some(1234_i64)))?);
-    assert!(bloom.find(DataValue::Int64(Some(-4321_i64)))?);
+    assert!(bloom.find(DataValue::Int64(1234_i64))?);
+    assert!(bloom.find(DataValue::Int64(-4321_i64))?);
     Ok(())
 }
 
 #[test]
 fn test_bloom_f64_serialization() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("Float64", DataType::Float64, true)]);
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("Float64", f64::to_data_type(), true)]);
 
-    let block = DataBlock::create_by_array(schema, vec![Series::new([
+    let block = DataBlock::create(schema, vec![Series::from_data([
         None,
         None,
         None,
@@ -126,67 +129,131 @@ fn test_bloom_f64_serialization() -> Result<()> {
     Ok(())
 }
 
+// A helper function to create a bloom filter, with the same bits and hashes as other.
+fn create_bloom(data_type: DataType, series: Series, other: &BloomFilter) -> Result<BloomFilter> {
+    let mut bloom = other.clone_empty();
+    let schema = DataSchemaRefExt::create(vec![DataField::new("num", data_type, true)]);
+    let block = DataBlock::create(schema, vec![series]);
+    let col = block.column(0);
+    bloom.add(col)?;
+    Ok(bloom)
+}
+
+#[test]
+fn test_bloom_uint8_existence() -> Result<()> {
+    // Build the table and bloom filters, get the bloom filter for column 'ColumnUInt8'
+    let table = create_blocks();
+    let indexer = BloomFilterIndexer::from_data_and_seeds(table.as_ref(), create_seeds())?;
+    let bloom = indexer.try_get_bloom("ColumnUInt8")?;
+
+    // Existence case: numbers 1, 3, 5, 7, 9, 11, 13, 15 should exist in the bloom filter.
+    for num in [1_u8, 3, 5, 7, 9, 11, 13, 15] {
+        let single_value_bloom =
+            create_bloom(u8::to_data_type(), Series::from_data(vec![num]), &bloom)?;
+
+        assert!(bloom.contains(&single_value_bloom));
+    }
+    Ok(())
+}
+
+#[test]
+fn test_bloom_f64_existence() -> Result<()> {
+    // Build the table and bloom filters, get the bloom filter for column 'ColumnUInt8'
+    let table = create_blocks();
+    let indexer = BloomFilterIndexer::from_data_and_seeds(table.as_ref(), create_seeds())?;
+    let bloom = indexer.try_get_bloom("ColumnFloat64")?;
+
+    // Existence case: numbers 1, 3, 5, 7, 9, 11, 13, 15 should exist in the bloom filter.
+    for num in [1.0_f64, 3.0, 5.0, 7.0, 9.0, 11.0, 13.0, 15.0] {
+        let single_value_bloom =
+            create_bloom(f64::to_data_type(), Series::from_data(vec![num]), &bloom)?;
+
+        assert!(bloom.contains(&single_value_bloom));
+    }
+    Ok(())
+}
+
+#[test]
+fn test_bloom_hash_collision() -> Result<()> {
+    // Build the table and bloom filters, get the bloom filter for column 'ColumnUInt8'
+    let table = create_blocks();
+    let indexer = BloomFilterIndexer::from_data_and_seeds(table.as_ref(), create_seeds())?;
+    let bloom = indexer.try_get_bloom("ColumnUInt8")?;
+
+    // Values [2, 4, 6, 8] doesn't exist and doesn't cause collision, so bloom.contains should return false
+    for num in [2_u8, 4, 6, 8] {
+        let single_value_bloom =
+            create_bloom(u8::to_data_type(), Series::from_data(vec![num]), &bloom)?;
+        assert!(!bloom.contains(&single_value_bloom), "{}", num);
+    }
+
+    // When hash collision happens, although number 32 doesn't exist in data_blocks, the hash bits say yes.
+    let single_value_bloom =
+        create_bloom(u8::to_data_type(), Series::from_data(vec![32_u8]), &bloom)?;
+    assert!(bloom.contains(&single_value_bloom));
+    Ok(())
+}
+
 // create test data, all numerics are odd number, even numbers are reserved for testing.
 fn create_blocks() -> Vec<DataBlock> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("ColumnUInt8", DataType::UInt8, true),
-        DataField::new("ColumnUInt16", DataType::UInt16, true),
-        DataField::new("ColumnUInt32", DataType::UInt32, true),
-        DataField::new("ColumnUInt64", DataType::UInt64, true),
-        DataField::new("ColumnInt8", DataType::Int8, true),
-        DataField::new("ColumnInt16", DataType::Int16, true),
-        DataField::new("ColumnInt32", DataType::Int32, true),
-        DataField::new("ColumnInt64", DataType::Int64, true),
-        DataField::new("ColumnFloat32", DataType::Float32, true),
-        DataField::new("ColumnFloat64", DataType::Float64, true),
-        DataField::new("ColumnDate16", DataType::Date16, true),
-        DataField::new("ColumnDate32", DataType::Date32, true),
-        DataField::new("ColumnDateTime32", DataType::DateTime32(None), true),
-        DataField::new("ColumnDateTime64", DataType::DateTime64(3, None), true),
-        DataField::new(
+        DataField::new_nullable("ColumnUInt8", u8::to_data_type()),
+        DataField::new_nullable("ColumnUInt16", u16::to_data_type()),
+        DataField::new_nullable("ColumnUInt32", u32::to_data_type()),
+        DataField::new_nullable("ColumnUInt64", u64::to_data_type()),
+        DataField::new_nullable("ColumnInt8", i8::to_data_type()),
+        DataField::new_nullable("ColumnInt16", i16::to_data_type()),
+        DataField::new_nullable("ColumnInt32", i32::to_data_type()),
+        DataField::new_nullable("ColumnInt64", i64::to_data_type()),
+        DataField::new_nullable("ColumnFloat32", f32::to_data_type()),
+        DataField::new_nullable("ColumnFloat64", f64::to_data_type()),
+        DataField::new_nullable("ColumnDate16", Date16Type::arc()),
+        DataField::new_nullable("ColumnDate32", Date32Type::arc()),
+        DataField::new_nullable("ColumnDateTime32", DateTime32Type::arc(None)),
+        DataField::new_nullable("ColumnDateTime64", DateTime64Type::arc(None)),
+        DataField::new_nullable(
             "ColumnIntervalDayTime",
-            DataType::Interval(IntervalUnit::DayTime),
-            true,
+            IntervalType::arc(IntervalUnit::DayTime),
         ),
-        DataField::new("ColumnString", DataType::String, true),
+        DataField::new_nullable("ColumnString", Vu8::to_data_type()),
     ]);
 
-    let block1 = DataBlock::create_by_array(schema.clone(), vec![
-        Series::new(vec![1_u8, 3, 5, 7]),
-        Series::new(vec![1_u16, 3, 5, 7]),
-        Series::new(vec![1_u32, 3, 5, 7]),
-        Series::new(vec![1_u64, 3, 5, 7]),
-        Series::new(vec![-1_i8, -3, -5, -7]),
-        Series::new(vec![-1_i16, -3, -5, -7]),
-        Series::new(vec![-1_i32, -3, -5, -7]),
-        Series::new(vec![-1_i64, -3, -5, -7]),
-        Series::new(vec![1.0_f32, 3.0, 5.0, 7.0]),
-        Series::new(vec![1.0_f64, 3.0, 5.0, 7.0]),
-        Series::new(vec![1_u16, 3, 5, 7]),
-        Series::new(vec![1_u32, 3, 5, 7]),
-        Series::new(vec![1_u32, 3, 5, 7]),
-        Series::new(vec![1_u64, 3, 5, 7]),
-        Series::new(vec![1_i64, 3, 5, 7]),
-        Series::new(vec!["Alice", "Bob", "Batman", "Superman"]),
+    let block1 = DataBlock::create(schema.clone(), vec![
+        Series::from_data(vec![1_u8, 3, 5, 7]),
+        Series::from_data(vec![1_u16, 3, 5, 7]),
+        Series::from_data(vec![1_u32, 3, 5, 7]),
+        Series::from_data(vec![1_u64, 3, 5, 7]),
+        Series::from_data(vec![-1_i8, -3, -5, -7]),
+        Series::from_data(vec![-1_i16, -3, -5, -7]),
+        Series::from_data(vec![-1_i32, -3, -5, -7]),
+        Series::from_data(vec![-1_i64, -3, -5, -7]),
+        Series::from_data(vec![1.0_f32, 3.0, 5.0, 7.0]),
+        Series::from_data(vec![1.0_f64, 3.0, 5.0, 7.0]),
+        Series::from_data(vec![1_u16, 3, 5, 7]),
+        Series::from_data(vec![1_u32, 3, 5, 7]),
+        Series::from_data(vec![1_u32, 3, 5, 7]),
+        Series::from_data(vec![1_u64, 3, 5, 7]),
+        Series::from_data(vec![1_i64, 3, 5, 7]),
+        Series::from_data(vec!["Alice", "Bob", "Batman", "Superman"]),
     ]);
 
-    let block2 = DataBlock::create_by_array(schema, vec![
-        Series::new(vec![9_u8, 11, 13, 15]),
-        Series::new(vec![9_u16, 11, 13, 15]),
-        Series::new(vec![9_u32, 11, 13, 15]),
-        Series::new(vec![9_u64, 11, 13, 15]),
-        Series::new(vec![-9_i8, -11, -13, -15]),
-        Series::new(vec![-9_i16, -11, -13, -15]),
-        Series::new(vec![-9_i32, -11, -13, -15]),
-        Series::new(vec![-9_i64, -11, -13, -15]),
-        Series::new(vec![9.0_f32, 11.0, 13.0, 15.0]),
-        Series::new(vec![9.0_f64, 11.0, 13.0, 17.0]),
-        Series::new(vec![9_u16, 11, 13, 15]),
-        Series::new(vec![9_u32, 11, 13, 15]),
-        Series::new(vec![9_u32, 11, 13, 15]),
-        Series::new(vec![9_u64, 11, 13, 15]),
-        Series::new(vec![9_i64, 11, 13, 15]),
-        Series::new(vec!["Iron man", "Thor", "Professor X", "Wolverine"]),
+    let block2 = DataBlock::create(schema, vec![
+        Series::from_data(vec![9_u8, 11, 13, 15]),
+        Series::from_data(vec![9_u16, 11, 13, 15]),
+        Series::from_data(vec![9_u32, 11, 13, 15]),
+        Series::from_data(vec![9_u64, 11, 13, 15]),
+        Series::from_data(vec![-9_i8, -11, -13, -15]),
+        Series::from_data(vec![-9_i16, -11, -13, -15]),
+        Series::from_data(vec![-9_i32, -11, -13, -15]),
+        Series::from_data(vec![-9_i64, -11, -13, -15]),
+        Series::from_data(vec![9.0_f32, 11.0, 13.0, 15.0]),
+        Series::from_data(vec![9.0_f64, 11.0, 13.0, 15.0]),
+        Series::from_data(vec![9_u16, 11, 13, 15]),
+        Series::from_data(vec![9_u32, 11, 13, 15]),
+        Series::from_data(vec![9_u32, 11, 13, 15]),
+        Series::from_data(vec![9_u64, 11, 13, 15]),
+        Series::from_data(vec![9_i64, 11, 13, 15]),
+        Series::from_data(vec!["Iron man", "Thor", "Professor X", "Wolverine"]),
     ]);
 
     vec![block1, block2]
@@ -202,8 +269,8 @@ fn test_bloom_indexer_single_column_prune() -> Result<()> {
 
     let tests: Vec<Test> = vec![
         Test {
-            name: "ColumnUInt8 = 32",
-            expr: col("ColumnUInt8").eq(lit(32u8)),
+            name: "ColumnUInt8 = 34",
+            expr: col("ColumnUInt8").eq(lit(34u8)),
             expected_eval_result: BloomFilterExprEvalResult::False,
         },
         Test {
@@ -217,7 +284,7 @@ fn test_bloom_indexer_single_column_prune() -> Result<()> {
             expected_eval_result: BloomFilterExprEvalResult::False,
         },
         Test {
-            name: "ColumnUInt32 = 21323722",
+            name: "ColumnUInt64 = 21323722",
             expr: col("ColumnUInt64").eq(lit(21323722_u64)),
             expected_eval_result: BloomFilterExprEvalResult::False,
         },
@@ -229,7 +296,7 @@ fn test_bloom_indexer_single_column_prune() -> Result<()> {
     ];
 
     let data_blocks = create_blocks();
-    let indexer = BloomFilterIndexer::from_data(data_blocks.as_ref())?;
+    let indexer = BloomFilterIndexer::from_data_and_seeds(data_blocks.as_ref(), create_seeds())?;
 
     for test in tests {
         let res = indexer.eval(&test.expr)?;
@@ -274,7 +341,7 @@ fn test_bloom_indexer_logical_and_prune() -> Result<()> {
     ];
 
     let data_blocks = create_blocks();
-    let indexer = BloomFilterIndexer::from_data(data_blocks.as_ref())?;
+    let indexer = BloomFilterIndexer::from_data_and_seeds(data_blocks.as_ref(), create_seeds())?;
 
     for test in tests {
         let res = indexer.eval(&test.expr)?;
@@ -327,7 +394,7 @@ fn test_bloom_indexer_logical_or_prune() -> Result<()> {
     ];
 
     let data_blocks = create_blocks();
-    let indexer = BloomFilterIndexer::from_data(data_blocks.as_ref())?;
+    let indexer = BloomFilterIndexer::from_data_and_seeds(data_blocks.as_ref(), create_seeds())?;
 
     for test in tests {
         let res = indexer.eval(&test.expr)?;

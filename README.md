@@ -66,7 +66,7 @@ In current implementation, the meta service has components:
 The compute layer is the clusters that running computing workloads, each cluster have many nodes, each node has components:
 * **Planner** - Builds execution plan from the user's SQL statement.
 * **Optimizer** - Optimizer rules like predicate push down or pruning of unused columns.
-* **Processors** - Vector-based query execution pipeline, which is build by planner instructions.
+* **Processors** - Vectorized Execution Engine, which is build by planner instructions.
 * **Cache** - Caching Data and Indexes based on the version.
 
 Many clusters can attach the same database, so they can serve the query in parallel by different users.

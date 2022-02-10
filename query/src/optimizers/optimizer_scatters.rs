@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
+use common_datavalues2::DataSchemaRef;
+use common_datavalues2::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
@@ -177,7 +177,7 @@ impl ScattersOptimizerImpl {
     fn convergent_shuffle_stage_builder(input: Arc<PlanNode>) -> PlanBuilder {
         PlanBuilder::from(&PlanNode::Stage(StagePlan {
             kind: StageKind::Convergent,
-            scatters_expr: Expression::create_literal(DataValue::UInt64(Some(0))),
+            scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
             input,
         }))
     }
@@ -185,7 +185,7 @@ impl ScattersOptimizerImpl {
     fn convergent_shuffle_stage(input: PlanNode) -> Result<PlanNode> {
         Ok(PlanNode::Stage(StagePlan {
             kind: StageKind::Convergent,
-            scatters_expr: Expression::create_literal(DataValue::UInt64(Some(0))),
+            scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
             input: Arc::new(input),
         }))
     }
@@ -315,7 +315,7 @@ impl Optimizer for ScattersOptimizer {
             RunningMode::Standalone => Ok(rewrite_plan),
             RunningMode::Cluster => Ok(PlanNode::Stage(StagePlan {
                 kind: StageKind::Convergent,
-                scatters_expr: Expression::create_literal(DataValue::UInt64(Some(0))),
+                scatters_expr: Expression::create_literal(DataValue::UInt64(0)),
                 input: Arc::new(rewrite_plan),
             })),
         }

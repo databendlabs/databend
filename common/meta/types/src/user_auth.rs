@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 // Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,6 +11,8 @@ use std::str::FromStr;
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::str::FromStr;
+
 use common_exception::ErrorCode;
 use sha2::Digest;
 use sha2::Sha256;
@@ -21,6 +21,7 @@ const NO_PASSWORD_STR: &str = "no_password";
 const PLAINTEXT_PASSWORD_STR: &str = "plaintext_password";
 const SHA256_PASSWORD_STR: &str = "sha256_password";
 const DOUBLE_SHA1_PASSWORD_STR: &str = "double_sha1_password";
+const JWT_AUTH_STR: &str = "jwt";
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum AuthType {
@@ -28,6 +29,7 @@ pub enum AuthType {
     PlaintextPassword,
     Sha256Password,
     DoubleShaPassword,
+    JWT,
 }
 
 impl std::str::FromStr for AuthType {
@@ -38,6 +40,7 @@ impl std::str::FromStr for AuthType {
             SHA256_PASSWORD_STR => Ok(AuthType::Sha256Password),
             DOUBLE_SHA1_PASSWORD_STR => Ok(AuthType::DoubleShaPassword),
             NO_PASSWORD_STR => Ok(AuthType::NoPassword),
+            JWT_AUTH_STR => Ok(AuthType::JWT),
             _ => Err(AuthType::bad_auth_types(s)),
         }
     }
@@ -50,6 +53,7 @@ impl AuthType {
             AuthType::PlaintextPassword => PLAINTEXT_PASSWORD_STR,
             AuthType::Sha256Password => SHA256_PASSWORD_STR,
             AuthType::DoubleShaPassword => DOUBLE_SHA1_PASSWORD_STR,
+            AuthType::JWT => JWT_AUTH_STR,
         }
     }
 
@@ -59,6 +63,7 @@ impl AuthType {
             PLAINTEXT_PASSWORD_STR,
             SHA256_PASSWORD_STR,
             DOUBLE_SHA1_PASSWORD_STR,
+            JWT_AUTH_STR,
         ];
         let all = all
             .iter()
@@ -85,12 +90,13 @@ pub enum AuthInfo {
         hash_value: Vec<u8>,
         hash_method: PasswordHashMethod,
     },
+    JWT,
 }
 
 fn calc_sha1(v: &[u8]) -> [u8; 20] {
     let mut m = ::sha1::Sha1::new();
     m.update(v);
-    m.digest().bytes()
+    m.finalize().into()
 }
 
 fn double_sha1(v: &[u8]) -> [u8; 20] {
@@ -101,6 +107,7 @@ impl AuthInfo {
     pub fn new(auth_type: AuthType, auth_string: &Option<String>) -> Result<AuthInfo, String> {
         match auth_type {
             AuthType::NoPassword => Ok(AuthInfo::None),
+            AuthType::JWT => Ok(AuthInfo::JWT),
             AuthType::PlaintextPassword
             | AuthType::Sha256Password
             | AuthType::DoubleShaPassword => match auth_string {
@@ -146,6 +153,7 @@ impl AuthInfo {
     pub fn get_type(&self) -> AuthType {
         match self {
             AuthInfo::None => AuthType::NoPassword,
+            AuthInfo::JWT => AuthType::JWT,
             AuthInfo::Password {
                 hash_value: _,
                 hash_method: t,
@@ -163,9 +171,10 @@ impl AuthInfo {
                 hash_value: p,
                 hash_method: t,
             } => t.to_string(p),
-            AuthInfo::None => "".to_string(),
+            AuthInfo::None | AuthInfo::JWT => "".to_string(),
         }
     }
+
     pub fn get_password(&self) -> Option<Vec<u8>> {
         match self {
             AuthInfo::Password {
@@ -196,7 +205,7 @@ impl AuthInfo {
         m.update(salt);
         m.update(user_password_hash);
 
-        let result = m.digest().bytes();
+        let result: [u8; 20] = m.finalize().into();
         if input.len() != result.len() {
             return Err(ErrorCode::SHA1CheckFailed("SHA1 check failed"));
         }
@@ -223,20 +232,10 @@ impl AuthInfo {
                     "login with sha256_password user for mysql protocol not supported yet.",
                 )),
             },
-        }
-    }
-
-    // for clickhouse and http basic
-    pub fn auth_password_plaintext(
-        &self,
-        password_input_plaintext: &[u8],
-    ) -> Result<bool, ErrorCode> {
-        match self {
-            AuthInfo::None => Ok(true),
-            AuthInfo::Password {
-                hash_value: p,
-                hash_method: t,
-            } => Ok(*p == t.hash(password_input_plaintext)),
+            _ => Err(ErrorCode::AuthenticateFailure(format!(
+                "user require auth type {}",
+                self.get_type().to_str()
+            ))),
         }
     }
 }
@@ -257,7 +256,7 @@ pub enum PasswordHashMethod {
 }
 
 impl PasswordHashMethod {
-    fn hash(self, user_input: &[u8]) -> Vec<u8> {
+    pub fn hash(self, user_input: &[u8]) -> Vec<u8> {
         match self {
             PasswordHashMethod::PlainText => Vec::from(user_input),
             PasswordHashMethod::DoubleSha1 => double_sha1(user_input).to_vec(),

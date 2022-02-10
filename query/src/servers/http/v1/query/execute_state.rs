@@ -22,34 +22,23 @@ use common_base::tokio::sync::RwLock;
 use common_base::ProgressValues;
 use common_base::TrySpawn;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::UserInfo;
 use common_tracing::tracing;
 use futures::StreamExt;
 use serde::Deserialize;
 use serde::Serialize;
 use ExecuteState::*;
 
+use super::http_query::HttpQueryRequest;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
-
-#[derive(Deserialize, Debug)]
-pub struct HttpQueryRequest {
-    #[serde(default)]
-    pub session: HttpSessionConf,
-    pub sql: String,
-}
-
-#[derive(Deserialize, Debug, Default)]
-pub struct HttpSessionConf {
-    pub database: Option<String>,
-    pub user: Option<String>,
-}
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
 pub enum ExecuteStateName {
@@ -75,8 +64,6 @@ impl ExecuteState {
     }
 }
 
-pub(crate) type ExecutorRef = Arc<RwLock<Executor>>;
-
 pub(crate) struct ExecuteStopped {
     progress: Option<ProgressValues>,
     reason: Result<()>,
@@ -101,7 +88,7 @@ impl Executor {
             Stopped(f) => f.stop_time - self.start_time,
         }
     }
-    pub(crate) async fn stop(this: &ExecutorRef, reason: Result<()>, kill: bool) {
+    pub(crate) async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>, kill: bool) {
         let mut guard = this.write().await;
         if let Running(r) = &guard.state {
             // release session
@@ -149,31 +136,22 @@ impl ExecuteState {
     pub(crate) async fn try_create(
         request: &HttpQueryRequest,
         session_manager: &Arc<SessionManager>,
+        user_info: &UserInfo,
         block_tx: mpsc::Sender<DataBlock>,
-    ) -> Result<(ExecutorRef, DataSchemaRef)> {
+    ) -> Result<(Arc<RwLock<Executor>>, DataSchemaRef)> {
         let sql = &request.sql;
         let session = session_manager.create_session("http-statement")?;
-        let context = session.create_context().await?;
+        let ctx = session.create_query_context().await?;
         if let Some(db) = &request.session.database {
-            context.set_current_database(db.clone()).await?;
+            ctx.set_current_database(db.clone()).await?;
         };
-        context.attach_query_str(sql);
-        let default_user = "root".to_string();
-        let user_name = request.session.user.as_ref().unwrap_or(&default_user);
-        let user_manager = session.get_user_manager();
+        ctx.attach_query_str(sql);
+        session.set_current_user(user_info.clone());
 
-        // take root@127.0.0.1 with all privileges yet
-        // TODO: verify the user identity by jwt
-        let ctx = session.create_context().await?;
-        let user_info = user_manager
-            .get_user(&ctx.get_tenant(), user_name, "127.0.0.1")
-            .await?;
-        session.set_current_user(user_info);
-
-        let plan = PlanParser::parse(sql, context.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), sql).await?;
         let schema = plan.schema();
 
-        let interpreter = InterpreterFactory::get(context.clone(), plan.clone())?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         // Write Start to query log table.
         let _ = interpreter
             .start()
@@ -181,16 +159,16 @@ impl ExecuteState {
             .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
 
         let data_stream = interpreter.execute(None).await?;
-        let mut data_stream = context.try_create_abortable(data_stream)?;
+        let mut data_stream = ctx.try_create_abortable(data_stream)?;
 
         let (abort_tx, mut abort_rx) = mpsc::channel(2);
-        context.attach_http_query(HttpQueryHandle {
+        ctx.attach_http_query(HttpQueryHandle {
             abort_sender: abort_tx,
         });
 
         let running_state = ExecuteRunning {
             session,
-            context: context.clone(),
+            context: ctx.clone(),
             interpreter: interpreter.clone(),
         };
         let executor = Arc::new(RwLock::new(Executor {
@@ -199,7 +177,7 @@ impl ExecuteState {
         }));
 
         let executor_clone = executor.clone();
-        context
+        ctx
             .try_spawn(async move {
                 loop {
                     if let Some(block_r) = data_stream.next().await {

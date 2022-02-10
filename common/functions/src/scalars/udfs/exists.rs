@@ -14,66 +14,75 @@
 
 use std::fmt;
 
-use common_datavalues::columns::DataColumn;
-use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataType;
-use common_datavalues::DataTypeAndNullable;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 #[derive(Clone)]
 pub struct ExistsFunction;
 
 impl ExistsFunction {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(ExistsFunction {}))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().bool_function().num_arguments(1))
     }
 }
 
-impl Function for ExistsFunction {
+impl Function2 for ExistsFunction {
     fn name(&self) -> &str {
         "ExistsFunction"
     }
 
-    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::Boolean;
-        Ok(DataTypeAndNullable::create(&dt, false))
+    fn return_type(
+        &self,
+        _args: &[&common_datavalues2::DataTypePtr],
+    ) -> Result<common_datavalues2::DataTypePtr> {
+        Ok(bool::to_data_type())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        match columns[0].column() {
-            DataColumn::Array(_) => Err(ErrorCode::LogicalError(
-                "Logical error: subquery result set must be const.",
-            )),
-            DataColumn::Constant(values, size) => match values {
-                DataValue::List(Some(values), _) => Ok(DataColumn::Constant(
-                    DataValue::Boolean(Some(!values.is_empty())),
-                    *size,
-                )),
-                DataValue::Struct(fields) if !fields.is_empty() => match &fields[0] {
-                    DataValue::List(Some(values), _) => Ok(DataColumn::Constant(
-                        DataValue::Boolean(Some(!values.is_empty())),
-                        *size,
-                    )),
-                    _ => Err(ErrorCode::LogicalError(
-                        "Logical error: subquery result set must be Struct(List(Some)).",
-                    )),
-                },
+    fn eval(
+        &self,
+        columns: &common_datavalues2::ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<common_datavalues2::ColumnRef> {
+        if columns[0].column().is_const() || columns[0].column().len() == 1 {
+            let value = columns[0].column().get(0);
+            match value {
+                DataValue::Array(v) => {
+                    let c = Series::from_data(vec![!v.is_empty()]);
+                    Ok(ConstColumn::new(c, input_rows).arc())
+                }
+                DataValue::Struct(v) => {
+                    if let Some(DataValue::Array(values)) = v.get(0) {
+                        let c = Series::from_data(vec![!values.is_empty()]);
+                        Ok(ConstColumn::new(c, input_rows).arc())
+                    } else {
+                        Err(ErrorCode::LogicalError(
+                            "Logical error: subquery result set must be Struct(List(Some)).",
+                        ))
+                    }
+                }
                 _ => Err(ErrorCode::LogicalError(
                     "Logical error: subquery result set must be List(Some) or Struct(List(Some)).",
                 )),
-            },
+            }
+        } else {
+            Err(ErrorCode::LogicalError(
+                "Logical error: subquery result set must be const.",
+            ))
         }
+    }
+
+    fn passthrough_constant(&self) -> bool {
+        false
     }
 }
 

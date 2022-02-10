@@ -17,13 +17,7 @@ use std::sync::Arc;
 
 use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::TableMeta;
@@ -33,7 +27,6 @@ use common_planners::Expression;
 use common_planners::Extras;
 use common_streams::SendableDataBlockStream;
 use databend_query::catalogs::Catalog;
-use databend_query::configs::Config;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::PlanParser;
@@ -59,13 +52,14 @@ pub struct TestFixture {
 impl TestFixture {
     pub async fn new() -> TestFixture {
         let tmp_dir = TempDir::new().unwrap();
-        let mut config = Config::default();
+        let mut conf = crate::tests::ConfigBuilder::create().config();
+
         // make sure we are suing `Disk` storage
-        config.storage.storage_type = "Disk".to_string();
+        conf.storage.storage_type = "Disk".to_string();
         // use `TempDir` as root path (auto clean)
-        config.storage.disk.data_path = tmp_dir.path().to_str().unwrap().to_string();
-        config.storage.disk.temp_data_path = tmp_dir.path().to_str().unwrap().to_string();
-        let ctx = crate::tests::create_query_context_with_config(config).unwrap();
+        conf.storage.disk.data_path = tmp_dir.path().to_str().unwrap().to_string();
+        conf.storage.disk.temp_data_path = tmp_dir.path().to_str().unwrap().to_string();
+        let ctx = crate::tests::create_query_context_with_config(conf).unwrap();
 
         let tenant = ctx.get_tenant();
         let random_prefix: String = Uuid::new_v4().simple().to_string();
@@ -109,7 +103,7 @@ impl TestFixture {
     }
 
     pub fn default_schema() -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)])
+        DataSchemaRefExt::create(vec![DataField::new("id", i32::to_data_type())])
     }
 
     pub fn default_crate_table_plan(&self) -> CreateTablePlan {
@@ -148,8 +142,8 @@ impl TestFixture {
             .into_iter()
             .map(|idx| {
                 let schema =
-                    DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
-                Ok(DataBlock::create_by_array(schema, vec![Series::new(
+                    DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
+                Ok(DataBlock::create(schema, vec![Series::from_data(
                     std::iter::repeat_with(|| idx as i32 + start)
                         .take(rows_perf_block)
                         .collect::<Vec<i32>>(),
@@ -192,11 +186,20 @@ pub async fn test_drive(
     test_db: Option<&str>,
     test_tbl: Option<&str>,
 ) -> Result<SendableDataBlockStream> {
-    let arg_db =
-        Expression::create_literal(DataValue::String(test_db.map(|v| v.as_bytes().to_vec())));
-    let arg_tbl =
-        Expression::create_literal(DataValue::String(test_tbl.map(|v| v.as_bytes().to_vec())));
-    let tbl_args = Some(vec![arg_db, arg_tbl]);
+    let arg_db = match test_db {
+        Some(v) => DataValue::String(v.as_bytes().to_vec()),
+        None => DataValue::Null,
+    };
+
+    let arg_tbl = match test_tbl {
+        Some(v) => DataValue::String(v.as_bytes().to_vec()),
+        None => DataValue::Null,
+    };
+
+    let tbl_args = Some(vec![
+        Expression::create_literal(arg_db),
+        Expression::create_literal(arg_tbl),
+    ]);
     test_drive_with_args(tbl_args).await
 }
 
@@ -257,15 +260,15 @@ pub async fn expects_ok(
     Ok(())
 }
 
-pub async fn execute_query(query: &str, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
-    let plan = PlanParser::parse(query, ctx.clone()).await?;
+pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<SendableDataBlockStream> {
+    let plan = PlanParser::parse(ctx.clone(), query).await?;
     InterpreterFactory::get(ctx.clone(), plan)?
         .execute(None)
         .await
 }
 
-pub async fn execute_command(query: &str, ctx: Arc<QueryContext>) -> Result<()> {
-    let res = execute_query(query, ctx).await?;
+pub async fn execute_command(ctx: Arc<QueryContext>, query: &str) -> Result<()> {
+    let res = execute_query(ctx, query).await?;
     res.try_collect::<Vec<DataBlock>>().await?;
     Ok(())
 }
@@ -357,7 +360,7 @@ pub async fn history_should_have_only_one_item(
 
     expects_ok(
         format!("{}: count_of_history_item_should_be_1", case_name),
-        execute_query(qry.as_str(), fixture.ctx()).await,
+        execute_query(fixture.ctx(), qry.as_str()).await,
         expected,
     )
     .await

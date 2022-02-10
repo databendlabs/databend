@@ -12,16 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_trait::async_trait;
-
 use crate::error::Result;
-use crate::ops::Object;
+use crate::Object;
+use crate::Operator;
 
-/// `Stat` will invoke the `stat` operation on the specified path.
-#[async_trait]
-pub trait Stat<S: Send + Sync>: Send + Sync {
-    async fn stat(&self, path: &str) -> Result<Object> {
-        let _ = path;
-        unimplemented!()
+pub struct OpStat {
+    op: Operator,
+
+    pub path: String,
+}
+
+impl OpStat {
+    pub fn new(op: Operator, path: &str) -> Self {
+        Self {
+            op,
+            path: path.to_string(),
+        }
+    }
+
+    pub async fn run(&self) -> Result<Object> {
+        self.op.inner().stat(self).await
     }
 }

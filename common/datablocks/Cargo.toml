@@ -13,7 +13,7 @@ test = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-arrow = {path = "../arrow"}
-common-datavalues = {path = "../datavalues"}
+common-datavalues2 = {path = "../datavalues2"}
 common-exception = {path = "../exception"}
 common-io = {path = "../io"}
 
@@ -26,4 +26,4 @@ comfy-table = "5.0.0"
 regex = "1.5.4"
 
 [dev-dependencies]
-pretty_assertions = "1.0.0"
+pretty_assertions = "1.1.0"

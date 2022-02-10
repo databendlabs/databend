@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -35,10 +35,10 @@ pub struct UsersTable {
 impl UsersTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("hostname", DataType::String, false),
-            DataField::new("auth_type", DataType::String, false),
-            DataField::new("auth_string", DataType::String, true),
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("hostname", Vu8::to_data_type()),
+            DataField::new("auth_type", Vu8::to_data_type()),
+            DataField::new_nullable("auth_string", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {
@@ -84,11 +84,11 @@ impl Table for UsersTable {
             .map(|x| x.auth_info.get_auth_string())
             .collect();
 
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
-            Series::new(names),
-            Series::new(hostnames),
-            Series::new(auth_types),
-            Series::new(auth_strings),
+        let block = DataBlock::create(self.table_info.schema(), vec![
+            Series::from_data(names),
+            Series::from_data(hostnames),
+            Series::from_data(auth_types),
+            Series::from_data(auth_strings),
         ]);
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),

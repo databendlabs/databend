@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -65,7 +65,6 @@ use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowGrantsPlan;
-use crate::ShowUDFPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -139,7 +138,6 @@ pub trait PlanRewriter: Sized {
             PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
             PlanNode::CreateUDF(plan) => self.rewrite_create_udf(plan),
             PlanNode::DropUDF(plan) => self.rewrite_drop_udf(plan),
-            PlanNode::ShowUDF(plan) => self.rewrite_show_udf(plan),
             PlanNode::AlterUDF(plan) => self.rewrite_alter_udf(plan),
         }
     }
@@ -403,10 +401,6 @@ pub trait PlanRewriter: Sized {
         Ok(PlanNode::DropUDF(plan.clone()))
     }
 
-    fn rewrite_show_udf(&mut self, plan: &ShowUDFPlan) -> Result<PlanNode> {
-        Ok(PlanNode::ShowUDF(plan.clone()))
-    }
-
     fn rewrite_alter_udf(&mut self, plan: &AlterUDFPlan) -> Result<PlanNode> {
         Ok(PlanNode::AlterUDF(plan.clone()))
     }
@@ -571,11 +565,16 @@ impl RewriteHelper {
 
                 Ok(Expression::Alias(alias.clone(), Box::new(new_expr)))
             }
-            Expression::Cast { expr, data_type } => {
+            Expression::Cast {
+                expr,
+                data_type,
+                is_nullable,
+            } => {
                 let new_expr = RewriteHelper::expr_rewrite_alias(expr, data)?;
                 Ok(Expression::Cast {
                     expr: Box::new(new_expr),
                     data_type: data_type.clone(),
+                    is_nullable: *is_nullable,
                 })
             }
             Expression::Wildcard

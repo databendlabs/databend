@@ -17,7 +17,9 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
+use common_arrow::arrow::bitmap::Bitmap;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -27,36 +29,34 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::aggregate_sum::sum_primitive;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
-use crate::with_match_primitive_type;
 
 // count = 0 means it's all nullable
 // so we do not need option like sum
 #[derive(Serialize, Deserialize)]
-struct AggregateAvgState<T: DFPrimitiveType> {
+struct AggregateAvgState<T: PrimitiveType> {
     #[serde(bound(deserialize = "T: DeserializeOwned"))]
     pub value: T,
     pub count: u64,
 }
 
 impl<T> AggregateAvgState<T>
-where T: std::ops::Add<Output = T> + DFPrimitiveType
+where T: std::ops::AddAssign + PrimitiveType
 {
     #[inline(always)]
-    fn add(&mut self, value: &Option<T>, count: u64) {
-        if let Some(v) = value {
-            self.value = self.value.add(*v);
-            self.count += count;
-        }
+    fn add_assume(&mut self, value: T, count: u64) {
+        self.value += value;
+        self.count += count;
     }
 
     #[inline(always)]
     fn merge(&mut self, other: &Self) {
-        self.value = self.value.add(other.value);
+        self.value += other.value;
         self.count += other.count;
     }
 }
@@ -71,20 +71,15 @@ pub struct AggregateAvgFunction<T, SumT> {
 
 impl<T, SumT> AggregateFunction for AggregateAvgFunction<T, SumT>
 where
-    T: DFPrimitiveType + AsPrimitive<SumT>,
-    SumT: DFPrimitiveType + std::ops::Add<Output = SumT>,
-    Option<SumT>: Into<DataValue>,
+    T: PrimitiveType + AsPrimitive<SumT>,
+    SumT: PrimitiveType + std::ops::AddAssign,
 {
     fn name(&self) -> &str {
         "AggregateAvgFunction"
     }
 
-    fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::Float64)
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
+    fn return_type(&self) -> Result<DataTypePtr> {
+        Ok(f64::to_data_type())
     }
 
     fn init_state(&self, place: StateAddr) {
@@ -98,13 +93,18 @@ where
         Layout::new::<AggregateAvgState<SumT>>()
     }
 
-    fn accumulate(&self, place: StateAddr, arrays: &[Series], _input_rows: usize) -> Result<()> {
+    fn accumulate(
+        &self,
+        place: StateAddr,
+        columns: &[ColumnRef],
+        validity: Option<&Bitmap>,
+        input_rows: usize,
+    ) -> Result<()> {
         let state = place.get::<AggregateAvgState<SumT>>();
-        let value = arrays[0].sum()?;
-        let count = arrays[0].len() - arrays[0].null_count();
-        let opt_sum: Option<SumT> = DFTryFrom::try_from(value).ok();
+        let sum = sum_primitive::<T, SumT>(&columns[0], validity)?;
+        let cnt = input_rows - validity.map(|v| v.null_count()).unwrap_or(0);
 
-        state.add(&opt_sum, count as u64);
+        state.add_assume(sum, cnt as u64);
         Ok(())
     }
 
@@ -112,17 +112,25 @@ where
         &self,
         places: &[StateAddr],
         offset: usize,
-        arrays: &[Series],
+        columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<()> {
-        let array: &DFPrimitiveArray<T> = arrays[0].static_cast();
+        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
 
-        array.into_iter().zip(places.iter()).for_each(|(v, place)| {
+        array.iter().zip(places.iter()).for_each(|(v, place)| {
             let place = place.next(offset);
             let state = place.get::<AggregateAvgState<SumT>>();
-            state.add(&v.map(|v| v.as_()), 1);
+            state.add_assume(v.as_(), 1);
         });
 
+        Ok(())
+    }
+
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+        let v = unsafe { array.value_unchecked(row) };
+        let state = place.get::<AggregateAvgState<SumT>>();
+        state.add_assume(v.as_(), 1);
         Ok(())
     }
 
@@ -145,25 +153,13 @@ where
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
         let state = place.get::<AggregateAvgState<SumT>>();
 
-        if state.count == 0 {
-            array.push_null();
-            return Ok(());
-        }
-
+        let builder: &mut MutablePrimitiveColumn<f64> = Series::check_get_mutable_column(array)?;
         let v: f64 = NumCast::from(state.value).unwrap_or_default();
         let val = v / state.count as f64;
-
-        let mut array = array
-            .as_mut_any()
-            .downcast_mut::<MutablePrimitiveArrayBuilder<f64, true>>()
-            .ok_or_else(|| {
-                ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
-            })?;
-        array.push(val);
-
+        builder.append_value(val);
         Ok(())
     }
 }
@@ -176,9 +172,8 @@ impl<T, SumT> fmt::Display for AggregateAvgFunction<T, SumT> {
 
 impl<T, SumT> AggregateAvgFunction<T, SumT>
 where
-    T: DFPrimitiveType + AsPrimitive<SumT>,
-    SumT: DFPrimitiveType + std::ops::Add<Output = SumT>,
-    Option<SumT>: Into<DataValue>,
+    T: PrimitiveType + AsPrimitive<SumT>,
+    SumT: PrimitiveType + std::ops::AddAssign,
 {
     pub fn try_create(
         display_name: &str,
@@ -201,8 +196,8 @@ pub fn try_create_aggregate_avg_function(
     assert_unary_arguments(display_name, arguments.len())?;
 
     let data_type = arguments[0].data_type();
-    with_match_primitive_type!(data_type, |$T| {
-        AggregateAvgFunction::<$T, <$T as DFPrimitiveType>::LargestType>::try_create(
+    with_match_primitive_type_id!(data_type.data_type_id(), |$T| {
+        AggregateAvgFunction::<$T, <$T as PrimitiveType>::LargestType>::try_create(
             display_name,
             arguments,
         )

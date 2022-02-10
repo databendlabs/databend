@@ -16,6 +16,7 @@ syntax = "proto3";
 
 package meta;
 
+message Empty {}
 message GetRequest { string key = 1; }
 
 message GetReply {
@@ -42,7 +43,12 @@ message HandshakeResponse {
   bytes payload = 2;
 }
 
-service MetaService {
+// Data chunk for export/import meta data
+message ExportedChunk {
+  repeated string data = 10;
+}
+
+service RaftService {
 
   rpc Write(RaftRequest) returns (RaftReply) {}
   rpc Get(GetRequest) returns (GetReply) {}
@@ -54,14 +60,20 @@ service MetaService {
 
   rpc AppendEntries(RaftRequest) returns (RaftReply);
   rpc InstallSnapshot(RaftRequest) returns (RaftReply);
-  rpc vote(RaftRequest) returns (RaftReply);
+  rpc Vote(RaftRequest) returns (RaftReply);
 }
 
-service Meta {
+service MetaService {
   // handshake
   rpc Handshake(stream HandshakeRequest) returns (stream HandshakeResponse);
 
   // message
   rpc WriteMsg(RaftRequest) returns (RaftReply);
-  rpc ReadMsg(GetRequest) returns (GetReply);
+  rpc ReadMsg(RaftRequest) returns (RaftReply);
+
+  // Export all meta data.
+  //
+  // Including raft hard state, logs and state machine.
+  // The exported data is a list of json strings in form of `(tree_name, sub_tree_prefix, key, value)`.
+  rpc Export(Empty) returns (stream ExportedChunk);
 }

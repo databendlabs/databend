@@ -20,8 +20,9 @@ use common_base::tokio::sync::oneshot::Receiver;
 use common_base::tokio::sync::oneshot::Sender;
 use common_base::tokio::task::JoinHandle;
 use common_base::Stoppable;
-use common_exception::ErrorCode;
-use common_meta_types::protobuf::meta_server::MetaServer;
+use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
+use common_meta_types::MetaError;
+use common_meta_types::MetaResult;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 use futures::future::Either;
@@ -29,7 +30,7 @@ use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
 
-use crate::api::grpc::grpc_service::MetaGrpcImpl;
+use crate::api::grpc::grpc_service::MetaServiceImpl;
 use crate::configs::Config;
 use crate::meta_service::MetaNode;
 
@@ -56,7 +57,7 @@ impl GrpcServer {
         self.meta_node.clone()
     }
 
-    async fn do_start(&mut self) -> common_exception::Result<()> {
+    async fn do_start(&mut self) -> MetaResult<()> {
         let conf = self.conf.clone();
         let meta_node = self.meta_node.clone();
         // For sending signal when server started.
@@ -69,13 +70,13 @@ impl GrpcServer {
         let builder = Server::builder();
 
         let tls_conf = Self::tls_config(&self.conf).await.map_err(|e| {
-            ErrorCode::TLSConfigurationFailure(format!("failed to build ServerTlsConfig {}", e))
+            MetaError::TLSConfigurationFailure(format!("failed to build ServerTlsConfig {}", e))
         })?;
 
         let mut builder = if let Some(tls_conf) = tls_conf {
             tracing::info!("gRPC TLS enabled");
             builder.tls_config(tls_conf).map_err(|e| {
-                ErrorCode::TLSConfigurationFailure(format!("gRPC server tls_config failure {}", e))
+                MetaError::TLSConfigurationFailure(format!("gRPC server tls_config failure {}", e))
             })?
         } else {
             builder
@@ -84,8 +85,8 @@ impl GrpcServer {
         let addr = conf.grpc_api_address.parse::<std::net::SocketAddr>()?;
         tracing::info!("gRPC addr: {}", addr);
 
-        let grpc_impl = MetaGrpcImpl::create(meta_node.clone());
-        let grpc_srv = MetaServer::new(grpc_impl);
+        let grpc_impl = MetaServiceImpl::create(meta_node.clone());
+        let grpc_srv = MetaServiceServer::new(grpc_impl);
 
         let j = tokio::spawn(
             async move {
@@ -116,7 +117,7 @@ impl GrpcServer {
 
         started_rx
             .await
-            .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?;
+            .map_err(|e| MetaError::StartMetaServiceError(e.to_string()))?;
 
         self.join_handle = Some(j);
         self.stop_tx = Some(stop_tx);
@@ -150,7 +151,7 @@ impl GrpcServer {
             } else {
                 tracing::info!("no force signal, block waiting for join handle for ever");
                 j.await.map_err(|e| {
-                    ErrorCode::MetaServiceError(format!("metasrv join handle error: {}", e))
+                    MetaError::StartMetaServiceError(format!("metasrv join handle error: {}", e))
                 })?;
                 tracing::info!("Done: waiting for join handle for ever");
             }
@@ -159,7 +160,7 @@ impl GrpcServer {
         if let Some(rx) = self.fin_rx.take() {
             tracing::info!("block waiting for fin_rx");
             rx.await.map_err(|e| {
-                ErrorCode::MetaServiceError(format!("metasrv fin_rx recv error: {}", e))
+                MetaError::StartMetaServiceError(format!("metasrv fin_rx recv error: {}", e))
             })?;
             tracing::info!("Done: block waiting for fin_rx");
         }

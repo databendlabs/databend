@@ -16,21 +16,19 @@ use std::fs::File;
 use std::io::Write;
 
 use common_base::tokio;
-use common_dal::DataAccessor;
-use common_dal::Local;
+use common_dal2::readers::SeekableReader;
+use common_dal2::services::fs;
+use common_dal2::Operator;
 use common_datablocks::assert_blocks_eq;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::DataColumn;
-use common_datavalues::prelude::Series;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::CsvSource;
 use common_streams::ParquetSource;
 use common_streams::Source;
 use common_streams::ValueSource;
+use futures::io::BufReader;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_parse_values() {
@@ -38,9 +36,9 @@ async fn test_parse_values() {
         "(1,  'str',   1) , (-1, ' str ' ,  1.1) , ( 2,  'aa aa', 2.2),  (3, \"33'33\", 3.3)   ";
 
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::String, false),
-        DataField::new("c", DataType::Float64, false),
+        DataField::new("a", i8::to_data_type()),
+        DataField::new("b", Vu8::to_data_type()),
+        DataField::new("c", f64::to_data_type()),
     ]);
     let mut values_source = ValueSource::new(buffer.as_bytes(), schema, 10);
     let block = values_source.read().await.unwrap().unwrap();
@@ -87,13 +85,17 @@ async fn test_parse_csvs() {
             .unwrap();
 
             let schema = DataSchemaRefExt::create(vec![
-                DataField::new("a", DataType::Int8, false),
-                DataField::new("b", DataType::String, false),
-                DataField::new("c", DataType::Float64, false),
+                DataField::new("a", i8::to_data_type()),
+                DataField::new("b", Vu8::to_data_type()),
+                DataField::new("c", f64::to_data_type()),
             ]);
 
-            let local = Local::with_path(dir.path().to_path_buf());
-            let stream = local.get_input_stream(name, None).unwrap();
+            let local = Operator::new(
+                fs::Backend::build()
+                    .root(dir.path().to_str().unwrap())
+                    .finish(),
+            );
+            let stream = local.read(name).run().await.unwrap();
             let mut csv_source =
                 CsvSource::try_create(stream, schema, false, field_delimitor, record_delimitor, 10)
                     .unwrap();
@@ -121,11 +123,67 @@ async fn test_parse_csvs() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_source_parquet() -> Result<()> {
-    use common_datavalues::DataType;
+async fn test_parse_csv2() {
+    let dir = tempfile::tempdir().unwrap();
+    let name = "my-temporary-note.txt";
+    let file_path = dir.path().join(name);
+    let mut file = File::create(file_path).unwrap();
+
+    write!(
+        file,
+        r#"1,'Beijing',100
+2,'Shanghai',80
+3,'Guangzhou',60
+4,'Shenzhen',70
+5,'Shenzhen',55
+6,'Beijing',99"#
+    )
+    .unwrap();
+
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::String, false),
+        DataField::new("a", i8::to_data_type()),
+        DataField::new("b", Vu8::to_data_type()),
+        DataField::new("c", f64::to_data_type()),
+    ]);
+
+    let local = Operator::new(
+        fs::Backend::build()
+            .root(dir.path().to_str().unwrap())
+            .finish(),
+    );
+    let stream = local.read(name).run().await.unwrap();
+    let mut csv_source = CsvSource::try_create(stream, schema, false, b',', b'\n', 10).unwrap();
+    let block = csv_source.read().await.unwrap().unwrap();
+    assert_blocks_eq(
+        vec![
+            "+---+-------------+-----+",
+            "| a | b           | c   |",
+            "+---+-------------+-----+",
+            "| 1 | 'Beijing'   | 100 |",
+            "| 2 | 'Shanghai'  | 80  |",
+            "| 3 | 'Guangzhou' | 60  |",
+            "| 4 | 'Shenzhen'  | 70  |",
+            "| 5 | 'Shenzhen'  | 55  |",
+            "| 6 | 'Beijing'   | 99  |",
+            "+---+-------------+-----+",
+        ],
+        &[block],
+    );
+
+    let block = csv_source.read().await.unwrap();
+    assert!(block.is_none());
+
+    drop(file);
+    dir.close().unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_source_parquet() -> Result<()> {
+    use common_datavalues2::prelude::*;
+
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", i8::to_data_type()),
+        DataField::new("b", Vu8::to_data_type()),
     ]);
 
     let arrow_schema = schema.to_arrow();
@@ -137,13 +195,9 @@ async fn test_source_parquet() -> Result<()> {
         version: Version::V2,
     };
 
-    use common_datavalues::prelude::SeriesFrom;
-    let col_a = Series::new(vec![1i8, 1, 2, 1, 2, 3]);
-    let col_b = Series::new(vec!["1", "1", "2", "1", "2", "3"]);
-    let sample_block = DataBlock::create(schema.clone(), vec![
-        DataColumn::Array(col_a),
-        DataColumn::Array(col_b),
-    ]);
+    let col_a = Series::from_data(vec![1i8, 1, 2, 1, 2, 3]);
+    let col_b = Series::from_data(vec!["1", "1", "2", "1", "2", "3"]);
+    let sample_block = DataBlock::create(schema.clone(), vec![col_a, col_b]);
 
     use common_arrow::arrow::record_batch::RecordBatch;
     let batch = RecordBatch::try_from(sample_block)?;
@@ -174,8 +228,13 @@ async fn test_source_parquet() -> Result<()> {
         .map_err(|e| ErrorCode::ParquetError(e.to_string()))?
     };
 
-    let local = Local::with_path(dir.path().to_path_buf());
-    let stream = local.get_input_stream(name, Some(len)).unwrap();
+    let local = Operator::new(
+        fs::Backend::build()
+            .root(dir.path().to_str().unwrap())
+            .finish(),
+    );
+    let stream = SeekableReader::new(local, name, len);
+    let stream = BufReader::with_capacity(4 * 1024 * 1024, stream);
 
     let default_proj = (0..schema.fields().len())
         .into_iter()

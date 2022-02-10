@@ -26,7 +26,7 @@ use common_base::TrySpawn;
 use common_clickhouse_srv::types::Block as ClickHouseBlock;
 use common_clickhouse_srv::CHContext;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::InsertPlan;
@@ -63,10 +63,10 @@ impl InteractiveWorkerBase {
         let query = &ch_ctx.state.query;
         tracing::debug!("{}", query);
 
-        let ctx = session.create_context().await?;
+        let ctx = session.create_query_context().await?;
         ctx.attach_query_str(query);
 
-        let plan = PlanParser::parse(query, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         match plan {
             PlanNode::Insert(ref insert) => {
                 // It has select plan, so we do not need to consume data from client

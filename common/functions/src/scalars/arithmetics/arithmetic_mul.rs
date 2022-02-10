@@ -12,72 +12,77 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-use std::ops::Add;
 use std::ops::Mul;
-use std::ops::Sub;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use num::cast::AsPrimitive;
-use num_traits::WrappingAdd;
+use num::traits::AsPrimitive;
 use num_traits::WrappingMul;
-use num_traits::WrappingSub;
 
-use super::arithmetic::ArithmeticTrait;
-use crate::binary_arithmetic;
-use crate::impl_binary_arith;
-use crate::impl_wrapping_binary_arith;
-use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
-use crate::scalars::Function;
-use crate::scalars::Monotonicity;
-use crate::with_match_primitive_type;
+use crate::scalars::Function2;
+use crate::scalars::Monotonicity2;
 
-impl_wrapping_binary_arith!(ArithmeticWrappingMul, wrapping_mul);
+fn mul_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>) -> O
+where
+    L: PrimitiveType + AsPrimitive<O>,
+    R: PrimitiveType + AsPrimitive<O>,
+    O: PrimitiveType + Mul<Output = O>,
+{
+    l.to_owned_scalar().as_() * r.to_owned_scalar().as_()
+}
 
-impl_binary_arith!(ArithmeticMul, *);
+fn wrapping_mul_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>) -> O
+where
+    L: PrimitiveType + AsPrimitive<O>,
+    R: PrimitiveType + AsPrimitive<O>,
+    O: IntegerType + WrappingMul<Output = O>,
+{
+    l.to_owned_scalar()
+        .as_()
+        .wrapping_mul(&r.to_owned_scalar().as_())
+}
 
 pub struct ArithmeticMulFunction;
 
 impl ArithmeticMulFunction {
     pub fn try_create_func(
         _display_name: &str,
-        args: &[DataTypeAndNullable],
-    ) -> Result<Box<dyn Function>> {
-        let left_type = &args[0].data_type();
-        let right_type = &args[1].data_type();
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function2>> {
         let op = DataValueBinaryOperator::Mul;
+        let left_type = remove_nullable(args[0]).data_type_id();
+        let right_type = remove_nullable(args[1]).data_type_id();
 
-        let error_fn = || -> Result<Box<dyn Function>> {
+        let error_fn = || -> Result<Box<dyn Function2>> {
             Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
                 left_type, op, right_type
             )))
         };
 
-        if !left_type.is_numeric() || !right_type.is_numeric() {
-            return error_fn();
-        };
-
-        with_match_primitive_type!(left_type, |$T| {
-            with_match_primitive_type!(right_type, |$D| {
-                let result_type = <($T, $D) as ResultTypeOfBinary>::AddMul::data_type();
-                match result_type {
-                    DataType::UInt64 => BinaryArithmeticFunction::<ArithmeticWrappingMul<$T, $D, u64>>::try_create_func(
+        with_match_primitive_type_id!(left_type, |$T| {
+            with_match_primitive_type_id!(right_type, |$D| {
+                let result_type = <($T, $D) as ResultTypeOfBinary>::AddMul::to_data_type();
+                match result_type.data_type_id() {
+                    TypeID::UInt64 => BinaryArithmeticFunction::<$T, $D, u64, _>::try_create_func(
                         op,
                         result_type,
+                        wrapping_mul_scalar::<$T, $D, _>,
                     ),
-                    DataType::Int64 => BinaryArithmeticFunction::<ArithmeticWrappingMul<$T, $D, i64>>::try_create_func(
+                    TypeID::Int64 => BinaryArithmeticFunction::<$T, $D, i64, _>::try_create_func(
                         op,
                         result_type,
+                        wrapping_mul_scalar::<$T, $D, _>,
                     ),
-                    _ => BinaryArithmeticFunction::<ArithmeticMul<$T, $D, <($T, $D) as ResultTypeOfBinary>::AddMul>>::try_create_func(
+                    _ => BinaryArithmeticFunction::<$T, $D, <($T, $D) as ResultTypeOfBinary>::AddMul, _>::try_create_func(
                         op,
                         result_type,
+                        mul_scalar::<$T, $D, _>,
                     ),
                 }
             }, {
@@ -97,15 +102,15 @@ impl ArithmeticMulFunction {
         )
     }
 
-    pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+    pub fn get_monotonicity(args: &[Monotonicity2]) -> Result<Monotonicity2> {
         arithmetic_mul_div_monotonicity(args, DataValueBinaryOperator::Mul)
     }
 }
 
 pub fn arithmetic_mul_div_monotonicity(
-    args: &[Monotonicity],
+    args: &[Monotonicity2],
     op: DataValueBinaryOperator,
-) -> Result<Monotonicity> {
+) -> Result<Monotonicity2> {
     if !matches!(
         op,
         DataValueBinaryOperator::Mul | DataValueBinaryOperator::Div
@@ -121,7 +126,7 @@ pub fn arithmetic_mul_div_monotonicity(
 
     match (f_x.is_constant, g_x.is_constant) {
         // both f(x) and g(x) are constant
-        (true, true) => Ok(Monotonicity::create_constant()),
+        (true, true) => Ok(Monotonicity2::create_constant()),
 
         //f(x) is constant
         (true, false) => {
@@ -129,7 +134,7 @@ pub fn arithmetic_mul_div_monotonicity(
                 1 => {
                     match op {
                         // 12 * g(x)
-                        DataValueBinaryOperator::Mul => Ok(Monotonicity::create(
+                        DataValueBinaryOperator::Mul => Ok(Monotonicity2::create(
                             g_x.is_monotonic,
                             g_x.is_positive,
                             g_x.is_constant,
@@ -138,9 +143,9 @@ pub fn arithmetic_mul_div_monotonicity(
                         _ => {
                             if g_x.compare_with_zero()? == 0 {
                                 // unknown monotonicity
-                                Ok(Monotonicity::default())
+                                Ok(Monotonicity2::default())
                             } else {
-                                Ok(Monotonicity::create(
+                                Ok(Monotonicity2::create(
                                     g_x.is_monotonic,
                                     !g_x.is_positive, // flip the is_positive
                                     g_x.is_constant,
@@ -152,7 +157,7 @@ pub fn arithmetic_mul_div_monotonicity(
                 -1 => {
                     match op {
                         // -12 * g(x)
-                        DataValueBinaryOperator::Mul => Ok(Monotonicity::create(
+                        DataValueBinaryOperator::Mul => Ok(Monotonicity2::create(
                             g_x.is_monotonic,
                             !g_x.is_positive, // flip the is_positive
                             g_x.is_constant,
@@ -161,9 +166,9 @@ pub fn arithmetic_mul_div_monotonicity(
                         _ => {
                             if g_x.compare_with_zero()? == 0 {
                                 // unknown monotonicity
-                                Ok(Monotonicity::default())
+                                Ok(Monotonicity2::default())
                             } else {
-                                Ok(Monotonicity::create(
+                                Ok(Monotonicity2::create(
                                     g_x.is_monotonic,
                                     g_x.is_positive,
                                     g_x.is_constant,
@@ -181,7 +186,7 @@ pub fn arithmetic_mul_div_monotonicity(
             match g_x.compare_with_zero()? {
                 1 => {
                     // f(x) *|/ 12
-                    Ok(Monotonicity::create(
+                    Ok(Monotonicity2::create(
                         f_x.is_monotonic,
                         f_x.is_positive,
                         f_x.is_constant,
@@ -189,7 +194,7 @@ pub fn arithmetic_mul_div_monotonicity(
                 }
                 -1 => {
                     // f(x) *|/ (-12), need to flip the is_positive for negative constant value.
-                    Ok(Monotonicity::create(
+                    Ok(Monotonicity2::create(
                         f_x.is_monotonic,
                         !f_x.is_positive,
                         f_x.is_constant,
@@ -227,7 +232,7 @@ pub fn arithmetic_mul_div_monotonicity(
                         if f_x_compare_with_zero == -1 {
                             is_positive = !is_positive;
                         }
-                        Ok(Monotonicity::create(is_monotonic, is_positive, false))
+                        Ok(Monotonicity2::create(is_monotonic, is_positive, false))
                     }
                     (-1, 1) | (1, -1) => {
                         // For case f(x) >= 0 && g(x) <= 0, we have following results. (f(x) <= 0 && g(x) >= 0 just need to flip the is_positive)
@@ -251,13 +256,13 @@ pub fn arithmetic_mul_div_monotonicity(
                         if f_x_compare_with_zero == -1 {
                             is_positive = !is_positive;
                         }
-                        Ok(Monotonicity::create(is_monotonic, is_positive, false))
+                        Ok(Monotonicity2::create(is_monotonic, is_positive, false))
                     }
-                    _ => Ok(Monotonicity::default()),
+                    _ => Ok(Monotonicity2::default()),
                 }
             } else {
                 // unknown monotonicity
-                Ok(Monotonicity::default())
+                Ok(Monotonicity2::default())
             }
         }
     }

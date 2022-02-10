@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use sha1::Digest;
 
 use crate::scalars::strings::String2StringFunction;
 use crate::scalars::strings::StringOperator;
@@ -22,14 +25,17 @@ pub struct Sha1 {}
 
 impl StringOperator for Sha1 {
     #[inline]
-    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
+    fn try_apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> Result<usize> {
         let buffer = &mut buffer[0..40];
         // TODO sha1 lib doesn't allow encode into buffer...
-        hex::encode_to_slice(sha1::Sha1::from(s).digest().bytes(), buffer).unwrap();
-        40
+        let mut m = ::sha1::Sha1::new();
+        m.update(s);
+        hex::encode_to_slice(m.finalize().as_slice(), buffer)
+            .map_err(|e| ErrorCode::StrParseError(e.to_string()))?;
+        Ok(40)
     }
 
-    fn estimate_bytes(&self, array: &DFStringArray) -> usize {
+    fn estimate_bytes(&self, array: &StringColumn) -> usize {
         array.len() * 40
     }
 }

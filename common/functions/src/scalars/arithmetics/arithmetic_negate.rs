@@ -12,73 +12,91 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
 use std::ops::Neg;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use num::cast::AsPrimitive;
+use num::traits::AsPrimitive;
 use num_traits::WrappingNeg;
 
-use super::arithmetic::ArithmeticTrait;
-use crate::impl_unary_arith;
-use crate::impl_wrapping_unary_arith;
-use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
-use crate::scalars::Monotonicity;
+use crate::scalars::ArithmeticDescription;
+use crate::scalars::Function2;
+use crate::scalars::Monotonicity2;
+use crate::scalars::ScalarUnaryFunction;
 use crate::scalars::UnaryArithmeticFunction;
-use crate::unary_arithmetic;
-use crate::with_match_primitive_type;
 
-impl_unary_arith!(ArithmeticNeg, -);
+#[derive(Clone, Debug, Default)]
+struct NegFunction {}
 
-impl_wrapping_unary_arith!(ArithmeticWrappingNeg, wrapping_neg);
+impl<L, O> ScalarUnaryFunction<L, O> for NegFunction
+where
+    L: PrimitiveType + AsPrimitive<O>,
+    O: PrimitiveType + Neg<Output = O>,
+{
+    fn eval(&self, l: L::RefType<'_>) -> O {
+        -l.to_owned_scalar().as_()
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct WrappingNegFunction {}
+
+impl<L, O> ScalarUnaryFunction<L, O> for WrappingNegFunction
+where
+    L: PrimitiveType + AsPrimitive<O>,
+    O: IntegerType + WrappingNeg,
+{
+    fn eval(&self, l: L::RefType<'_>) -> O {
+        l.to_owned_scalar().as_().wrapping_neg()
+    }
+}
 
 pub struct ArithmeticNegateFunction;
 
 impl ArithmeticNegateFunction {
     pub fn try_create_func(
         _display_name: &str,
-        args: &[DataTypeAndNullable],
-    ) -> Result<Box<dyn Function>> {
-        let arg_type = &args[0].data_type();
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function2>> {
+        let arg_type = remove_nullable(args[0]).data_type_id();
         let op = DataValueUnaryOperator::Negate;
-        let error_fn = || -> Result<Box<dyn Function>> {
+        let error_fn = || -> Result<Box<dyn Function2>> {
             Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Unsupported arithmetic {} ({:?})",
                 op, arg_type
             )))
         };
 
-        if !arg_type.is_numeric() {
-            return error_fn();
-        };
-
-        with_match_primitive_type!(arg_type, |$T| {
-            let result_type = <$T as ResultTypeOfUnary>::Negate::data_type();
-            match result_type {
-                DataType::Int64 => UnaryArithmeticFunction::<ArithmeticWrappingNeg<$T, i64>>::try_create_func(
+        with_match_primitive_type_id!(arg_type, |$T| {
+            let result_type = <$T as ResultTypeOfUnary>::Negate::to_data_type();
+            match result_type.data_type_id() {
+                TypeID::Int64 => UnaryArithmeticFunction::<$T, i64, _>::try_create_func(
                     op,
                     result_type,
+                    WrappingNegFunction::default(),
                 ),
-                DataType::Int32 => UnaryArithmeticFunction::<ArithmeticWrappingNeg<$T, i32>>::try_create_func(
+                TypeID::Int32 => UnaryArithmeticFunction::<$T, i32, _>::try_create_func(
                     op,
                     result_type,
+                    WrappingNegFunction::default(),
                 ),
-                DataType::Int16 => UnaryArithmeticFunction::<ArithmeticWrappingNeg<$T, i16>>::try_create_func(
+                TypeID::Int16 => UnaryArithmeticFunction::<$T, i16, _>::try_create_func(
                     op,
                     result_type,
+                    WrappingNegFunction::default(),
                 ),
-                DataType::Int8 => UnaryArithmeticFunction::<ArithmeticWrappingNeg<$T, i8>>::try_create_func(
+                TypeID::Int8 => UnaryArithmeticFunction::<$T, i8, _>::try_create_func(
                     op,
                     result_type,
+                    WrappingNegFunction::default(),
                 ),
-                _ => UnaryArithmeticFunction::<ArithmeticNeg<$T, <$T as ResultTypeOfUnary>::Negate>>::try_create_func(
+                _ => UnaryArithmeticFunction::<$T, <$T as ResultTypeOfUnary>::Negate, _>::try_create_func(
                     op,
                     result_type,
+                    NegFunction::default(),
                 ),
             }
         }, {
@@ -95,10 +113,10 @@ impl ArithmeticNegateFunction {
         )
     }
 
-    pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+    pub fn get_monotonicity(args: &[Monotonicity2]) -> Result<Monotonicity2> {
         // unary operation like '-f(x)', just flip the is_positive.
         // also pass the is_constant, in case the input is a constant value.
-        Ok(Monotonicity::create(
+        Ok(Monotonicity2::create(
             args[0].is_monotonic || args[0].is_constant,
             !args[0].is_positive,
             args[0].is_constant,

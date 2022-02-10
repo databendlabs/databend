@@ -36,7 +36,7 @@ impl AnalyzableStatement for DfShowFunctions {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let rewritten_query = self.rewritten_query(ctx.clone());
-        let rewritten_query_plan = PlanParser::parse(rewritten_query.as_str(), ctx);
+        let rewritten_query_plan = PlanParser::parse(ctx, rewritten_query.as_str());
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             rewritten_query_plan.await?,
         )))
@@ -47,19 +47,19 @@ const FUNCTIONS_TABLE: &str = "system.functions";
 
 impl DfShowFunctions {
     fn show_all_functions(&self, _ctx: Arc<QueryContext>) -> String {
-        format!("SELECT name FROM {} ORDER BY name", FUNCTIONS_TABLE,)
+        format!("SELECT * FROM {} ORDER BY name", FUNCTIONS_TABLE,)
     }
 
     fn show_functions_with_like(&self, i: &Ident, _ctx: Arc<QueryContext>) -> String {
         format!(
-            "SELECT name FROM {} where name LIKE {} ORDER BY name",
+            "SELECT * FROM {} where name LIKE {} ORDER BY name",
             FUNCTIONS_TABLE, i,
         )
     }
 
     fn show_functions_with_predicate(&self, e: &Expr, _ctx: Arc<QueryContext>) -> String {
         format!(
-            "SELECT name FROM {} where ({}) ORDER BY name",
+            "SELECT * FROM {} where ({}) ORDER BY name",
             FUNCTIONS_TABLE, e,
         )
     }

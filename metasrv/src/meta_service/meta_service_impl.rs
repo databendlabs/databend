@@ -19,7 +19,7 @@ use std::convert::TryInto;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use common_meta_types::protobuf::meta_service_server::MetaService;
+use common_meta_types::protobuf::raft_service_server::RaftService;
 use common_meta_types::protobuf::GetReply;
 use common_meta_types::protobuf::GetRequest;
 use common_meta_types::protobuf::RaftReply;
@@ -36,18 +36,18 @@ use crate::meta_service::MetaNode;
 pub type GrpcStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
-pub struct MetaServiceImpl {
+pub struct RaftServiceImpl {
     pub meta_node: Arc<MetaNode>,
 }
 
-impl MetaServiceImpl {
+impl RaftServiceImpl {
     pub fn create(meta_node: Arc<MetaNode>) -> Self {
         Self { meta_node }
     }
 }
 
 #[async_trait::async_trait]
-impl MetaService for MetaServiceImpl {
+impl RaftService for RaftServiceImpl {
     /// Handles a write request.
     /// This node must be leader or an error returned.
     #[tracing::instrument(level = "info", skip(self))]

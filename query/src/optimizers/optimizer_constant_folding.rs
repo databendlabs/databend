@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::Function2Factory;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
@@ -47,7 +47,7 @@ impl ConstantFoldingImpl {
 
     fn rewrite_function<F>(op: &str, args: Expressions, name: String, f: F) -> Result<Expression>
     where F: Fn(&str, Expressions) -> Expression {
-        let factory = FunctionFactory::instance();
+        let factory = Function2Factory::instance();
         let function_features = factory.get_features(op)?;
 
         if function_features.is_deterministic && Self::constants_arguments(&args) {
@@ -74,12 +74,13 @@ impl ConstantFoldingImpl {
     }
 
     fn execute_expression(expression: Expression, origin_name: String) -> Result<Expression> {
-        let input_fields = vec![DataField::new("_dummy", DataType::UInt8, false)];
+        let input_fields = vec![DataField::new("_dummy", u8::to_data_type())];
         let input_schema = Arc::new(DataSchema::new(input_fields));
 
         let data_type = expression.to_data_type(&input_schema)?;
         let expression_executor = Self::expr_executor(&input_schema, expression)?;
-        let dummy_columns = vec![DataColumn::Constant(DataValue::UInt8(Some(1)), 1)];
+        let const_col = ConstColumn::new(Series::from_data(vec![1u8]), 1);
+        let dummy_columns = vec![Arc::new(const_col) as ColumnRef];
         let data_block = DataBlock::create(input_schema, dummy_columns);
         let executed_data_block = expression_executor.execute(&data_block)?;
 
@@ -89,120 +90,18 @@ impl ConstantFoldingImpl {
     fn convert_to_expression(
         column_name: String,
         data_block: DataBlock,
-        data_type: DataType,
+        data_type: DataTypePtr,
     ) -> Result<Expression> {
         debug_assert!(data_block.num_rows() == 1);
         debug_assert!(data_block.num_columns() == 1);
 
         let column_name = Some(column_name);
-        let value = data_block.column(0).try_get(0)?;
+        let value = data_block.column(0).get_checked(0)?;
         Ok(Expression::Literal {
             value,
             column_name,
             data_type,
         })
-    }
-
-    fn remove_const_cond(
-        &mut self,
-        schema: &DataSchemaRef,
-        column_name: String,
-        left: &Expression,
-        right: &Expression,
-        is_and: bool,
-    ) -> Result<Expression> {
-        let mut is_remove = false;
-
-        let mut left_const = false;
-        let new_left = self.eval_const_cond(
-            schema,
-            column_name.clone(),
-            left,
-            is_and,
-            &mut left_const,
-            &mut is_remove,
-        )?;
-        if is_remove {
-            return Ok(new_left);
-        }
-
-        let mut right_const = false;
-        let new_right = self.eval_const_cond(
-            schema,
-            column_name.clone(),
-            right,
-            is_and,
-            &mut right_const,
-            &mut is_remove,
-        )?;
-        if is_remove {
-            return Ok(new_right);
-        }
-
-        match (left_const, right_const) {
-            (true, true) => {
-                if is_and {
-                    Ok(Expression::Literal {
-                        value: DataValue::Boolean(Some(true)),
-                        column_name: Some(column_name),
-                        data_type: DataType::Boolean,
-                    })
-                } else {
-                    Ok(Expression::Literal {
-                        value: DataValue::Boolean(Some(false)),
-                        column_name: Some(column_name),
-                        data_type: DataType::Boolean,
-                    })
-                }
-            }
-            (true, false) => Ok(new_right),
-            (false, true) => Ok(new_left),
-            (false, false) => {
-                if is_and {
-                    Ok(new_left.and(new_right))
-                } else {
-                    Ok(new_left.or(new_right))
-                }
-            }
-        }
-    }
-
-    fn eval_const_cond(
-        &mut self,
-        schema: &DataSchemaRef,
-        column_name: String,
-        expr: &Expression,
-        is_and: bool,
-        is_const: &mut bool,
-        is_remove: &mut bool,
-    ) -> Result<Expression> {
-        let new_expr = self.rewrite_expr(schema, expr)?;
-        match new_expr {
-            Expression::Literal { ref value, .. } => {
-                *is_const = true;
-                let val = value.as_bool()?;
-                if val {
-                    if !is_and {
-                        *is_remove = true;
-                        return Ok(Expression::Literal {
-                            value: DataValue::Boolean(Some(true)),
-                            column_name: Some(column_name),
-                            data_type: DataType::Boolean,
-                        });
-                    }
-                } else if is_and {
-                    *is_remove = true;
-                    return Ok(Expression::Literal {
-                        value: DataValue::Boolean(Some(false)),
-                        column_name: Some(column_name),
-                        data_type: DataType::Boolean,
-                    });
-                }
-            }
-            _ => *is_const = false,
-        }
-        *is_remove = false;
-        Ok(new_expr)
     }
 }
 
@@ -253,43 +152,27 @@ impl PlanRewriter for ConstantFoldingImpl {
                 right: Expression,
                 origin_expr: &Expression,
             ) -> Result<Expression> {
-                unsafe {
-                    let origin_name = origin_expr.column_name();
-                    match op.to_lowercase().as_str() {
-                        "and" => (&mut *self.0).remove_const_cond(
-                            &self.1,
-                            origin_name,
-                            &left,
-                            &right,
-                            true,
-                        ),
-                        "or" => (&mut *self.0).remove_const_cond(
-                            &self.1,
-                            origin_name,
-                            &left,
-                            &right,
-                            false,
-                        ),
-                        _ => ConstantFoldingImpl::rewrite_function(
-                            op,
-                            vec![left, right],
-                            origin_name,
-                            Expression::create_binary_expression,
-                        ),
-                    }
-                }
+                let origin_name = origin_expr.column_name();
+                ConstantFoldingImpl::rewrite_function(
+                    op,
+                    vec![left, right],
+                    origin_name,
+                    Expression::create_binary_expression,
+                )
             }
 
             fn mutate_cast(
                 &mut self,
-                typ: &DataType,
+                typ: &DataTypePtr,
                 expr: Expression,
                 origin_expr: &Expression,
+                is_nullable: bool,
             ) -> Result<Expression> {
                 if matches!(&expr, Expression::Literal { .. }) {
                     let optimize_expr = Expression::Cast {
                         expr: Box::new(expr),
                         data_type: typ.clone(),
+                        is_nullable,
                     };
 
                     return ConstantFoldingImpl::execute_expression(
@@ -301,6 +184,7 @@ impl PlanRewriter for ConstantFoldingImpl {
                 Ok(Expression::Cast {
                     expr: Box::new(expr),
                     data_type: typ.clone(),
+                    is_nullable,
                 })
             }
         }

@@ -55,13 +55,6 @@ fn test_trigonometric_sin_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionTest {
-            name: "sin-str-passed",
-            nullable: false,
-            columns: vec![Series::new(vec!["0", "1", "3"]).into()],
-            expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
-            error: "",
-        },
-        ScalarFunctionTest {
             name: "sin-f64-passed",
             nullable: false,
             columns: vec![Series::new(vec![0_f64, 1.0, 3.0]).into()],

@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.pub use data_type::*;
 
+pub mod arithmetics_type;
 pub mod data_type;
 pub mod type_array;
 pub mod type_boolean;
 pub mod type_coercion;
-pub mod type_date;
+pub mod type_date16;
 pub mod type_date32;
-pub mod type_datetime;
+pub mod type_datetime32;
 pub mod type_datetime64;
 pub mod type_interval;
 pub mod type_null;
@@ -31,19 +32,25 @@ pub mod type_traits;
 pub mod eq;
 pub mod type_id;
 
+mod date_converter;
 pub mod deserializations;
 pub mod serializations;
+mod type_factory;
 
+pub use arithmetics_type::*;
 pub use data_type::*;
+pub use date_converter::*;
+pub use date_converter::*;
 pub use deserializations::*;
 pub use eq::*;
 pub use serializations::*;
 pub use type_array::*;
 pub use type_boolean::*;
-pub use type_date::*;
+pub use type_date16::*;
 pub use type_date32::*;
-pub use type_datetime::*;
+pub use type_datetime32::*;
 pub use type_datetime64::*;
+pub use type_factory::*;
 pub use type_id::*;
 pub use type_interval::*;
 pub use type_null::*;

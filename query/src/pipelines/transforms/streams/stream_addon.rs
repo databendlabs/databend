@@ -17,11 +17,9 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::DataColumn;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchema;
+use common_datavalues2::DataSchemaRef;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
@@ -60,6 +58,7 @@ impl AddOnStream {
                         Box::new(Expression::Cast {
                             expr: Box::new(expression),
                             data_type: f.data_type().clone(),
+                            is_nullable: f.is_nullable(),
                         }),
                     );
 
@@ -100,10 +99,11 @@ impl AddOnStream {
         }
 
         for f in &self.default_nonexpr_fields {
-            let column = DataColumn::Constant(
-                DataValue::new_from_data_type(f.data_type(), f.is_nullable()),
-                num_rows,
-            );
+            let default_value = f.data_type().default_value();
+            let column = f
+                .data_type()
+                .create_constant_column(&default_value, num_rows)?;
+
             block = block.add_column(column, f.clone())?;
         }
         block.resort(self.output_schema.clone())

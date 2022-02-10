@@ -19,7 +19,7 @@ use common_arrow::arrow_format::flight::data::Action;
 use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
 use common_base::tokio;
-use common_datavalues::DataValue;
+use common_datavalues2::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ABORT_SESSION;
@@ -166,9 +166,9 @@ async fn do_action_request(query_id: &str, stage_id: &str) -> Result<Request<Act
     let flight_action = FlightAction::PrepareShuffleAction(ShuffleAction {
         query_id: String::from(query_id),
         stage_id: String::from(stage_id),
-        plan: PlanParser::parse("SELECT number FROM numbers(5)", ctx.clone()).await?,
+        plan: PlanParser::parse(ctx.clone(), "SELECT number FROM numbers(5)").await?,
         sinks: vec![String::from("stream_id")],
-        scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
+        scatters_expression: Expression::create_literal(DataValue::UInt64(1)),
     });
 
     Ok(Request::new(flight_action.try_into()?))

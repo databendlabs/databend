@@ -14,6 +14,7 @@
 
 use common_ast::parser::ast::*;
 use common_ast::parser::*;
+use pretty_assertions::assert_eq;
 
 #[test]
 fn test_parse_with_sqlparser() {
@@ -41,7 +42,7 @@ fn test_parse_with_sqlparser() {
         })
         .collect();
     let expected = vec![
-        r#"SELECT DISTINCT a, count(*) FROM t WHERE a = 1 AND b - 1 < a GROUP BY a HAVING a = 1"#,
+        r#"SELECT DISTINCT a, COUNT(*) FROM t WHERE a = 1 AND b - 1 < a GROUP BY a HAVING a = 1"#,
         r#"SELECT * FROM a CROSS JOIN b CROSS JOIN c"#,
         r#"SELECT * FROM a INNER JOIN b ON a.a = b.a"#,
         r#"SELECT * FROM a LEFT OUTER JOIN b ON a.a = b.a"#,

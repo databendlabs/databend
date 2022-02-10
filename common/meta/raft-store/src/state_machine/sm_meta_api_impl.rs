@@ -306,7 +306,7 @@ impl MetaApi for StateMachine {
             let ch: Change<TableMeta> = res.try_into().unwrap();
             let (prev, _result) = ch.unwrap();
 
-            return Err(ErrorCode::TableVersionMissMatch(format!(
+            return Err(ErrorCode::TableVersionMismatched(format!(
                 "targeting version {:?}, current version {}",
                 req.seq, prev.seq,
             )));

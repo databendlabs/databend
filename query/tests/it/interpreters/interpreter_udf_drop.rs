@@ -33,7 +33,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
     static DROP_UDF: &str = "DROP FUNCTION isnotempty";
 
     {
-        let plan = PlanParser::parse(CREATE_UDF, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), CREATE_UDF).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatUDFInterpreter");
         let mut stream = executor.execute(None).await?;
@@ -50,7 +50,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
     }
 
     {
-        let plan = PlanParser::parse(DROP_UDF, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), DROP_UDF).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUDFInterpreter");
         let res = executor.execute(None).await;
@@ -58,7 +58,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
     }
 
     {
-        let plan = PlanParser::parse(DROP_UDF_IF_EXISTS, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), DROP_UDF_IF_EXISTS).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUDFInterpreter");
         let res = executor.execute(None).await;
@@ -66,7 +66,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
     }
 
     {
-        let plan = PlanParser::parse(DROP_UDF, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), DROP_UDF).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUDFInterpreter");
         let res = executor.execute(None).await;
@@ -74,7 +74,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
     }
 
     {
-        let plan = PlanParser::parse(CREATE_UDF, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), CREATE_UDF).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatUDFInterpreter");
         let mut stream = executor.execute(None).await?;
@@ -90,7 +90,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
         assert_eq!(udf.description, "This is a description")
     }
     {
-        let plan = PlanParser::parse(DROP_UDF_IF_EXISTS, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), DROP_UDF_IF_EXISTS).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUDFInterpreter");
         let res = executor.execute(None).await;

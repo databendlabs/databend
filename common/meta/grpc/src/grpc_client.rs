@@ -25,9 +25,7 @@ use common_exception::Result;
 use common_exception::SerializedError;
 use common_grpc::ConnectionFactory;
 use common_grpc::RpcClientTlsConfig;
-use common_meta_types::protobuf::meta_client::MetaClient;
-use common_meta_types::protobuf::GetReply;
-use common_meta_types::protobuf::GetRequest;
+use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::HandshakeRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
@@ -67,7 +65,7 @@ impl ItemManager for MetaChannelManager {
     }
 
     async fn check(&self, mut ch: Self::Item) -> std::result::Result<Self::Item, Self::Error> {
-        futures::future::poll_fn(|cx| (&mut ch).poll_ready(cx))
+        futures::future::poll_fn(|cx| ch.poll_ready(cx))
             .await
             .map_err(|e| {
                 ErrorCode::CannotConnectNode(format!("Check rpc connect failed, error: {}", e))
@@ -123,11 +121,11 @@ impl MetaGrpcClient {
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn make_client(
         &self,
-    ) -> Result<MetaClient<InterceptedService<Channel, AuthInterceptor>>> {
+    ) -> Result<MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>> {
         let channel = self.conn_pool.get(&self.addr).await?;
         tracing::debug!("connecting to {}, channel: {:?}", &self.addr, channel);
 
-        let mut client = MetaClient::new(channel.clone());
+        let mut client = MetaServiceClient::new(channel.clone());
         let mut t = self.token.write().await;
         let token = match t.clone() {
             Some(t) => t,
@@ -139,7 +137,7 @@ impl MetaGrpcClient {
             }
         };
 
-        let client = { MetaClient::with_interceptor(channel, AuthInterceptor { token }) };
+        let client = { MetaServiceClient::with_interceptor(channel, AuthInterceptor { token }) };
 
         Ok(client)
     }
@@ -147,7 +145,7 @@ impl MetaGrpcClient {
     /// Handshake.
     #[tracing::instrument(level = "debug", skip(client, password))]
     async fn handshake(
-        client: &mut MetaClient<Channel>,
+        client: &mut MetaServiceClient<Channel>,
         username: &str,
         password: &str,
     ) -> Result<Vec<u8>> {
@@ -180,7 +178,7 @@ impl MetaGrpcClient {
         R: DeserializeOwned,
     {
         let act: MetaGrpcWriteReq = v.into();
-        let req: Request<RaftRequest> = (&act.clone()).try_into()?;
+        let req: Request<RaftRequest> = act.clone().try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
         let mut client = self.make_client().await?;
@@ -194,7 +192,7 @@ impl MetaGrpcClient {
                         *token = None;
                     }
                     let mut client = self.make_client().await?;
-                    let req: Request<RaftRequest> = (&act).try_into()?;
+                    let req: Request<RaftRequest> = act.try_into()?;
                     let req = common_tracing::inject_span_to_tonic_request(req);
                     Ok(client.write_msg(req).await?.into_inner())
                 } else {
@@ -215,19 +213,19 @@ impl MetaGrpcClient {
     }
 
     #[tracing::instrument(level = "debug", skip(self, v))]
-    pub(crate) async fn do_get<T, R>(&self, v: T) -> Result<R>
+    pub(crate) async fn do_read<T, R>(&self, v: T) -> Result<R>
     where
         T: RequestFor<Reply = R>,
         T: Into<MetaGrpcReadReq>,
         R: DeserializeOwned,
     {
         let act: MetaGrpcReadReq = v.into();
-        let req: Request<GetRequest> = (&act.clone()).try_into()?;
+        let req: Request<RaftRequest> = act.clone().try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
         let mut client = self.make_client().await?;
         let result = client.read_msg(req).await;
-        let result: std::result::Result<GetReply, Status> = match result {
+        let rpc_res: std::result::Result<RaftReply, Status> = match result {
             Ok(r) => Ok(r.into_inner()),
             Err(s) => {
                 if status_is_retryable(&s) {
@@ -236,7 +234,7 @@ impl MetaGrpcClient {
                         *token = None;
                     }
                     let mut client = self.make_client().await?;
-                    let req: Request<GetRequest> = (&act).try_into()?;
+                    let req: Request<RaftRequest> = act.try_into()?;
                     let req = common_tracing::inject_span_to_tonic_request(req);
                     Ok(client.read_msg(req).await?.into_inner())
                 } else {
@@ -244,15 +242,14 @@ impl MetaGrpcClient {
                 }
             }
         };
-        let result = result?;
-        if result.ok {
-            let v = serde_json::from_str::<R>(&result.value)?;
+        let raft_reply = rpc_res?;
+
+        if raft_reply.error.is_empty() {
+            let v = serde_json::from_str::<R>(&raft_reply.data)?;
             Ok(v)
         } else {
-            Err(ErrorCode::EmptyData(format!(
-                "Can not receive data from grpc server, action: {:?}",
-                act
-            )))
+            let e: SerializedError = serde_json::from_str(&raft_reply.error)?;
+            Err(e.into())
         }
     }
 }

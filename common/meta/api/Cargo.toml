@@ -14,12 +14,12 @@ test = false
 
 [dependencies]
 common-base = {path = "../../base" }
-common-datavalues = {path = "../../datavalues" }
+common-datavalues2 = {path = "../../datavalues2" }
 common-exception = {path = "../../exception" }
 common-meta-types = {path= "../types" }
 common-tracing = { path = "../../tracing" }
 
-anyhow = "1.0.52"
+anyhow = "1.0.53"
 async-trait = "0.1.52"
-futures = "0.3.19"
+futures = "0.3.21"
 maplit = "1.0.2"

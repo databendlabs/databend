@@ -16,9 +16,7 @@ use std::pin::Pin;
 use std::task::Context;
 
 use common_datablocks::DataBlock;
-use common_datavalues::columns::DataColumn;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use futures::task::Poll;
 use futures::Stream;
@@ -53,9 +51,15 @@ impl Stream for SubQueriesStream {
         self.input.poll_next_unpin(cx).map(|x| match x {
             Some(Ok(ref block)) => {
                 let mut new_columns = block.columns().to_vec();
-                for index in 0..self.sub_queries_columns.len() {
-                    let values = self.sub_queries_columns[index].clone();
-                    new_columns.push(DataColumn::Constant(values, block.num_rows()));
+
+                let start_index = self.schema.fields().len() - self.sub_queries_columns.len();
+
+                for (index, datavalue) in self.sub_queries_columns.iter().enumerate() {
+                    let data_type = self.schema.field(start_index + index).data_type();
+                    let col = data_type
+                        .create_constant_column(datavalue, block.num_rows())
+                        .unwrap();
+                    new_columns.push(col);
                 }
 
                 Some(Ok(DataBlock::create(self.schema.clone(), new_columns)))

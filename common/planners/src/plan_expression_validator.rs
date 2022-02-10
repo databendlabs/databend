@@ -14,7 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::Function2Factory;
 
 use crate::Expression;
 use crate::ExpressionVisitor;
@@ -88,7 +88,7 @@ fn validate_function_arg(
 pub fn validate_expression(expr: &Expression) -> Result<()> {
     let validator = ExpressionValidator::new(&|expr: &Expression| match expr {
         Expression::ScalarFunction { op, args } => {
-            let features = FunctionFactory::instance().get_features(op)?;
+            let features = Function2Factory::instance().get_features(op)?;
             validate_function_arg(
                 op,
                 args.len(),

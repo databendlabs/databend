@@ -34,7 +34,7 @@ impl ExpressionBinder {
                 table,
                 column,
             } => {
-                let table_name = table.as_ref().map(|t| (&t.name).to_lowercase());
+                let table_name = table.as_ref().map(|t| (t.name).to_lowercase());
                 let column_name = column.name.to_lowercase();
                 let column = bind_context.resolve_column(table_name, column_name)?;
                 Ok(ScalarExpr::BoundVariable(BoundVariable {

@@ -31,6 +31,7 @@ use common_meta_types::UpsertTableOptionReq;
 use dyn_clone::DynClone;
 
 use crate::databases::Database;
+use crate::storages::StorageDescription;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
@@ -118,6 +119,11 @@ pub trait Catalog: DynClone + Send + Sync {
         _func_name: &str,
         _tbl_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
+        unimplemented!()
+    }
+
+    // Get table engines
+    fn get_table_engines(&self) -> Vec<StorageDescription> {
         unimplemented!()
     }
 }

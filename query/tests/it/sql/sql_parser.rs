@@ -47,9 +47,9 @@ use databend_query::sql::statements::DfRevokeStatement;
 use databend_query::sql::statements::DfShowCreateDatabase;
 use databend_query::sql::statements::DfShowCreateTable;
 use databend_query::sql::statements::DfShowDatabases;
+use databend_query::sql::statements::DfShowEngines;
 use databend_query::sql::statements::DfShowGrants;
 use databend_query::sql::statements::DfShowTables;
-use databend_query::sql::statements::DfShowUDF;
 use databend_query::sql::statements::DfTruncateTable;
 use databend_query::sql::statements::DfUseDatabase;
 use databend_query::sql::statements::DfUseTenant;
@@ -1409,18 +1409,6 @@ fn test_drop_udf() -> Result<()> {
 }
 
 #[test]
-fn test_show_udf() -> Result<()> {
-    expect_parse_ok(
-        "SHOW FUNCTION test_udf",
-        DfStatement::ShowUDF(DfShowUDF {
-            udf_name: "test_udf".to_string(),
-        }),
-    )?;
-
-    Ok(())
-}
-
-#[test]
 fn test_alter_udf() -> Result<()> {
     expect_parse_err_contains(
         "ALTER FUNCTION test_udf AS p -> not(isnotnull(p))",
@@ -1497,5 +1485,13 @@ fn test_alter_udf() -> Result<()> {
         }),
     )?;
 
+    Ok(())
+}
+
+#[test]
+fn show_engines_test() -> Result<()> {
+    expect_parse_ok("show engines", DfStatement::ShowEngines(DfShowEngines))?;
+
+    expect_parse_ok("SHOW ENGINES", DfStatement::ShowEngines(DfShowEngines))?;
     Ok(())
 }

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datavalues2::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
@@ -46,7 +48,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "datetime32",
-            data_type: DateTimeType::arc(None),
+            data_type: DateTime32Type::arc(None),
             value: DataValue::UInt64(1630320462),
             column: Series::from_data(vec![1630320462u32, 1637117572u32, 1]),
             val_str: "2021-08-30 10:47:42",
@@ -58,7 +60,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "date32",
-            data_type: Date32Type32::arc(),
+            data_type: Date32Type::arc(),
             value: DataValue::Int64(18869),
             column: Series::from_data(vec![18869i32, 18948i32, 1]),
             val_str: "2021-08-30",
@@ -75,6 +77,49 @@ fn test_serializers() -> Result<()> {
             column: Series::from_data(vec!["hello", "world", "NULL"]),
             val_str: "hello",
             col_str: vec!["hello".to_owned(), "world".to_owned(), "NULL".to_owned()],
+        },
+        Test {
+            name: "array",
+            data_type: Arc::new(ArrayType::create(StringType::arc())),
+            value: DataValue::Array(vec![
+                DataValue::String("data".as_bytes().to_vec()),
+                DataValue::String("bend".as_bytes().to_vec()),
+            ]),
+            column: Arc::new(ArrayColumn::from_data(
+                Arc::new(ArrayType::create(StringType::arc())),
+                vec![0, 1, 3, 6].into(),
+                Series::from_data(vec!["test", "data", "bend", "hello", "world", "NULL"]),
+            )),
+            val_str: "['data', 'bend']",
+            col_str: vec![
+                "['test']".to_owned(),
+                "['data', 'bend']".to_owned(),
+                "['hello', 'world', 'NULL']".to_owned(),
+            ],
+        },
+        Test {
+            name: "struct",
+            data_type: Arc::new(StructType::create(
+                vec!["date".to_owned(), "integer".to_owned()],
+                vec![Date32Type::arc(), Int8Type::arc()],
+            )),
+            value: DataValue::Struct(vec![DataValue::Int64(18869), DataValue::Int64(1)]),
+            column: Arc::new(StructColumn::from_data(
+                vec![
+                    Series::from_data(vec![18869i32, 18948i32, 1]),
+                    Series::from_data(vec![1i8, 2i8, 3]),
+                ],
+                Arc::new(StructType::create(
+                    vec!["date".to_owned(), "integer".to_owned()],
+                    vec![Date32Type::arc(), Int8Type::arc()],
+                )),
+            )),
+            val_str: "('2021-08-30', 1)",
+            col_str: vec![
+                "('2021-08-30', 1)".to_owned(),
+                "('2021-11-17', 2)".to_owned(),
+                "('1970-01-02', 3)".to_owned(),
+            ],
         },
     ];
 
@@ -99,7 +144,7 @@ fn test_serializers() -> Result<()> {
                 Float64Type::arc(),
                 StringType::arc(),
                 BooleanType::arc(),
-                DateType::arc(),
+                Date16Type::arc(),
             ],
         );
         let serializer = data_type.create_serializer();
@@ -115,4 +160,13 @@ fn test_serializers() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[test]
+fn test_convert_arrow() {
+    let t = DateTime32Type::arc(None);
+    let arrow_y = t.to_arrow_field("x");
+    let new_t = from_arrow_field(&arrow_y);
+
+    assert_eq!(new_t.name(), t.name())
 }

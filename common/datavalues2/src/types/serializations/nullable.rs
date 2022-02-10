@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_clickhouse_srv::types::column::NullableColumnData;
 use common_exception::Result;
+use serde_json::Value;
 
 use crate::prelude::DataValue;
 use crate::Column;
@@ -45,5 +49,30 @@ impl TypeSerializer for NullableSerializer {
             }
         });
         Ok(res)
+    }
+
+    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+        let column: &NullableColumn = Series::check_get(column)?;
+        let rows = column.len();
+        let mut res = self.inner.serialize_json(column.inner())?;
+
+        (0..rows).for_each(|row| {
+            if column.null_at(row) {
+                res[row] = Value::Null;
+            }
+        });
+        Ok(res)
+    }
+
+    fn serialize_clickhouse_format(
+        &self,
+        column: &ColumnRef,
+    ) -> Result<common_clickhouse_srv::types::column::ArcColumnData> {
+        let column: &NullableColumn = Series::check_get(column)?;
+        let inner = self.inner.serialize_clickhouse_format(column.inner())?;
+        let nulls = column.ensure_validity().iter().map(|v| !v as u8).collect();
+        let data = NullableColumnData { nulls, inner };
+
+        Ok(Arc::new(data))
     }
 }

@@ -26,27 +26,27 @@ pub struct NullDeserializer {
 
 impl TypeDeserializer for NullDeserializer {
     fn de(&mut self, _reader: &mut &[u8]) -> Result<()> {
-        self.builder.append_null();
+        self.builder.append_default();
         Ok(())
     }
 
     fn de_default(&mut self) {
-        self.builder.append_null();
+        self.builder.append_default();
     }
 
     fn de_batch(&mut self, _reader: &[u8], _step: usize, rows: usize) -> Result<()> {
         for _ in 0..rows {
-            self.builder.append_null();
+            self.builder.append_default();
         }
         Ok(())
     }
 
     fn de_text(&mut self, _reader: &[u8]) -> Result<()> {
-        self.builder.append_null();
+        self.builder.append_default();
         Ok(())
     }
 
     fn finish_to_column(&mut self) -> ColumnRef {
-        self.builder.as_column()
+        self.builder.to_column()
     }
 }

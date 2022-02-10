@@ -29,6 +29,8 @@ pub const QUERY_CLICKHOUSE_HANDLER_HOST: &str = "QUERY_CLICKHOUSE_HANDLER_HOST";
 pub const QUERY_CLICKHOUSE_HANDLER_PORT: &str = "QUERY_CLICKHOUSE_HANDLER_PORT";
 pub const QUERY_HTTP_HANDLER_HOST: &str = "QUERY_HTTP_HANDLER_HOST";
 pub const QUERY_HTTP_HANDLER_PORT: &str = "QUERY_HTTP_HANDLER_PORT";
+pub const QUERY_HTTP_HANDLER_RESULT_TIMEOUT_MILLIS: &str =
+    "QUERY_HTTP_HANDLER_RESULT_TIMEOUT_MILLIS";
 pub const QUERY_FLIGHT_API_ADDRESS: &str = "QUERY_FLIGHT_API_ADDRESS";
 pub const QUERY_HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
 pub const QUERY_METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
@@ -62,16 +64,17 @@ const QUERY_TABLE_ENGINE_MEMORY_ENABLED: &str = "QUERY_TABLE_ENGINE_MEMORY_ENABL
 const QUERY_DATABASE_ENGINE_GITHUB_ENABLED: &str = "QUERY_DATABASE_ENGINE_GITHUB_ENABLED";
 
 const QUERY_MANAGEMENT_MODE: &str = "QUERY_MANAGEMENT_MODE";
+const QUERY_JWT_KEY_FILE: &str = "QUERY_JWT_KEY_FILE";
 
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct QueryConfig {
-    /// Tenant id for get the information from the MetaStore
-    #[clap(long, env = QUERY_TENANT_ID, default_value = "")]
+    /// Tenant id for get the information from the MetaSrv.
+    #[clap(long, env = QUERY_TENANT_ID, default_value = "admin")]
     pub tenant_id: String,
 
-    /// ID for construct the cluster
+    /// ID for construct the cluster.
     #[clap(long, env = QUERY_CLUSTER_ID, default_value = "")]
     pub cluster_id: String,
 
@@ -98,6 +101,9 @@ pub struct QueryConfig {
 
     #[clap(long, env = QUERY_HTTP_HANDLER_PORT, default_value = "8000")]
     pub http_handler_port: u16,
+
+    #[clap(long, env = QUERY_HTTP_HANDLER_RESULT_TIMEOUT_MILLIS, default_value = "10000")]
+    pub http_handler_result_timeout_millis: u64,
 
     #[clap(long, env = QUERY_FLIGHT_API_ADDRESS, default_value = "127.0.0.1:9090")]
     pub flight_api_address: String,
@@ -208,6 +214,9 @@ pub struct QueryConfig {
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     #[clap(long, env = QUERY_MANAGEMENT_MODE)]
     pub management_mode: bool,
+
+    #[clap(long, env = QUERY_JWT_KEY_FILE, default_value = "")]
+    pub jwt_key_file: String,
 }
 
 impl Default for QueryConfig {
@@ -223,6 +232,7 @@ impl Default for QueryConfig {
             clickhouse_handler_port: 9000,
             http_handler_host: "127.0.0.1".to_string(),
             http_handler_port: 8000,
+            http_handler_result_timeout_millis: 10000,
             flight_api_address: "127.0.0.1:9090".to_string(),
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
@@ -250,6 +260,7 @@ impl Default for QueryConfig {
             table_disk_cache_root: "_cache".to_string(),
             table_disk_cache_mb_size: 1024,
             management_mode: false,
+            jwt_key_file: "".to_string(),
         }
     }
 }
@@ -356,6 +367,14 @@ impl QueryConfig {
             http_handler_tls_server_root_ca_cert,
             String,
             QUERY_HTTP_HANDLER_TLS_SERVER_ROOT_CA_CERT
+        );
+
+        env_helper!(
+            mut_config,
+            query,
+            http_handler_result_timeout_millis,
+            u64,
+            QUERY_HTTP_HANDLER_RESULT_TIMEOUT_MILLIS
         );
 
         // for query rpc server
@@ -488,5 +507,6 @@ impl QueryConfig {
             bool,
             QUERY_MANAGEMENT_MODE
         );
+        env_helper!(mut_config, query, management_mode, bool, QUERY_JWT_KEY_FILE);
     }
 }

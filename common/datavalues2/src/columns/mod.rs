@@ -14,26 +14,32 @@
 
 #[macro_use]
 mod builder;
-mod mutable;
 
 mod array;
 mod boolean;
 mod column;
+mod column_with_field;
 mod const_;
 mod eq;
+#[allow(clippy::ptr_arg)]
+mod group_hash;
+mod mutable;
 mod null;
 mod nullable;
 mod primitive;
 pub mod series;
 mod string;
 mod struct_;
-mod wrapper;
+mod take;
+mod viewer;
 
 pub use array::*;
 pub use boolean::*;
 pub use builder::*;
 pub use column::*;
+pub use column_with_field::*;
 pub use const_::*;
+pub use group_hash::GroupHash;
 pub use mutable::*;
 pub use null::*;
 pub use nullable::*;
@@ -41,4 +47,5 @@ pub use primitive::*;
 pub use series::*;
 pub use string::*;
 pub use struct_::*;
-pub use wrapper::*;
+pub use take::*;
+pub use viewer::*;

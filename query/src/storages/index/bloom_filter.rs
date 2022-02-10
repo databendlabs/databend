@@ -17,13 +17,7 @@ use std::sync::Arc;
 use bincode;
 use bit_vec::BitVec;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::DataColumn;
-use common_datavalues::seahash::SeaHasher;
-use common_datavalues::DFHasher;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -36,7 +30,7 @@ use crate::storages::index::IndexSchemaVersion;
 /// For example, expression of 'age = 12' should return false is the bloom filter are sure
 /// of the nonexistent of value '12' in column 'age'. Otherwise should return 'Unknown'.
 ///
-/// If the column is not applicable for bloom filter, like DataType::struct, NotApplicable is used.
+/// If the column is not applicable for bloom filter, like TypeID::struct, NotApplicable is used.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BloomFilterExprEvalResult {
     False,
@@ -86,10 +80,19 @@ impl BloomFilterIndexer {
         [seed0, seed1, seed2, seed3]
     }
 
-    /// Create a bloom filter block from input data blocks.
+    /// Create a bloom filter block from input data.
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
+    #[allow(dead_code)]
     pub fn from_data(blocks: &[DataBlock]) -> Result<Self> {
+        let seeds = Self::create_seeds();
+        Self::from_data_and_seeds(blocks, seeds)
+    }
+
+    /// Create a bloom filter block from input data blocks and seeds.
+    ///
+    /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
+    pub fn from_data_and_seeds(blocks: &[DataBlock], seeds: [u64; 4]) -> Result<Self> {
         if blocks.is_empty() {
             return Err(ErrorCode::BadArguments("data blocks is empty"));
         }
@@ -104,11 +107,10 @@ impl BloomFilterIndexer {
             if BloomFilter::is_supported_type(field.data_type()) {
                 // create field
                 let bloom_column_name = Self::to_bloom_column_name(field.name());
-                let bloom_field = DataField::new(&bloom_column_name, DataType::String, false);
+                let bloom_field = DataField::new(&bloom_column_name, Vu8::to_data_type());
                 bloom_fields.push(bloom_field);
 
                 // create bloom filter per column
-                let seeds = Self::create_seeds();
                 let mut bloom_filter = BloomFilter::with_rate_and_max_bits(
                     total_num_rows,
                     BLOOM_FILTER_DEFAULT_FALSE_POSITIVE_RATE,
@@ -125,7 +127,7 @@ impl BloomFilterIndexer {
                 // create bloom filter column
                 let serialized_bytes = bloom_filter.to_vec()?;
                 let bloom_column =
-                    DataColumn::Constant(DataValue::String(Some(serialized_bytes)), 1);
+                    ColumnRef::Constant(DataValue::String(Some(serialized_bytes)), 1);
                 bloom_columns.push(bloom_column);
             }
         }
@@ -242,6 +244,15 @@ impl BloomFilterIndexer {
             _ => Ok(BloomFilterExprEvalResult::NotApplicable),
         }
     }
+
+    /// Find and returns the bloom filter by name
+    pub fn try_get_bloom(&self, column_name: &str) -> Result<BloomFilter> {
+        let bloom_column = Self::to_bloom_column_name(column_name);
+        let val = self.inner.first(&bloom_column)?;
+        let bloom_bytes = val.as_string()?;
+        let bloom_filter = BloomFilter::from_vec(bloom_bytes.as_ref())?;
+        Ok(bloom_filter)
+    }
 }
 
 /// A bloom filter implementation for data column and values.
@@ -339,6 +350,29 @@ impl BloomFilter {
         self.num_hashes
     }
 
+    /// Returns the reference of bitmap container
+    pub fn bitmap(&self) -> &BitVec<u32> {
+        &self.container
+    }
+
+    /// Returns true if the bitmap contains the other's bitmap.
+    /// Notice: this function doesn't do any schema check, but only bits comparison.
+    pub fn contains(&self, other: &BloomFilter) -> bool {
+        if self.num_bits() != other.num_bits() {
+            return false;
+        }
+
+        let mut copy = self.container.clone();
+        !copy.or(other.bitmap())
+    }
+
+    /// Clone and return an empty bloom filter with same number of bits, seeds and hashes.
+    /// All bits are set to false/zero, e.g. the hashed bits are not cloned.
+    #[must_use]
+    pub fn clone_empty(&self) -> Self {
+        Self::with_size(self.num_bits(), self.num_hashes(), self.seeds)
+    }
+
     /// Returns whether the data type is supported by bloom filter.
     ///
     /// The supported types are most same as Databricks:
@@ -349,25 +383,26 @@ impl BloomFilter {
     ///
     /// Nulls are not added to the Bloom
     /// filter, so any null related filter requires reading the data file. "
-    pub fn is_supported_type(data_type: &DataType) -> bool {
+    pub fn is_supported_type(data_type: &DataTypePtr) -> bool {
+        let data_type_id = data_type.data_type_id();
         matches!(
-            data_type,
-            DataType::UInt8
-                | DataType::UInt16
-                | DataType::UInt32
-                | DataType::UInt64
-                | DataType::Int8
-                | DataType::Int16
-                | DataType::Int32
-                | DataType::Int64
-                | DataType::Float32
-                | DataType::Float64
-                | DataType::Date16
-                | DataType::Date32
-                | DataType::DateTime32(_)
-                | DataType::DateTime64(_, _)
-                | DataType::Interval(_)
-                | DataType::String
+            data_type_id,
+            TypeID::UInt8
+                | TypeID::UInt16
+                | TypeID::UInt32
+                | TypeID::UInt64
+                | TypeID::Int8
+                | TypeID::Int16
+                | TypeID::Int32
+                | TypeID::Int64
+                | TypeID::Float32
+                | TypeID::Float64
+                | TypeID::Date16
+                | TypeID::Date32
+                | TypeID::DateTime32
+                | TypeID::DateTime64
+                | TypeID::Interval
+                | TypeID::String
         )
     }
 
@@ -404,7 +439,7 @@ impl BloomFilter {
     ///
     /// The design of skipping Nulls are arguably correct. For now we do the same as databricks.
     /// See the design of databricks https://docs.databricks.com/delta/optimizations/bloom-filters.html
-    pub fn add(&mut self, column: &DataColumn) -> Result<()> {
+    pub fn add(&mut self, column: &ColumnRef) -> Result<()> {
         if !Self::is_supported_type(&column.data_type()) {
             return Err(ErrorCode::BadArguments(format!(
                 "Unsupported data type: {} ",
@@ -470,7 +505,7 @@ impl BloomFilter {
             )));
         }
 
-        let col = DataColumn::Constant(val, 1);
+        let col = ColumnRef::Constant(val, 1);
         let series = col.to_minimal_array()?;
 
         let hasher1 = self.create_hasher();

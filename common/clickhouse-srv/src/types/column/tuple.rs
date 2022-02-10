@@ -29,8 +29,8 @@ use crate::types::SqlType;
 use crate::types::Value;
 use crate::types::ValueRef;
 
-pub(crate) struct TupleColumnData {
-    pub(crate) inner: Vec<ArcColumnData>,
+pub struct TupleColumnData {
+    pub inner: Vec<ArcColumnData>,
 }
 
 impl TupleColumnData {

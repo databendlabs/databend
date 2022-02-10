@@ -16,12 +16,12 @@ use super::uuid_creator::UUIDZeroFunction;
 use super::uuid_creator::UUIDv4Function;
 use super::uuid_verifier::UUIDIsEmptyFunction;
 use super::uuid_verifier::UUIDIsNotEmptyFunction;
-use crate::scalars::function_factory::FunctionFactory;
+use crate::scalars::Function2Factory;
 
 pub struct UUIDFunction;
 
 impl UUIDFunction {
-    pub fn register(factory: &mut FunctionFactory) {
+    pub fn register2(factory: &mut Function2Factory) {
         factory.register("generateUUIDv4", UUIDv4Function::desc());
         factory.register("zeroUUID", UUIDZeroFunction::desc());
         factory.register("isemptyUUID", UUIDIsEmptyFunction::desc());

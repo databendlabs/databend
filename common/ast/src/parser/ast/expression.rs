@@ -22,73 +22,68 @@ use crate::parser::ast::display_identifier_vec;
 #[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
 pub enum Expr {
-    // Wildcard star
-    Wildcard,
-    // Column reference, with indirection like `table.column`
+    /// Column reference, with indirection like `table.column`
     ColumnRef {
         database: Option<Identifier>,
         table: Option<Identifier>,
         column: Identifier,
     },
-    // `IS NULL` expression
-    IsNull(Box<Expr>),
-    // `IS NOT NULL` expression
-    IsNotNull(Box<Expr>),
-    // `[ NOT ] IN (expr, ...)`
+    /// `IS [ NOT ] NULL` expression
+    IsNull { expr: Box<Expr>, not: bool },
+    /// `[ NOT ] IN (expr, ...)`
     InList {
         expr: Box<Expr>,
         list: Vec<Expr>,
         not: bool,
     },
-    // `[ NOT ] IN (SELECT ...)`
+    /// `[ NOT ] IN (SELECT ...)`
     InSubquery {
         expr: Box<Expr>,
         subquery: Box<Query>,
         not: bool,
     },
-    // `BETWEEN ... AND ...`
+    /// `BETWEEN ... AND ...`
     Between {
         expr: Box<Expr>,
-        negated: bool,
         low: Box<Expr>,
         high: Box<Expr>,
+        not: bool,
     },
-    // Binary operation
+    /// Binary operation
     BinaryOp {
         op: BinaryOperator,
         left: Box<Expr>,
         right: Box<Expr>,
     },
-    // Unary operation
-    UnaryOp {
-        op: UnaryOperator,
-        expr: Box<Expr>,
-    },
-    // `CAST` expression, like `CAST(expr AS target_type)`
+    /// Unary operation
+    UnaryOp { op: UnaryOperator, expr: Box<Expr> },
+    /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
         expr: Box<Expr>,
         target_type: TypeName,
     },
-    // A literal value, such as string, number, date or NULL
+    /// A literal value, such as string, number, date or NULL
     Literal(Literal),
-    // Scalar function call
+    /// `COUNT(*)` expression
+    CountAll,
+    /// Scalar function call
     FunctionCall {
-        // Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
+        /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
         distinct: bool,
         name: String,
         args: Vec<Expr>,
         params: Vec<Literal>,
     },
-    // `CASE ... WHEN ... ELSE ...` expression
+    /// `CASE ... WHEN ... ELSE ...` expression
     Case {
         operand: Option<Box<Expr>>,
         conditions: Vec<Expr>,
         results: Vec<Expr>,
         else_result: Option<Box<Expr>>,
     },
-    // `EXISTS` expression
+    /// `EXISTS` expression
     Exists(Box<Query>),
-    // Scalar subquery, which will only return a single row with a single column.
+    /// Scalar subquery, which will only return a single row with a single column.
     Subquery(Box<Query>),
 }
 
@@ -164,7 +159,7 @@ impl Display for UnaryOperator {
                 write!(f, "+")
             }
             UnaryOperator::Minus => {
-                write!(f, "NEGATE")
+                write!(f, "-")
             }
             UnaryOperator::Not => {
                 write!(f, "NOT")
@@ -327,7 +322,7 @@ impl Display for Literal {
                 write!(f, "{}", val)
             }
             Literal::String(val) => {
-                write!(f, "\"{}\"", val)
+                write!(f, "\'{}\'", val)
             }
             Literal::Boolean(val) => {
                 if *val {
@@ -346,9 +341,6 @@ impl Display for Literal {
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expr::Wildcard => {
-                write!(f, "*")?;
-            }
             Expr::ColumnRef {
                 database,
                 table,
@@ -367,19 +359,16 @@ impl Display for Expr {
                     .as_slice(),
                 )?;
             }
-            Expr::IsNull(expr) => {
-                write!(f, "{} IS NULL", expr)?;
+            Expr::IsNull { expr, not } => {
+                write!(f, "{} IS ", expr)?;
+                if *not {
+                    write!(f, "NOT ")?;
+                }
+                write!(f, "NULL")?;
             }
-            Expr::IsNotNull(expr) => {
-                write!(f, "{} IS NOT NULL", expr)?;
-            }
-            Expr::InList {
-                expr,
-                list,
-                not: negated,
-            } => {
+            Expr::InList { expr, list, not } => {
                 write!(f, "{} ", expr)?;
-                if *negated {
+                if *not {
                     write!(f, "NOT ")?;
                 }
                 write!(f, "IN(")?;
@@ -394,22 +383,22 @@ impl Display for Expr {
             Expr::InSubquery {
                 expr,
                 subquery,
-                not: negated,
+                not,
             } => {
                 write!(f, "{} ", expr)?;
-                if *negated {
+                if *not {
                     write!(f, "NOT ")?;
                 }
                 write!(f, "IN({})", subquery)?;
             }
             Expr::Between {
                 expr,
-                negated,
                 low,
                 high,
+                not,
             } => {
                 write!(f, "{} ", expr)?;
-                if *negated {
+                if *not {
                     write!(f, "NOT ")?;
                 }
                 write!(f, "BETWEEN {} AND {}", low, high)?;
@@ -425,6 +414,9 @@ impl Display for Expr {
             }
             Expr::Literal(lit) => {
                 write!(f, "{}", lit)?;
+            }
+            Expr::CountAll => {
+                write!(f, "COUNT(*)")?;
             }
             Expr::FunctionCall {
                 distinct,

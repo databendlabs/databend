@@ -16,7 +16,7 @@ use std::convert::TryInto;
 
 use common_arrow::arrow_format::flight::data::Action;
 use common_base::tokio;
-use common_datavalues::DataValue;
+use common_datavalues2::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
 use databend_query::api::FlightAction;
@@ -32,9 +32,9 @@ async fn test_shuffle_action_try_into() -> Result<()> {
     let shuffle_action = ShuffleAction {
         query_id: String::from("query_id"),
         stage_id: String::from("stage_id"),
-        plan: PlanParser::parse("SELECT number FROM numbers(5)", ctx.clone()).await?,
+        plan: PlanParser::parse(ctx.clone(), "SELECT number FROM numbers(5)").await?,
         sinks: vec![String::from("stream_id")],
-        scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
+        scatters_expression: Expression::create_literal(DataValue::UInt64(1)),
     };
 
     let from_action = FlightAction::PrepareShuffleAction(shuffle_action);
@@ -48,12 +48,12 @@ async fn test_shuffle_action_try_into() -> Result<()> {
             assert_eq!(action.stage_id, "stage_id");
             assert_eq!(
                 action.plan,
-                PlanParser::parse("SELECT number FROM numbers(5)", ctx.clone()).await?
+                PlanParser::parse(ctx.clone(), "SELECT number FROM numbers(5)").await?
             );
             assert_eq!(action.sinks, vec![String::from("stream_id")]);
             assert_eq!(
                 action.scatters_expression,
-                Expression::create_literal(DataValue::UInt64(Some(1)))
+                Expression::create_literal(DataValue::UInt64(1))
             );
         }
     }

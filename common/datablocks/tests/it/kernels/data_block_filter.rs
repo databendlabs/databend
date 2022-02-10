@@ -12,29 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datablocks::DataBlock;
-use common_datavalues::columns::DataColumn;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 
 #[test]
 fn test_filter_non_const_data_block() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::String, false),
+        DataField::new("a", i8::to_data_type()),
+        DataField::new("b", Vu8::to_data_type()),
     ]);
 
-    let block = DataBlock::create_by_array(schema, vec![
-        Series::new(vec![1i8, 1, 2, 1, 2, 3]),
-        Series::new(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
+    let block = DataBlock::create(schema, vec![
+        Series::from_data(vec![1i8, 1, 2, 1, 2, 3]),
+        Series::from_data(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
     ]);
 
-    let predicate = Series::new(vec![true, false, true, true, false, false]).into();
+    let predicate = Series::from_data(vec![true, false, true, true, false, false]);
     let block = DataBlock::filter_block(&block, &predicate)?;
 
     common_datablocks::assert_blocks_eq(
@@ -56,16 +52,16 @@ fn test_filter_non_const_data_block() -> Result<()> {
 #[test]
 fn test_filter_all_false_data_block() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::String, false),
+        DataField::new("a", i8::to_data_type()),
+        DataField::new("b", Vu8::to_data_type()),
     ]);
 
-    let block = DataBlock::create_by_array(schema, vec![
-        Series::new(vec![1i8, 1, 2, 1, 2, 3]),
-        Series::new(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
+    let block = DataBlock::create(schema, vec![
+        Series::from_data(vec![1i8, 1, 2, 1, 2, 3]),
+        Series::from_data(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
     ]);
 
-    let predicate = Series::new(vec![false, false, false, false, false, false]).into();
+    let predicate = Series::from_data(vec![false, false, false, false, false, false]);
     let block = DataBlock::filter_block(&block, &predicate)?;
 
     common_datablocks::assert_blocks_eq(
@@ -79,16 +75,19 @@ fn test_filter_all_false_data_block() -> Result<()> {
 #[test]
 fn test_filter_const_data_block() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::String, false),
+        DataField::new("a", i8::to_data_type()),
+        DataField::new("b", Vu8::to_data_type()),
     ]);
 
     let block = DataBlock::create(schema, vec![
-        DataColumn::Array(Series::new(vec![1i8, 1, 2, 1, 2, 3])),
-        DataColumn::Constant(DataValue::String(Some(vec![b'x', b'1'])), 6),
+        Series::from_data(vec![1i8, 1, 2, 1, 2, 3]),
+        Arc::new(ConstColumn::new(
+            Series::from_data(vec![vec![b'x', b'1']]),
+            6,
+        )),
     ]);
 
-    let predicate = Series::new(vec![true, false, true, true, false, false]).into();
+    let predicate = Series::from_data(vec![true, false, true, true, false, false]);
     let block = DataBlock::filter_block(&block, &predicate)?;
 
     common_datablocks::assert_blocks_eq(
@@ -110,16 +109,19 @@ fn test_filter_const_data_block() -> Result<()> {
 #[test]
 fn test_filter_all_const_data_block() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::String, false),
+        DataField::new("a", i8::to_data_type()),
+        DataField::new("b", Vu8::to_data_type()),
     ]);
 
     let block = DataBlock::create(schema, vec![
-        DataColumn::Constant(DataValue::UInt8(Some(1)), 6),
-        DataColumn::Constant(DataValue::String(Some(vec![b'x', b'1'])), 6),
+        Arc::new(ConstColumn::new(Series::from_data(vec![1i8]), 6)),
+        Arc::new(ConstColumn::new(
+            Series::from_data(vec![vec![b'x', b'1']]),
+            6,
+        )),
     ]);
 
-    let predicate = Series::new(vec![true, false, true, true, false, false]).into();
+    let predicate = Series::from_data(vec![true, false, true, true, false, false]);
     let block = DataBlock::filter_block(&block, &predicate)?;
 
     common_datablocks::assert_blocks_eq(

@@ -14,9 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableMeta;
 use common_planners::*;
@@ -26,7 +24,7 @@ fn test_plan_display_indent() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     // TODO test other plan type
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i64::to_data_type())]);
 
     let mut options = HashMap::new();
     options.insert("opt_foo".to_string(), "opt_bar".to_string());

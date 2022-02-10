@@ -14,7 +14,7 @@
 //
 
 use common_base::tokio;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::*;
@@ -51,14 +51,14 @@ async fn test_fuse_history_table_args() -> Result<()> {
         test_drive_with_args(Some(vec![])).await,
     );
 
-    let arg_db = Expression::create_literal(DataValue::String(Some(test_db.as_bytes().to_vec())));
+    let arg_db = Expression::create_literal(DataValue::String(test_db.as_bytes().to_vec()));
     expects_err(
         "bad argument (no table)",
         ErrorCode::bad_arguments_code(),
         test_drive_with_args(Some(vec![arg_db])).await,
     );
 
-    let arg_db = Expression::create_literal(DataValue::String(Some(test_db.as_bytes().to_vec())));
+    let arg_db = Expression::create_literal(DataValue::String(test_db.as_bytes().to_vec()));
     expects_err(
         "bad argument (too many args)",
         ErrorCode::bad_arguments_code(),
@@ -81,8 +81,8 @@ async fn test_fuse_history_table_read() -> Result<()> {
     catalog.create_table(create_table_plan.into()).await?;
 
     // func args
-    let arg_db = Expression::create_literal(DataValue::String(Some(db.as_bytes().to_vec())));
-    let arg_tbl = Expression::create_literal(DataValue::String(Some(tbl.as_bytes().to_vec())));
+    let arg_db = Expression::create_literal(DataValue::String(db.as_bytes().to_vec()));
+    let arg_tbl = Expression::create_literal(DataValue::String(tbl.as_bytes().to_vec()));
 
     {
         let expected = vec![
@@ -118,7 +118,7 @@ async fn test_fuse_history_table_read() -> Result<()> {
 
         expects_ok(
             "count_should_be_1",
-            execute_query(qry.as_str(), ctx.clone()).await,
+            execute_query(ctx.clone(), qry.as_str()).await,
             expected,
         )
         .await?;
@@ -138,7 +138,7 @@ async fn test_fuse_history_table_read() -> Result<()> {
         );
         expects_ok(
             "check_row_and_block_count",
-            execute_query(qry.as_str(), ctx.clone()).await,
+            execute_query(ctx.clone(), qry.as_str()).await,
             expected,
         )
         .await?;
@@ -161,7 +161,7 @@ async fn test_fuse_history_table_read() -> Result<()> {
         );
         expects_ok(
             "check_row_and_block_count_after_append",
-            execute_query(qry.as_str(), ctx.clone()).await,
+            execute_query(ctx.clone(), qry.as_str()).await,
             expected,
         )
         .await?;
@@ -170,13 +170,13 @@ async fn test_fuse_history_table_read() -> Result<()> {
     {
         // incompatible table engine
         let qry = format!("create table {}.in_mem (a int) engine =Memory", db);
-        execute_query(qry.as_str(), ctx.clone()).await?;
+        execute_query(ctx.clone(), qry.as_str()).await?;
 
         let qry = format!("select * from fuse_history('{}', '{}')", db, "in_mem");
         expects_err(
             "check_row_and_block_count_after_append",
             ErrorCode::bad_arguments_code(),
-            execute_query(qry.as_str(), ctx.clone()).await,
+            execute_query(ctx.clone(), qry.as_str()).await,
         );
     }
 

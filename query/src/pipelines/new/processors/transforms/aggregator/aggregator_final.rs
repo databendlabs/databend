@@ -5,7 +5,7 @@ use crate::pipelines::new::processors::transforms::transform_aggregator::Aggrega
 use crate::pipelines::transforms::group_by::{PolymorphicKeysHelper};
 use common_exception::Result;
 
-pub struct FinalAggregator<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>> {
+pub struct FinalAggregator<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> {
     is_generated: bool,
 
     method: Method,
@@ -13,7 +13,7 @@ pub struct FinalAggregator<const HAS_AGG: bool, Method: HashMethod + Polymorphic
     params: Arc<AggregatorParams>,
 }
 
-impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator for FinalAggregator<true, Method> {
+impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for FinalAggregator<true, Method> {
     const NAME: &'static str = "";
 
     fn consume(&mut self, data: DataBlock) -> Result<()> {
@@ -26,11 +26,11 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator for FinalAgg
     }
 }
 
-impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator for FinalAggregator<false, Method> {
+impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for FinalAggregator<false, Method> {
     const NAME: &'static str = "";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
-        let key_array = block.column(self.params.aggregate_functions.len()).to_array()?;
+        // let key_array = block.column(self.params.aggregate_functions.len()).to_array()?;
         // let key_array = block.column(aggr_funcs_len).to_array()?;
 
         // let key_array: $key_array_type = key_array.$downcast_fn()?;

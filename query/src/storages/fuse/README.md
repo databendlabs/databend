@@ -6,7 +6,7 @@ This is an ongoing work.
 
 **Table Layout**
 
-A table comprised of a list of snapshots. MetaStore keeps a pointer to 
+A table is comprised of a list of snapshots. MetaStore keeps a pointer to 
 the latest snapshot of a given table.
 
 - Snapshot
@@ -32,23 +32,23 @@ the latest snapshot of a given table.
 
 - Insert `Interpreter`
 
-  Accumulates/batch data into blocks, naturally ordered, not partitioning
-t this stage, we rely on background tasks to merge the data properly.
+  Accumulate/Batch data into blocks, naturally ordered, not partitioning
+  this stage, we rely on background tasks to merge the data properly.
   
 - `Table::append`
   
   For each block, put it in object storage (as parquet for the time being).  
     
-  Segment are generated for those blocks, which tracks all the block
-  meta information. also, statistics of each block are aggregated and kept 
-  int the segments.
+  Segments are generated for those blocks, which tracks all the block
+  meta information. Also, statistics of each block is aggregated and kept 
+  in the corresponding segment.
 
   Segments are stored in object storage as well.
  
      
 - commit (by "Coordinator" role)
 
-  Gather all the segments(info) , aggregates the statistics, merge segments
+  Gather all the segments(info), aggregate the statistics, merge segments
   with previous snapshot, and commit.  
 
   In case of conflicts, "Coordinator" need to re-try the transaction.(OCC, Table level, READ-COMMITTED)

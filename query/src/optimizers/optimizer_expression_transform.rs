@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::Function2Factory;
 use common_planners::*;
 
 use crate::optimizers::Optimizer;
@@ -47,7 +47,7 @@ impl ExprTransformImpl {
             return Ok(origin.clone());
         }
 
-        let factory = FunctionFactory::instance();
+        let factory = Function2Factory::instance();
         let function_features = factory.get_features(op)?;
 
         let expr = function_features.negative_function_name.as_ref().map_or(
@@ -111,7 +111,7 @@ impl ExprTransformImpl {
     }
 
     fn make_condition(op: &str, origin: &Expression) -> Result<Expression> {
-        let factory = FunctionFactory::instance();
+        let factory = Function2Factory::instance();
         let function_features = factory.get_features(op)?;
         if function_features.is_bool_func {
             Ok(origin.clone())
@@ -148,6 +148,108 @@ impl ExprTransformImpl {
             Expression::ScalarFunction { op, .. } => Self::make_condition(op.as_str(), origin),
             _ => Ok(origin.not_eq(lit(0))),
         }
+    }
+
+    fn constant_transformer(origin: &Expression) -> Result<Expression> {
+        let (column_name, left, right, is_and) = match origin {
+            Expression::BinaryExpression { op, left, right } => match op.to_lowercase().as_str() {
+                "and" => (origin.column_name(), left, right, true),
+                "or" => (origin.column_name(), left, right, false),
+                _ => return Ok(origin.clone()),
+            },
+            _ => return Ok(origin.clone()),
+        };
+
+        let left = Self::constant_transformer(left)?;
+        let right = Self::constant_transformer(right)?;
+
+        let mut is_remove = false;
+
+        let mut left_const = false;
+        let new_left = Self::eval_const_cond(
+            column_name.clone(),
+            &left,
+            is_and,
+            &mut left_const,
+            &mut is_remove,
+        )?;
+        if is_remove {
+            return Ok(new_left);
+        }
+
+        let mut right_const = false;
+        let new_right = Self::eval_const_cond(
+            column_name.clone(),
+            &right,
+            is_and,
+            &mut right_const,
+            &mut is_remove,
+        )?;
+        if is_remove {
+            return Ok(new_right);
+        }
+
+        match (left_const, right_const) {
+            (true, true) => {
+                if is_and {
+                    Ok(Expression::Literal {
+                        value: DataValue::Boolean(true),
+                        column_name: Some(column_name),
+                        data_type: bool::to_data_type(),
+                    })
+                } else {
+                    Ok(Expression::Literal {
+                        value: DataValue::Boolean(false),
+                        column_name: Some(column_name),
+                        data_type: bool::to_data_type(),
+                    })
+                }
+            }
+            (true, false) => Ok(new_right),
+            (false, true) => Ok(new_left),
+            (false, false) => {
+                if is_and {
+                    Ok(new_left.and(new_right))
+                } else {
+                    Ok(new_left.or(new_right))
+                }
+            }
+        }
+    }
+
+    fn eval_const_cond(
+        column_name: String,
+        expr: &Expression,
+        is_and: bool,
+        is_const: &mut bool,
+        is_remove: &mut bool,
+    ) -> Result<Expression> {
+        match expr {
+            Expression::Literal { ref value, .. } => {
+                *is_const = true;
+                let val = value.as_bool()?;
+                if val {
+                    if !is_and {
+                        *is_remove = true;
+                        return Ok(Expression::Literal {
+                            value: DataValue::Boolean(true),
+                            column_name: Some(column_name),
+                            data_type: bool::to_data_type(),
+                        });
+                    }
+                } else if is_and {
+                    *is_remove = true;
+                    return Ok(Expression::Literal {
+                        value: DataValue::Boolean(false),
+                        column_name: Some(column_name),
+                        data_type: bool::to_data_type(),
+                    });
+                }
+            }
+            _ => *is_const = false,
+        }
+        *is_remove = false;
+        Ok(expr.clone())
     }
 }
 
@@ -201,7 +303,8 @@ impl PlanRewriter for ExprTransformImpl {
         }
 
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        let new_predicate = Self::boolean_transformer(&plan.predicate)?;
+        let new_predicate = Self::constant_transformer(&plan.predicate)?;
+        let new_predicate = Self::boolean_transformer(&new_predicate)?;
         let new_predicate = Self::truth_transformer(&new_predicate, false)?;
         PlanBuilder::from(&new_input).filter(new_predicate)?.build()
     }
@@ -217,7 +320,8 @@ impl PlanRewriter for ExprTransformImpl {
         }
 
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
-        let new_predicate = Self::boolean_transformer(&plan.predicate)?;
+        let new_predicate = Self::constant_transformer(&plan.predicate)?;
+        let new_predicate = Self::boolean_transformer(&new_predicate)?;
         let new_predicate = Self::truth_transformer(&new_predicate, false)?;
         PlanBuilder::from(&new_input).having(new_predicate)?.build()
     }

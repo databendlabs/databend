@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use databend_query::servers::http::v1::block_to_json::block_to_json;
 use pretty_assertions::assert_eq;
@@ -27,23 +28,46 @@ where T: Serialize {
 }
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("c1", DataType::Int32, is_nullable),
-        DataField::new("c2", DataType::String, is_nullable),
-        DataField::new("c3", DataType::Boolean, is_nullable),
-        DataField::new("c4", DataType::Float64, is_nullable),
-        DataField::new("c5", DataType::Date16, is_nullable),
+    let schema = match is_nullable {
+        false => DataSchemaRefExt::create(vec![
+            DataField::new("c1", i32::to_data_type()),
+            DataField::new("c2", Vu8::to_data_type()),
+            DataField::new("c3", bool::to_data_type()),
+            DataField::new("c4", f64::to_data_type()),
+            DataField::new("c5", Date16Type::arc()),
+        ]),
+        true => DataSchemaRefExt::create(vec![
+            DataField::new_nullable("c1", i32::to_data_type()),
+            DataField::new_nullable("c2", Vu8::to_data_type()),
+            DataField::new_nullable("c3", bool::to_data_type()),
+            DataField::new_nullable("c4", f64::to_data_type()),
+            DataField::new_nullable("c5", Date16Type::arc()),
+        ]),
+    };
+
+    let block = DataBlock::create(schema.clone(), vec![
+        Series::from_data(vec![1, 2, 3]),
+        Series::from_data(vec!["a", "b", "c"]),
+        Series::from_data(vec![true, true, false]),
+        Series::from_data(vec![1.1, 2.2, 3.3]),
+        Series::from_data(vec![1_u16, 2_u16, 3_u16]),
     ]);
 
-    let block = DataBlock::create_by_array(schema, vec![
-        Series::new(vec![1, 2, 3]),
-        Series::new(vec!["a", "b", "c"]),
-        Series::new(vec![true, true, false]),
-        Series::new(vec![1.1, 2.2, 3.3]),
-        Series::new(vec![1_u16, 2_u16, 3_u16])
-            .cast_with_type(&DataType::Date16)
-            .unwrap(),
-    ]);
+    let block = if is_nullable {
+        let columns = block
+            .columns()
+            .iter()
+            .map(|c| {
+                let mut validity = MutableBitmap::new();
+                validity.extend_constant(c.len(), true);
+                NullableColumn::new(c.clone(), validity.into()).arc()
+            })
+            .collect();
+        DataBlock::create(schema, columns)
+    } else {
+        block
+    };
+
     let json_block = block_to_json(&block)?;
     let expect = vec![
         vec![val(1), val("a"), val(true), val(1.1), val("1970-01-02")],

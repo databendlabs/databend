@@ -46,6 +46,7 @@ clickhouse_handler_host = \"127.0.0.1\"
 clickhouse_handler_port = 9000
 http_handler_host = \"127.0.0.1\"
 http_handler_port = 8000
+http_handler_result_timeout_millis = 10000
 flight_api_address = \"127.0.0.1:9090\"
 http_api_address = \"127.0.0.1:8080\"
 metric_api_address = \"127.0.0.1:7070\"
@@ -73,6 +74,7 @@ table_memory_cache_mb_size = 256
 table_disk_cache_root = \"_cache\"
 table_disk_cache_mb_size = 1024
 management_mode = false
+jwt_key_file = \"\"
 
 [log]
 log_level = \"INFO\"

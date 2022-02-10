@@ -21,7 +21,7 @@ use common_base::tokio::sync::mpsc::Sender;
 use common_base::tokio::sync::*;
 use common_base::TrySpawn;
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -74,7 +74,10 @@ impl DatabendQueryFlightDispatcher {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    pub fn get_stream(&self, ticket: &StreamTicket) -> Result<mpsc::Receiver<Result<DataBlock>>> {
+    pub fn get_stream(
+        &self,
+        ticket: &StreamTicket,
+    ) -> Result<(mpsc::Receiver<Result<DataBlock>>, DataSchemaRef)> {
         let stage_name = format!("{}/{}", ticket.query_id, ticket.stage_id);
         if let Some(notify) = self.stages_notify.write().remove(&stage_name) {
             notify.notify_waiters();
@@ -82,7 +85,7 @@ impl DatabendQueryFlightDispatcher {
 
         let stream_name = format!("{}/{}", stage_name, ticket.stream);
         match self.streams.write().remove(&stream_name) {
-            Some(stream_info) => Ok(stream_info.rx),
+            Some(stream_info) => Ok((stream_info.rx, stream_info.schema)),
             None => Err(ErrorCode::NotFoundStream("Stream is not found")),
         }
     }
@@ -125,7 +128,7 @@ impl DatabendQueryFlightDispatcher {
 
     #[tracing::instrument(level = "debug", skip_all, fields(session.id = session.get_id().as_str()))]
     async fn one_sink_action(&self, session: SessionRef, action: &FlightAction) -> Result<()> {
-        let query_context = session.create_context().await?;
+        let query_context = session.create_query_context().await?;
         let action_context = QueryContext::create_from(query_context.clone());
         let pipeline_builder = PipelineBuilder::create(action_context.clone());
 
@@ -181,7 +184,7 @@ impl DatabendQueryFlightDispatcher {
     where
         T: FlightScatter + Send + 'static,
     {
-        let query_context = session.create_context().await?;
+        let query_context = session.create_query_context().await?;
         let action_context = QueryContext::create_from(query_context.clone());
         let pipeline_builder = PipelineBuilder::create(action_context.clone());
 

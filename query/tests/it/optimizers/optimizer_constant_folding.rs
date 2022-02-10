@@ -79,15 +79,7 @@ async fn test_constant_folding_optimizer() -> Result<()> {
                 query: "SELECT sipHash('test_string')",
                 expect: "\
                 Projection: sipHash('test_string'):UInt64\
-                \n  Expression: 15735157695654173841:UInt64 (Before Projection)\
-                \n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
-            },
-            Test {
-                name: "Projection logics const recursion",
-                query: "SELECT 1 = 1 AND 2 > 1",
-                expect: "\
-                Projection: ((1 = 1) AND (2 > 1)):Boolean\
-                \n  Expression: true:Boolean (Before Projection)\
+                \n  Expression: 11164312367746070837:UInt64 (Before Projection)\
                 \n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
             },
             Test {
@@ -106,76 +98,12 @@ async fn test_constant_folding_optimizer() -> Result<()> {
                 \n  Expression: String:String (Before Projection)\
                 \n    ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
             },
-            Test {
-                name: "Filter true and cond",
-                query: "SELECT number from numbers(10) where true AND number > 1",
-                expect: "\
-                Projection: number:UInt64\
-                \n  Filter: (number > 1)\
-                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(true AND (number > 1))]]",
-            },
-            Test {
-                name: "Filter cond and true",
-                query: "SELECT number from numbers(10) where number > 1 AND true",
-                expect: "\
-                Projection: number:UInt64\
-                \n  Filter: (number > 1)\
-                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number > 1) AND true)]]",
-            },
-            Test {
-                name: "Filter false and cond",
-                query: "SELECT number from numbers(10) where false AND number > 1",
-                expect: "\
-                Projection: number:UInt64\
-                \n  Filter: false\
-                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(false AND (number > 1))]]",
-            },
-            Test {
-                name: "Filter cond and false",
-                query: "SELECT number from numbers(10) where number > 1 AND false",
-                expect: "\
-                Projection: number:UInt64\
-                \n  Filter: false\
-                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number > 1) AND false)]]",
-            },
-            Test {
-                name: "Filter false or cond",
-                query: "SELECT number from numbers(10) where false OR number > 1",
-                expect: "\
-                Projection: number:UInt64\
-                \n  Filter: (number > 1)\
-                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(false OR (number > 1))]]",
-            },
-            Test {
-                name: "Filter cond or false",
-                query: "SELECT number from numbers(10) where number > 1 OR false",
-                expect: "\
-                Projection: number:UInt64\
-                \n  Filter: (number > 1)\
-                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number > 1) OR false)]]",
-            },
-            Test {
-                name: "Filter true or cond",
-                query: "SELECT number from numbers(10) where true OR number > 1",
-                expect: "\
-                Projection: number:UInt64\
-                \n  Filter: true\
-                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(true OR (number > 1))]]",
-            },
-            Test {
-                name: "Filter cond or true",
-                query: "SELECT number from numbers(10) where number > 1 OR true",
-                expect: "\
-                Projection: number:UInt64\
-                \n  Filter: true\
-                \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [((number > 1) OR true)]]",
-            },
         ];
 
     for test in tests {
         let ctx = crate::tests::create_query_context()?;
 
-        let plan = PlanParser::parse(test.query, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), test.query).await?;
         let mut optimizer = ConstantFoldingOptimizer::create(ctx);
         let optimized = optimizer.optimize(&plan)?;
         let actual = format!("{:?}", optimized);

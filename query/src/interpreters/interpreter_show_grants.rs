@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_planners::ShowGrantsPlan;
 use common_streams::DataBlockStream;
@@ -46,8 +46,7 @@ impl Interpreter for ShowGrantsInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let schema =
-            DataSchemaRefExt::create(vec![DataField::new("Grants", DataType::String, false)]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new("Grants", Vu8::to_data_type())]);
 
         // TODO: add permission check on reading user grants
         let user_info = match self.plan.user_identity {
@@ -68,7 +67,7 @@ impl Interpreter for ShowGrantsInterpreter {
             .map(|e| e.to_string().into_bytes())
             .collect::<Vec<_>>();
 
-        let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(grant_list)]);
+        let block = DataBlock::create(schema.clone(), vec![Series::from_data(grant_list)]);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))
     }
 }

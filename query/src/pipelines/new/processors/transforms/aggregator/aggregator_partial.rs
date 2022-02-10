@@ -1,13 +1,13 @@
 use std::sync::Arc;
 use bytes::BytesMut;
 use common_datablocks::{DataBlock, HashMethod, HashMethodKeysU16, HashMethodKeysU32, HashMethodKeysU64, HashMethodKeysU8, HashMethodSerializer};
-use common_datavalues::columns::DataColumn;
-use common_datavalues::prelude::{IntoSeries, Series, StringArrayBuilder};
+use common_datavalues2::{ColumnRef, MutableColumn, MutableStringColumn};
+use common_datavalues2::prelude::column::ScalarColumnBuilder;
 use common_exception::Result;
 use common_functions::aggregates::{StateAddr, StateAddrs};
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::transforms::group_by::StateEntity;
-use crate::pipelines::transforms::group_by::KeysArrayBuilder;
+use crate::pipelines::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::new::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::transforms::group_by::{AggregatorState, PolymorphicKeysHelper};
 
@@ -64,7 +64,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 
     #[inline(always)]
-    fn aggregate_arguments(block: &DataBlock, params: &Arc<AggregatorParams>) -> Result<Vec<Vec<Series>>> {
+    fn aggregate_arguments(block: &DataBlock, params: &Arc<AggregatorParams>) -> Result<Vec<Vec<ColumnRef>>> {
         let aggregate_functions_arguments = &params.aggregate_functions_arguments_name;
         let mut aggregate_arguments_columns = Vec::with_capacity(aggregate_functions_arguments.len());
         for function_arguments in aggregate_functions_arguments {
@@ -72,7 +72,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
             for argument_name in function_arguments {
                 let argument_column = block.try_column_by_name(argument_name)?;
-                function_arguments_column.push(argument_column.to_array()?);
+                function_arguments_column.push(argument_column.clone());
             }
 
             aggregate_arguments_columns.push(function_arguments_column);
@@ -104,11 +104,11 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 
     #[inline(always)]
-    pub fn group_columns<'a>(names: &[String], block: &'a DataBlock) -> Result<Vec<&'a DataColumn>> {
+    pub fn group_columns<'a>(names: &[String], block: &'a DataBlock) -> Result<Vec<&'a ColumnRef>> {
         names
             .iter()
             .map(|column_name| block.try_column_by_name(column_name))
-            .collect::<Result<Vec<&DataColumn>>>()
+            .collect::<Result<Vec<&ColumnRef>>>()
     }
 
     #[inline(always)]
@@ -125,8 +125,8 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
 
         // Builders.
-        let mut state_builders: Vec<StringArrayBuilder> = (0..aggr_len)
-            .map(|_| StringArrayBuilder::with_capacity(state_groups_len * 4))
+        let mut state_builders: Vec<MutableStringColumn> = (0..aggr_len)
+            .map(|_| MutableStringColumn::with_capacity(state_groups_len * 4))
             .collect();
 
         let mut group_key_builder = self.method.state_array_builder(state_groups_len);
@@ -146,13 +146,13 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         }
 
         let schema = &self.params.schema;
-        let mut columns: Vec<Series> = Vec::with_capacity(schema.fields().len());
+        let mut columns: Vec<ColumnRef> = Vec::with_capacity(schema.fields().len());
         for mut builder in state_builders {
-            columns.push(builder.finish().into_series());
+            columns.push(builder.to_column());
         }
 
         columns.push(group_key_builder.finish());
-        Ok(Some(DataBlock::create_by_array(schema.clone(), columns)))
+        Ok(Some(DataBlock::create(schema.clone(), columns)))
     }
 }
 

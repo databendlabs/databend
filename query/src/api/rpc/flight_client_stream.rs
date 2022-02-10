@@ -15,11 +15,10 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::io::flight::deserialize_batch;
-use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_base::tokio::sync::mpsc::Receiver;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::Stream;
@@ -39,24 +38,21 @@ impl FlightDataStream {
             match flight_data {
                 Err(status) => Err(ErrorCode::UnknownException(status.message())),
                 Ok(flight_data) => {
-                    fn create_data_block(record_batch: RecordBatch) -> DataBlock {
-                        let columns = record_batch
-                            .columns()
-                            .iter()
-                            .map(|column| DataColumn::Array(column.clone().into_series()))
-                            .collect::<Vec<_>>();
-
-                        DataBlock::create(
-                            Arc::new(DataSchema::from(record_batch.schema().as_ref())),
-                            columns,
-                        )
-                    }
-
                     let arrow_schema = Arc::new(schema.to_arrow());
-                    Ok(
-                        deserialize_batch(&flight_data, arrow_schema, true, &Default::default())
-                            .map(create_data_block)?,
-                    )
+                    let ipc_fields = common_arrow::arrow::io::ipc::write::default_ipc_fields(
+                        &arrow_schema.fields,
+                    );
+                    let ipc_schema = common_arrow::arrow::io::ipc::IpcSchema {
+                        fields: ipc_fields,
+                        is_little_endian: true,
+                    };
+                    let batch = deserialize_batch(
+                        &flight_data,
+                        arrow_schema,
+                        &ipc_schema,
+                        &Default::default(),
+                    )?;
+                    batch.try_into()
                 }
             }
         })
@@ -66,30 +62,27 @@ impl FlightDataStream {
     #[inline]
     #[allow(dead_code)]
     pub fn from_receiver(
-        schema_ref: DataSchemaRef,
+        schema: DataSchemaRef,
         inner: Receiver<Result<FlightData, ErrorCode>>,
     ) -> impl Stream<Item = Result<DataBlock, ErrorCode>> {
         ReceiverStream::new(inner).map(move |flight_data| match flight_data {
             Err(error_code) => Err(error_code),
             Ok(flight_data) => {
-                fn create_data_block(record_batch: RecordBatch) -> DataBlock {
-                    let columns = record_batch
-                        .columns()
-                        .iter()
-                        .map(|column| DataColumn::Array(column.clone().into_series()))
-                        .collect::<Vec<_>>();
+                let arrow_schema = Arc::new(schema.to_arrow());
+                let ipc_fields =
+                    common_arrow::arrow::io::ipc::write::default_ipc_fields(&arrow_schema.fields);
+                let ipc_schema = common_arrow::arrow::io::ipc::IpcSchema {
+                    fields: ipc_fields,
+                    is_little_endian: true,
+                };
 
-                    let schema = DataSchema::from(record_batch.schema().as_ref());
-                    DataBlock::create(Arc::new(schema), columns)
-                }
-
-                Ok(deserialize_batch(
+                let batch = deserialize_batch(
                     &flight_data,
-                    Arc::new(schema_ref.to_arrow()),
-                    true,
+                    arrow_schema,
+                    &ipc_schema,
                     &Default::default(),
-                )
-                .map(create_data_block)?)
+                )?;
+                batch.try_into()
             }
         })
     }

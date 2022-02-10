@@ -3,6 +3,3 @@ contact_links:
   - name: Question
     url: https://github.com/datafuselabs/databend/discussions/categories/q-a
     about: Please ask and answer questions on the discussions Q&A category.
-  - name: Feature Request
-    url: https://github.com/datafuselabs/databend/discussions/categories/ideas
-    about: Please discuss feature requests on the discussions Ideas category.

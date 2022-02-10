@@ -14,8 +14,10 @@
 
 use std::sync::Arc;
 
-use common_dal::DataAccessor;
-use common_dal::S3;
+use common_dal2::credential::Credential;
+use common_dal2::readers::SeekableReader;
+use common_dal2::services::s3;
+use common_dal2::Operator as DalOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::CopyPlan;
@@ -70,11 +72,12 @@ impl Interpreter for CopyInterpreter {
         }
         let (stage, path) = c.unwrap();
 
-        let acc = get_dal_by_stage(self.ctx.clone(), stage)?;
+        let acc = get_dal_by_stage(self.ctx.clone(), stage).await?;
         let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-        let input_stream = acc.get_input_stream(path, None)?;
+        let o = acc.stat(path).run().await.unwrap();
+        let reader = SeekableReader::new(acc, path, o.size);
         let read_buffer_size = self.ctx.get_settings().get_storage_read_buffer_size()?;
-        let reader = BufReader::with_capacity(read_buffer_size as usize, input_stream);
+        let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
         let source_params = SourceParams {
             reader,
             path,
@@ -115,15 +118,22 @@ fn extract_stage_location(path: &str) -> IResult<&str, &str> {
 
 //  this is mock implementation from env
 //  todo: support get the stage config from metadata
-fn get_dal_by_stage(ctx: Arc<QueryContext>, _stage_name: &str) -> Result<Arc<dyn DataAccessor>> {
+async fn get_dal_by_stage(ctx: Arc<QueryContext>, _stage_name: &str) -> Result<DalOperator> {
+    // TODO: we need to check the storage type and get the right dal.
     let conf = ctx.get_config().storage.s3;
 
-    Ok(Arc::new(S3::try_create(
-        &conf.region,
-        &conf.endpoint_url,
-        &conf.bucket,
-        &conf.access_key_id,
-        &conf.secret_access_key,
-        conf.enable_pod_iam_policy,
-    )?))
+    let cred = Credential::hmac(&conf.access_key_id, &conf.secret_access_key);
+
+    let mut builder = s3::Backend::build();
+
+    Ok(DalOperator::new(
+        builder
+            .region(&conf.region)
+            .endpoint(&conf.endpoint_url)
+            .bucket(&conf.bucket)
+            .credential(cred)
+            .finish()
+            .await
+            .unwrap(),
+    ))
 }

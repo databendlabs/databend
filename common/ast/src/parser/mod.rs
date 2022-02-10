@@ -14,6 +14,8 @@
 
 pub mod ast;
 pub mod expr;
+pub mod rule;
+pub mod token;
 pub mod transformer;
 
 use common_exception::Result;

@@ -13,22 +13,22 @@
 // limitations under the License.
 
 use common_datablocks::*;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 
 #[test]
 fn test_data_block_take() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int64, false),
-        DataField::new("b", DataType::String, false),
+        DataField::new("a", i64::to_data_type()),
+        DataField::new("b", Vu8::to_data_type()),
     ]);
 
-    let raw = DataBlock::create_by_array(schema, vec![
-        Series::new(vec![1i64, 2, 3]),
-        Series::new(vec!["b1", "b2", "b3"]),
+    let raw = DataBlock::create(schema, vec![
+        Series::from_data(vec![1i64, 2, 3]),
+        Series::from_data(vec!["b1", "b2", "b3"]),
     ]);
 
-    let take = DataBlock::block_take_by_indices(&raw, &[], &[0, 2])?;
+    let take = DataBlock::block_take_by_indices(&raw, &[0, 2])?;
     assert_eq!(raw.schema(), take.schema());
 
     let expected = vec![

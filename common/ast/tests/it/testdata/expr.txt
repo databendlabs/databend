@@ -1,0 +1,522 @@
+---------- Input ----------
+a
+---------- Output ---------
+a
+---------- AST ------------
+ColumnRef {
+    database: None,
+    table: None,
+    column: Identifier {
+        name: "a",
+        quote: None,
+    },
+}
+
+
+---------- Input ----------
+1 + a * c.d
+---------- Output ---------
+1 + a * c.d
+---------- AST ------------
+BinaryOp {
+    op: Plus,
+    left: Literal(
+        Number(
+            "1",
+        ),
+    ),
+    right: BinaryOp {
+        op: Multiply,
+        left: ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "a",
+                quote: None,
+            },
+        },
+        right: ColumnRef {
+            database: None,
+            table: Some(
+                Identifier {
+                    name: "c",
+                    quote: None,
+                },
+            ),
+            column: Identifier {
+                name: "d",
+                quote: None,
+            },
+        },
+    },
+}
+
+
+---------- Input ----------
+col1 not between 1 and 2
+---------- Output ---------
+col1 NOT BETWEEN 1 AND 2
+---------- AST ------------
+Between {
+    expr: ColumnRef {
+        database: None,
+        table: None,
+        column: Identifier {
+            name: "col1",
+            quote: None,
+        },
+    },
+    low: Literal(
+        Number(
+            "1",
+        ),
+    ),
+    high: Literal(
+        Number(
+            "2",
+        ),
+    ),
+    not: true,
+}
+
+
+---------- Input ----------
+sum(col1)
+---------- Output ---------
+sum(col1)
+---------- AST ------------
+FunctionCall {
+    distinct: false,
+    name: "sum",
+    args: [
+        ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "col1",
+                quote: None,
+            },
+        },
+    ],
+    params: [],
+}
+
+
+---------- Input ----------
+G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)
+---------- Output ---------
+G.E.B IS NOT NULL AND col1 NOT BETWEEN col2 AND 1 + col3 DIV sum(col4)
+---------- AST ------------
+BinaryOp {
+    op: And,
+    left: IsNull {
+        expr: ColumnRef {
+            database: Some(
+                Identifier {
+                    name: "G",
+                    quote: None,
+                },
+            ),
+            table: Some(
+                Identifier {
+                    name: "E",
+                    quote: None,
+                },
+            ),
+            column: Identifier {
+                name: "B",
+                quote: None,
+            },
+        },
+        not: true,
+    },
+    right: Between {
+        expr: ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "col1",
+                quote: None,
+            },
+        },
+        low: ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "col2",
+                quote: None,
+            },
+        },
+        high: BinaryOp {
+            op: Div,
+            left: BinaryOp {
+                op: Plus,
+                left: Literal(
+                    Number(
+                        "1",
+                    ),
+                ),
+                right: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "col3",
+                        quote: None,
+                    },
+                },
+            },
+            right: FunctionCall {
+                distinct: false,
+                name: "sum",
+                args: [
+                    ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "col4",
+                            quote: None,
+                        },
+                    },
+                ],
+                params: [],
+            },
+        },
+        not: true,
+    },
+}
+
+
+---------- Input ----------
+sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END
+---------- Output ---------
+sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END
+---------- AST ------------
+BinaryOp {
+    op: Divide,
+    left: FunctionCall {
+        distinct: false,
+        name: "sum",
+        args: [
+            Case {
+                operand: None,
+                conditions: [
+                    BinaryOp {
+                        op: Eq,
+                        left: ColumnRef {
+                            database: None,
+                            table: Some(
+                                Identifier {
+                                    name: "n2",
+                                    quote: None,
+                                },
+                            ),
+                            column: Identifier {
+                                name: "n_name",
+                                quote: None,
+                            },
+                        },
+                        right: Literal(
+                            String(
+                                "GERMANY",
+                            ),
+                        ),
+                    },
+                ],
+                results: [
+                    ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "ol_amount",
+                            quote: None,
+                        },
+                    },
+                ],
+                else_result: Some(
+                    Literal(
+                        Number(
+                            "0",
+                        ),
+                    ),
+                ),
+            },
+        ],
+        params: [],
+    },
+    right: Case {
+        operand: None,
+        conditions: [
+            BinaryOp {
+                op: Eq,
+                left: FunctionCall {
+                    distinct: false,
+                    name: "sum",
+                    args: [
+                        ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Identifier {
+                                name: "ol_amount",
+                                quote: None,
+                            },
+                        },
+                    ],
+                    params: [],
+                },
+                right: Literal(
+                    Number(
+                        "0",
+                    ),
+                ),
+            },
+        ],
+        results: [
+            Literal(
+                Number(
+                    "1",
+                ),
+            ),
+        ],
+        else_result: Some(
+            FunctionCall {
+                distinct: false,
+                name: "sum",
+                args: [
+                    ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "ol_amount",
+                            quote: None,
+                        },
+                    },
+                ],
+                params: [],
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+p_partkey = l_partkey
+            AND p_brand = 'Brand#12'
+            AND p_container IN ('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG')
+            AND l_quantity >= CAST (1 AS smallint) AND l_quantity <= CAST (1 + 10 AS smallint)
+            AND p_size BETWEEN CAST (1 AS smallint) AND CAST (5 AS smallint)
+            AND l_shipmode IN ('AIR', 'AIR REG')
+            AND l_shipinstruct = 'DELIVER IN PERSON'
+---------- Output ---------
+p_partkey = l_partkey AND p_brand = 'Brand#12' AND p_container IN('SM CASE', 'SM BOX', 'SM PACK', 'SM PKG') AND l_quantity >= CAST(1 AS SMALLINT) AND l_quantity <= CAST(1 + 10 AS SMALLINT) AND p_size BETWEEN CAST(1 AS SMALLINT) AND CAST(5 AS SMALLINT) AND l_shipmode IN('AIR', 'AIR REG') AND l_shipinstruct = 'DELIVER IN PERSON'
+---------- AST ------------
+BinaryOp {
+    op: And,
+    left: BinaryOp {
+        op: And,
+        left: BinaryOp {
+            op: And,
+            left: BinaryOp {
+                op: And,
+                left: BinaryOp {
+                    op: And,
+                    left: BinaryOp {
+                        op: And,
+                        left: BinaryOp {
+                            op: And,
+                            left: BinaryOp {
+                                op: Eq,
+                                left: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "p_partkey",
+                                        quote: None,
+                                    },
+                                },
+                                right: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "l_partkey",
+                                        quote: None,
+                                    },
+                                },
+                            },
+                            right: BinaryOp {
+                                op: Eq,
+                                left: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Identifier {
+                                        name: "p_brand",
+                                        quote: None,
+                                    },
+                                },
+                                right: Literal(
+                                    String(
+                                        "Brand#12",
+                                    ),
+                                ),
+                            },
+                        },
+                        right: InList {
+                            expr: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Identifier {
+                                    name: "p_container",
+                                    quote: None,
+                                },
+                            },
+                            list: [
+                                Literal(
+                                    String(
+                                        "SM CASE",
+                                    ),
+                                ),
+                                Literal(
+                                    String(
+                                        "SM BOX",
+                                    ),
+                                ),
+                                Literal(
+                                    String(
+                                        "SM PACK",
+                                    ),
+                                ),
+                                Literal(
+                                    String(
+                                        "SM PKG",
+                                    ),
+                                ),
+                            ],
+                            not: false,
+                        },
+                    },
+                    right: BinaryOp {
+                        op: Gte,
+                        left: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Identifier {
+                                name: "l_quantity",
+                                quote: None,
+                            },
+                        },
+                        right: Cast {
+                            expr: Literal(
+                                Number(
+                                    "1",
+                                ),
+                            ),
+                            target_type: SmallInt(
+                                None,
+                            ),
+                        },
+                    },
+                },
+                right: BinaryOp {
+                    op: Lte,
+                    left: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "l_quantity",
+                            quote: None,
+                        },
+                    },
+                    right: Cast {
+                        expr: BinaryOp {
+                            op: Plus,
+                            left: Literal(
+                                Number(
+                                    "1",
+                                ),
+                            ),
+                            right: Literal(
+                                Number(
+                                    "10",
+                                ),
+                            ),
+                        },
+                        target_type: SmallInt(
+                            None,
+                        ),
+                    },
+                },
+            },
+            right: Between {
+                expr: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "p_size",
+                        quote: None,
+                    },
+                },
+                low: Cast {
+                    expr: Literal(
+                        Number(
+                            "1",
+                        ),
+                    ),
+                    target_type: SmallInt(
+                        None,
+                    ),
+                },
+                high: Cast {
+                    expr: Literal(
+                        Number(
+                            "5",
+                        ),
+                    ),
+                    target_type: SmallInt(
+                        None,
+                    ),
+                },
+                not: false,
+            },
+        },
+        right: InList {
+            expr: ColumnRef {
+                database: None,
+                table: None,
+                column: Identifier {
+                    name: "l_shipmode",
+                    quote: None,
+                },
+            },
+            list: [
+                Literal(
+                    String(
+                        "AIR",
+                    ),
+                ),
+                Literal(
+                    String(
+                        "AIR REG",
+                    ),
+                ),
+            ],
+            not: false,
+        },
+    },
+    right: BinaryOp {
+        op: Eq,
+        left: ColumnRef {
+            database: None,
+            table: None,
+            column: Identifier {
+                name: "l_shipinstruct",
+                quote: None,
+            },
+        },
+        right: Literal(
+            String(
+                "DELIVER IN PERSON",
+            ),
+        ),
+    },
+}
+
+

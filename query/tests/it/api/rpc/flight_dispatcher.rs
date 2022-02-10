@@ -14,7 +14,7 @@
 
 use common_base::tokio;
 use common_datablocks::assert_blocks_eq;
-use common_datavalues::DataValue;
+use common_datavalues2::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
 use databend_query::api::DatabendQueryFlightDispatcher;
@@ -61,15 +61,15 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
                 FlightAction::PrepareShuffleAction(ShuffleAction {
                     query_id: query_id.clone(),
                     stage_id: stage_id.clone(),
-                    plan: PlanParser::parse("SELECT number FROM numbers(5)", ctx.clone()).await?,
+                    plan: PlanParser::parse(ctx.clone(), "SELECT number FROM numbers(5)").await?,
                     sinks: vec![stream_id.clone()],
-                    scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
+                    scatters_expression: Expression::create_literal(DataValue::UInt64(1)),
                 }),
             )
             .await?;
 
         let stream = stream_ticket(&query_id, &stage_id, &stream_id);
-        let receiver = flight_dispatcher.get_stream(&stream)?;
+        let (receiver, _data_scheme) = flight_dispatcher.get_stream(&stream)?;
         let receiver_stream = ReceiverStream::new(receiver);
         let collect_data_blocks = receiver_stream.collect::<Result<Vec<_>>>();
 
@@ -106,7 +106,7 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
                 FlightAction::PrepareShuffleAction(ShuffleAction {
                     query_id: query_id.clone(),
                     stage_id: stage_id.clone(),
-                    plan: PlanParser::parse("SELECT number FROM numbers(5)", ctx.clone()).await?,
+                    plan: PlanParser::parse(ctx.clone(), "SELECT number FROM numbers(5)").await?,
                     sinks: vec!["stream_1".to_string(), "stream_2".to_string()],
                     scatters_expression: Expression::Column("number".to_string()),
                 }),
@@ -114,7 +114,7 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
             .await?;
 
         let stream_1 = stream_ticket(&query_id, &stage_id, "stream_1");
-        let receiver = flight_dispatcher.get_stream(&stream_1)?;
+        let (receiver, _data_scheme) = flight_dispatcher.get_stream(&stream_1)?;
         let receiver_stream = ReceiverStream::new(receiver);
         let collect_data_blocks = receiver_stream.collect::<Result<Vec<_>>>();
 
@@ -131,7 +131,7 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
         assert_blocks_eq(expect, &collect_data_blocks.await?);
 
         let stream_2 = stream_ticket(&query_id, &stage_id, "stream_2");
-        let receiver = flight_dispatcher.get_stream(&stream_2)?;
+        let (receiver, _data_scheme) = flight_dispatcher.get_stream(&stream_2)?;
         let receiver_stream = ReceiverStream::new(receiver);
         let collect_data_blocks = receiver_stream.collect::<Result<Vec<_>>>();
 

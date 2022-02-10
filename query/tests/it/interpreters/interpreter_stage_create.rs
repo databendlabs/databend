@@ -29,9 +29,9 @@ async fn test_create_stage_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
     let tenant = ctx.get_tenant();
 
-    static TEST_QUERY: &str = "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter='\n') comments='test'";
+    let query = "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter='\n') comments='test'";
     {
-        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatStageInterpreter");
         executor.execute(None).await?;
@@ -50,7 +50,7 @@ async fn test_create_stage_interpreter() -> Result<()> {
 
     // IF NOT EXISTS.
     {
-        let plan = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatStageInterpreter");
         executor.execute(None).await?;
@@ -68,9 +68,9 @@ async fn test_create_stage_interpreter() -> Result<()> {
         assert_eq!(stage.comments, String::from("test"));
     }
 
-    static TEST_QUERY1: &str = "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter='\n') comments='test'";
     {
-        let plan = PlanParser::parse(TEST_QUERY1, ctx.clone()).await?;
+        let query = "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter='\n') comments='test'";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatStageInterpreter");
         let r = executor.execute(None).await;

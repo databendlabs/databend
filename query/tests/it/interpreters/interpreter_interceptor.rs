@@ -26,7 +26,7 @@ async fn test_interpreter_interceptor() -> Result<()> {
     {
         let query = "select number from numbers_mt(100) where number > 90";
         ctx.attach_query_str(query);
-        let plan = PlanParser::parse(query, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
         interpreter.start().await?;
         let stream = interpreter.execute(None).await?;
@@ -56,7 +56,7 @@ async fn test_interpreter_interceptor() -> Result<()> {
     // Check.
     {
         let query = "select log_type, handler_type, cpu_usage, scan_rows, scan_bytes, scan_partitions, written_rows, written_bytes, result_rows, result_bytes, query_kind, query_text, sql_user, sql_user_quota from system.query_log";
-        let plan = PlanParser::parse(query, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
         let stream = interpreter.execute(None).await?;
@@ -84,7 +84,7 @@ async fn test_interpreter_interceptor_for_insert() -> Result<()> {
     {
         let query = "create table t as select number from numbers_mt(1)";
         ctx.attach_query_str(query);
-        let plan = PlanParser::parse(query, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
         interpreter.start().await?;
         let stream = interpreter.execute(None).await?;
@@ -95,7 +95,7 @@ async fn test_interpreter_interceptor_for_insert() -> Result<()> {
     // Check.
     {
         let query = "select log_type, handler_type, cpu_usage, scan_rows, scan_bytes, scan_partitions, written_rows, written_bytes, result_rows, result_bytes, query_kind, query_text, sql_user, sql_user_quota from system.query_log";
-        let plan = PlanParser::parse(query, ctx.clone()).await?;
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
         let stream = interpreter.execute(None).await?;
@@ -106,7 +106,7 @@ async fn test_interpreter_interceptor_for_insert() -> Result<()> {
             "| log_type | handler_type | cpu_usage | scan_rows | scan_bytes | scan_partitions | written_rows | written_bytes | result_rows | result_bytes | query_kind      | query_text                                         | sql_user | sql_user_quota                                                            |",
             "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+---------------------------------------------------------------------------+",
             "| 1        | TestSession  | 8         | 0         | 0          | 0               | 0            | 0             | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
-            "| 2        | TestSession  | 8         | 1         | 8          | 0               | 1            | 1121          | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
+            "| 2        | TestSession  | 8         | 1         | 8          | 0               | 1            | 1090          | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
             "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+---------------------------------------------------------------------------+",
         ];
 

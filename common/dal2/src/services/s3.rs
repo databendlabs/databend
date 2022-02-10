@@ -15,6 +15,7 @@
 use std::borrow::Cow;
 use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
@@ -27,15 +28,15 @@ use futures::TryStreamExt;
 use crate::credential::Credential;
 use crate::error::Error;
 use crate::error::Result;
-use crate::ops::Delete;
-use crate::ops::Object;
-use crate::ops::Read;
-use crate::ops::ReadBuilder;
-use crate::ops::Reader;
-use crate::ops::ReaderStream;
-use crate::ops::Stat;
-use crate::ops::Write;
-use crate::ops::WriteBuilder;
+use crate::ops::HeaderRange;
+use crate::ops::OpDelete;
+use crate::ops::OpRead;
+use crate::ops::OpStat;
+use crate::ops::OpWrite;
+use crate::readers::ReaderStream;
+use crate::Accessor;
+use crate::Object;
+use crate::Reader;
 
 /// # TODO
 ///
@@ -86,7 +87,7 @@ impl Builder {
         self
     }
 
-    pub async fn finish(&mut self) -> Result<Backend> {
+    pub async fn finish(&mut self) -> Result<Arc<dyn Accessor>> {
         if self.bucket.is_empty() || self.region.is_empty() {
             return Err(Error::BackendConfigurationInvalid {
                 key: "bucket".to_string(),
@@ -147,12 +148,12 @@ impl Builder {
             }
         }
 
-        Ok(Backend {
+        Ok(Arc::new(Backend {
             // Make `/` as the default of root.
             root,
             bucket: self.bucket.clone(),
             client: AwsS3::Client::from_conf(cfg.build()),
-        })
+        }))
     }
 }
 
@@ -181,28 +182,28 @@ impl Backend {
 }
 
 #[async_trait]
-impl<S: Send + Sync> Read<S> for Backend {
-    async fn read(&self, args: &ReadBuilder<S>) -> Result<Reader> {
-        let p = self.get_abs_path(args.path);
+impl Accessor for Backend {
+    async fn read(&self, args: &OpRead) -> Result<Reader> {
+        let p = self.get_abs_path(&args.path);
 
-        // TODO: Handle range header here.
-        let resp = self
+        let mut req = self
             .client
             .get_object()
             .bucket(&self.bucket.clone())
-            .key(&p)
-            .send()
-            .await
-            .unwrap(); // TODO: we need a better way to handle errors here.
+            .key(&p);
+
+        if args.offset.is_some() || args.size.is_some() {
+            req = req.range(HeaderRange::new(args.offset, args.size).to_string());
+        }
+
+        // TODO: we need a better way to handle errors here.
+        let resp = req.send().await.unwrap();
 
         Ok(Box::new(S3Stream(resp.body).into_async_read()))
     }
-}
 
-#[async_trait]
-impl<S: Send + Sync> Write<S> for Backend {
-    async fn write(&self, r: Reader, args: &WriteBuilder<S>) -> Result<usize> {
-        let p = self.get_abs_path(args.path);
+    async fn write(&self, r: Reader, args: &OpWrite) -> Result<usize> {
+        let p = self.get_abs_path(&args.path);
 
         let _ = self
             .client
@@ -219,12 +220,9 @@ impl<S: Send + Sync> Write<S> for Backend {
 
         Ok(args.size as usize)
     }
-}
 
-#[async_trait]
-impl<S: Send + Sync> Stat<S> for Backend {
-    async fn stat(&self, path: &str) -> Result<Object> {
-        let p = self.get_abs_path(path);
+    async fn stat(&self, args: &OpStat) -> Result<Object> {
+        let p = self.get_abs_path(&args.path);
 
         let meta = self
             .client
@@ -235,18 +233,15 @@ impl<S: Send + Sync> Stat<S> for Backend {
             .await
             .unwrap(); // TODO: we need a better way to handle errors here.
         let o = Object {
-            path: path.to_string(),
+            path: args.path.to_string(),
             size: meta.content_length as u64,
         };
 
         Ok(o)
     }
-}
 
-#[async_trait]
-impl<S: Send + Sync> Delete<S> for Backend {
-    async fn delete(&self, path: &str) -> Result<()> {
-        let p = self.get_abs_path(path);
+    async fn delete(&self, args: &OpDelete) -> Result<()> {
+        let p = self.get_abs_path(&args.path);
 
         let _ = self
             .client

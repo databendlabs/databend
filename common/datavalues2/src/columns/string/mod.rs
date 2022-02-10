@@ -14,6 +14,7 @@
 
 mod iterator;
 mod mutable;
+mod transform;
 
 use std::sync::Arc;
 
@@ -28,7 +29,7 @@ pub use mutable::*;
 use crate::prelude::*;
 
 // TODO adaptive offset
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct StringColumn {
     offsets: Buffer<i64>,
     values: Buffer<u8>,
@@ -157,6 +158,10 @@ impl Column for StringColumn {
         ))
     }
 
+    fn arc(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
         let offsets = unsafe { self.offsets.clone().slice_unchecked(offset, length + 1) };
 
@@ -164,6 +169,36 @@ impl Column for StringColumn {
             offsets,
             values: self.values.clone(),
         })
+    }
+
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        let mut builders = Vec::with_capacity(scattered_size);
+        for _i in 0..scattered_size {
+            builders.push(MutableStringColumn::with_capacity(self.len()));
+        }
+
+        indices.iter().zip(self.iter()).for_each(|(index, value)| {
+            builders[*index].append_value(value);
+        });
+
+        builders.iter_mut().map(|b| b.to_column()).collect()
+    }
+
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        let length = filter.values().len() - filter.values().null_count();
+        if length == self.len() {
+            return Arc::new(self.clone());
+        }
+        let mut builder = MutableStringColumn::with_capacity(length);
+        let values = self.values();
+        for (i, v) in filter.values().iter().enumerate() {
+            if v {
+                let start = self.offsets[i] as usize;
+                let end = self.offsets[i + 1] as usize;
+                builder.append_value(&values[start..end]);
+            }
+        }
+        builder.to_column()
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
@@ -177,7 +212,7 @@ impl Column for StringColumn {
         }
 
         let max_size = offsets.iter().max().unwrap();
-        let mut builder = MutableStringColumn::with_capacity(*max_size * 5, *max_size);
+        let mut builder = MutableStringColumn::with_capacity(*max_size);
 
         let mut previous_offset: usize = 0;
 
@@ -189,19 +224,47 @@ impl Column for StringColumn {
             }
             previous_offset = offset;
         });
-        builder.as_column()
+        builder.to_column()
     }
 
     fn convert_full_column(&self) -> ColumnRef {
         Arc::new(self.clone())
     }
 
-    unsafe fn get_unchecked(&self, index: usize) -> DataValue {
+    fn get(&self, index: usize) -> DataValue {
         let start = self.offsets[index].to_usize();
         let end = self.offsets[index + 1].to_usize();
 
         // soundness: the invariant of the struct
-        let str = self.values.get_unchecked(start..end);
+        let str = unsafe { self.values.get_unchecked(start..end) };
         DataValue::String(str.to_vec())
+    }
+}
+
+impl ScalarColumn for StringColumn {
+    type Builder = MutableStringColumn;
+    type OwnedItem = Vec<u8>;
+    type RefItem<'a> = &'a [u8];
+    type Iterator<'a> = StringValueIter<'a>;
+
+    #[inline]
+    fn get_data(&self, idx: usize) -> Self::RefItem<'_> {
+        let start = self.offsets[idx].to_usize();
+        let end = self.offsets[idx + 1].to_usize();
+
+        // soundness: the invariant of the struct
+        unsafe { self.values.get_unchecked(start..end) }
+    }
+
+    fn scalar_iter(&self) -> Self::Iterator<'_> {
+        StringValueIter::new(self)
+    }
+}
+
+impl std::fmt::Debug for StringColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let iter = self.iter().map(String::from_utf8_lossy);
+        let head = "StringColumn";
+        display_fmt(iter, head, self.len(), self.data_type_id(), f)
     }
 }

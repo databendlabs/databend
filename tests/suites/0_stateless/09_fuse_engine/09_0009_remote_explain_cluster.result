@@ -1,0 +1,4 @@
+RedistributeStage[expr: 0]
+  Projection: a:Nullable(UInt32), b:Nullable(UInt64), c:Nullable(String)
+    Filter: (a > 3)
+      ReadDataSource: scan schema: [a:UInt32;N, b:UInt64;N, c:String;N], statistics: [read_rows: 2, read_bytes: 56, partitions_scanned: 1, partitions_total: 3], push_downs: [projections: [0, 1, 2], filters: [(a > 3)]]

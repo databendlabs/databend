@@ -17,16 +17,16 @@ use std::sync::Arc;
 use common_base::tokio;
 use common_base::*;
 use common_datablocks::*;
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_streams::*;
 use futures::TryStreamExt;
 
 #[tokio::test]
 async fn test_progress_stream() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i64::to_data_type())]);
 
-    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1i64, 2, 3])]);
+    let block = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1i64, 2, 3])]);
 
     let input = DataBlockStream::create(Arc::new(DataSchema::empty()), None, vec![
         block.clone(),

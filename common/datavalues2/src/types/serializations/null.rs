@@ -12,7 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_clickhouse_srv::types::column::ArcColumnWrapper;
+use common_clickhouse_srv::types::column::ColumnFrom;
+use common_clickhouse_srv::types::column::NullableColumnData;
 use common_exception::Result;
+use serde_json::Value;
 
 use crate::prelude::DataValue;
 use crate::ColumnRef;
@@ -21,13 +27,31 @@ use crate::TypeSerializer;
 #[derive(Clone, Debug, Default)]
 pub struct NullSerializer {}
 
+const NULL_STR: &str = "NULL";
+
 impl TypeSerializer for NullSerializer {
     fn serialize_value(&self, _value: &DataValue) -> Result<String> {
-        Ok("NULL".to_owned())
+        Ok(NULL_STR.to_owned())
     }
 
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
-        let result: Vec<String> = vec!["NULL".to_owned(); column.len()];
+        let result: Vec<String> = vec![NULL_STR.to_owned(); column.len()];
         Ok(result)
+    }
+
+    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+        let null = Value::Null;
+        let result: Vec<Value> = vec![null; column.len()];
+        Ok(result)
+    }
+
+    fn serialize_clickhouse_format(
+        &self,
+        column: &ColumnRef,
+    ) -> Result<common_clickhouse_srv::types::column::ArcColumnData> {
+        let nulls = vec![1u8; column.len()];
+        let inner = Vec::column_from::<ArcColumnWrapper>(vec![1u8; column.len()]);
+        let data = NullableColumnData { nulls, inner };
+        Ok(Arc::new(data))
     }
 }

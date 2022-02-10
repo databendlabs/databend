@@ -23,7 +23,6 @@ fn test_user_info() -> Result<()> {
     // And check the serialize(old_userinfo) can be deserialized by the new UserInfo.
     #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
     #[serde(default)]
-
     pub struct OldUserInfo {
         pub name: String,
         pub hostname: String,

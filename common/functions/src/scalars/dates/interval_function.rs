@@ -147,12 +147,6 @@ impl IntegerTypedArithmetic for SecondsArithmetic {
 }
 pub type SecondsArithmeticFunction = IntegerTypedIntervalFunction<SecondsArithmetic>;
 
-//////////////////////////////////////////////////////////////////////////////////////////////
-
-// The function type for handling Interval typed arithmetic operation
-pub type IntervalArithmeticFunction =
-    fn(&DataValueBinaryOperator, &DataColumnWithField, &DataColumnWithField) -> Result<DataColumn>;
-
 // The function type for handling arithmetic operation of integer column representing number of months
 pub type IntegerMonthsArithmeticFunction = fn(
     &DataValueBinaryOperator,

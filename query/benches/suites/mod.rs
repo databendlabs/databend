@@ -30,9 +30,9 @@ pub mod bench_sort_query_sql;
 pub async fn select_executor(sql: &str) -> Result<()> {
     let sessions = SessionManager::from_conf(Config::default()).await?;
     let executor_session = sessions.create_session("Benches")?;
-    let ctx = executor_session.create_context().await?;
+    let ctx = executor_session.create_query_context().await?;
 
-    if let PlanNode::Select(plan) = PlanParser::parse(sql, ctx.clone()).await? {
+    if let PlanNode::Select(plan) = PlanParser::parse(ctx.clone(), sql).await? {
         let executor = SelectInterpreter::try_create(ctx, plan)?;
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}

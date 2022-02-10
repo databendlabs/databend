@@ -12,43 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use num::cast::AsPrimitive;
+use num::traits::AsPrimitive;
 
-use super::arithmetic::ArithmeticTrait;
 use super::arithmetic_mul::arithmetic_mul_div_monotonicity;
-use crate::binary_arithmetic;
-use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
-use crate::scalars::Function;
-use crate::scalars::Monotonicity;
-use crate::with_match_primitive_type;
+use crate::scalars::Function2;
+use crate::scalars::Monotonicity2;
 
-#[derive(Clone)]
-pub struct ArithmeticDiv<T, D> {
-    t: PhantomData<T>,
-    d: PhantomData<D>,
-}
-
-impl<T, D> ArithmeticTrait for ArithmeticDiv<T, D>
+fn div_scalar<L, R>(l: L::RefType<'_>, r: R::RefType<'_>) -> f64
 where
-    T: DFPrimitiveType + AsPrimitive<f64>,
-    D: DFPrimitiveType + AsPrimitive<f64>,
+    L: PrimitiveType + AsPrimitive<f64>,
+    R: PrimitiveType + AsPrimitive<f64>,
 {
-    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
-        binary_arithmetic!(
-            columns[0].column(),
-            columns[1].column(),
-            f64,
-            |l: f64, r: f64| l / r
-        )
-    }
+    l.to_owned_scalar().as_() / r.to_owned_scalar().as_()
 }
 
 pub struct ArithmeticDivFunction;
@@ -56,28 +38,25 @@ pub struct ArithmeticDivFunction;
 impl ArithmeticDivFunction {
     pub fn try_create_func(
         _display_name: &str,
-        args: &[DataTypeAndNullable],
-    ) -> Result<Box<dyn Function>> {
-        let left_type = &args[0].data_type();
-        let right_type = &args[1].data_type();
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function2>> {
         let op = DataValueBinaryOperator::Div;
-        let error_fn = || -> Result<Box<dyn Function>> {
+        let left_type = remove_nullable(args[0]).data_type_id();
+        let right_type = remove_nullable(args[1]).data_type_id();
+
+        let error_fn = || -> Result<Box<dyn Function2>> {
             Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
                 left_type, op, right_type
             )))
         };
 
-        // error on any non-numeric type
-        if !left_type.is_numeric() || !right_type.is_numeric() {
-            return error_fn();
-        };
-
-        with_match_primitive_type!(left_type, |$T| {
-            with_match_primitive_type!(right_type, |$D| {
-                BinaryArithmeticFunction::<ArithmeticDiv::<$T,$D>>::try_create_func(
+        with_match_primitive_type_id!(left_type, |$T| {
+            with_match_primitive_type_id!(right_type, |$D| {
+                BinaryArithmeticFunction::<$T, $D, f64, _>::try_create_func(
                     op,
-                    DataType::Float64,
+                    Float64Type::arc(),
+                    div_scalar::<$T, $D>
                 )
             }, {
                 error_fn()
@@ -96,7 +75,7 @@ impl ArithmeticDivFunction {
         )
     }
 
-    pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+    pub fn get_monotonicity(args: &[Monotonicity2]) -> Result<Monotonicity2> {
         arithmetic_mul_div_monotonicity(args, DataValueBinaryOperator::Div)
     }
 }

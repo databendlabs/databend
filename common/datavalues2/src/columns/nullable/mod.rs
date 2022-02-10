@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod mutable;
+
+use std::sync::Arc;
+
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-
-mod mutable;
-use std::sync::Arc;
-
 pub use mutable::*;
 
 use crate::prelude::*;
@@ -31,6 +31,24 @@ pub struct NullableColumn {
 
 impl NullableColumn {
     pub fn new(column: ColumnRef, validity: Bitmap) -> Self {
+        debug_assert!(
+            column.data_type().can_inside_nullable(),
+            "{} can't be inside of nullable.",
+            column.data_type().name()
+        );
+        Self { column, validity }
+    }
+
+    pub fn new_from_opt(column: ColumnRef, validity: Option<Bitmap>) -> Self {
+        let validity = match validity {
+            Some(v) => v,
+            None => {
+                let mut bitmap = MutableBitmap::with_capacity(column.len());
+                bitmap.extend_constant(column.len(), true);
+                bitmap.into()
+            }
+        };
+
         Self { column, validity }
     }
 
@@ -82,11 +100,55 @@ impl Column for NullableColumn {
         Arc::from(result.with_validity(Some(self.validity.clone())))
     }
 
+    fn arc(&self) -> ColumnRef {
+        Arc::new(self.clone())
+    }
+
     fn slice(&self, offset: usize, length: usize) -> ColumnRef {
         Arc::new(Self {
             column: self.column.slice(offset, length),
             validity: self.validity.clone().slice(offset, length),
         })
+    }
+
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+        if filter.values().null_count() == 0 {
+            return Arc::new(self.clone());
+        }
+        let inner = self.inner().filter(filter);
+        let iter = self
+            .validity
+            .iter()
+            .zip(filter.values().iter())
+            .filter(|(_, f)| *f)
+            .map(|(v, _)| v);
+        let validity = MutableBitmap::from_iter(iter);
+
+        Arc::new(Self::new(inner, validity.into()))
+    }
+
+    fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
+        let inner_values = self.inner().scatter(indices, scattered_size);
+        let mut bitmaps = Vec::with_capacity(scattered_size);
+        for _ in 0..scattered_size {
+            let bitmap = MutableBitmap::with_capacity(self.len());
+            bitmaps.push(bitmap);
+        }
+        unsafe {
+            indices.iter().zip(self.validity.iter()).for_each(|(i, f)| {
+                bitmaps[*i].push_unchecked(f);
+            });
+        }
+
+        let mut results = Vec::with_capacity(scattered_size);
+
+        for (index, value) in inner_values.iter().enumerate().take(scattered_size) {
+            let bitmap = bitmaps.get_mut(index).unwrap();
+            let bitmap = std::mem::take(bitmap).into();
+            results.push(Arc::new(NullableColumn::new(value.clone(), bitmap)) as ColumnRef);
+        }
+
+        results
     }
 
     fn replicate(&self, offsets: &[usize]) -> ColumnRef {
@@ -121,7 +183,33 @@ impl Column for NullableColumn {
         })
     }
 
-    unsafe fn get_unchecked(&self, _index: usize) -> DataValue {
-        self.column.get_unchecked(0)
+    fn get(&self, index: usize) -> DataValue {
+        if self.validity.get_bit(index) {
+            self.column.get(index)
+        } else {
+            DataValue::Null
+        }
+    }
+}
+
+impl std::fmt::Debug for NullableColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut data = Vec::new();
+        for idx in 0..self.len() {
+            if self.validity.get_bit(idx) {
+                let val = self.column.get(idx);
+                data.push(format!("{:?}", val));
+            } else {
+                data.push("NULL".to_string());
+            }
+        }
+        let head = "NullableColumn";
+        display_fmt(
+            data.iter(),
+            head,
+            self.len(),
+            self.inner().data_type_id(),
+            f,
+        )
     }
 }

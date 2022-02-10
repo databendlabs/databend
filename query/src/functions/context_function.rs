@@ -14,11 +14,10 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataValue;
+use common_datavalues2::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::scalars::FunctionFactory;
+use common_functions::is_builtin_function;
 use common_planners::Expression;
 
 use crate::sessions::QueryContext;
@@ -28,12 +27,9 @@ pub struct ContextFunction;
 impl ContextFunction {
     // Some function args need from context
     // such as `SELECT database()`, the arg is ctx.get_default_db()
-    pub fn build_args_from_ctx(name: &str, ctx: Arc<QueryContext>) -> Result<Vec<Expression>> {
+    pub fn build_args_from_ctx(ctx: Arc<QueryContext>, name: &str) -> Result<Vec<Expression>> {
         // Check the function is supported in common functions.
-        let function_factory = FunctionFactory::instance();
-        let aggregate_function_factory = AggregateFunctionFactory::instance();
-
-        if !function_factory.check(name) && !aggregate_function_factory.check(name) {
+        if !is_builtin_function(name) {
             return Result::Err(ErrorCode::UnknownFunction(format!(
                 "Unsupported function: {:?}",
                 name
@@ -41,15 +37,15 @@ impl ContextFunction {
         }
 
         Ok(match name.to_lowercase().as_str() {
-            "database" => vec![Expression::create_literal(DataValue::String(Some(
+            "database" => vec![Expression::create_literal(DataValue::String(
                 ctx.get_current_database().into_bytes(),
-            )))],
-            "version" => vec![Expression::create_literal(DataValue::String(Some(
+            ))],
+            "version" => vec![Expression::create_literal(DataValue::String(
                 ctx.get_fuse_version().into_bytes(),
-            )))],
-            "current_user" => vec![Expression::create_literal(DataValue::String(Some(
+            ))],
+            "current_user" => vec![Expression::create_literal(DataValue::String(
                 ctx.get_current_user()?.identity().to_string().into_bytes(),
-            )))],
+            ))],
             _ => vec![],
         })
     }

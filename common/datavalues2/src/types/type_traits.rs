@@ -17,13 +17,20 @@ use num::NumCast;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::prelude::*;
-use crate::Column;
-use crate::DataType;
+use crate::DFTryFrom;
 use crate::DataValue;
+use crate::Scalar;
 
 pub trait PrimitiveType:
-    NativeArithmetics + NumCast + PartialOrd + Into<DataValue> + Default + Serialize + DeserializeOwned
+    NativeArithmetics
+    + DFTryFrom<DataValue>
+    + NumCast
+    + PartialOrd
+    + Into<DataValue>
+    + Default
+    + Serialize
+    + DeserializeOwned
+    + Scalar
 {
     type LargestType: PrimitiveType;
     const SIGN: bool;
@@ -53,11 +60,11 @@ impl_primitive!(i64, i64, true, false, 8);
 impl_primitive!(f32, f64, true, true, 4);
 impl_primitive!(f64, f64, true, true, 8);
 
-pub trait DFIntegerType: PrimitiveType {}
+pub trait IntegerType: PrimitiveType {}
 
 macro_rules! impl_integer {
     ($ca:ident, $native:ident) => {
-        impl DFIntegerType for $ca {}
+        impl IntegerType for $ca {}
     };
 }
 
@@ -73,33 +80,3 @@ impl_integer!(i64, i64);
 pub trait FloatType: PrimitiveType {}
 impl FloatType for f32 {}
 impl FloatType for f64 {}
-
-pub trait ScalarType: Sized {
-    type Type: DataType;
-    type ColumnType: Column;
-}
-
-macro_rules! impl_primitive_scalar_type {
-    ($native:ident) => {
-        impl ScalarType for $native {
-            type Type = PrimitiveDataType<$native>;
-            type ColumnType = PrimitiveColumn<$native>;
-        }
-    };
-}
-
-impl_primitive_scalar_type!(u8);
-impl_primitive_scalar_type!(u16);
-impl_primitive_scalar_type!(u32);
-impl_primitive_scalar_type!(u64);
-impl_primitive_scalar_type!(i8);
-impl_primitive_scalar_type!(i16);
-impl_primitive_scalar_type!(i32);
-impl_primitive_scalar_type!(i64);
-impl_primitive_scalar_type!(f32);
-impl_primitive_scalar_type!(f64);
-
-impl ScalarType for bool {
-    type Type = BooleanType;
-    type ColumnType = BooleanColumn;
-}

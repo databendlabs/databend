@@ -13,57 +13,65 @@
 // limitations under the License.
 
 use std::fmt;
-use std::marker::PhantomData;
+use std::sync::Arc;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::arithmetic::ArithmeticTrait;
 use crate::scalars::ArithmeticNegateFunction;
-use crate::scalars::Function;
-use crate::scalars::Monotonicity;
+use crate::scalars::Function2;
+use crate::scalars::Monotonicity2;
+use crate::scalars::ScalarUnaryExpression;
+use crate::scalars::ScalarUnaryFunction;
 
 #[derive(Clone)]
-pub struct UnaryArithmeticFunction<T> {
+pub struct UnaryArithmeticFunction<L: Scalar, O: Scalar, F> {
     op: DataValueUnaryOperator,
-    result_type: DataType,
-    t: PhantomData<T>,
+    result_type: DataTypePtr,
+    unary: ScalarUnaryExpression<L, O, F>,
 }
 
-impl<T> UnaryArithmeticFunction<T>
-where T: ArithmeticTrait + Clone + Sync + Send + 'static
+impl<L, O, F> UnaryArithmeticFunction<L, O, F>
+where
+    L: Scalar + Send + Sync + Clone,
+    O: Scalar + Send + Sync + Clone,
+    F: ScalarUnaryFunction<L, O> + Send + Sync + Clone + 'static,
 {
     pub fn try_create_func(
         op: DataValueUnaryOperator,
-        result_type: DataType,
-    ) -> Result<Box<dyn Function>> {
+        result_type: DataTypePtr,
+        func: F,
+    ) -> Result<Box<dyn Function2>> {
+        let unary = ScalarUnaryExpression::<L, O, _>::new(func);
         Ok(Box::new(Self {
             op,
             result_type,
-            t: PhantomData,
+            unary,
         }))
     }
 }
 
-impl<T> Function for UnaryArithmeticFunction<T>
-where T: ArithmeticTrait + Clone + Sync + Send + 'static
+impl<L, O, F> Function2 for UnaryArithmeticFunction<L, O, F>
+where
+    L: Scalar + Send + Sync + Clone,
+    O: Scalar + Send + Sync + Clone,
+    F: ScalarUnaryFunction<L, O> + Send + Sync + Clone,
 {
     fn name(&self) -> &str {
         "UnaryArithmeticFunction"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        Ok(DataTypeAndNullable::create(&self.result_type, nullable))
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        Ok(self.result_type.clone())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        T::arithmetic(columns)
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        let col = self.unary.eval(columns[0].column())?;
+        Ok(Arc::new(col))
     }
 
-    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+    fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
         if args.len() != 1 {
             return Err(ErrorCode::BadArguments(format!(
                 "Invalid argument lengths {} for get_monotonicity",
@@ -77,8 +85,11 @@ where T: ArithmeticTrait + Clone + Sync + Send + 'static
     }
 }
 
-impl<T> fmt::Display for UnaryArithmeticFunction<T>
-where T: ArithmeticTrait + Clone + Sync + Send + 'static
+impl<L, O, F> fmt::Display for UnaryArithmeticFunction<L, O, F>
+where
+    L: Scalar + Send + Sync + Clone,
+    O: Scalar + Send + Sync + Clone,
+    F: ScalarUnaryFunction<L, O> + Send + Sync + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.op)

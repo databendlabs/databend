@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledTree;
+use common_meta_types::MetaError;
+use common_meta_types::MetaResult;
+use common_meta_types::MetaStorageResult;
 use common_meta_types::NodeId;
 use common_tracing::tracing;
 use openraft::storage::HardState;
@@ -40,7 +42,7 @@ pub struct RaftState {
     is_open: bool,
 
     /// A sled tree with key space support.
-    pub(crate) inner: SledTree,
+    pub inner: SledTree,
 }
 
 const TREE_RAFT_STATE: &str = "raft_state";
@@ -62,7 +64,7 @@ impl RaftState {
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
-    ) -> common_exception::Result<RaftState> {
+    ) -> MetaResult<RaftState> {
         tracing::info!(?config);
         tracing::info!("open: {:?}, create: {:?}", open, create);
 
@@ -78,10 +80,7 @@ impl RaftState {
             match (open, create) {
                 (Some(_), _) => (curr_id, true),
                 (None, Some(_)) => {
-                    return Err(ErrorCode::MetaStoreAlreadyExists(format!(
-                        "raft state present id={}, can not create",
-                        curr_id
-                    )));
+                    return Err(MetaError::MetaStoreAlreadyExists(curr_id));
                 }
                 (None, None) => panic!("no open no create"),
             }
@@ -89,9 +88,7 @@ impl RaftState {
             match (open, create) {
                 (Some(_), Some(_)) => (config.id, false),
                 (Some(_), None) => {
-                    return Err(ErrorCode::MetaStoreNotFound(
-                        "raft state absent, can not open",
-                    ));
+                    return Err(MetaError::MetaStoreNotFound);
                 }
                 (None, Some(_)) => (config.id, false),
                 (None, None) => panic!("no open no create"),
@@ -110,7 +107,7 @@ impl RaftState {
     /// Initialize a raft state. The only thing to do is to persist the node id
     /// so that next time opening it the caller knows it is initialized.
     #[tracing::instrument(level = "info", skip(self))]
-    async fn init(&self) -> common_exception::Result<()> {
+    async fn init(&self) -> MetaResult<()> {
         let state = self.state();
         state
             .insert(&RaftStateKey::Id, &RaftStateValue::NodeId(self.id))
@@ -118,7 +115,7 @@ impl RaftState {
         Ok(())
     }
 
-    pub async fn write_hard_state(&self, hs: &HardState) -> common_exception::Result<()> {
+    pub async fn write_hard_state(&self, hs: &HardState) -> MetaStorageResult<()> {
         let state = self.state();
         state
             .insert(
@@ -129,7 +126,7 @@ impl RaftState {
         Ok(())
     }
 
-    pub fn read_hard_state(&self) -> common_exception::Result<Option<HardState>> {
+    pub fn read_hard_state(&self) -> MetaStorageResult<Option<HardState>> {
         let state = self.state();
         let hs = state.get(&RaftStateKey::HardState)?;
         let hs = hs.map(HardState::from);
@@ -137,7 +134,7 @@ impl RaftState {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn write_state_machine_id(&self, id: &(u64, u64)) -> common_exception::Result<()> {
+    pub async fn write_state_machine_id(&self, id: &(u64, u64)) -> MetaStorageResult<()> {
         let state = self.state();
         state
             .insert(
@@ -149,7 +146,7 @@ impl RaftState {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub fn read_state_machine_id(&self) -> common_exception::Result<(u64, u64)> {
+    pub fn read_state_machine_id(&self) -> MetaStorageResult<(u64, u64)> {
         let state = self.state();
         let smid = state.get(&RaftStateKey::StateMachineId)?;
         let smid: (u64, u64) = smid.map_or((0, 0), |v| v.into());

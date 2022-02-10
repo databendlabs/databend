@@ -17,10 +17,8 @@ use std::fmt;
 use std::sync::Arc;
 
 use bytes::BytesMut;
-use common_datavalues::arrays::MutableArrayBuilder;
-use common_datavalues::prelude::Series;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
+use common_arrow::arrow::bitmap::Bitmap;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 
 use super::StateAddr;
@@ -28,27 +26,39 @@ use super::StateAddr;
 pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;
 
 /// AggregateFunction
-/// In AggregateFunction, all datablock columns are not ConstantColumn, we take the column as Series
+/// In AggregateFunction, all datablock columns are not ConstantColumn, we take the column as Full columns
 pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn name(&self) -> &str;
-    fn return_type(&self) -> Result<DataType>;
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool>;
+    fn return_type(&self) -> Result<DataTypePtr>;
 
     fn init_state(&self, place: StateAddr);
     fn state_layout(&self) -> Layout;
 
     // accumulate is to accumulate the arrays in batch mode
     // common used when there is no group by for aggregate function
-    fn accumulate(&self, _place: StateAddr, _arrays: &[Series], _input_rows: usize) -> Result<()>;
+    fn accumulate(
+        &self,
+        _place: StateAddr,
+        _columns: &[ColumnRef],
+        _validity: Option<&Bitmap>,
+        _input_rows: usize,
+    ) -> Result<()>;
 
     // used when we need to calculate with group keys
     fn accumulate_keys(
         &self,
-        _places: &[StateAddr],
-        _offset: usize,
-        _arrays: &[Series],
+        places: &[StateAddr],
+        offset: usize,
+        columns: &[ColumnRef],
         _input_rows: usize,
-    ) -> Result<()>;
+    ) -> Result<()> {
+        for (row, place) in places.iter().enumerate() {
+            self.accumulate_row(place.next(offset), columns, row)?;
+        }
+        Ok(())
+    }
+
+    fn accumulate_row(&self, _place: StateAddr, _columns: &[ColumnRef], _row: usize) -> Result<()>;
 
     // serialize  the state into binary array
     fn serialize(&self, _place: StateAddr, _writer: &mut BytesMut) -> Result<()>;
@@ -58,5 +68,14 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
 
     // TODO append the value into the column builder
-    fn merge_result(&self, _place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()>;
+    fn merge_result(&self, _place: StateAddr, array: &mut dyn MutableColumn) -> Result<()>;
+
+    fn get_own_null_adaptor(
+        &self,
+        _nested_function: AggregateFunctionRef,
+        _params: Vec<DataValue>,
+        _arguments: Vec<DataField>,
+    ) -> Result<Option<AggregateFunctionRef>> {
+        Ok(None)
+    }
 }

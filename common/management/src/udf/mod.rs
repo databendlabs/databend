@@ -15,5 +15,5 @@
 mod udf_api;
 mod udf_mgr;
 
-pub use udf_api::UdfMgrApi;
+pub use udf_api::UdfApi;
 pub use udf_mgr::UdfMgr;

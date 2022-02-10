@@ -18,16 +18,11 @@ use std::cmp::max;
 use std::collections::HashMap;
 use std::mem::size_of;
 use std::sync::Arc;
+use chrono::NaiveDateTime;
 use common_datablocks::DataBlock;
-
-use common_datavalues::chrono::NaiveDateTime;
-use common_datavalues::chrono::TimeZone;
-use common_datavalues::chrono::Utc;
-use common_datavalues::{DataField, DataSchemaRef};
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_datavalues::prelude::{DFUInt64Array, IntoSeries};
+use common_datavalues2::chrono::TimeZone;
+use common_datavalues2::chrono::Utc;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::{MetaId, TableIdent};
@@ -95,8 +90,7 @@ impl NumbersTable {
             meta: TableMeta {
                 schema: DataSchemaRefExt::create(vec![DataField::new(
                     "number",
-                    DataType::UInt64,
-                    false,
+                    u64::to_data_type(),
                 )]),
                 engine: engine.to_string(),
                 // Assuming that created_on is unnecessary for function table,
@@ -145,9 +139,9 @@ impl Table for NumbersTable {
     }
 
     fn table_args(&self) -> Option<Vec<Expression>> {
-        Some(vec![Expression::create_literal(DataValue::UInt64(Some(
+        Some(vec![Expression::create_literal(DataValue::UInt64(
             self.total,
-        )))])
+        ))])
     }
 
     async fn read(
@@ -245,8 +239,8 @@ impl SyncSource for NumbersSource {
                 let column_data = (self.begin..self.begin + step).collect();
 
                 self.begin += step;
-                let series = DFUInt64Array::new_from_vec(column_data).into_series();
-                Ok(Some(DataBlock::create_by_array(self.schema.clone(), vec![series])))
+                let column = UInt64Column::new_from_vec(column_data);
+                Ok(Some(DataBlock::create(self.schema.clone(), vec![Arc::new(column)])))
             }
         }
     }

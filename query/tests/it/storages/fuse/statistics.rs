@@ -14,12 +14,7 @@
 //
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::*;
 use databend_query::storages::fuse::statistics::accumulator;
 use databend_query::storages::fuse::statistics::reducers;
 use databend_query::storages::fuse::statistics::StatisticsAccumulator;
@@ -28,13 +23,13 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[test]
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
-    let block = DataBlock::create_by_array(schema, vec![Series::new(vec![1, 2, 3])]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
+    let block = DataBlock::create(schema, vec![Series::from_data(vec![1, 2, 3])]);
     let r = StatisticsAccumulator::acc_columns(&block)?;
     assert_eq!(1, r.len());
     let col_stats = r.get(&0).unwrap();
-    assert_eq!(col_stats.min, DataValue::Int32(Some(1)));
-    assert_eq!(col_stats.max, DataValue::Int32(Some(3)));
+    assert_eq!(col_stats.min, DataValue::Int64(1));
+    assert_eq!(col_stats.max, DataValue::Int64(3));
     Ok(())
 }
 
@@ -45,7 +40,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let val_start_with = 1;
 
     let blocks = TestFixture::gen_sample_blocks_ex(num_of_blocks, rows_per_block, val_start_with);
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
     let col_stats = blocks
         .iter()
         .map(|b| StatisticsAccumulator::acc_columns(&b.clone().unwrap()))
@@ -55,8 +50,8 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let r = r.unwrap();
     assert_eq!(1, r.len());
     let col_stats = r.get(&0).unwrap();
-    assert_eq!(col_stats.min, DataValue::Int32(Some(val_start_with)));
-    assert_eq!(col_stats.max, DataValue::Int32(Some(num_of_blocks as i32)));
+    assert_eq!(col_stats.min, DataValue::Int64(val_start_with as i64));
+    assert_eq!(col_stats.max, DataValue::Int64(num_of_blocks as i64));
     Ok(())
 }
 

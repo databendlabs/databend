@@ -38,6 +38,7 @@ use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::StorageContext;
+use crate::storages::StorageDescription;
 use crate::storages::Table;
 
 pub struct FuseTable {
@@ -47,6 +48,13 @@ pub struct FuseTable {
 impl FuseTable {
     pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Box::new(FuseTable { table_info }))
+    }
+
+    pub fn description() -> StorageDescription {
+        StorageDescription {
+            engine_name: "FUSE".to_string(),
+            comment: "FUSE Storage Engine".to_string(),
+        }
     }
 }
 
@@ -103,7 +111,7 @@ impl Table for FuseTable {
 
     async fn commit_insertion(
         &self,
-        _ctx: Arc<QueryContext>,
+        ctx: Arc<QueryContext>,
         operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
@@ -112,7 +120,7 @@ impl Table for FuseTable {
             .iter()
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        self.do_commit(_ctx, append_log_entries, overwrite).await
+        self.do_commit(ctx, append_log_entries, overwrite).await
     }
 
     async fn truncate(

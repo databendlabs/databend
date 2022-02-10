@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
+use common_datavalues2::DataSchema;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::ReadDataSourcePlan;
@@ -28,6 +28,7 @@ use futures::stream::StreamExt;
 
 use crate::sessions::QueryContext;
 use crate::storages::StorageContext;
+use crate::storages::StorageDescription;
 use crate::storages::Table;
 
 pub struct NullTable {
@@ -37,6 +38,13 @@ pub struct NullTable {
 impl NullTable {
     pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Box::new(Self { table_info }))
+    }
+
+    pub fn description() -> StorageDescription {
+        StorageDescription {
+            engine_name: "NULL".to_string(),
+            comment: "NULL Storage Engine".to_string(),
+        }
     }
 }
 

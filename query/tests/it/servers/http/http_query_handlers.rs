@@ -14,28 +14,40 @@
 
 use std::fs::File;
 use std::io::Read;
-use std::sync::Arc;
+use std::time::Duration;
 
+use base64::encode_config;
+use base64::URL_SAFE_NO_PAD;
 use common_base::tokio;
 use common_exception::Result;
+use common_meta_types::AuthInfo;
+use common_meta_types::UserInfo;
 use databend_query::servers::http::v1::make_final_uri;
 use databend_query::servers::http::v1::make_page_uri;
 use databend_query::servers::http::v1::make_state_uri;
+use databend_query::servers::http::v1::middleware::HTTPSessionEndpoint;
+use databend_query::servers::http::v1::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateName;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
-use databend_query::sessions::SessionManager;
+use headers::Header;
+use httpmock::MockServer;
 use hyper::header;
+use jwt_simple::algorithms::RS256KeyPair;
+use jwt_simple::algorithms::RSAKeyPairLike;
+use jwt_simple::claims::JWTClaims;
+use jwt_simple::claims::NoCustomClaims;
+use jwt_simple::prelude::Clock;
 use poem::http::Method;
 use poem::http::StatusCode;
-use poem::middleware::AddDataEndpoint;
 use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Request;
 use poem::Response;
 use poem::Route;
 use pretty_assertions::assert_eq;
+use tokio::time::sleep;
 
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
@@ -48,18 +60,10 @@ use crate::tests::tls_constants::TEST_TLS_SERVER_CERT;
 use crate::tests::tls_constants::TEST_TLS_SERVER_KEY;
 use crate::tests::SessionManagerBuilder;
 
+type EndpointType = HTTPSessionEndpoint<Route>;
+
 // TODO(youngsofun): add test for
 // 1. query fail after started
-
-pub fn get_page_uri(query_id: &str, page_no: usize, wait_time: u32) -> String {
-    format!(
-        "{}?wait_time={}",
-        make_page_uri(query_id, page_no),
-        wait_time
-    )
-}
-
-type RouteWithData = AddDataEndpoint<Route, Arc<SessionManager>>;
 
 #[tokio::test]
 async fn test_simple_sql() -> Result<()> {
@@ -89,13 +93,13 @@ async fn test_bad_sql() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_async() -> Result<()> {
-    let sessions = SessionManagerBuilder::create().build()?;
-    let route = Route::new().nest("/v1/query", query_route()).data(sessions);
-    let sql = "select sleep(2)";
-    let json = serde_json::json!({"sql": sql.to_string()});
+    let ep = create_endpoint();
+    let sql = "select sleep(0.2)";
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
 
-    let (status, result) = post_json_to_router(&route, &json, 0).await?;
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK);
     let query_id = result.id;
     let next_uri = make_page_uri(&query_id, 0);
@@ -105,12 +109,13 @@ async fn test_async() -> Result<()> {
     assert!(result.stats.progress.is_some());
     assert!(result.schema.is_some());
     assert_eq!(result.state, ExecuteStateName::Running,);
+    sleep(Duration::from_millis(300)).await;
 
     // get page, support retry
     for _ in 1..3 {
-        let uri = get_page_uri(&query_id, 0, 3);
+        let uri = make_page_uri(&query_id, 0);
 
-        let (status, result) = get_uri_checked(&route, &uri).await?;
+        let (status, result) = get_uri_checked(&ep, &uri).await?;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(result.data.len(), 1);
         assert!(result.error.is_none(), "{:?}", result.error);
@@ -122,7 +127,7 @@ async fn test_async() -> Result<()> {
 
     // get state
     let uri = make_state_uri(&query_id);
-    let (status, result) = get_uri_checked(&route, &uri).await?;
+    let (status, result) = get_uri_checked(&ep, &uri).await?;
     assert_eq!(status, StatusCode::OK);
     assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.data.len(), 0);
@@ -132,40 +137,70 @@ async fn test_async() -> Result<()> {
     assert_eq!(result.state, ExecuteStateName::Succeeded);
 
     // get page not expected
-    let uri = get_page_uri(&query_id, 1, 3);
-    let response = get_uri(&route, &uri).await;
+    let uri = make_page_uri(&query_id, 1);
+    let response = get_uri(&ep, &uri).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(body, "wrong page number 1");
 
     // delete
-    let status = delete_query(&route, query_id.clone()).await;
+    let status = delete_query(&ep, query_id.clone()).await;
     assert_eq!(status, StatusCode::OK);
 
-    let response = get_uri(&route, &uri).await;
+    let response = get_uri(&ep, &uri).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_result_timeout() -> Result<()> {
+    let session_manager = SessionManagerBuilder::create()
+        .http_handler_result_time_out(200u64)
+        .build()
+        .unwrap();
+    let ep = Route::new()
+        .nest("/v1/query", query_route())
+        .with(HTTPSessionMiddleware { session_manager });
+
+    let sql = "select sleep(0.1)";
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    assert_eq!(status, StatusCode::OK);
+    let query_id = result.id;
+    let next_uri = make_page_uri(&query_id, 0);
+    assert_eq!(result.next_uri, Some(next_uri.clone()));
+
+    sleep(Duration::from_millis(110)).await;
+    let response = get_uri(&ep, &next_uri).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    sleep(std::time::Duration::from_millis(210)).await;
+    let response = get_uri(&ep, &next_uri).await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_multi_page() -> Result<()> {
-    let sessions = SessionManagerBuilder::create().build()?;
-    let route = Route::new().nest("/v1/query", query_route()).data(sessions);
+    let session_manager = SessionManagerBuilder::create().build().unwrap();
+    let num_parts = session_manager.get_conf().query.num_cpus as usize;
+    let ep = Route::new()
+        .nest("/v1/query", query_route())
+        .with(HTTPSessionMiddleware { session_manager });
 
     let max_block_size = 10000;
-    let num_parts = num_cpus::get();
     let sql = format!("select * from numbers({})", max_block_size * num_parts);
 
-    let json = serde_json::json!({"sql": sql.to_string()});
-    let (status, result) = post_json_to_router(&route, &json, 3).await?;
+    let json = serde_json::json!({"sql": sql.to_string(),  "pagination": {"wait_time_secs": 3}});
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(result.data.len(), max_block_size);
     let query_id = result.id;
-    let mut next_uri = get_page_uri(&query_id, 1, 3);
+    let mut next_uri = make_page_uri(&query_id, 1);
 
     for p in 1..(num_parts + 1) {
-        let (status, result) = get_uri_checked(&route, &next_uri).await?;
+        let (status, result) = get_uri_checked(&ep, &next_uri).await?;
         assert_eq!(status, StatusCode::OK);
         assert!(result.error.is_none(), "{:?}", result.error);
         assert!(result.stats.progress.is_some());
@@ -174,9 +209,9 @@ async fn test_multi_page() -> Result<()> {
             assert_eq!(result.next_uri, None);
             assert_eq!(result.state, ExecuteStateName::Succeeded);
         } else {
-            assert_eq!(result.data.len(), 10000);
-            assert_eq!(result.next_uri, Some(make_page_uri(&query_id, p + 1)));
-            next_uri = get_page_uri(&query_id, p + 1, 3);
+            next_uri = make_page_uri(&query_id, p + 1);
+            assert_eq!(result.data.len(), max_block_size);
+            assert_eq!(result.next_uri, Some(next_uri.clone()));
         }
     }
     Ok(())
@@ -184,8 +219,7 @@ async fn test_multi_page() -> Result<()> {
 
 #[tokio::test]
 async fn test_insert() -> Result<()> {
-    let sessions = SessionManagerBuilder::create().build()?;
-    let route = Route::new().nest("/v1/query", query_route()).data(sessions);
+    let route = create_endpoint();
 
     let sqls = vec![
         ("create table t(a int) engine=fuse", 0),
@@ -194,8 +228,8 @@ async fn test_insert() -> Result<()> {
     ];
 
     for (sql, data_len) in sqls {
-        let json = serde_json::json!({"sql": sql.to_string()});
-        let (status, result) = post_json_to_router(&route, &json, 3).await?;
+        let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 3}});
+        let (status, result) = post_json_to_endpoint(&route, &json).await?;
         assert_eq!(status, StatusCode::OK);
         assert!(result.error.is_none(), "{:?}", result.error);
         assert_eq!(result.data.len(), data_len);
@@ -204,9 +238,9 @@ async fn test_insert() -> Result<()> {
     Ok(())
 }
 
-async fn delete_query(route: &RouteWithData, query_id: String) -> StatusCode {
+async fn delete_query(ep: &EndpointType, query_id: String) -> StatusCode {
     let uri = make_final_uri(&query_id);
-    let resp = get_uri(route, &uri).await;
+    let resp = get_uri(ep, &uri).await;
     resp.status()
 }
 
@@ -223,52 +257,57 @@ async fn check_response(response: Response) -> Result<(StatusCode, QueryResponse
     Ok((status, result?))
 }
 
-async fn get_uri(route: &RouteWithData, uri: &str) -> Response {
-    route
-        .call(
-            Request::builder()
-                .uri(uri.parse().unwrap())
-                .method(Method::GET)
-                .finish(),
-        )
-        .await
-        .unwrap_or_else(|err| err.as_response())
+async fn get_uri(ep: &EndpointType, uri: &str) -> Response {
+    ep.call(
+        Request::builder()
+            .uri(uri.parse().unwrap())
+            .method(Method::GET)
+            .finish(),
+    )
+    .await
+    .unwrap_or_else(|err| err.as_response())
 }
 
-async fn get_uri_checked(route: &RouteWithData, uri: &str) -> Result<(StatusCode, QueryResponse)> {
-    let response = get_uri(route, uri).await;
+async fn get_uri_checked(ep: &EndpointType, uri: &str) -> Result<(StatusCode, QueryResponse)> {
+    let response = get_uri(ep, uri).await;
     check_response(response).await
 }
 
-async fn post_sql(sql: &'static str, wait_time: i32) -> Result<(StatusCode, QueryResponse)> {
-    let json = serde_json::json!({"sql": sql.to_string()});
-    post_json(&json, wait_time).await
+async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryResponse)> {
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
+    post_json(&json).await
 }
 
-pub fn create_router() -> RouteWithData {
-    let sessions = SessionManagerBuilder::create().build().unwrap();
-    Route::new().nest("/v1/query", query_route()).data(sessions)
+pub fn create_endpoint() -> EndpointType {
+    let session_manager = SessionManagerBuilder::create().build().unwrap();
+    Route::new()
+        .nest("/v1/query", query_route())
+        .with(HTTPSessionMiddleware { session_manager })
 }
 
-async fn post_json(
-    json: &serde_json::Value,
-    wait_time: i32,
+async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryResponse)> {
+    let ep = create_endpoint();
+    post_json_to_endpoint(&ep, json).await
+}
+
+async fn post_sql_to_endpoint(
+    ep: &EndpointType,
+    sql: &str,
+    wait_time_secs: u64,
 ) -> Result<(StatusCode, QueryResponse)> {
-    let router = create_router();
-    post_json_to_router(&router, json, wait_time).await
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
+    post_json_to_endpoint(ep, &json).await
 }
 
-async fn post_json_to_router(
-    route: &RouteWithData,
+async fn post_json_to_endpoint(
+    ep: &EndpointType,
     json: &serde_json::Value,
-    wait_time: i32,
 ) -> Result<(StatusCode, QueryResponse)> {
-    let path = "/v1/query";
-    let uri = format!("{}?wait_time={}", path, wait_time);
+    let uri = "/v1/query";
     let content_type = "application/json";
     let body = serde_json::to_vec(&json)?;
 
-    let response = route
+    let response = ep
         .call(
             Request::builder()
                 .uri(uri.parse().unwrap())
@@ -280,6 +319,118 @@ async fn post_json_to_router(
         .unwrap();
 
     check_response(response).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_auth_basic() -> Result<()> {
+    let user_name = "user1";
+    let password = "password";
+
+    let ep = create_endpoint();
+    let sql = format!("create user {} identified by {}", user_name, password);
+    post_sql_to_endpoint(&ep, &sql, 1).await?;
+
+    let basic = headers::Authorization::basic(user_name, password);
+    test_auth_post(&ep, user_name, basic).await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_auth_jwt() -> Result<()> {
+    let user_name = "user1";
+
+    let kid = "test_kid";
+    let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
+    let rsa_components = key_pair.public_key().to_components();
+    let e = encode_config(rsa_components.e, URL_SAFE_NO_PAD);
+    let n = encode_config(rsa_components.n, URL_SAFE_NO_PAD);
+    let j =
+        serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
+
+    let server = MockServer::start();
+    let path = "/jwks.json";
+    let mock = server.mock(|when, then| {
+        when.method(httpmock::Method::GET).path(path);
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(j);
+    });
+    let jwks_url = format!("http://{}{}", server.address(), path);
+
+    let session_manager = SessionManagerBuilder::create()
+        .jwt_key_file(jwks_url)
+        .build()
+        .unwrap();
+
+    let user_info = UserInfo {
+        name: user_name.to_string(),
+        hostname: "%".to_string(),
+        auth_info: AuthInfo::JWT,
+        grants: Default::default(),
+        quota: Default::default(),
+    };
+
+    let tenant = "test";
+    session_manager
+        .get_user_manager()
+        .add_user(tenant, user_info)
+        .await?;
+
+    let ep = Route::new()
+        .nest("/v1/query", query_route())
+        .with(HTTPSessionMiddleware { session_manager });
+
+    let now = Some(Clock::now_since_epoch());
+    let claims = JWTClaims {
+        issued_at: now,
+        expires_at: Some(now.unwrap() + jwt_simple::prelude::Duration::from_secs(10)),
+        invalid_before: now,
+        audiences: None,
+        issuer: None,
+        jwt_id: None,
+        subject: Some(user_name.to_string()),
+        nonce: None,
+        custom: NoCustomClaims {},
+    };
+
+    let token = key_pair.sign(claims)?;
+    let bear = headers::Authorization::bearer(&token).unwrap();
+    test_auth_post(&ep, user_name, bear).await?;
+    mock.assert();
+    Ok(())
+}
+
+async fn test_auth_post(ep: &EndpointType, user_name: &str, header: impl Header) -> Result<()> {
+    let sql = "select current_user()";
+
+    let json = serde_json::json!({"sql": sql.to_string()});
+
+    let path = "/v1/query";
+    let uri = format!("{}?wait_time_secs={}", path, 3);
+    let content_type = "application/json";
+    let body = serde_json::to_vec(&json)?;
+
+    let response = ep
+        .call(
+            Request::builder()
+                .uri(uri.parse().unwrap())
+                .method(Method::POST)
+                .header(header::CONTENT_TYPE, content_type)
+                .typed_header(header)
+                .body(body),
+        )
+        .await
+        .unwrap();
+
+    let (_, resp) = check_response(response).await?;
+    let v = resp.data;
+    assert_eq!(v.len(), 1);
+    assert_eq!(v[0].len(), 1);
+    assert_eq!(
+        v[0][0],
+        serde_json::Value::String(format!("'{}'@'%'", user_name))
+    );
+    Ok(())
 }
 
 // need to support local_addr, but axum_server do not have local_addr callback

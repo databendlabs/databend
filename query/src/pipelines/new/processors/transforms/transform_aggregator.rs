@@ -2,7 +2,7 @@ use std::alloc::Layout;
 use std::sync::Arc;
 use tonic::Code::Unimplemented;
 use common_datablocks::{DataBlock, HashMethodKeysU16, HashMethodKeysU32, HashMethodKeysU64, HashMethodKeysU8, HashMethodKind, HashMethodSerializer};
-use common_datavalues::DataSchemaRef;
+use common_datavalues2::DataSchemaRef;
 use common_exception::{ErrorCode, Result};
 use common_functions::aggregates::{AggregateFunctionRef, get_layout_offsets};
 use common_planners::Expression;
@@ -225,7 +225,6 @@ impl<TAggregator: Aggregator + 'static> AggregatorTransform<TAggregator> {
             if state.is_finished {
                 if !state.output_port.is_finished() {
                     state.output_port.finish();
-                    state.inner.on_finished();
                 }
 
                 let mut temp_state = AggregatorTransform::Finished;

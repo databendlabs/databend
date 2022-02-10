@@ -18,6 +18,7 @@ mod configs_table;
 mod contributors_table;
 mod credits_table;
 mod databases_table;
+mod engines_table;
 mod functions_table;
 mod metrics_table;
 mod query_log_table;
