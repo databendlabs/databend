@@ -14,6 +14,7 @@
 
 use std::cmp::Ordering;
 use std::fmt;
+use std::sync::Arc;
 
 use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
@@ -58,41 +59,33 @@ impl Function2 for HexFunction {
         Ok(StringType::arc())
     }
 
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
-        let mut builder: ColumnBuilder<Vu8> = ColumnBuilder::with_capacity(input_rows);
-
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
         match columns[0].data_type().data_type_id() {
             TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
                 let col = cast_column_field(&columns[0], &UInt64Type::arc())?;
                 let col = col.as_any().downcast_ref::<UInt64Column>().unwrap();
-                for val in col.iter() {
-                    builder.append(format!("{:x}", val).as_bytes());
-                }
+                let iter = col.iter().map(|val| format!("{:x}", val).into_bytes());
+                Ok(Arc::new(StringColumn::from_owned_iterator(iter)))
             }
             TypeID::Int8 | TypeID::Int16 | TypeID::Int32 | TypeID::Int64 => {
                 let col = cast_column_field(&columns[0], &Int64Type::arc())?;
                 let col = col.as_any().downcast_ref::<Int64Column>().unwrap();
-                for val in col.iter() {
-                    let val = match val.cmp(&0) {
-                        Ordering::Less => {
-                            format!("-{:x}", val.unsigned_abs())
-                        }
-                        _ => {
-                            format!("{:x}", val)
-                        }
-                    };
-                    builder.append(val.as_bytes());
-                }
+                let iter = col.iter().map(|val| match val.cmp(&0) {
+                    Ordering::Less => format!("-{:x}", val.unsigned_abs()).into_bytes(),
+                    _ => format!("{:x}", val).into_bytes(),
+                });
+                Ok(Arc::new(StringColumn::from_owned_iterator(iter)))
             }
             TypeID::String => {
                 let col = cast_column_field(&columns[0], &StringType::arc())?;
                 let col = col.as_any().downcast_ref::<StringColumn>().unwrap();
-                for val in col.iter() {
+                let iter = col.iter().map(|val| {
                     let mut buffer = vec![0u8; val.len() * 2];
-                    let buffer = &mut buffer[0..val.len() * 2];
-                    let _ = hex::encode_to_slice(val, buffer);
-                    builder.append(buffer)
-                }
+                    let buff = &mut buffer[0..val.len() * 2];
+                    let _ = hex::encode_to_slice(val, buff);
+                    buffer
+                });
+                Ok(Arc::new(StringColumn::from_owned_iterator(iter)))
             }
             _ => {
                 return Err(ErrorCode::IllegalDataType(format!(
@@ -101,7 +94,6 @@ impl Function2 for HexFunction {
                 )));
             }
         }
-        Ok(builder.build(input_rows))
     }
 }
 

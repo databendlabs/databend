@@ -84,6 +84,7 @@ impl StringFunction {
         factory.register("bin", BinFunction::desc());
         factory.register("oct", OctFunction::desc());
         factory.register("hex", HexFunction::desc());
+        factory.register("unhex", UnhexFunction::desc());
     }
 
     pub fn register(factory: &mut FunctionFactory) {
@@ -92,7 +93,6 @@ impl StringFunction {
         factory.register("substr", SubstringFunction::desc());
         factory.register("substring", SubstringFunction::desc());
         factory.register("substring_index", SubstringIndexFunction::desc());
-        factory.register("unhex", UnhexFunction::desc());
         factory.register("locate", LocateFunction::desc());
         factory.register("position", PositionFunction::desc());
         factory.register("instr", InstrFunction::desc());
