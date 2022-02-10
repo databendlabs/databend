@@ -25,8 +25,6 @@ use crate::prelude::*;
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct IntervalType {
-    /// Interval(YearMonth) represents the elapsed number of months.
-    /// Interval(DayTime) represents the elapsed number of microseconds.
     kind: IntervalKind,
 }
 

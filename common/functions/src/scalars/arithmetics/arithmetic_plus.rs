@@ -75,7 +75,7 @@ impl ArithmeticPlusFunction {
                 with_match_primitive_type_id!(right_type, |$D| {
                     BinaryArithmeticFunction::<$T, $D, $T, _>::try_create_func(
                         op,
-                        args[0].clone(),
+                        left_arg,
                         add_scalar::<$T, $D, _>,
                     )
                 },{
@@ -83,7 +83,7 @@ impl ArithmeticPlusFunction {
                         let interval = right_arg.as_any().downcast_ref::<IntervalType>().unwrap();
                         let kind = interval.kind();
                         let function_name = format!("add{}s", kind);
-                        Function2Factory::instance().get(function_name, args)
+                        Function2Factory::instance().get(function_name, &[&left_arg, &Int64Type::arc()])
                     } else {
                         error_fn()
                     }
@@ -96,18 +96,11 @@ impl ArithmeticPlusFunction {
                 with_match_primitive_type_id!(left_type, |$T| {
                     BinaryArithmeticFunction::<$T, $D, $D, _>::try_create_func(
                         op,
-                        args[1].clone(),
+                        right_arg,
                         add_scalar::<$T, $D, _>,
                     )
                 }, {
-                    if left_type.is_interval() {
-                        let interval = left_arg.as_any().downcast_ref::<IntervalType>().unwrap();
-                        let kind = interval.kind();
-                        let function_name = format!("add{}s", kind);
-                        Function2Factory::instance().get(function_name, args)
-                    } else {
-                        error_fn()
-                    }
+                    error_fn()
                 })
             });
         }

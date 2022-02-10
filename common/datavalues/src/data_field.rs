@@ -156,6 +156,10 @@ impl DataField {
 
         let custom_metadata = match self.data_type() {
             DataType::DateTime32(tz) => tz.clone(),
+            DataType::DateTime64(precision, tz) => {
+                let tz = tz.clone().unwrap_or("UTC".to_string());
+                Some(format!("{}{}", precision, tz))
+            }
             _ => None,
         };
 
@@ -184,12 +188,20 @@ impl From<&ArrowField> for DataField {
         let mut dt: DataType = f.data_type().into();
         if let Some(m) = f.metadata() {
             if let Some(custom_name) = m.get("ARROW:extension:databend_name") {
-                let metatada = m.get("ARROW:extension:databend_metadata");
+                let metadata = m.get("ARROW:extension:databend_metadata");
                 match custom_name.as_str() {
                     "Date16" => dt = DataType::Date16,
                     "Date32" => dt = DataType::Date32,
-                    "DateTime32" => dt = DataType::DateTime32(metatada.cloned()),
-                    "DateTime64" => dt = DataType::DateTime64(3, metatada.cloned()),
+                    "DateTime32" => dt = DataType::DateTime32(metadata.cloned()),
+                    "DateTime64" => match metadata {
+                        Some(meta) => {
+                            let mut chars = meta.chars();
+                            let precision = chars.next().unwrap().to_digit(10).unwrap();
+                            let tz = chars.collect::<String>();
+                            dt = DataType::DateTime64(precision, Some(tz));
+                        }
+                        None => dt = DataType::DateTime64(3, None),
+                    },
                     _ => {}
                 }
             }

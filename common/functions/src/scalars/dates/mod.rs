@@ -14,6 +14,7 @@
 
 mod date;
 mod interval_function;
+mod interval_function2;
 mod now;
 mod number_function;
 mod round_function;
@@ -24,6 +25,7 @@ pub use date::DateFunction;
 pub use interval_function::IntervalFunctionFactory;
 pub use interval_function::MonthsArithmeticFunction;
 pub use interval_function::SecondsArithmeticFunction;
+pub use interval_function2::AddYearsFunction;
 pub use number_function::ToDayOfMonthFunction;
 pub use number_function::ToDayOfWeekFunction;
 pub use number_function::ToDayOfYearFunction;

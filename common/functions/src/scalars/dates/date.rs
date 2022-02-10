@@ -19,6 +19,7 @@ use super::interval_function::MonthsArithmeticFunction;
 use super::interval_function::SecondsArithmeticFunction;
 use super::now::NowFunction;
 use super::number_function::ToMondayFunction;
+use super::AddYearsFunction;
 use super::RoundFunction;
 use super::ToDayOfMonthFunction;
 use super::ToDayOfWeekFunction;
@@ -141,7 +142,7 @@ impl DateFunction {
         factory.register("toStartOfDay", Self::round_function_creator(60 * 60 * 24));
 
         //interval functions
-        factory.register("addYears", Self::month_arithmetic_function_creator(12));
+        //factory.register("addYears", Self::month_arithmetic_function_creator(12));
         factory.register("addMonths", Self::month_arithmetic_function_creator(1));
         factory.register(
             "addDays",
@@ -181,5 +182,6 @@ impl DateFunction {
         factory.register("today", TodayFunction::desc());
         factory.register("yesterday", YesterdayFunction::desc());
         factory.register("tomorrow", TomorrowFunction::desc());
+        factory.register_arithmetic("addYears", AddYearsFunction::desc());
     }
 }

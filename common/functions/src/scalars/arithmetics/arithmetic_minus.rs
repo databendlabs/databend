@@ -74,7 +74,7 @@ impl ArithmeticMinusFunction {
                 with_match_primitive_type_id!(right_type, |$D| {
                     BinaryArithmeticFunction::<$T, $D, $T, _>::try_create_func(
                         op,
-                        args[0].clone(),
+                        left_arg,
                         sub_scalar::<$T,$D, _>
                     )
                 },{
@@ -83,7 +83,7 @@ impl ArithmeticMinusFunction {
                         let interval = right_arg.as_any().downcast_ref::<IntervalType>().unwrap();
                         let kind = interval.kind();
                         let function_name = format!("subtract{}s", kind);
-                        return Function2Factory::instance().get(function_name, args);
+                        return Function2Factory::instance().get(function_name, &[&left_arg, &Int64Type::arc()]);
                     }
                     with_match_date_type_error!(right_type, |$D| {
                         BinaryArithmeticFunction::<$T, $D, i32, _>::try_create_func(
@@ -101,7 +101,7 @@ impl ArithmeticMinusFunction {
                 with_match_date_type_error!(right_type, |$D| {
                     BinaryArithmeticFunction::<$T, $D, $D, _>::try_create_func(
                         op,
-                        args[1].clone(),
+                        right_arg,
                         sub_scalar::<$T, $D, _>
                     )
                 })

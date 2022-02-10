@@ -20,7 +20,6 @@ use common_datavalues::chrono::Datelike;
 use common_datavalues::chrono::Duration;
 use common_datavalues::chrono::NaiveDate;
 use common_datavalues::chrono::NaiveDateTime;
-use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Timelike;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
@@ -407,16 +406,13 @@ impl IntervalFunctionFactory {
 
     // A private helper function to add/subtract month to/from days
     fn days_plus_signed_months(days: i64, months: i64) -> Result<i32> {
-        let date = Utc
-            .ymd(1970, 1, 1)
+        let epoch = NaiveDate::from_ymd(1970, 1, 1);
+        let date = epoch
             .checked_add_signed(Duration::days(days))
             .ok_or_else(|| ErrorCode::Overflow(format!("Overflow on date with days {}.", days,)))?;
-
         let new_date = Self::plus_months(date.year(), date.month0() as i64, date.day(), months)?;
-
-        let dt = DateTime::<Utc>::from_utc(new_date.and_hms(0, 0, 0), Utc);
-        let seconds_per_day = 24 * 3600;
-        Ok((dt.timestamp() / seconds_per_day) as i32)
+        let duration = new_date.signed_duration_since(epoch);
+        Ok(duration.num_days() as i32)
     }
 
     fn plus_months(year: i32, month0: i64, day: u32, months: i64) -> Result<NaiveDate> {
