@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 // Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,6 +11,8 @@ use std::str::FromStr;
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::str::FromStr;
+
 use common_exception::ErrorCode;
 use sha2::Digest;
 use sha2::Sha256;

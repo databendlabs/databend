@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use clap::Parser;
-use common_exception::ErrorCode;
+use common_meta_types::MetaResult;
 use common_meta_types::NodeId;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
@@ -91,10 +91,6 @@ pub struct RaftConfig {
     #[clap(long, env = "RAFT_MAX_APPLIED_LOG_TO_KEEP", default_value = "1000")]
     pub max_applied_log_to_keep: u64,
 
-    /// Whether to boot up a new cluster. If already booted, it is ignored
-    #[clap(long, env = KVSRV_BOOT)]
-    pub boot: bool,
-
     /// Single node metasrv. It creates a single node cluster if meta data is not initialized.
     /// Otherwise it opens the previous one.
     /// This is mainly for testing purpose.
@@ -130,7 +126,6 @@ impl Default for RaftConfig {
             heartbeat_interval: 1000,
             install_snapshot_timeout: 4000,
             max_applied_log_to_keep: 1000,
-            boot: false,
             single: false,
             join: vec![],
             id: 0,
@@ -158,13 +153,7 @@ impl RaftConfig {
         !self.no_sync
     }
 
-    pub fn check(&self) -> common_exception::Result<()> {
-        if self.boot && self.single {
-            return Err(ErrorCode::InvalidConfig(
-                "--boot and --single can not be both set",
-            ));
-        }
-
+    pub fn check(&self) -> MetaResult<()> {
         Ok(())
     }
 

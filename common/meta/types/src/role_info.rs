@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::MetaError;
+use crate::MetaResult;
 use crate::UserGrantSet;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -37,12 +37,12 @@ impl RoleInfo {
 }
 
 impl TryFrom<Vec<u8>> for RoleInfo {
-    type Error = ErrorCode;
+    type Error = MetaError;
 
-    fn try_from(value: Vec<u8>) -> Result<Self> {
+    fn try_from(value: Vec<u8>) -> MetaResult<Self> {
         match serde_json::from_slice(&value) {
             Ok(role_info) => Ok(role_info),
-            Err(serialize_error) => Err(ErrorCode::IllegalRoleInfoFormat(format!(
+            Err(serialize_error) => Err(MetaError::IllegalRoleInfoFormat(format!(
                 "Cannot deserialize role info from bytes. cause {}",
                 serialize_error
             ))),

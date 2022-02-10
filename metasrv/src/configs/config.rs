@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use clap::Parser;
-use common_exception::ErrorCode;
 use common_meta_raft_store::config as raft_config;
 use common_meta_raft_store::config::RaftConfig;
+use common_meta_types::MetaError;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -119,7 +119,7 @@ impl Config {
     /// If config file is not empty, e.g: `-c xx.toml`, reload config from the file.
     /// Prefer to use environment variables in cloud native deployment.
     /// Override configs base on environment variables.
-    pub fn load() -> Result<Self, ErrorCode> {
+    pub fn load() -> Result<Self, MetaError> {
         let mut cfg = Config::parse();
         if !cfg.config_file.is_empty() {
             cfg = Self::load_from_toml(cfg.config_file.as_str())?;
@@ -130,12 +130,12 @@ impl Config {
     }
 
     /// Load configs from toml file.
-    pub fn load_from_toml(file: &str) -> Result<Self, ErrorCode> {
+    pub fn load_from_toml(file: &str) -> Result<Self, MetaError> {
         let txt = std::fs::read_to_string(file)
-            .map_err(|e| ErrorCode::CannotReadFile(format!("File: {}, err: {:?}", file, e)))?;
+            .map_err(|e| MetaError::LoadConfigError(format!("File: {}, err: {:?}", file, e)))?;
 
         let cfg = toml::from_str::<Config>(txt.as_str())
-            .map_err(|e| ErrorCode::BadArguments(format!("{:?}", e)))?;
+            .map_err(|e| MetaError::LoadConfigError(format!("{:?}", e)))?;
 
         Ok(cfg)
     }
@@ -182,7 +182,6 @@ impl Config {
             u64,
             raft_config::KVSRV_INSTALL_SNAPSHOT_TIMEOUT
         );
-        load_field_from_env!(cfg.raft_config.boot, bool, raft_config::KVSRV_BOOT);
         load_field_from_env!(cfg.raft_config.single, bool, raft_config::KVSRV_SINGLE);
         load_field_from_env!(cfg.raft_config.id, u64, raft_config::KVSRV_ID);
     }

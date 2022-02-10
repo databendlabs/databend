@@ -16,11 +16,12 @@ use std::fmt;
 use std::io::Cursor;
 
 use bytes::BytesMut;
-use common_exception::ErrorCode;
 use common_io::prelude::BinaryRead;
 use common_io::prelude::BinaryWriteBuf;
 use common_meta_sled_store::sled::IVec;
 use common_meta_sled_store::SledOrderedSerde;
+use common_meta_types::MetaStorageError;
+use common_meta_types::ToMetaStorageError;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -32,18 +33,24 @@ pub struct TableLookupKey {
 }
 
 impl SledOrderedSerde for TableLookupKey {
-    fn ser(&self) -> Result<IVec, ErrorCode> {
+    fn ser(&self) -> Result<IVec, MetaStorageError> {
         let mut buf = BytesMut::new();
-        buf.write_uvarint(self.database_id)?;
-        buf.write_string(&self.table_name)?;
+        buf.write_uvarint(self.database_id)
+            .map_error_to_meta_storage_error(MetaStorageError::BytesError, || "write_uvarint")?;
+        buf.write_string(&self.table_name)
+            .map_error_to_meta_storage_error(MetaStorageError::BytesError, || "write_string")?;
         Ok(IVec::from(buf.to_vec()))
     }
 
-    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, MetaStorageError>
     where Self: Sized {
         let mut buf_read = Cursor::new(v);
-        let database_id = buf_read.read_uvarint()?;
-        let table_name = buf_read.read_string()?;
+        let database_id = buf_read
+            .read_uvarint()
+            .map_error_to_meta_storage_error(MetaStorageError::BytesError, || "read_uvarint")?;
+        let table_name = buf_read
+            .read_string()
+            .map_error_to_meta_storage_error(MetaStorageError::BytesError, || "read_string")?;
         Ok(TableLookupKey {
             database_id,
             table_name,

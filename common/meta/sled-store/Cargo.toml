@@ -14,6 +14,7 @@ test = false
 [dependencies]
 common-exception = { path = "../../exception" }
 common-tracing = { path = "../../tracing" }
+common-meta-types = { path = "../types" }
 
 anyhow = "1.0.53"
 byteorder = "1.4.3"
@@ -27,4 +28,3 @@ tempfile = "3.3.0"
 
 [dev-dependencies]
 common-base = { path = "../../base" }
-common-meta-types = { path = "../types" }

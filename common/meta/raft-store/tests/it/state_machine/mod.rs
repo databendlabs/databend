@@ -18,7 +18,6 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_base::tokio;
-use common_exception::ErrorCode;
 use common_meta_api::KVApi;
 use common_meta_raft_store::state_machine::testing::pretty_snapshot;
 use common_meta_raft_store::state_machine::testing::pretty_snapshot_iter;
@@ -26,6 +25,7 @@ use common_meta_raft_store::state_machine::testing::snapshot_logs;
 use common_meta_raft_store::state_machine::SerializableSnapshot;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
+use common_meta_types::AppError;
 use common_meta_types::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
@@ -33,9 +33,11 @@ use common_meta_types::DatabaseMeta;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
+use common_meta_types::MetaStorageError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
+use common_meta_types::UnknownTableId;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 use maplit::hashmap;
@@ -298,10 +300,12 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
             );
 
             let err = r.unwrap_err();
-
             assert_eq!(
-                ErrorCode::UnknownTableId("Unknown table id").code(),
-                err.code()
+                MetaStorageError::AppError(AppError::UnknownTableId(UnknownTableId::new(
+                    0,
+                    String::from("apply_upsert_table_options_cmd")
+                ))),
+                err
             );
 
             Ok(AppliedState::None)

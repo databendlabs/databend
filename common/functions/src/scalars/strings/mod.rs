@@ -86,7 +86,7 @@ pub use soundex::SoundexFunction;
 pub use space::SpaceFunction;
 pub use strcmp::StrcmpFunction;
 pub use string::StringFunction;
-pub use string2number::NumberResultFunction;
+pub use string2number::NumberOperator;
 pub use string2number::String2NumberFunction;
 pub use string2string::String2StringFunction;
 pub use string2string::StringOperator;
