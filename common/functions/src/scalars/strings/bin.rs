@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fmt;
-use std::sync::Arc;
 
 use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
@@ -48,119 +47,60 @@ impl Function2 for BinFunction {
     }
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if !args[0].data_type_id().is_numeric() && args[0].data_type_id() != TypeID::Null {
+        if !args[0].data_type_id().is_numeric() {
             return Err(ErrorCode::IllegalDataType(format!(
-                "Expected number or null, but got {}",
+                "Expected integer but got {}",
                 args[0].data_type_id()
             )));
         }
 
-        let dt = StringType::arc();
-        if args[0].is_nullable() {
-            Ok(Arc::new(NullableType::create(dt)))
-        } else {
-            Ok(dt)
-        }
+        Ok(StringType::arc())
     }
 
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
-        let dt = columns[0].data_type();
-        if dt.is_nullable() {
-            let mut builder: NullableColumnBuilder<Vu8> =
-                NullableColumnBuilder::with_capacity(input_rows);
+        let mut builder: ColumnBuilder<Vu8> = ColumnBuilder::with_capacity(input_rows);
 
-            let dt = remove_nullable(columns[0].data_type());
-            match dt.data_type_id() {
-                TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
-                    let col = cast_column_field(&columns[0], &UInt64Type::arc())?;
-                    let viewer = ColumnViewer::<u64>::create(&col)?;
-                    for idx in 0..input_rows {
-                        if viewer.valid_at(idx) {
-                            builder.append(format!("{:b}", viewer.value(idx)).as_bytes(), true);
-                        } else {
-                            builder.append_null();
-                        }
-                    }
-                }
-                TypeID::Int8 | TypeID::Int16 | TypeID::Int32 | TypeID::Int64 => {
-                    let col = cast_column_field(&columns[0], &Int64Type::arc())?;
-                    let viewer = ColumnViewer::<i64>::create(&col)?;
-                    for idx in 0..input_rows {
-                        if viewer.valid_at(idx) {
-                            builder.append(format!("{:b}", viewer.value(idx)).as_bytes(), true);
-                        } else {
-                            builder.append_null();
-                        }
-                    }
-                }
-                TypeID::Float32 | TypeID::Float64 => {
-                    let col = cast_column_field(&columns[0], &Float64Type::arc())?;
-                    let viewer = ColumnViewer::<f64>::create(&col)?;
-                    for idx in 0..input_rows {
-                        let val = viewer.value(idx);
-                        if viewer.valid_at(idx) {
-                            let val = if val.ge(&0f64) {
-                                format!(
-                                    "{:b}",
-                                    val.max(i64::MIN as f64).min(i64::MAX as f64).round() as i64
-                                )
-                            } else {
-                                format!(
-                                    "{:b}",
-                                    val.max(u64::MIN as f64).min(u64::MAX as f64).round() as u64
-                                )
-                            };
-                            builder.append(val.as_bytes(), true);
-                        } else {
-                            builder.append_null();
-                        }
-                    }
-                }
-                _ => {
-                    builder.append_null();
+        match columns[0].data_type().data_type_id() {
+            TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
+                let col = cast_column_field(&columns[0], &UInt64Type::arc())?;
+                let col = col.as_any().downcast_ref::<UInt64Column>().unwrap();
+                for val in col.iter() {
+                    builder.append(format!("{:b}", val).as_bytes());
                 }
             }
-            Ok(builder.build(input_rows))
-        } else {
-            let mut builder: ColumnBuilder<Vu8> = ColumnBuilder::with_capacity(input_rows);
-
-            match columns[0].data_type().data_type_id() {
-                TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
-                    let col = cast_column_field(&columns[0], &UInt64Type::arc())?;
-                    let col = col.as_any().downcast_ref::<UInt64Column>().unwrap();
-                    for val in col.iter() {
-                        builder.append(format!("{:b}", val).as_bytes());
-                    }
+            TypeID::Int8 | TypeID::Int16 | TypeID::Int32 | TypeID::Int64 => {
+                let col = cast_column_field(&columns[0], &Int64Type::arc())?;
+                let col = col.as_any().downcast_ref::<Int64Column>().unwrap();
+                for val in col.iter() {
+                    builder.append(format!("{:b}", val).as_bytes());
                 }
-                TypeID::Int8 | TypeID::Int16 | TypeID::Int32 | TypeID::Int64 => {
-                    let col = cast_column_field(&columns[0], &Int64Type::arc())?;
-                    let col = col.as_any().downcast_ref::<Int64Column>().unwrap();
-                    for val in col.iter() {
-                        builder.append(format!("{:b}", val).as_bytes());
-                    }
-                }
-                TypeID::Float32 | TypeID::Float64 => {
-                    let col = cast_column_field(&columns[0], &Float64Type::arc())?;
-                    let col = col.as_any().downcast_ref::<Float64Column>().unwrap();
-                    for val in col.iter() {
-                        let val = if val.ge(&0f64) {
-                            format!(
-                                "{:b}",
-                                val.max(i64::MIN as f64).min(i64::MAX as f64).round() as i64
-                            )
-                        } else {
-                            format!(
-                                "{:b}",
-                                val.max(u64::MIN as f64).min(u64::MAX as f64).round() as u64
-                            )
-                        };
-                        builder.append(val.as_bytes());
-                    }
-                }
-                _ => {}
             }
-            Ok(builder.build(input_rows))
+            TypeID::Float32 | TypeID::Float64 => {
+                let col = cast_column_field(&columns[0], &Float64Type::arc())?;
+                let col = col.as_any().downcast_ref::<Float64Column>().unwrap();
+                for val in col.iter() {
+                    let val = if val.ge(&0f64) {
+                        format!(
+                            "{:b}",
+                            val.max(i64::MIN as f64).min(i64::MAX as f64).round() as i64
+                        )
+                    } else {
+                        format!(
+                            "{:b}",
+                            val.max(u64::MIN as f64).min(u64::MAX as f64).round() as u64
+                        )
+                    };
+                    builder.append(val.as_bytes());
+                }
+            }
+            _ => {
+                return Err(ErrorCode::IllegalDataType(format!(
+                    "Expected integer but got {}",
+                    columns[0].data_type().data_type_id()
+                )));
+            }
         }
+        Ok(builder.build(input_rows))
     }
 }
 
