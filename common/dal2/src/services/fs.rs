@@ -115,7 +115,7 @@ impl Accessor for Backend {
             .ok_or_else(|| Error::Unexpected(format!("malformed path: {:?}", path.to_str())))?;
         fs::create_dir_all(parent)
             .await
-            .map_err(|e| parse_io_error(&e, &parent))?;
+            .map_err(|e| parse_io_error(&e, parent))?;
 
         let mut f = fs::OpenOptions::new()
             .create(true)
