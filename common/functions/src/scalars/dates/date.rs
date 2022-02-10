@@ -182,6 +182,6 @@ impl DateFunction {
         factory.register("today", TodayFunction::desc());
         factory.register("yesterday", YesterdayFunction::desc());
         factory.register("tomorrow", TomorrowFunction::desc());
-        factory.register_arithmetic("addYears", AddYearsFunction::desc());
+        factory.register_arithmetic("addYears", AddYearsFunction::desc(1));
     }
 }

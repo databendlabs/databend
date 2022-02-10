@@ -101,7 +101,7 @@ impl ValueExprAnalyzer {
         Ok(Expression::Literal {
             value: DataValue::Int64(months as i64),
             column_name: Some(months.to_string()),
-            data_type: IntervalType::arc(IntervalUnit::YearMonth),
+            data_type: IntervalType::arc(IntervalKind::Month),
         })
     }
 
@@ -112,7 +112,7 @@ impl ValueExprAnalyzer {
         Ok(Expression::Literal {
             value: DataValue::Int64(total_ms),
             column_name: Some(total_ms.to_string()),
-            data_type: IntervalType::arc(IntervalUnit::DayTime),
+            data_type: IntervalType::arc(IntervalKind::Second),
         })
     }
 }

@@ -26,8 +26,8 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function2;
-use crate::scalars::Monotonicity2;
 use crate::scalars::Function2Factory;
+use crate::scalars::Monotonicity2;
 
 fn sub_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>) -> O
 where

@@ -130,21 +130,6 @@ impl DataType for IntervalType {
         })
     }
 
-    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
-        let mut mp = BTreeMap::new();
-        match self.unit {
-            IntervalUnit::YearMonth => mp.insert(
-                ARROW_EXTENSION_NAME.to_string(),
-                "IntervalYearMonth".to_string(),
-            ),
-            IntervalUnit::DayTime => mp.insert(
-                ARROW_EXTENSION_NAME.to_string(),
-                "IntervalDayTime".to_string(),
-            ),
-        };
-        Some(mp)
-    }
-
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
         Box::new(MutablePrimitiveColumn::<i64>::with_capacity(capacity))
     }
@@ -152,6 +137,6 @@ impl DataType for IntervalType {
 
 impl std::fmt::Debug for IntervalType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}({:?})", self.name(), self.unit)
+        write!(f, "{}({:?})", self.name(), self.kind)
     }
 }
