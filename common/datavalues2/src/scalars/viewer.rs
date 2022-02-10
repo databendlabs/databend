@@ -107,7 +107,7 @@ where
 /// Already materialized boolean column.
 #[derive(Clone)]
 pub struct BooleanViewer {
-    values: Vec<bool>,
+    values: Bitmap,
     null_mask: usize,
     non_const_mask: usize,
     pub(crate) size: usize,
@@ -122,7 +122,7 @@ impl<'a> ScalarViewer<'a> for BooleanViewer {
     fn try_create(column: &ColumnRef) -> Result<Self> {
         let (inner, validity) = try_extract_inner(column)?;
         let col: &BooleanColumn = Series::check_get(inner)?;
-        let values = col.values().iter().collect();
+        let values = col.values().clone();
 
         let null_mask = get_null_mask(column);
         let non_const_mask = non_const_mask(column);
@@ -140,7 +140,7 @@ impl<'a> ScalarViewer<'a> for BooleanViewer {
 
     #[inline]
     fn value_at(&self, index: usize) -> bool {
-        self.values[index & self.non_const_mask]
+        unsafe { self.values.get_bit_unchecked(index & self.non_const_mask) }
     }
 
     #[inline]
