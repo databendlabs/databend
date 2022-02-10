@@ -36,9 +36,10 @@ use common_meta_types::AppliedState;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
 use common_meta_types::MetaResult;
+use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
-use common_meta_types::ToMetaError;
+use common_meta_types::ToMetaStorageError;
 use common_tracing::tracing;
 use openraft::async_trait::async_trait;
 use openraft::raft::Entry;
@@ -190,7 +191,7 @@ impl MetaRaftStore {
             let k = &x[0];
             let v = &x[1];
             tree.insert(k, v.clone())
-                .map_error_to_meta_error(MetaError::MetaStoreDamaged, || {
+                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
                     "fail to insert snapshot"
                 })?;
         }
@@ -203,7 +204,9 @@ impl MetaRaftStore {
 
         tree.flush_async()
             .await
-            .map_error_to_meta_error(MetaError::MetaStoreDamaged, || "fail to flush snapshot")?;
+            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
+                "fail to flush snapshot"
+            })?;
 
         tracing::info!("flushed tree, no_kvs: {}", nkvs);
 

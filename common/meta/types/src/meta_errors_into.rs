@@ -51,15 +51,6 @@ impl From<serde_json::Error> for MetaError {
     }
 }
 
-impl From<std::string::FromUtf8Error> for MetaError {
-    fn from(error: std::string::FromUtf8Error) -> Self {
-        MetaError::BadBytes(format!(
-            "Bad bytes, cannot parse bytes with UTF8, cause: {}",
-            error
-        ))
-    }
-}
-
 impl From<std::net::AddrParseError> for MetaError {
     fn from(error: std::net::AddrParseError) -> Self {
         MetaError::BadAddressFormat(format!("Bad address format, cause: {}", error))
