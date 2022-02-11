@@ -1,3 +1,4 @@
+use std::cmp::min;
 // Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -78,7 +79,13 @@ impl AsyncRead for SeekableReader {
                     let op = self.op.clone();
                     let key = self.key.clone();
                     let pos = self.pos;
-                    let length = buf.len() as u64;
+
+                    // Length should be adjust to minimum of the buffer length and remaining bytes.
+                    let length = min(buf.len() as u64, self.total - self.pos);
+                    if length == 0 {
+                        // If there is no more data to read, return EOF.
+                        return Poll::Ready(Ok(0));
+                    }
 
                     let f = async move {
                         let mut builder = op.read(key.as_str());
@@ -100,6 +107,7 @@ impl AsyncRead for SeekableReader {
 
                     let n = ready!(r.poll_read(cx, buf))?;
                     self.pos += n as u64;
+                    // Reset state to idle so that we can start a new read.
                     self.state = SeekableReaderState::Idle;
                     return Poll::Ready(Ok(n));
                 }
