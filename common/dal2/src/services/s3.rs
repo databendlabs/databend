@@ -102,10 +102,7 @@ impl Builder {
             String::new()
         };
 
-        // Load from runtime env as default.
-        let aws_cfg = aws_config::load_from_env().await;
-
-        let mut cfg = AwsS3::config::Builder::from(&aws_cfg);
+        let mut cfg = AwsS3::Config::builder();
 
         // TODO: Maybe we can
         //
@@ -187,6 +184,7 @@ impl Backend {
 #[async_trait]
 impl Accessor for Backend {
     async fn read(&self, args: &OpRead) -> Result<Reader> {
+        println!("try to read {}", &args.path);
         let p = self.get_abs_path(&args.path);
 
         let mut req = self
