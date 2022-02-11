@@ -22,6 +22,7 @@ use common_base::tokio::task::JoinHandle;
 use common_base::Stoppable;
 use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use common_meta_types::MetaError;
+use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaResult;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
@@ -82,7 +83,14 @@ impl GrpcServer {
             builder
         };
 
-        let addr = conf.grpc_api_address.parse::<std::net::SocketAddr>()?;
+        let ret = conf.grpc_api_address.parse::<std::net::SocketAddr>();
+        let addr = match ret {
+            Ok(addr) => addr,
+            Err(e) => {
+                let err: MetaNetworkError = e.into();
+                return Err(err.into());
+            }
+        };
         tracing::info!("gRPC addr: {}", addr);
 
         let grpc_impl = MetaServiceImpl::create(meta_node.clone());

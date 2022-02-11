@@ -18,6 +18,8 @@ use common_exception::ErrorCode;
 use common_exception::SerializedError;
 
 use crate::MetaError;
+use crate::MetaNetworkError;
+use crate::MetaRaftError;
 use crate::MetaResult;
 use crate::MetaStorageError;
 
@@ -39,6 +41,18 @@ impl From<MetaError> for ErrorCode {
     }
 }
 
+impl From<MetaNetworkError> for MetaError {
+    fn from(e: MetaNetworkError) -> Self {
+        MetaError::MetaNetworkError(e)
+    }
+}
+
+impl From<MetaRaftError> for MetaError {
+    fn from(e: MetaRaftError) -> Self {
+        MetaError::MetaRaftError(e)
+    }
+}
+
 impl From<MetaStorageError> for MetaError {
     fn from(e: MetaStorageError) -> Self {
         MetaError::MetaStorageError(e)
@@ -48,12 +62,6 @@ impl From<MetaStorageError> for MetaError {
 impl From<serde_json::Error> for MetaError {
     fn from(error: serde_json::Error) -> Self {
         MetaError::MetaStorageError(error.into())
-    }
-}
-
-impl From<std::net::AddrParseError> for MetaError {
-    fn from(error: std::net::AddrParseError) -> Self {
-        MetaError::BadAddressFormat(format!("Bad address format, cause: {}", error))
     }
 }
 
