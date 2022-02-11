@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues2::DataSchema;
 use common_exception::Result;
-use common_planners::UseTenantPlan;
+use common_planners::AdminUseTenantPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -27,11 +27,11 @@ use crate::sessions::QueryContext;
 
 pub struct UseTenantInterpreter {
     ctx: Arc<QueryContext>,
-    plan: UseTenantPlan,
+    plan: AdminUseTenantPlan,
 }
 
 impl UseTenantInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: UseTenantPlan) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: AdminUseTenantPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(UseTenantInterpreter { ctx, plan }))
     }
 }
