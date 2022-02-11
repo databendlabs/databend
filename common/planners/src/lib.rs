@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod plan_admin_use_tenant;
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
 mod plan_broadcast;
@@ -67,7 +68,6 @@ mod plan_table_drop;
 mod plan_table_optimize;
 mod plan_truncate_table;
 mod plan_use_database;
-mod plan_use_tenant;
 mod plan_user_alter;
 mod plan_user_create;
 mod plan_user_drop;
@@ -78,6 +78,7 @@ mod plan_user_udf_create;
 mod plan_user_udf_drop;
 mod plan_visitor;
 
+pub use plan_admin_use_tenant::AdminUseTenantPlan;
 pub use plan_aggregator_final::AggregatorFinalPlan;
 pub use plan_aggregator_partial::AggregatorPartialPlan;
 pub use plan_broadcast::BroadcastPlan;
@@ -86,7 +87,7 @@ pub use plan_copy::CopyPlan;
 pub use plan_database_create::CreateDatabasePlan;
 pub use plan_database_create::DatabaseOptions;
 pub use plan_database_drop::DropDatabasePlan;
-pub use plan_describe_stage::DescribeStagePlan;
+pub use plan_describe_stage::DescribeUserStagePlan;
 pub use plan_describe_table::DescribeTablePlan;
 pub use plan_empty::EmptyPlan;
 pub use plan_explain::ExplainPlan;
@@ -163,13 +164,12 @@ pub use plan_table_optimize::Optimization;
 pub use plan_table_optimize::OptimizeTablePlan;
 pub use plan_truncate_table::TruncateTablePlan;
 pub use plan_use_database::UseDatabasePlan;
-pub use plan_use_tenant::UseTenantPlan;
 pub use plan_user_alter::AlterUserPlan;
 pub use plan_user_create::CreateUserPlan;
 pub use plan_user_drop::DropUserPlan;
 pub use plan_user_stage_create::CreateUserStagePlan;
 pub use plan_user_stage_drop::DropUserStagePlan;
-pub use plan_user_udf_alter::AlterUDFPlan;
-pub use plan_user_udf_create::CreateUDFPlan;
-pub use plan_user_udf_drop::DropUDFPlan;
+pub use plan_user_udf_alter::AlterUserUDFPlan;
+pub use plan_user_udf_create::CreateUserUDFPlan;
+pub use plan_user_udf_drop::DropUserUDFPlan;
 pub use plan_visitor::PlanVisitor;

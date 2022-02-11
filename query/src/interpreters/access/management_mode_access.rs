@@ -40,7 +40,7 @@ impl ManagementModeAccess {
                 | PlanNode::DropDatabase(_)
                 | PlanNode::CreateTable(_)
                 | PlanNode::DescribeTable(_)
-                | PlanNode::DescribeStage(_)
+                | PlanNode::DescribeUserStage(_)
                 | PlanNode::DropTable(_)
                 | PlanNode::ShowCreateTable(_)
                 | PlanNode::CreateUser(_)
@@ -51,12 +51,12 @@ impl ManagementModeAccess {
                 | PlanNode::CreateUserStage(_)
                 | PlanNode::DropUserStage(_)
                 | PlanNode::ShowGrants(_)
-                | PlanNode::UseTenant(_)
-                | PlanNode::CreateUDF(_)
-                | PlanNode::DropUDF(_)
+                | PlanNode::AdminUseTenant(_)
+                | PlanNode::CreateUserUDF(_)
+                | PlanNode::DropUserUDF(_)
                 | PlanNode::UseDatabase(_)
                 | PlanNode::Select(_) // Allow select from system.* tables, like show tables;
-                | PlanNode::AlterUDF(_) => Ok(()),
+                | PlanNode::AlterUserUDF(_) => Ok(()),
                 _ => Err(ErrorCode::ManagementModePermissionDenied(format!(
                     "Access denied for operation:{:?} in management-mode",
                     plan.name()
@@ -64,7 +64,7 @@ impl ManagementModeAccess {
             };
         } else {
             match plan {
-                PlanNode::UseTenant(_) => Err(ErrorCode::ManagementModePermissionDenied(
+                PlanNode::AdminUseTenant(_) => Err(ErrorCode::ManagementModePermissionDenied(
                     "Access denied:'USE TENANT' only used in management-mode",
                 )),
                 _ => Ok(()),
