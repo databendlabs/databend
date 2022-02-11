@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crc32fast::Hasher as CRC32;
+
 use crate::scalars::function2_factory::Function2Factory;
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::AbsFunction;
-use crate::scalars::CRC32Function;
+use crate::scalars::BaseHashFunction;
 use crate::scalars::CeilFunction;
 use crate::scalars::DegressFunction;
 use crate::scalars::ExpFunction;
@@ -41,6 +43,8 @@ use crate::scalars::TrigonometricSinFunction;
 use crate::scalars::TrigonometricTanFunction;
 use crate::scalars::TruncNumberFunction;
 
+pub type CRC32Function = BaseHashFunction<CRC32, u32>;
+
 pub struct MathsFunction;
 
 impl MathsFunction {
@@ -50,7 +54,6 @@ impl MathsFunction {
         factory.register("cos", TrigonometricCosFunction::desc());
         factory.register("tan", TrigonometricTanFunction::desc());
         factory.register("cot", TrigonometricCotFunction::desc());
-        factory.register("crc32", CRC32Function::desc());
         factory.register("degrees", DegressFunction::desc());
         factory.register("radians", RadiansFunction::desc());
         factory.register("log", LogFunction::desc());
@@ -76,5 +79,6 @@ impl MathsFunction {
 
     pub fn register2(factory: &mut Function2Factory) {
         factory.register("pi", PiFunction::desc());
+        factory.register("crc32", CRC32Function::desc());
     }
 }
