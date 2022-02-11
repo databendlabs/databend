@@ -16,7 +16,6 @@ bytes = "1.1.0"
 futures = { version = "0.3.21", features = ["alloc"] }
 tokio = { version = "1.16.1", features = ["full"] }
 thiserror = "1.0.30"
-aws-config = "0.6.0"
 aws-types = { version = "0.6.0", features = ["hardcoded-credentials"] }
 aws-sdk-s3 = "0.6.0"
 aws-endpoint = "0.6.0"
