@@ -12,8 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod column;
-pub mod type_;
+mod column;
+mod iterator;
+mod type_;
+mod viewer;
 
 pub use column::*;
+pub use iterator::*;
 pub use type_::*;
+pub use viewer::*;

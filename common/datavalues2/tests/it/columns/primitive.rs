@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::f64::consts::PI;
+
 use common_datavalues2::prelude::*;
 
 #[test]
@@ -45,4 +47,10 @@ fn test_primitive_column() {
 
     let slice = data_column.slice(0, N / 2);
     assert!(slice.len() == N / 2);
+}
+
+#[test]
+fn test_const_column() {
+    let c = ConstColumn::new(Series::from_data(vec![PI]), 24).arc();
+    println!("{:?}", c);
 }

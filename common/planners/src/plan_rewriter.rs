@@ -23,23 +23,24 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
+use crate::AdminUseTenantPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
-use crate::AlterUDFPlan;
 use crate::AlterUserPlan;
+use crate::AlterUserUDFPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
-use crate::CreateUDFPlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
-use crate::DescribeStagePlan;
+use crate::CreateUserUDFPlan;
 use crate::DescribeTablePlan;
+use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
-use crate::DropUDFPlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
+use crate::DropUserUDFPlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::Expression;
@@ -70,7 +71,6 @@ use crate::SortPlan;
 use crate::StagePlan;
 use crate::TruncateTablePlan;
 use crate::UseDatabasePlan;
-use crate::UseTenantPlan;
 
 /// `PlanRewriter` is a visitor that can help to rewrite `PlanNode`
 /// By default, a `PlanRewriter` will traverse the plan tree in pre-order and return rewritten plan tree.
@@ -94,51 +94,78 @@ use crate::UseTenantPlan;
 pub trait PlanRewriter: Sized {
     fn rewrite_plan_node(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         match plan {
+            // Base.
             PlanNode::AggregatorPartial(plan) => self.rewrite_aggregate_partial(plan),
             PlanNode::AggregatorFinal(plan) => self.rewrite_aggregate_final(plan),
             PlanNode::Empty(plan) => self.rewrite_empty(plan),
             PlanNode::Projection(plan) => self.rewrite_projection(plan),
             PlanNode::Filter(plan) => self.rewrite_filter(plan),
-            PlanNode::Sort(plan) => self.rewrite_sort(plan),
-            PlanNode::Limit(plan) => self.rewrite_limit(plan),
-            PlanNode::LimitBy(plan) => self.rewrite_limit_by(plan),
-            PlanNode::ReadSource(plan) => self.rewrite_read_data_source(plan),
-            PlanNode::Select(plan) => self.rewrite_select(plan),
-            PlanNode::Explain(plan) => self.rewrite_explain(plan),
-            PlanNode::CreateTable(plan) => self.rewrite_create_table(plan),
-            PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
-            PlanNode::CreateDatabase(plan) => self.rewrite_create_database(plan),
-            PlanNode::UseDatabase(plan) => self.rewrite_use_database(plan),
-            PlanNode::UseTenant(plan) => self.rewrite_use_tenant(plan),
-            PlanNode::SetVariable(plan) => self.rewrite_set_variable(plan),
             PlanNode::Stage(plan) => self.rewrite_stage(plan),
             PlanNode::Broadcast(plan) => self.rewrite_broadcast(plan),
             PlanNode::Remote(plan) => self.rewrite_remote(plan),
             PlanNode::Having(plan) => self.rewrite_having(plan),
             PlanNode::Expression(plan) => self.rewrite_expression(plan),
-            PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
-            PlanNode::DescribeStage(plan) => self.rewrite_describe_stage(plan),
-            PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
-            PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
-            PlanNode::Insert(plan) => self.rewrite_insert_into(plan),
-            PlanNode::Copy(plan) => self.rewrite_copy(plan),
-            PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
+            PlanNode::Sort(plan) => self.rewrite_sort(plan),
+            PlanNode::Limit(plan) => self.rewrite_limit(plan),
+            PlanNode::LimitBy(plan) => self.rewrite_limit_by(plan),
+            PlanNode::ReadSource(plan) => self.rewrite_read_data_source(plan),
             PlanNode::SubQueryExpression(plan) => self.rewrite_sub_queries_sets(plan),
+            PlanNode::Sink(plan) => self.rewrite_sink(plan),
+
+            // Query.
+            PlanNode::Select(plan) => self.rewrite_select(plan),
+
+            // Explain.
+            PlanNode::Explain(plan) => self.rewrite_explain(plan),
+
+            // Insert.
+            PlanNode::Insert(plan) => self.rewrite_insert_into(plan),
+
+            // Copy.
+            PlanNode::Copy(plan) => self.rewrite_copy(plan),
+
+            // Table.
+            PlanNode::CreateTable(plan) => self.rewrite_create_table(plan),
+            PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
             PlanNode::TruncateTable(plan) => self.rewrite_truncate_table(plan),
-            PlanNode::Kill(plan) => self.rewrite_kill(plan),
+            PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
+            PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
+            PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
+
+            // Database.
+            PlanNode::CreateDatabase(plan) => self.rewrite_create_database(plan),
+            PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
+            PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
+
+            // User.
             PlanNode::CreateUser(plan) => self.create_user(plan),
             PlanNode::AlterUser(plan) => self.alter_user(plan),
             PlanNode::DropUser(plan) => self.drop_user(plan),
             PlanNode::GrantPrivilege(plan) => self.grant_privilege(plan),
             PlanNode::RevokePrivilege(plan) => self.revoke_privilege(plan),
-            PlanNode::CreateUserStage(plan) => self.rewrite_create_stage(plan),
-            PlanNode::Sink(plan) => self.rewrite_sink(plan),
             PlanNode::ShowGrants(plan) => self.rewrite_show_grants(plan),
-            PlanNode::DropUserStage(plan) => self.rewrite_drop_stage(plan),
-            PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
-            PlanNode::CreateUDF(plan) => self.rewrite_create_udf(plan),
-            PlanNode::DropUDF(plan) => self.rewrite_drop_udf(plan),
-            PlanNode::AlterUDF(plan) => self.rewrite_alter_udf(plan),
+
+            // Stage.
+            PlanNode::CreateUserStage(plan) => self.rewrite_create_user_stage(plan),
+            PlanNode::DropUserStage(plan) => self.rewrite_drop_user_stage(plan),
+            PlanNode::DescribeUserStage(plan) => self.rewrite_describe_user_stage(plan),
+
+            // UDF.
+            PlanNode::CreateUserUDF(plan) => self.rewrite_create_user_udf(plan),
+            PlanNode::DropUserUDF(plan) => self.rewrite_drop_user_udf(plan),
+            PlanNode::AlterUserUDF(plan) => self.rewrite_alter_user_udf(plan),
+
+            // Use.
+            PlanNode::UseDatabase(plan) => self.rewrite_use_database(plan),
+
+            // Set.
+            PlanNode::SetVariable(plan) => self.rewrite_set_variable(plan),
+
+            // Kill.
+            PlanNode::Kill(plan) => self.rewrite_kill(plan),
+
+            // Admin.
+            PlanNode::AdminUseTenant(plan) => self.rewrite_use_tenant(plan),
         }
     }
 
@@ -309,8 +336,8 @@ pub trait PlanRewriter: Sized {
         Ok(PlanNode::UseDatabase(plan.clone()))
     }
 
-    fn rewrite_use_tenant(&mut self, plan: &UseTenantPlan) -> Result<PlanNode> {
-        Ok(PlanNode::UseTenant(plan.clone()))
+    fn rewrite_use_tenant(&mut self, plan: &AdminUseTenantPlan) -> Result<PlanNode> {
+        Ok(PlanNode::AdminUseTenant(plan.clone()))
     }
 
     fn rewrite_set_variable(&mut self, plan: &SettingPlan) -> Result<PlanNode> {
@@ -321,8 +348,8 @@ pub trait PlanRewriter: Sized {
         Ok(PlanNode::DescribeTable(plan.clone()))
     }
 
-    fn rewrite_describe_stage(&mut self, plan: &DescribeStagePlan) -> Result<PlanNode> {
-        Ok(PlanNode::DescribeStage(plan.clone()))
+    fn rewrite_describe_user_stage(&mut self, plan: &DescribeUserStagePlan) -> Result<PlanNode> {
+        Ok(PlanNode::DescribeUserStage(plan.clone()))
     }
 
     fn rewrite_drop_table(&mut self, plan: &DropTablePlan) -> Result<PlanNode> {
@@ -373,11 +400,11 @@ pub trait PlanRewriter: Sized {
         Ok(PlanNode::RevokePrivilege(plan.clone()))
     }
 
-    fn rewrite_create_stage(&mut self, plan: &CreateUserStagePlan) -> Result<PlanNode> {
+    fn rewrite_create_user_stage(&mut self, plan: &CreateUserStagePlan) -> Result<PlanNode> {
         Ok(PlanNode::CreateUserStage(plan.clone()))
     }
 
-    fn rewrite_drop_stage(&mut self, plan: &DropUserStagePlan) -> Result<PlanNode> {
+    fn rewrite_drop_user_stage(&mut self, plan: &DropUserStagePlan) -> Result<PlanNode> {
         Ok(PlanNode::DropUserStage(plan.clone()))
     }
 
@@ -393,16 +420,16 @@ pub trait PlanRewriter: Sized {
         Ok(PlanNode::ShowCreateDatabase(plan.clone()))
     }
 
-    fn rewrite_create_udf(&mut self, plan: &CreateUDFPlan) -> Result<PlanNode> {
-        Ok(PlanNode::CreateUDF(plan.clone()))
+    fn rewrite_create_user_udf(&mut self, plan: &CreateUserUDFPlan) -> Result<PlanNode> {
+        Ok(PlanNode::CreateUserUDF(plan.clone()))
     }
 
-    fn rewrite_drop_udf(&mut self, plan: &DropUDFPlan) -> Result<PlanNode> {
-        Ok(PlanNode::DropUDF(plan.clone()))
+    fn rewrite_drop_user_udf(&mut self, plan: &DropUserUDFPlan) -> Result<PlanNode> {
+        Ok(PlanNode::DropUserUDF(plan.clone()))
     }
 
-    fn rewrite_alter_udf(&mut self, plan: &AlterUDFPlan) -> Result<PlanNode> {
-        Ok(PlanNode::AlterUDF(plan.clone()))
+    fn rewrite_alter_user_udf(&mut self, plan: &AlterUserUDFPlan) -> Result<PlanNode> {
+        Ok(PlanNode::AlterUserUDF(plan.clone()))
     }
 }
 

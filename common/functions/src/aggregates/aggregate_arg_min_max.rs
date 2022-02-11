@@ -104,13 +104,12 @@ where
             let mut v = S::default();
             let mut data_value = DataValue::Null;
             let mut has_v = false;
-            let view = ColumnViewer::<S>::create(column)?;
+            let viewer = S::try_create_viewer(column)?;
 
-            for row in 0..view.len() {
-                if view.null_at(row) {
+            for (row, data) in viewer.iter().enumerate() {
+                if viewer.null_at(row) {
                     continue;
                 }
-                let data = view.value(row);
                 if !has_v {
                     has_v = true;
                     v = data.to_owned_scalar();

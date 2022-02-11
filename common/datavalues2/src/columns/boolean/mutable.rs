@@ -25,7 +25,7 @@ use crate::ColumnRef;
 use crate::ScalarColumnBuilder;
 
 pub struct MutableBooleanColumn {
-    values: MutableBitmap,
+    pub(crate) values: MutableBitmap,
     data_type: DataTypePtr,
 }
 

@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::AdminUseTenantPlan;
 use common_planners::PlanNode;
-use common_planners::UseTenantPlan;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
@@ -39,8 +39,8 @@ impl AnalyzableStatement for DfUseTenant {
         }
 
         let tenant = self.name.0[0].value.clone();
-        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::UseTenant(
-            UseTenantPlan { tenant },
-        ))))
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::AdminUseTenant(AdminUseTenantPlan { tenant }),
+        )))
     }
 }
