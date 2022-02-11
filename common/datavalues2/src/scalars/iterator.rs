@@ -30,7 +30,8 @@ where
 
         let old = self.pos;
         self.pos += 1;
-        Some(self.values[old & self.non_const_mask])
+
+        Some(unsafe { *self.values.as_ptr().add(old & self.non_const_mask) })
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
