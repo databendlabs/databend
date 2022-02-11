@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::TrustedLen;
+
 use crate::prelude::*;
 
 /// Iterator over slices of `&[u8]`.
@@ -48,6 +50,14 @@ impl<'a> Iterator for StringValueIter<'a> {
         )
     }
 }
+
+impl<'a> ExactSizeIterator for StringValueIter<'a> {
+    fn len(&self) -> usize {
+        self.column.len() - self.index
+    }
+}
+
+unsafe impl TrustedLen for StringValueIter<'_> {}
 
 impl<'a> StringColumn {
     pub fn iter(&'a self) -> StringValueIter<'a> {

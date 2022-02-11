@@ -18,7 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_meta_types::UserStageInfo;
-use common_planners::DescribeStagePlan;
+use common_planners::DescribeUserStagePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -28,11 +28,14 @@ use crate::sessions::QueryContext;
 
 pub struct DescribeStageInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DescribeStagePlan,
+    plan: DescribeUserStagePlan,
 }
 
 impl DescribeStageInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DescribeStagePlan) -> Result<InterpreterPtr> {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        plan: DescribeUserStagePlan,
+    ) -> Result<InterpreterPtr> {
         Ok(Arc::new(DescribeStageInterpreter { ctx, plan }))
     }
 }

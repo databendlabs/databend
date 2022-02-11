@@ -19,8 +19,9 @@ use std::sync::Arc;
 
 use common_datavalues2::BooleanColumn;
 use common_datavalues2::BooleanType;
-use common_datavalues2::ColumnViewerIter;
+use common_datavalues2::Scalar;
 use common_datavalues2::ScalarColumn;
+use common_datavalues2::ScalarViewer;
 use common_datavalues2::TypeID;
 use common_datavalues2::Vu8;
 use common_exception::ErrorCode;
@@ -125,8 +126,8 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
         _input_rows: usize,
     ) -> Result<common_datavalues2::ColumnRef> {
         let result_column = if columns[0].data_type().data_type_id() == TypeID::String {
-            let iter = ColumnViewerIter::<Vu8>::try_create(columns[0].column())?;
-            BooleanColumn::from_iterator(iter.map(|uuid_bytes| {
+            let viewer = Vu8::try_create_viewer(columns[0].column())?;
+            BooleanColumn::from_iterator(viewer.iter().map(|uuid_bytes| {
                 if let Ok(uuid_str) = str::from_utf8(uuid_bytes) {
                     if let Ok(uuid) = Uuid::parse_str(uuid_str) {
                         T::verify(uuid)

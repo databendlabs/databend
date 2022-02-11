@@ -19,12 +19,12 @@ use common_datavalues2::DataSchemaRef;
 use common_meta_types::UserDefinedFunction;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct CreateUDFPlan {
+pub struct CreateUserUDFPlan {
     pub if_not_exists: bool,
     pub udf: UserDefinedFunction,
 }
 
-impl CreateUDFPlan {
+impl CreateUserUDFPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

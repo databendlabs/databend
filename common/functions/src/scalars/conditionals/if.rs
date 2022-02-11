@@ -86,37 +86,48 @@ impl Function2 for IfFunction {
             (
              $T:ident
         ) => {{
-                let predicate_wrapper = ColumnViewer::<bool>::create(&predicate)?;
-                let lhs_wrapper = ColumnViewer::<$T>::create(&lhs)?;
-                let rhs_wrapper = ColumnViewer::<$T>::create(&rhs)?;
-                let size = lhs_wrapper.len();
+                let predicate_viewer = bool::try_create_viewer(&predicate)?;
+                let lhs_viewer = $T::try_create_viewer(&lhs)?;
+                let rhs_viewer = $T::try_create_viewer(&rhs)?;
+
+                let size = lhs_viewer.size();
 
                 if nullable {
                     let mut builder = NullableColumnBuilder::<$T>::with_capacity(size);
 
-                    for row in 0..size {
-                        let predicate = predicate_wrapper.value(row);
-                        if predicate {
-                            builder.append(lhs_wrapper.value(row), lhs_wrapper.valid_at(row));
+                    for ((predicate, l), (row, r)) in predicate_viewer
+                        .iter()
+                        .zip(lhs_viewer.iter())
+                        .zip(rhs_viewer.iter().enumerate())
+                    {
+                        let valid = predicate_viewer.valid_at(row);
+                        if predicate & valid {
+                            builder.append(l, lhs_viewer.valid_at(row));
                         } else {
-                            builder.append(rhs_wrapper.value(row), rhs_wrapper.valid_at(row));
+                            builder.append(r, rhs_viewer.valid_at(row));
                         };
                     }
 
                     Ok(builder.build(size))
                 } else {
-                    let mut builder = ColumnBuilder::<$T>::with_capacity(size);
+                    // let a = Series::check_get_scalar::<$T>(&lhs)?;
+                    // let b = Series::check_get_scalar::<$T>(&rhs)?;
+                    // let p = Series::check_get_scalar::<bool>(&predicate)?;
 
-                    for row in 0..size {
-                        let predicate = predicate_wrapper.value(row);
-                        if predicate {
-                            builder.append(lhs_wrapper.value(row));
-                        } else {
-                            builder.append(rhs_wrapper.value(row));
-                        };
-                    }
+                    // let it = p
+                    //     .scalar_iter()
+                    //     .zip(a.scalar_iter())
+                    //     .zip(b.scalar_iter())
+                    //     .map(|((predicate, l), r)| if predicate { l } else { r });
 
-                    Ok(builder.build(size))
+                    let it = predicate_viewer
+                        .iter()
+                        .zip(lhs_viewer.iter())
+                        .zip(rhs_viewer.iter())
+                        .map(|((predicate, l), r)| if predicate { l } else { r });
+
+                    let col = <$T as Scalar>::ColumnType::from_iterator(it);
+                    Ok(col.arc())
                 }
             }};
         }

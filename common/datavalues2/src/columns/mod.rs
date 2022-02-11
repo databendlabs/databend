@@ -31,7 +31,6 @@ pub mod series;
 mod string;
 mod struct_;
 mod take;
-mod viewer;
 
 pub use array::*;
 pub use boolean::*;
@@ -48,4 +47,3 @@ pub use series::*;
 pub use string::*;
 pub use struct_::*;
 pub use take::*;
-pub use viewer::*;

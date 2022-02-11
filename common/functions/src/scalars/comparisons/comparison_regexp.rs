@@ -133,10 +133,10 @@ where F: Fn(bool) -> bool {
 
     let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
 
-    let lhs = ColumnViewerIter::<Vu8>::try_create(lhs)?;
-    let rhs = ColumnViewerIter::<Vu8>::try_create(rhs)?;
+    let lhs = Vu8::try_create_viewer(lhs)?;
+    let rhs = Vu8::try_create_viewer(rhs)?;
 
-    for (lhs_value, rhs_value) in lhs.zip(rhs) {
+    for (lhs_value, rhs_value) in lhs.iter().zip(rhs.iter()) {
         let pattern = if let Some(pattern) = map.get(rhs_value) {
             pattern
         } else {
@@ -154,9 +154,9 @@ where F: Fn(bool) -> bool {
 fn a_regexp_binary_scalar<F>(lhs: &ColumnRef, rhs: &[u8], op: F) -> Result<BooleanColumn>
 where F: Fn(bool) -> bool {
     let re = build_regexp_from_pattern(rhs)?;
-    let iter = ColumnViewerIter::<Vu8>::try_create(lhs)?;
+    let viewer = Vu8::try_create_viewer(lhs)?;
     Ok(BooleanColumn::from_iterator(
-        iter.map(|x| op(re.is_match(x))),
+        viewer.iter().map(|x| op(re.is_match(x))),
     ))
 }
 
