@@ -68,15 +68,16 @@ impl Function2 for RepeatFunction {
 
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
         let col1 = cast_column_field(&columns[0], &StringType::arc())?;
-        let col1_viewer = ColumnViewer::<Vu8>::create(&col1)?;
+        let col1_viewer = Vu8::try_create_viewer(&col1)?;
 
         let col2 = cast_column_field(&columns[1], &UInt64Type::arc())?;
-        let col2_viewer = ColumnViewer::<u64>::create(&col2)?;
+        let col2_viewer = u64::try_create_viewer(&col2)?;
 
         let mut builder = ColumnBuilder::<Vu8>::with_capacity(input_rows);
 
-        for idx in 0..input_rows {
-            let val = repeat(col1_viewer.value(idx), col2_viewer.value(idx))?;
+        let iter = col1_viewer.iter().zip(col2_viewer.iter());
+        for (string, times) in iter {
+            let val = repeat(string, times)?;
             builder.append(&val);
         }
 

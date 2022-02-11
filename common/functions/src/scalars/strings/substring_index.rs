@@ -17,6 +17,7 @@ use std::fmt;
 use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use itertools::izip;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
@@ -79,22 +80,20 @@ impl Function2 for SubstringIndexFunction {
 
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
         let s_column = cast_column_field(&columns[0], &StringType::arc())?;
-        let s_viewer = ColumnViewer::<Vu8>::create(&s_column)?;
+        let s_viewer = Vu8::try_create_viewer(&s_column)?;
 
         let d_column = cast_column_field(&columns[1], &StringType::arc())?;
-        let d_viewer = ColumnViewer::<Vu8>::create(&d_column)?;
+        let d_viewer = Vu8::try_create_viewer(&d_column)?;
 
         let c_column = cast_column_field(&columns[2], &Int64Type::arc())?;
-        let c_viewer = ColumnViewer::<i64>::create(&c_column)?;
+        let c_viewer = i64::try_create_viewer(&c_column)?;
+
+        let iter = izip!(s_viewer, d_viewer, c_viewer);
 
         let mut builder = ColumnBuilder::<Vu8>::with_capacity(input_rows);
 
-        for idx in 0..input_rows {
-            let val = substring_index(
-                s_viewer.value(idx),
-                d_viewer.value(idx),
-                &c_viewer.value(idx),
-            );
+        for (str, delim, count) in iter {
+            let val = substring_index(str, delim, &count);
             builder.append(val);
         }
 

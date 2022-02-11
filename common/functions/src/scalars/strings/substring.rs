@@ -17,6 +17,7 @@ use std::fmt;
 use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use itertools::izip;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
@@ -79,28 +80,28 @@ impl Function2 for SubstringFunction {
 
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
         let s_column = cast_column_field(&columns[0], &StringType::arc())?;
-        let s_viewer = ColumnViewer::<Vu8>::create(&s_column)?;
+        let s_viewer = Vu8::try_create_viewer(&s_column)?;
 
         let p_column = cast_column_field(&columns[1], &Int64Type::arc())?;
-        let p_viewer = ColumnViewer::<i64>::create(&p_column)?;
+        let p_viewer = i64::try_create_viewer(&p_column)?;
 
         let mut builder = ColumnBuilder::<Vu8>::with_capacity(input_rows);
 
         if columns.len() > 2 {
             let p2_column = cast_column_field(&columns[2], &UInt64Type::arc())?;
-            let p2_viewer = ColumnViewer::<u64>::create(&p2_column)?;
+            let p2_viewer = u64::try_create_viewer(&p2_column)?;
 
-            for idx in 0..input_rows {
-                let val = substr_from_for(
-                    s_viewer.value(idx),
-                    &p_viewer.value(idx),
-                    &p2_viewer.value(idx),
-                );
+            let iter = izip!(s_viewer, p_viewer, p2_viewer);
+
+            for (str, pos, len) in iter {
+                let val = substr_from_for(str, &pos, &len);
                 builder.append(val);
             }
         } else {
-            for idx in 0..input_rows {
-                let val = substr_from(s_viewer.value(idx), &p_viewer.value(idx));
+            let iter = s_viewer.iter().zip(p_viewer.iter());
+
+            for (str, pos) in iter {
+                let val = substr_from(str, &pos);
                 builder.append(val);
             }
         }
