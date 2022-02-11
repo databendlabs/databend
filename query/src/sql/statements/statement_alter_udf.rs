@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
-use common_planners::AlterUDFPlan;
+use common_planners::AlterUserUDFPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 
@@ -36,15 +36,15 @@ pub struct DfAlterUDF {
 impl AnalyzableStatement for DfAlterUDF {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::AlterUDF(
-            AlterUDFPlan {
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::AlterUserUDF(AlterUserUDFPlan {
                 udf: UserDefinedFunction::new(
                     self.udf_name.as_str(),
                     self.parameters.clone(),
                     self.definition.as_str(),
                     self.description.as_str(),
                 ),
-            },
-        ))))
+            }),
+        )))
     }
 }

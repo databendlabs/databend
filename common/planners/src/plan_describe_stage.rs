@@ -14,11 +14,11 @@
 
 use common_datavalues2::prelude::*;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct DescribeStagePlan {
+pub struct DescribeUserStagePlan {
     pub name: String,
 }
 
-impl DescribeStagePlan {
+impl DescribeUserStagePlan {
     pub fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
             DataField::new("parent_properties", Vu8::to_data_type()),

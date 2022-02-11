@@ -16,23 +16,24 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
+use crate::AdminUseTenantPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
-use crate::AlterUDFPlan;
 use crate::AlterUserPlan;
+use crate::AlterUserUDFPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
-use crate::CreateUDFPlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
-use crate::DescribeStagePlan;
+use crate::CreateUserUDFPlan;
 use crate::DescribeTablePlan;
+use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
-use crate::DropUDFPlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
+use crate::DropUserUDFPlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::Expression;
@@ -60,7 +61,6 @@ use crate::SortPlan;
 use crate::StagePlan;
 use crate::TruncateTablePlan;
 use crate::UseDatabasePlan;
-use crate::UseTenantPlan;
 
 /// `PlanVisitor` implements visitor pattern(reference [syn](https://docs.rs/syn/1.0.72/syn/visit/trait.Visit.html)) for `PlanNode`.
 ///
@@ -106,51 +106,78 @@ use crate::UseTenantPlan;
 pub trait PlanVisitor {
     fn visit_plan_node(&mut self, node: &PlanNode) -> Result<()> {
         match node {
+            // Base.
             PlanNode::AggregatorPartial(plan) => self.visit_aggregate_partial(plan),
             PlanNode::AggregatorFinal(plan) => self.visit_aggregate_final(plan),
             PlanNode::Empty(plan) => self.visit_empty(plan),
             PlanNode::Projection(plan) => self.visit_projection(plan),
             PlanNode::Filter(plan) => self.visit_filter(plan),
             PlanNode::Sort(plan) => self.visit_sort(plan),
-            PlanNode::Limit(plan) => self.visit_limit(plan),
-            PlanNode::LimitBy(plan) => self.visit_limit_by(plan),
-            PlanNode::ReadSource(plan) => self.visit_read_data_source(plan),
-            PlanNode::Select(plan) => self.visit_select(plan),
-            PlanNode::Explain(plan) => self.visit_explain(plan),
-            PlanNode::CreateDatabase(plan) => self.visit_create_database(plan),
-            PlanNode::DropDatabase(plan) => self.visit_drop_database(plan),
-            PlanNode::CreateTable(plan) => self.visit_create_table(plan),
-            PlanNode::DropTable(plan) => self.visit_drop_table(plan),
-            PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
-            PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
-            PlanNode::DescribeStage(plan) => self.visit_describe_stage(plan),
-            PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
-            PlanNode::UseDatabase(plan) => self.visit_use_database(plan),
-            PlanNode::UseTenant(plan) => self.visit_use_tenant(plan),
-            PlanNode::SetVariable(plan) => self.visit_set_variable(plan),
             PlanNode::Stage(plan) => self.visit_stage(plan),
             PlanNode::Broadcast(plan) => self.visit_broadcast(plan),
             PlanNode::Remote(plan) => self.visit_remote(plan),
             PlanNode::Having(plan) => self.visit_having(plan),
             PlanNode::Expression(plan) => self.visit_expression(plan),
-            PlanNode::Insert(plan) => self.visit_insert_into(plan),
-            PlanNode::Copy(plan) => self.visit_copy(plan),
-            PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
+            PlanNode::Limit(plan) => self.visit_limit(plan),
+            PlanNode::LimitBy(plan) => self.visit_limit_by(plan),
+            PlanNode::ReadSource(plan) => self.visit_read_data_source(plan),
             PlanNode::SubQueryExpression(plan) => self.visit_sub_queries_sets(plan),
-            PlanNode::Kill(plan) => self.visit_kill_query(plan),
+            PlanNode::Sink(plan) => self.visit_append(plan),
+
+            // Query.
+            PlanNode::Select(plan) => self.visit_select(plan),
+
+            // Explain.
+            PlanNode::Explain(plan) => self.visit_explain(plan),
+
+            // Insert.
+            PlanNode::Insert(plan) => self.visit_insert_into(plan),
+
+            // Copy.
+            PlanNode::Copy(plan) => self.visit_copy(plan),
+
+            // Database.
+            PlanNode::CreateDatabase(plan) => self.visit_create_database(plan),
+            PlanNode::DropDatabase(plan) => self.visit_drop_database(plan),
+            PlanNode::ShowCreateDatabase(plan) => self.visit_show_create_database(plan),
+
+            // Table.
+            PlanNode::CreateTable(plan) => self.visit_create_table(plan),
+            PlanNode::DropTable(plan) => self.visit_drop_table(plan),
+            PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
+            PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
+            PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
+            PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
+
+            // User.
             PlanNode::CreateUser(plan) => self.visit_create_user(plan),
             PlanNode::AlterUser(plan) => self.visit_alter_user(plan),
             PlanNode::DropUser(plan) => self.visit_drop_user(plan),
             PlanNode::GrantPrivilege(plan) => self.visit_grant_privilege(plan),
             PlanNode::RevokePrivilege(plan) => self.visit_revoke_privilege(plan),
-            PlanNode::Sink(plan) => self.visit_append(plan),
-            PlanNode::CreateUserStage(plan) => self.visit_create_stage(plan),
             PlanNode::ShowGrants(plan) => self.visit_show_grants(plan),
-            PlanNode::DropUserStage(plan) => self.visit_drop_stage(plan),
-            PlanNode::ShowCreateDatabase(plan) => self.visit_show_create_database(plan),
-            PlanNode::CreateUDF(plan) => self.visit_create_udf(plan),
-            PlanNode::DropUDF(plan) => self.visit_drop_udf(plan),
-            PlanNode::AlterUDF(plan) => self.visit_alter_udf(plan),
+
+            // Stage.
+            PlanNode::CreateUserStage(plan) => self.visit_create_user_stage(plan),
+            PlanNode::DropUserStage(plan) => self.visit_drop_user_stage(plan),
+            PlanNode::DescribeUserStage(plan) => self.visit_describe_user_stage(plan),
+
+            // UDF.
+            PlanNode::CreateUserUDF(plan) => self.visit_create_user_udf(plan),
+            PlanNode::DropUserUDF(plan) => self.visit_drop_user_udf(plan),
+            PlanNode::AlterUserUDF(plan) => self.visit_alter_user_udf(plan),
+
+            // Use.
+            PlanNode::UseDatabase(plan) => self.visit_use_database(plan),
+
+            // Set.
+            PlanNode::SetVariable(plan) => self.visit_set_variable(plan),
+
+            // Kill.
+            PlanNode::Kill(plan) => self.visit_kill_query(plan),
+
+            // Admin.
+            PlanNode::AdminUseTenant(plan) => self.visit_use_tenant(plan),
         }
     }
 
@@ -298,7 +325,7 @@ pub trait PlanVisitor {
         Ok(())
     }
 
-    fn visit_describe_stage(&mut self, _: &DescribeStagePlan) -> Result<()> {
+    fn visit_describe_user_stage(&mut self, _: &DescribeUserStagePlan) -> Result<()> {
         Ok(())
     }
 
@@ -310,7 +337,7 @@ pub trait PlanVisitor {
         Ok(())
     }
 
-    fn visit_use_tenant(&mut self, _: &UseTenantPlan) -> Result<()> {
+    fn visit_use_tenant(&mut self, _: &AdminUseTenantPlan) -> Result<()> {
         Ok(())
     }
 
@@ -341,11 +368,11 @@ pub trait PlanVisitor {
         Ok(())
     }
 
-    fn visit_create_stage(&mut self, _: &CreateUserStagePlan) -> Result<()> {
+    fn visit_create_user_stage(&mut self, _: &CreateUserStagePlan) -> Result<()> {
         Ok(())
     }
 
-    fn visit_drop_stage(&mut self, _: &DropUserStagePlan) -> Result<()> {
+    fn visit_drop_user_stage(&mut self, _: &DropUserStagePlan) -> Result<()> {
         Ok(())
     }
 
@@ -357,15 +384,15 @@ pub trait PlanVisitor {
         Ok(())
     }
 
-    fn visit_create_udf(&mut self, _: &CreateUDFPlan) -> Result<()> {
+    fn visit_create_user_udf(&mut self, _: &CreateUserUDFPlan) -> Result<()> {
         Ok(())
     }
 
-    fn visit_drop_udf(&mut self, _: &DropUDFPlan) -> Result<()> {
+    fn visit_drop_user_udf(&mut self, _: &DropUserUDFPlan) -> Result<()> {
         Ok(())
     }
 
-    fn visit_alter_udf(&mut self, _: &AlterUDFPlan) -> Result<()> {
+    fn visit_alter_user_udf(&mut self, _: &AlterUserUDFPlan) -> Result<()> {
         Ok(())
     }
 }

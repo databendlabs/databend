@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::DescribeStagePlan;
+use common_planners::DescribeUserStagePlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
@@ -36,7 +36,7 @@ impl AnalyzableStatement for DfDescribeStage {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let (_, name) = self.resolve_table(ctx)?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::DescribeStage(DescribeStagePlan { name }),
+            PlanNode::DescribeUserStage(DescribeUserStagePlan { name }),
         )))
     }
 }

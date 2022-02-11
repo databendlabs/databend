@@ -67,7 +67,7 @@ impl InterpreterFactory {
             PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::OptimizeTable(v) => OptimizeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx_clone, v),
-            PlanNode::UseTenant(v) => UseTenantInterpreter::try_create(ctx_clone, v),
+            PlanNode::AdminUseTenant(v) => UseTenantInterpreter::try_create(ctx_clone, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx_clone, v),
             PlanNode::Insert(v) => InsertInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),
@@ -81,13 +81,13 @@ impl InterpreterFactory {
             PlanNode::CreateUserStage(v) => CreatStageInterpreter::try_create(ctx_clone, v),
             PlanNode::DropUserStage(v) => DropStageInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowGrants(v) => ShowGrantsInterpreter::try_create(ctx_clone, v),
-            PlanNode::DescribeStage(v) => DescribeStageInterpreter::try_create(ctx_clone, v),
+            PlanNode::DescribeUserStage(v) => DescribeStageInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowCreateDatabase(v) => {
                 ShowCreateDatabaseInterpreter::try_create(ctx_clone, v)
             }
-            PlanNode::CreateUDF(v) => CreatUDFInterpreter::try_create(ctx_clone, v),
-            PlanNode::DropUDF(v) => DropUDFInterpreter::try_create(ctx_clone, v),
-            PlanNode::AlterUDF(v) => AlterUDFInterpreter::try_create(ctx_clone, v),
+            PlanNode::CreateUserUDF(v) => CreatUDFInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropUserUDF(v) => DropUDFInterpreter::try_create(ctx_clone, v),
+            PlanNode::AlterUserUDF(v) => AlterUDFInterpreter::try_create(ctx_clone, v),
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",
                 plan.name()

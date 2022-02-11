@@ -229,7 +229,7 @@ impl Series {
 No need to care about `Constants` and `Nullable`.
 
 ```rust
-let wrapper = ColumnViewer::<i8>::create(&column)?;
+let wrapper = ColumnViewer::<i8>::try_create(&column)?;
 
 assert_eq!(wrapper.len(), 10);
 assert!(!wrapper.null_at(0));
@@ -239,10 +239,10 @@ for i in 0..wrapper.len() {
 Ok(())
 
 
-let wrapper = ColumnViewer::<bool>::create(&column)?;
+let wrapper = ColumnViewer::<bool>::try_create(&column)?;
 let c = wrapper.value(0);
 
-let wrapper =  ColumnViewer::<&str>::create(&column)?;
+let wrapper =  ColumnViewer::<&str>::try_create(&column)?;
 let c = wrapper.value(1);
 Ok(())
 ```
