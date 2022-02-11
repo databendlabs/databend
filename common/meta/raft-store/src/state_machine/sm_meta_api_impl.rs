@@ -58,7 +58,7 @@ impl MetaApi for StateMachine {
         };
 
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cmd, &t).unwrap();
+            let r = self.apply_cmd(&cmd, &t)?;
             Ok(r)
         })?;
 
@@ -85,7 +85,7 @@ impl MetaApi for StateMachine {
         };
 
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cmd, &t).unwrap();
+            let r = self.apply_cmd(&cmd, &t)?;
             Ok(r)
         })?;
 
@@ -156,7 +156,7 @@ impl MetaApi for StateMachine {
         };
 
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cr, &t).unwrap();
+            let r = self.apply_cmd(&cr, &t)?;
             Ok(r)
         })?;
 
@@ -189,7 +189,7 @@ impl MetaApi for StateMachine {
         };
 
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cr, &t).unwrap();
+            let r = self.apply_cmd(&cr, &t)?;
             Ok(r)
         })?;
 
@@ -299,7 +299,7 @@ impl MetaApi for StateMachine {
         let cmd = Cmd::UpsertTableOptions(req.clone());
 
         let res = self.sm_tree.txn(true, |t| {
-            let r = self.apply_cmd(&cmd, &t).unwrap();
+            let r = self.apply_cmd(&cmd, &t)?;
             Ok(r)
         })?;
         if !res.changed() {

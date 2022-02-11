@@ -17,6 +17,7 @@ use std::fmt::Display;
 use common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
+use sled::transaction::UnabortableTransactionError;
 use thiserror::Error;
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -29,14 +30,14 @@ pub enum MetaStorageError {
     #[error("{0}")]
     SerdeError(String),
 
-    #[error("{0}")]
+    #[error("sled error: {0}")]
     SledError(String),
 
     #[error("{0}")]
     TransactionAbort(String),
 
-    #[error("{0}")]
-    TransactionError(String),
+    #[error("Conflict when execute transaction, just retry")]
+    TransactionConflict,
 
     #[error("{0}")]
     AppError(#[from] AppError),
@@ -93,16 +94,22 @@ pub enum AppError {
     UnknownTableId(#[from] UnknownTableId),
 }
 
+impl From<AppError> for ErrorCode {
+    fn from(app_err: AppError) -> Self {
+        match app_err {
+            AppError::UnknownDatabase(err) => ErrorCode::UnknownDatabase(err.to_string()),
+            AppError::UnknownDatabaseId(err) => ErrorCode::UnknownDatabaseId(err.to_string()),
+            AppError::UnknownTableId(err) => ErrorCode::UnknownTableId(err.to_string()),
+        }
+    }
+}
+
 pub type MetaStorageResult<T> = std::result::Result<T, MetaStorageError>;
 
 impl From<MetaStorageError> for ErrorCode {
     fn from(e: MetaStorageError) -> Self {
         match e {
-            MetaStorageError::AppError(app_err) => match app_err {
-                AppError::UnknownDatabase(err) => ErrorCode::UnknownDatabase(err.to_string()),
-                AppError::UnknownDatabaseId(err) => ErrorCode::UnknownDatabaseId(err.to_string()),
-                AppError::UnknownTableId(err) => ErrorCode::UnknownTableId(err.to_string()),
-            },
+            MetaStorageError::AppError(app_err) => app_err.into(),
             _ => ErrorCode::MetaStorageError(e.to_string()),
         }
     }
@@ -170,33 +177,11 @@ where E: Display + Send + Sync + 'static
     }
 }
 
-// ser/de to/from sled::transaction::TransactionError,sled::transaction::ConflictableTransactionError
-impl<T: Display> From<sled::transaction::ConflictableTransactionError<T>> for MetaStorageError {
-    fn from(error: sled::transaction::ConflictableTransactionError<T>) -> Self {
+impl From<UnabortableTransactionError> for MetaStorageError {
+    fn from(error: UnabortableTransactionError) -> Self {
         match error {
-            sled::transaction::ConflictableTransactionError::Abort(e) => {
-                MetaStorageError::TransactionAbort(format!("Transaction abort, cause: {}", e))
-            }
-            sled::transaction::ConflictableTransactionError::Storage(e) => {
-                MetaStorageError::TransactionError(format!(
-                    "Transaction storage error, cause: {}",
-                    e
-                ))
-            }
-            _ => MetaStorageError::TransactionError(String::from("Unexpect transaction error")),
-        }
-    }
-}
-
-impl<E: Display> From<sled::transaction::TransactionError<E>> for MetaStorageError {
-    fn from(error: sled::transaction::TransactionError<E>) -> Self {
-        match error {
-            sled::transaction::TransactionError::Abort(e) => {
-                MetaStorageError::TransactionAbort(format!("Transaction abort, cause: {}", e))
-            }
-            sled::transaction::TransactionError::Storage(e) => MetaStorageError::TransactionError(
-                format!("Transaction storage error, cause :{}", e),
-            ),
+            UnabortableTransactionError::Storage(e) => MetaStorageError::SledError(e.to_string()),
+            UnabortableTransactionError::Conflict => MetaStorageError::TransactionConflict,
         }
     }
 }

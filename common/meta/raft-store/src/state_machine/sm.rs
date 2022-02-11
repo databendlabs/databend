@@ -247,7 +247,7 @@ impl StateMachine {
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "debug", skip(self, entry), fields(log_id=%entry.log_id))]
-    pub async fn apply(&self, entry: &Entry<LogEntry>) -> MetaStorageResult<AppliedState> {
+    pub async fn apply(&self, entry: &Entry<LogEntry>) -> Result<AppliedState, MetaStorageError> {
         tracing::debug!("apply: summary: {}", entry.summary());
         tracing::debug!("apply: payload: {:?}", entry.payload);
 
@@ -270,16 +270,17 @@ impl StateMachine {
                         }
                     }
 
-                    let resp = self.apply_cmd(&data.cmd, &txn_tree)?;
+                    let res = self.apply_cmd(&data.cmd, &txn_tree);
+                    let applied_state = res?;
 
                     if let Some(ref txid) = data.txid {
                         self.txn_client_last_resp_update(
                             &txid.client,
-                            (txid.serial, resp.clone()),
+                            (txid.serial, applied_state.clone()),
                             &txn_tree,
                         )?;
                     }
-                    return Ok(Some(resp));
+                    return Ok(Some(applied_state));
                 }
                 EntryPayload::Membership(ref mem) => {
                     txn_sm_meta.insert(
@@ -294,16 +295,26 @@ impl StateMachine {
             };
 
             Ok(None)
-        })?;
+        });
+
+        let opt_applied_state = match result {
+            Ok(x) => x,
+            Err(meta_sto_err) => {
+                return match meta_sto_err {
+                    MetaStorageError::AppError(app_err) => Ok(AppliedState::AppError(app_err)),
+                    _ => Err(meta_sto_err),
+                }
+            }
+        };
 
         tracing::debug!("sled tx done: {:?}", entry);
 
-        let result = match result {
+        let applied_state = match opt_applied_state {
             Some(r) => r,
             None => AppliedState::None,
         };
 
-        Ok(result)
+        Ok(applied_state)
     }
 
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
@@ -351,7 +362,7 @@ impl StateMachine {
 
         let db_lookup_tree = txn_tree.key_space::<DatabaseLookup>();
 
-        let (prev, result) = self.sub_txn_tree_upsert(
+        let (prev, result) = self.txn_sub_tree_upsert(
             &db_lookup_tree,
             &DatabaseLookupKey::new(tenant.to_string(), name.to_string()),
             &MatchSeq::Exact(0),
@@ -376,7 +387,7 @@ impl StateMachine {
         }
 
         let dbs = txn_tree.key_space::<Databases>();
-        let (prev_meta, result_meta) = self.sub_txn_tree_upsert(
+        let (prev_meta, result_meta) = self.txn_sub_tree_upsert(
             &dbs,
             &db_id,
             &MatchSeq::Exact(0),
@@ -411,7 +422,7 @@ impl StateMachine {
     ) -> MetaStorageResult<AppliedState> {
         let dbs = txn_tree.key_space::<DatabaseLookup>();
 
-        let (prev, result) = self.sub_txn_tree_upsert(
+        let (prev, result) = self.txn_sub_tree_upsert(
             &dbs,
             &DatabaseLookupKey::new(tenant.to_string(), name.to_string()),
             &MatchSeq::Any,
@@ -433,7 +444,7 @@ impl StateMachine {
 
             let dbs = txn_tree.key_space::<Databases>();
             let (prev_meta, result_meta) =
-                self.sub_txn_tree_upsert(&dbs, &db_id, &MatchSeq::Any, Operation::Delete, None)?;
+                self.txn_sub_tree_upsert(&dbs, &db_id, &MatchSeq::Any, Operation::Delete, None)?;
 
             tracing::debug!("applied drop Database: {} {:?}", name, result);
 
@@ -482,7 +493,7 @@ impl StateMachine {
         let table_meta = table_meta.clone();
         let table_id = self.txn_incr_seq(SEQ_TABLE_ID, txn_tree)?;
 
-        self.sub_txn_tree_upsert(
+        self.txn_sub_tree_upsert(
             &table_lookup_tree,
             &lookup_key,
             &MatchSeq::Exact(0),
@@ -491,7 +502,7 @@ impl StateMachine {
         )?;
 
         let table_tree = txn_tree.key_space::<Tables>();
-        let (prev, result) = self.sub_txn_tree_upsert(
+        let (prev, result) = self.txn_sub_tree_upsert(
             &table_tree,
             &table_id,
             &MatchSeq::Exact(0),
@@ -534,7 +545,7 @@ impl StateMachine {
 
         let table_id = seq_table_id.unwrap().data.0;
 
-        self.sub_txn_tree_upsert(
+        self.txn_sub_tree_upsert(
             &table_lookup_tree,
             &lookup_key,
             &MatchSeq::Any,
@@ -544,7 +555,7 @@ impl StateMachine {
 
         let tables = txn_tree.key_space::<Tables>();
         let (prev, result) =
-            self.sub_txn_tree_upsert(&tables, &table_id, &MatchSeq::Any, Operation::Delete, None)?;
+            self.txn_sub_tree_upsert(&tables, &table_id, &MatchSeq::Any, Operation::Delete, None)?;
         if prev.is_some() && result.is_none() {
             self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)?;
         }
@@ -562,7 +573,7 @@ impl StateMachine {
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
-        let (prev, result) = self.sub_txn_tree_upsert(
+        let (prev, result) = self.txn_sub_tree_upsert(
             &sub_tree,
             &key.to_string(),
             seq,
@@ -637,7 +648,7 @@ impl StateMachine {
         &self,
         cmd: &Cmd,
         txn_tree: &TransactionSledTree,
-    ) -> MetaStorageResult<AppliedState> {
+    ) -> Result<AppliedState, MetaStorageError> {
         tracing::debug!("apply_cmd: {:?}", cmd);
 
         match cmd {
@@ -761,7 +772,7 @@ impl StateMachine {
     }
 
     #[allow(clippy::type_complexity)]
-    fn sub_txn_tree_upsert<'s, V, KS>(
+    fn txn_sub_tree_upsert<'s, V, KS>(
         &'s self,
         sub_tree: &AsTxnKeySpace<'s, KS>,
         key: &KS::K,
@@ -784,7 +795,7 @@ impl StateMachine {
 
         // result is the state after applying an operation.
         let result =
-            self.sub_txn_tree_do_update(sub_tree, key, prev.clone(), value_meta, value_op)?;
+            self.txn_sub_tree_do_update(sub_tree, key, prev.clone(), value_meta, value_op)?;
 
         tracing::debug!("applied upsert: {} {:?}", key, result);
         Ok((prev, result))
@@ -793,7 +804,7 @@ impl StateMachine {
     /// Update a record into a sled tree sub tree, defined by a KeySpace, without seq check.
     ///
     /// TODO(xp); this should be a method of sled sub tree
-    fn sub_txn_tree_do_update<'s, V, KS>(
+    fn txn_sub_tree_do_update<'s, V, KS>(
         &'s self,
         sub_tree: &AsTxnKeySpace<'s, KS>,
         key: &KS::K,
@@ -824,7 +835,6 @@ impl StateMachine {
         Ok(Some(seq_kv_value))
     }
 
-    #[allow(clippy::ptr_arg)]
     pub fn get_database_id(&self, tenant: &str, db_name: &str) -> common_exception::Result<u64> {
         let seq_dbi = self
             .database_lookup()
