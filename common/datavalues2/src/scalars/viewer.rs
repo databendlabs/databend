@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::TrustedLen;
+
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
@@ -20,7 +22,9 @@ use crate::prelude::*;
 
 pub trait ScalarViewer<'a>: Clone + Sized {
     type ScalarItem: Scalar<Viewer<'a> = Self>;
-    type Iterator: Iterator<Item = <Self::ScalarItem as Scalar>::RefType<'a>>;
+    type Iterator: Iterator<Item = <Self::ScalarItem as Scalar>::RefType<'a>>
+        + ExactSizeIterator
+        + TrustedLen;
 
     fn try_create(col: &'a ColumnRef) -> Result<Self>;
 
@@ -104,7 +108,6 @@ where
     }
 }
 
-/// Already materialized boolean column.
 #[derive(Clone)]
 pub struct BooleanViewer {
     values: Bitmap,
@@ -120,6 +123,7 @@ impl<'a> ScalarViewer<'a> for BooleanViewer {
     type Iterator = Self;
 
     fn try_create(column: &ColumnRef) -> Result<Self> {
+        debug_assert!(!column.is_empty());
         let (inner, validity) = try_extract_inner(column)?;
         let col: &BooleanColumn = Series::check_get(inner)?;
         let values = col.values().clone();
@@ -140,7 +144,7 @@ impl<'a> ScalarViewer<'a> for BooleanViewer {
 
     #[inline]
     fn value_at(&self, index: usize) -> bool {
-        unsafe { self.values.get_bit_unchecked(index & self.non_const_mask) }
+        self.values.get_bit(index & self.non_const_mask)
     }
 
     #[inline]

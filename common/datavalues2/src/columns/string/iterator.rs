@@ -51,6 +51,12 @@ impl<'a> Iterator for StringValueIter<'a> {
     }
 }
 
+impl<'a> ExactSizeIterator for StringValueIter<'a> {
+    fn len(&self) -> usize {
+        self.column.len() - self.index
+    }
+}
+
 unsafe impl TrustedLen for StringValueIter<'_> {}
 
 impl<'a> StringColumn {

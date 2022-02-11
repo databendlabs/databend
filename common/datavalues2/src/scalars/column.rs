@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::TrustedLen;
+
 use super::type_::Scalar;
 use super::type_::ScalarRef;
 use crate::prelude::*;
@@ -27,7 +29,7 @@ where for<'a> Self::OwnedItem: Scalar<RefType<'a> = Self::RefItem<'a>>
     type OwnedItem: Scalar<ColumnType = Self>;
     type RefItem<'a>: ScalarRef<'a, ScalarType = Self::OwnedItem, ColumnType = Self>
     where Self: 'a;
-    type Iterator<'a>: Iterator<Item = Self::RefItem<'a>>;
+    type Iterator<'a>: Iterator<Item = Self::RefItem<'a>> + ExactSizeIterator + TrustedLen;
 
     // Note: get_data has bad performance, avoid call this function inside the loop
     // Use `iter` instead

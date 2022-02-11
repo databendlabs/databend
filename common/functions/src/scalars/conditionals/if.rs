@@ -110,6 +110,16 @@ impl Function2 for IfFunction {
 
                     Ok(builder.build(size))
                 } else {
+                    // let a = Series::check_get_scalar::<$T>(&lhs)?;
+                    // let b = Series::check_get_scalar::<$T>(&rhs)?;
+                    // let p = Series::check_get_scalar::<bool>(&predicate)?;
+
+                    // let it = p
+                    //     .scalar_iter()
+                    //     .zip(a.scalar_iter())
+                    //     .zip(b.scalar_iter())
+                    //     .map(|((predicate, l), r)| if predicate { l } else { r });
+
                     let it = predicate_viewer
                         .iter()
                         .zip(lhs_viewer.iter())
