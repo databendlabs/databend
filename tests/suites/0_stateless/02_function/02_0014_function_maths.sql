@@ -43,7 +43,7 @@ SELECT '===exp===';
 SELECT exp(NULL);
 SELECT exp(2);
 SELECT exp('2');
-SELECT exp('a');
+SELECT exp('a'); -- {ErrorCode 1010}
 
 SELECT '===trigonometric===';
 

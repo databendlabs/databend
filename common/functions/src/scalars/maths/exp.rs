@@ -14,14 +14,14 @@
 
 use std::fmt;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::cast_column_field;
+use crate::scalars::function2_factory::Function2Description;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
 
 #[derive(Clone)]
 pub struct ExpFunction {
@@ -29,47 +29,49 @@ pub struct ExpFunction {
 }
 
 impl ExpFunction {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(ExpFunction {
             _display_name: _display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
-impl Function for ExpFunction {
+impl Function2 for ExpFunction {
     fn name(&self) -> &str {
         &*self._display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-
-        let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
-            Ok(DataType::Float64)
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        let data_type = if args[0].data_type_id().is_numeric()
+            || args[0].data_type_id().is_string()
+            || args[0].data_type_id().is_null()
+        {
+            Ok(Float64Type::arc())
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric, but got {}",
-                args[0]
+                args[0].data_type_id()
             )))
         }?;
 
-        Ok(DataTypeAndNullable::create(&data_type, nullable))
+        Ok(data_type)
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let result = columns[0]
-            .column()
-            .to_minimal_array()?
-            .cast_with_type(&DataType::Float64)?
-            .f64()?
-            .apply_cast_numeric(|v| v.exp());
-        let column: DataColumn = result.into();
-        Ok(column.resize_constant(columns[0].column().len()))
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        let column = cast_column_field(&columns[0], &Float64Type::arc())?;
+        let viewer = ColumnViewer::<f64>::create(&column)?;
+        let input_rows = columns[0].column().len();
+        let mut builder = ColumnBuilder::<f64>::with_capacity(input_rows);
+        for idx in 0..input_rows {
+            let val = viewer.value(idx).exp();
+            builder.append(val);
+        }
+        Ok(builder.build(input_rows))
     }
 }
 
