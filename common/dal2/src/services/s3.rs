@@ -87,7 +87,7 @@ impl Builder {
         self
     }
 
-    pub async fn finish(&mut self) -> Result<Arc<dyn Accessor>> {
+    pub fn finish(&mut self) -> Result<Arc<dyn Accessor>> {
         if self.bucket.is_empty() || self.region.is_empty() {
             return Err(Error::BackendConfigurationInvalid {
                 key: "bucket".to_string(),

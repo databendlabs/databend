@@ -44,7 +44,6 @@ use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
-use futures::executor::block_on;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
@@ -304,20 +303,16 @@ impl QueryContext {
         let da: Arc<dyn Accessor> = match schema {
             DalSchema::S3 => {
                 let conf = &storage_conf.s3;
-                // TODO: Block on here to init the storage, we should find a better way.
-                block_on(async {
-                    s3::Backend::build()
-                        .region(&conf.region)
-                        .endpoint(&conf.endpoint_url)
-                        .bucket(&conf.bucket)
-                        .credential(Credential::hmac(
-                            &conf.access_key_id,
-                            &conf.secret_access_key,
-                        ))
-                        .finish()
-                        .await
-                        .map_err(|e| ErrorCode::DalTransportError(e.to_string()))
-                })?
+                s3::Backend::build()
+                    .region(&conf.region)
+                    .endpoint(&conf.endpoint_url)
+                    .bucket(&conf.bucket)
+                    .credential(Credential::hmac(
+                        &conf.access_key_id,
+                        &conf.secret_access_key,
+                    ))
+                    .finish()
+                    .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?
             }
             DalSchema::Azblob => {
                 todo!()

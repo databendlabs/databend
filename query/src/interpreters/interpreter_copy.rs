@@ -133,7 +133,6 @@ async fn get_dal_by_stage(ctx: Arc<QueryContext>, _stage_name: &str) -> Result<D
             .bucket(&conf.bucket)
             .credential(cred)
             .finish()
-            .await
             .unwrap(),
     ))
 }
