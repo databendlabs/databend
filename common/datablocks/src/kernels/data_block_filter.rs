@@ -38,13 +38,23 @@ impl DataBlock {
             }
         }
 
-        let mut after_columns = Vec::with_capacity(block.num_columns());
         let boolean_col: &BooleanColumn = Series::check_get(&predict_boolean_nonull)?;
-        for data_column in block.columns() {
-            after_columns.push(data_column.filter(boolean_col));
-        }
+        let rows = boolean_col.len();
+        let count_zeros = boolean_col.values().null_count();
+        match count_zeros {
+            0 => Ok(block.clone()),
+            _ => {
+                if count_zeros == rows {
+                    return Ok(DataBlock::empty_with_schema(block.schema().clone()));
+                }
+                let mut after_columns = Vec::with_capacity(block.num_columns());
+                for data_column in block.columns() {
+                    after_columns.push(data_column.filter(boolean_col));
+                }
 
-        Ok(DataBlock::create(block.schema().clone(), after_columns))
+                Ok(DataBlock::create(block.schema().clone(), after_columns))
+            }
+        }
     }
 
     pub fn cast_to_nonull_boolean(predict: &ColumnRef) -> Result<ColumnRef> {

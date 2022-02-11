@@ -58,9 +58,9 @@ where F: ScalarBinaryFunction<L, R, O>
         match (l.is_const(), r.is_const()) {
             (false, true) => {
                 let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(l) };
-                let right = ColumnViewer::<R>::create(r)?;
+                let right = R::try_create_viewer(r)?;
 
-                let b = right.value(0);
+                let b = right.value_at(0);
                 let it = left.scalar_iter().map(|a| self.func.eval(a, b));
                 Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
             }
@@ -77,8 +77,8 @@ where F: ScalarBinaryFunction<L, R, O>
             }
 
             (true, false) => {
-                let left = ColumnViewer::<L>::create(l)?;
-                let a = left.value(0);
+                let left = L::try_create_viewer(l)?;
+                let a = left.value_at(0);
 
                 let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
                 let it = right.scalar_iter().map(|b| self.func.eval(a, b));
@@ -87,10 +87,13 @@ where F: ScalarBinaryFunction<L, R, O>
 
             // True True ?
             (true, true) => {
-                let left = ColumnViewerIter::<L>::try_create(l)?;
-                let right = ColumnViewerIter::<R>::try_create(r)?;
+                let left = L::try_create_viewer(l)?;
+                let right = R::try_create_viewer(r)?;
 
-                let it = left.zip(right).map(|(a, b)| self.func.eval(a, b));
+                let it = left
+                    .iter()
+                    .zip(right.iter())
+                    .map(|(a, b)| self.func.eval(a, b));
                 Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
             }
         }

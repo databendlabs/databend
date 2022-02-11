@@ -17,18 +17,7 @@ use std::net::Ipv4Addr;
 use std::str;
 use std::sync::Arc;
 
-use common_datavalues2::remove_nullable;
-use common_datavalues2::type_primitive;
-use common_datavalues2::ColumnBuilder;
-use common_datavalues2::ColumnRef;
-use common_datavalues2::ColumnViewer;
-use common_datavalues2::ColumnsWithField;
-use common_datavalues2::DataTypePtr;
-use common_datavalues2::DataValue;
-use common_datavalues2::NullType;
-use common_datavalues2::NullableColumnBuilder;
-use common_datavalues2::NullableType;
-use common_datavalues2::TypeID;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -93,15 +82,16 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function2 for InetAtonFunctionImpl<SUPPRE
             return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
         }
 
-        let viewer = ColumnViewer::<Vec<u8>>::create(columns[0].column())?;
+        let viewer = Vu8::try_create_viewer(columns[0].column())?;
+        let viewer_iter = viewer.iter();
 
         if SUPPRESS_PARSE_ERROR {
             let mut builder = NullableColumnBuilder::<u32>::with_capacity(input_rows);
-            for i in 0..input_rows {
+
+            for (i, input) in viewer_iter.enumerate() {
                 // We skip the null check because the function has passthrough_null is true.
                 // This is arguably correct because the address parsing is not optimized by SIMD, not quite sure how much we can gain from skipping branch prediction.
                 // Think about the case if we have 1000 rows and 999 are Nulls.
-                let input = viewer.value(i);
                 let addr_str = String::from_utf8_lossy(input);
                 match addr_str.parse::<Ipv4Addr>() {
                     Ok(addr) => {
@@ -116,13 +106,12 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function2 for InetAtonFunctionImpl<SUPPRE
 
         if columns[0].column().is_nullable() {
             let mut builder = NullableColumnBuilder::<u32>::with_capacity(input_rows);
-            for i in 0..input_rows {
+            for (i, input) in viewer_iter.enumerate() {
                 if viewer.null_at(i) {
                     builder.append_null();
                     continue;
                 }
 
-                let input = viewer.value(i);
                 let addr_str = String::from_utf8_lossy(input);
                 match addr_str.parse::<Ipv4Addr>() {
                     Ok(addr) => {
@@ -140,8 +129,7 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function2 for InetAtonFunctionImpl<SUPPRE
             Ok(builder.build(input_rows))
         } else {
             let mut builder = ColumnBuilder::<u32>::with_capacity(input_rows);
-            for i in 0..input_rows {
-                let input = viewer.value(i);
+            for input in viewer_iter {
                 let addr_str = String::from_utf8_lossy(input);
                 match addr_str.parse::<Ipv4Addr>() {
                     Ok(addr) => {

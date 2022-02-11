@@ -88,8 +88,8 @@ fn databend_if_else_then(
     })}
 
     with_match_physical_primitive_type!(physical_id, |$T| {
-        let lhs_wrapper = ColumnViewer::<$T>::create(lhs)?;
-        let rhs_wrapper = ColumnViewer::<$T>::create(rhs)?;
+        let lhs_wrapper = ColumnViewer::<$T>::try_create(lhs)?;
+        let rhs_wrapper = ColumnViewer::<$T>::try_create(rhs)?;
         let size = lhs_wrapper.len();
 
         let mut builder = NullableColumnBuilder::<$T>::with_capacity(size);
