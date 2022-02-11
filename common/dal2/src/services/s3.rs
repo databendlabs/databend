@@ -174,10 +174,13 @@ impl Backend {
     /// If user input a relative path, we will calculate the absolute path with the root.
     fn get_abs_path(&self, path: &str) -> String {
         if path.starts_with('/') {
-            path.strip_prefix('/').unwrap().to_string()
-        } else {
-            format!("{}/{}", self.root, path)
+            return path.strip_prefix('/').unwrap().to_string();
         }
+        if self.root.is_empty() {
+            return path.to_string();
+        }
+
+        format!("{}/{}", self.root, path)
     }
 }
 
