@@ -184,7 +184,6 @@ impl Backend {
 #[async_trait]
 impl Accessor for Backend {
     async fn read(&self, args: &OpRead) -> Result<Reader> {
-        println!("try to read {}", &args.path);
         let p = self.get_abs_path(&args.path);
 
         let mut req = self

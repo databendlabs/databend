@@ -75,8 +75,6 @@ impl Backend {
 #[async_trait]
 impl Accessor for Backend {
     async fn read(&self, args: &OpRead) -> Result<Reader> {
-        println!("try to read {}", args.path);
-
         let path = PathBuf::from(&self.root).join(&args.path);
 
         let mut f = fs::OpenOptions::new()
@@ -100,8 +98,6 @@ impl Accessor for Backend {
     }
 
     async fn write(&self, mut r: Reader, args: &OpWrite) -> Result<usize> {
-        println!("try to write {}", args.path);
-
         let path = PathBuf::from(&self.root).join(&args.path);
 
         // Create dir before write path.
@@ -135,13 +131,10 @@ impl Accessor for Backend {
         // have been flushed to fs successfully.
         f.sync_all().await.map_err(|e| parse_io_error(&e, &path))?;
 
-        println!("finished write {}", args.path);
         Ok(s as usize)
     }
 
     async fn stat(&self, args: &OpStat) -> Result<Object> {
-        println!("try to stat {}", args.path);
-
         let path = PathBuf::from(&self.root).join(&args.path);
 
         let meta = fs::metadata(&path)
@@ -156,8 +149,6 @@ impl Accessor for Backend {
     }
 
     async fn delete(&self, args: &OpDelete) -> Result<()> {
-        println!("try to delete {}", args.path);
-
         let path = PathBuf::from(&self.root).join(&args.path);
 
         // PathBuf.is_dir() is not free, call metadata directly instead.
