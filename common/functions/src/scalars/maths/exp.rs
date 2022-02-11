@@ -22,6 +22,7 @@ use crate::scalars::cast_column_field;
 use crate::scalars::function2_factory::Function2Description;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
+use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
 pub struct ExpFunction {
@@ -47,30 +48,21 @@ impl Function2 for ExpFunction {
     }
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        let data_type = if args[0].data_type_id().is_numeric()
-            || args[0].data_type_id().is_string()
-            || args[0].data_type_id().is_null()
-        {
-            Ok(Float64Type::arc())
-        } else {
-            Err(ErrorCode::IllegalDataType(format!(
+        if !args[0].data_type_id().is_numeric() {
+            return Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric, but got {}",
                 args[0].data_type_id()
-            )))
-        }?;
+            )));
+        }
 
-        Ok(data_type)
+        Ok(Float64Type::arc())
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
         let column = cast_column_field(&columns[0], &Float64Type::arc())?;
-        let viewer = f64::try_create_viewer(&column)?;
-        let input_rows = viewer.size();
-        let mut builder = ColumnBuilder::<f64>::with_capacity(input_rows);
-        for val in viewer.iter() {
-            builder.append(val.exp());
-        }
-        Ok(builder.build(input_rows))
+        let unary = ScalarUnaryExpression::<f64, f64, _>::new(f64::exp);
+        let col = unary.eval(&column)?;
+        Ok(col.arc())
     }
 }
 
