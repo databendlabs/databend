@@ -50,9 +50,7 @@ impl Function2 for PiFunction {
     }
 
     fn eval(&self, _columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
-        let mut builder: ColumnBuilder<f64> = ColumnBuilder::with_capacity(1);
-        builder.append(PI);
-        Ok(builder.build(1))
+        Ok(ConstColumn::new(Series::from_data(vec![PI]), input_rows).arc())
     }
 }
 

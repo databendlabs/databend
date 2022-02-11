@@ -25,7 +25,8 @@ use crate::scalars::scalar_function2_test::ScalarFunction2Test;
 fn test_pi_function() -> Result<()> {
     let tests = vec![ScalarFunction2Test {
         name: "pi-function-passed",
-        columns: vec![],
+        // TODO: this should be `vec![]`, consider adding the `input_row` field to `ScalarFunction2Test`.
+        columns: vec![Series::from_data(vec![PI])],
         expect: Series::from_data(vec![PI]),
         error: "",
     }];
