@@ -100,6 +100,7 @@ impl AsyncRead for SeekableReader {
 
                     let n = ready!(r.poll_read(cx, buf))?;
                     self.pos += n as u64;
+                    self.state = SeekableReaderState::Idle;
                     return Poll::Ready(Ok(n));
                 }
             }
