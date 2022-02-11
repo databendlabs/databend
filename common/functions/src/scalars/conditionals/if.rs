@@ -101,10 +101,10 @@ impl Function2 for IfFunction {
                         .zip(rhs_viewer.iter().enumerate())
                     {
                         let valid = predicate_viewer.valid_at(row);
-                        if predicate {
-                            builder.append(l, lhs_viewer.valid_at(row) & valid);
+                        if predicate & valid {
+                            builder.append(l, lhs_viewer.valid_at(row));
                         } else {
-                            builder.append(r, rhs_viewer.valid_at(row) & valid);
+                            builder.append(r, rhs_viewer.valid_at(row));
                         };
                     }
 

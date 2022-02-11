@@ -131,7 +131,7 @@ macro_rules! run_difference_compute {
                     .skip(1)
                     .zip(viewer_iter_b.take(size - 1).enumerate())
                 {
-                    if viewer.null_at(index - 1) || viewer.null_at(index) {
+                    if viewer.null_at(index + 1) || viewer.null_at(index) {
                         builder.append_null();
                     } else {
                         let a = a as $result_primitive_type;
@@ -165,8 +165,8 @@ run_difference_compute!(compute_i8, i8, Int16Type, i16, sub);
 run_difference_compute!(compute_u8, u8, Int16Type, i16, sub);
 run_difference_compute!(compute_i16, i16, Int32Type, i32, sub);
 run_difference_compute!(compute_u16, u16, Int32Type, i32, sub);
-run_difference_compute!(compute_i32, i32, Int64Type, i64, sub);
-run_difference_compute!(compute_u32, u32, Int64Type, i64, sub);
+run_difference_compute!(compute_i32, i32, Int64Type, i64, wrapping_sub);
+run_difference_compute!(compute_u32, u32, Int64Type, i64, wrapping_sub);
 run_difference_compute!(compute_i64, i64, Int64Type, i64, wrapping_sub);
 run_difference_compute!(compute_u64, u64, Int64Type, i64, wrapping_sub);
 run_difference_compute!(compute_f32, f32, Float64Type, f64, sub);

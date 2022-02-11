@@ -27,10 +27,10 @@ where
         if self.pos >= self.size {
             return None;
         }
-        let value = self.value_at(self.pos);
 
+        let old = self.pos;
         self.pos += 1;
-        Some(value)
+        Some(self.values[old & self.non_const_mask])
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -44,10 +44,9 @@ impl Iterator for BooleanViewer {
         if self.pos >= self.size {
             return None;
         }
-        let value = self.value_at(self.pos);
-
+        let old = self.pos;
         self.pos += 1;
-        Some(value)
+        Some(unsafe { self.values.get_bit_unchecked(old & self.non_const_mask) })
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -62,10 +61,11 @@ impl<'a> Iterator for StringViewer<'a> {
         if self.pos >= self.size {
             return None;
         }
-        let value = self.value_at(self.pos);
 
+        let old = self.pos;
         self.pos += 1;
-        Some(value)
+
+        unsafe { Some(self.col.value_unchecked(old & self.non_const_mask)) }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {

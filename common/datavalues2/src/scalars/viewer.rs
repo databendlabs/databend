@@ -48,16 +48,16 @@ pub trait ScalarViewer<'a>: Clone + Sized {
 
 #[derive(Clone)]
 pub struct PrimitiveViewer<'a, T: PrimitiveType> {
-    values: &'a [T],
+    pub(crate) values: &'a [T],
     // for not nullable column, it's 0. we only need keep one sign bit to tell `null_at` that it's not null.
     // for nullable column, it's usize::max, validity will be cloned from nullable column.
-    null_mask: usize,
+    pub(crate) null_mask: usize,
     // for const column, it's 0, `value` function will fetch the first value of the column.
     // for not const column, it's usize::max, `value` function will fetch the value of the row in the column.
-    non_const_mask: usize,
+    pub(crate) non_const_mask: usize,
     pub(crate) size: usize,
     pub(crate) pos: usize,
-    validity: Bitmap,
+    pub(crate) validity: Bitmap,
 }
 
 impl<'a, T> ScalarViewer<'a> for PrimitiveViewer<'a, T>
@@ -112,12 +112,12 @@ where
 
 #[derive(Clone)]
 pub struct BooleanViewer {
-    values: Bitmap,
-    null_mask: usize,
-    non_const_mask: usize,
+    pub(crate) values: Bitmap,
+    pub(crate) null_mask: usize,
+    pub(crate) non_const_mask: usize,
     pub(crate) size: usize,
     pub(crate) pos: usize,
-    validity: Bitmap,
+    pub(crate) validity: Bitmap,
 }
 
 impl<'a> ScalarViewer<'a> for BooleanViewer {
@@ -168,12 +168,12 @@ impl<'a> ScalarViewer<'a> for BooleanViewer {
 
 #[derive(Clone)]
 pub struct StringViewer<'a> {
-    col: &'a StringColumn,
-    null_mask: usize,
-    non_const_mask: usize,
+    pub(crate) col: &'a StringColumn,
+    pub(crate) null_mask: usize,
+    pub(crate) non_const_mask: usize,
     pub(crate) size: usize,
     pub(crate) pos: usize,
-    validity: Bitmap,
+    pub(crate) validity: Bitmap,
 }
 
 impl<'a> ScalarViewer<'a> for StringViewer<'a> {
