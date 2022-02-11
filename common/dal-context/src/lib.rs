@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 mod metrics;
+pub use metrics::DalMetrics;
 
 mod context;
 pub use context::DalContext;

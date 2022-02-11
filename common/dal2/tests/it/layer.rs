@@ -23,14 +23,14 @@ use futures::lock::Mutex;
 
 struct Test {
     #[allow(dead_code)]
-    inner: Arc<dyn Accessor>,
+    inner: Option<Arc<dyn Accessor>>,
     deleted: Arc<Mutex<bool>>,
 }
 
 impl Layer for &Test {
     fn layer(&self, inner: Arc<dyn Accessor>) -> Arc<dyn Accessor> {
         Arc::new(Test {
-            inner: inner.clone(),
+            inner: Some(inner.clone()),
             deleted: self.deleted.clone(),
         })
     }
@@ -42,6 +42,8 @@ impl Accessor for Test {
         let mut x = self.deleted.lock().await;
         *x = true;
 
+        assert!(self.inner.is_some());
+
         // We will not call anything here to test the layer.
         Ok(())
     }
@@ -50,11 +52,11 @@ impl Accessor for Test {
 #[tokio::test]
 async fn test_layer() {
     let test = Test {
-        inner: Arc::new(fs::Backend::build().finish()),
+        inner: None,
         deleted: Arc::new(Mutex::new(false)),
     };
 
-    let op = Operator::new(fs::Backend::build().finish()).layer(&test);
+    let op = Operator::new(fs::Backend::build().finish().await.unwrap()).layer(&test);
 
     op.delete("xxxxx").run().await.unwrap();
 

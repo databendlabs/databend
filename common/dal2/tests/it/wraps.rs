@@ -55,7 +55,7 @@ async fn callback_reader() {
 
 #[tokio::test]
 async fn test_seekable_reader() {
-    let f = Operator::new(fs::Backend::build().finish());
+    let f = Operator::new(fs::Backend::build().finish().await.unwrap());
 
     let path = format!("/tmp/{}", uuid::Uuid::new_v4());
 
@@ -71,15 +71,33 @@ async fn test_seekable_reader() {
     assert_eq!(o.size, 13);
 
     let mut r = BufReader::with_capacity(
-        4 * 1024 * 1024, // 4 MiB
+        4, // Make buffer size small to test seek.
         SeekableReader::new(f, &path, o.size),
     );
 
-    let n = r.seek(SeekFrom::Current(3)).await.expect("seek");
+    // Seek to offset 3.
+    let n = r.seek(SeekFrom::Start(3)).await.expect("seek");
     assert_eq!(n, 3);
 
-    let mut bs = Vec::with_capacity(5);
-    let n = r.read_to_end(&mut bs).await.expect("read_to_end");
-    assert_eq!("lo, world!", from_utf8(&bs).unwrap());
-    assert_eq!(n, 10);
+    // Read only one byte.
+    let mut bs = Vec::new();
+    bs.resize(1, 0);
+    let n = r.read(&mut bs).await.expect("read");
+    assert_eq!("l", from_utf8(&bs).unwrap());
+    assert_eq!(n, 1);
+    let n = r.seek(SeekFrom::Current(0)).await.expect("seek");
+    assert_eq!(n, 4);
+
+    // Seek to end.
+    let n = r.seek(SeekFrom::End(-1)).await.expect("seek");
+    assert_eq!(n, 12);
+
+    // Read only one byte.
+    let mut bs = Vec::new();
+    bs.resize(1, 0);
+    let n = r.read(&mut bs).await.expect("read");
+    assert_eq!("!", from_utf8(&bs).unwrap());
+    assert_eq!(n, 1);
+    let n = r.seek(SeekFrom::Current(0)).await.expect("seek");
+    assert_eq!(n, 13);
 }
