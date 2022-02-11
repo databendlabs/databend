@@ -18,11 +18,11 @@ use common_datavalues2::DataSchema;
 use common_datavalues2::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct UseTenantPlan {
+pub struct AdminUseTenantPlan {
     pub tenant: String,
 }
 
-impl UseTenantPlan {
+impl AdminUseTenantPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
