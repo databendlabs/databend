@@ -104,7 +104,9 @@ where
     }
 
     fn iter(&self) -> Self {
-        self.clone()
+        let mut res = self.clone();
+        res.pos = 0;
+        res
     }
 }
 
@@ -158,7 +160,9 @@ impl<'a> ScalarViewer<'a> for BooleanViewer {
     }
 
     fn iter(&self) -> Self {
-        self.clone()
+        let mut res = self.clone();
+        res.pos = 0;
+        res
     }
 }
 
@@ -210,7 +214,9 @@ impl<'a> ScalarViewer<'a> for StringViewer<'a> {
     }
 
     fn iter(&self) -> Self {
-        self.clone()
+        let mut res = self.clone();
+        res.pos = 0;
+        res
     }
 }
 
