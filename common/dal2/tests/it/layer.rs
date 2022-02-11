@@ -56,7 +56,7 @@ async fn test_layer() {
         deleted: Arc::new(Mutex::new(false)),
     };
 
-    let op = Operator::new(fs::Backend::build().finish().unwrap()).layer(&test);
+    let op = Operator::new(fs::Backend::build().finish().await.unwrap()).layer(&test);
 
     op.delete("xxxxx").run().await.unwrap();
 

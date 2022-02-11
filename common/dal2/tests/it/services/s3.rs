@@ -27,6 +27,7 @@ async fn builder() {
         .credential(Credential::hmac("access-key", "secret-key"))
         .endpoint("http://localhost:9000")
         .finish()
+        .await
         .unwrap();
 }
 
@@ -43,6 +44,7 @@ async fn test_read() {
         .credential(Credential::hmac("minioadmin", "minioadmin"))
         .endpoint("http://localhost:9900")
         .finish()
+        .await
         .unwrap();
 
     let op = Operator::new(da);

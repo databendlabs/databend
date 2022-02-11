@@ -295,7 +295,7 @@ impl QueryContext {
 
     // Get the storage data accessor by config.
     // TODO(xuanwo): we can build dal backend only once.
-    pub fn get_storage_accessor(&self) -> Result<Operator> {
+    pub async fn get_storage_accessor(&self) -> Result<Operator> {
         let storage_conf = &self.get_config().storage;
         let schema_name = &storage_conf.storage_type;
         let schema = DalSchema::from_str(schema_name)
@@ -312,6 +312,7 @@ impl QueryContext {
                         &conf.secret_access_key,
                     ))
                     .finish()
+                    .await
                     .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?
             }
             DalSchema::Azblob => {
@@ -320,6 +321,7 @@ impl QueryContext {
             DalSchema::Fs => fs::Backend::build()
                 .root(&storage_conf.disk.data_path)
                 .finish()
+                .await
                 .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?,
         };
 

@@ -23,6 +23,7 @@ http = "0.2.6"
 aws-smithy-http = "0.36.0"
 hyper = { version = "0.14.16", features = ["stream"] }
 pin-project = "1.0.10"
+aws-config = "0.6.0"
 
 [dev-dependencies]
 uuid = { version = "0.8.2", features = ["serde", "v4"] }

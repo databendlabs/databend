@@ -164,7 +164,7 @@ impl FuseTable {
         let uuid = new_snapshot.snapshot_id;
         let snapshot_loc = io::snapshot_location(&uuid);
         let bytes = serde_json::to_vec(&new_snapshot)?;
-        let da = ctx.get_storage_accessor()?;
+        let da = ctx.get_storage_accessor().await?;
         da.write(&snapshot_loc, bytes.len() as u64)
             .run(Box::new(Cursor::new(bytes)))
             .await

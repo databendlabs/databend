@@ -46,14 +46,15 @@ impl Builder {
         self
     }
 
-    pub fn finish(&mut self) -> Result<Arc<dyn Accessor>> {
+    pub async fn finish(&mut self) -> Result<Arc<dyn Accessor>> {
         // Make `/` as the default of root.
         let root = self.root.clone().unwrap_or_else(|| "/".to_string());
 
         // If root dir is not exist, we must create it.
-        if let Err(e) = std::fs::metadata(&root) {
+        if let Err(e) = fs::metadata(&root).await {
             if e.kind() == std::io::ErrorKind::NotFound {
-                std::fs::create_dir_all(&root)
+                fs::create_dir_all(&root)
+                    .await
                     .map_err(|e| parse_io_error(&e, PathBuf::from(&root).as_path()))?;
             }
         }

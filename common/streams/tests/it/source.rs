@@ -94,6 +94,7 @@ async fn test_parse_csvs() {
                 fs::Backend::build()
                     .root(dir.path().to_str().unwrap())
                     .finish()
+                    .await
                     .unwrap(),
             );
             let stream = local.read(name).run().await.unwrap();
@@ -151,6 +152,7 @@ async fn test_parse_csv2() {
         fs::Backend::build()
             .root(dir.path().to_str().unwrap())
             .finish()
+            .await
             .unwrap(),
     );
     let stream = local.read(name).run().await.unwrap();
@@ -234,6 +236,7 @@ async fn test_source_parquet() -> Result<()> {
         fs::Backend::build()
             .root(dir.path().to_str().unwrap())
             .finish()
+            .await
             .unwrap(),
     );
     let stream = SeekableReader::new(local, name, len);

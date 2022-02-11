@@ -87,7 +87,7 @@ impl Builder {
         self
     }
 
-    pub fn finish(&mut self) -> Result<Arc<dyn Accessor>> {
+    pub async fn finish(&mut self) -> Result<Arc<dyn Accessor>> {
         if self.bucket.is_empty() || self.region.is_empty() {
             return Err(Error::BackendConfigurationInvalid {
                 key: "bucket".to_string(),
@@ -102,7 +102,15 @@ impl Builder {
             String::new()
         };
 
-        let mut cfg = AwsS3::Config::builder();
+        // Load config from environment, including:
+        // - Environment variables: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_REGION
+        // - The default credentials files located in ~/.aws/config and ~/.aws/credentials (location can vary per platform)
+        // - Web Identity Token credentials from the environment or container (including EKS)
+        // - ECS Container Credentials (IAM roles for tasks)
+        // - EC2 Instance Metadata Service (IAM Roles attached to instance)
+        let cfg = aws_config::load_from_env().await;
+
+        let mut cfg = AwsS3::config::Builder::from(&cfg);
 
         // TODO: Maybe we can
         //
