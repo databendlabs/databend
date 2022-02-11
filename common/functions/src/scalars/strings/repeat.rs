@@ -14,14 +14,14 @@
 
 use std::fmt;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 const MAX_REPEAT_TIMES: u64 = 1000000;
 
@@ -31,84 +31,57 @@ pub struct RepeatFunction {
 }
 
 impl RepeatFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(RepeatFunction {
             _display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }
 
-impl Function for RepeatFunction {
+impl Function2 for RepeatFunction {
     fn name(&self) -> &str {
         "repeat"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        if !args[0].is_string() && !args[0].is_null() {
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        if !args[0].data_type_id().is_string() && !args[0].data_type_id().is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected parameter 1 is string, but got {}",
-                args[0]
+                args[0].data_type_id()
             )));
         }
 
-        if !args[1].is_unsigned_integer() && !args[1].is_string() && !args[1].is_null() {
+        if !args[1].data_type_id().is_unsigned_integer() && !args[1].data_type_id().is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
-                "Expected parameter 2 is unsigned integer or string or null, but got {}",
-                args[1]
+                "Expected parameter 2 is unsigned integer or null, but got {}",
+                args[1].data_type_id()
             )));
         }
 
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+        Ok(StringType::arc())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        match (
-            columns[0].column().cast_with_type(&DataType::String)?,
-            columns[1].column().cast_with_type(&DataType::UInt64)?,
-        ) {
-            (
-                DataColumn::Constant(DataValue::String(input_string), _),
-                DataColumn::Constant(DataValue::UInt64(times), _),
-            ) => Ok(DataColumn::Constant(
-                DataValue::String(repeat(input_string, times)?),
-                input_rows,
-            )),
-            (
-                DataColumn::Constant(DataValue::String(input_string), _),
-                DataColumn::Array(times),
-            ) => {
-                let mut string_builder = StringArrayBuilder::with_capacity(input_rows);
-                for times in times.u64()? {
-                    string_builder.append_option(repeat(input_string.as_ref(), times.copied())?);
-                }
-                Ok(string_builder.finish().into())
-            }
-            (
-                DataColumn::Array(input_string),
-                DataColumn::Constant(DataValue::UInt64(times), _),
-            ) => {
-                let mut string_builder = StringArrayBuilder::with_capacity(input_rows);
-                for input_string in input_string.string()? {
-                    string_builder.append_option(repeat(input_string, times)?);
-                }
-                Ok(string_builder.finish().into())
-            }
-            (DataColumn::Array(input_string), DataColumn::Array(times)) => {
-                let mut string_builder = StringArrayBuilder::with_capacity(input_rows);
-                for (input_string, times) in input_string.string()?.into_iter().zip(times.u64()?) {
-                    string_builder.append_option(repeat(input_string, times.copied())?);
-                }
-                Ok(string_builder.finish().into())
-            }
-            _ => Ok(DataColumn::Constant(DataValue::Null, input_rows)),
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        let col1 = cast_column_field(&columns[0], &StringType::arc())?;
+        let col1_viewer = Vu8::try_create_viewer(&col1)?;
+
+        let col2 = cast_column_field(&columns[1], &UInt64Type::arc())?;
+        let col2_viewer = u64::try_create_viewer(&col2)?;
+
+        let mut builder = ColumnBuilder::<Vu8>::with_capacity(input_rows);
+
+        let iter = col1_viewer.iter().zip(col2_viewer.iter());
+        for (string, times) in iter {
+            let val = repeat(string, times)?;
+            builder.append(&val);
         }
+
+        Ok(builder.build(input_rows))
     }
 }
 
@@ -119,16 +92,12 @@ impl fmt::Display for RepeatFunction {
 }
 
 #[inline]
-fn repeat(string: Option<impl AsRef<[u8]>>, times: Option<u64>) -> Result<Option<Vec<u8>>> {
-    if let (Some(string), Some(times)) = (string, times) {
-        if times > MAX_REPEAT_TIMES {
-            return Err(ErrorCode::BadArguments(format!(
-                "Too many times to repeat: ({}), maximum is: {}",
-                times, MAX_REPEAT_TIMES
-            )));
-        }
-        Ok(Some(string.as_ref().repeat(times as usize)))
-    } else {
-        Ok(None)
+fn repeat(string: impl AsRef<[u8]>, times: u64) -> Result<Vec<u8>> {
+    if times > MAX_REPEAT_TIMES {
+        return Err(ErrorCode::BadArguments(format!(
+            "Too many times to repeat: ({}), maximum is: {}",
+            times, MAX_REPEAT_TIMES
+        )));
     }
+    Ok(string.as_ref().repeat(times as usize))
 }

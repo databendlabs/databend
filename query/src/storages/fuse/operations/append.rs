@@ -17,8 +17,10 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_stream::stream;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
+use futures::io::Cursor;
 use futures::StreamExt;
 
 use crate::sessions::QueryContext;
@@ -46,7 +48,7 @@ impl FuseTable {
         let block_per_seg =
             self.get_option(TBL_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
-        let da = ctx.get_storage_accessor()?;
+        let da = ctx.get_storage_accessor().await?;
 
         let mut segment_stream = BlockStreamWriter::write_block_stream(
             da.clone(),
@@ -63,7 +65,10 @@ impl FuseTable {
                     Ok(seg) => {
                         let seg_loc = io::gen_segment_info_location();
                         let bytes = serde_json::to_vec(&seg)?;
-                        da.put(&seg_loc, bytes).await?;
+                        da.write(&seg_loc, bytes.len() as u64)
+                        .run(Box::new(Cursor::new(bytes)))
+                        .await
+                        .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
                         let log_entry = AppendOperationLogEntry::new(seg_loc, seg);
                         Ok(log_entry)
                     },
