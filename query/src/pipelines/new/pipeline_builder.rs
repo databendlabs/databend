@@ -26,7 +26,7 @@ use crate::pipelines::new::pipe::TransformPipeBuilder;
 use crate::pipelines::new::pipeline::NewPipeline;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::{AggregatorParams, AggregatorTransformParams, ExpressionTransform, TableSource, TransformAggregator};
+use crate::pipelines::new::processors::{AggregatorParams, ExpressionTransform, AggregatorTransformParams, TableSource, TransformAggregator, ProjectionTransform};
 use crate::pipelines::new::processors::TransformFilter;
 use crate::sessions::QueryContext;
 
@@ -66,6 +66,20 @@ impl PlanVisitor for QueryPipelineBuilder {
             PlanNode::Explain(n) => self.visit_explain(n),
             _ => Err(ErrorCode::UnImplement("")),
         }
+    }
+
+    fn visit_projection(&mut self, plan: &ProjectionPlan) -> Result<()> {
+        self.visit_plan_node(&plan.input)?;
+
+        self.pipeline.add_transform(|transform_input_port, transform_output_port| {
+            ProjectionTransform::try_create(
+                transform_input_port,
+                transform_output_port,
+                plan.input.schema(),
+                plan.schema(),
+                plan.expr.to_owned(),
+            )
+        })
     }
 
     fn visit_expression(&mut self, plan: &ExpressionPlan) -> Result<()> {
@@ -118,6 +132,19 @@ impl PlanVisitor for QueryPipelineBuilder {
     }
 
     fn visit_filter(&mut self, plan: &FilterPlan) -> Result<()> {
+        self.visit_plan_node(&plan.input)?;
+
+        self.pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformFilter::try_create(
+                plan.schema(),
+                plan.predicate.clone(),
+                transform_input_port,
+                transform_output_port,
+            )
+        })
+    }
+
+    fn visit_having(&mut self, plan: &HavingPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
 
         self.pipeline.add_transform(|transform_input_port, transform_output_port| {

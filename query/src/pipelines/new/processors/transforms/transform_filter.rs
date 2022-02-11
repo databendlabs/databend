@@ -17,17 +17,6 @@ pub struct TransformFilter {
     executor: Arc<ExpressionExecutor>,
 }
 
-impl Transform for TransformFilter {
-    const NAME: &'static str = "FilterTransform";
-
-    const SKIP_EMPTY_DATA_BLOCK: bool = true;
-
-    fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
-        let filter_block = self.executor.execute(&data)?;
-        DataBlock::filter_block(&data, filter_block.column(0))
-    }
-}
-
 impl TransformFilter {
     pub fn try_create(
         schema: DataSchemaRef,
@@ -53,5 +42,16 @@ impl TransformFilter {
             vec![expr.clone()],
             false,
         )
+    }
+}
+
+impl Transform for TransformFilter {
+    const NAME: &'static str = "FilterTransform";
+
+    const SKIP_EMPTY_DATA_BLOCK: bool = true;
+
+    fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
+        let filter_block = self.executor.execute(&data)?;
+        DataBlock::filter_block(&data, filter_block.column(0))
     }
 }

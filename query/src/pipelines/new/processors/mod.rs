@@ -31,6 +31,7 @@ pub use resize_processor::ResizeProcessor;
 pub use transforms::TransformDummy;
 pub use transforms::TransformFilter;
 pub use transforms::ExpressionTransform;
+pub use transforms::ProjectionTransform;
 pub use transforms::TransformAggregator;
 pub use transforms::AggregatorParams;
 pub use transforms::AggregatorTransformParams;

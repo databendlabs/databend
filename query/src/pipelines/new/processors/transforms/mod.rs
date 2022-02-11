@@ -18,10 +18,12 @@ mod transform_filter;
 mod transform_aggregator;
 mod aggregator;
 mod transform_expression;
+mod transform_projection;
 
 pub use transform_dummy::TransformDummy;
 pub use transform_filter::TransformFilter;
 pub use transform_aggregator::TransformAggregator;
 pub use transform_expression::ExpressionTransform;
+pub use transform_expression::ProjectionTransform;
 pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
