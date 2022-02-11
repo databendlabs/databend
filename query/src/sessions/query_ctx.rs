@@ -29,7 +29,7 @@ use common_dal2::services::fs;
 use common_dal2::services::s3;
 use common_dal2::Accessor;
 use common_dal2::Operator;
-use common_dal2::Schema as DalSchema;
+use common_dal2::Scheme as DalSchema;
 use common_dal_context::DalContext;
 use common_dal_context::DalMetrics;
 use common_exception::ErrorCode;

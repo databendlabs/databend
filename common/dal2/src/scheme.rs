@@ -16,26 +16,26 @@ use std::str::FromStr;
 use super::error::Error;
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Schema {
+pub enum Scheme {
     // TODO: Although we don't have azblob support for now, but we need to add it for compatibility. We will implement azblob support as soon as possible.
     Azblob,
     Fs,
     S3,
 }
 
-impl FromStr for Schema {
+impl FromStr for Scheme {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.to_lowercase();
         match s.as_str() {
-            "azblob" => Ok(Schema::Azblob),
-            "fs" => Ok(Schema::Fs),
-            "s3" => Ok(Schema::S3),
+            "azblob" => Ok(Scheme::Azblob),
+            "fs" => Ok(Scheme::Fs),
+            "s3" => Ok(Scheme::S3),
 
             // TODO: it's used for compatibility with dal1, should be removed in the future
-            "local" | "disk" => Ok(Schema::Fs),
-            "azurestorageblob" => Ok(Schema::Azblob),
+            "local" | "disk" => Ok(Scheme::Fs),
+            "azurestorageblob" => Ok(Scheme::Azblob),
 
             _ => Err(Error::BackendNotSupported(s)),
         }
