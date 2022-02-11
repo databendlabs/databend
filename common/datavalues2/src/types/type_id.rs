@@ -78,11 +78,6 @@ impl TypeID {
     }
 
     #[inline]
-    pub fn is_null(&self) -> bool {
-        matches!(self, TypeID::Null)
-    }
-
-    #[inline]
     pub fn is_string(&self) -> bool {
         matches!(self, TypeID::String)
     }

@@ -64,12 +64,11 @@ impl Function2 for ExpFunction {
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
         let column = cast_column_field(&columns[0], &Float64Type::arc())?;
-        let viewer = ColumnViewer::<f64>::create(&column)?;
-        let input_rows = columns[0].column().len();
+        let viewer = f64::try_create_viewer(&column)?;
+        let input_rows = viewer.size();
         let mut builder = ColumnBuilder::<f64>::with_capacity(input_rows);
-        for idx in 0..input_rows {
-            let val = viewer.value(idx).exp();
-            builder.append(val);
+        for val in viewer.iter() {
+            builder.append(val.exp());
         }
         Ok(builder.build(input_rows))
     }
