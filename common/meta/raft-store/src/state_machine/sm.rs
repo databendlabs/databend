@@ -29,6 +29,7 @@ use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_sled_store::Store;
 use common_meta_sled_store::TransactionSledTree;
+use common_meta_types::error_context::WithContext;
 use common_meta_types::AppError;
 use common_meta_types::AppliedState;
 use common_meta_types::Change;
@@ -48,7 +49,6 @@ use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
-use common_meta_types::ToMetaStorageError;
 use common_meta_types::UnknownDatabase;
 use common_meta_types::UnknownDatabaseId;
 use common_meta_types::UnknownTableId;
@@ -130,22 +130,20 @@ impl StateMachine {
     }
 
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub fn clean(config: &RaftConfig, sm_id: u64) -> MetaResult<()> {
+    pub fn clean(config: &RaftConfig, sm_id: u64) -> Result<(), MetaStorageError> {
         let tree_name = StateMachine::tree_name(config, sm_id);
 
         let db = get_sled_db();
 
         // it blocks and slow
         db.drop_tree(tree_name)
-            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                "drop prev state machine"
-            })?;
+            .context(|| "drop prev state machine")?;
 
         Ok(())
     }
 
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub async fn open(config: &RaftConfig, sm_id: u64) -> MetaResult<StateMachine> {
+    pub async fn open(config: &RaftConfig, sm_id: u64) -> Result<StateMachine, MetaStorageError> {
         let db = get_sled_db();
 
         let tree_name = StateMachine::tree_name(config, sm_id);
@@ -211,10 +209,7 @@ impl StateMachine {
     ) -> MetaStorageResult<Vec<u8>> {
         let mut kvs = Vec::new();
         for rkv in view {
-            let (k, v) = rkv
-                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                    "taking snapshot"
-                })?;
+            let (k, v) = rkv.context(|| "taking snapshot")?;
             kvs.push(vec![k.to_vec(), v.to_vec()]);
         }
         let snap = SerializableSnapshot { kvs };
