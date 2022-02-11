@@ -14,15 +14,14 @@
 
 use std::fmt;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use itertools::izip;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 #[derive(Clone)]
 pub struct SubstringFunction {
@@ -30,14 +29,14 @@ pub struct SubstringFunction {
 }
 
 impl SubstringFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(SubstringFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(2, 3),
@@ -45,204 +44,67 @@ impl SubstringFunction {
     }
 }
 
-impl Function for SubstringFunction {
+impl Function2 for SubstringFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        if !args[0].is_string() && !args[0].is_null() {
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        if !args[0].data_type_id().is_string() && !args[0].data_type_id().is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
-                args[0]
+                args[0].data_type_id()
             )));
         }
-        if !args[1].is_integer() && !args[1].is_null() {
+
+        if !args[1].data_type_id().is_integer() && !args[1].data_type_id().is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
-                args[1]
+                args[1].data_type_id()
             )));
         }
-        if args.len() > 2 && !args[2].is_integer() && !args[2].is_null() {
+
+        if args.len() > 2
+            && !args[2].data_type_id().is_integer()
+            && !args[2].data_type_id().is_null()
+        {
             return Err(ErrorCode::IllegalDataType(format!(
-                "Expected integer or null, but got {}",
-                args[2]
+                "Expected integer or string or null, but got {}",
+                args[2].data_type_id()
             )));
         }
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+
+        Ok(StringType::arc())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let s_column = columns[0].column().cast_with_type(&DataType::String)?;
-        let p_column = columns[1].column().cast_with_type(&DataType::Int64)?;
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        let s_column = cast_column_field(&columns[0], &StringType::arc())?;
+        let s_viewer = ColumnViewer::<Vu8>::create(&s_column)?;
 
-        let r_column: DataColumn = match (s_column, p_column) {
-            // #00
-            (
-                DataColumn::Constant(DataValue::String(s), _),
-                DataColumn::Constant(DataValue::Int64(p), _),
-            ) => {
-                if let (Some(s), Some(p)) = (s, p) {
-                    if columns.len() > 2 {
-                        match columns[2].column().cast_with_type(&DataType::UInt64)? {
-                            DataColumn::Constant(DataValue::UInt64(l), _) => {
-                                if let Some(l) = l {
-                                    DataColumn::Constant(
-                                        DataValue::String(Some(
-                                            substr_from_for(&s, &p, &l).to_owned(),
-                                        )),
-                                        input_rows,
-                                    )
-                                } else {
-                                    DataColumn::Constant(DataValue::Null, input_rows)
-                                }
-                            }
-                            DataColumn::Array(l_series) => {
-                                let mut r_array = StringArrayBuilder::with_capacity(input_rows);
-                                for ol in l_series.u64()? {
-                                    r_array.append_option(ol.map(|l| substr_from_for(&s, &p, l)));
-                                }
-                                r_array.finish().into()
-                            }
-                            _ => DataColumn::Constant(DataValue::Null, input_rows),
-                        }
-                    } else {
-                        DataColumn::Constant(
-                            DataValue::String(Some(substr_from(&s, &p).to_owned())),
-                            input_rows,
-                        )
-                    }
-                } else {
-                    DataColumn::Constant(DataValue::Null, input_rows)
-                }
+        let p_column = cast_column_field(&columns[1], &Int64Type::arc())?;
+        let p_viewer = ColumnViewer::<i64>::create(&p_column)?;
+
+        let mut builder = ColumnBuilder::<Vu8>::with_capacity(input_rows);
+
+        if columns.len() > 2 {
+            let p2_column = cast_column_field(&columns[2], &UInt64Type::arc())?;
+            let p2_viewer = ColumnViewer::<u64>::create(&p2_column)?;
+
+            for idx in 0..input_rows {
+                let val = substr_from_for(
+                    s_viewer.value(idx),
+                    &p_viewer.value(idx),
+                    &p2_viewer.value(idx),
+                );
+                builder.append(val);
             }
-            // #10
-            (DataColumn::Array(s_series), DataColumn::Constant(DataValue::Int64(p), _)) => {
-                if let Some(p) = p {
-                    if columns.len() > 2 {
-                        match columns[2].column().cast_with_type(&DataType::UInt64)? {
-                            DataColumn::Constant(DataValue::UInt64(l), _) => {
-                                if let Some(l) = l {
-                                    let mut r_array = StringArrayBuilder::with_capacity(input_rows);
-                                    for os in s_series.string()? {
-                                        r_array
-                                            .append_option(os.map(|s| substr_from_for(s, &p, &l)));
-                                    }
-                                    r_array.finish().into()
-                                } else {
-                                    DataColumn::Constant(DataValue::Null, input_rows)
-                                }
-                            }
-                            DataColumn::Array(l_series) => {
-                                let mut r_array = StringArrayBuilder::with_capacity(input_rows);
-                                for s_l in izip!(s_series.string()?, l_series.u64()?) {
-                                    r_array.append_option(match s_l {
-                                        (Some(s), Some(l)) => Some(substr_from_for(s, &p, l)),
-                                        _ => None,
-                                    });
-                                }
-                                r_array.finish().into()
-                            }
-                            _ => DataColumn::Constant(DataValue::Null, input_rows),
-                        }
-                    } else {
-                        let mut r_array = StringArrayBuilder::with_capacity(input_rows);
-                        for os in s_series.string()? {
-                            r_array.append_option(os.map(|s| substr_from(s, &p)));
-                        }
-                        r_array.finish().into()
-                    }
-                } else {
-                    DataColumn::Constant(DataValue::Null, input_rows)
-                }
+        } else {
+            for idx in 0..input_rows {
+                let val = substr_from(s_viewer.value(idx), &p_viewer.value(idx));
+                builder.append(val);
             }
-            // #01
-            (DataColumn::Constant(DataValue::String(s), _), DataColumn::Array(p_series)) => {
-                if let Some(s) = s {
-                    if columns.len() > 2 {
-                        match columns[2].column().cast_with_type(&DataType::UInt64)? {
-                            DataColumn::Constant(DataValue::UInt64(l), _) => {
-                                if let Some(l) = l {
-                                    let mut r_array = StringArrayBuilder::with_capacity(input_rows);
-                                    for op in p_series.i64()? {
-                                        r_array
-                                            .append_option(op.map(|p| substr_from_for(&s, p, &l)));
-                                    }
-                                    r_array.finish().into()
-                                } else {
-                                    DataColumn::Constant(DataValue::Null, input_rows)
-                                }
-                            }
-                            DataColumn::Array(l_series) => {
-                                let mut r_array = StringArrayBuilder::with_capacity(input_rows);
-                                for s_l in izip!(p_series.i64()?, l_series.u64()?) {
-                                    r_array.append_option(match s_l {
-                                        (Some(p), Some(l)) => Some(substr_from_for(&s, p, l)),
-                                        _ => None,
-                                    });
-                                }
-                                r_array.finish().into()
-                            }
-                            _ => DataColumn::Constant(DataValue::Null, input_rows),
-                        }
-                    } else {
-                        let mut r_array = StringArrayBuilder::with_capacity(input_rows);
-                        for op in p_series.i64()? {
-                            r_array.append_option(op.map(|p| substr_from(&s, p)));
-                        }
-                        r_array.finish().into()
-                    }
-                } else {
-                    DataColumn::Constant(DataValue::Null, input_rows)
-                }
-            }
-            // #11
-            (DataColumn::Array(s_series), DataColumn::Array(p_series)) => {
-                if columns.len() > 2 {
-                    match columns[2].column().cast_with_type(&DataType::UInt64)? {
-                        DataColumn::Constant(DataValue::UInt64(l), _) => {
-                            if let Some(l) = l {
-                                let mut r_array = StringArrayBuilder::with_capacity(input_rows);
-                                for s_p in izip!(s_series.string()?, p_series.i64()?) {
-                                    r_array.append_option(match s_p {
-                                        (Some(s), Some(p)) => Some(substr_from_for(s, p, &l)),
-                                        _ => None,
-                                    });
-                                }
-                                r_array.finish().into()
-                            } else {
-                                DataColumn::Constant(DataValue::Null, input_rows)
-                            }
-                        }
-                        DataColumn::Array(l_series) => {
-                            let mut r_array = StringArrayBuilder::with_capacity(input_rows);
-                            for s_p_l in izip!(s_series.string()?, p_series.i64()?, l_series.u64()?)
-                            {
-                                r_array.append_option(match s_p_l {
-                                    (Some(s), Some(p), Some(l)) => Some(substr_from_for(s, p, l)),
-                                    _ => None,
-                                });
-                            }
-                            r_array.finish().into()
-                        }
-                        _ => DataColumn::Constant(DataValue::Null, input_rows),
-                    }
-                } else {
-                    let mut r_array = StringArrayBuilder::with_capacity(input_rows);
-                    for s_p in izip!(s_series.string()?, p_series.i64()?) {
-                        r_array.append_option(match s_p {
-                            (Some(s), Some(p)) => Some(substr_from(s, p)),
-                            _ => None,
-                        });
-                    }
-                    r_array.finish().into()
-                }
-            }
-            _ => DataColumn::Constant(DataValue::Null, input_rows),
-        };
-        Ok(r_column)
+        }
+        Ok(builder.build(input_rows))
     }
 }
 

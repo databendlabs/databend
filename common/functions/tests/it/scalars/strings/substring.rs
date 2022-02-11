@@ -12,77 +12,72 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::SubstringFunction;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions2;
+use crate::scalars::scalar_function2_test::ScalarFunction2Test;
 
 #[test]
 fn test_substring_function() -> Result<()> {
     let tests = vec![
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "substring-abcde-passed",
-            nullable: false,
             columns: vec![
-                Series::new(vec!["abcde"]).into(),
-                Series::new(vec![2_i64]).into(),
-                Series::new(vec![3_u64]).into(),
+                Series::from_data(vec!["abcde"]),
+                Series::from_data(vec![2_i64]),
+                Series::from_data(vec![3_u64]),
             ],
-            expect: Series::new(vec!["bcd"]).into(),
+            expect: Series::from_data(vec!["bcd"]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "substring-abcde-passed",
-            nullable: false,
             columns: vec![
-                Series::new(vec!["abcde"]).into(),
-                Series::new(vec![1_i64]).into(),
-                Series::new(vec![3_u64]).into(),
+                Series::from_data(vec!["abcde"]),
+                Series::from_data(vec![1_i64]),
+                Series::from_data(vec![3_u64]),
             ],
-            expect: Series::new(vec!["abc"]).into(),
+            expect: Series::from_data(vec!["abc"]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "substring-abcde-passed",
-            nullable: false,
             columns: vec![
-                Series::new(vec!["abcde"]).into(),
-                Series::new(vec![2_i64]).into(),
+                Series::from_data(vec!["abcde"]),
+                Series::from_data(vec![2_i64]),
             ],
-            expect: Series::new(vec!["bcde"]).into(),
+            expect: Series::from_data(vec!["bcde"]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "substring-1234567890-passed",
-            nullable: false,
             columns: vec![
-                Series::new(vec!["1234567890"]).into(),
-                Series::new(vec![-3_i64]).into(),
-                Series::new(vec![3_u64]).into(),
+                Series::from_data(vec!["1234567890"]),
+                Series::from_data(vec![-3_i64]),
+                Series::from_data(vec![3_u64]),
             ],
-            expect: Series::new(vec!["890"]).into(),
+            expect: Series::from_data(vec!["890"]),
             error: "",
         },
     ];
 
-    test_scalar_functions(SubstringFunction::try_create("substring")?, &tests)
+    test_scalar_functions2(SubstringFunction::try_create("substring")?, &tests)
 }
 
 #[test]
 fn test_substring_nullable() -> Result<()> {
-    let tests = vec![ScalarFunctionTest {
+    let tests = vec![ScalarFunction2Test {
         name: "substring-nullabe-passed",
-        nullable: false,
         columns: vec![
-            Series::new(vec!["abcde"]).into(),
-            Series::new(vec![2_i64]).into(),
-            Series::new(vec![3_u64]).into(),
+            Series::from_data(vec!["abcde"]),
+            Series::from_data(vec![2_i64]),
+            Series::from_data(vec![3_u64]),
         ],
-        expect: Series::new(vec!["bcd"]).into(),
+        expect: Series::from_data(vec!["bcd"]),
         error: "",
     }];
 
-    test_scalar_functions(SubstringFunction::try_create("substring")?, &tests)
+    test_scalar_functions2(SubstringFunction::try_create("substring")?, &tests)
 }
