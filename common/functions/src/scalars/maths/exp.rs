@@ -15,10 +15,11 @@
 use std::fmt;
 
 use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use num::cast::AsPrimitive;
 
-use crate::scalars::cast_column_field;
 use crate::scalars::function2_factory::Function2Description;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
@@ -42,6 +43,11 @@ impl ExpFunction {
     }
 }
 
+fn exp<S>(value: S) -> f64
+where S: AsPrimitive<f64> {
+    value.as_().exp()
+}
+
 impl Function2 for ExpFunction {
     fn name(&self) -> &str {
         &*self._display_name
@@ -59,10 +65,13 @@ impl Function2 for ExpFunction {
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        let column = cast_column_field(&columns[0], &Float64Type::arc())?;
-        let unary = ScalarUnaryExpression::<f64, f64, _>::new(f64::exp);
-        let col = unary.eval(&column)?;
-        Ok(col.arc())
+        with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
+             let unary = ScalarUnaryExpression::<$S, f64, _>::new(exp::<$S>);
+             let col = unary.eval(columns[0].column())?;
+             Ok(col.arc())
+        },{
+            unreachable!()
+        })
     }
 }
 
