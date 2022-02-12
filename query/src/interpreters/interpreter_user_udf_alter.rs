@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::DropUserStagePlan;
+use common_planners::AlterUserUDFPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -25,21 +25,21 @@ use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
-pub struct DropStageInterpreter {
+pub struct AlterUserUDFInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropUserStagePlan,
+    plan: AlterUserUDFPlan,
 }
 
-impl DropStageInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUserStagePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropStageInterpreter { ctx, plan }))
+impl AlterUserUDFInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterUserUDFPlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(AlterUserUDFInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DropStageInterpreter {
+impl Interpreter for AlterUserUDFInterpreter {
     fn name(&self) -> &str {
-        "DropStageInterpreter"
+        "AlterUserUDFInterpreter"
     }
 
     #[tracing::instrument(level = "debug", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
@@ -48,11 +48,10 @@ impl Interpreter for DropStageInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
+
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
-        user_mgr
-            .drop_stage(&tenant, plan.name.as_str(), plan.if_exists)
-            .await?;
+        user_mgr.update_udf(&tenant, plan.udf).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

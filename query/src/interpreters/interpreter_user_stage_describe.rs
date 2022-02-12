@@ -26,24 +26,24 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
-pub struct DescribeStageInterpreter {
+pub struct DescribeUserStageInterpreter {
     ctx: Arc<QueryContext>,
     plan: DescribeUserStagePlan,
 }
 
-impl DescribeStageInterpreter {
+impl DescribeUserStageInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         plan: DescribeUserStagePlan,
     ) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DescribeStageInterpreter { ctx, plan }))
+        Ok(Arc::new(DescribeUserStageInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DescribeStageInterpreter {
+impl Interpreter for DescribeUserStageInterpreter {
     fn name(&self) -> &str {
-        "DescribeStageInterpreter"
+        "DescribeUserStageInterpreter"
     }
 
     async fn execute(
