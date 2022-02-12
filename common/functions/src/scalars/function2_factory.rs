@@ -33,6 +33,7 @@ use super::Function2Adapter;
 use super::FunctionFactory;
 use super::HashesFunction;
 use super::LogicFunction;
+use super::MathsFunction;
 use super::NullableFunction;
 use super::OtherFunction;
 use super::StringFunction;
@@ -109,6 +110,7 @@ static FUNCTION2_FACTORY: Lazy<Arc<Function2Factory>> = Lazy::new(|| {
     DateFunction::register2(&mut function_factory);
     OtherFunction::register(&mut function_factory);
     UUIDFunction::register2(&mut function_factory);
+    MathsFunction::register2(&mut function_factory);
 
     Arc::new(function_factory)
 });

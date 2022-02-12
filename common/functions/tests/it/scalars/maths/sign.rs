@@ -12,129 +12,103 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions2;
+use crate::scalars::scalar_function2_test::ScalarFunction2Test;
 
 #[test]
 fn test_sign_function() -> Result<()> {
     let tests = vec![
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "positive int",
-            nullable: false,
-            columns: vec![Series::new([11_i8]).into()],
-            expect: Series::new([1_i8]).into(),
+            columns: vec![Series::from_data([11_i8])],
+            expect: Series::from_data([1_i8]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "negative int",
-            nullable: false,
-            columns: vec![Series::new([-11_i8]).into()],
-            expect: Series::new([-1_i8]).into(),
+            columns: vec![Series::from_data([-11_i8])],
+            expect: Series::from_data([-1_i8]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "zero int",
-            nullable: false,
-            columns: vec![Series::new([0_i8]).into()],
-            expect: Series::new([0_i8]).into(),
+            columns: vec![Series::from_data([0_i8])],
+            expect: Series::from_data([0_i8]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "with null",
-            nullable: true,
-            columns: vec![Series::new([Some(0_i8), None]).into()],
-            expect: Series::new([Some(0_i8), None]).into(),
+            columns: vec![Series::from_data([Some(0_i8), None])],
+            expect: Series::from_data([Some(0_i8), None]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "int as string",
-            nullable: false,
-            columns: vec![Series::new(["22"]).into()],
-            expect: Series::new([1_i8]).into(),
-            error: "",
+            columns: vec![Series::from_data(["22"])],
+            expect: Series::from_data([1_i8]),
+            error: "Expected a numeric type, but got String",
         },
-        ScalarFunctionTest {
-            name: "number with string postfix",
-            nullable: false,
-            columns: vec![Series::new(["22abc"]).into()],
-            expect: Series::new([1_i8]).into(),
-            error: "",
-        },
-        ScalarFunctionTest {
-            name: "number with string prefix",
-            nullable: false,
-            columns: vec![Series::new(["abc22def"]).into()],
-            expect: Series::new([0_i8]).into(),
-            error: "",
-        },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "i16",
-            nullable: false,
-            columns: vec![Series::new([11_i16]).into()],
-            expect: Series::new([1_i8]).into(),
+            columns: vec![Series::from_data([11_i16])],
+            expect: Series::from_data([1_i8]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "i32",
-            nullable: false,
-            columns: vec![Series::new([11_i32]).into()],
-            expect: Series::new([1_i8]).into(),
+            columns: vec![Series::from_data([11_i32])],
+            expect: Series::from_data([1_i8]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "i64",
-            nullable: false,
-            columns: vec![Series::new([11_i64]).into()],
-            expect: Series::new([1_i8]).into(),
+            columns: vec![Series::from_data([11_i64])],
+            expect: Series::from_data([1_i8]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "u8",
-            nullable: false,
-            columns: vec![Series::new([11_u8]).into()],
-            expect: Series::new([1_i8]).into(),
+            columns: vec![Series::from_data([11_u8])],
+            expect: Series::from_data([1_i8]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "u16",
-            nullable: false,
-            columns: vec![Series::new([11_u16]).into()],
-            expect: Series::new([1_i8]).into(),
+            columns: vec![Series::from_data([11_u16])],
+            expect: Series::from_data([1_i8]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "u32",
-            nullable: false,
-            columns: vec![Series::new([11_u32]).into()],
-            expect: Series::new([1_i8]).into(),
+            columns: vec![Series::from_data([11_u32])],
+            expect: Series::from_data([1_i8]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "u64",
-            nullable: false,
-            columns: vec![Series::new([11_u64]).into()],
-            expect: Series::new([1_i8]).into(),
+            columns: vec![Series::from_data([11_u64])],
+            expect: Series::from_data([1_i8]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "f32",
-            nullable: false,
-            columns: vec![Series::new([11.11_f32]).into()],
-            expect: Series::new([1_i8]).into(),
+            columns: vec![Series::from_data([11.11_f32])],
+            expect: Series::from_data([1_i8]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "f64",
-            nullable: false,
-            columns: vec![Series::new([11.11_f64]).into()],
-            expect: Series::new([1_i8]).into(),
+            columns: vec![Series::from_data([11.11_f64])],
+            expect: Series::from_data([1_i8]),
             error: "",
         },
     ];
 
-    test_scalar_functions(SignFunction::try_create("sign")?, &tests)
+    let sign_f = SignFunction::try_create("sign")?;
+    let sign_f = Function2Adapter::create(sign_f);
+    test_scalar_functions2(sign_f, &tests)
 }

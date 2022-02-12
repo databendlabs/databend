@@ -21,7 +21,7 @@ use futures::io::Cursor;
 
 #[tokio::test]
 async fn normal() {
-    let f = Operator::new(fs::Backend::build().finish());
+    let f = Operator::new(fs::Backend::build().finish().await.unwrap());
 
     let path = format!("/tmp/{}", uuid::Uuid::new_v4());
 

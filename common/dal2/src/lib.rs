@@ -29,6 +29,9 @@ pub use operator::Operator;
 mod object;
 pub use object::Object;
 
+mod scheme;
+pub use scheme::Scheme;
+
 pub mod credential;
 pub mod error;
 pub mod ops;

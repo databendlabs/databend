@@ -24,14 +24,14 @@ use common_base::tokio::task::JoinHandle;
 use common_base::Progress;
 use common_base::ProgressValues;
 use common_base::TrySpawn;
-use common_dal::AzureBlobAccessor;
-use common_dal::DalContext;
-use common_dal::DalMetrics;
-use common_dal::DataAccessor;
-use common_dal::DataAccessorInterceptor;
-use common_dal::Local;
-use common_dal::StorageScheme;
-use common_dal::S3;
+use common_dal2::credential::Credential;
+use common_dal2::services::fs;
+use common_dal2::services::s3;
+use common_dal2::Accessor;
+use common_dal2::Operator;
+use common_dal2::Scheme as DalSchema;
+use common_dal_context::DalContext;
+use common_dal_context::DalMetrics;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -48,7 +48,6 @@ use common_tracing::tracing;
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;
-use crate::configs::AzureStorageBlobConfig;
 use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::ProcessInfo;
@@ -295,37 +294,38 @@ impl QueryContext {
     }
 
     // Get the storage data accessor by config.
-    pub fn get_storage_accessor(&self) -> Result<Arc<dyn DataAccessor>> {
+    // TODO(xuanwo): we can build dal backend only once.
+    pub async fn get_storage_accessor(&self) -> Result<Operator> {
         let storage_conf = &self.get_config().storage;
-        let scheme_name = &storage_conf.storage_type;
-        let scheme = StorageScheme::from_str(scheme_name)?;
-        let da: Arc<dyn DataAccessor> = match scheme {
-            StorageScheme::S3 => {
+        let schema_name = &storage_conf.storage_type;
+        let schema = DalSchema::from_str(schema_name)
+            .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
+        let da: Arc<dyn Accessor> = match schema {
+            DalSchema::S3 => {
                 let conf = &storage_conf.s3;
-                Arc::new(S3::try_create(
-                    &conf.region,
-                    &conf.endpoint_url,
-                    &conf.bucket,
-                    &conf.access_key_id,
-                    &conf.secret_access_key,
-                    conf.enable_pod_iam_policy,
-                )?)
+                s3::Backend::build()
+                    .region(&conf.region)
+                    .endpoint(&conf.endpoint_url)
+                    .bucket(&conf.bucket)
+                    .credential(Credential::hmac(
+                        &conf.access_key_id,
+                        &conf.secret_access_key,
+                    ))
+                    .finish()
+                    .await
+                    .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?
             }
-            StorageScheme::AzureStorageBlob => {
-                let conf: &AzureStorageBlobConfig = &storage_conf.azure_storage_blob;
-                Arc::new(AzureBlobAccessor::with_credentials(
-                    &conf.account,
-                    &conf.container,
-                    &conf.master_key,
-                ))
+            DalSchema::Azblob => {
+                todo!()
             }
-            StorageScheme::LocalFs => Arc::new(Local::new(storage_conf.disk.data_path.as_str())),
+            DalSchema::Fs => fs::Backend::build()
+                .root(&storage_conf.disk.data_path)
+                .finish()
+                .await
+                .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?,
         };
 
-        Ok(Arc::new(DataAccessorInterceptor::new(
-            self.shared.dal_ctx.clone(),
-            da,
-        )))
+        Ok(Operator::new(da).layer(self.shared.dal_ctx.clone()))
     }
 
     pub fn get_dal_context(&self) -> &DalContext {

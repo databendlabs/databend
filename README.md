@@ -14,7 +14,7 @@
 </a>
 
 <a href="https://github.com/datafuselabs/databend/actions">
-<img src="https://github.com/datafuselabs/databend/actions/workflows/production.yml/badge.svg" alt="CI Status" />
+<img src="https://github.com/datafuselabs/databend/actions/workflows/databend-release.yml/badge.svg" alt="CI Status" />
 </a>
 
 <img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="patform" />

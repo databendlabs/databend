@@ -46,11 +46,20 @@ impl Builder {
         self
     }
 
-    pub fn finish(&mut self) -> Arc<dyn Accessor> {
-        Arc::new(Backend {
-            // Make `/` as the default of root.
-            root: self.root.clone().unwrap_or_else(|| "/".to_string()),
-        })
+    pub async fn finish(&mut self) -> Result<Arc<dyn Accessor>> {
+        // Make `/` as the default of root.
+        let root = self.root.clone().unwrap_or_else(|| "/".to_string());
+
+        // If root dir is not exist, we must create it.
+        if let Err(e) = fs::metadata(&root).await {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                fs::create_dir_all(&root)
+                    .await
+                    .map_err(|e| parse_io_error(&e, PathBuf::from(&root).as_path()))?;
+            }
+        }
+
+        Ok(Arc::new(Backend { root }))
     }
 }
 
@@ -92,6 +101,19 @@ impl Accessor for Backend {
     async fn write(&self, mut r: Reader, args: &OpWrite) -> Result<usize> {
         let path = PathBuf::from(&self.root).join(&args.path);
 
+        // Create dir before write path.
+        //
+        // TODO(xuanwo): There are many works to do here:
+        //   - Is it safe to create dir concurrently?
+        //   - Do we need to extract this logic as new util functions?
+        //   - Is it better to check the parent dir exists before call mkdir?
+        let parent = path
+            .parent()
+            .ok_or_else(|| Error::Unexpected(format!("malformed path: {:?}", path.to_str())))?;
+        fs::create_dir_all(parent)
+            .await
+            .map_err(|e| parse_io_error(&e, parent))?;
+
         let mut f = fs::OpenOptions::new()
             .create(true)
             .write(true)
@@ -103,6 +125,12 @@ impl Accessor for Backend {
         let s = io::copy(&mut r.compat_mut(), &mut f)
             .await
             .map_err(|e| parse_io_error(&e, &path))?;
+
+        // `std::fs::File`'s errors detected on closing are ignored by
+        // the implementation of Drop.
+        // So we need to call `sync_all` to make sure all internal metadata
+        // have been flushed to fs successfully.
+        f.sync_all().await.map_err(|e| parse_io_error(&e, &path))?;
 
         Ok(s as usize)
     }

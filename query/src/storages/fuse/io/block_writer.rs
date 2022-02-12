@@ -19,18 +19,18 @@ use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::io::parquet::write::*;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::parquet::encoding::Encoding;
-use common_dal::DataAccessor;
+use common_dal2::Operator;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use futures::io::Cursor;
 
 pub async fn write_block(
     arrow_schema: &ArrowSchema,
     block: DataBlock,
-    data_accessor: impl AsRef<dyn DataAccessor>,
+    data_accessor: Operator,
     location: &str,
 ) -> Result<u64> {
-    let data_accessor = data_accessor.as_ref();
     let options = WriteOptions {
         write_statistics: true,
         compression: Compression::Lz4, // let's begin with lz4
@@ -67,10 +67,12 @@ pub async fn write_block(
 
     let parquet = writer.into_inner();
     let stream_len = parquet.len();
-    let stream = futures::stream::once(async move { Ok(bytes::Bytes::from(parquet)) });
+
     data_accessor
-        .put_stream(location, Box::new(Box::pin(stream)), stream_len)
-        .await?;
+        .write(location, stream_len as u64)
+        .run(Box::new(Cursor::new(parquet)))
+        .await
+        .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 
     Ok(len)
 }

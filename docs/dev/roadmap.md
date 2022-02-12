@@ -4,7 +4,7 @@ title: Roadmap 2022
 
 
 :::note Notes
-Sync from the [#476](https://github.com/datafuselabs/databend/issues/3706)
+Sync from the [#3706](https://github.com/datafuselabs/databend/issues/3706)
 :::
 
 This is Databend Roadmap 2022 :rocket: 
@@ -15,13 +15,15 @@ This is Databend Roadmap 2022 :rocket:
 ### 1. Query 
 
 
+
 | Task                                         | Status    | Release Target | Comments        | 
 | ----------------------------------------------- | --------- | -------------- | --------------- | 
 | [Query Cluster Track #747](https://github.com/datafuselabs/databend/issues/747) | PROGRESS  |   |  |
 | [RBAC Privileges #2793](https://github.com/datafuselabs/databend/issues/2793) | PROGRESS  |   |   |
 | [ New Planner Framework #1217](https://github.com/datafuselabs/databend/issues/1218)| PROGRESS  | | [RFC](https://databend.rs/dev/rfcs/query/new-sql-planner-framework)|
 | [ Database Sharing #3430](https://github.com/datafuselabs/databend/issues/3430)| PROGRESS  |     | |
-| [ Stage #2976](https://github.com/datafuselabs/databend/issues/2976)| PROGRESS  |     | |
+| [ STAGE Command #2976](https://github.com/datafuselabs/databend/issues/2976)| PROGRESS  |     | |
+| [ COPY Command #4104](https://github.com/datafuselabs/databend/issues/4104)| PROGRESS  |     | |
 | [Index Design #3711](https://github.com/datafuselabs/databend/issues/3711) | PROGRESS  |   |   |
 | [Push-Based + Pull-Based processor](https://github.com/datafuselabs/databend/issues/3379)| PROGRESS  |   |  |
 | [Semi-structured Data Types #3916](https://github.com/datafuselabs/databend/issues/3916) | PLANNING  |   |   |
