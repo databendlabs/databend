@@ -157,7 +157,7 @@ impl RaftConfig {
                     .await?;
                 Ok(format!(
                     "{}:{}",
-                    ip_addrs[0].to_string(),
+                    ip_addrs[0],
                     self.raft_api_port
                 ))
             }
