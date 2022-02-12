@@ -22,7 +22,6 @@ use crate::scalars::CeilFunction;
 use crate::scalars::DegressFunction;
 use crate::scalars::ExpFunction;
 use crate::scalars::FloorFunction;
-use crate::scalars::Function2Factory;
 use crate::scalars::LnFunction;
 use crate::scalars::Log10Function;
 use crate::scalars::Log2Function;
@@ -51,6 +50,9 @@ pub struct MathsFunction;
 impl MathsFunction {
     pub fn register2(factory: &mut Function2Factory) {
         factory.register("sign", SignFunction::desc());
+        factory.register("pi", PiFunction::desc());
+        factory.register("crc32", CRC32Function::desc());
+        factory.register("exp", ExpFunction::desc());
     }
 
     pub fn register(factory: &mut FunctionFactory) {
@@ -78,11 +80,5 @@ impl MathsFunction {
         factory.register("rand", RandomFunction::desc());
         factory.register("round", RoundNumberFunction::desc());
         factory.register("truncate", TruncNumberFunction::desc());
-    }
-
-    pub fn register2(factory: &mut Function2Factory) {
-        factory.register("pi", PiFunction::desc());
-        factory.register("crc32", CRC32Function::desc());
-        factory.register("exp", ExpFunction::desc());
     }
 }
