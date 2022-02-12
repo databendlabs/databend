@@ -163,9 +163,9 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
                 let e = rst.unwrap_err();
                 match e {
                     MetaError::MetaRaftError(MetaRaftError::ForwardToLeader(ForwardToLeader {
-                        leader,
+                        leader_id: forward_leader_id,
                     })) => {
-                        assert_eq!(Some(leader_id), leader);
+                        assert_eq!(Some(leader_id), forward_leader_id);
                     }
                     _ => {
                         panic!("expect MetaRaftError::ForwardToLeader")
