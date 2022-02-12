@@ -155,11 +155,7 @@ impl RaftConfig {
                 let ip_addrs = DNSResolver::instance()?
                     .resolve(self.raft_api_host.clone())
                     .await?;
-                Ok(format!(
-                    "{}:{}",
-                    ip_addrs[0],
-                    self.raft_api_port
-                ))
+                Ok(format!("{}:{}", ip_addrs[0], self.raft_api_port))
             }
         }
     }
