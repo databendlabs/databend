@@ -273,10 +273,9 @@ impl MetaNode {
 
         if !is_open {
             if let Some(_addrs) = init_cluster {
-                mn.init_cluster(config.raft_api_addr().await?);
+                mn.init_cluster(config.raft_api_addr().await?).await?;
             }
         }
-
         Ok(mn)
     }
 
