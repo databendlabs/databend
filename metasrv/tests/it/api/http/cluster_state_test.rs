@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- */
+*/
 use std::fs::File;
 use std::io::Read;
 use std::string::String;
@@ -51,7 +51,7 @@ async fn test_cluster_nodes() -> common_exception::Result<()> {
     let mut tc1 = MetaSrvTestContext::new(1);
 
     tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr()];
+    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?];
 
     let meta_node = MetaNode::start(&tc0.config.raft_config).await?;
     let meta_node1 = MetaNode::start(&tc1.config.raft_config).await?;
@@ -87,7 +87,7 @@ async fn test_cluster_state() -> common_exception::Result<()> {
     let mut tc1 = MetaSrvTestContext::new(1);
 
     tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr()];
+    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?];
 
     let meta_node = MetaNode::start(&tc0.config.raft_config).await?;
     let meta_node1 = MetaNode::start(&tc1.config.raft_config).await?;
@@ -129,7 +129,7 @@ async fn test_http_service_cluster_state() -> common_exception::Result<()> {
     let mut tc1 = MetaSrvTestContext::new(1);
 
     tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr()];
+    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?];
     tc1.config.admin_api_address = addr_str.to_owned();
     tc1.config.admin_tls_server_key = TEST_SERVER_KEY.to_owned();
     tc1.config.admin_tls_server_cert = TEST_SERVER_CERT.to_owned();

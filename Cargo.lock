@@ -1871,6 +1871,7 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-exception",
+ "common-grpc",
  "common-io",
  "common-meta-api",
  "common-meta-sled-store",
