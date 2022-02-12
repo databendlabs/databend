@@ -18,22 +18,22 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 
-use super::DescribeStageInterpreter;
-use crate::interpreters::interpreter_stage_drop::DropStageInterpreter;
+use super::DescribeUserStageInterpreter;
 use crate::interpreters::interpreter_table_optimize::OptimizeTableInterpreter;
-use crate::interpreters::AlterUDFInterpreter;
+use crate::interpreters::interpreter_user_stage_drop::DropUserStageInterpreter;
 use crate::interpreters::AlterUserInterpreter;
+use crate::interpreters::AlterUserUDFInterpreter;
 use crate::interpreters::CopyInterpreter;
-use crate::interpreters::CreatStageInterpreter;
-use crate::interpreters::CreatUDFInterpreter;
 use crate::interpreters::CreateDatabaseInterpreter;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::CreateUserInterpreter;
+use crate::interpreters::CreateUserStageInterpreter;
+use crate::interpreters::CreateUserUDFInterpreter;
 use crate::interpreters::DescribeTableInterpreter;
 use crate::interpreters::DropDatabaseInterpreter;
 use crate::interpreters::DropTableInterpreter;
-use crate::interpreters::DropUDFInterpreter;
 use crate::interpreters::DropUserInterpreter;
+use crate::interpreters::DropUserUDFInterpreter;
 use crate::interpreters::ExplainInterpreter;
 use crate::interpreters::GrantPrivilegeInterpreter;
 use crate::interpreters::InsertInterpreter;
@@ -57,37 +57,67 @@ impl InterpreterFactory {
     pub fn get(ctx: Arc<QueryContext>, plan: PlanNode) -> Result<Arc<dyn Interpreter>> {
         let ctx_clone = ctx.clone();
         let inner = match plan.clone() {
+            // Query.
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx_clone, v),
+
+            // Select.
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx_clone, v),
+
+            // Insert.
+            PlanNode::Insert(v) => InsertInterpreter::try_create(ctx_clone, v),
+
+            // Copy.
+            PlanNode::Copy(v) => CopyInterpreter::try_create(ctx_clone, v),
+
+            // Database.
             PlanNode::CreateDatabase(v) => CreateDatabaseInterpreter::try_create(ctx_clone, v),
             PlanNode::DropDatabase(v) => DropDatabaseInterpreter::try_create(ctx_clone, v),
+            PlanNode::ShowCreateDatabase(v) => {
+                ShowCreateDatabaseInterpreter::try_create(ctx_clone, v)
+            }
+
+            // Table.
             PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DropTable(v) => DropTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::OptimizeTable(v) => OptimizeTableInterpreter::try_create(ctx_clone, v),
-            PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx_clone, v),
-            PlanNode::AdminUseTenant(v) => UseTenantInterpreter::try_create(ctx_clone, v),
-            PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx_clone, v),
-            PlanNode::Insert(v) => InsertInterpreter::try_create(ctx_clone, v),
-            PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),
-            PlanNode::Kill(v) => KillInterpreter::try_create(ctx_clone, v),
+
+            // User.
             PlanNode::CreateUser(v) => CreateUserInterpreter::try_create(ctx_clone, v),
             PlanNode::AlterUser(v) => AlterUserInterpreter::try_create(ctx_clone, v),
             PlanNode::DropUser(v) => DropUserInterpreter::try_create(ctx_clone, v),
             PlanNode::GrantPrivilege(v) => GrantPrivilegeInterpreter::try_create(ctx_clone, v),
             PlanNode::RevokePrivilege(v) => RevokePrivilegeInterpreter::try_create(ctx_clone, v),
-            PlanNode::Copy(v) => CopyInterpreter::try_create(ctx_clone, v),
-            PlanNode::CreateUserStage(v) => CreatStageInterpreter::try_create(ctx_clone, v),
-            PlanNode::DropUserStage(v) => DropStageInterpreter::try_create(ctx_clone, v),
+
+            // Stage.
+            PlanNode::CreateUserStage(v) => CreateUserStageInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropUserStage(v) => DropUserStageInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowGrants(v) => ShowGrantsInterpreter::try_create(ctx_clone, v),
-            PlanNode::DescribeUserStage(v) => DescribeStageInterpreter::try_create(ctx_clone, v),
-            PlanNode::ShowCreateDatabase(v) => {
-                ShowCreateDatabaseInterpreter::try_create(ctx_clone, v)
+            PlanNode::DescribeUserStage(v) => {
+                DescribeUserStageInterpreter::try_create(ctx_clone, v)
             }
-            PlanNode::CreateUserUDF(v) => CreatUDFInterpreter::try_create(ctx_clone, v),
-            PlanNode::DropUserUDF(v) => DropUDFInterpreter::try_create(ctx_clone, v),
-            PlanNode::AlterUserUDF(v) => AlterUDFInterpreter::try_create(ctx_clone, v),
+
+            // UDF.
+            PlanNode::CreateUserUDF(v) => CreateUserUDFInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropUserUDF(v) => DropUserUDFInterpreter::try_create(ctx_clone, v),
+            PlanNode::AlterUserUDF(v) => AlterUserUDFInterpreter::try_create(ctx_clone, v),
+
+            // Show.
+            PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),
+
+            // Use.
+            PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx_clone, v),
+
+            // Kill.
+            PlanNode::Kill(v) => KillInterpreter::try_create(ctx_clone, v),
+
+            // Set.
+            PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx_clone, v),
+
+            // Admin.
+            PlanNode::AdminUseTenant(v) => UseTenantInterpreter::try_create(ctx_clone, v),
+
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",
                 plan.name()
