@@ -15,13 +15,14 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_planners::PlanNode;
+use common_planners::ShowDatabasesPlan;
 use common_tracing::tracing;
 use sqlparser::ast::Expr;
 
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
-use crate::sql::PlanParser;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfShowDatabases {
@@ -30,32 +31,16 @@ pub struct DfShowDatabases {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfShowDatabases {
-    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let rewritten_query = self.rewritten_query();
-        let rewritten_query_plan = PlanParser::parse(ctx, rewritten_query.as_str());
-        Ok(AnalyzedResult::SimpleQuery(Box::new(
-            rewritten_query_plan.await?,
-        )))
-    }
-}
-
-impl DfShowDatabases {
-    fn show_all_databases() -> String {
-        String::from("SELECT name AS Database FROM system.databases ORDER BY name")
-    }
-
-    fn show_databases_with_predicate(expr: &Expr) -> String {
-        format!(
-            "SELECT name AS Database FROM system.databases WHERE {} ORDER BY name",
-            expr
-        )
-    }
-
-    fn rewritten_query(&self) -> String {
+    #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
+    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+        let mut where_opt = None;
         match &self.where_opt {
-            None => Self::show_all_databases(),
-            Some(expr) => Self::show_databases_with_predicate(expr),
+            None => {}
+            Some(expr) => where_opt = Some(format!("{}", expr)),
         }
+
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::ShowDatabases(ShowDatabasesPlan { where_opt }),
+        )))
     }
 }

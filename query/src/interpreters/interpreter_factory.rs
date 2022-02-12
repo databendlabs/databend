@@ -45,6 +45,7 @@ use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SettingInterpreter;
 use crate::interpreters::ShowCreateDatabaseInterpreter;
 use crate::interpreters::ShowCreateTableInterpreter;
+use crate::interpreters::ShowDatabasesInterpreter;
 use crate::interpreters::ShowGrantsInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
@@ -75,6 +76,7 @@ impl InterpreterFactory {
             PlanNode::ShowCreateDatabase(v) => {
                 ShowCreateDatabaseInterpreter::try_create(ctx_clone, v)
             }
+            PlanNode::ShowDatabases(v) => ShowDatabasesInterpreter::try_create(ctx_clone, v),
 
             // Table.
             PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx_clone, v),

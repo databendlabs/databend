@@ -55,6 +55,7 @@ use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
+use crate::ShowDatabasesPlan;
 use crate::ShowGrantsPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
@@ -140,6 +141,7 @@ pub trait PlanVisitor {
             PlanNode::CreateDatabase(plan) => self.visit_create_database(plan),
             PlanNode::DropDatabase(plan) => self.visit_drop_database(plan),
             PlanNode::ShowCreateDatabase(plan) => self.visit_show_create_database(plan),
+            PlanNode::ShowDatabases(plan) => self.visit_show_databases(plan),
 
             // Table.
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
@@ -381,6 +383,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_show_create_database(&mut self, _: &ShowCreateDatabasePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_show_databases(&mut self, _: &ShowDatabasesPlan) -> Result<()> {
         Ok(())
     }
 

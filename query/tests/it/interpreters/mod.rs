@@ -22,6 +22,7 @@ mod interpreter_factory_interceptor;
 mod interpreter_insert;
 mod interpreter_select;
 mod interpreter_setting;
+mod interpreter_show_databases;
 mod interpreter_table_create;
 mod interpreter_table_describe;
 mod interpreter_table_drop;
