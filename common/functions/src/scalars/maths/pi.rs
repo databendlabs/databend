@@ -15,12 +15,13 @@
 use std::f64::consts::PI;
 use std::fmt;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 
-use crate::scalars::function2_factory::Function2Description;
+use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
+use crate::scalars::Function;
 
 #[derive(Clone)]
 pub struct PiFunction {
@@ -28,29 +29,33 @@ pub struct PiFunction {
 }
 
 impl PiFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(PiFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic())
     }
 }
 
-impl Function2 for PiFunction {
+impl Function for PiFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(Float64Type::arc())
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let dt = DataType::Float64;
+        Ok(DataTypeAndNullable::create(&dt, false))
     }
 
-    fn eval(&self, _columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
-        Ok(ConstColumn::new(Series::from_data(vec![PI]), input_rows).arc())
+    fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+        Ok(DataColumn::Constant(
+            DataValue::Float64(Some(PI)),
+            input_rows,
+        ))
     }
 }
 

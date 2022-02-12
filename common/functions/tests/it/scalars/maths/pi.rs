@@ -14,22 +14,22 @@
 
 use std::f64::consts::PI;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions2;
-use crate::scalars::scalar_function2_test::ScalarFunction2Test;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_pi_function() -> Result<()> {
-    let tests = vec![ScalarFunction2Test {
+    let tests = vec![ScalarFunctionTest {
         name: "pi-function-passed",
-        // TODO: this should be `vec![]`, consider adding the `input_row` field to `ScalarFunction2Test`.
-        columns: vec![Series::from_data(vec![PI])],
-        expect: Series::from_data(vec![PI]),
+        nullable: false,
+        columns: vec![],
+        expect: Series::new(vec![PI]).into(),
         error: "",
     }];
 
-    test_scalar_functions2(PiFunction::try_create("pi()")?, &tests)
+    test_scalar_functions(PiFunction::try_create("pi()")?, &tests)
 }
