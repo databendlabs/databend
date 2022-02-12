@@ -18,10 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::SerializedError;
 
 use crate::MetaError;
-use crate::MetaNetworkError;
-use crate::MetaRaftError;
 use crate::MetaResult;
-use crate::MetaStorageError;
 
 impl From<ErrorCode> for MetaError {
     fn from(e: ErrorCode) -> Self {
@@ -38,24 +35,6 @@ impl From<MetaError> for ErrorCode {
                 ErrorCode::MetaServiceError(e.to_string())
             }
         }
-    }
-}
-
-impl From<MetaNetworkError> for MetaError {
-    fn from(e: MetaNetworkError) -> Self {
-        MetaError::MetaNetworkError(e)
-    }
-}
-
-impl From<MetaRaftError> for MetaError {
-    fn from(e: MetaRaftError) -> Self {
-        MetaError::MetaRaftError(e)
-    }
-}
-
-impl From<MetaStorageError> for MetaError {
-    fn from(e: MetaStorageError) -> Self {
-        MetaError::MetaStorageError(e)
     }
 }
 

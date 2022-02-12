@@ -28,13 +28,13 @@ pub enum MetaError {
     ErrorCode(#[from] SerializedError),
 
     #[error(transparent)]
-    MetaNetworkError(MetaNetworkError),
+    MetaNetworkError(#[from] MetaNetworkError),
 
     #[error(transparent)]
-    MetaRaftError(MetaRaftError),
+    MetaRaftError(#[from] MetaRaftError),
 
     #[error(transparent)]
-    MetaStorageError(MetaStorageError),
+    MetaStorageError(#[from] MetaStorageError),
 
     #[error("{0}")]
     InvalidConfig(String),
