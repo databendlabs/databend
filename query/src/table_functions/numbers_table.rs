@@ -134,7 +134,6 @@ impl Table for NumbersTable {
         let parts =
             generate_block_parts(0, ctx.get_settings().get_max_threads()? as u64, self.total);
 
-        println!("read_partitions {:?}", parts);
         Ok((statistics, parts))
     }
 

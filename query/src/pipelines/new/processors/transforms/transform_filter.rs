@@ -13,11 +13,14 @@ use crate::pipelines::new::processors::transforms::transform::Transform;
 use crate::pipelines::new::processors::transforms::transform::Transformer;
 use crate::pipelines::transforms::ExpressionExecutor;
 
-pub struct TransformFilter {
+pub type TransformHaving = TransformFilterImpl::<true>;
+pub type TransformFilter = TransformFilterImpl::<false>;
+
+pub struct TransformFilterImpl<const HAVING: bool> {
     executor: Arc<ExpressionExecutor>,
 }
 
-impl TransformFilter {
+impl<const HAVING: bool> TransformFilterImpl<HAVING> where Self: Transform {
     pub fn try_create(
         schema: DataSchemaRef,
         predicate: Expression,
@@ -26,7 +29,7 @@ impl TransformFilter {
     ) -> Result<ProcessorPtr> {
         let predicate_executor = Self::expr_executor(&schema, &predicate)?;
         predicate_executor.validate()?;
-        Ok(Transformer::create(input, output, TransformFilter {
+        Ok(Transformer::create(input, output, TransformFilterImpl {
             executor: Arc::new(predicate_executor),
         }))
     }
@@ -45,7 +48,18 @@ impl TransformFilter {
     }
 }
 
-impl Transform for TransformFilter {
+impl Transform for TransformFilterImpl<true> {
+    const NAME: &'static str = "HavingTransform";
+
+    const SKIP_EMPTY_DATA_BLOCK: bool = true;
+
+    fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
+        let filter_block = self.executor.execute(&data)?;
+        DataBlock::filter_block(&data, filter_block.column(0))
+    }
+}
+
+impl Transform for TransformFilterImpl<false> {
     const NAME: &'static str = "FilterTransform";
 
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
