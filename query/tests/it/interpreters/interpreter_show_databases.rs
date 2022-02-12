@@ -51,7 +51,7 @@ async fn test_show_databases_interpreter() -> Result<()> {
             "+----------+",
             "| Database |",
             "+----------+",
-            "| default  |",
+            "| system   |",
             "+----------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
