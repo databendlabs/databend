@@ -33,11 +33,12 @@ runs:
         args: --tests -- -D warnings
 
     - name: Check License Header
-      uses: apache/skywalking-eyes@main
+      uses: apache/skywalking-eyes@0.2.0
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
       with:
         log: info
+        config: .github/licenserc.yml
 
     - name: YAML Lint
       uses: ibiqlik/action-yamllint@v3
