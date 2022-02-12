@@ -19,6 +19,7 @@ use crate::scalars::CeilFunction;
 use crate::scalars::DegressFunction;
 use crate::scalars::ExpFunction;
 use crate::scalars::FloorFunction;
+use crate::scalars::Function2Factory;
 use crate::scalars::LnFunction;
 use crate::scalars::Log10Function;
 use crate::scalars::Log2Function;
@@ -43,6 +44,10 @@ use crate::scalars::TruncNumberFunction;
 pub struct MathsFunction;
 
 impl MathsFunction {
+    pub fn register2(factory: &mut Function2Factory) {
+        factory.register("sign", SignFunction::desc());
+    }
+
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("pi", PiFunction::desc());
         factory.register("abs", AbsFunction::desc());
@@ -65,7 +70,6 @@ impl MathsFunction {
         factory.register("acos", TrigonometricAcosFunction::desc());
         factory.register("atan", TrigonometricAtanFunction::desc());
         factory.register("atan2", TrigonometricAtan2Function::desc());
-        factory.register("sign", SignFunction::desc());
         factory.register("sqrt", SqrtFunction::desc());
         factory.register("pow", PowFunction::desc());
         factory.register("power", PowFunction::desc());
