@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
 use clap::Parser;
+use common_exception::Result;
+use common_grpc::DNSResolver;
 use common_meta_types::MetaResult;
 use common_meta_types::NodeId;
+use ipaddress::IPAddress;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
@@ -144,8 +148,21 @@ impl RaftConfig {
         <Self as Parser>::parse_from(&Vec::<&'static str>::new())
     }
 
-    pub fn raft_api_addr(&self) -> String {
-        format!("{}:{}", self.raft_api_host, self.raft_api_port)
+    /// Support ip address and hostname
+    pub async fn raft_api_addr(&self) -> Result<String> {
+        match IPAddress::parse(self.raft_api_host.as_str()) {
+            Ok(_ip_address) => Ok(format!("{}:{}", self.raft_api_host, self.raft_api_port)),
+            Err(_) => {
+                let ip_addrs = DNSResolver::instance()?
+                    .resolve(self.raft_api_host.clone())
+                    .await?;
+                Ok(format!(
+                    "{}:{}",
+                    ip_addrs[0].to_string(),
+                    self.raft_api_port
+                ))
+            }
+        }
     }
 
     /// Returns true to fsync after a write operation to meta.
