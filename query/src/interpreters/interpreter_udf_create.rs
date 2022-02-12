@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::CreateUDFPlan;
+use common_planners::CreateUserUDFPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -27,11 +27,11 @@ use crate::sessions::QueryContext;
 #[derive(Debug)]
 pub struct CreatUDFInterpreter {
     ctx: Arc<QueryContext>,
-    plan: CreateUDFPlan,
+    plan: CreateUserUDFPlan,
 }
 
 impl CreatUDFInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateUDFPlan) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateUserUDFPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(CreatUDFInterpreter { ctx, plan }))
     }
 }

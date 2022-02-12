@@ -26,7 +26,7 @@ pub struct MutablePrimitiveColumn<T>
 where T: PrimitiveType
 {
     data_type: DataTypePtr,
-    values: Vec<T>,
+    pub(crate) values: Vec<T>,
 }
 
 impl<T> MutableColumn for MutablePrimitiveColumn<T>

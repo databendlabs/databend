@@ -12,38 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-mod builder;
+use common_datavalues2::DataTypePtr;
+use common_exception::ErrorCode;
+use common_exception::Result;
 
-mod array;
-mod boolean;
-mod column;
-mod column_with_field;
-mod const_;
-mod eq;
-#[allow(clippy::ptr_arg)]
-mod group_hash;
-mod mutable;
-mod null;
-mod nullable;
-mod primitive;
-pub mod series;
-mod string;
-mod struct_;
-mod take;
-
-pub use array::*;
-pub use boolean::*;
-pub use builder::*;
-pub use column::*;
-pub use column_with_field::*;
-pub use const_::*;
-pub use group_hash::GroupHash;
-pub use mutable::*;
-pub use null::*;
-pub use nullable::*;
-pub use primitive::*;
-pub use series::*;
-pub use string::*;
-pub use struct_::*;
-pub use take::*;
+pub fn assert_numeric(data_type: &DataTypePtr) -> Result<()> {
+    if !data_type.data_type_id().is_numeric() {
+        return Err(ErrorCode::IllegalDataType(format!(
+            "Expected a numeric type, but got {:?}",
+            data_type
+        )));
+    }
+    Ok(())
+}

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues2::DataSchema;
-use common_datavalues2::DataSchemaRef;
+use common_infallible::RwLock;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct UseTenantPlan {
-    pub tenant: String,
-}
+use crate::DataBlock;
 
-impl UseTenantPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
+/// Shared store to support memory tables.
+///
+/// Indexed by table id etc.
+pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;

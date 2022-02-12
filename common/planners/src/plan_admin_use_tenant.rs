@@ -12,38 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-mod builder;
+use std::sync::Arc;
 
-mod array;
-mod boolean;
-mod column;
-mod column_with_field;
-mod const_;
-mod eq;
-#[allow(clippy::ptr_arg)]
-mod group_hash;
-mod mutable;
-mod null;
-mod nullable;
-mod primitive;
-pub mod series;
-mod string;
-mod struct_;
-mod take;
+use common_datavalues2::DataSchema;
+use common_datavalues2::DataSchemaRef;
 
-pub use array::*;
-pub use boolean::*;
-pub use builder::*;
-pub use column::*;
-pub use column_with_field::*;
-pub use const_::*;
-pub use group_hash::GroupHash;
-pub use mutable::*;
-pub use null::*;
-pub use nullable::*;
-pub use primitive::*;
-pub use series::*;
-pub use string::*;
-pub use struct_::*;
-pub use take::*;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct AdminUseTenantPlan {
+    pub tenant: String,
+}
+
+impl AdminUseTenantPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

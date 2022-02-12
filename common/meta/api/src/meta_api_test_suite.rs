@@ -371,6 +371,48 @@ impl MetaApiTestSuite {
         let db_name = "db1";
         let tbl_name = "tb2";
 
+        let schema = || {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]))
+        };
+
+        let options = || maplit::hashmap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        tracing::info!("--- create table on unknown db");
+        // TODO(xp): test other table operation on unknown db.
+        {
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                tenant: tenant.to_string(),
+                db: db_name.to_string(),
+                table: tbl_name.to_string(),
+                table_meta: table_meta(created_on),
+            };
+
+            {
+                let res = mt.create_table(req).await;
+                tracing::debug!("create table on unknown db res: {:?}", res);
+
+                assert!(res.is_err());
+                assert_eq!(
+                    ErrorCode::UnknownDatabase("").code(),
+                    res.unwrap_err().code()
+                );
+            }
+        }
+
         tracing::info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
@@ -391,14 +433,6 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- create and get table");
         {
-            // Table schema with metadata(due to serde issue).
-            let schema = Arc::new(DataSchema::new(vec![DataField::new(
-                "number",
-                u64::to_data_type(),
-            )]));
-
-            let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
-
             let created_on = Utc::now();
 
             let mut req = CreateTableReq {
@@ -406,13 +440,7 @@ impl MetaApiTestSuite {
                 tenant: tenant.to_string(),
                 db: db_name.to_string(),
                 table: tbl_name.to_string(),
-                table_meta: TableMeta {
-                    schema: schema.clone(),
-                    engine: "JSON".to_string(),
-                    options: options.clone(),
-                    created_on,
-                    ..TableMeta::default()
-                },
+                table_meta: table_meta(created_on),
             };
 
             {
@@ -425,13 +453,7 @@ impl MetaApiTestSuite {
                     ident: TableIdent::new(1, 1),
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
-                    meta: TableMeta {
-                        schema: schema.clone(),
-                        engine: "JSON".to_owned(),
-                        options: options.clone(),
-                        created_on,
-                        ..Default::default()
-                    },
+                    meta: table_meta(created_on),
                 };
                 assert_eq!(want, got.as_ref().clone(), "get created table");
             }
@@ -447,13 +469,7 @@ impl MetaApiTestSuite {
                     ident: TableIdent::new(1, 1),
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
-                    meta: TableMeta {
-                        schema: schema.clone(),
-                        engine: "JSON".to_owned(),
-                        options: options.clone(),
-                        created_on,
-                        ..Default::default()
-                    },
+                    meta: table_meta(created_on),
                 };
                 assert_eq!(want, got.as_ref().clone(), "get created table");
             }
@@ -478,13 +494,7 @@ impl MetaApiTestSuite {
                     ident: TableIdent::new(1, 1),
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
-                    meta: TableMeta {
-                        schema: schema.clone(),
-                        engine: "JSON".to_owned(),
-                        options: options.clone(),
-                        created_on,
-                        ..Default::default()
-                    },
+                    meta: table_meta(created_on),
                 };
                 assert_eq!(want, got.as_ref().clone(), "get old table");
             }

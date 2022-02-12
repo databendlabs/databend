@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod query_ctx;
 mod session;
 mod session_context;
 mod session_setting;

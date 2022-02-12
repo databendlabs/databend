@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod crash_me;
 mod current_user;
 mod database;
 mod exists;
@@ -23,7 +22,6 @@ mod udf;
 mod udf_example;
 mod version;
 
-pub use crash_me::CrashMeFunction;
 pub use current_user::CurrentUserFunction;
 pub use database::DatabaseFunction;
 pub use in_basic::InFunction;

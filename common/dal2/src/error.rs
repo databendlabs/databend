@@ -24,8 +24,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// The error will be named as `noun-adj`. For example, `ObjectNotExist` or `PermissionDenied`.
 /// The error will be formatted as `description: (keyA valueA, keyB valueB, ...)`.
 /// As an exception, `Error::Unexpected` is used for all unexpected errors.
+///
+/// ## TODO
+///
+/// Maybe it's better to include the operation name in the error message.
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("backend not supported: (type {0})")]
+    BackendNotSupported(String),
     #[error("backend configuration invalid: (key {key}, value {value})")]
     BackendConfigurationInvalid { key: String, value: String },
 

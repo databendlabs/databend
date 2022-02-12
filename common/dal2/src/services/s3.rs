@@ -102,10 +102,15 @@ impl Builder {
             String::new()
         };
 
-        // Load from runtime env as default.
-        let aws_cfg = aws_config::load_from_env().await;
+        // Load config from environment, including:
+        // - Environment variables: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_REGION
+        // - The default credentials files located in ~/.aws/config and ~/.aws/credentials (location can vary per platform)
+        // - Web Identity Token credentials from the environment or container (including EKS)
+        // - ECS Container Credentials (IAM roles for tasks)
+        // - EC2 Instance Metadata Service (IAM Roles attached to instance)
+        let cfg = aws_config::load_from_env().await;
 
-        let mut cfg = AwsS3::config::Builder::from(&aws_cfg);
+        let mut cfg = AwsS3::config::Builder::from(&cfg);
 
         // TODO: Maybe we can
         //
@@ -174,10 +179,13 @@ impl Backend {
     /// If user input a relative path, we will calculate the absolute path with the root.
     fn get_abs_path(&self, path: &str) -> String {
         if path.starts_with('/') {
-            path.strip_prefix('/').unwrap().to_string()
-        } else {
-            format!("{}/{}", self.root, path)
+            return path.strip_prefix('/').unwrap().to_string();
         }
+        if self.root.is_empty() {
+            return path.to_string();
+        }
+
+        format!("{}/{}", self.root, path)
     }
 }
 

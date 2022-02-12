@@ -1587,6 +1587,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-dal-context"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-dal2",
+ "common-infallible",
+]
+
+[[package]]
 name = "common-dal2"
 version = "0.1.0"
 dependencies = [
@@ -1616,6 +1625,7 @@ dependencies = [
  "common-arrow",
  "common-datavalues2",
  "common-exception",
+ "common-infallible",
  "common-io",
  "pretty_assertions",
  "regex 1.5.4",
@@ -2406,15 +2416,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dal_context"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-dal2",
- "common-infallible",
-]
-
-[[package]]
 name = "data-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2528,7 +2529,7 @@ dependencies = [
  "common-building",
  "common-cache",
  "common-clickhouse-srv",
- "common-dal",
+ "common-dal-context",
  "common-dal2",
  "common-datablocks",
  "common-datavalues2",
