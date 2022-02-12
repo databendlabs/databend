@@ -108,6 +108,7 @@ static FUNCTION2_FACTORY: Lazy<Arc<Function2Factory>> = Lazy::new(|| {
     LogicFunction::register(&mut function_factory);
     NullableFunction::register(&mut function_factory);
     DateFunction::register2(&mut function_factory);
+    MathsFunction::register2(&mut function_factory);
     OtherFunction::register(&mut function_factory);
     UUIDFunction::register2(&mut function_factory);
     MathsFunction::register2(&mut function_factory);
