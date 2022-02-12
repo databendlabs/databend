@@ -15,16 +15,19 @@
 use std::fmt;
 use std::ops::AddAssign;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
-use common_exception::ErrorCode;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::Result;
 use num_format::Locale;
 use num_format::ToFormattedString;
+use num_traits::AsPrimitive;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::assert_numeric;
+use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
+use crate::scalars::ScalarBinaryExpression;
 
 const FORMAT_MAX_DECIMALS: i64 = 30;
 
@@ -33,110 +36,74 @@ pub struct FormatFunction {
     _display_name: String,
 }
 
+// FORMAT(X,D[,locale])
+// Formats the number X to a format like '#,###,###.##', rounded to D decimal places, and returns the result as a string.
+// If D is 0, the result has no decimal point or fractional part.
 impl FormatFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(FormatFunction {
             _display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(2, 3),
         )
     }
-
-    fn format_en_us(number: Option<f64>, precision: Option<i64>) -> Option<Vec<u8>> {
-        if let (Some(number), Some(precision)) = (number, precision) {
-            let precision = if precision > FORMAT_MAX_DECIMALS {
-                FORMAT_MAX_DECIMALS
-            } else if precision < 0 {
-                0
-            } else {
-                precision
-            };
-            let trunc = number as i64;
-            let fract = (number - trunc as f64).abs();
-            let fract_str = format!("{0:.1$}", fract, precision as usize);
-            let fract_str = fract_str.strip_prefix('0');
-            let mut trunc_str = trunc.to_formatted_string(&Locale::en);
-            if let Some(s) = fract_str {
-                trunc_str.add_assign(s)
-            }
-            Some(Vec::from(trunc_str))
-        } else {
-            None
-        }
-    }
 }
 
-impl Function for FormatFunction {
+impl Function2 for FormatFunction {
     fn name(&self) -> &str {
         "format"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        // Format(value, format, culture), the 'culture' is optional.
-        // if 'value' or 'format' is nullable, the result should be nullable.
-        let nullable = args[0].is_nullable() || args[1].is_nullable();
-
-        if (args[0].is_numeric() || args[0].is_string() || args[0].is_null())
-            && (args[1].is_numeric() || args[1].is_string() || args[1].is_null())
-        {
-            let dt = DataType::String;
-            Ok(DataTypeAndNullable::create(&dt, nullable))
-        } else {
-            Err(ErrorCode::IllegalDataType(format!(
-                "Expected string/numeric, but got {}",
-                args[0]
-            )))
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        assert_numeric(args[0])?;
+        assert_numeric(args[1])?;
+        if args.len() >= 3 {
+            assert_string(args[2])?;
         }
+        Ok(Vu8::to_data_type())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        match (
-            columns[0].column().cast_with_type(&DataType::Float64)?,
-            columns[1].column().cast_with_type(&DataType::Int64)?,
-        ) {
-            (
-                DataColumn::Constant(DataValue::Float64(number), _),
-                DataColumn::Constant(DataValue::Int64(precision), _),
-            ) => {
-                // Currently we ignore the locale value and use en_US as default.
-                let ret = Self::format_en_us(number, precision);
-                Ok(DataColumn::Constant(DataValue::String(ret), input_rows))
-            }
-            (DataColumn::Array(number), DataColumn::Constant(DataValue::Int64(precision), _)) => {
-                let mut string_builder = StringArrayBuilder::with_capacity(input_rows);
-                for number in number.f64()? {
-                    string_builder.append_option(Self::format_en_us(number.copied(), precision));
-                }
-                Ok(string_builder.finish().into())
-            }
-            (DataColumn::Constant(DataValue::Float64(number), _), DataColumn::Array(precision)) => {
-                let mut string_builder = StringArrayBuilder::with_capacity(input_rows);
-                for precision in precision.i64()? {
-                    string_builder.append_option(Self::format_en_us(number, precision.copied()));
-                }
-                Ok(string_builder.finish().into())
-            }
-            (DataColumn::Array(number), DataColumn::Array(precision)) => {
-                let mut string_builder = StringArrayBuilder::with_capacity(input_rows);
-                for (number, precision) in number.f64()?.into_iter().zip(precision.i64()?) {
-                    string_builder
-                        .append_option(Self::format_en_us(number.copied(), precision.copied()));
-                }
-                Ok(string_builder.finish().into())
-            }
-            _ => Ok(DataColumn::Constant(DataValue::String(None), input_rows)),
-        }
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$S| {
+            let binary = ScalarBinaryExpression::<f64, i64, Vu8, _>::new(format_en_us);
+            let col = binary.eval(columns[0].column(), columns[1].column())?;
+            Ok(col.arc())
+        },{
+            unreachable!()
+        })
     }
+}
 
-    fn passthrough_null(&self) -> bool {
-        true
+fn format_en_us<L, R>(number: L, precision: R) -> Vec<u8>
+where
+    L: AsPrimitive<f64> + AsPrimitive<i64>,
+    R: AsPrimitive<i64>,
+{
+    let precision = precision.as_();
+    let precision = if precision > FORMAT_MAX_DECIMALS {
+        FORMAT_MAX_DECIMALS
+    } else if precision < 0 {
+        0
+    } else {
+        precision
+    };
+
+    let trunc: i64 = number.as_();
+    let number: f64 = number.as_();
+    let fract = (number - trunc as f64).abs();
+    let fract_str = format!("{0:.1$}", fract, precision as usize);
+    let fract_str = fract_str.strip_prefix('0');
+    let mut trunc_str = trunc.to_formatted_string(&Locale::en);
+    if let Some(s) = fract_str {
+        trunc_str.add_assign(s)
     }
+    Vec::from(trunc_str)
 }
 
 impl fmt::Display for FormatFunction {

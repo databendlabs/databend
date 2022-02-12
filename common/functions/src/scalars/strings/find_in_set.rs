@@ -14,15 +14,14 @@
 
 use std::fmt;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
-use common_exception::ErrorCode;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
-use itertools::izip;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
+use crate::scalars::ScalarBinaryExpression;
 
 #[derive(Clone)]
 pub struct FindInSetFunction {
@@ -30,88 +29,33 @@ pub struct FindInSetFunction {
 }
 
 impl FindInSetFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }
 
-impl Function for FindInSetFunction {
+impl Function2 for FindInSetFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        if !args[0].is_integer() && !args[0].is_string() && !args[0].is_null() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected integer or string or null, but got {}",
-                args[0]
-            )));
-        }
-        if !args[1].is_integer() && !args[1].is_string() && !args[1].is_null() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected integer or string or null, but got {}",
-                args[1]
-            )));
-        }
-
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::UInt64;
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        assert_string(args[0])?;
+        assert_string(args[1])?;
+        Ok(u64::to_data_type())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, r: usize) -> Result<DataColumn> {
-        let e_column = columns[0].column().cast_with_type(&DataType::String)?;
-        let d_column = columns[1].column().cast_with_type(&DataType::String)?;
-
-        match (e_column, d_column) {
-            (
-                DataColumn::Constant(DataValue::String(e), _),
-                DataColumn::Constant(DataValue::String(d), _),
-            ) => {
-                if let (Some(e), Some(d)) = (e, d) {
-                    let l = find(&e, &d);
-                    Ok(DataColumn::Constant(DataValue::UInt64(Some(l)), r))
-                } else {
-                    Ok(DataColumn::Constant(DataValue::Null, r))
-                }
-            }
-            (DataColumn::Array(e), DataColumn::Constant(DataValue::String(d), _)) => {
-                if let Some(d) = d {
-                    Ok(DataColumn::from(
-                        e.string()?.apply_cast_numeric(|e| find(e, &d)),
-                    ))
-                } else {
-                    Ok(DataColumn::Constant(DataValue::Null, r))
-                }
-            }
-            (DataColumn::Constant(DataValue::String(e), _), DataColumn::Array(d)) => {
-                if let Some(e) = e {
-                    Ok(DataColumn::from(
-                        d.string()?.apply_cast_numeric(|d| find(&e, d)),
-                    ))
-                } else {
-                    Ok(DataColumn::Constant(DataValue::Null, r))
-                }
-            }
-            (DataColumn::Array(e), DataColumn::Array(d)) => {
-                let e = e.string()?;
-                let d = d.string()?;
-                Ok(DataColumn::from(DFUInt64Array::new_from_iter_validity(
-                    izip!(e.into_no_null_iter(), d.into_no_null_iter()).map(|(e, d)| find(e, d)),
-                    combine_validities(e.inner().validity(), d.inner().validity()),
-                )))
-            }
-            _ => Err(ErrorCode::IllegalDataType(
-                "Expected args a const, an expression, an expression, a const and a const",
-            )),
-        }
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        let binary = ScalarBinaryExpression::<Vu8, Vu8, u64, _>::new(find_in_set);
+        let col = binary.eval(columns[0].column(), columns[1].column())?;
+        Ok(col.arc())
     }
 }
 
@@ -122,7 +66,7 @@ impl fmt::Display for FindInSetFunction {
 }
 
 #[inline]
-fn find<'a>(str: &'a [u8], list: &'a [u8]) -> u64 {
+fn find_in_set(str: &[u8], list: &[u8]) -> u64 {
     if str.is_empty() || str.len() > list.len() {
         return 0;
     }
