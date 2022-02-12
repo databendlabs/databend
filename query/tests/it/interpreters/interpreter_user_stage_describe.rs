@@ -30,7 +30,7 @@ async fn test_desc_stageinterpreter() -> Result<()> {
         let query = "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP  record_delimiter='|') comments='test'";
         let plan = PlanParser::parse(ctx.clone(), query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CreatStageInterpreter");
+        assert_eq!(executor.name(), "CreateUserStageInterpreter");
         let _ = executor.execute(None).await?;
     }
 

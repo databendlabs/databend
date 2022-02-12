@@ -71,6 +71,7 @@ pub use interpreter_show_grants::ShowGrantsInterpreter;
 pub use interpreter_table_create::CreateTableInterpreter;
 pub use interpreter_table_describe::DescribeTableInterpreter;
 pub use interpreter_table_drop::DropTableInterpreter;
+pub use interpreter_table_optimize::OptimizeTableInterpreter;
 pub use interpreter_table_show_create::ShowCreateTableInterpreter;
 pub use interpreter_table_truncate::TruncateTableInterpreter;
 pub use interpreter_use_database::UseDatabaseInterpreter;
