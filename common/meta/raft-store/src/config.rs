@@ -17,7 +17,7 @@ use common_exception::Result;
 use common_grpc::DNSResolver;
 use common_meta_types::MetaResult;
 use common_meta_types::NodeId;
-use ipaddress::IPAddress;
+use net::Ipv4Addr;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
@@ -149,7 +149,7 @@ impl RaftConfig {
 
     /// Support ip address and hostname
     pub async fn raft_api_addr(&self) -> Result<String> {
-        if IPAddress::is_valid(self.raft_api_host.as_str()) {
+        if self.raft_api_host.as_str().parse::<Ipv4Addr>().is_ipv4() {
             Ok(format!("{}:{}", self.raft_api_host, self.raft_api_port))
         } else {
             let _ip_addrs = DNSResolver::instance()?

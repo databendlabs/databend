@@ -36,8 +36,6 @@ serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.78"
 thiserror = "1.0.30"
 tonic = { version = "0.6.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
-ipaddress = "0.1.2"
-bad = "0.1.1"
 
 [dev-dependencies]
 common-base = { path = "../../base" }
