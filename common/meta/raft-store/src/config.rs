@@ -149,14 +149,13 @@ impl RaftConfig {
 
     /// Support ip address and hostname
     pub async fn raft_api_addr(&self) -> Result<String> {
-        match IPAddress::parse(self.raft_api_host.as_str()) {
-            Ok(_ip_address) => Ok(format!("{}:{}", self.raft_api_host, self.raft_api_port)),
-            Err(_) => {
-                let ip_addrs = DNSResolver::instance()?
-                    .resolve(self.raft_api_host.clone())
-                    .await?;
-                Ok(format!("{}:{}", ip_addrs[0], self.raft_api_port))
-            }
+        if IPAddress::is_valid(self.raft_api_host.as_str()) {
+            Ok(format!("{}:{}", self.raft_api_host, self.raft_api_port))
+        } else {
+            let _ip_addrs = DNSResolver::instance()?
+                .resolve(self.raft_api_host.clone())
+                .await?;
+            Ok(format!("{}:{}", _ip_addrs[0], self.raft_api_port))
         }
     }
 
