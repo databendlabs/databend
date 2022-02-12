@@ -25,21 +25,21 @@ use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
-pub struct CreatUDFInterpreter {
+pub struct CreateUserUDFInterpreter {
     ctx: Arc<QueryContext>,
     plan: CreateUserUDFPlan,
 }
 
-impl CreatUDFInterpreter {
+impl CreateUserUDFInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CreateUserUDFPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(CreatUDFInterpreter { ctx, plan }))
+        Ok(Arc::new(CreateUserUDFInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreatUDFInterpreter {
+impl Interpreter for CreateUserUDFInterpreter {
     fn name(&self) -> &str {
-        "CreatUDFInterpreter"
+        "CreateUserUDFInterpreter"
     }
 
     #[tracing::instrument(level = "info", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]

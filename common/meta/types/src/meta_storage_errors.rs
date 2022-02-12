@@ -14,13 +14,16 @@
 
 use std::fmt::Display;
 
+use anyerror::AnyError;
 use common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::transaction::UnabortableTransactionError;
 use thiserror::Error;
 
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+use crate::error_context::ErrorWithContext;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
 pub enum MetaStorageError {
     // type to represent bytes format errors
     #[error("{0}")]
@@ -30,15 +33,19 @@ pub enum MetaStorageError {
     #[error("{0}")]
     SerdeError(String),
 
-    #[error("sled error: {0}")]
-    SledError(String),
+    /// An AnyError built from sled::Error.
+    #[error(transparent)]
+    SledError(AnyError),
 
-    #[error("{0}")]
-    TransactionAbort(String),
+    /// Error that is related to snapshot
+    #[error(transparent)]
+    SnapshotError(AnyError),
 
+    /// An internal error that inform txn to retry.
     #[error("Conflict when execute transaction, just retry")]
     TransactionConflict,
 
+    /// An application error that cause transaction to abort.
     #[error("{0}")]
     AppError(#[from] AppError),
 }
@@ -131,10 +138,15 @@ impl From<serde_json::Error> for MetaStorageError {
     }
 }
 
-// from sled error to MetaStorageError::StorageError
 impl From<sled::Error> for MetaStorageError {
-    fn from(error: sled::Error) -> MetaStorageError {
-        MetaStorageError::SledError(format!("sled error: {:?}", error))
+    fn from(e: sled::Error) -> MetaStorageError {
+        MetaStorageError::SledError(AnyError::new(&e))
+    }
+}
+
+impl From<ErrorWithContext<sled::Error>> for MetaStorageError {
+    fn from(e: ErrorWithContext<sled::Error>) -> MetaStorageError {
+        MetaStorageError::SledError(AnyError::new(&e.err).add_context(|| e.context))
     }
 }
 
@@ -180,7 +192,9 @@ where E: Display + Send + Sync + 'static
 impl From<UnabortableTransactionError> for MetaStorageError {
     fn from(error: UnabortableTransactionError) -> Self {
         match error {
-            UnabortableTransactionError::Storage(e) => MetaStorageError::SledError(e.to_string()),
+            UnabortableTransactionError::Storage(e) => {
+                MetaStorageError::SledError(AnyError::new(&e))
+            }
             UnabortableTransactionError::Conflict => MetaStorageError::TransactionConflict,
         }
     }
