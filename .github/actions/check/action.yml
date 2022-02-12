@@ -38,7 +38,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
       with:
         log: info
-        config: .github/licenserc.yml
+        config: .github/licenserc.yaml
 
     - name: YAML Lint
       uses: ibiqlik/action-yamllint@v3
