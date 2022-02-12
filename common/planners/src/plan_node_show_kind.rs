@@ -12,20 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_datavalues2::DataSchema;
-use common_datavalues2::DataSchemaRef;
-
-use crate::PlanShowKind;
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct ShowDatabasesPlan {
-    pub kind: PlanShowKind,
-}
+pub enum PlanShowKind {
+    None,
 
-impl ShowDatabasesPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
+    // show databases like '%xx%'
+    WithLike(String),
+
+    // show tables where name like '%xx%'
+    WithWhere(String),
+
+    // show tables from db1
+    WithFrom(String),
 }

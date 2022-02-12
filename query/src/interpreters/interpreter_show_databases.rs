@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
+use common_planners::PlanShowKind;
 use common_planners::ShowDatabasesPlan;
 use common_streams::SendableDataBlockStream;
 
@@ -36,13 +37,19 @@ impl ShowDatabasesInterpreter {
         Ok(Arc::new(ShowDatabasesInterpreter { ctx, plan }))
     }
 
-    fn build_query(&self) -> String {
-        return match &self.plan.where_opt {
-            None => "SELECT name AS Database FROM system.databases ORDER BY name".to_string(),
-            Some(v) => format!(
+    fn build_query(&self) -> Result<String> {
+        return match &self.plan.kind {
+            PlanShowKind::None => {
+                Ok("SELECT name AS Database FROM system.databases ORDER BY name".to_string())
+            }
+            PlanShowKind::WithLike(expr) => Ok(format!(
                 "SELECT name AS Database FROM system.databases WHERE {} ORDER BY name",
-                v
-            ),
+                expr
+            )),
+            kind => Err(ErrorCode::UnImplement(format!(
+                "Show databases unsupported: {:?}",
+                kind
+            ))),
         };
     }
 }
@@ -57,7 +64,7 @@ impl Interpreter for ShowDatabasesInterpreter {
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let query = self.build_query();
+        let query = self.build_query()?;
         if let PlanNode::Select(plan) = PlanParser::parse(self.ctx.clone(), &query).await? {
             let interpreter = SelectInterpreter::try_create(self.ctx.clone(), plan)?;
             interpreter.execute(input_stream).await

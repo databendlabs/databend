@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_planners::PlanNode;
+use common_planners::PlanShowKind;
 use common_planners::ShowDatabasesPlan;
 use common_tracing::tracing;
 use sqlparser::ast::Expr;
@@ -33,14 +34,16 @@ pub struct DfShowDatabases {
 impl AnalyzableStatement for DfShowDatabases {
     #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let mut where_opt = None;
+        let mut kind = PlanShowKind::None;
         match &self.where_opt {
             None => {}
-            Some(expr) => where_opt = Some(format!("{}", expr)),
+            Some(expr) => {
+                kind = PlanShowKind::WithLike(format!("{}", expr));
+            }
         }
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::ShowDatabases(ShowDatabasesPlan { where_opt }),
+            PlanNode::ShowDatabases(ShowDatabasesPlan { kind }),
         )))
     }
 }
