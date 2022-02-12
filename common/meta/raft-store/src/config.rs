@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::net::Ipv4Addr;
+
 use clap::Parser;
 use common_exception::Result;
 use common_grpc::DNSResolver;
 use common_meta_types::MetaResult;
 use common_meta_types::NodeId;
-use net::Ipv4Addr;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
@@ -149,13 +150,15 @@ impl RaftConfig {
 
     /// Support ip address and hostname
     pub async fn raft_api_addr(&self) -> Result<String> {
-        if self.raft_api_host.as_str().parse::<Ipv4Addr>().is_ipv4() {
-            Ok(format!("{}:{}", self.raft_api_host, self.raft_api_port))
-        } else {
-            let _ip_addrs = DNSResolver::instance()?
-                .resolve(self.raft_api_host.clone())
-                .await?;
-            Ok(format!("{}:{}", _ip_addrs[0], self.raft_api_port))
+        let _ipv4_addr = self.raft_api_host.as_str().parse::<Ipv4Addr>();
+        match _ipv4_addr {
+            Ok(_) => Ok(format!("{}:{}", self.raft_api_host, self.raft_api_port)),
+            Err(_) => {
+                let _ip_addrs = DNSResolver::instance()?
+                    .resolve(self.raft_api_host.clone())
+                    .await?;
+                Ok(format!("{}:{}", _ip_addrs[0], self.raft_api_port))
+            }
         }
     }
 
