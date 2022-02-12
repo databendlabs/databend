@@ -262,7 +262,9 @@ impl MetaNode {
             builder = builder.node_id(sto.id);
         } else {
             // read id from config, read listening addr from config.
-            builder = builder.node_id(config.id).addr(config.raft_api_addr().await?);
+            builder = builder
+                .node_id(config.id)
+                .addr(config.raft_api_addr().await?);
         }
 
         let mn = builder.build().await?;
