@@ -42,7 +42,7 @@ common-metrics = { path = "../common/metrics" }
 # Github dependencies
 
 # Crates.io dependencies
-anyerror = "0.1.2"
+anyerror = "0.1.3"
 anyhow = "1.0.53"
 async-trait = "0.1.52"
 backtrace = "0.3.64"
