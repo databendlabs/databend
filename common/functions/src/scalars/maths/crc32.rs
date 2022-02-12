@@ -16,21 +16,21 @@ use std::fmt;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
-use common_exception::ErrorCode;
 use common_exception::Result;
+use crc32fast::Hasher;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone)]
-pub struct ExpFunction {
+pub struct CRC32Function {
     _display_name: String,
 }
 
-impl ExpFunction {
+impl CRC32Function {
     pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(ExpFunction {
+        Ok(Box::new(CRC32Function {
             _display_name: _display_name.to_string(),
         }))
     }
@@ -41,40 +41,35 @@ impl ExpFunction {
     }
 }
 
-impl Function for ExpFunction {
+impl Function for CRC32Function {
     fn name(&self) -> &str {
         &*self._display_name
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let dt = DataType::UInt32;
         let nullable = args.iter().any(|arg| arg.is_nullable());
-
-        let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
-            Ok(DataType::Float64)
-        } else {
-            Err(ErrorCode::IllegalDataType(format!(
-                "Expected numeric, but got {}",
-                args[0]
-            )))
-        }?;
-
-        Ok(DataTypeAndNullable::create(&data_type, nullable))
+        Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         let result = columns[0]
             .column()
             .to_minimal_array()?
-            .cast_with_type(&DataType::Float64)?
-            .f64()?
-            .apply_cast_numeric(|v| v.exp());
+            .cast_with_type(&DataType::String)?
+            .string()?
+            .apply_cast_numeric(|v| {
+                let mut hasher = Hasher::new();
+                hasher.update(v);
+                hasher.finalize()
+            });
         let column: DataColumn = result.into();
         Ok(column.resize_constant(columns[0].column().len()))
     }
 }
 
-impl fmt::Display for ExpFunction {
+impl fmt::Display for CRC32Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "EXP")
+        write!(f, "CRC")
     }
 }
