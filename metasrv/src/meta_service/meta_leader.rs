@@ -168,7 +168,7 @@ impl<'a> MetaLeader<'a> {
             }
             ClientWriteError::ForwardToLeader(to_leader) => {
                 Err(MetaRaftError::ForwardToLeader(ForwardToLeader {
-                    leader: to_leader.leader_id,
+                    leader_id: to_leader.leader_id,
                 })
                 .into())
             }
@@ -200,7 +200,7 @@ impl<'a> MetaLeader<'a> {
                 // retryable error
                 ClientWriteError::ForwardToLeader(to_leader) => {
                     Err(MetaRaftError::ForwardToLeader(ForwardToLeader {
-                        leader: to_leader.leader_id,
+                        leader_id: to_leader.leader_id,
                     })
                     .into())
                 }

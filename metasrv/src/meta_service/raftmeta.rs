@@ -571,7 +571,7 @@ impl MetaNode {
             .into());
         }
 
-        let leader_id = e.leader.ok_or_else(|| {
+        let leader_id = e.leader_id.ok_or_else(|| {
             MetaRaftError::NoLeaderError("need to forward req but no leader".to_string())
         })?;
 
@@ -594,7 +594,7 @@ impl MetaNode {
             return Ok(MetaLeader::new(self));
         }
         Err(ForwardToLeader {
-            leader: Some(curr_leader),
+            leader_id: Some(curr_leader),
         })
     }
 

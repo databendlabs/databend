@@ -18,6 +18,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
 
+pub type ForwardToLeader = openraft::error::ForwardToLeader;
+
 // represent raft related errors
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum MetaRaftError {
@@ -41,12 +43,6 @@ pub enum MetaRaftError {
 
     #[error("{0}")]
     RequestNotForwardToLeaderError(String),
-}
-
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[error("ForwardToLeader: {leader:?}")]
-pub struct ForwardToLeader {
-    pub leader: Option<NodeId>,
 }
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
