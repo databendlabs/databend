@@ -12,38 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions2;
+use crate::scalars::scalar_function2_test::ScalarFunction2Test;
 
 #[test]
 fn test_crc32_function() -> Result<()> {
     let tests = vec![
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "crc-MySQL-passed",
-            nullable: false,
-            columns: vec![Series::new(vec!["MySQL"]).into()],
-            expect: Series::new(vec![3259397556u32]).into(),
+            columns: vec![Series::from_data(vec!["MySQL"])],
+            expect: Series::from_data(vec![3259397556u32]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "crc-mysql-passed",
-            nullable: false,
-            columns: vec![Series::new(vec!["mysql"]).into()],
-            expect: Series::new(vec![2501908538u32]).into(),
+            columns: vec![Series::from_data(vec!["mysql"])],
+            expect: Series::from_data(vec![2501908538u32]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "crc-1-passed",
-            nullable: false,
-            columns: vec![Series::new(vec![1]).into()],
-            expect: Series::new(vec![2212294583u32]).into(),
+            columns: vec![Series::from_data(vec!["1"])],
+            expect: Series::from_data(vec![2212294583u32]),
             error: "",
         },
     ];
 
-    test_scalar_functions(CRC32Function::try_create("crc")?, &tests)
+    test_scalar_functions2(CRC32Function::try_create("crc")?, &tests)
 }
