@@ -58,6 +58,10 @@ pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
         false
     }
 
+    fn is_null(&self) -> bool {
+        self.data_type_id() == TypeID::Null
+    }
+
     fn name(&self) -> &str;
 
     fn aliases(&self) -> &[&str] {
