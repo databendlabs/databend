@@ -78,4 +78,9 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     ) -> Result<Option<AggregateFunctionRef>> {
         Ok(None)
     }
+
+    // some features
+    fn convert_const_to_full(&self) -> bool {
+        true
+    }
 }
