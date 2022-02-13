@@ -172,7 +172,7 @@ impl Function2 for ConcatWsFunction {
         let cols: Vec<ColumnWithField> = columns[1..]
             .iter()
             .filter(|c| !c.data_type().is_null())
-            .map(|c| c.clone())
+            .cloned()
             .collect();
 
         let viewer = Vu8::try_create_viewer(columns[0].column())?;
