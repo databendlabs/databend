@@ -15,72 +15,47 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_planners::PlanNode;
+use common_planners::PlanShowKind;
+use common_planners::ShowTablesPlan;
 use common_tracing::tracing;
-use sqlparser::ast::Expr;
-use sqlparser::ast::Ident;
-use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
-use crate::sql::PlanParser;
+use crate::sql::statements::DfShowKind;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum DfShowTables {
-    All,
-    Like(Ident),
-    Where(Expr),
-    FromOrIn(ObjectName),
+pub struct DfShowTables {
+    pub kind: DfShowKind,
+}
+
+impl DfShowTables {
+    pub fn create(kind: DfShowKind) -> DfShowTables {
+        DfShowTables { kind }
+    }
 }
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfShowTables {
-    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let rewritten_query = self.rewritten_query(ctx.clone());
-        let rewritten_query_plan = PlanParser::parse(ctx, rewritten_query.as_str());
-        Ok(AnalyzedResult::SimpleQuery(Box::new(
-            rewritten_query_plan.await?,
-        )))
-    }
-}
-
-impl DfShowTables {
-    fn show_all_tables(&self, ctx: Arc<QueryContext>) -> String {
-        format!(
-            "SELECT created_on, name FROM system.tables where database = '{}' ORDER BY database, name",
-            ctx.get_current_database()
-        )
-    }
-
-    fn show_tables_with_like(&self, i: &Ident, ctx: Arc<QueryContext>) -> String {
-        format!(
-            "SELECT created_on, name FROM system.tables where database = '{}' AND name LIKE {} ORDER BY database, name",
-            ctx.get_current_database(), i,
-        )
-    }
-
-    fn show_tables_with_predicate(&self, e: &Expr, ctx: Arc<QueryContext>) -> String {
-        format!(
-            "SELECT created_on, name FROM system.tables where database = '{}' AND ({}) ORDER BY database, name",
-            ctx.get_current_database(),
-            e,
-        )
-    }
-
-    fn show_tables_from_db(name: &ObjectName) -> String {
-        format!(
-            "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
-            name.0[0].value.clone()
-        )
-    }
-
-    fn rewritten_query(&self, ctx: Arc<QueryContext>) -> String {
-        match self {
-            DfShowTables::All => self.show_all_tables(ctx),
-            DfShowTables::Like(i) => self.show_tables_with_like(i, ctx),
-            DfShowTables::Where(e) => self.show_tables_with_predicate(e, ctx),
-            DfShowTables::FromOrIn(name) => DfShowTables::show_tables_from_db(name),
+    #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
+    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+        let mut kind = PlanShowKind::All;
+        match &self.kind {
+            DfShowKind::All => {}
+            DfShowKind::Like(v) => {
+                kind = PlanShowKind::Like(format!("{}", v));
+            }
+            DfShowKind::Where(v) => {
+                kind = PlanShowKind::Where(format!("{}", v));
+            }
+            DfShowKind::FromOrIn(v) => {
+                kind = PlanShowKind::FromOrIn(v.0[0].value.clone());
+            }
         }
+
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::ShowTables(
+            ShowTablesPlan { kind },
+        ))))
     }
 }

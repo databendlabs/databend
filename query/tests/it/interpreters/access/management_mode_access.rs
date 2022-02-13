@@ -40,6 +40,11 @@ async fn test_management_mode_access() -> Result<()> {
                     is_err: false,
                 },
                 Test {
+                    name: "db-show-databases-passed",
+                    query: "SHOW DATABASES",
+                    is_err: false,
+                },
+                Test {
                     name: "db-show-access-passed",
                     query: "SHOW CREATE DATABASE db1",
                     is_err: false,
@@ -57,6 +62,11 @@ async fn test_management_mode_access() -> Result<()> {
                 Test {
                     name: "table-create-access-passed",
                     query: "CREATE TABLE t1(a int)",
+                    is_err: false,
+                },
+                Test {
+                    name: "table-show-tables-passed",
+                    query: "SHOW TABLES",
                     is_err: false,
                 },
                 Test {

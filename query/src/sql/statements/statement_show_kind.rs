@@ -12,16 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub enum PlanShowKind {
+use sqlparser::ast::Expr;
+use sqlparser::ast::Ident;
+use sqlparser::ast::ObjectName;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DfShowKind {
     All,
-
-    // show databases like '%xx%'
-    Like(String),
-
-    // show tables where name like '%xx%'
-    Where(String),
-
-    // show tables from db1 [or in db1]
-    FromOrIn(String),
+    Like(Ident),
+    Where(Expr),
+    FromOrIn(ObjectName),
 }
