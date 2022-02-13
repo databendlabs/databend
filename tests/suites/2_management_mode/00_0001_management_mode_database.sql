@@ -1,0 +1,15 @@
+-- TENANT1
+SUDO USE TENANT 'tenant1';
+
+-- database check.
+CREATE DATABASE IF NOT EXISTS tenant1_db;
+SHOW DATABASES;
+
+-- TENANT2
+SUDO USE TENANT 'tenant2';
+SHOW DATABASES;
+
+
+-- TENANT1
+SUDO USE TENANT 'tenant1';
+DROP DATABASE tenant1_db;
