@@ -67,6 +67,7 @@ use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowDatabasesPlan;
 use crate::ShowGrantsPlan;
+use crate::ShowTablesPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -138,6 +139,7 @@ pub trait PlanRewriter: Sized {
             PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
             PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
+            PlanNode::ShowTables(plan) => self.rewrite_show_tables(plan),
 
             // User.
             PlanNode::CreateUser(plan) => self.create_user(plan),
@@ -372,6 +374,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_show_create_table(&mut self, plan: &ShowCreateTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::ShowCreateTable(plan.clone()))
+    }
+
+    fn rewrite_show_tables(&mut self, plan: &ShowTablesPlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowTables(plan.clone()))
     }
 
     fn rewrite_truncate_table(&mut self, plan: &TruncateTablePlan) -> Result<PlanNode> {

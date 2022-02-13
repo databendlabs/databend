@@ -56,6 +56,7 @@ use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowDatabasesPlan;
 use crate::ShowGrantsPlan;
+use crate::ShowTablesPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -107,6 +108,7 @@ pub enum PlanNode {
     OptimizeTable(OptimizeTablePlan),
     DescribeTable(DescribeTablePlan),
     ShowCreateTable(ShowCreateTablePlan),
+    ShowTables(ShowTablesPlan),
 
     // User.
     CreateUser(CreateUserPlan),
@@ -186,6 +188,7 @@ impl PlanNode {
             PlanNode::OptimizeTable(v) => v.schema(),
             PlanNode::DescribeTable(v) => v.schema(),
             PlanNode::ShowCreateTable(v) => v.schema(),
+            PlanNode::ShowTables(v) => v.schema(),
 
             // Show.
             PlanNode::ShowGrants(v) => v.schema(),
@@ -266,6 +269,7 @@ impl PlanNode {
             PlanNode::OptimizeTable(_) => "OptimizeTablePlan",
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
             PlanNode::DescribeTable(_) => "DescribeTablePlan",
+            PlanNode::ShowTables(_) => "ShowTablesPlan",
 
             // User.
             PlanNode::CreateUser(_) => "CreateUser",

@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_planners::PlanNode;
 
 use super::DescribeUserStageInterpreter;
+use crate::interpreters::interpreter_show_tables::ShowTablesInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::AlterUserUDFInterpreter;
 use crate::interpreters::CopyInterpreter;
@@ -81,9 +82,10 @@ impl InterpreterFactory {
             // Table.
             PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DropTable(v) => DropTableInterpreter::try_create(ctx_clone, v),
-            PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::OptimizeTable(v) => OptimizeTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::ShowTables(v) => ShowTablesInterpreter::try_create(ctx_clone, v),
 
             // User.
             PlanNode::CreateUser(v) => CreateUserInterpreter::try_create(ctx_clone, v),

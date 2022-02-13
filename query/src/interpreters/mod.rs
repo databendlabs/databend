@@ -31,6 +31,7 @@ mod interpreter_select;
 mod interpreter_setting;
 mod interpreter_show_databases;
 mod interpreter_show_grants;
+mod interpreter_show_tables;
 mod interpreter_table_create;
 mod interpreter_table_describe;
 mod interpreter_table_drop;

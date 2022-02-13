@@ -18,7 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::PlanShowKind;
-use common_planners::ShowDatabasesPlan;
+use common_planners::ShowTablesPlan;
 use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
@@ -27,37 +27,41 @@ use crate::interpreters::SelectInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
 
-pub struct ShowDatabasesInterpreter {
+pub struct ShowTablesInterpreter {
     ctx: Arc<QueryContext>,
-    plan: ShowDatabasesPlan,
+    plan: ShowTablesPlan,
 }
 
-impl ShowDatabasesInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowDatabasesPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowDatabasesInterpreter { ctx, plan }))
+impl ShowTablesInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowTablesPlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(ShowTablesInterpreter { ctx, plan }))
     }
 
     fn build_query(&self) -> Result<String> {
+        let database = self.ctx.get_current_database();
         return match &self.plan.kind {
             PlanShowKind::All => {
-                Ok("SELECT name AS Database FROM system.databases ORDER BY name".to_string())
+                Ok(format!("SELECT name FROM system.tables where database = '{}' ORDER BY database, name", database))
             }
-            PlanShowKind::Like(expr) => Ok(format!(
-                "SELECT name AS Database FROM system.databases WHERE {} ORDER BY name",
-                expr
-            )),
-            kind => Err(ErrorCode::UnImplement(format!(
-                "Show databases unsupported: {:?}",
-                kind
-            ))),
+            PlanShowKind::Like(v) => {
+                Ok(format!("SELECT name FROM system.tables where database = '{}' AND name LIKE {} ORDER BY database, name", database, v))
+
+            }
+            PlanShowKind::Where(v) => {
+                Ok(format!("SELECT name FROM system.tables where database = '{}' AND ({}) ORDER BY database, name", database, v))
+
+            }
+            PlanShowKind::FromOrIn(v) => {
+                Ok(format!("SELECT name FROM system.tables where database = '{}' ORDER BY database, name", v))
+            }
         };
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for ShowDatabasesInterpreter {
+impl Interpreter for ShowTablesInterpreter {
     fn name(&self) -> &str {
-        "ShowDatabasesInterpreter"
+        "ShowTablesInterpreter"
     }
 
     async fn execute(
@@ -69,7 +73,7 @@ impl Interpreter for ShowDatabasesInterpreter {
             let interpreter = SelectInterpreter::try_create(self.ctx.clone(), plan)?;
             interpreter.execute(input_stream).await
         } else {
-            return Err(ErrorCode::LogicalError("Show databases build query error"));
+            return Err(ErrorCode::LogicalError("Show tables build query error"));
         }
     }
 }

@@ -46,6 +46,7 @@ impl ManagementModeAccess {
                 | PlanNode::DropTable(_)
                 | PlanNode::DescribeTable(_)
                 | PlanNode::ShowCreateTable(_)
+                | PlanNode::ShowTables(_)
 
                 // User.
                 | PlanNode::CreateUser(_)

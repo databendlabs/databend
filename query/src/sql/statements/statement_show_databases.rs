@@ -34,11 +34,11 @@ pub struct DfShowDatabases {
 impl AnalyzableStatement for DfShowDatabases {
     #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let mut kind = PlanShowKind::None;
+        let mut kind = PlanShowKind::All;
         match &self.where_opt {
             None => {}
             Some(expr) => {
-                kind = PlanShowKind::WithLike(format!("{}", expr));
+                kind = PlanShowKind::Like(format!("{}", expr));
             }
         }
 
