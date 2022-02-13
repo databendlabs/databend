@@ -70,10 +70,15 @@ impl Function2 for FormatFunction {
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$S| {
-            let binary = ScalarBinaryExpression::<f64, i64, Vu8, _>::new(format_en_us);
-            let col = binary.eval(columns[0].column(), columns[1].column())?;
-            Ok(col.arc())
+        with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$F| {
+                with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$N| {
+                    let binary = ScalarBinaryExpression::<$F, $N, Vu8, _>::new(format_en_us);
+                    let col = binary.eval(columns[0].column(), columns[1].column())?;
+                    Ok(col.arc())
+                },{
+                    unreachable!()
+
+                })
         },{
             unreachable!()
         })

@@ -21,6 +21,7 @@ use common_exception::Result;
 use num_traits::AsPrimitive;
 
 use crate::scalars::assert_numeric;
+use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
 use crate::scalars::Function2Description;
@@ -65,7 +66,7 @@ impl Function2 for EltFunction {
         for arg in args[1..].iter() {
             let arg = remove_nullable(*arg);
             if !arg.is_null() {
-                assert_numeric(&arg)?;
+                assert_string(&arg)?;
             }
         }
 
@@ -94,20 +95,24 @@ impl Function2 for EltFunction {
 }
 
 fn check_range(index: usize, cols: usize) -> Result<()> {
-    if index >= cols {
+    if index > cols || index == 0 {
         return Err(ErrorCode::IndexOutOfBounds(format!(
-            "Index out of bounds, index: {}, len: {}",
-            index, cols
+            "Index out of bounds, expect: [1, {}], index: {}",
+            cols, index
         )));
     }
     Ok(())
 }
 
-fn execute_impl<S: Scalar + AsPrimitive<usize>>(
+fn execute_impl<S>(
     columns: &ColumnsWithField,
     input_rows: usize,
     nullable: bool,
-) -> Result<ColumnRef> {
+) -> Result<ColumnRef>
+where
+    S: Scalar + AsPrimitive<usize>,
+    for<'a> S: Scalar<RefType<'a> = S>,
+{
     let viewer = S::try_create_viewer(columns[0].column())?;
     let cols = columns.len() - 1;
 
@@ -115,7 +120,7 @@ fn execute_impl<S: Scalar + AsPrimitive<usize>>(
         if viewer.null_at(0) {
             return Ok(NullColumn::new(input_rows).arc());
         }
-        let index: usize = viewer.value_at(0).to_owned_scalar().as_();
+        let index: usize = viewer.value_at(0).as_();
         check_range(index, cols)?;
         let dest_column = columns[index].column();
 
@@ -135,12 +140,12 @@ fn execute_impl<S: Scalar + AsPrimitive<usize>>(
         .collect::<Result<Vec<_>>>()?;
     match nullable {
         false => {
-            let index_c = Series::check_get_scalar::<u8>(columns[0].column())?;
+            let index_c = Series::check_get_scalar::<S>(columns[0].column())?;
             let mut builder = MutableStringColumn::with_capacity(input_rows);
             for (row, index) in index_c.scalar_iter().enumerate() {
                 let index: usize = index.as_();
                 check_range(index, cols)?;
-                builder.append_value(viewers[index].value_at(row));
+                builder.append_value(viewers[index - 1].value_at(row));
             }
             Ok(builder.to_column())
         }

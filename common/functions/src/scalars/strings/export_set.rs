@@ -14,6 +14,7 @@
 
 use std::fmt;
 
+use bytes::BufMut;
 use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -96,9 +97,11 @@ impl Function2 for ExportSetFunction {
             &DEFAULT_CAST_OPTIONS,
         )?;
 
-        if input_rows != 1 && (number_bits_column.is_const() || bits_column.is_const()) {
+        if input_rows != 1
+            && (!number_bits_column.is_const() || !bits_column.is_const() || !sep_col.is_const())
+        {
             return Err(ErrorCode::BadArguments(
-                "Expected constant column for bits_column and number_bits_column and separator_column, column indexes: [0, 3, 4]".to_string(),
+                "Expected constant column for bits_column and separator_column and number_bits_column, column indexes: [0, 3, 4]".to_string(),
             ));
         }
 
@@ -112,22 +115,23 @@ impl Function2 for ExportSetFunction {
         let sep_viewer = Vu8::try_create_viewer(&sep_col)?;
 
         let values_capacity =
-            (std::cmp::max(on_viewer.len(), off_viewer.len()) + s.len() * input_rows) * n;
+            (std::cmp::max(on_viewer.len(), off_viewer.len()) + s.len()) * input_rows * n;
 
-        let mut builder = MutableStringColumn::with_values_capacity(input_rows, values_capacity);
+        let mut values: Vec<u8> = Vec::with_capacity(values_capacity);
+        let mut offsets: Vec<i64> = Vec::with_capacity(input_rows + 1);
+        offsets.push(0);
         for row in 0..input_rows {
-            let values = builder.values_mut();
-            let size = export_set(
+            export_set(
                 b,
                 on_viewer.value_at(row),
                 off_viewer.value_at(row),
                 sep_viewer.value_at(row),
                 n,
-                values,
+                &mut values,
             );
-
-            builder.add_offset(size);
+            offsets.push(values.len() as i64);
         }
+        let mut builder = MutableStringColumn::from_data(values, offsets);
         Ok(builder.to_column())
     }
 }
@@ -145,28 +149,16 @@ fn export_set<'a>(
     off: &'a [u8],
     sep: &'a [u8],
     n: usize,
-    buffer: &mut [u8],
-) -> usize {
-    let off_len = off.len();
-    let on_len = on.len();
-    let sep_len = sep.len();
-
-    let mut offset = 0;
+    buffer: &mut Vec<u8>,
+) {
     for n in 0..n {
         if n != 0 {
-            let buf = &mut buffer[offset..offset + sep_len];
-            buf.copy_from_slice(sep);
-            offset += sep_len;
+            buffer.put_slice(sep);
         }
         if (bits >> n & 1) == 0 {
-            let buf = &mut buffer[offset..offset + off_len];
-            buf.copy_from_slice(off);
-            offset += off_len;
+            buffer.put_slice(off);
         } else {
-            let buf = &mut buffer[offset..offset + on_len];
-            buf.copy_from_slice(on);
-            offset += on_len;
+            buffer.put_slice(on);
         }
     }
-    offset
 }

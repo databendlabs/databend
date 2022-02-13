@@ -57,7 +57,7 @@ impl Function2 for SpaceFunction {
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
-            let unary = ScalarUnaryExpression::<$S, Vu8, _>::new(|n: $S| -> Vu8 { vec![0u8; n.as_()] });
+            let unary = ScalarUnaryExpression::<$S, Vu8, _>::new(|n: $S| -> Vu8 { vec![32u8; n.as_()] });
             let col = unary.eval(columns[0].column())?;
             Ok(Arc::new(col))
         },{

@@ -83,7 +83,7 @@ impl<const IS_LEFT: bool> Function2 for LeftRightFunction<IS_LEFT> {
         match IS_LEFT {
             true => {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$S| {
-                    let binary = ScalarBinaryExpression::<Vu8, i8, Vu8, _>::new_ref(left);
+                    let binary = ScalarBinaryExpression::<Vu8, $S, Vu8, _>::new_ref(left);
                     let col = binary.eval_ref(columns[0].column(), columns[1].column())?;
                     Ok(Arc::new(col))
                 },{
@@ -92,7 +92,7 @@ impl<const IS_LEFT: bool> Function2 for LeftRightFunction<IS_LEFT> {
             }
             false => {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$S| {
-                    let binary = ScalarBinaryExpression::<Vu8, i8, Vu8, _>::new_ref(right);
+                    let binary = ScalarBinaryExpression::<Vu8, $S, Vu8, _>::new_ref(right);
                     let col = binary.eval_ref(columns[0].column(), columns[1].column())?;
                     Ok(Arc::new(col))
                 },{

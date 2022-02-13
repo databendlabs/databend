@@ -17,6 +17,7 @@ use std::fmt;
 use common_datavalues2::prelude::*;
 use common_exception::Result;
 
+use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
 use crate::scalars::Function2Description;
@@ -147,6 +148,13 @@ impl Function2 for ConcatWsFunction {
             return Ok(NullType::arc());
         }
 
+        for arg in args {
+            let arg = remove_nullable(*arg);
+            if !arg.is_null() {
+                assert_string(&arg)?;
+            }
+        }
+
         let dt = Vu8::to_data_type();
         match args[0].is_nullable() {
             true => Ok(wrap_nullable(&dt)),
@@ -160,21 +168,28 @@ impl Function2 for ConcatWsFunction {
             return Ok(NullColumn::new(input_rows).arc());
         }
 
+        // remove other null columns
+        let cols: Vec<ColumnWithField> = columns[1..]
+            .iter()
+            .filter(|c| !c.data_type().is_null())
+            .map(|c| c.clone())
+            .collect();
+
         let viewer = Vu8::try_create_viewer(columns[0].column())?;
-        if columns[0].column().is_const() {
+        if seperator.column().is_const() {
             if viewer.null_at(0) {
                 return Ok(NullColumn::new(input_rows).arc());
             }
             return Self::concat_column_with_constant_seperator(
                 viewer.value_at(0),
-                &columns[1..],
+                &cols,
                 input_rows,
             );
         }
 
         match columns[0].data_type().is_nullable() {
-            false => Self::concat_column_nonull(&columns[0], &columns[1..], input_rows),
-            true => Self::concat_column_null(&columns[0], &columns[1..], input_rows),
+            false => Self::concat_column_nonull(&columns[0], &cols, input_rows),
+            true => Self::concat_column_null(&columns[0], &cols, input_rows),
         }
     }
 
