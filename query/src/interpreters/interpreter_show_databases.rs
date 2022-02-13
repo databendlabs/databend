@@ -24,6 +24,7 @@ use common_streams::SendableDataBlockStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
+use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
 
@@ -69,7 +70,10 @@ impl Interpreter for ShowDatabasesInterpreter {
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let query = self.build_query()?;
-        if let PlanNode::Select(plan) = PlanParser::parse(self.ctx.clone(), &query).await? {
+        let plan = PlanParser::parse(self.ctx.clone(), &query).await?;
+        let optimized = Optimizers::create(self.ctx.clone()).optimize(&plan)?;
+
+        if let PlanNode::Select(plan) = optimized {
             let interpreter = SelectInterpreter::try_create(self.ctx.clone(), plan)?;
             interpreter.execute(input_stream).await
         } else {
