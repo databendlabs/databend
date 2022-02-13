@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,12 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregate_base_adaptor;
-mod aggregate_null_adaptor;
-mod aggregate_null_unary_adaptor;
-mod aggregate_null_variadic_adaptor;
+use std::sync::Arc;
 
-pub use aggregate_base_adaptor::*;
-pub use aggregate_null_adaptor::*;
-pub use aggregate_null_unary_adaptor::*;
-pub use aggregate_null_variadic_adaptor::*;
+use common_datavalues2::DataSchema;
+use common_datavalues2::DataSchemaRef;
+
+use crate::PlanShowKind;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct ShowTablesPlan {
+    pub kind: PlanShowKind,
+}
+
+impl ShowTablesPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

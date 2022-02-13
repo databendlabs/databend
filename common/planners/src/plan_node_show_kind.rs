@@ -14,14 +14,14 @@
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum PlanShowKind {
-    None,
+    All,
 
     // show databases like '%xx%'
-    WithLike(String),
+    Like(String),
 
     // show tables where name like '%xx%'
-    WithWhere(String),
+    Where(String),
 
-    // show tables from db1
-    WithFrom(String),
+    // show tables from db1 [or in db1]
+    FromOrIn(String),
 }

@@ -57,6 +57,7 @@ use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowDatabasesPlan;
 use crate::ShowGrantsPlan;
+use crate::ShowTablesPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -147,9 +148,10 @@ pub trait PlanVisitor {
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
             PlanNode::DropTable(plan) => self.visit_drop_table(plan),
             PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
+            PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
             PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
             PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
-            PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
+            PlanNode::ShowTables(plan) => self.visit_show_tables(plan),
 
             // User.
             PlanNode::CreateUser(plan) => self.visit_create_user(plan),
@@ -356,6 +358,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_show_create_table(&mut self, _: &ShowCreateTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_show_tables(&mut self, _: &ShowTablesPlan) -> Result<()> {
         Ok(())
     }
 
