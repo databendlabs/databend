@@ -65,6 +65,7 @@ use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
+use crate::ShowDatabasesPlan;
 use crate::ShowGrantsPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
@@ -124,6 +125,12 @@ pub trait PlanRewriter: Sized {
             // Copy.
             PlanNode::Copy(plan) => self.rewrite_copy(plan),
 
+            // Database.
+            PlanNode::CreateDatabase(plan) => self.rewrite_create_database(plan),
+            PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
+            PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
+            PlanNode::ShowDatabases(plan) => self.rewrite_show_databases(plan),
+
             // Table.
             PlanNode::CreateTable(plan) => self.rewrite_create_table(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
@@ -131,11 +138,6 @@ pub trait PlanRewriter: Sized {
             PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
             PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
-
-            // Database.
-            PlanNode::CreateDatabase(plan) => self.rewrite_create_database(plan),
-            PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
-            PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
 
             // User.
             PlanNode::CreateUser(plan) => self.create_user(plan),
@@ -418,6 +420,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_show_create_database(&mut self, plan: &ShowCreateDatabasePlan) -> Result<PlanNode> {
         Ok(PlanNode::ShowCreateDatabase(plan.clone()))
+    }
+
+    fn rewrite_show_databases(&mut self, plan: &ShowDatabasesPlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowDatabases(plan.clone()))
     }
 
     fn rewrite_create_user_udf(&mut self, plan: &CreateUserUDFPlan) -> Result<PlanNode> {

@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::io::Cursor;
 use std::ops::RangeBounds;
 
+use anyerror::AnyError;
 use common_base::tokio::sync::RwLock;
 use common_base::tokio::sync::RwLockWriteGuard;
 use common_meta_raft_store::config::RaftConfig;
@@ -32,6 +33,7 @@ use common_meta_sled_store::openraft::EffectiveMembership;
 use common_meta_sled_store::openraft::ErrorSubject;
 use common_meta_sled_store::openraft::ErrorVerb;
 use common_meta_sled_store::openraft::StateMachineChanges;
+use common_meta_types::error_context::WithContext;
 use common_meta_types::AppliedState;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
@@ -40,7 +42,6 @@ use common_meta_types::MetaResult;
 use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
-use common_meta_types::ToMetaStorageError;
 use common_tracing::tracing;
 use openraft::async_trait::async_trait;
 use openraft::raft::Entry;
@@ -158,15 +159,15 @@ impl MetaRaftStore {
 
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
     #[tracing::instrument(level = "debug", skip(self, data))]
-    pub async fn install_snapshot(&self, data: &[u8]) -> MetaResult<()> {
+    pub async fn install_snapshot(&self, data: &[u8]) -> Result<(), MetaStorageError> {
         let mut sm = self.state_machine.write().await;
 
         let (sm_id, prev_sm_id) = self.raft_state.read_state_machine_id()?;
         if sm_id != prev_sm_id {
-            return Err(MetaError::ConcurrentSnapshotInstall(format!(
+            return Err(MetaStorageError::SnapshotError(AnyError::error(format!(
                 "another snapshot install is not finished yet: {} {}",
                 sm_id, prev_sm_id
-            )));
+            ))));
         }
 
         let new_sm_id = sm_id + 1;
@@ -191,10 +192,7 @@ impl MetaRaftStore {
         for x in snap.kvs.into_iter() {
             let k = &x[0];
             let v = &x[1];
-            tree.insert(k, v.clone())
-                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                    "fail to insert snapshot"
-                })?;
+            tree.insert(k, v.clone()).context(|| "insert snapshot")?;
         }
 
         tracing::info!(
@@ -203,11 +201,7 @@ impl MetaRaftStore {
             new_sm.get_last_applied()?,
         );
 
-        tree.flush_async()
-            .await
-            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                "fail to flush snapshot"
-            })?;
+        tree.flush_async().await.context(|| "flush snapshot")?;
 
         tracing::info!("flushed tree, no_kvs: {}", nkvs);
 

@@ -271,7 +271,9 @@ impl MetaNode {
             builder = builder.node_id(sto.id);
         } else {
             // read id from config, read listening addr from config.
-            builder = builder.node_id(config.id).addr(config.raft_api_addr());
+            builder = builder
+                .node_id(config.id)
+                .addr(config.raft_api_addr().await?);
         }
 
         let mn = builder.build().await?;
@@ -280,10 +282,9 @@ impl MetaNode {
 
         if !is_open {
             if let Some(_addrs) = init_cluster {
-                mn.init_cluster(config.raft_api_addr()).await?;
+                mn.init_cluster(config.raft_api_addr().await?).await?;
             }
         }
-
         Ok(mn)
     }
 
@@ -415,7 +416,7 @@ impl MetaNode {
                     forward_to_leader: 1,
                     body: ForwardRequestBody::Join(JoinRequest {
                         node_id: conf.id,
-                        address: conf.raft_api_addr(),
+                        address: conf.raft_api_addr().await?,
                     }),
                 };
 

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
-use common_exception::Result;
-use common_grpc::DNSResolver;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub enum PlanShowKind {
+    None,
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_resolver_github() -> Result<()> {
-    let addrs = DNSResolver::instance()?.resolve("github.com").await?;
-    assert_ne!(addrs.len(), 0);
-    Ok(())
+    // show databases like '%xx%'
+    WithLike(String),
+
+    // show tables where name like '%xx%'
+    WithWhere(String),
+
+    // show tables from db1
+    WithFrom(String),
 }

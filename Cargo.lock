@@ -54,14 +54,13 @@ dependencies = [
 
 [[package]]
 name = "anyerror"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ad463f35c2858e54959324c3bc6c076a1f159f53b4ac402658a65ee863180a5"
+checksum = "59e74c994272090d6d62049799a5edc1d81b9fcdc36dc5ce11a08986b98175a8"
 dependencies = [
  "anyhow",
  "backtrace",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1872,6 +1871,7 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-exception",
+ "common-grpc",
  "common-io",
  "common-meta-api",
  "common-meta-sled-store",
