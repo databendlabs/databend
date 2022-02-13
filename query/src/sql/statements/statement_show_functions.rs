@@ -15,60 +15,47 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_planners::PlanNode;
+use common_planners::PlanShowKind;
+use common_planners::ShowFunctionsPlan;
 use common_tracing::tracing;
-use sqlparser::ast::Expr;
-use sqlparser::ast::Ident;
 
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
-use crate::sql::PlanParser;
+use crate::sql::statements::DfShowKind;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum DfShowFunctions {
-    All,
-    Like(Ident),
-    Where(Expr),
+pub struct DfShowFunctions {
+    pub kind: DfShowKind,
+}
+
+impl DfShowFunctions {
+    pub fn create(kind: DfShowKind) -> DfShowFunctions {
+        DfShowFunctions { kind }
+    }
 }
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfShowFunctions {
-    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let rewritten_query = self.rewritten_query(ctx.clone());
-        let rewritten_query_plan = PlanParser::parse(ctx, rewritten_query.as_str());
-        Ok(AnalyzedResult::SimpleQuery(Box::new(
-            rewritten_query_plan.await?,
-        )))
-    }
-}
-
-const FUNCTIONS_TABLE: &str = "system.functions";
-
-impl DfShowFunctions {
-    fn show_all_functions(&self, _ctx: Arc<QueryContext>) -> String {
-        format!("SELECT * FROM {} ORDER BY name", FUNCTIONS_TABLE,)
-    }
-
-    fn show_functions_with_like(&self, i: &Ident, _ctx: Arc<QueryContext>) -> String {
-        format!(
-            "SELECT * FROM {} where name LIKE {} ORDER BY name",
-            FUNCTIONS_TABLE, i,
-        )
-    }
-
-    fn show_functions_with_predicate(&self, e: &Expr, _ctx: Arc<QueryContext>) -> String {
-        format!(
-            "SELECT * FROM {} where ({}) ORDER BY name",
-            FUNCTIONS_TABLE, e,
-        )
-    }
-
-    fn rewritten_query(&self, ctx: Arc<QueryContext>) -> String {
-        match self {
-            DfShowFunctions::All => self.show_all_functions(ctx),
-            DfShowFunctions::Like(i) => self.show_functions_with_like(i, ctx),
-            DfShowFunctions::Where(e) => self.show_functions_with_predicate(e, ctx),
+    #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
+    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+        let mut kind = PlanShowKind::All;
+        match &self.kind {
+            DfShowKind::All => {}
+            DfShowKind::Like(v) => {
+                kind = PlanShowKind::Like(format!("{}", v));
+            }
+            DfShowKind::Where(v) => {
+                kind = PlanShowKind::Where(format!("{}", v));
+            }
+            DfShowKind::FromOrIn(v) => {
+                kind = PlanShowKind::FromOrIn(v.0[0].value.clone());
+            }
         }
+
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::ShowFunctions(ShowFunctionsPlan { kind }),
+        )))
     }
 }
