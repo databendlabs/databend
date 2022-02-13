@@ -120,6 +120,6 @@ impl AggregateFunction for AggregateFunctionBasicAdaptor {
 }
 impl fmt::Display for AggregateFunctionBasicAdaptor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.inner.name())
+        write!(f, "{}", self.inner)
     }
 }
