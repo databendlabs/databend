@@ -20,7 +20,7 @@ use common_datavalues2::remove_nullable;
 use common_datavalues2::DataField;
 use common_datavalues2::DataSchema;
 
-use crate::plan_display_indent::PlanNodeIndentFormatDisplay;
+use crate::plan_node_display_indent::PlanNodeIndentFormatDisplay;
 use crate::PlanNode;
 
 impl PlanNode {
