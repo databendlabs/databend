@@ -137,6 +137,7 @@ build_exceptions! {
 
     // Tenant error codes.
     TenantIsEmpty(1101),
+    IndexOutOfBounds(1102),
 }
 
 // Metasvr errors [2001, 3000].

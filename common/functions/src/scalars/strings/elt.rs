@@ -14,29 +14,35 @@
 
 use std::fmt;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use num_traits::AsPrimitive;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::assert_numeric;
+use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 #[derive(Clone)]
 pub struct EltFunction {
     display_name: String,
 }
 
+//MySQL ELT() returns the string at the index number specified in the list of arguments. The first argument indicates the index of the string to be retrieved from the list of arguments.
+// Note: According to Wikipedia ELT stands for Extract, Load, Transform (ELT), a data manipulation process
+
 impl EltFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(EltFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(2, usize::MAX - 1),
@@ -44,83 +50,121 @@ impl EltFunction {
     }
 }
 
-impl Function for EltFunction {
+impl Function2 for EltFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        if !args[0].is_numeric() && !args[0].is_string() && !args[0].is_null() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected string or null, but got {}",
-                args[0]
-            )));
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        if args[0].is_null() {
+            return Ok(NullType::arc());
         }
 
-        for arg in &args[1..] {
-            if !arg.is_numeric() && !arg.is_string() && !arg.is_null() {
-                return Err(ErrorCode::IllegalDataType(format!(
-                    "Expected string or null, but got {}",
-                    arg
-                )));
+        let arg = remove_nullable(args[0]);
+        assert_numeric(&arg)?;
+
+        for arg in args[1..].iter() {
+            let arg = remove_nullable(*arg);
+            if !arg.is_null() {
+                assert_string(&arg)?;
             }
         }
-        let dt = DataType::String;
-        Ok(DataTypeAndNullable::create(&dt, true))
+
+        let dt = Vu8::to_data_type();
+        match args.iter().any(|f| f.is_nullable()) {
+            true => Ok(wrap_nullable(&dt)),
+            false => Ok(dt),
+        }
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let n_column = columns[0].column().cast_with_type(&DataType::Int64)?;
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        if columns[0].data_type().is_null() {
+            return Ok(NullColumn::new(input_rows).arc());
+        }
+        let nullable = columns.iter().any(|c| c.data_type().is_nullable());
+        with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
+             execute_impl::<$S>(columns, input_rows, nullable)
+        },{
+            unreachable!()
+        })
+    }
 
-        let r_column = match n_column {
-            DataColumn::Constant(DataValue::Int64(num), _) => {
-                if let Some(num) = num {
-                    let n = num as usize;
-                    if n > 0 && n < columns.len() {
-                        columns[n].column().clone()
-                    } else {
-                        DataColumn::Constant(DataValue::Null, input_rows)
-                    }
-                } else {
-                    DataColumn::Constant(DataValue::Null, input_rows)
-                }
-            }
-            DataColumn::Array(n_series) => {
-                let series = columns[1..]
-                    .iter()
-                    .map(|c| c.column().cast_with_type(&DataType::String)?.to_array())
-                    .collect::<Result<Vec<Series>>>()?;
+    fn passthrough_null(&self) -> bool {
+        false
+    }
+}
 
-                let columns = series
-                    .iter()
-                    .map(|s| s.string())
-                    .collect::<Result<Vec<&DFStringArray>>>()?;
+fn check_range(index: usize, cols: usize) -> Result<()> {
+    if index > cols || index == 0 {
+        return Err(ErrorCode::IndexOutOfBounds(format!(
+            "Index out of bounds, expect: [1, {}], index: {}",
+            cols, index
+        )));
+    }
+    Ok(())
+}
 
-                let mut r_array = StringArrayBuilder::with_capacity(input_rows);
+fn execute_impl<S>(
+    columns: &ColumnsWithField,
+    input_rows: usize,
+    nullable: bool,
+) -> Result<ColumnRef>
+where
+    S: Scalar + AsPrimitive<usize>,
+    for<'a> S: Scalar<RefType<'a> = S>,
+{
+    let viewer = S::try_create_viewer(columns[0].column())?;
+    let cols = columns.len() - 1;
 
-                for (i, on) in n_series.i64()?.iter().enumerate() {
-                    if let Some(on) = on {
-                        let n = *on as usize;
-                        if n > 0 && n <= columns.len() {
-                            if columns[n - 1].is_null(n) {
-                                r_array.append_null();
-                            } else {
-                                unsafe {
-                                    r_array.append_value(columns[n - 1].value_unchecked(i));
-                                }
-                            }
-                        } else {
-                            r_array.append_null();
-                        }
-                    } else {
-                        r_array.append_null();
-                    }
-                }
-                r_array.finish().into()
-            }
-            _ => DataColumn::Constant(DataValue::Null, input_rows),
+    if columns[0].column().is_const() {
+        if viewer.null_at(0) {
+            return Ok(NullColumn::new(input_rows).arc());
+        }
+        let index: usize = viewer.value_at(0).as_();
+        check_range(index, cols)?;
+        let dest_column = columns[index].column();
+
+        return match (nullable, dest_column.data_type().can_inside_nullable()) {
+            (true, true) => Ok(NullableColumn::new(
+                dest_column.clone(),
+                const_validitiess(input_rows, true),
+            )
+            .arc()),
+            _ => Ok(dest_column.clone()),
         };
-        Ok(r_column)
+    }
+
+    let viewers = columns[1..]
+        .iter()
+        .map(|column| Vu8::try_create_viewer(column.column()))
+        .collect::<Result<Vec<_>>>()?;
+    match nullable {
+        false => {
+            let index_c = Series::check_get_scalar::<S>(columns[0].column())?;
+            let mut builder = MutableStringColumn::with_capacity(input_rows);
+            for (row, index) in index_c.scalar_iter().enumerate() {
+                let index: usize = index.as_();
+                check_range(index, cols)?;
+                builder.append_value(viewers[index - 1].value_at(row));
+            }
+            Ok(builder.to_column())
+        }
+
+        true => {
+            let index_viewer = u8::try_create_viewer(columns[0].column())?;
+            let mut builder = NullableColumnBuilder::<Vu8>::with_capacity(input_rows);
+
+            for row in 0..input_rows {
+                if index_viewer.null_at(row) {
+                    builder.append_null();
+                } else {
+                    let index: usize = index_viewer.value_at(row).as_();
+                    check_range(index, cols)?;
+                    builder.append(viewers[index].value_at(row), viewers[index].valid_at(row));
+                }
+            }
+            Ok(builder.build(input_rows))
+        }
     }
 }
 

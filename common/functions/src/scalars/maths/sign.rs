@@ -50,12 +50,8 @@ impl SignFunction {
     }
 }
 
-fn sign<S>(value: S::RefType<'_>) -> i8
-where
-    S: Scalar + Default,
-    for<'a> S::RefType<'a, ScalarType = S>: PartialOrd,
-    for<'a> S: Scalar<RefType<'a> = S>,
-{
+fn sign<S>(value: S) -> i8
+where S: Scalar + Default + PartialOrd {
     match value.partial_cmp(&S::default()) {
         Some(std::cmp::Ordering::Greater) => 1,
         Some(std::cmp::Ordering::Less) => -1,

@@ -16,6 +16,16 @@ use common_datavalues2::DataTypePtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+pub fn assert_string(data_type: &DataTypePtr) -> Result<()> {
+    if !data_type.data_type_id().is_string() {
+        return Err(ErrorCode::IllegalDataType(format!(
+            "Expected a string type, but got {:?}",
+            data_type
+        )));
+    }
+    Ok(())
+}
+
 pub fn assert_numeric(data_type: &DataTypePtr) -> Result<()> {
     if !data_type.data_type_id().is_numeric() {
         return Err(ErrorCode::IllegalDataType(format!(
