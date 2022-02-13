@@ -79,7 +79,7 @@ pub trait ClickHouseSession: Send + Sync {
         Progress::default()
     }
 
-    fn authenticate(&self, _username: &str, _password: &[u8], _client_addr: &str) -> bool {
+    async fn authenticate(&self, _username: &str, _password: &[u8], _client_addr: &str) -> bool {
         true
     }
 }
