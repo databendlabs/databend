@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod blake3hash;
+mod city64_with_seed;
 mod hash;
 mod hash_base;
 mod md5hash;
@@ -20,6 +21,7 @@ mod sha1hash;
 mod sha2hash;
 
 pub use blake3hash::Blake3HashFunction;
+pub use city64_with_seed::City64WithSeedFunction;
 pub use hash::*;
 pub use hash_base::BaseHashFunction;
 pub use md5hash::Md5HashFunction;
