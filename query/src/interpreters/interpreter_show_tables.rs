@@ -41,18 +41,16 @@ impl ShowTablesInterpreter {
         let database = self.ctx.get_current_database();
         return match &self.plan.kind {
             PlanShowKind::All => {
-                Ok(format!("SELECT name FROM system.tables where database = '{}' ORDER BY database, name", database))
+                Ok(format!("SELECT name FROM system.tables WHERE database = '{}' ORDER BY database, name", database))
             }
             PlanShowKind::Like(v) => {
-                Ok(format!("SELECT name FROM system.tables where database = '{}' AND name LIKE {} ORDER BY database, name", database, v))
-
+                Ok(format!("SELECT name FROM system.tables WHERE database = '{}' AND name LIKE {} ORDER BY database, name", database, v))
             }
             PlanShowKind::Where(v) => {
-                Ok(format!("SELECT name FROM system.tables where database = '{}' AND ({}) ORDER BY database, name", database, v))
-
+                Ok(format!("SELECT name FROM system.tables WHERE database = '{}' AND ({}) ORDER BY database, name", database, v))
             }
             PlanShowKind::FromOrIn(v) => {
-                Ok(format!("SELECT name FROM system.tables where database = '{}' ORDER BY database, name", v))
+                Ok(format!("SELECT name FROM system.tables WHERE database = '{}' ORDER BY database, name", v))
             }
         };
     }

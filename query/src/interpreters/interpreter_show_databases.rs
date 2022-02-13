@@ -43,8 +43,12 @@ impl ShowDatabasesInterpreter {
                 Ok("SELECT name AS Database FROM system.databases ORDER BY name".to_string())
             }
             PlanShowKind::Like(expr) => Ok(format!(
-                "SELECT name AS Database FROM system.databases WHERE {} ORDER BY name",
+                "SELECT name AS Database FROM system.databases WHERE name LIKE {} ORDER BY name",
                 expr
+            )),
+            PlanShowKind::Where(v) => Ok(format!(
+                "SELECT name As Database FROM system.databases WHERE {} ORDER BY name",
+                v
             )),
             kind => Err(ErrorCode::UnImplement(format!(
                 "Show databases unsupported: {:?}",
