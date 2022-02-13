@@ -39,7 +39,7 @@ impl ShowMetricsInterpreter {
     }
 
     fn build_query(&self) -> Result<String> {
-        Ok("SELECT metrics, kind, labels, value FROM system.metrics".to_string())
+        Ok("SELECT metric, kind, labels, value FROM system.metrics".to_string())
     }
 }
 

@@ -31,12 +31,14 @@ async fn test_show_engines_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+----------+",
-            "| Database |",
-            "+----------+",
-            "| default  |",
-            "| system   |",
-            "+----------+",
+            "+--------+-----------------------+",
+            "| Engine | Comment               |",
+            "+--------+-----------------------+",
+            "| FUSE   | FUSE Storage Engine   |",
+            "| GITHUB | GITHUB Storage Engine |",
+            "| MEMORY | MEMORY Storage Engine |",
+            "| NULL   | NULL Storage Engine   |",
+            "+--------+-----------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
