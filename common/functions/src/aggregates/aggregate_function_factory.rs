@@ -15,16 +15,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::prelude::DataField as OldDataField;
-use common_datavalues::prelude::DataValue as OldDataValue;
 use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
-use super::AggConvertor;
+use super::AggregateFunctionBasicAdaptor;
 use super::AggregateFunctionCombinatorNull;
-use super::AggregateFunctionV1Ref;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::Aggregators;
 
@@ -136,19 +133,6 @@ impl AggregateFunctionFactory {
     pub fn get(
         &self,
         name: impl AsRef<str>,
-        params: Vec<OldDataValue>,
-        arguments: Vec<OldDataField>,
-    ) -> Result<AggregateFunctionV1Ref> {
-        let params: Vec<DataValue> = params.iter().map(|v| v.clone().into()).collect();
-        let arguments: Vec<DataField> = arguments.iter().map(|v| v.clone().into()).collect();
-
-        let f = self.get_new(name, params.clone(), arguments.clone())?;
-        Ok(AggConvertor::create(f, params, arguments))
-    }
-
-    pub fn get_new(
-        &self,
-        name: impl AsRef<str>,
         params: Vec<DataValue>,
         arguments: Vec<DataField>,
     ) -> Result<AggregateFunctionRef> {
@@ -164,12 +148,14 @@ impl AggregateFunctionFactory {
             let new_arguments = AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
 
             let nested = self.get_impl(name, new_params, new_arguments, &mut properties)?;
-            return AggregateFunctionCombinatorNull::try_create(
+            let agg = AggregateFunctionCombinatorNull::try_create(
                 name, params, arguments, nested, properties,
-            );
+            )?;
+            return Ok(AggregateFunctionBasicAdaptor::create(agg));
         }
 
-        self.get_impl(name, params, arguments, &mut properties)
+        let agg = self.get_impl(name, params, arguments, &mut properties)?;
+        Ok(AggregateFunctionBasicAdaptor::create(agg))
     }
 
     fn get_impl(

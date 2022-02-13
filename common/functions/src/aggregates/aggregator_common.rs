@@ -87,7 +87,7 @@ pub fn eval_aggr(
     let arguments = columns.iter().map(|c| c.field().clone()).collect();
     let cols: Vec<ColumnRef> = columns.iter().map(|c| c.column().clone()).collect();
 
-    let func = factory.get_new(name, params, arguments)?;
+    let func = factory.get(name, params, arguments)?;
 
     let arena = Bump::new();
     let place = arena.alloc_layout(func.state_layout());
