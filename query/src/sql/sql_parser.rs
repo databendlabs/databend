@@ -81,6 +81,7 @@ use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowEngines;
 use crate::sql::statements::DfShowFunctions;
 use crate::sql::statements::DfShowGrants;
+use crate::sql::statements::DfShowKind;
 use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowSettings;
@@ -348,16 +349,18 @@ impl<'a> DfParser<'a> {
     fn parse_show_tables(&mut self) -> Result<DfStatement, ParserError> {
         let tok = self.parser.next_token();
         match &tok {
-            Token::EOF | Token::SemiColon => Ok(DfStatement::ShowTables(DfShowTables::All)),
+            Token::EOF | Token::SemiColon => Ok(DfStatement::ShowTables(DfShowTables {
+                kind: DfShowKind::All,
+            })),
             Token::Word(w) => match w.keyword {
-                Keyword::LIKE => Ok(DfStatement::ShowTables(DfShowTables::Like(
-                    self.parser.parse_identifier()?,
+                Keyword::LIKE => Ok(DfStatement::ShowTables(DfShowTables::create(
+                    DfShowKind::Like(self.parser.parse_identifier()?),
                 ))),
-                Keyword::WHERE => Ok(DfStatement::ShowTables(DfShowTables::Where(
-                    self.parser.parse_expr()?,
+                Keyword::WHERE => Ok(DfStatement::ShowTables(DfShowTables::create(
+                    DfShowKind::Where(self.parser.parse_expr()?),
                 ))),
-                Keyword::FROM | Keyword::IN => Ok(DfStatement::ShowTables(DfShowTables::FromOrIn(
-                    self.parser.parse_object_name()?,
+                Keyword::FROM | Keyword::IN => Ok(DfStatement::ShowTables(DfShowTables::create(
+                    DfShowKind::FromOrIn(self.parser.parse_object_name()?),
                 ))),
                 _ => self.expected("like or where", tok),
             },

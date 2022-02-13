@@ -19,20 +19,21 @@ use common_planners::PlanNode;
 use common_planners::PlanShowKind;
 use common_planners::ShowTablesPlan;
 use common_tracing::tracing;
-use sqlparser::ast::Expr;
-use sqlparser::ast::Ident;
-use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
+use crate::sql::statements::DfShowKind;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum DfShowTables {
-    All,
-    Like(Ident),
-    Where(Expr),
-    FromOrIn(ObjectName),
+pub struct DfShowTables {
+    pub kind: DfShowKind,
+}
+
+impl DfShowTables {
+    pub fn create(kind: DfShowKind) -> DfShowTables {
+        DfShowTables { kind }
+    }
 }
 
 #[async_trait::async_trait]
@@ -40,15 +41,15 @@ impl AnalyzableStatement for DfShowTables {
     #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let mut kind = PlanShowKind::All;
-        match self {
-            DfShowTables::All => {}
-            DfShowTables::Like(v) => {
+        match &self.kind {
+            DfShowKind::All => {}
+            DfShowKind::Like(v) => {
                 kind = PlanShowKind::Like(format!("{}", v));
             }
-            DfShowTables::Where(v) => {
+            DfShowKind::Where(v) => {
                 kind = PlanShowKind::Where(format!("{}", v));
             }
-            DfShowTables::FromOrIn(v) => {
+            DfShowKind::FromOrIn(v) => {
                 kind = PlanShowKind::FromOrIn(v.0[0].value.clone());
             }
         }
