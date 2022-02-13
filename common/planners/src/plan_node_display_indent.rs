@@ -15,9 +15,9 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use crate::plan_broadcast::BroadcastPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::BroadcastPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::DropDatabasePlan;

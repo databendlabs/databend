@@ -75,6 +75,17 @@ pub fn cast_column_field(
     )
 }
 
+// No logical type is specified
+// Use Default options
+pub fn default_column_cast(column: &ColumnRef, data_type: &DataTypePtr) -> Result<ColumnRef> {
+    cast_with_type(
+        column,
+        &column.data_type(),
+        data_type,
+        &DEFAULT_CAST_OPTIONS,
+    )
+}
+
 pub fn cast_with_type(
     column: &ColumnRef,
     from_type: &DataTypePtr,

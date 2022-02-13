@@ -24,7 +24,7 @@ macro_rules! load_field_from_env {
         if let Some(env_var) = std::env::var_os($env) {
             $field = env_var
                 .into_string()
-                .expect(format!("connot convert {} to string", $env).as_str())
+                .expect(format!("cannot convert {} to string", $env).as_str())
                 .parse::<$field_type>()
                 .expect(format!("cannot convert {} to {}", $env, stringify!($field_type)).as_str());
         }

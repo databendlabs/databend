@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregate_base_adaptor;
-mod aggregate_null_adaptor;
-mod aggregate_null_unary_adaptor;
-mod aggregate_null_variadic_adaptor;
+use sqlparser::ast::Expr;
+use sqlparser::ast::Ident;
+use sqlparser::ast::ObjectName;
 
-pub use aggregate_base_adaptor::*;
-pub use aggregate_null_adaptor::*;
-pub use aggregate_null_unary_adaptor::*;
-pub use aggregate_null_variadic_adaptor::*;
+#[derive(Debug, Clone, PartialEq)]
+pub enum DfShowKind {
+    All,
+    Like(Ident),
+    Where(Expr),
+    FromOrIn(ObjectName),
+}

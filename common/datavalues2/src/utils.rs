@@ -14,6 +14,7 @@
 use std::ops::Deref;
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 
 pub struct Wrap<T>(pub T);
 
@@ -47,6 +48,12 @@ pub fn get_iter_capacity<T, I: Iterator<Item = T>>(iter: &I) -> usize {
         (0, None) => 1024,
         (lower, None) => lower,
     }
+}
+
+pub fn const_validitiess(size: usize, valid: bool) -> Bitmap {
+    let mut bitmap = MutableBitmap::with_capacity(size);
+    bitmap.extend_constant(size, valid);
+    bitmap.into()
 }
 
 pub fn combine_validities(lhs: Option<&Bitmap>, rhs: Option<&Bitmap>) -> Option<Bitmap> {

@@ -301,7 +301,7 @@ fn test_aggregate_function() -> Result<()> {
 
         let mut func = || -> Result<()> {
             let factory = AggregateFunctionFactory::instance();
-            let func = factory.get_new(t.func_name, t.params.clone(), t.args.clone())?;
+            let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
 
             let addr1 = arena.alloc_layout(func.state_layout());
             func.init_state(addr1.into());
@@ -644,7 +644,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
 
         let mut func = || -> Result<()> {
             let factory = AggregateFunctionFactory::instance();
-            let func = factory.get_new(t.func_name, t.params.clone(), t.args.clone())?;
+            let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
 
             let addr1 = arena.alloc_layout(func.state_layout());
             func.init_state(addr1.into());
@@ -861,7 +861,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
 
         let mut func = || -> Result<()> {
             let factory = AggregateFunctionFactory::instance();
-            let func = factory.get_new(t.func_name, t.params.clone(), t.args.clone())?;
+            let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
             let addr1 = arena.alloc_layout(func.state_layout());
             func.init_state(addr1.into());
 
@@ -935,7 +935,7 @@ fn test_covariance_with_comparable_data_sets() -> Result<()> {
     let factory = AggregateFunctionFactory::instance();
 
     let run_test = |func_name: &'static str, array: &mut dyn MutableColumn| -> Result<f64> {
-        let func = factory.get_new(func_name, vec![], args.clone())?;
+        let func = factory.get(func_name, vec![], args.clone())?;
         let addr = arena.alloc_layout(func.state_layout());
         func.init_state(addr.into());
         func.accumulate(addr.into(), &arrays, None, 2000)?;
