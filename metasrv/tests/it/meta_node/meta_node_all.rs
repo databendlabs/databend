@@ -30,6 +30,7 @@ use common_meta_types::ForwardToLeader;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaError;
+use common_meta_types::MetaRaftError;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::RetryableError;
@@ -161,11 +162,13 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
                 assert!(rst.is_err());
                 let e = rst.unwrap_err();
                 match e {
-                    MetaError::ForwardToLeader(ForwardToLeader { leader }) => {
-                        assert_eq!(Some(leader_id), leader);
+                    MetaError::MetaRaftError(MetaRaftError::ForwardToLeader(ForwardToLeader {
+                        leader_id: forward_leader_id,
+                    })) => {
+                        assert_eq!(Some(leader_id), forward_leader_id);
                     }
                     _ => {
-                        panic!("expect ForwardToLeader")
+                        panic!("expect MetaRaftError::ForwardToLeader")
                     }
                 }
             }

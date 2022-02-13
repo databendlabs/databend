@@ -26,6 +26,7 @@ use common_meta_types::ForwardResponse;
 use common_meta_types::ForwardToLeader;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
+use common_meta_types::MetaRaftError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_tracing::tracing;
@@ -158,20 +159,23 @@ impl<'a> MetaLeader<'a> {
         };
 
         match err {
-            ClientWriteError::ChangeMembershipError(e) => Err(MetaError::ChangeMembershipError(e)),
+            ClientWriteError::ChangeMembershipError(e) => {
+                Err(MetaRaftError::ChangeMembershipError(e).into())
+            }
             // TODO(xp): enable MetaNode::RaftError when RaftError impl Serialized
-            ClientWriteError::Fatal(fatal) => Err(MetaError::UnknownError(fatal.to_string())),
+            ClientWriteError::Fatal(fatal) => Err(MetaRaftError::RaftFatal(fatal).into()),
             ClientWriteError::ForwardToLeader(to_leader) => {
-                Err(MetaError::ForwardToLeader(ForwardToLeader {
-                    leader: to_leader.leader_id,
-                }))
+                Err(MetaRaftError::ForwardToLeader(ForwardToLeader {
+                    leader_id: to_leader.leader_id,
+                })
+                .into())
             }
         }
     }
 
     /// Write a log through local raft node and return the states before and after applying the log.
     ///
-    /// If the raft node is not a leader, it returns MetaError::ForwardToLeader.
+    /// If the raft node is not a leader, it returns MetaRaftError::ForwardToLeader.
     /// If the leadership is lost during writing the log, it returns an UnknownError.
     /// TODO(xp): elaborate the UnknownError, e.g. LeaderLostError
     #[tracing::instrument(level = "debug", skip(self))]
@@ -188,12 +192,13 @@ impl<'a> MetaLeader<'a> {
             Ok(resp) => Ok(resp.data),
             Err(cli_write_err) => match cli_write_err {
                 // fatal error
-                ClientWriteError::Fatal(fatal) => Err(MetaError::UnknownError(fatal.to_string())),
+                ClientWriteError::Fatal(fatal) => Err(MetaRaftError::RaftFatal(fatal).into()),
                 // retryable error
                 ClientWriteError::ForwardToLeader(to_leader) => {
-                    Err(MetaError::ForwardToLeader(ForwardToLeader {
-                        leader: to_leader.leader_id,
-                    }))
+                    Err(MetaRaftError::ForwardToLeader(ForwardToLeader {
+                        leader_id: to_leader.leader_id,
+                    })
+                    .into())
                 }
                 ClientWriteError::ChangeMembershipError(_) => {
                     unreachable!("there should not be a ChangeMembershipError for client_write")
