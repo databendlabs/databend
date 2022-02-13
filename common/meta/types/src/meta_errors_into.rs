@@ -38,12 +38,6 @@ impl From<MetaError> for ErrorCode {
     }
 }
 
-impl From<serde_json::Error> for MetaError {
-    fn from(error: serde_json::Error) -> Self {
-        MetaError::MetaStorageError(error.into())
-    }
-}
-
 pub trait ToMetaError<T, E, CtxFn>
 where E: Display + Send + Sync + 'static
 {

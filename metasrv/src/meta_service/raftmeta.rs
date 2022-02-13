@@ -40,6 +40,7 @@ use common_meta_types::ListTableReq;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
+use common_meta_types::MetaNetworkResult;
 use common_meta_types::MetaRaftError;
 use common_meta_types::MetaResult;
 use common_meta_types::Node;
@@ -196,7 +197,7 @@ impl MetaNode {
 
     /// Start the grpc service for raft communication and meta operation API.
     #[tracing::instrument(level = "info", skip(mn))]
-    pub async fn start_grpc(mn: Arc<MetaNode>, addr: &str) -> MetaResult<()> {
+    pub async fn start_grpc(mn: Arc<MetaNode>, addr: &str) -> MetaNetworkResult<()> {
         let mut rx = mn.running_rx.clone();
 
         let meta_srv_impl = RaftServiceImpl::create(mn.clone());
@@ -207,8 +208,7 @@ impl MetaNode {
         let addr = match ret {
             Ok(addr) => addr,
             Err(e) => {
-                let err: MetaNetworkError = e.into();
-                return Err(err.into());
+                return Err(e.into());
             }
         };
         let node_id = mn.sto.id;

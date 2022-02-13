@@ -163,9 +163,7 @@ impl<'a> MetaLeader<'a> {
                 Err(MetaRaftError::ChangeMembershipError(e).into())
             }
             // TODO(xp): enable MetaNode::RaftError when RaftError impl Serialized
-            ClientWriteError::Fatal(fatal) => {
-                Err(MetaRaftError::ClientWriteError(fatal.to_string()).into())
-            }
+            ClientWriteError::Fatal(fatal) => Err(MetaRaftError::RaftFatal(fatal).into()),
             ClientWriteError::ForwardToLeader(to_leader) => {
                 Err(MetaRaftError::ForwardToLeader(ForwardToLeader {
                     leader_id: to_leader.leader_id,
@@ -194,9 +192,7 @@ impl<'a> MetaLeader<'a> {
             Ok(resp) => Ok(resp.data),
             Err(cli_write_err) => match cli_write_err {
                 // fatal error
-                ClientWriteError::Fatal(fatal) => {
-                    Err(MetaRaftError::ClientWriteError(fatal.to_string()).into())
-                }
+                ClientWriteError::Fatal(fatal) => Err(MetaRaftError::RaftFatal(fatal).into()),
                 // retryable error
                 ClientWriteError::ForwardToLeader(to_leader) => {
                     Err(MetaRaftError::ForwardToLeader(ForwardToLeader {

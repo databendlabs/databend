@@ -96,6 +96,7 @@ pub use meta_errors::MetaResult;
 pub use meta_errors_into::ToMetaError;
 pub use meta_network_errors::ConnectionError;
 pub use meta_network_errors::MetaNetworkError;
+pub use meta_network_errors::MetaNetworkResult;
 pub use meta_raft_errors::ForwardToLeader;
 pub use meta_raft_errors::MetaRaftError;
 pub use meta_raft_errors::RetryableError;

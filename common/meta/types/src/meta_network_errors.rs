@@ -27,14 +27,13 @@ pub enum MetaNetworkError {
     GetNodeAddrError(String),
 
     #[error("{0}")]
-    UnknownNode(String),
-
-    #[error("{0}")]
     CannotConnectNode(String),
 
     #[error("{0}")]
     BadAddressFormat(String),
 }
+
+pub type MetaNetworkResult<T> = std::result::Result<T, MetaNetworkError>;
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[error("ConnectionError: {msg} source: {source}")]

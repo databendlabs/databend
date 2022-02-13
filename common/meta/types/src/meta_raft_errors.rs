@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use openraft::error::ChangeMembershipError;
+use openraft::error::Fatal;
 use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
@@ -33,7 +34,7 @@ pub enum MetaRaftError {
     ConsistentReadError(String),
 
     #[error("{0}")]
-    ClientWriteError(String),
+    RaftFatal(#[from] Fatal),
 
     #[error("{0}")]
     ForwardRequestError(String),

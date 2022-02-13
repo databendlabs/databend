@@ -36,7 +36,6 @@ use common_meta_sled_store::openraft::StateMachineChanges;
 use common_meta_types::error_context::WithContext;
 use common_meta_types::AppliedState;
 use common_meta_types::LogEntry;
-use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaResult;
 use common_meta_types::MetaStorageError;
@@ -507,7 +506,7 @@ impl MetaRaftStore {
             .get_node(node_id)
             .await?
             .map(|n| n.address)
-            .ok_or_else(|| MetaNetworkError::UnknownNode(format!("node id: {}", node_id)))?;
+            .ok_or_else(|| MetaNetworkError::GetNodeAddrError(format!("node id: {}", node_id)))?;
 
         Ok(addr)
     }
