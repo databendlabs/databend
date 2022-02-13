@@ -1,4 +1,4 @@
-FROM debian:buster
+FROM ubuntu:22.04
 
 COPY ./target/release/databend-query /databend-query
 COPY ./target/release/databend-meta /databend-meta
