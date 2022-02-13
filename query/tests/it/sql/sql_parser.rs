@@ -426,42 +426,52 @@ fn show_functions_tests() -> Result<()> {
     // positive case
     expect_parse_ok(
         "SHOW FUNCTIONS",
-        DfStatement::ShowFunctions(DfShowFunctions::All),
+        DfStatement::ShowFunctions(DfShowFunctions::create(DfShowKind::All)),
     )?;
     expect_parse_ok(
         "SHOW FUNCTIONS;",
-        DfStatement::ShowFunctions(DfShowFunctions::All),
+        DfStatement::ShowFunctions(DfShowFunctions::create(DfShowKind::All)),
     )?;
     expect_parse_ok(
         "SHOW FUNCTIONS --comments should not in sql case1",
-        DfStatement::ShowFunctions(DfShowFunctions::All),
+        DfStatement::ShowFunctions(DfShowFunctions::create(DfShowKind::All)),
     )?;
 
     expect_parse_ok(
         "SHOW FUNCTIONS LIKE 'aaa'",
-        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+        DfStatement::ShowFunctions(DfShowFunctions::create(DfShowKind::Like(
+            Ident::with_quote('\'', "aaa"),
+        ))),
     )?;
     expect_parse_ok(
         "SHOW FUNCTIONS LIKE 'aaa';",
-        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+        DfStatement::ShowFunctions(DfShowFunctions::create(DfShowKind::Like(
+            Ident::with_quote('\'', "aaa"),
+        ))),
     )?;
     expect_parse_ok(
         "SHOW FUNCTIONS LIKE 'aaa' --comments should not in sql case2",
-        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+        DfStatement::ShowFunctions(DfShowFunctions::create(DfShowKind::Like(
+            Ident::with_quote('\'', "aaa"),
+        ))),
     )?;
 
     expect_parse_ok(
         "SHOW FUNCTIONS WHERE t LIKE 'aaa'",
-        DfStatement::ShowFunctions(DfShowFunctions::Where(parse_sql_to_expr("t LIKE 'aaa'"))),
+        DfStatement::ShowFunctions(DfShowFunctions::create(DfShowKind::Where(
+            parse_sql_to_expr("t LIKE 'aaa'"),
+        ))),
     )?;
     expect_parse_ok(
         "SHOW FUNCTIONS LIKE 'aaa' --comments should not in sql case2",
-        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+        DfStatement::ShowFunctions(DfShowFunctions::create(DfShowKind::Like(
+            Ident::with_quote('\'', "aaa"),
+        ))),
     )?;
     expect_parse_ok(
         "SHOW FUNCTIONS WHERE t LIKE 'aaa' AND t LIKE 'a%'",
-        DfStatement::ShowFunctions(DfShowFunctions::Where(parse_sql_to_expr(
-            "t LIKE 'aaa' AND t LIKE 'a%'",
+        DfStatement::ShowFunctions(DfShowFunctions::create(DfShowKind::Where(
+            parse_sql_to_expr("t LIKE 'aaa' AND t LIKE 'a%'"),
         ))),
     )?;
 
