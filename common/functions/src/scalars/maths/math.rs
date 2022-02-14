@@ -53,6 +53,7 @@ impl MathsFunction {
         factory.register("pi", PiFunction::desc());
         factory.register("crc32", CRC32Function::desc());
         factory.register("exp", ExpFunction::desc());
+        factory.register("sqrt", SqrtFunction::desc());
         factory.register("ceil", CeilFunction::desc());
         factory.register("ceiling", CeilFunction::desc());
         factory.register("floor", FloorFunction::desc());
@@ -74,7 +75,6 @@ impl MathsFunction {
         factory.register("acos", TrigonometricAcosFunction::desc());
         factory.register("atan", TrigonometricAtanFunction::desc());
         factory.register("atan2", TrigonometricAtan2Function::desc());
-        factory.register("sqrt", SqrtFunction::desc());
         factory.register("pow", PowFunction::desc());
         factory.register("power", PowFunction::desc());
         factory.register("rand", RandomFunction::desc());
