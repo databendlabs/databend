@@ -64,7 +64,7 @@ no_sync = true
 snapshot_logs_since_last = 1000
 heartbeat_interval = 2000
 install_snapshot_timeout = 3000
-single = true
+single = false
 join = ["j1", "j2"]
 id = 20
 sled_tree_prefix = "sled_foo"
@@ -89,7 +89,7 @@ sled_tree_prefix = "sled_foo"
     assert_eq!(cfg.raft_config.snapshot_logs_since_last, 1000);
     assert_eq!(cfg.raft_config.heartbeat_interval, 2000);
     assert_eq!(cfg.raft_config.install_snapshot_timeout, 3000);
-    assert!(cfg.raft_config.single);
+    assert!(!cfg.raft_config.single);
     assert_eq!(cfg.raft_config.join, vec!["j1", "j2"]);
     assert_eq!(cfg.raft_config.id, 20);
     assert_eq!(cfg.raft_config.sled_tree_prefix, "sled_foo");

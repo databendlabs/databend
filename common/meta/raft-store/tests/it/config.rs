@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::tokio;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_types::MetaError;
 
