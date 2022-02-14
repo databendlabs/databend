@@ -19,11 +19,11 @@ use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::io::parquet::write::*;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::parquet::encoding::Encoding;
-use common_dal2::Operator;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::io::Cursor;
+use opendal::Operator;
 
 pub async fn write_block(
     arrow_schema: &ArrowSchema,
