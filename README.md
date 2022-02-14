@@ -1,5 +1,6 @@
 <div align="center">
-<p align="center"><img alt="Databend Logo" src="website/static/img/favicon.png" width="20%"/></p>
+
+<p align="center"><img alt="Databend Logo" src="https://user-images.githubusercontent.com/7812909/153911834-4813da46-4393-4a86-ac20-1486d8b963b5.svg" width="20%"/></p>
 <p align="center">The Open Source Serverless Data Warehouse for Everyone</p>
  
 <h4 align="center">
