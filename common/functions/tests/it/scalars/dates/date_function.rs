@@ -322,7 +322,7 @@ fn test_todayofyear_function() -> Result<()> {
         ScalarFunction2WithFieldTest {
             name: "test_todayofyear_datetime",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![1633173324u32]).into(),
+                Series::from_data(vec![1633173324u32]),
                 DataField::new("dummy_1", DateTime32Type::arc(None)),
             )],
             expect: Series::from_data(vec![275u16]),
@@ -499,7 +499,7 @@ fn test_tohour_function() -> Result<()> {
         ScalarFunction2WithFieldTest {
             name: "test_tohour_date32",
             columns: vec![ColumnWithField::new(
-                Series::from_data(vec![0i32]).into(),
+                Series::from_data(vec![0i32]),
                 DataField::new("dummy_1", Date32Type::arc()),
             )],
             expect: Series::from_data(vec![0u8]),
