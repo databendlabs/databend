@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod blake3hash;
-mod city64_with_seed;
-mod hash;
-mod hash_base;
-mod md5hash;
-mod sha1hash;
-mod sha2hash;
+use std::sync::Arc;
 
-pub use blake3hash::Blake3HashFunction;
-pub use city64_with_seed::City64WithSeedFunction;
-pub use hash::*;
-pub use hash_base::BaseHashFunction;
-pub use md5hash::Md5HashFunction;
-pub use sha1hash::Sha1HashFunction;
-pub use sha2hash::Sha2HashFunction;
+use common_datavalues2::DataSchema;
+use common_datavalues2::DataSchemaRef;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct ShowUsersPlan {}
+
+impl ShowUsersPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

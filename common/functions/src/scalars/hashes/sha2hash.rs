@@ -64,7 +64,7 @@ impl Function2 for Sha2HashFunction {
         if !args[1].data_type_id().is_numeric() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected second arg as integer type, but got {:?}",
-                args[0]
+                args[1]
             )));
         }
         Ok(StringType::arc())

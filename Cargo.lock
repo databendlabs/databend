@@ -1702,6 +1702,7 @@ dependencies = [
  "indexmap",
  "itertools",
  "md5",
+ "naive-cityhash 0.2.0",
  "num",
  "num-format",
  "num-traits",

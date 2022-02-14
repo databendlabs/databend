@@ -66,8 +66,14 @@ use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowDatabasesPlan;
+use crate::ShowEnginesPlan;
+use crate::ShowFunctionsPlan;
 use crate::ShowGrantsPlan;
+use crate::ShowMetricsPlan;
+use crate::ShowProcessListsPlan;
+use crate::ShowSettingsPlan;
 use crate::ShowTablesPlan;
+use crate::ShowUsersPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -126,11 +132,21 @@ pub trait PlanRewriter: Sized {
             // Copy.
             PlanNode::Copy(plan) => self.rewrite_copy(plan),
 
+            // Show.
+            PlanNode::ShowDatabases(plan) => self.rewrite_show_databases(plan),
+            PlanNode::ShowTables(plan) => self.rewrite_show_tables(plan),
+            PlanNode::ShowEngines(plan) => self.rewrite_show_engines(plan),
+            PlanNode::ShowFunctions(plan) => self.rewrite_show_functions(plan),
+            PlanNode::ShowGrants(plan) => self.rewrite_show_grants(plan),
+            PlanNode::ShowMetrics(plan) => self.rewrite_show_metrics(plan),
+            PlanNode::ShowProcessList(plan) => self.rewrite_show_processlist(plan),
+            PlanNode::ShowSettings(plan) => self.rewrite_show_settings(plan),
+            PlanNode::ShowUsers(plan) => self.rewrite_show_users(plan),
+
             // Database.
             PlanNode::CreateDatabase(plan) => self.rewrite_create_database(plan),
             PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
             PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
-            PlanNode::ShowDatabases(plan) => self.rewrite_show_databases(plan),
 
             // Table.
             PlanNode::CreateTable(plan) => self.rewrite_create_table(plan),
@@ -139,7 +155,6 @@ pub trait PlanRewriter: Sized {
             PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
             PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
-            PlanNode::ShowTables(plan) => self.rewrite_show_tables(plan),
 
             // User.
             PlanNode::CreateUser(plan) => self.create_user(plan),
@@ -147,7 +162,6 @@ pub trait PlanRewriter: Sized {
             PlanNode::DropUser(plan) => self.drop_user(plan),
             PlanNode::GrantPrivilege(plan) => self.grant_privilege(plan),
             PlanNode::RevokePrivilege(plan) => self.revoke_privilege(plan),
-            PlanNode::ShowGrants(plan) => self.rewrite_show_grants(plan),
 
             // Stage.
             PlanNode::CreateUserStage(plan) => self.rewrite_create_user_stage(plan),
@@ -430,6 +444,30 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_show_databases(&mut self, plan: &ShowDatabasesPlan) -> Result<PlanNode> {
         Ok(PlanNode::ShowDatabases(plan.clone()))
+    }
+
+    fn rewrite_show_engines(&mut self, plan: &ShowEnginesPlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowEngines(plan.clone()))
+    }
+
+    fn rewrite_show_functions(&mut self, plan: &ShowFunctionsPlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowFunctions(plan.clone()))
+    }
+
+    fn rewrite_show_metrics(&mut self, plan: &ShowMetricsPlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowMetrics(plan.clone()))
+    }
+
+    fn rewrite_show_processlist(&mut self, plan: &ShowProcessListsPlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowProcessList(plan.clone()))
+    }
+
+    fn rewrite_show_settings(&mut self, plan: &ShowSettingsPlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowSettings(plan.clone()))
+    }
+
+    fn rewrite_show_users(&mut self, plan: &ShowUsersPlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowUsers(plan.clone()))
     }
 
     fn rewrite_create_user_udf(&mut self, plan: &CreateUserUDFPlan) -> Result<PlanNode> {

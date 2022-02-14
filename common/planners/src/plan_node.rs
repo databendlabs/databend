@@ -55,8 +55,14 @@ use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowDatabasesPlan;
+use crate::ShowEnginesPlan;
+use crate::ShowFunctionsPlan;
 use crate::ShowGrantsPlan;
+use crate::ShowMetricsPlan;
+use crate::ShowProcessListsPlan;
+use crate::ShowSettingsPlan;
 use crate::ShowTablesPlan;
+use crate::ShowUsersPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -83,6 +89,7 @@ pub enum PlanNode {
     LimitBy(LimitByPlan),
     ReadSource(ReadDataSourcePlan),
     SubQueryExpression(SubQueriesSetPlan),
+    Sink(SinkPlan),
 
     // Explain.
     Explain(ExplainPlan),
@@ -92,14 +99,25 @@ pub enum PlanNode {
 
     // Insert.
     Insert(InsertPlan),
+
+    // Copy.
     Copy(CopyPlan),
-    Sink(SinkPlan),
+
+    // Show.
+    ShowDatabases(ShowDatabasesPlan),
+    ShowTables(ShowTablesPlan),
+    ShowEngines(ShowEnginesPlan),
+    ShowFunctions(ShowFunctionsPlan),
+    ShowGrants(ShowGrantsPlan),
+    ShowMetrics(ShowMetricsPlan),
+    ShowProcessList(ShowProcessListsPlan),
+    ShowSettings(ShowSettingsPlan),
+    ShowUsers(ShowUsersPlan),
 
     // Database.
     CreateDatabase(CreateDatabasePlan),
     DropDatabase(DropDatabasePlan),
     ShowCreateDatabase(ShowCreateDatabasePlan),
-    ShowDatabases(ShowDatabasesPlan),
 
     // Table.
     CreateTable(CreateTablePlan),
@@ -108,7 +126,6 @@ pub enum PlanNode {
     OptimizeTable(OptimizeTablePlan),
     DescribeTable(DescribeTablePlan),
     ShowCreateTable(ShowCreateTablePlan),
-    ShowTables(ShowTablesPlan),
 
     // User.
     CreateUser(CreateUserPlan),
@@ -116,7 +133,6 @@ pub enum PlanNode {
     DropUser(DropUserPlan),
     GrantPrivilege(GrantPrivilegePlan),
     RevokePrivilege(RevokePrivilegePlan),
-    ShowGrants(ShowGrantsPlan),
 
     // Stage.
     CreateUserStage(CreateUserStagePlan),
@@ -175,11 +191,21 @@ impl PlanNode {
             // Copy.
             PlanNode::Copy(v) => v.schema(),
 
+            // Show.
+            PlanNode::ShowDatabases(v) => v.schema(),
+            PlanNode::ShowTables(v) => v.schema(),
+            PlanNode::ShowEngines(v) => v.schema(),
+            PlanNode::ShowFunctions(v) => v.schema(),
+            PlanNode::ShowGrants(v) => v.schema(),
+            PlanNode::ShowMetrics(v) => v.schema(),
+            PlanNode::ShowProcessList(v) => v.schema(),
+            PlanNode::ShowSettings(v) => v.schema(),
+            PlanNode::ShowUsers(v) => v.schema(),
+
             // Database.
             PlanNode::CreateDatabase(v) => v.schema(),
             PlanNode::DropDatabase(v) => v.schema(),
             PlanNode::ShowCreateDatabase(v) => v.schema(),
-            PlanNode::ShowDatabases(v) => v.schema(),
 
             // Table.
             PlanNode::CreateTable(v) => v.schema(),
@@ -188,10 +214,6 @@ impl PlanNode {
             PlanNode::OptimizeTable(v) => v.schema(),
             PlanNode::DescribeTable(v) => v.schema(),
             PlanNode::ShowCreateTable(v) => v.schema(),
-            PlanNode::ShowTables(v) => v.schema(),
-
-            // Show.
-            PlanNode::ShowGrants(v) => v.schema(),
 
             // User.
             PlanNode::CreateUser(v) => v.schema(),
@@ -256,11 +278,21 @@ impl PlanNode {
             // Copy.
             PlanNode::Copy(_) => "CopyPlan",
 
+            // Show.
+            PlanNode::ShowTables(_) => "ShowTablesPlan",
+            PlanNode::ShowDatabases(_) => "ShowDatabasesPlan",
+            PlanNode::ShowEngines(_) => "ShowEngiensPlan",
+            PlanNode::ShowFunctions(_) => "ShowFunctionsPlan",
+            PlanNode::ShowGrants(_) => "ShowGrantsPlan",
+            PlanNode::ShowMetrics(_) => "ShowMetricsPlan",
+            PlanNode::ShowProcessList(_) => "ShowProcessListPlan",
+            PlanNode::ShowSettings(_) => "ShowSettingsPlan",
+            PlanNode::ShowUsers(_) => "ShowUsersPlan",
+
             // Database.
             PlanNode::CreateDatabase(_) => "CreateDatabasePlan",
             PlanNode::DropDatabase(_) => "DropDatabasePlan",
             PlanNode::ShowCreateDatabase(_) => "ShowCreateDatabasePlan",
-            PlanNode::ShowDatabases(_) => "ShowDatabasesPlan",
 
             // Table.
             PlanNode::CreateTable(_) => "CreateTablePlan",
@@ -269,7 +301,6 @@ impl PlanNode {
             PlanNode::OptimizeTable(_) => "OptimizeTablePlan",
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
             PlanNode::DescribeTable(_) => "DescribeTablePlan",
-            PlanNode::ShowTables(_) => "ShowTablesPlan",
 
             // User.
             PlanNode::CreateUser(_) => "CreateUser",
@@ -277,7 +308,6 @@ impl PlanNode {
             PlanNode::DropUser(_) => "DropUser",
             PlanNode::GrantPrivilege(_) => "GrantPrivilegePlan",
             PlanNode::RevokePrivilege(_) => "RevokePrivilegePlan",
-            PlanNode::ShowGrants(_) => "ShowGrantsPlan",
 
             // Stage.
             PlanNode::CreateUserStage(_) => "CreateUserStagePlan",

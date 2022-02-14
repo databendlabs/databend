@@ -35,18 +35,26 @@ impl ManagementModeAccess {
         if self.ctx.get_config().query.management_mode {
             return match plan {
                 PlanNode::Empty(_)
+
+                // Show.
+                | PlanNode::ShowDatabases(_)
+                | PlanNode::ShowTables(_)
+                | PlanNode::ShowEngines(_)
+                | PlanNode::ShowFunctions(_)
+                | PlanNode::ShowGrants(_)
+                | PlanNode::ShowSettings(_)
+                | PlanNode::ShowUsers(_)
+
                 // Database.
                 | PlanNode::CreateDatabase(_)
                 | PlanNode::ShowCreateDatabase(_)
                 | PlanNode::DropDatabase(_)
-                | PlanNode::ShowDatabases(_)
 
                 // Table.
                 | PlanNode::CreateTable(_)
                 | PlanNode::DropTable(_)
                 | PlanNode::DescribeTable(_)
                 | PlanNode::ShowCreateTable(_)
-                | PlanNode::ShowTables(_)
 
                 // User.
                 | PlanNode::CreateUser(_)
@@ -54,7 +62,6 @@ impl ManagementModeAccess {
                 | PlanNode::AlterUser(_)
                 | PlanNode::GrantPrivilege(_)
                 | PlanNode::RevokePrivilege(_)
-                | PlanNode::ShowGrants(_)
 
                 // Stage.
                 | PlanNode::CreateUserStage(_)
@@ -68,7 +75,6 @@ impl ManagementModeAccess {
 
                 // USE.
                 | PlanNode::UseDatabase(_)
-                | PlanNode::Select(_)// Allow select from system.* tables, like show tables;
 
                 // Admin.
                 | PlanNode::AdminUseTenant(_) => Ok(()),
