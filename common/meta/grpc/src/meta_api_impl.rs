@@ -28,6 +28,7 @@ use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
+use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -43,57 +44,45 @@ impl MetaApi for MetaGrpcClient {
     async fn create_database(
         &self,
         req: CreateDatabaseReq,
-    ) -> common_exception::Result<CreateDatabaseReply> {
+    ) -> Result<CreateDatabaseReply, MetaError> {
         self.do_write(req).await
     }
 
-    async fn drop_database(
-        &self,
-        req: DropDatabaseReq,
-    ) -> common_exception::Result<DropDatabaseReply> {
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError> {
         self.do_write(req).await
     }
 
-    async fn get_database(
-        &self,
-        req: GetDatabaseReq,
-    ) -> common_exception::Result<Arc<DatabaseInfo>> {
+    async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, MetaError> {
         self.do_read(req).await
     }
 
     async fn list_databases(
         &self,
         req: ListDatabaseReq,
-    ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError> {
         self.do_read(req).await
     }
 
-    async fn create_table(
-        &self,
-        req: CreateTableReq,
-    ) -> common_exception::Result<CreateTableReply> {
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError> {
         self.do_write(req).await
     }
 
-    async fn drop_table(&self, req: DropTableReq) -> common_exception::Result<DropTableReply> {
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, MetaError> {
         self.do_write(req).await
     }
 
-    async fn get_table(&self, req: GetTableReq) -> common_exception::Result<Arc<TableInfo>> {
+    async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, MetaError> {
         self.do_read(req).await
     }
 
-    async fn list_tables(
-        &self,
-        req: ListTableReq,
-    ) -> common_exception::Result<Vec<Arc<TableInfo>>> {
+    async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {
         self.do_read(req).await
     }
 
     async fn get_table_by_id(
         &self,
         table_id: MetaId,
-    ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
+    ) -> Result<(TableIdent, Arc<TableMeta>), MetaError> {
         let x: TableInfo = self.do_read(GetTableExtReq { tbl_id: table_id }).await?;
         Ok((x.ident, Arc::new(x.meta)))
     }
@@ -101,7 +90,7 @@ impl MetaApi for MetaGrpcClient {
     async fn upsert_table_option(
         &self,
         req: UpsertTableOptionReq,
-    ) -> common_exception::Result<UpsertTableOptionReply> {
+    ) -> Result<UpsertTableOptionReply, MetaError> {
         self.do_write(req).await
     }
 

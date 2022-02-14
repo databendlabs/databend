@@ -16,7 +16,6 @@ use std::convert::TryInto;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
@@ -99,9 +98,9 @@ impl tonic::IntoRequest<RaftRequest> for MetaGrpcWriteReq {
 
 /// Try convert DoActionAction to tonic::Request<RaftRequest>.
 impl TryInto<Request<RaftRequest>> for MetaGrpcWriteReq {
-    type Error = ErrorCode;
+    type Error = serde_json::Error;
 
-    fn try_into(self) -> common_exception::Result<Request<RaftRequest>> {
+    fn try_into(self) -> Result<Request<RaftRequest>, Self::Error> {
         let raft_request = RaftRequest {
             data: serde_json::to_string(&self)?,
         };
@@ -125,7 +124,7 @@ impl TryInto<MetaGrpcReadReq> for Request<RaftRequest> {
 }
 
 impl TryInto<Request<RaftRequest>> for MetaGrpcReadReq {
-    type Error = ErrorCode;
+    type Error = serde_json::Error;
 
     fn try_into(self) -> Result<Request<RaftRequest>, Self::Error> {
         let get_req = RaftRequest {

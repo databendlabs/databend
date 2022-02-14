@@ -15,14 +15,16 @@
 use std::convert::TryInto;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_meta_api::MetaApi;
+use common_meta_types::anyerror::AnyError;
+use common_meta_types::AppError;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
+use common_meta_types::DatabaseAlreadyExists;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::DropDatabaseReply;
@@ -33,10 +35,17 @@ use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
+use common_meta_types::MetaError;
 use common_meta_types::MetaId;
+use common_meta_types::MetaStorageError;
+use common_meta_types::TableAlreadyExists;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::TableVersionMismatched;
+use common_meta_types::UnknownDatabase;
+use common_meta_types::UnknownTable;
+use common_meta_types::UnknownTableId;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
@@ -50,7 +59,7 @@ impl MetaApi for StateMachine {
     async fn create_database(
         &self,
         req: CreateDatabaseReq,
-    ) -> Result<CreateDatabaseReply, ErrorCode> {
+    ) -> Result<CreateDatabaseReply, MetaError> {
         let cmd = Cmd::CreateDatabase {
             tenant: req.tenant,
             name: req.db.clone(),
@@ -69,16 +78,14 @@ impl MetaApi for StateMachine {
         assert!(result.is_some());
 
         if prev.is_some() && !req.if_not_exists {
-            return Err(ErrorCode::DatabaseAlreadyExists(format!(
-                "{} database exists",
-                req.db
-            )));
+            let ae = AppError::from(DatabaseAlreadyExists::new(req.db, "create database"));
+            return Err(MetaError::from(ae));
         }
 
         Ok(CreateDatabaseReply { database_id: db_id })
     }
 
-    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, ErrorCode> {
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError> {
         let cmd = Cmd::DropDatabase {
             tenant: req.tenant,
             name: req.db.clone(),
@@ -92,16 +99,14 @@ impl MetaApi for StateMachine {
         assert!(res.result().is_none());
 
         if res.prev().is_none() && !req.if_exists {
-            return Err(ErrorCode::UnknownDatabase(format!(
-                "database not found: {:}",
-                req.db
-            )));
+            let ae = AppError::from(UnknownDatabase::new(req.db, "drop database"));
+            return Err(MetaError::from(ae));
         }
 
         Ok(DropDatabaseReply {})
     }
 
-    async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, ErrorCode> {
+    async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, MetaError> {
         let db_id = self.get_database_id(&req.tenant, &req.db_name)?;
         let seq_meta = self.get_database_meta_by_id(&db_id)?;
 
@@ -116,7 +121,7 @@ impl MetaApi for StateMachine {
     async fn list_databases(
         &self,
         req: ListDatabaseReq,
-    ) -> Result<Vec<Arc<DatabaseInfo>>, ErrorCode> {
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError> {
         let mut res = vec![];
 
         let it = self
@@ -138,7 +143,7 @@ impl MetaApi for StateMachine {
         Ok(res)
     }
 
-    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, ErrorCode> {
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError> {
         let tenant = &req.tenant;
         let db_name = &req.db;
         let table_name = &req.table;
@@ -167,16 +172,14 @@ impl MetaApi for StateMachine {
         assert!(result.is_some());
 
         if prev.is_some() && !if_not_exists {
-            Err(ErrorCode::TableAlreadyExists(format!(
-                "table exists: {}",
-                table_name
-            )))
+            let ae = AppError::from(TableAlreadyExists::new(table_name, "create_table"));
+            Err(MetaError::from(ae))
         } else {
             Ok(CreateTableReply { table_id })
         }
     }
 
-    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, ErrorCode> {
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, MetaError> {
         let tenant = req.tenant;
         let db_name = &req.db;
         let table_name = &req.table;
@@ -196,16 +199,14 @@ impl MetaApi for StateMachine {
         assert!(res.result().is_none());
 
         if res.prev().is_none() && !if_exists {
-            return Err(ErrorCode::UnknownTable(format!(
-                "Unknown table: '{:}'",
-                table_name
-            )));
+            let ae = AppError::from(UnknownTable::new(table_name, "drop_table"));
+            return Err(MetaError::from(ae));
         }
 
         Ok(DropTableReply {})
     }
 
-    async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, ErrorCode> {
+    async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, MetaError> {
         let tenant = &req.tenant;
         let db = &req.db_name;
         let table_name = &req.table_name;
@@ -218,12 +219,13 @@ impl MetaApi for StateMachine {
                 database_id: db_id,
                 table_name: table_name.to_string(),
             })?
-            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{:}'", table_name)))?;
+            .ok_or_else(|| AppError::from(UnknownTable::new(table_name, "get_table")))?;
+
         let table_id = table_id.data.0;
 
         let seq_table = self
             .get_table_meta_by_id(&table_id)?
-            .ok_or_else(|| ErrorCode::UnknownTable(table_name.to_string()))?;
+            .ok_or_else(|| AppError::from(UnknownTableId::new(table_id, "get_table")))?;
 
         let version = seq_table.seq;
         let table_meta = seq_table.data;
@@ -238,7 +240,7 @@ impl MetaApi for StateMachine {
         Ok(Arc::new(table_info))
     }
 
-    async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, ErrorCode> {
+    async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {
         let tenant = &req.tenant;
         let db_name = &req.db_name;
         let db_id = self.get_database_id(tenant, db_name)?;
@@ -256,7 +258,8 @@ impl MetaApi for StateMachine {
                 let table_id = seq_table_id.data.0;
 
                 let seq_table_meta = tables.get(&table_id)?.ok_or_else(|| {
-                    ErrorCode::IllegalMetaState(format!(" table of id {}, not found", table_id))
+                    let ut = UnknownTableId::new(table_id, "list_tables");
+                    MetaStorageError::Damaged(AnyError::new(&ut))
                 })?;
 
                 let version = seq_table_meta.seq;
@@ -279,12 +282,11 @@ impl MetaApi for StateMachine {
     async fn get_table_by_id(
         &self,
         table_id: MetaId,
-    ) -> Result<(TableIdent, Arc<TableMeta>), ErrorCode> {
+    ) -> Result<(TableIdent, Arc<TableMeta>), MetaError> {
         let x = self.tables().get(&table_id)?;
 
-        let table = x.ok_or_else(|| {
-            ErrorCode::UnknownTable(format!("table of id {} not found", table_id))
-        })?;
+        let table =
+            x.ok_or_else(|| AppError::from(UnknownTableId::new(table_id, "get_table_by_id")))?;
 
         let version = table.seq;
         let table_meta = table.data;
@@ -295,7 +297,7 @@ impl MetaApi for StateMachine {
     async fn upsert_table_option(
         &self,
         req: UpsertTableOptionReq,
-    ) -> Result<UpsertTableOptionReply, ErrorCode> {
+    ) -> Result<UpsertTableOptionReply, MetaError> {
         let cmd = Cmd::UpsertTableOptions(req.clone());
 
         let res = self.sm_tree.txn(true, |t| {
@@ -306,10 +308,13 @@ impl MetaApi for StateMachine {
             let ch: Change<TableMeta> = res.try_into().unwrap();
             let (prev, _result) = ch.unwrap();
 
-            return Err(ErrorCode::TableVersionMismatched(format!(
-                "targeting version {:?}, current version {}",
-                req.seq, prev.seq,
-            )));
+            let ae = AppError::from(TableVersionMismatched::new(
+                req.table_id,
+                req.seq,
+                prev.seq,
+                "upsert_table_option",
+            ));
+            return Err(MetaError::from(ae));
         }
 
         Ok(UpsertTableOptionReply {})

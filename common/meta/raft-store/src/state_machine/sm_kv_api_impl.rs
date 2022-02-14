@@ -17,6 +17,7 @@ use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
+use common_meta_types::MetaError;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
@@ -26,10 +27,7 @@ use crate::state_machine::StateMachine;
 
 #[async_trait::async_trait]
 impl KVApi for StateMachine {
-    async fn upsert_kv(
-        &self,
-        act: UpsertKVAction,
-    ) -> common_exception::Result<UpsertKVActionReply> {
+    async fn upsert_kv(&self, act: UpsertKVAction) -> Result<UpsertKVActionReply, MetaError> {
         let cmd = Cmd::UpsertKV {
             key: act.key,
             seq: act.seq,
@@ -50,7 +48,7 @@ impl KVApi for StateMachine {
         }
     }
 
-    async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVActionReply, MetaError> {
         // TODO(xp) refine get(): a &str is enough for key
         let sv = self.kvs().get(&key.to_string())?;
         tracing::debug!("get_kv sv:{:?}", sv);
@@ -62,7 +60,7 @@ impl KVApi for StateMachine {
         Ok(Self::unexpired(sv))
     }
 
-    async fn mget_kv(&self, keys: &[String]) -> common_exception::Result<MGetKVActionReply> {
+    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVActionReply, MetaError> {
         let kvs = self.kvs();
         let mut res = vec![];
         for x in keys.iter() {
@@ -77,7 +75,7 @@ impl KVApi for StateMachine {
     async fn prefix_list_kv(
         &self,
         prefix: &str,
-    ) -> common_exception::Result<Vec<(String, SeqV<Vec<u8>>)>> {
+    ) -> Result<Vec<(String, SeqV<Vec<u8>>)>, MetaError> {
         let kvs = self.kvs();
         let kv_pairs = kvs.scan_prefix(&prefix.to_string())?;
 

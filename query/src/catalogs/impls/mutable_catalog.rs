@@ -194,7 +194,8 @@ impl Catalog for MutableCatalog {
         &self,
         table_id: MetaId,
     ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
-        self.ctx.meta.get_table_by_id(table_id).await
+        let res = self.ctx.meta.get_table_by_id(table_id).await?;
+        Ok(res)
     }
 
     async fn get_table(
@@ -231,14 +232,16 @@ impl Catalog for MutableCatalog {
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
-        self.ctx.meta.drop_table(req).await
+        let res = self.ctx.meta.drop_table(req).await?;
+        Ok(res)
     }
 
     async fn upsert_table_option(
         &self,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        self.ctx.meta.upsert_table_option(req).await
+        let res = self.ctx.meta.upsert_table_option(req).await?;
+        Ok(res)
     }
 
     fn get_table_engines(&self) -> Vec<StorageDescription> {

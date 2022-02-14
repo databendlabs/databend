@@ -14,7 +14,6 @@
 
 use std::fmt::Debug;
 
-use common_exception::ErrorCode;
 use openraft::AppDataResponse;
 use serde::Deserialize;
 use serde::Serialize;
@@ -71,7 +70,7 @@ where
     fn try_into(self) -> Result<AddResult<T, ID>, Self::Error> {
         // TODO(xp): maybe better to replace with specific error?
         if let AppliedState::AppError(app_err) = self {
-            return Err(ErrorCode::from(app_err).into());
+            return Err(MetaError::AppError(app_err));
         }
 
         let typ = std::any::type_name::<T>();

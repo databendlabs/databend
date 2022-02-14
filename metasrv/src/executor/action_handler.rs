@@ -14,22 +14,14 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::SerializedError;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcReadReq;
 use common_meta_grpc::MetaGrpcWriteReq;
 use common_meta_grpc::RequestFor;
 use common_meta_types::protobuf::RaftReply;
-use serde::Serialize;
+use common_meta_types::MetaError;
 
 use crate::meta_service::MetaNode;
-
-pub trait ReplySerializer {
-    type Output;
-    fn serialize<T>(&self, v: T) -> Result<Self::Output, ErrorCode>
-    where T: Serialize;
-}
 
 pub struct ActionHandler {
     /// The raft-based meta data entry.
@@ -40,7 +32,7 @@ pub struct ActionHandler {
 pub trait RequestHandler<T>: Sync + Send
 where T: RequestFor
 {
-    async fn handle(&self, req: T) -> common_exception::Result<T::Reply>;
+    async fn handle(&self, req: T) -> Result<T::Reply, MetaError>;
 }
 
 impl ActionHandler {
@@ -53,80 +45,75 @@ impl ActionHandler {
 
         match action {
             MetaGrpcWriteReq::UpsertKV(a) => {
-                let r = self
-                    .meta_node
-                    .upsert_kv(a)
-                    .await
-                    .map_err(SerializedError::from);
+                let r = self.meta_node.upsert_kv(a).await;
                 RaftReply::from(r)
             }
             // database
             MetaGrpcWriteReq::CreateDatabase(a) => {
-                let r = self.handle(a).await.map_err(SerializedError::from);
+                let r = self.handle(a).await;
                 RaftReply::from(r)
             }
             MetaGrpcWriteReq::DropDatabase(a) => {
-                let r = self.handle(a).await.map_err(SerializedError::from);
+                let r = self.handle(a).await;
                 RaftReply::from(r)
             }
 
             // table
             MetaGrpcWriteReq::CreateTable(a) => {
-                let r = self.handle(a).await.map_err(SerializedError::from);
+                let r = self.handle(a).await;
                 RaftReply::from(r)
             }
             MetaGrpcWriteReq::DropTable(a) => {
-                let r = self.handle(a).await.map_err(SerializedError::from);
+                let r = self.handle(a).await;
                 RaftReply::from(r)
             }
             MetaGrpcWriteReq::CommitTable(a) => {
-                let r = self.handle(a).await.map_err(SerializedError::from);
+                let r = self.handle(a).await;
                 RaftReply::from(r)
             }
         }
     }
 
-    pub async fn execute_read(&self, action: MetaGrpcReadReq) -> common_exception::Result<String> {
+    pub async fn execute_read(&self, action: MetaGrpcReadReq) -> RaftReply {
         // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
 
-        let r = match action {
+        match action {
             MetaGrpcReadReq::GetKV(a) => {
-                let r = self.meta_node.get_kv(&a.key).await?;
-                serde_json::to_string(&r)?
+                let r = self.meta_node.get_kv(&a.key).await;
+                RaftReply::from(r)
             }
             MetaGrpcReadReq::MGetKV(a) => {
-                let r = self.meta_node.mget_kv(&a.keys).await?;
-                serde_json::to_string(&r)?
+                let r = self.meta_node.mget_kv(&a.keys).await;
+                RaftReply::from(r)
             }
             MetaGrpcReadReq::PrefixListKV(a) => {
-                let r = self.meta_node.prefix_list_kv(&a.0).await?;
-                serde_json::to_string(&r)?
+                let r = self.meta_node.prefix_list_kv(&a.0).await;
+                RaftReply::from(r)
             }
 
             // database
             MetaGrpcReadReq::GetDatabase(a) => {
-                let r = self.handle(a).await?;
-                serde_json::to_string(&r)?
+                let r = self.handle(a).await;
+                RaftReply::from(r)
             }
             MetaGrpcReadReq::ListDatabases(a) => {
-                let r = self.handle(a).await?;
-                serde_json::to_string(&r)?
+                let r = self.handle(a).await;
+                RaftReply::from(r)
             }
 
             // table
             MetaGrpcReadReq::GetTable(a) => {
-                let r = self.handle(a).await?;
-                serde_json::to_string(&r)?
+                let r = self.handle(a).await;
+                RaftReply::from(r)
             }
             MetaGrpcReadReq::ListTables(a) => {
-                let r = self.handle(a).await?;
-                serde_json::to_string(&r)?
+                let r = self.handle(a).await;
+                RaftReply::from(r)
             }
             MetaGrpcReadReq::GetTableExt(a) => {
-                let r = self.handle(a).await?;
-                serde_json::to_string(&r)?
+                let r = self.handle(a).await;
+                RaftReply::from(r)
             }
-        };
-        Ok(r)
+        }
     }
 }
