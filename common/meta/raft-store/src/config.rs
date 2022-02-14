@@ -17,6 +17,7 @@ use std::net::Ipv4Addr;
 use clap::Parser;
 use common_exception::Result;
 use common_grpc::DNSResolver;
+use common_meta_types::MetaError;
 use common_meta_types::MetaResult;
 use common_meta_types::NodeId;
 use once_cell::sync::Lazy;
@@ -167,7 +168,18 @@ impl RaftConfig {
         !self.no_sync
     }
 
-    pub fn check(&self) -> MetaResult<()> {
+    pub async fn check(&self) -> MetaResult<()> {
+        if !self.join.is_empty() && self.single {
+            return Err(MetaError::InvalidConfig(String::from(
+                "--join and --single can not be both set",
+            )));
+        }
+        let self_addr: String = self.raft_api_addr().await?;
+        if self.join.contains(&self_addr) {
+            return Err(MetaError::InvalidConfig(String::from(
+                "--join must not be set to itself",
+            )));
+        }
         Ok(())
     }
 
