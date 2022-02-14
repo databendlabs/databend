@@ -295,10 +295,9 @@ impl<'a> DfParser<'a> {
     fn parse_describe(&mut self) -> Result<DfStatement, ParserError> {
         if self.consume_token("stage") {
             self.parse_desc_stage()
-        } else if self.consume_token("table") {
-            self.parse_desc_table()
         } else {
-            self.expected("stage or table", self.parser.peek_token())
+            self.consume_token("table");
+            self.parse_desc_table()
         }
     }
 
