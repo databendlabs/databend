@@ -30,6 +30,7 @@ impl PProfRequest {
         5
     }
     pub(crate) fn default_frequency() -> NonZeroI32 {
+        // safe unwrap
         NonZeroI32::new(99).unwrap()
     }
 }
