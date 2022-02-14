@@ -54,15 +54,7 @@ use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
-use crate::ShowDatabasesPlan;
-use crate::ShowEnginesPlan;
-use crate::ShowFunctionsPlan;
-use crate::ShowGrantsPlan;
-use crate::ShowMetricsPlan;
-use crate::ShowProcessListsPlan;
-use crate::ShowSettingsPlan;
-use crate::ShowTablesPlan;
-use crate::ShowUsersPlan;
+use crate::ShowPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -104,15 +96,7 @@ pub enum PlanNode {
     Copy(CopyPlan),
 
     // Show.
-    ShowDatabases(ShowDatabasesPlan),
-    ShowTables(ShowTablesPlan),
-    ShowEngines(ShowEnginesPlan),
-    ShowFunctions(ShowFunctionsPlan),
-    ShowGrants(ShowGrantsPlan),
-    ShowMetrics(ShowMetricsPlan),
-    ShowProcessList(ShowProcessListsPlan),
-    ShowSettings(ShowSettingsPlan),
-    ShowUsers(ShowUsersPlan),
+    Show(ShowPlan),
 
     // Database.
     CreateDatabase(CreateDatabasePlan),
@@ -192,15 +176,7 @@ impl PlanNode {
             PlanNode::Copy(v) => v.schema(),
 
             // Show.
-            PlanNode::ShowDatabases(v) => v.schema(),
-            PlanNode::ShowTables(v) => v.schema(),
-            PlanNode::ShowEngines(v) => v.schema(),
-            PlanNode::ShowFunctions(v) => v.schema(),
-            PlanNode::ShowGrants(v) => v.schema(),
-            PlanNode::ShowMetrics(v) => v.schema(),
-            PlanNode::ShowProcessList(v) => v.schema(),
-            PlanNode::ShowSettings(v) => v.schema(),
-            PlanNode::ShowUsers(v) => v.schema(),
+            PlanNode::Show(v) => v.schema(),
 
             // Database.
             PlanNode::CreateDatabase(v) => v.schema(),
@@ -279,15 +255,7 @@ impl PlanNode {
             PlanNode::Copy(_) => "CopyPlan",
 
             // Show.
-            PlanNode::ShowTables(_) => "ShowTablesPlan",
-            PlanNode::ShowDatabases(_) => "ShowDatabasesPlan",
-            PlanNode::ShowEngines(_) => "ShowEngiensPlan",
-            PlanNode::ShowFunctions(_) => "ShowFunctionsPlan",
-            PlanNode::ShowGrants(_) => "ShowGrantsPlan",
-            PlanNode::ShowMetrics(_) => "ShowMetricsPlan",
-            PlanNode::ShowProcessList(_) => "ShowProcessListPlan",
-            PlanNode::ShowSettings(_) => "ShowSettingsPlan",
-            PlanNode::ShowUsers(_) => "ShowUsersPlan",
+            PlanNode::Show(_) => "ShowPlan",
 
             // Database.
             PlanNode::CreateDatabase(_) => "CreateDatabasePlan",

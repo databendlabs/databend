@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
+use common_planners::ShowPlan;
 
 use crate::sessions::QueryContext;
 
@@ -37,13 +38,13 @@ impl ManagementModeAccess {
                 PlanNode::Empty(_)
 
                 // Show.
-                | PlanNode::ShowDatabases(_)
-                | PlanNode::ShowTables(_)
-                | PlanNode::ShowEngines(_)
-                | PlanNode::ShowFunctions(_)
-                | PlanNode::ShowGrants(_)
-                | PlanNode::ShowSettings(_)
-                | PlanNode::ShowUsers(_)
+                | PlanNode::Show(ShowPlan::ShowDatabases(_))
+                | PlanNode::Show(ShowPlan::ShowTables(_))
+                | PlanNode::Show(ShowPlan::ShowEngines(_))
+                | PlanNode::Show(ShowPlan::ShowFunctions(_))
+                | PlanNode::Show(ShowPlan::ShowGrants(_))
+                | PlanNode::Show(ShowPlan::ShowSettings(_))
+                | PlanNode::Show(ShowPlan::ShowUsers(_))
 
                 // Database.
                 | PlanNode::CreateDatabase(_)

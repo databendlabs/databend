@@ -18,6 +18,7 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::PlanShowKind;
 use common_planners::ShowDatabasesPlan;
+use common_planners::ShowPlan;
 use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
@@ -54,8 +55,8 @@ impl AnalyzableStatement for DfShowDatabases {
             }
         }
 
-        Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::ShowDatabases(ShowDatabasesPlan { kind }),
-        )))
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Show(
+            ShowPlan::ShowDatabases(ShowDatabasesPlan { kind }),
+        ))))
     }
 }
