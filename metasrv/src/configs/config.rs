@@ -125,6 +125,8 @@ impl Config {
             cfg = Self::load_from_toml(cfg.config_file.as_str())?;
         }
 
+        cfg.raft_config.check()?;
+
         Self::load_from_env(&mut cfg);
         Ok(cfg)
     }
@@ -137,6 +139,7 @@ impl Config {
         let cfg = toml::from_str::<Config>(txt.as_str())
             .map_err(|e| MetaError::LoadConfigError(format!("{:?}", e)))?;
 
+        cfg.raft_config.check()?;
         Ok(cfg)
     }
 

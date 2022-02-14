@@ -16,15 +16,15 @@ use common_base::tokio;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_types::MetaError;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_raft_config() -> anyhow::Result<()> {
+#[test]
+fn test_raft_config() -> anyhow::Result<()> {
     {
         let raft_config = &RaftConfig {
             single: true,
             join: vec!["j1".to_string()],
             ..Default::default()
         };
-        let r = raft_config.check().await;
+        let r = raft_config.check();
 
         assert_eq!(
             r,
@@ -44,7 +44,7 @@ async fn test_raft_config() -> anyhow::Result<()> {
             join: vec![format!("{}:{}", addr, port)],
             ..Default::default()
         };
-        let r = raft_config.check().await;
+        let r = raft_config.check();
 
         assert_eq!(
             r,

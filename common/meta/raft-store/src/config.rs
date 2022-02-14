@@ -149,11 +149,15 @@ impl RaftConfig {
         <Self as Parser>::parse_from(&Vec::<&'static str>::new())
     }
 
+    fn raft_api_addr_string(&self) -> String {
+        format!("{}:{}", self.raft_api_host, self.raft_api_port)
+    }
+
     /// Support ip address and hostname
     pub async fn raft_api_addr(&self) -> Result<String> {
         let _ipv4_addr = self.raft_api_host.as_str().parse::<Ipv4Addr>();
         match _ipv4_addr {
-            Ok(_) => Ok(format!("{}:{}", self.raft_api_host, self.raft_api_port)),
+            Ok(_) => Ok(self.raft_api_addr_string()),
             Err(_) => {
                 let _ip_addrs = DNSResolver::instance()?
                     .resolve(self.raft_api_host.clone())
@@ -168,13 +172,13 @@ impl RaftConfig {
         !self.no_sync
     }
 
-    pub async fn check(&self) -> MetaResult<()> {
+    pub fn check(&self) -> MetaResult<()> {
         if !self.join.is_empty() && self.single {
             return Err(MetaError::InvalidConfig(String::from(
                 "--join and --single can not be both set",
             )));
         }
-        let self_addr: String = self.raft_api_addr().await?;
+        let self_addr = self.raft_api_addr_string();
         if self.join.contains(&self_addr) {
             return Err(MetaError::InvalidConfig(String::from(
                 "--join must not be set to itself",
