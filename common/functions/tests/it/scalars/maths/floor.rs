@@ -12,80 +12,71 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions2;
+use crate::scalars::scalar_function2_test::ScalarFunction2Test;
 
 #[test]
 fn test_floor_function() -> Result<()> {
     let tests = vec![
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "floor(123)",
-            nullable: false,
-            columns: vec![Series::new([123]).into()],
-            expect: Series::new(vec![123_f64]).into(),
+            columns: vec![Series::from_data([123])],
+            expect: Series::from_data(vec![123_f64]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "floor(1.7)",
-            columns: vec![Series::new([1.7]).into()],
-            expect: Series::new(vec![1_f64]).into(),
-            nullable: false,
+            columns: vec![Series::from_data([1.7])],
+            expect: Series::from_data(vec![1_f64]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "floor(-2.1)",
-            nullable: false,
-            columns: vec![Series::new([-2.1]).into()],
-            expect: Series::new(vec![-3_f64]).into(),
+            columns: vec![Series::from_data([-2.1])],
+            expect: Series::from_data(vec![-3_f64]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "floor('123')",
-            columns: vec![Series::new(["123"]).into()],
-            expect: Series::new(vec![123_f64]).into(),
-            nullable: false,
-            error: "",
+            columns: vec![Series::from_data(["123"])],
+            expect: Series::from_data(vec![123_f64]),
+            error: "Expected a numeric type, but got String",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "floor('+123.8a1')",
-            nullable: false,
-            columns: vec![Series::new(["+123.8a1"]).into()],
-            expect: Series::new(vec![123_f64]).into(),
-            error: "",
+            columns: vec![Series::from_data(["+123.8a1"])],
+            expect: Series::from_data(vec![123_f64]),
+            error: "Expected a numeric type, but got String",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "floor('-123.2a1')",
-            nullable: false,
-            columns: vec![Series::new(["-123.2a1"]).into()],
-            expect: Series::new(vec![-124_f64]).into(),
-            error: "",
+            columns: vec![Series::from_data(["-123.2a1"])],
+            expect: Series::from_data(vec![-124_f64]),
+            error: "Expected a numeric type, but got String",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "floor('a')",
-            nullable: false,
-            columns: vec![Series::new(["a"]).into()],
-            expect: Series::new(vec![0_f64]).into(),
-            error: "",
+            columns: vec![Series::from_data(["a"])],
+            expect: Series::from_data(vec![0_f64]),
+            error: "Expected a numeric type, but got String",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "floor('a123')",
-            nullable: false,
-            columns: vec![Series::new(["a123"]).into()],
-            expect: Series::new(vec![0_f64]).into(),
-            error: "",
+            columns: vec![Series::from_data(["a123"])],
+            expect: Series::from_data(vec![0_f64]),
+            error: "Expected a numeric type, but got String",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "floor(true)",
-            nullable: false,
-            columns: vec![Series::new([true]).into()],
-            expect: Series::new([1_u8]).into(),
-            error: "Expected numeric types, but got Boolean",
+            columns: vec![Series::from_data([true])],
+            expect: Series::from_data([1_u8]),
+            error: "Expected a numeric type, but got Boolean",
         },
     ];
 
-    test_scalar_functions(FloorFunction::try_create("floor")?, &tests)
+    test_scalar_functions2(FloorFunction::try_create("floor")?, &tests)
 }
