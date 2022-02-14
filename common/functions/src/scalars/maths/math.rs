@@ -53,6 +53,8 @@ impl MathsFunction {
         factory.register("pi", PiFunction::desc());
         factory.register("crc32", CRC32Function::desc());
         factory.register("exp", ExpFunction::desc());
+        factory.register("ceil", CeilFunction::desc());
+        factory.register("ceiling", CeilFunction::desc());
     }
 
     pub fn register(factory: &mut FunctionFactory) {
@@ -67,8 +69,6 @@ impl MathsFunction {
         factory.register("log10", Log10Function::desc());
         factory.register("log2", Log2Function::desc());
         factory.register("ln", LnFunction::desc());
-        factory.register("ceil", CeilFunction::desc());
-        factory.register("ceiling", CeilFunction::desc());
         factory.register("floor", FloorFunction::desc());
         factory.register("asin", TrigonometricAsinFunction::desc());
         factory.register("acos", TrigonometricAcosFunction::desc());
