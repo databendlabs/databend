@@ -17,9 +17,9 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_cache::Cache;
-use common_dal2::Operator;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use opendal::Operator;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::snapshot_location;

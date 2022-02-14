@@ -17,12 +17,12 @@ use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::schema::FileMetaData;
-use common_dal2::readers::SeekableReader;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
 use futures::io::BufReader;
+use opendal::readers::SeekableReader;
 use serde::de::DeserializeOwned;
 
 use crate::sessions::QueryContext;
@@ -168,9 +168,7 @@ impl BufReaderProvider for &QueryContext {
             Some(l) => l,
             None => {
                 let object = accessor.stat(path).run().await.map_err(|e| match e {
-                    common_dal2::error::Error::ObjectNotExist(msg) => {
-                        ErrorCode::DalPathNotFound(msg)
-                    }
+                    opendal::error::Error::ObjectNotExist(msg) => ErrorCode::DalPathNotFound(msg),
                     _ => ErrorCode::DalTransportError(e.to_string()),
                 })?;
                 object.size
