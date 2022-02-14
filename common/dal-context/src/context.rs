@@ -14,17 +14,17 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_dal2::error::Result as DalResult;
-use common_dal2::ops::OpDelete;
-use common_dal2::ops::OpRead;
-use common_dal2::ops::OpStat;
-use common_dal2::ops::OpWrite;
-use common_dal2::readers::CallbackReader;
-use common_dal2::Accessor;
-use common_dal2::Layer;
-use common_dal2::Object;
-use common_dal2::Reader;
 use common_infallible::RwLock;
+use opendal::error::Result as DalResult;
+use opendal::ops::OpDelete;
+use opendal::ops::OpRead;
+use opendal::ops::OpStat;
+use opendal::ops::OpWrite;
+use opendal::readers::CallbackReader;
+use opendal::Accessor;
+use opendal::Layer;
+use opendal::Object;
+use opendal::Reader;
 
 use crate::metrics::DalMetrics;
 

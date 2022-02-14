@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::PlanShowKind;
+use common_planners::ShowPlan;
 use common_planners::ShowTablesPlan;
 use common_tracing::tracing;
 
@@ -54,8 +55,8 @@ impl AnalyzableStatement for DfShowTables {
             }
         }
 
-        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::ShowTables(
-            ShowTablesPlan { kind },
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Show(
+            ShowPlan::ShowTables(ShowTablesPlan { kind }),
         ))))
     }
 }

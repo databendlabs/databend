@@ -20,8 +20,6 @@ use common_arrow::arrow::io::parquet::read::decompress;
 use common_arrow::arrow::io::parquet::read::page_stream_to_array;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_arrow::parquet::read::get_page_stream;
-use common_dal2::readers::SeekableReader;
-use common_dal2::Operator;
 use common_datablocks::DataBlock;
 use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
@@ -32,6 +30,8 @@ use common_tracing::tracing::Instrument;
 use futures::io::BufReader;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use opendal::readers::SeekableReader;
+use opendal::Operator;
 
 use crate::storages::fuse::io::meta_readers::BlockMetaReader;
 

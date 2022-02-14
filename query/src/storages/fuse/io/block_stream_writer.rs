@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_dal2::Operator;
 use common_datablocks::DataBlock;
 use common_datavalues2::DataSchema;
 use common_exception::ErrorCode;
@@ -24,6 +23,7 @@ use futures::stream::try_unfold;
 use futures::stream::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use opendal::Operator;
 
 use crate::storages::fuse::io::block_writer;
 use crate::storages::fuse::io::locations::gen_block_location;

@@ -18,6 +18,7 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::PlanShowKind;
 use common_planners::ShowFunctionsPlan;
+use common_planners::ShowPlan;
 use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
@@ -54,8 +55,8 @@ impl AnalyzableStatement for DfShowFunctions {
             }
         }
 
-        Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::ShowFunctions(ShowFunctionsPlan { kind }),
-        )))
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Show(
+            ShowPlan::ShowFunctions(ShowFunctionsPlan { kind }),
+        ))))
     }
 }

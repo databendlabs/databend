@@ -55,15 +55,7 @@ use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
-use crate::ShowDatabasesPlan;
-use crate::ShowEnginesPlan;
-use crate::ShowFunctionsPlan;
-use crate::ShowGrantsPlan;
-use crate::ShowMetricsPlan;
-use crate::ShowProcessListsPlan;
-use crate::ShowSettingsPlan;
-use crate::ShowTablesPlan;
-use crate::ShowUsersPlan;
+use crate::ShowPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -145,15 +137,7 @@ pub trait PlanVisitor {
             PlanNode::Copy(plan) => self.visit_copy(plan),
 
             // Show.
-            PlanNode::ShowDatabases(plan) => self.visit_show_databases(plan),
-            PlanNode::ShowTables(plan) => self.visit_show_tables(plan),
-            PlanNode::ShowEngines(plan) => self.visit_show_engines(plan),
-            PlanNode::ShowFunctions(plan) => self.visit_show_functions(plan),
-            PlanNode::ShowGrants(plan) => self.visit_show_grants(plan),
-            PlanNode::ShowMetrics(plan) => self.visit_show_metrics(plan),
-            PlanNode::ShowProcessList(plan) => self.visit_show_processlist(plan),
-            PlanNode::ShowSettings(plan) => self.visit_show_settings(plan),
-            PlanNode::ShowUsers(plan) => self.visit_show_users(plan),
+            PlanNode::Show(plan) => self.visit_show(plan),
 
             // Database.
             PlanNode::CreateDatabase(plan) => self.visit_create_database(plan),
@@ -375,10 +359,6 @@ pub trait PlanVisitor {
         Ok(())
     }
 
-    fn visit_show_tables(&mut self, _: &ShowTablesPlan) -> Result<()> {
-        Ok(())
-    }
-
     fn visit_truncate_table(&mut self, _: &TruncateTablePlan) -> Result<()> {
         Ok(())
     }
@@ -398,39 +378,11 @@ pub trait PlanVisitor {
         Ok(())
     }
 
-    fn visit_show_grants(&mut self, _: &ShowGrantsPlan) -> Result<()> {
-        Ok(())
-    }
-
     fn visit_show_create_database(&mut self, _: &ShowCreateDatabasePlan) -> Result<()> {
         Ok(())
     }
 
-    fn visit_show_databases(&mut self, _: &ShowDatabasesPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_show_engines(&mut self, _: &ShowEnginesPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_show_functions(&mut self, _: &ShowFunctionsPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_show_metrics(&mut self, _: &ShowMetricsPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_show_processlist(&mut self, _: &ShowProcessListsPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_show_settings(&mut self, _: &ShowSettingsPlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_show_users(&mut self, _: &ShowUsersPlan) -> Result<()> {
+    fn visit_show(&mut self, _: &ShowPlan) -> Result<()> {
         Ok(())
     }
 
