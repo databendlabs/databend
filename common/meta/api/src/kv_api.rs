@@ -18,6 +18,7 @@ use std::ops::Deref;
 use async_trait::async_trait;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
+use common_meta_types::MetaError;
 use common_meta_types::PrefixListReply;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
@@ -35,35 +36,31 @@ where T: KVApi
 
 #[async_trait]
 pub trait KVApi: Send + Sync {
-    async fn upsert_kv(&self, act: UpsertKVAction)
-        -> common_exception::Result<UpsertKVActionReply>;
+    async fn upsert_kv(&self, act: UpsertKVAction) -> Result<UpsertKVActionReply, MetaError>;
 
-    async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply>;
+    async fn get_kv(&self, key: &str) -> Result<GetKVActionReply, MetaError>;
 
     // mockall complains about AsRef... so we use String here
-    async fn mget_kv(&self, key: &[String]) -> common_exception::Result<MGetKVActionReply>;
+    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVActionReply, MetaError>;
 
-    async fn prefix_list_kv(&self, prefix: &str) -> common_exception::Result<PrefixListReply>;
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply, MetaError>;
 }
 
 #[async_trait]
 impl<U: KVApi, T: Deref<Target = U> + Send + Sync> KVApi for T {
-    async fn upsert_kv(
-        &self,
-        act: UpsertKVAction,
-    ) -> common_exception::Result<UpsertKVActionReply> {
+    async fn upsert_kv(&self, act: UpsertKVAction) -> Result<UpsertKVActionReply, MetaError> {
         self.deref().upsert_kv(act).await
     }
 
-    async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVActionReply, MetaError> {
         self.deref().get_kv(key).await
     }
 
-    async fn mget_kv(&self, key: &[String]) -> common_exception::Result<MGetKVActionReply> {
+    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVActionReply, MetaError> {
         self.deref().mget_kv(key).await
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> common_exception::Result<PrefixListReply> {
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply, MetaError> {
         self.deref().prefix_list_kv(prefix).await
     }
 }

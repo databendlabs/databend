@@ -23,6 +23,7 @@ use common_meta_types::AuthInfo;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MatchSeq;
+use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::PasswordHashMethod;
 use common_meta_types::PrefixListReply;
@@ -40,16 +41,16 @@ mock! {
         async fn upsert_kv(
             &self,
             act: UpsertKVAction,
-        ) -> common_exception::Result<UpsertKVActionReply>;
+        ) -> Result<UpsertKVActionReply, MetaError>;
 
-        async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply>;
+        async fn get_kv(&self, key: &str) -> Result<GetKVActionReply,MetaError>;
 
         async fn mget_kv(
             &self,
             key: &[String],
-        ) -> common_exception::Result<MGetKVActionReply>;
+        ) -> Result<MGetKVActionReply,MetaError>;
 
-        async fn prefix_list_kv(&self, prefix: &str) -> common_exception::Result<PrefixListReply>;
+        async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply, MetaError>;
         }
 }
 
@@ -170,7 +171,7 @@ mod add {
 
             assert_eq!(
                 res.unwrap_err().code(),
-                ErrorCode::UnknownException("").code()
+                ErrorCode::MetaNodeInternalError("").code()
             );
         }
         Ok(())

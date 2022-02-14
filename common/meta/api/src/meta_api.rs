@@ -15,7 +15,6 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
@@ -29,6 +28,7 @@ use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
+use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -40,30 +40,39 @@ use common_meta_types::UpsertTableOptionReq;
 pub trait MetaApi: Send + Sync {
     // database
 
-    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
+    async fn create_database(
+        &self,
+        req: CreateDatabaseReq,
+    ) -> Result<CreateDatabaseReply, MetaError>;
 
-    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply>;
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, MetaError>;
 
-    async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>>;
+    async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, MetaError>;
 
-    async fn list_databases(&self, req: ListDatabaseReq) -> Result<Vec<Arc<DatabaseInfo>>>;
+    async fn list_databases(
+        &self,
+        req: ListDatabaseReq,
+    ) -> Result<Vec<Arc<DatabaseInfo>>, MetaError>;
 
     // table
 
-    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply>;
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, MetaError>;
 
-    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply>;
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, MetaError>;
 
-    async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>>;
+    async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, MetaError>;
 
-    async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>>;
+    async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError>;
 
-    async fn get_table_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
+    async fn get_table_by_id(
+        &self,
+        table_id: MetaId,
+    ) -> Result<(TableIdent, Arc<TableMeta>), MetaError>;
 
     async fn upsert_table_option(
         &self,
         req: UpsertTableOptionReq,
-    ) -> Result<UpsertTableOptionReply>;
+    ) -> Result<UpsertTableOptionReply, MetaError>;
 
     fn name(&self) -> String;
 }

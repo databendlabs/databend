@@ -143,6 +143,9 @@ impl SledTree {
                         MetaStorageError::SnapshotError(_e) => {
                             Err(ConflictableTransactionError::Abort(meta_sto_err))
                         }
+                        MetaStorageError::Damaged(_e) => {
+                            Err(ConflictableTransactionError::Abort(meta_sto_err))
+                        }
                     }
                 }
             }

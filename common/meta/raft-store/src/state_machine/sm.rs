@@ -17,7 +17,6 @@ use std::fmt::Debug;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_exception::ErrorCode;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::EffectiveMembership;
@@ -830,11 +829,11 @@ impl StateMachine {
         Ok(Some(seq_kv_value))
     }
 
-    pub fn get_database_id(&self, tenant: &str, db_name: &str) -> common_exception::Result<u64> {
+    pub fn get_database_id(&self, tenant: &str, db_name: &str) -> Result<u64, MetaStorageError> {
         let seq_dbi = self
             .database_lookup()
             .get(&(DatabaseLookupKey::new(tenant.to_string(), db_name.to_string())))?
-            .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
+            .ok_or_else(|| AppError::from(UnknownDatabase::new(db_name, "get_database_id")))?;
 
         Ok(seq_dbi.data)
     }

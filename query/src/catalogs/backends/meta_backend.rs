@@ -16,7 +16,6 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_exception::Result;
 use common_meta_api::MetaApi;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
@@ -31,6 +30,7 @@ use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
+use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -63,9 +63,9 @@ impl MetaBackend {
         }
     }
 
-    async fn query_backend<F, T, ResFut>(&self, f: F) -> Result<T>
+    async fn query_backend<F, T, ResFut>(&self, f: F) -> std::result::Result<T, MetaError>
     where
-        ResFut: Future<Output = Result<T>> + Send + 'static,
+        ResFut: Future<Output = std::result::Result<T, MetaError>> + Send + 'static,
         F: FnOnce(Arc<dyn MetaApi>) -> ResFut,
         F: Send + Sync + 'static,
         T: Send + Sync + 'static,
@@ -77,48 +77,72 @@ impl MetaBackend {
 
 #[async_trait::async_trait]
 impl MetaApi for MetaBackend {
-    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
+    async fn create_database(
+        &self,
+        req: CreateDatabaseReq,
+    ) -> std::result::Result<CreateDatabaseReply, MetaError> {
         self.query_backend(move |cli| async move { cli.create_database(req).await })
             .await
     }
 
-    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply> {
+    async fn drop_database(
+        &self,
+        req: DropDatabaseReq,
+    ) -> std::result::Result<DropDatabaseReply, MetaError> {
         self.query_backend(move |cli| async move { cli.drop_database(req).await })
             .await
     }
 
-    async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>> {
+    async fn get_database(
+        &self,
+        req: GetDatabaseReq,
+    ) -> std::result::Result<Arc<DatabaseInfo>, MetaError> {
         self.query_backend(move |cli| async move { cli.get_database(req).await })
             .await
     }
 
-    async fn list_databases(&self, req: ListDatabaseReq) -> Result<Vec<Arc<DatabaseInfo>>> {
+    async fn list_databases(
+        &self,
+        req: ListDatabaseReq,
+    ) -> std::result::Result<Vec<Arc<DatabaseInfo>>, MetaError> {
         self.query_backend(move |cli| async move { cli.list_databases(req).await })
             .await
     }
 
-    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
+    async fn create_table(
+        &self,
+        req: CreateTableReq,
+    ) -> std::result::Result<CreateTableReply, MetaError> {
         // TODO validate plan by table engine first
         self.query_backend(move |cli| async move { cli.create_table(req).await })
             .await
     }
 
-    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
+    async fn drop_table(
+        &self,
+        req: DropTableReq,
+    ) -> std::result::Result<DropTableReply, MetaError> {
         self.query_backend(move |cli| async move { cli.drop_table(req).await })
             .await
     }
 
-    async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>> {
+    async fn get_table(&self, req: GetTableReq) -> std::result::Result<Arc<TableInfo>, MetaError> {
         self.query_backend(move |cli| async move { cli.get_table(req).await })
             .await
     }
 
-    async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>> {
+    async fn list_tables(
+        &self,
+        req: ListTableReq,
+    ) -> std::result::Result<Vec<Arc<TableInfo>>, MetaError> {
         self.query_backend(move |cli| async move { cli.list_tables(req).await })
             .await
     }
 
-    async fn get_table_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
+    async fn get_table_by_id(
+        &self,
+        table_id: MetaId,
+    ) -> std::result::Result<(TableIdent, Arc<TableMeta>), MetaError> {
         self.query_backend(move |cli| async move { cli.get_table_by_id(table_id).await })
             .await
     }
@@ -126,7 +150,7 @@ impl MetaApi for MetaBackend {
     async fn upsert_table_option(
         &self,
         req: UpsertTableOptionReq,
-    ) -> Result<UpsertTableOptionReply> {
+    ) -> std::result::Result<UpsertTableOptionReply, MetaError> {
         self.query_backend(move |cli| async move { cli.upsert_table_option(req).await })
             .await
     }

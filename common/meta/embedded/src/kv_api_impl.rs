@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use common_exception::Result;
 use common_meta_api::KVApi;
 pub use common_meta_sled_store::init_temp_sled_db;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
+use common_meta_types::MetaError;
 use common_meta_types::PrefixListReply;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
@@ -26,25 +26,22 @@ use crate::MetaEmbedded;
 
 #[async_trait]
 impl KVApi for MetaEmbedded {
-    async fn upsert_kv(
-        &self,
-        act: UpsertKVAction,
-    ) -> common_exception::Result<UpsertKVActionReply> {
+    async fn upsert_kv(&self, act: UpsertKVAction) -> Result<UpsertKVActionReply, MetaError> {
         let sm = self.inner.lock().await;
         sm.upsert_kv(act).await
     }
 
-    async fn get_kv(&self, key: &str) -> Result<GetKVActionReply> {
+    async fn get_kv(&self, key: &str) -> Result<GetKVActionReply, MetaError> {
         let sm = self.inner.lock().await;
         sm.get_kv(key).await
     }
 
-    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVActionReply> {
+    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVActionReply, MetaError> {
         let sm = self.inner.lock().await;
         sm.mget_kv(key).await
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply> {
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply, MetaError> {
         let sm = self.inner.lock().await;
         sm.prefix_list_kv(prefix).await
     }

@@ -44,9 +44,9 @@ pub struct ConnectionError {
 }
 
 impl ConnectionError {
-    pub fn new(source: tonic::transport::Error, msg: String) -> Self {
+    pub fn new(source: impl std::error::Error + 'static, msg: impl Into<String>) -> Self {
         Self {
-            msg,
+            msg: msg.into(),
             source: AnyError::new(&source),
         }
     }

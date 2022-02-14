@@ -12,21 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::SerializedError;
+use anyerror::AnyError;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
 
+use crate::AppError;
 use crate::MetaNetworkError;
 use crate::MetaRaftError;
+use crate::MetaResultError;
 use crate::MetaStorageError;
 
 /// Top level error MetaNode would return.
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum MetaError {
-    #[error(transparent)]
-    ErrorCode(#[from] SerializedError),
-
     #[error(transparent)]
     MetaNetworkError(#[from] MetaNetworkError),
 
@@ -34,7 +33,10 @@ pub enum MetaError {
     MetaRaftError(#[from] MetaRaftError),
 
     #[error(transparent)]
-    MetaStorageError(#[from] MetaStorageError),
+    MetaStorageError(MetaStorageError),
+
+    #[error(transparent)]
+    MetaResultError(#[from] MetaResultError),
 
     #[error("{0}")]
     InvalidConfig(String),
@@ -65,6 +67,22 @@ pub enum MetaError {
 
     #[error("{0}")]
     IllegalUserInfoFormat(String),
+
+    /// type to represent serialize/deserialize errors
+    #[error(transparent)]
+    SerdeError(AnyError),
+
+    /// Error when encoding auth
+    #[error(transparent)]
+    EncodeError(AnyError),
+
+    #[error(transparent)]
+    AppError(#[from] AppError),
+
+    /// Any other unclassified error.
+    /// Other crate may return general error such as ErrorCode or anyhow::Error, which can not be classified by type.
+    #[error(transparent)]
+    Fatal(AnyError),
 }
 
 pub type MetaResult<T> = std::result::Result<T, MetaError>;
@@ -72,3 +90,12 @@ pub type MetaResult<T> = std::result::Result<T, MetaError>;
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[error("InvalidMembership")]
 pub struct InvalidMembership {}
+
+impl From<MetaStorageError> for MetaError {
+    fn from(e: MetaStorageError) -> Self {
+        match e {
+            MetaStorageError::AppError(app_err) => MetaError::AppError(app_err),
+            _ => MetaError::MetaStorageError(e),
+        }
+    }
+}

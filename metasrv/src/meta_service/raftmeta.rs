@@ -16,12 +16,12 @@ use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use anyerror::AnyError;
 use common_base::tokio;
 use common_base::tokio::sync::watch;
 use common_base::tokio::sync::Mutex;
 use common_base::tokio::sync::RwLockReadGuard;
 use common_base::tokio::task::JoinHandle;
-use common_exception::ErrorCode;
 use common_meta_api::MetaApi;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::StateMachine;
@@ -271,9 +271,12 @@ impl MetaNode {
             builder = builder.node_id(sto.id);
         } else {
             // read id from config, read listening addr from config.
-            builder = builder
-                .node_id(config.id)
-                .addr(config.raft_api_addr().await?);
+            builder = builder.node_id(config.id).addr(
+                config
+                    .raft_api_addr()
+                    .await
+                    .map_err(|e| MetaError::Fatal(AnyError::new(&e)))?,
+            );
         }
 
         let mn = builder.build().await?;
@@ -282,7 +285,13 @@ impl MetaNode {
 
         if !is_open {
             if let Some(_addrs) = init_cluster {
-                mn.init_cluster(config.raft_api_addr().await?).await?;
+                mn.init_cluster(
+                    config
+                        .raft_api_addr()
+                        .await
+                        .map_err(|e| MetaError::Fatal(AnyError::new(&e)))?,
+                )
+                .await?;
             }
         }
         Ok(mn)
@@ -416,7 +425,10 @@ impl MetaNode {
                     forward_to_leader: 1,
                     body: ForwardRequestBody::Join(JoinRequest {
                         node_id: conf.id,
-                        address: conf.raft_api_addr().await?,
+                        address: conf
+                            .raft_api_addr()
+                            .await
+                            .map_err(|e| MetaError::Fatal(AnyError::new(&e)))?,
                     }),
                 };
 
@@ -644,7 +656,7 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, ErrorCode> {
+    pub async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, MetaError> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
