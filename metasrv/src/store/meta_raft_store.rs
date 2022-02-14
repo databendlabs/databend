@@ -475,30 +475,36 @@ impl MetaRaftStore {
         let sm = self.state_machine.read().await;
         let ms = self.get_membership().await.expect("get membership config");
 
-        let membership = ms.unwrap();
-
-        let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
-        let voters = nodes
-            .into_iter()
-            .filter(|(node_id, _)| membership.membership.contains(node_id))
-            .map(|(_, node)| node)
-            .collect();
-        Ok(voters)
+        match ms {
+            Some(membership) => {
+                let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
+                let voters = nodes
+                    .into_iter()
+                    .filter(|(node_id, _)| membership.membership.contains(node_id))
+                    .map(|(_, node)| node)
+                    .collect();
+                Ok(voters)
+            }
+            None => Ok(vec![]),
+        }
     }
 
     pub async fn get_non_voters(&self) -> MetaResult<Vec<Node>> {
         let sm = self.state_machine.read().await;
         let ms = self.get_membership().await.expect("get membership config");
 
-        let membership = ms.unwrap();
-
-        let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
-        let non_voters = nodes
-            .into_iter()
-            .filter(|(node_id, _)| !membership.membership.contains(node_id))
-            .map(|(_, node)| node)
-            .collect();
-        Ok(non_voters)
+        match ms {
+            Some(membership) => {
+                let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
+                let non_voters = nodes
+                    .into_iter()
+                    .filter(|(node_id, _)| !membership.membership.contains(node_id))
+                    .map(|(_, node)| node)
+                    .collect();
+                Ok(non_voters)
+            }
+            None => Ok(vec![]),
+        }
     }
 
     pub async fn get_node_addr(&self, node_id: &NodeId) -> MetaResult<String> {

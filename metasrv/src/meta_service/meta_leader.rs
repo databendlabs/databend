@@ -125,6 +125,7 @@ impl<'a> MetaLeader<'a> {
         // TODO(xp): deal with joint config
         assert!(membership.get_ith_config(1).is_none());
 
+        // safe unwrap: if the first config is None, panic is the expected behavior here.
         let mut membership = membership.get_ith_config(0).unwrap().clone();
 
         membership.insert(node_id);

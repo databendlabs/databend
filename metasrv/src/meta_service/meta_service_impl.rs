@@ -27,6 +27,8 @@ use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::AppliedState;
 use common_meta_types::ForwardRequest;
 use common_meta_types::LogEntry;
+use common_meta_types::MetaError;
+use common_meta_types::MetaRaftError;
 use common_tracing::tracing;
 use tonic::codegen::futures_core::Stream;
 
@@ -69,10 +71,18 @@ impl RaftService for RaftServiceImpl {
             })
             .await;
 
-        let res = res.map(|x| {
-            let a: AppliedState = x.try_into().unwrap();
-            a
-        });
+        let res = match res {
+            Ok(r) => {
+                let a: Result<AppliedState, MetaError> = r.try_into().map_err(|e: &str| {
+                    MetaError::MetaRaftError(MetaRaftError::ForwardRequestError(e.to_string()))
+                });
+                match a {
+                    Ok(applied_state) => Ok(applied_state),
+                    Err(e) => Err(e),
+                }
+            }
+            Err(e) => Err(e),
+        };
 
         let raft_reply = RaftReply::from(res);
         return Ok(tonic::Response::new(raft_reply));
