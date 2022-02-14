@@ -14,24 +14,23 @@
 
 use std::fmt;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Datelike;
-use common_datavalues::chrono::TimeZone;
-use common_datavalues::chrono::Timelike;
-use common_datavalues::chrono::Utc;
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::chrono::DateTime;
+use common_datavalues2::chrono::Datelike;
+use common_datavalues2::chrono::TimeZone;
+use common_datavalues2::chrono::Timelike;
+use common_datavalues2::chrono::Utc;
+use common_datavalues2::prelude::*;
 use common_datavalues2::Date16Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function2_factory::Function2Description;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::CastFunction;
-use crate::scalars::Function;
-use crate::scalars::Function2Convertor;
-use crate::scalars::Monotonicity;
+use crate::scalars::Function2;
+use crate::scalars::Monotonicity2;
 use crate::scalars::RoundFunction;
 
 #[derive(Clone, Debug)]
@@ -41,17 +40,15 @@ pub struct NumberFunction<T, R> {
     r: PhantomData<R>,
 }
 
-pub trait NumberResultFunction<R> {
+pub trait NumberOperator<R> {
     const IS_DETERMINISTIC: bool;
 
-    fn return_type() -> Result<DataType>;
     fn to_number(_value: DateTime<Utc>) -> R;
-    fn to_constant_value(_value: DateTime<Utc>) -> DataValue;
     // Used to check the monotonicity of the function.
     // For example, ToDayOfYear is monotonous only when the time range is the same year.
     // So we can use ToStartOfYearFunction to check whether the time range is in the same year.
     // If the function always monotonous, just return error.
-    fn factor_function() -> Result<Box<dyn Function>> {
+    fn factor_function() -> Result<Box<dyn Function2>> {
         Err(ErrorCode::UnknownException(
             "Always monotonous, has no factor function",
         ))
@@ -61,48 +58,30 @@ pub trait NumberResultFunction<R> {
 #[derive(Clone)]
 pub struct ToYYYYMM;
 
-impl NumberResultFunction<u32> for ToYYYYMM {
+impl NumberOperator<u32> for ToYYYYMM {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt32)
-    }
     fn to_number(value: DateTime<Utc>) -> u32 {
         value.year() as u32 * 100 + value.month()
-    }
-
-    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
-        DataValue::UInt32(Some(Self::to_number(value)))
     }
 }
 
 #[derive(Clone)]
 pub struct ToYYYYMMDD;
 
-impl NumberResultFunction<u32> for ToYYYYMMDD {
+impl NumberOperator<u32> for ToYYYYMMDD {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt32)
-    }
     fn to_number(value: DateTime<Utc>) -> u32 {
         value.year() as u32 * 10000 + value.month() * 100 + value.day()
-    }
-
-    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
-        DataValue::UInt32(Some(Self::to_number(value)))
     }
 }
 
 #[derive(Clone)]
 pub struct ToYYYYMMDDhhmmss;
 
-impl NumberResultFunction<u64> for ToYYYYMMDDhhmmss {
+impl NumberOperator<u64> for ToYYYYMMDDhhmmss {
     const IS_DETERMINISTIC: bool = true;
-
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt64)
-    }
 
     fn to_number(value: DateTime<Utc>) -> u64 {
         value.year() as u64 * 10000000000
@@ -112,40 +91,26 @@ impl NumberResultFunction<u64> for ToYYYYMMDDhhmmss {
             + value.minute() as u64 * 100
             + value.second() as u64
     }
-
-    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
-        DataValue::UInt64(Some(Self::to_number(value)))
-    }
 }
 
 #[derive(Clone)]
 pub struct ToStartOfYear;
 
-impl NumberResultFunction<u16> for ToStartOfYear {
+impl NumberOperator<u16> for ToStartOfYear {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::Date16)
-    }
     fn to_number(value: DateTime<Utc>) -> u16 {
         let end: DateTime<Utc> = Utc.ymd(value.year(), 1, 1).and_hms(0, 0, 0);
         get_day(end) as u16
-    }
-
-    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
-        DataValue::UInt16(Some(Self::to_number(value) as u16))
     }
 }
 
 #[derive(Clone)]
 pub struct ToStartOfISOYear;
 
-impl NumberResultFunction<u16> for ToStartOfISOYear {
+impl NumberOperator<u16> for ToStartOfISOYear {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::Date16)
-    }
     fn to_number(value: DateTime<Utc>) -> u16 {
         let week_day = value.weekday().num_days_from_monday();
         let iso_week = value.iso_week();
@@ -155,71 +120,46 @@ impl NumberResultFunction<u16> for ToStartOfISOYear {
         let end: DateTime<Utc> = Utc.timestamp_millis(result);
         get_day(end) as u16
     }
-
-    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
-        DataValue::UInt16(Some(Self::to_number(value) as u16))
-    }
 }
 
 #[derive(Clone)]
 pub struct ToStartOfQuarter;
 
-impl NumberResultFunction<u16> for ToStartOfQuarter {
+impl NumberOperator<u16> for ToStartOfQuarter {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::Date16)
-    }
     fn to_number(value: DateTime<Utc>) -> u16 {
         let new_month = value.month0() / 3 * 3 + 1;
         let date = Utc.ymd(value.year(), new_month, 1).and_hms(0, 0, 0);
         get_day(date) as u16
-    }
-
-    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
-        DataValue::UInt16(Some(Self::to_number(value) as u16))
     }
 }
 
 #[derive(Clone)]
 pub struct ToStartOfMonth;
 
-impl NumberResultFunction<u16> for ToStartOfMonth {
+impl NumberOperator<u16> for ToStartOfMonth {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::Date16)
-    }
     fn to_number(value: DateTime<Utc>) -> u16 {
         let date = Utc.ymd(value.year(), value.month(), 1).and_hms(0, 0, 0);
         get_day(date) as u16
-    }
-
-    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
-        DataValue::UInt16(Some(Self::to_number(value) as u16))
     }
 }
 
 #[derive(Clone)]
 pub struct ToMonth;
 
-impl NumberResultFunction<u8> for ToMonth {
+impl NumberOperator<u8> for ToMonth {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt8)
-    }
     fn to_number(value: DateTime<Utc>) -> u8 {
         value.month() as u8
     }
 
-    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
-        DataValue::UInt8(Some(Self::to_number(value)))
-    }
-
     // ToMonth is NOT a monotonic function in general, unless the time range is within the same year.
     // For example, date(2020-12-01) < date(2021-5-5), while ToMonth(2020-12-01) > ToMonth(2021-5-5).
-    fn factor_function() -> Result<Box<dyn Function>> {
+    fn factor_function() -> Result<Box<dyn Function2>> {
         ToStartOfYearFunction::try_create("toStartOfYear")
     }
 }
@@ -227,23 +167,16 @@ impl NumberResultFunction<u8> for ToMonth {
 #[derive(Clone)]
 pub struct ToDayOfYear;
 
-impl NumberResultFunction<u16> for ToDayOfYear {
+impl NumberOperator<u16> for ToDayOfYear {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt16)
-    }
     fn to_number(value: DateTime<Utc>) -> u16 {
         value.ordinal() as u16
     }
 
-    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
-        DataValue::UInt16(Some(Self::to_number(value)))
-    }
-
     // ToDayOfYear is NOT a monotonic function in general, unless the time range is within the same year.
     // For example, date(2020-12-01) < date(2021-5-5), while ToDayOfYear(2020-12-01) > ToDayOfYear(2021-5-5).
-    fn factor_function() -> Result<Box<dyn Function>> {
+    fn factor_function() -> Result<Box<dyn Function2>> {
         ToStartOfYearFunction::try_create("toStartOfYear")
     }
 }
@@ -251,23 +184,16 @@ impl NumberResultFunction<u16> for ToDayOfYear {
 #[derive(Clone)]
 pub struct ToDayOfMonth;
 
-impl NumberResultFunction<u8> for ToDayOfMonth {
+impl NumberOperator<u8> for ToDayOfMonth {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt8)
-    }
     fn to_number(value: DateTime<Utc>) -> u8 {
         value.day() as u8
     }
 
-    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
-        DataValue::UInt8(Some(Self::to_number(value)))
-    }
-
     // ToDayOfMonth is not a monotonic function in general, unless the time range is within the same month.
     // For example, date(2021-11-20) < date(2021-12-01), while ToDayOfMonth(2021-11-20) > ToDayOfMonth(2021-12-01).
-    fn factor_function() -> Result<Box<dyn Function>> {
+    fn factor_function() -> Result<Box<dyn Function2>> {
         ToStartOfMonthFunction::try_create("toStartOfMonth")
     }
 }
@@ -275,22 +201,15 @@ impl NumberResultFunction<u8> for ToDayOfMonth {
 #[derive(Clone)]
 pub struct ToDayOfWeek;
 
-impl NumberResultFunction<u8> for ToDayOfWeek {
+impl NumberOperator<u8> for ToDayOfWeek {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt8)
-    }
     fn to_number(value: DateTime<Utc>) -> u8 {
         value.weekday().number_from_monday() as u8
     }
 
-    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
-        DataValue::UInt8(Some(Self::to_number(value)))
-    }
-
     // ToDayOfWeek is NOT a monotonic function in general, unless the time range is within the same week.
-    fn factor_function() -> Result<Box<dyn Function>> {
+    fn factor_function() -> Result<Box<dyn Function2>> {
         ToMondayFunction::try_create("toMonday")
     }
 }
@@ -298,48 +217,34 @@ impl NumberResultFunction<u8> for ToDayOfWeek {
 #[derive(Clone)]
 pub struct ToHour;
 
-impl NumberResultFunction<u8> for ToHour {
+impl NumberOperator<u8> for ToHour {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt8)
-    }
     fn to_number(value: DateTime<Utc>) -> u8 {
         value.hour() as u8
     }
 
-    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
-        DataValue::UInt8(Some(Self::to_number(value)))
-    }
-
     // ToHour is NOT a monotonic function in general, unless the time range is within the same day.
-    fn factor_function() -> Result<Box<dyn Function>> {
+    fn factor_function() -> Result<Box<dyn Function2>> {
         let func2 = CastFunction::create("toDate", Date16Type::arc().name()).unwrap();
-        let adapter = Function2Convertor::create(func2);
+        //let adapter = Function2Convertor::create(func2);
 
-        Ok(adapter)
+        Ok(func2)
     }
 }
 
 #[derive(Clone)]
 pub struct ToMinute;
 
-impl NumberResultFunction<u8> for ToMinute {
+impl NumberOperator<u8> for ToMinute {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt8)
-    }
     fn to_number(value: DateTime<Utc>) -> u8 {
         value.minute() as u8
     }
 
-    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
-        DataValue::UInt8(Some(Self::to_number(value)))
-    }
-
     // ToMinute is NOT a monotonic function in general, unless the time range is within the same hour.
-    fn factor_function() -> Result<Box<dyn Function>> {
+    fn factor_function() -> Result<Box<dyn Function2>> {
         RoundFunction::try_create("toStartOfHour", 60 * 60)
     }
 }
@@ -347,22 +252,15 @@ impl NumberResultFunction<u8> for ToMinute {
 #[derive(Clone)]
 pub struct ToSecond;
 
-impl NumberResultFunction<u8> for ToSecond {
+impl NumberOperator<u8> for ToSecond {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt8)
-    }
     fn to_number(value: DateTime<Utc>) -> u8 {
         value.second() as u8
     }
 
-    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
-        DataValue::UInt8(Some(Self::to_number(value)))
-    }
-
     // ToSecond is NOT a monotonic function in general, unless the time range is within the same minute.
-    fn factor_function() -> Result<Box<dyn Function>> {
+    fn factor_function() -> Result<Box<dyn Function2>> {
         RoundFunction::try_create("toStartOfMinute", 60)
     }
 }
@@ -370,29 +268,21 @@ impl NumberResultFunction<u8> for ToSecond {
 #[derive(Clone)]
 pub struct ToMonday;
 
-impl NumberResultFunction<u16> for ToMonday {
+impl NumberOperator<u16> for ToMonday {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::Date16)
-    }
     fn to_number(value: DateTime<Utc>) -> u16 {
         let weekday = value.weekday();
         (get_day(value) - weekday.num_days_from_monday()) as u16
-    }
-
-    fn to_constant_value(value: DateTime<Utc>) -> DataValue {
-        DataValue::UInt16(Some(Self::to_number(value)))
     }
 }
 
 impl<T, R> NumberFunction<T, R>
 where
-    T: NumberResultFunction<R> + Clone + Sync + Send + 'static,
-    R: DFPrimitiveType + Clone,
-    DFPrimitiveArray<R>: IntoSeries,
+    T: NumberOperator<R> + Clone + Sync + Send + 'static,
+    R: PrimitiveType + Clone + ToDataType + common_datavalues2::Scalar<RefType<'static> = R>,
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(NumberFunction::<T, R> {
             display_name: display_name.to_string(),
             t: PhantomData,
@@ -400,87 +290,89 @@ where
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
+    pub fn desc() -> Function2Description {
         let mut features = FunctionFeatures::default().monotonicity().num_arguments(1);
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();
         }
 
-        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
+        Function2Description::creator(Box::new(Self::try_create)).features(features)
     }
 }
 
-impl<T, R> Function for NumberFunction<T, R>
+impl<T, R> Function2 for NumberFunction<T, R>
 where
-    T: NumberResultFunction<R> + Clone + Sync + Send,
-    R: DFPrimitiveType + Clone,
-    DFPrimitiveArray<R>: IntoSeries,
+    T: NumberOperator<R> + Clone + Sync + Send,
+    R: PrimitiveType + Clone + ToDataType + common_datavalues2::Scalar<RefType<'static> = R>,
 {
     fn name(&self) -> &str {
         self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = T::return_type()?;
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+    fn return_type(
+        &self,
+        _args: &[&common_datavalues2::DataTypePtr],
+    ) -> Result<common_datavalues2::DataTypePtr> {
+        Ok(R::to_data_type())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let data_type = columns[0].data_type();
-        let number_array: DataColumn = match data_type {
-            DataType::Date16 => {
-                if let DataColumn::Constant(v, _) = columns[0].column() {
-                    let date_time = Utc.timestamp(v.as_u64()? as i64 * 24 * 3600, 0_u32);
-                    let constant_result = T::to_constant_value(date_time);
-                    Ok(DataColumn::Constant(constant_result, input_rows))
-                } else {
-                    let result: DFPrimitiveArray<R> = columns[0].column()
-                        .to_array()?
-                        .u16()?
-                        .apply_cast_numeric(|v| {
-                            let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
-                            T::to_number(date_time)
-                        }
-                        );
-                    Ok(result.into())
+    fn eval(
+        &self,
+        columns: &common_datavalues2::ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<common_datavalues2::ColumnRef> {
+        let type_id = columns[0].field().data_type().data_type_id();
+        let column = columns[0].column();
+        let number_array= match type_id {
+            TypeID::Date16 => {
+                if column.is_const() {
+                    let column: &ConstColumn = Series::check_get(column)?;
+                    let date_time = Utc.timestamp(column.get(0).as_i64()? * 24 * 3600, 0_u32);
+                    let column = PrimitiveColumn::new_from_vec(vec![T::to_number(date_time)]).arc();
+                    Ok(Arc::new(ConstColumn::new(column, input_rows)).arc())
+                }else {
+                    let mut array = Vec::with_capacity(input_rows);
+                    for i in 0..column.len() {
+                        let v = column.get(i).as_i64()?;
+                        let date_time = Utc.timestamp(v * 24 * 3600, 0_u32);
+                        array.push(T::to_number(date_time));
+                    }
+                    Ok(PrimitiveColumn::new_from_vec(array).arc())
                 }
-            }
-            DataType::Date32 => {
-                if let DataColumn::Constant(v, _) = columns[0].column() {
-                    let date_time = Utc.timestamp(v.as_i64()? * 24 * 3600, 0_u32);
-                    let constant_result = T::to_constant_value(date_time);
-                    Ok(DataColumn::Constant(constant_result, input_rows))
-                } else {
-                    let result = columns[0].column()
-                        .to_array()?
-                        .i32()?
-                        .apply_cast_numeric(|v| {
-                            let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
-                            T::to_number(date_time)
-                        }
-                        );
-                    Ok(result.into())
+            },
+            TypeID::Date32 => {
+                if column.is_const() {
+                    let column: &ConstColumn = Series::check_get(column)?;
+                    let date_time = Utc.timestamp(column.get(0).as_i64()? * 24 * 3600, 0_u32);
+                    let column = PrimitiveColumn::new_from_vec(vec![T::to_number(date_time)]).arc();
+                    Ok(Arc::new(ConstColumn::new(column, input_rows)).arc())
+                }else {
+                    let mut array = Vec::with_capacity(input_rows);
+                    for i in 0..column.len() {
+                        let v = column.get(i).as_i64()?;
+                        let date_time = Utc.timestamp(v * 24 * 3600, 0_u32);
+                        array.push(T::to_number(date_time));
+                    }
+                    Ok(PrimitiveColumn::new_from_vec(array).arc())
                 }
-            }
-            DataType::DateTime32(_) => {
-                if let DataColumn::Constant(v, _) = columns[0].column() {
-                    let date_time = Utc.timestamp(v.as_u64()? as i64, 0_u32);
-                    let constant_result = T::to_constant_value(date_time);
-                    Ok(DataColumn::Constant(constant_result, input_rows))
-                } else {
-                    let result = columns[0].column()
-                        .to_array()?
-                        .u32()?
-                        .apply_cast_numeric(|v| {
-                            let date_time = Utc.timestamp(v as i64, 0_u32);
-                            T::to_number(date_time)
-                        }
-                        );
-                    Ok(result.into())
+            },
+            TypeID::DateTime32 => {
+                if column.is_const() {
+                    let column: &ConstColumn = Series::check_get(column)?;
+                    let date_time = Utc.timestamp(column.get(0).as_i64()?, 0_u32);
+                    let column = PrimitiveColumn::new_from_vec(vec![T::to_number(date_time)]).arc();
+                    Ok(ConstColumn::new(column, input_rows).arc())
+                }else {
+                    let mut array = Vec::with_capacity(input_rows);
+                    for i in 0..column.len() {
+                        let v = column.get(i).as_u64()?;
+                        let date_time = Utc.timestamp(v as i64, 0_u32);
+                        array.push(T::to_number(date_time));
+                    }
+                    Ok(PrimitiveColumn::new_from_vec(array).arc())
                 }
-            }
+            },
             other => Result::Err(ErrorCode::IllegalDataType(format!(
                 "Illegal type {:?} of argument of function {}.Should be a date16/data32 or a dateTime32",
                 other,
@@ -489,27 +381,25 @@ where
         Ok(number_array)
     }
 
-    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+    fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
         let func = match T::factor_function() {
             Ok(f) => f,
             // Always monotonous, has no factor function.
-            Err(_) => return Ok(Monotonicity::clone_without_range(&args[0])),
+            Err(_) => return Ok(Monotonicity2::clone_without_range(&args[0])),
         };
 
         if args[0].left.is_none() || args[0].right.is_none() {
-            return Ok(Monotonicity::default());
+            return Ok(Monotonicity2::default());
         }
 
-        let left_val = func.eval(&[args[0].left.clone().unwrap()], 1)?.try_get(0)?;
-        let right_val = func
-            .eval(&[args[0].right.clone().unwrap()], 1)?
-            .try_get(0)?;
+        let left_val = func.eval(&[args[0].left.clone().unwrap()], 1)?.get(0);
+        let right_val = func.eval(&[args[0].right.clone().unwrap()], 1)?.get(0);
         // The function is monotonous, if the factor eval returns the same values for them.
         if left_val == right_val {
-            return Ok(Monotonicity::clone_without_range(&args[0]));
+            return Ok(Monotonicity2::clone_without_range(&args[0]));
         }
 
-        Ok(Monotonicity::default())
+        Ok(Monotonicity2::default())
     }
 }
 
