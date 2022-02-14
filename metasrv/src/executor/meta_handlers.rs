@@ -76,7 +76,9 @@ impl RequestHandler<CreateDatabaseReq> for ActionHandler {
 
         let res = self.meta_node.write(cr).await?;
 
-        let mut ch: Change<DatabaseMeta> = res.try_into().unwrap();
+        let mut ch: Change<DatabaseMeta> = res
+            .try_into()
+            .map_err(|e: &str| ErrorCode::from(MetaError::MetaServiceError(e.to_string())))?;
         let db_id = ch.ident.take().expect("Some(db_id)");
         let (prev, _result) = ch.unpack_data();
 
@@ -120,7 +122,9 @@ impl RequestHandler<DropDatabaseReq> for ActionHandler {
 
         let res = self.meta_node.write(cr).await?;
 
-        let ch: Change<DatabaseMeta> = res.try_into().unwrap();
+        let ch: Change<DatabaseMeta> = res
+            .try_into()
+            .map_err(|e: &str| ErrorCode::from(MetaError::MetaServiceError(e.to_string())))?;
         let (prev, _result) = ch.unpack_data();
 
         if prev.is_some() || if_exists {
@@ -174,6 +178,7 @@ impl RequestHandler<CreateTableReq> for ActionHandler {
         }
 
         Ok(CreateTableReply {
+            // safe unwrap: id is not None.
             table_id: add_res.id.unwrap(),
         })
     }
@@ -198,7 +203,9 @@ impl RequestHandler<DropTableReq> for ActionHandler {
 
         let res = self.meta_node.write(cr).await?;
 
-        let ch: Change<TableMeta> = res.try_into().unwrap();
+        let ch: Change<TableMeta> = res
+            .try_into()
+            .map_err(|e: &str| ErrorCode::from(MetaError::MetaServiceError(e.to_string())))?;
         let (prev, _result) = ch.unpack();
 
         if prev.is_some() || if_exists {
@@ -271,7 +278,10 @@ impl RequestHandler<UpsertTableOptionReq> for ActionHandler {
         let res = self.meta_node.write(cr).await?;
 
         if !res.changed() {
-            let ch: Change<TableMeta> = res.try_into().unwrap();
+            let ch: Change<TableMeta> = res
+                .try_into()
+                .map_err(|e: &str| ErrorCode::from(MetaError::MetaServiceError(e.to_string())))?;
+            // safe unwrap: res not changed, so `prev` and `result` are not None.
             let (prev, _result) = ch.unwrap();
 
             let ae = AppError::from(TableVersionMismatched::new(

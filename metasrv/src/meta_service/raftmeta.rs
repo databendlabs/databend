@@ -307,6 +307,7 @@ impl MetaNode {
             .shutdown()
             .await
             .map_error_to_meta_error(MetaError::MetaServiceError, || "fail to stop raft")?;
+        // safe unwrap: receiver wait for change.
         self.running_tx.send(()).unwrap();
 
         // wait for raft to close the metrics tx

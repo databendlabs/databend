@@ -38,11 +38,23 @@ pub async fn nodes_handler(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl
 }
 
 #[poem::handler]
-pub async fn state_handler(meta_node: Data<&Arc<MetaNode>>) -> Json<serde_json::Value> {
-    let voters = meta_node.get_voters().await.unwrap();
-    let non_voters = meta_node.get_non_voters().await.unwrap();
-    Json(serde_json::json!({
+pub async fn state_handler(
+    meta_node: Data<&Arc<MetaNode>>,
+) -> poem::Result<Json<serde_json::Value>> {
+    let voters = meta_node.get_voters().await.map_err(|e| {
+        poem::Error::from_string(
+            format!("failed to get voters: {}", e),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
+    })?;
+    let non_voters = meta_node.get_non_voters().await.map_err(|e| {
+        poem::Error::from_string(
+            format!("failed to get non-voters: {}", e),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
+    })?;
+    Ok(Json(serde_json::json!({
         "voters": voters,
         "non_voters": non_voters,
-    }))
+    })))
 }
