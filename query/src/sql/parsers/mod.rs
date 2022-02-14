@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-mod exec;
-mod metrics;
-pub mod optimizer;
-mod parsers;
-mod plan_parser;
-mod planner;
-mod sql_common;
-mod sql_parser;
-mod sql_statement;
-pub mod statements;
-
-pub use common::*;
-pub use plan_parser::PlanParser;
-pub use planner::*;
-pub use sql_common::SQLCommon;
-pub use sql_parser::DfParser;
-pub use sql_statement::*;
+mod parser_admin;
+mod parser_copy;
+mod parser_database;
+mod parser_explain;
+mod parser_insert;
+mod parser_kill;
+mod parser_optimize;
+mod parser_query;
+mod parser_set;
+mod parser_show;
+mod parser_stage;
+mod parser_table;
+mod parser_udf;
+mod parser_use;
+mod parser_user;
