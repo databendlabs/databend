@@ -65,7 +65,7 @@ use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
-use crate::ShowGrantsPlan;
+use crate::ShowPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -124,6 +124,14 @@ pub trait PlanRewriter: Sized {
             // Copy.
             PlanNode::Copy(plan) => self.rewrite_copy(plan),
 
+            // Show.
+            PlanNode::Show(plan) => self.rewrite_show(plan),
+
+            // Database.
+            PlanNode::CreateDatabase(plan) => self.rewrite_create_database(plan),
+            PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
+            PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
+
             // Table.
             PlanNode::CreateTable(plan) => self.rewrite_create_table(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
@@ -132,18 +140,12 @@ pub trait PlanRewriter: Sized {
             PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
 
-            // Database.
-            PlanNode::CreateDatabase(plan) => self.rewrite_create_database(plan),
-            PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
-            PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
-
             // User.
             PlanNode::CreateUser(plan) => self.create_user(plan),
             PlanNode::AlterUser(plan) => self.alter_user(plan),
             PlanNode::DropUser(plan) => self.drop_user(plan),
             PlanNode::GrantPrivilege(plan) => self.grant_privilege(plan),
             PlanNode::RevokePrivilege(plan) => self.revoke_privilege(plan),
-            PlanNode::ShowGrants(plan) => self.rewrite_show_grants(plan),
 
             // Stage.
             PlanNode::CreateUserStage(plan) => self.rewrite_create_user_stage(plan),
@@ -408,16 +410,16 @@ pub trait PlanRewriter: Sized {
         Ok(PlanNode::DropUserStage(plan.clone()))
     }
 
-    fn rewrite_show_grants(&mut self, plan: &ShowGrantsPlan) -> Result<PlanNode> {
-        Ok(PlanNode::ShowGrants(plan.clone()))
-    }
-
     fn rewrite_sink(&mut self, plan: &SinkPlan) -> Result<PlanNode> {
         Ok(PlanNode::Sink(plan.clone()))
     }
 
     fn rewrite_show_create_database(&mut self, plan: &ShowCreateDatabasePlan) -> Result<PlanNode> {
         Ok(PlanNode::ShowCreateDatabase(plan.clone()))
+    }
+
+    fn rewrite_show(&mut self, plan: &ShowPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Show(plan.clone()))
     }
 
     fn rewrite_create_user_udf(&mut self, plan: &CreateUserUDFPlan) -> Result<PlanNode> {

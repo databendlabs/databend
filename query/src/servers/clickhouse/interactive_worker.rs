@@ -98,41 +98,38 @@ impl ClickHouseSession for InteractiveWorker {
         54405
     }
 
-    fn authenticate(&self, user: &str, password: &[u8], client_addr: &str) -> bool {
-        // TODO: push async up to clickhouse server lib
-        futures::executor::block_on(async move {
-            // Here we don't handle the create context error.
-            let client_ip = client_addr.split(':').collect::<Vec<_>>()[0];
-            let credential = Credential::Password {
-                name: user.to_string(),
-                password: Some(password.to_owned()),
-                hostname: Some(client_ip.to_string()),
-            };
-            let user_info_auth = self
-                .session
-                .get_session_manager()
-                .get_auth_manager()
-                .auth(&credential)
-                .await;
-            match user_info_auth {
-                Ok(user_info) => {
-                    self.session.set_current_user(user_info);
-                    true
-                }
-                Err(failure) => {
-                    tracing::error!(
-                        "ClickHouse handler authenticate failed, \
+    async fn authenticate(&self, user: &str, password: &[u8], client_addr: &str) -> bool {
+        // Here we don't handle the create context error.
+        let client_ip = client_addr.split(':').collect::<Vec<_>>()[0];
+        let credential = Credential::Password {
+            name: user.to_string(),
+            password: Some(password.to_owned()),
+            hostname: Some(client_ip.to_string()),
+        };
+        let user_info_auth = self
+            .session
+            .get_session_manager()
+            .get_auth_manager()
+            .auth(&credential)
+            .await;
+        match user_info_auth {
+            Ok(user_info) => {
+                self.session.set_current_user(user_info);
+                true
+            }
+            Err(failure) => {
+                tracing::error!(
+                    "ClickHouse handler authenticate failed, \
                         user: {}, \
                         client_address: {}, \
                         cause: {:?}",
-                        user,
-                        client_addr,
-                        failure
-                    );
-                    false
-                }
+                    user,
+                    client_addr,
+                    failure
+                );
+                false
             }
-        })
+        }
     }
 
     // TODO: remove it

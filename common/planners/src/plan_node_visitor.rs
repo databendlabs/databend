@@ -55,7 +55,7 @@ use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
-use crate::ShowGrantsPlan;
+use crate::ShowPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -136,6 +136,9 @@ pub trait PlanVisitor {
             // Copy.
             PlanNode::Copy(plan) => self.visit_copy(plan),
 
+            // Show.
+            PlanNode::Show(plan) => self.visit_show(plan),
+
             // Database.
             PlanNode::CreateDatabase(plan) => self.visit_create_database(plan),
             PlanNode::DropDatabase(plan) => self.visit_drop_database(plan),
@@ -145,9 +148,9 @@ pub trait PlanVisitor {
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
             PlanNode::DropTable(plan) => self.visit_drop_table(plan),
             PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
+            PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
             PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
             PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
-            PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
 
             // User.
             PlanNode::CreateUser(plan) => self.visit_create_user(plan),
@@ -155,7 +158,6 @@ pub trait PlanVisitor {
             PlanNode::DropUser(plan) => self.visit_drop_user(plan),
             PlanNode::GrantPrivilege(plan) => self.visit_grant_privilege(plan),
             PlanNode::RevokePrivilege(plan) => self.visit_revoke_privilege(plan),
-            PlanNode::ShowGrants(plan) => self.visit_show_grants(plan),
 
             // Stage.
             PlanNode::CreateUserStage(plan) => self.visit_create_user_stage(plan),
@@ -376,11 +378,11 @@ pub trait PlanVisitor {
         Ok(())
     }
 
-    fn visit_show_grants(&mut self, _: &ShowGrantsPlan) -> Result<()> {
+    fn visit_show_create_database(&mut self, _: &ShowCreateDatabasePlan) -> Result<()> {
         Ok(())
     }
 
-    fn visit_show_create_database(&mut self, _: &ShowCreateDatabasePlan) -> Result<()> {
+    fn visit_show(&mut self, _: &ShowPlan) -> Result<()> {
         Ok(())
     }
 

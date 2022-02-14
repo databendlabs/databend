@@ -16,26 +16,25 @@ use std::sync::Arc;
 
 use common_datavalues2::DataSchemaRef;
 
-use crate::plan_broadcast::BroadcastPlan;
-use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::plan_user_stage_create::CreateUserStagePlan;
-use crate::plan_user_udf_alter::AlterUserUDFPlan;
-use crate::plan_user_udf_create::CreateUserUDFPlan;
-use crate::plan_user_udf_drop::DropUserUDFPlan;
 use crate::AdminUseTenantPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
+use crate::AlterUserUDFPlan;
+use crate::BroadcastPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
+use crate::CreateUserStagePlan;
+use crate::CreateUserUDFPlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
+use crate::DropUserUDFPlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::ExpressionPlan;
@@ -55,10 +54,11 @@ use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
-use crate::ShowGrantsPlan;
+use crate::ShowPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
+use crate::SubQueriesSetPlan;
 use crate::TruncateTablePlan;
 use crate::UseDatabasePlan;
 
@@ -81,6 +81,7 @@ pub enum PlanNode {
     LimitBy(LimitByPlan),
     ReadSource(ReadDataSourcePlan),
     SubQueryExpression(SubQueriesSetPlan),
+    Sink(SinkPlan),
 
     // Explain.
     Explain(ExplainPlan),
@@ -90,8 +91,12 @@ pub enum PlanNode {
 
     // Insert.
     Insert(InsertPlan),
+
+    // Copy.
     Copy(CopyPlan),
-    Sink(SinkPlan),
+
+    // Show.
+    Show(ShowPlan),
 
     // Database.
     CreateDatabase(CreateDatabasePlan),
@@ -112,7 +117,6 @@ pub enum PlanNode {
     DropUser(DropUserPlan),
     GrantPrivilege(GrantPrivilegePlan),
     RevokePrivilege(RevokePrivilegePlan),
-    ShowGrants(ShowGrantsPlan),
 
     // Stage.
     CreateUserStage(CreateUserStagePlan),
@@ -171,6 +175,9 @@ impl PlanNode {
             // Copy.
             PlanNode::Copy(v) => v.schema(),
 
+            // Show.
+            PlanNode::Show(v) => v.schema(),
+
             // Database.
             PlanNode::CreateDatabase(v) => v.schema(),
             PlanNode::DropDatabase(v) => v.schema(),
@@ -190,7 +197,6 @@ impl PlanNode {
             PlanNode::DropUser(v) => v.schema(),
             PlanNode::GrantPrivilege(v) => v.schema(),
             PlanNode::RevokePrivilege(v) => v.schema(),
-            PlanNode::ShowGrants(v) => v.schema(),
 
             // Stage.
             PlanNode::CreateUserStage(v) => v.schema(),
@@ -248,6 +254,9 @@ impl PlanNode {
             // Copy.
             PlanNode::Copy(_) => "CopyPlan",
 
+            // Show.
+            PlanNode::Show(_) => "ShowPlan",
+
             // Database.
             PlanNode::CreateDatabase(_) => "CreateDatabasePlan",
             PlanNode::DropDatabase(_) => "DropDatabasePlan",
@@ -267,7 +276,6 @@ impl PlanNode {
             PlanNode::DropUser(_) => "DropUser",
             PlanNode::GrantPrivilege(_) => "GrantPrivilegePlan",
             PlanNode::RevokePrivilege(_) => "RevokePrivilegePlan",
-            PlanNode::ShowGrants(_) => "ShowGrantsPlan",
 
             // Stage.
             PlanNode::CreateUserStage(_) => "CreateUserStagePlan",

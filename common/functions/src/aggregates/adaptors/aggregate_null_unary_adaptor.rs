@@ -91,16 +91,19 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         }
     }
 
+    #[inline]
     fn init_state(&self, place: StateAddr) {
         Self::init_flag(place);
         self.nested.init_state(self.nested_place(place));
     }
 
+    #[inline]
     fn state_layout(&self) -> Layout {
         let layout = self.nested.state_layout();
         Layout::from_size_align(layout.size() + self.prefix_size, layout.align()).unwrap()
     }
 
+    #[inline]
     fn accumulate(
         &self,
         place: StateAddr,
@@ -134,6 +137,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         Ok(())
     }
 
+    #[inline]
     fn accumulate_keys(
         &self,
         places: &[StateAddr],

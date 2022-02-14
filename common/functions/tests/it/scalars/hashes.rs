@@ -18,12 +18,14 @@ use std::hash::Hasher;
 use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::Blake3HashFunction;
+use common_functions::scalars::City64WithSeedFunction;
 use common_functions::scalars::Md5HashFunction;
 use common_functions::scalars::Sha1HashFunction;
 use common_functions::scalars::Sha2HashFunction;
 use common_functions::scalars::SipHash64Function;
 use common_functions::scalars::XxHash32Function;
 use common_functions::scalars::XxHash64Function;
+use naive_cityhash::cityhash64_with_seed;
 use twox_hash::XxHash32;
 
 use super::scalar_function2_test::test_scalar_functions2;
@@ -274,4 +276,96 @@ fn test_hash() {
     let b = h.finish();
 
     assert!(a == b);
+}
+
+#[test]
+fn test_cityhash64_with_seed_u8() -> Result<()> {
+    let to_hash = vec![10u8, 11, 12];
+    let seeds = vec![1u64, 2, 3];
+    let mut expected_result = Vec::with_capacity(to_hash.len());
+    for i in 0..3 {
+        let v = to_hash[i];
+        let hashed = cityhash64_with_seed(&[v], seeds[i]);
+        expected_result.push(hashed);
+    }
+    let test0 = ScalarFunction2Test {
+        name: "u8 valid input without null",
+        columns: vec![Series::from_data(to_hash), Series::from_data(seeds)],
+        expect: Series::from_data(expected_result),
+        error: "",
+    };
+
+    let to_hash = vec![100u8, 99, 98];
+    let seed = 100u64; //constant seed
+    let mut expected_result = Vec::with_capacity(to_hash.len());
+    for v in to_hash.iter() {
+        let hashed = cityhash64_with_seed(&[*v], seed);
+        expected_result.push(hashed);
+    }
+    let data_type = UInt64Type::arc();
+    let data_value = DataValue::UInt64(seed);
+    let seed_column = data_type.create_constant_column(&data_value, to_hash.len())?;
+    let test1 = ScalarFunction2Test {
+        name: "u8 valid input without null, constant seed",
+        columns: vec![Series::from_data(to_hash), seed_column],
+        expect: Series::from_data(expected_result),
+        error: "",
+    };
+
+    let tests = vec![test0, test1];
+    test_scalar_functions2(
+        City64WithSeedFunction::try_create("city64WithSeed")?,
+        &tests,
+    )
+}
+
+#[test]
+fn test_cityhash64_with_seed_string() -> Result<()> {
+    let to_hash = vec!["Alice", "Bob", "Batman"];
+    let seeds = vec![Some(1u64), None, Some(3)];
+    let mut expected_result = Vec::with_capacity(to_hash.len());
+    for i in 0..3 {
+        match seeds[i] {
+            Some(s) => {
+                let v = to_hash[i].as_bytes();
+                let hashed = cityhash64_with_seed(v, s);
+                expected_result.push(Some(hashed));
+            }
+            None => expected_result.push(None),
+        }
+    }
+    let test0 = ScalarFunction2Test {
+        name: "String + Nullable(Seed)",
+        columns: vec![Series::from_data(to_hash), Series::from_data(seeds)],
+        expect: Series::from_data(expected_result),
+        error: "",
+    };
+
+    let to_hash = vec![Some("Superman"), None, None];
+    let seed = 100u64; //constant seed
+    let mut expected_result = Vec::with_capacity(to_hash.len());
+    for val in to_hash.iter() {
+        match val {
+            Some(v) => {
+                let hashed = cityhash64_with_seed(v.as_bytes(), seed);
+                expected_result.push(Some(hashed));
+            }
+            None => expected_result.push(None),
+        }
+    }
+    let data_type = UInt64Type::arc();
+    let data_value = DataValue::UInt64(seed);
+    let seed_column = data_type.create_constant_column(&data_value, to_hash.len())?;
+    let test1 = ScalarFunction2Test {
+        name: "Nullable(String) + constant seed",
+        columns: vec![Series::from_data(to_hash), seed_column],
+        expect: Series::from_data(expected_result),
+        error: "",
+    };
+
+    let tests = vec![test0, test1];
+    test_scalar_functions2(
+        City64WithSeedFunction::try_create("city64WithSeed")?,
+        &tests,
+    )
 }

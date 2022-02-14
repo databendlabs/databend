@@ -39,6 +39,9 @@ use common_meta_types::ForwardToLeader;
 use common_meta_types::ListTableReq;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaError;
+use common_meta_types::MetaNetworkError;
+use common_meta_types::MetaNetworkResult;
+use common_meta_types::MetaRaftError;
 use common_meta_types::MetaResult;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
@@ -194,14 +197,20 @@ impl MetaNode {
 
     /// Start the grpc service for raft communication and meta operation API.
     #[tracing::instrument(level = "info", skip(mn))]
-    pub async fn start_grpc(mn: Arc<MetaNode>, addr: &str) -> MetaResult<()> {
+    pub async fn start_grpc(mn: Arc<MetaNode>, addr: &str) -> MetaNetworkResult<()> {
         let mut rx = mn.running_rx.clone();
 
         let meta_srv_impl = RaftServiceImpl::create(mn.clone());
         let meta_srv = RaftServiceServer::new(meta_srv_impl);
 
         let addr_str = addr.to_string();
-        let addr = addr.parse::<std::net::SocketAddr>()?;
+        let ret = addr.parse::<std::net::SocketAddr>();
+        let addr = match ret {
+            Ok(addr) => addr,
+            Err(e) => {
+                return Err(e.into());
+            }
+        };
         let node_id = mn.sto.id;
 
         let srv = tonic::transport::Server::builder().add_service(meta_srv);
@@ -262,7 +271,9 @@ impl MetaNode {
             builder = builder.node_id(sto.id);
         } else {
             // read id from config, read listening addr from config.
-            builder = builder.node_id(config.id).addr(config.raft_api_addr());
+            builder = builder
+                .node_id(config.id)
+                .addr(config.raft_api_addr().await?);
         }
 
         let mn = builder.build().await?;
@@ -271,10 +282,9 @@ impl MetaNode {
 
         if !is_open {
             if let Some(_addrs) = init_cluster {
-                mn.init_cluster(config.raft_api_addr()).await?;
+                mn.init_cluster(config.raft_api_addr().await?).await?;
             }
         }
-
         Ok(mn)
     }
 
@@ -400,13 +410,13 @@ impl MetaNode {
             for addr in addrs {
                 let mut client = RaftServiceClient::connect(format!("http://{}", addr))
                     .await
-                    .map_err(|e| MetaError::CannotConnectNode(e.to_string()))?;
+                    .map_err(|e| MetaNetworkError::CannotConnectNode(e.to_string()))?;
 
                 let admin_req = ForwardRequest {
                     forward_to_leader: 1,
                     body: ForwardRequestBody::Join(JoinRequest {
                         node_id: conf.id,
-                        address: conf.raft_api_addr(),
+                        address: conf.raft_api_addr().await?,
                     }),
                 };
 
@@ -521,7 +531,7 @@ impl MetaNode {
             .await?;
 
         let res: Reply = res.try_into().map_err(|e| {
-            MetaError::UnknownException(format!("consistent read recv invalid reply: {}", e))
+            MetaRaftError::ConsistentReadError(format!("consistent read recv invalid reply: {}", e))
         })?;
 
         Ok(res)
@@ -539,7 +549,7 @@ impl MetaNode {
         let l = self.as_leader().await;
         let res = match l {
             Ok(l) => l.handle_forwardable_req(req.clone()).await,
-            Err(e) => Err(MetaError::ForwardToLeader(e)),
+            Err(e) => Err(MetaRaftError::ForwardToLeader(e).into()),
         };
 
         let e = match res {
@@ -548,15 +558,23 @@ impl MetaNode {
         };
 
         let e = match e {
-            MetaError::ForwardToLeader(e) => e,
+            MetaError::MetaRaftError(err) => match err {
+                MetaRaftError::ForwardToLeader(err) => err,
+                _ => return Err(err.into()),
+            },
             _ => return Err(e),
         };
 
         if forward == 0 {
-            return Err(MetaError::ForwardToLeader(e));
+            return Err(MetaRaftError::RequestNotForwardToLeaderError(
+                "req not forward to leader".to_string(),
+            )
+            .into());
         }
 
-        let leader_id = e.leader.ok_or(MetaError::ForwardToLeader(e))?;
+        let leader_id = e.leader_id.ok_or_else(|| {
+            MetaRaftError::NoLeaderError("need to forward req but no leader".to_string())
+        })?;
 
         let mut r2 = req.clone();
         // Avoid infinite forward
@@ -577,7 +595,7 @@ impl MetaNode {
             return Ok(MetaLeader::new(self));
         }
         Err(ForwardToLeader {
-            leader: Some(curr_leader),
+            leader_id: Some(curr_leader),
         })
     }
 
@@ -700,16 +718,21 @@ impl MetaNode {
             .sto
             .get_node_addr(node_id)
             .await
-            .map_err(|e| MetaError::UnknownError(e.to_string()))?;
+            .map_err(|e| MetaNetworkError::GetNodeAddrError(e.to_string()))?;
 
         let mut client = RaftServiceClient::connect(format!("http://{}", addr))
             .await
-            .map_err(|e| ConnectionError::new(e, format!("address: {}", addr)))?;
+            .map_err(|e| {
+                MetaNetworkError::ConnectionError(ConnectionError::new(
+                    e,
+                    format!("address: {}", addr),
+                ))
+            })?;
 
         let resp = client
             .forward(req)
             .await
-            .map_err(|e| MetaError::UnknownError(e.to_string()))?;
+            .map_err(|e| MetaRaftError::ForwardRequestError(e.to_string()))?;
         let raft_mes = resp.into_inner();
 
         let res: Result<ForwardResponse, MetaError> = raft_mes.into();

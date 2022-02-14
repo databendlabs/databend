@@ -19,7 +19,6 @@ use common_exception::SerializedError;
 
 use crate::MetaError;
 use crate::MetaResult;
-use crate::MetaStorageError;
 
 impl From<ErrorCode> for MetaError {
     fn from(e: ErrorCode) -> Self {
@@ -36,24 +35,6 @@ impl From<MetaError> for ErrorCode {
                 ErrorCode::MetaServiceError(e.to_string())
             }
         }
-    }
-}
-
-impl From<MetaStorageError> for MetaError {
-    fn from(e: MetaStorageError) -> Self {
-        MetaError::MetaStorageError(e)
-    }
-}
-
-impl From<serde_json::Error> for MetaError {
-    fn from(error: serde_json::Error) -> Self {
-        MetaError::MetaStorageError(error.into())
-    }
-}
-
-impl From<std::net::AddrParseError> for MetaError {
-    fn from(error: std::net::AddrParseError) -> Self {
-        MetaError::BadAddressFormat(format!("Bad address format, cause: {}", error))
     }
 }
 

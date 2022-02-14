@@ -201,10 +201,10 @@ impl QueryContext {
     }
 
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
-        let tenent_id = self.get_tenant();
+        let tenant_id = self.get_tenant();
         let catalog = self.get_catalog();
         match catalog
-            .get_database(tenent_id.as_str(), &new_database_name)
+            .get_database(tenant_id.as_str(), &new_database_name)
             .await
         {
             Ok(_) => self.shared.set_current_database(new_database_name),
