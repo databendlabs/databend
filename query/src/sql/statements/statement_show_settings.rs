@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_planners::PlanNode;
+use common_planners::ShowPlan;
 use common_planners::ShowSettingsPlan;
 use common_tracing::tracing;
 
@@ -30,8 +31,8 @@ pub struct DfShowSettings;
 impl AnalyzableStatement for DfShowSettings {
     #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::ShowSettings(ShowSettingsPlan {}),
-        )))
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Show(
+            ShowPlan::ShowSettings(ShowSettingsPlan {}),
+        ))))
     }
 }

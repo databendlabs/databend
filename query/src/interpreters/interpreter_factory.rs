@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
+use common_planners::ShowPlan;
 
 use super::DescribeUserStageInterpreter;
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
@@ -78,15 +79,33 @@ impl InterpreterFactory {
             PlanNode::Copy(v) => CopyInterpreter::try_create(ctx_clone, v),
 
             // Show.
-            PlanNode::ShowDatabases(v) => ShowDatabasesInterpreter::try_create(ctx_clone, v),
-            PlanNode::ShowTables(v) => ShowTablesInterpreter::try_create(ctx_clone, v),
-            PlanNode::ShowEngines(v) => ShowEnginesInterpreter::try_create(ctx_clone, v),
-            PlanNode::ShowFunctions(v) => ShowFunctionsInterpreter::try_create(ctx_clone, v),
-            PlanNode::ShowGrants(v) => ShowGrantsInterpreter::try_create(ctx_clone, v),
-            PlanNode::ShowMetrics(v) => ShowMetricsInterpreter::try_create(ctx_clone, v),
-            PlanNode::ShowProcessList(v) => ShowProcessListInterpreter::try_create(ctx_clone, v),
-            PlanNode::ShowSettings(v) => ShowSettingsInterpreter::try_create(ctx_clone, v),
-            PlanNode::ShowUsers(v) => ShowUsersInterpreter::try_create(ctx_clone, v),
+            PlanNode::Show(ShowPlan::ShowDatabases(v)) => {
+                ShowDatabasesInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowTables(v)) => {
+                ShowTablesInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowEngines(v)) => {
+                ShowEnginesInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowFunctions(v)) => {
+                ShowFunctionsInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowGrants(v)) => {
+                ShowGrantsInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowMetrics(v)) => {
+                ShowMetricsInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowProcessList(v)) => {
+                ShowProcessListInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowSettings(v)) => {
+                ShowSettingsInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowUsers(v)) => {
+                ShowUsersInterpreter::try_create(ctx_clone, v)
+            }
 
             // Database.
             PlanNode::CreateDatabase(v) => CreateDatabaseInterpreter::try_create(ctx_clone, v),

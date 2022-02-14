@@ -12,6 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_datavalues2::DataSchema;
+use common_datavalues2::DataSchemaRef;
+
+use crate::ShowDatabasesPlan;
+use crate::ShowEnginesPlan;
+use crate::ShowFunctionsPlan;
+use crate::ShowGrantsPlan;
+use crate::ShowMetricsPlan;
+use crate::ShowProcessListsPlan;
+use crate::ShowSettingsPlan;
+use crate::ShowTablesPlan;
+use crate::ShowUsersPlan;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum PlanShowKind {
     All,
@@ -24,4 +39,23 @@ pub enum PlanShowKind {
 
     // show tables from db1 [or in db1]
     FromOrIn(String),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub enum ShowPlan {
+    ShowDatabases(ShowDatabasesPlan),
+    ShowTables(ShowTablesPlan),
+    ShowEngines(ShowEnginesPlan),
+    ShowFunctions(ShowFunctionsPlan),
+    ShowMetrics(ShowMetricsPlan),
+    ShowProcessList(ShowProcessListsPlan),
+    ShowSettings(ShowSettingsPlan),
+    ShowUsers(ShowUsersPlan),
+    ShowGrants(ShowGrantsPlan),
+}
+
+impl ShowPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
 }

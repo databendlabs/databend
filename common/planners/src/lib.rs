@@ -146,6 +146,7 @@ pub use plan_node_extras::Extras;
 pub use plan_node_rewriter::PlanRewriter;
 pub use plan_node_rewriter::RewriteHelper;
 pub use plan_node_show_kind::PlanShowKind;
+pub use plan_node_show_kind::ShowPlan;
 pub use plan_node_stage::StageKind;
 pub use plan_node_stage::StagePlan;
 pub use plan_node_statistics::Statistics;
