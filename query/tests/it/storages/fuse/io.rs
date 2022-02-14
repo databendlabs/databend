@@ -16,11 +16,6 @@
 use std::sync::Arc;
 
 use common_base::tokio;
-use common_dal2::ops::OpWrite;
-use common_dal2::services::fs;
-use common_dal2::Accessor;
-use common_dal2::Operator;
-use common_dal2::Reader;
 use common_datablocks::DataBlock;
 use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
@@ -31,6 +26,11 @@ use databend_query::storages::fuse::DEFAULT_CHUNK_BLOCK_NUM;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use num::Integer;
+use opendal::ops::OpWrite;
+use opendal::services::fs;
+use opendal::Accessor;
+use opendal::Operator;
+use opendal::Reader;
 use tempfile::TempDir;
 
 #[tokio::test]
@@ -338,7 +338,7 @@ impl MockDataAccessor {
 }
 #[async_trait::async_trait]
 impl Accessor for MockDataAccessor {
-    async fn write(&self, _r: Reader, args: &OpWrite) -> common_dal2::error::Result<usize> {
+    async fn write(&self, _r: Reader, args: &OpWrite) -> opendal::error::Result<usize> {
         let called = &mut *self.put_stream_called.lock();
         *called += 1;
         Ok(args.size as usize)

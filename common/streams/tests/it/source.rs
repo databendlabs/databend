@@ -16,9 +16,6 @@ use std::fs::File;
 use std::io::Write;
 
 use common_base::tokio;
-use common_dal2::readers::SeekableReader;
-use common_dal2::services::fs;
-use common_dal2::Operator;
 use common_datablocks::assert_blocks_eq;
 use common_datablocks::DataBlock;
 use common_datavalues2::prelude::*;
@@ -29,6 +26,9 @@ use common_streams::ParquetSource;
 use common_streams::Source;
 use common_streams::ValueSource;
 use futures::io::BufReader;
+use opendal::readers::SeekableReader;
+use opendal::services::fs;
+use opendal::Operator;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_parse_values() {
