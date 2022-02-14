@@ -78,7 +78,7 @@ impl RequestHandler<CreateDatabaseReq> for ActionHandler {
 
         let mut ch: Change<DatabaseMeta> = res
             .try_into()
-            .map_err(|e: &str| ErrorCode::from(MetaError::MetaServiceError(e.to_string())))?;
+            .map_err(|e: &str| MetaError::MetaServiceError(e.to_string()))?;
         let db_id = ch.ident.take().expect("Some(db_id)");
         let (prev, _result) = ch.unpack_data();
 
@@ -124,7 +124,7 @@ impl RequestHandler<DropDatabaseReq> for ActionHandler {
 
         let ch: Change<DatabaseMeta> = res
             .try_into()
-            .map_err(|e: &str| ErrorCode::from(MetaError::MetaServiceError(e.to_string())))?;
+            .map_err(|e: &str| MetaError::MetaServiceError(e.to_string()))?;
         let (prev, _result) = ch.unpack_data();
 
         if prev.is_some() || if_exists {
@@ -205,7 +205,7 @@ impl RequestHandler<DropTableReq> for ActionHandler {
 
         let ch: Change<TableMeta> = res
             .try_into()
-            .map_err(|e: &str| ErrorCode::from(MetaError::MetaServiceError(e.to_string())))?;
+            .map_err(|e: &str| MetaError::MetaServiceError(e.to_string()))?;
         let (prev, _result) = ch.unpack();
 
         if prev.is_some() || if_exists {
@@ -280,7 +280,7 @@ impl RequestHandler<UpsertTableOptionReq> for ActionHandler {
         if !res.changed() {
             let ch: Change<TableMeta> = res
                 .try_into()
-                .map_err(|e: &str| ErrorCode::from(MetaError::MetaServiceError(e.to_string())))?;
+                .map_err(|e: &str| MetaError::MetaServiceError(e.to_string()))?;
             // safe unwrap: res not changed, so `prev` and `result` are not None.
             let (prev, _result) = ch.unwrap();
 
