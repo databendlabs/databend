@@ -55,7 +55,6 @@ impl Series {
     /// # Safety
     /// Assumes that the `column` is  T.
     pub unsafe fn static_cast<T>(column: &ColumnRef) -> &T {
-        let datatype = column.data_type().data_type_id();
         let object = column.as_ref();
         &*(object as *const dyn Column as *const T)
     }
