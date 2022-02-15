@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use client_conf::RpcClientConf;
-pub use client_conf::RpcClientTlsConfig;
-pub use dns_resolver::ConnectionFactory;
-pub use dns_resolver::DNSResolver;
-pub use dns_resolver::GrpcConnectionError;
-pub use grpc_token::GrpcClaim;
-pub use grpc_token::GrpcToken;
-
-mod client_conf;
-mod dns_resolver;
-mod grpc_token;
+mod parser_admin;
+mod parser_copy;
+mod parser_database;
+mod parser_optimize;
+mod parser_show;
+mod parser_stage;
+mod parser_table;
+mod parser_udf;
+mod parser_use;
+mod parser_user;
