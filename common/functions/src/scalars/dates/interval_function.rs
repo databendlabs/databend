@@ -213,51 +213,6 @@ impl_interval_year_month!(AddYearsImpl, add_years_base);
 impl_interval_year_month!(AddMonthsImpl, add_months_base);
 
 #[derive(Clone)]
-pub struct AddTimesImpl;
-
-impl IntervalArithmeticImpl for AddTimesImpl {
-    type Date16Result = u32;
-    type Date32Result = i64;
-
-    fn eval_date16<R: PrimitiveType + AsPrimitive<i64>>(
-        l: u16,
-        r: R::RefType<'_>,
-        ctx: &mut EvalContext,
-    ) -> Self::Date16Result {
-        (l as i64 * 3600 * 24 + r.to_owned_scalar().as_() * ctx.factor) as Self::Date16Result
-    }
-
-    fn eval_date32<R: PrimitiveType + AsPrimitive<i64>>(
-        l: i32,
-        r: R::RefType<'_>,
-        ctx: &mut EvalContext,
-    ) -> Self::Date32Result {
-        l as i64 * 3600 * 24 + r.to_owned_scalar().as_() * ctx.factor
-    }
-
-    fn eval_datetime32<R: PrimitiveType + AsPrimitive<i64>>(
-        l: u32,
-        r: R::RefType<'_>,
-        ctx: &mut EvalContext,
-    ) -> u32 {
-        (l as i64 + r.to_owned_scalar().as_() * ctx.factor) as u32
-    }
-
-    fn eval_datetime64<R: PrimitiveType + AsPrimitive<i64>>(
-        l: i64,
-        r: R::RefType<'_>,
-        ctx: &mut EvalContext,
-    ) -> i64 {
-        let precision = ctx
-            .get_meta_value("precision".to_string())
-            .map_or(0, |v| v.parse::<u32>().unwrap());
-        let base = 10_i64.pow(precision);
-        let factor = ctx.factor * base;
-        l as i64 + r.to_owned_scalar().as_() * factor
-    }
-}
-
-#[derive(Clone)]
 pub struct AddDaysImpl;
 
 impl IntervalArithmeticImpl for AddDaysImpl {
@@ -299,6 +254,51 @@ impl IntervalArithmeticImpl for AddDaysImpl {
             .map_or(0, |v| v.parse::<u32>().unwrap());
         let base = 10_i64.pow(precision);
         let factor = ctx.factor * 24 * 3600 * base;
+        l as i64 + r.to_owned_scalar().as_() * factor
+    }
+}
+
+#[derive(Clone)]
+pub struct AddTimesImpl;
+
+impl IntervalArithmeticImpl for AddTimesImpl {
+    type Date16Result = u32;
+    type Date32Result = i64;
+
+    fn eval_date16<R: PrimitiveType + AsPrimitive<i64>>(
+        l: u16,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> Self::Date16Result {
+        (l as i64 * 3600 * 24 + r.to_owned_scalar().as_() * ctx.factor) as Self::Date16Result
+    }
+
+    fn eval_date32<R: PrimitiveType + AsPrimitive<i64>>(
+        l: i32,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> Self::Date32Result {
+        l as i64 * 3600 * 24 + r.to_owned_scalar().as_() * ctx.factor
+    }
+
+    fn eval_datetime32<R: PrimitiveType + AsPrimitive<i64>>(
+        l: u32,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> u32 {
+        (l as i64 + r.to_owned_scalar().as_() * ctx.factor) as u32
+    }
+
+    fn eval_datetime64<R: PrimitiveType + AsPrimitive<i64>>(
+        l: i64,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> i64 {
+        let precision = ctx
+            .get_meta_value("precision".to_string())
+            .map_or(0, |v| v.parse::<u32>().unwrap());
+        let base = 10_i64.pow(precision);
+        let factor = ctx.factor * base;
         l as i64 + r.to_owned_scalar().as_() * factor
     }
 }
@@ -345,7 +345,7 @@ fn add_months_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveD
 // Get the last day of the year month, could be 28(non leap Feb), 29(leap year Feb), 30 or 31
 fn last_day_of_year_month(year: i32, month: u32) -> u32 {
     let is_leap_year = NaiveDate::from_ymd_opt(year, 2, 29).is_some();
-    if month == 2 && is_leap_year {
+    if std::intrinsics::unlikely(month == 2 && is_leap_year) {
         return 29;
     }
     let last_day_lookup = [0u32, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];

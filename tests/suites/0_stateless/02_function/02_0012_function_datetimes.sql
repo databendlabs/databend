@@ -117,6 +117,7 @@ select '===addDays===';
 select '===addHours===';
 select addHours(toDateTime(1582970400), cast(25, INT32)); -- 2020-2-29T10:00:00 + 25 hours
 select toDateTime(1582970400) + interval '25' hour;
+select addHours(toDate(18321), cast(1.2, Float32));
 select '===addHours===';
 
 select '===subtractMinutes===';
