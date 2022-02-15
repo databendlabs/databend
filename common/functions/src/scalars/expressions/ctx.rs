@@ -56,4 +56,10 @@ impl EvalContext {
             .cloned()
             .ok_or_else(|| ErrorCode::UnknownException(format!("metadata key {} is not set", key)))
     }
+
+    pub fn set_error(&mut self, e: ErrorCode) {
+        if self.error.is_none() {
+            self.error = Some(e);
+        }
+    }
 }

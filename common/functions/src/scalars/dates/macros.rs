@@ -64,7 +64,7 @@ macro_rules! define_date_add_year_months {
         let epoch = NaiveDate::from_ymd(1970, 1, 1);
         let naive = epoch.checked_add_signed(Duration::days($l as i64));
         if naive.is_none() {
-            $ctx.error = Some(ErrorCode::Overflow(format!(
+            $ctx.set_error(ErrorCode::Overflow(format!(
                 "Overflow on date with days {}.",
                 $l
             )));
@@ -80,7 +80,7 @@ macro_rules! define_date_add_year_months {
         );
         new_date.map_or_else(
             |e| {
-                $ctx.error = Some(e);
+                $ctx.set_error(e);
                 0
             },
             |d| d.signed_duration_since(epoch).num_days() as $date_type,
@@ -94,7 +94,7 @@ macro_rules! define_datetime32_add_year_months {
         let factor = $ctx.factor;
         let naive = NaiveDateTime::from_timestamp_opt($l as i64, 0);
         if naive.is_none() {
-            $ctx.error = Some(ErrorCode::Overflow(format!(
+            $ctx.set_error(ErrorCode::Overflow(format!(
                 "Overflow on datetime with seconds {}",
                 $l
             )));
@@ -110,7 +110,7 @@ macro_rules! define_datetime32_add_year_months {
         );
         new_date.map_or_else(
             |e| {
-                $ctx.error = Some(e);
+                $ctx.set_error(e);
                 0
             },
             |d| NaiveDateTime::new(d, date.time()).timestamp() as u32,
@@ -130,7 +130,7 @@ macro_rules! define_datetime64_add_year_months {
         let naive =
             NaiveDateTime::from_timestamp_opt(nano / 1_000_000_000, (nano % 1_000_000_000) as u32);
         if naive.is_none() {
-            $ctx.error = Some(ErrorCode::Overflow(format!(
+            $ctx.set_error(ErrorCode::Overflow(format!(
                 "Overflow on datetime with nanoseconds {}",
                 $l
             )));
@@ -146,7 +146,7 @@ macro_rules! define_datetime64_add_year_months {
         );
         new_date.map_or_else(
             |e| {
-                $ctx.error = Some(e);
+                $ctx.set_error(e);
                 0
             },
             |d| NaiveDateTime::new(d, date.time()).timestamp_nanos() / base,
