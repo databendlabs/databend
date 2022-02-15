@@ -18,6 +18,7 @@ use ahash::AHasher;
 
 use crate::common::HashTableKeyable;
 
+#[derive(Clone, Copy)]
 pub struct KeysRef {
     pub length: usize,
     pub address: usize,

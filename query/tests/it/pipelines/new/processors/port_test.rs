@@ -19,8 +19,10 @@ use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use databend_query::pipelines::new::processors::connect;
-use databend_query::pipelines::new::processors::port::InputPort;
+// use databend_query::pipelines::new::processors::port::InputPort;
 use databend_query::pipelines::new::processors::port::OutputPort;
+
+use super::processors::port::InputPort;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_input_and_output_port() -> Result<()> {
@@ -59,4 +61,24 @@ async fn test_input_and_output_port() -> Result<()> {
         thread_2.join().unwrap();
         Ok(())
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_input_and_output_flags() -> Result<()> {
+    unsafe {
+        let input = InputPort::create();
+        let output = OutputPort::create();
+
+        connect(&input, &output);
+
+        output.finish();
+        assert!(input.is_finished());
+        input.set_need_data();
+        assert!(input.is_finished());
+    }
+
+    // assert_eq!(output.can_push());
+    // input.set_need_data();
+    // assert_eq!(!output.can_push());
+    Ok(())
 }

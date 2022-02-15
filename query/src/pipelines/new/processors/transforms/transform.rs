@@ -26,6 +26,7 @@ use crate::pipelines::new::processors::Processor;
 // TODO: maybe we also need async transform for `SELECT sleep(1)`?
 pub trait Transform: Send {
     const NAME: &'static str;
+    const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock>;
 }
@@ -74,7 +75,11 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
 
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
-            self.output_data = Some(self.transform.transform(data_block)?);
+            let data_block = self.transform.transform(data_block)?;
+
+            if !T::SKIP_EMPTY_DATA_BLOCK || !data_block.is_empty() {
+                self.output_data = Some(data_block);
+            }
         }
 
         Ok(())

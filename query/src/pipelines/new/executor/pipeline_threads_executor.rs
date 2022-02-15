@@ -23,45 +23,52 @@ use crate::pipelines::new::pipeline::NewPipeline;
 
 #[allow(dead_code)]
 pub struct PipelineThreadsExecutor {
-    base: Option<Arc<PipelineExecutor>>,
-
-    pipeline: Option<NewPipeline>,
+    threads_num: usize,
+    inner_executor: Arc<PipelineExecutor>,
 }
 
 #[allow(dead_code)]
 impl PipelineThreadsExecutor {
-    pub fn create(pipeline: NewPipeline) -> Result<PipelineThreadsExecutor> {
-        Ok(PipelineThreadsExecutor {
-            base: None,
-            pipeline: Some(pipeline),
-        })
+    pub fn create(pipeline: NewPipeline) -> Result<Arc<PipelineThreadsExecutor>> {
+        let threads_num = pipeline.get_max_threads();
+        let inner_executor = PipelineExecutor::create(pipeline, threads_num)?;
+        Ok(Arc::new(PipelineThreadsExecutor {
+            threads_num,
+            inner_executor,
+        }))
     }
 
-    pub fn start(&mut self, workers: usize) -> Result<()> {
-        if self.base.is_some() {
-            return Err(ErrorCode::AlreadyStarted(
-                "PipelineThreadsExecutor is already started.",
-            ));
-        }
-
-        match self.pipeline.take() {
-            None => Err(ErrorCode::LogicalError("Logical error: it's a bug.")),
-            Some(pipeline) => self.start_workers(workers, pipeline),
-        }
+    pub fn finish(&self) -> Result<()> {
+        self.inner_executor.finish();
+        Ok(())
     }
 
-    fn start_workers(&mut self, workers: usize, pipeline: NewPipeline) -> Result<()> {
-        let executor = PipelineExecutor::create(pipeline, workers)?;
-
-        self.base = Some(executor.clone());
-        for worker_num in 0..workers {
-            let worker = executor.clone();
-            Thread::spawn(move || unsafe {
-                if let Err(cause) = worker.execute_with_single_worker(worker_num) {
-                    // TODO:
-                    println!("Executor error : {:?}", cause);
+    pub fn execute(&self) -> Result<()> {
+        let mut threads = Vec::with_capacity(self.threads_num);
+        for thread_num in 0..self.threads_num {
+            let worker_executor = self.inner_executor.clone();
+            let name = format!("PipelineExecutor-{}", thread_num);
+            threads.push(Thread::named_spawn(Some(name), move || unsafe {
+                match worker_executor.execute(thread_num) {
+                    Ok(_) => Ok(()),
+                    Err(cause) => {
+                        worker_executor.finish();
+                        Err(cause.add_message_back(format!(
+                            " (while in processor thread {})",
+                            thread_num
+                        )))
+                    }
                 }
-            });
+            }));
+        }
+
+        while let Some(join_handle) = threads.pop() {
+            // flatten error.
+            match join_handle.join() {
+                Ok(Ok(_)) => Ok(()),
+                Ok(Err(cause)) => Err(cause),
+                Err(cause) => Err(ErrorCode::LogicalError(format!("{:?}", cause))),
+            }?;
         }
 
         Ok(())

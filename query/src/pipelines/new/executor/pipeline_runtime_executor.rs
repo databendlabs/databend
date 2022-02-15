@@ -59,7 +59,7 @@ impl PipelineRuntimeExecutor {
             // TODO: wait runtime shutdown.
             rt.spawn(async move {
                 unsafe {
-                    if let Err(cause) = worker.execute_with_single_worker(worker_num) {
+                    if let Err(cause) = worker.execute(worker_num) {
                         // TODO: worker
                         println!("Worker {} failure, cause {:?}", worker_num, cause);
                     }
