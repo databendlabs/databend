@@ -14,7 +14,6 @@
 
 mod date;
 mod interval_function;
-mod interval_function2;
 mod now;
 mod number_function;
 mod round_function;
@@ -24,13 +23,10 @@ mod week_date;
 mod macros;
 
 pub use date::DateFunction;
-pub use interval_function::IntervalFunctionFactory;
-pub use interval_function::MonthsArithmeticFunction;
-pub use interval_function::SecondsArithmeticFunction;
-pub use interval_function2::AddDaysFunction;
-pub use interval_function2::AddMonthsFunction;
-pub use interval_function2::AddTimesFunction;
-pub use interval_function2::AddYearsFunction;
+pub use interval_function::AddDaysFunction;
+pub use interval_function::AddMonthsFunction;
+pub use interval_function::AddTimesFunction;
+pub use interval_function::AddYearsFunction;
 pub use number_function::ToDayOfMonthFunction;
 pub use number_function::ToDayOfWeekFunction;
 pub use number_function::ToDayOfYearFunction;

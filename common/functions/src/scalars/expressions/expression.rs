@@ -26,7 +26,7 @@ impl ToCastFunction {
     fn cast_function_creator(type_name: &'static str) -> Result<Function2Description> {
         let mut features = FunctionFeatures::default().deterministic().monotonicity();
 
-        // TODO: complete DateTime, e.g. toDateTime64(1640019661000, 3, 'UTC').
+        // TODO(zhyass): complete DateTime, e.g. toDateTime64(1640019661000, 3, 'UTC').
         features = match type_name {
             "Boolean" => features.num_arguments(1).bool_function(),
             "DateTime" | "DateTime32" => features.variadic_arguments(1, 2),

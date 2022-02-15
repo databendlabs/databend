@@ -12,582 +12,347 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Datelike;
-use common_datavalues::chrono::Duration;
-use common_datavalues::chrono::NaiveDate;
-use common_datavalues::chrono::NaiveDateTime;
-use common_datavalues::chrono::Timelike;
-use common_datavalues::chrono::Utc;
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::chrono::Datelike;
+use common_datavalues2::chrono::Duration;
+use common_datavalues2::chrono::NaiveDate;
+use common_datavalues2::chrono::NaiveDateTime;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use num_traits::AsPrimitive;
 
-use crate::scalars::Function;
+use crate::define_date_add_year_months;
+use crate::define_datetime32_add_year_months;
+use crate::define_datetime64_add_year_months;
+use crate::impl_interval_year_month;
+use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::ArithmeticCreator;
+use crate::scalars::ArithmeticDescription;
+use crate::scalars::EvalContext;
+use crate::scalars::Function2;
+use crate::scalars::ScalarBinaryExpression2;
+use crate::scalars::ScalarBinaryFunction2;
 
-pub trait IntegerTypedArithmetic {
-    fn get_func(
-        a: &DataType,
-        b: &DataType,
-    ) -> fn(
-        &DataValueBinaryOperator,
-        &DataColumnWithField,
-        &DataColumnWithField,
-        i64,
-    ) -> Result<DataColumn>;
-}
-
-#[derive(Clone, Debug)]
-pub struct IntegerTypedIntervalFunction<T> {
+pub struct IntervalFunctionCreator<T> {
     t: PhantomData<T>,
-    display_name: String,
-    factor: i64,
-    op: DataValueBinaryOperator,
 }
 
-impl<T> IntegerTypedIntervalFunction<T>
-where T: IntegerTypedArithmetic + Clone + Sync + Send + 'static
+impl<T> IntervalFunctionCreator<T>
+where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
 {
-    pub fn try_create(
+    pub fn try_create_func(
         display_name: &str,
-        op: DataValueBinaryOperator,
         factor: i64,
-    ) -> Result<Box<dyn Function>> {
-        Ok(Box::new(IntegerTypedIntervalFunction::<T> {
-            t: PhantomData,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function2>> {
+        let left_arg = remove_nullable(args[0]);
+        let right_arg = remove_nullable(args[1]);
+        let left_type = left_arg.data_type_id();
+        let right_type = right_arg.data_type_id();
+
+        with_match_primitive_types_error!(right_type, |$R| {
+            match left_type {
+                TypeID::Date16 => IntervalFunction::<u16, $R, T::Date16Result, _>::try_create_func(
+                    display_name,
+                    T::Date16Result::to_date_type(),
+                    T::eval_date16::<$R>,
+                    factor,
+                    None,
+                ),
+                TypeID::Date32 => IntervalFunction::<i32, $R, T::Date32Result, _>::try_create_func(
+                    display_name,
+                    T::Date32Result::to_date_type(),
+                    T::eval_date32::<$R>,
+                    factor,
+                    None,
+                ),
+                TypeID::DateTime32 => IntervalFunction::<u32, $R, u32, _>::try_create_func(
+                    display_name,
+                    left_arg,
+                    T::eval_datetime32::<$R>,
+                    factor,
+                    None,
+                ),
+                TypeID::DateTime64 => {
+                    let mut mp = BTreeMap::new();
+                    let datetime = left_arg.as_any().downcast_ref::<DateTime64Type>().unwrap();
+                    let precision = datetime.precision().to_string();
+                    mp.insert("precision".to_string(), precision);
+                    IntervalFunction::<i64, $R, i64, _>::try_create_func(
+                        display_name,
+                        left_arg,
+                        T::eval_datetime64::<$R>,
+                        factor,
+                        Some(mp),
+                    )
+                },
+                _=> Err(ErrorCode::BadDataValueType(format!(
+                    "DataValue Error: Unsupported arithmetic {}({:?}, {:?})",
+                    display_name, left_type, right_type
+                ))),
+            }
+        })
+    }
+
+    pub fn desc(factor: i64) -> ArithmeticDescription {
+        let function_creator: ArithmeticCreator =
+            Box::new(move |display_name, args| Self::try_create_func(display_name, factor, args));
+
+        ArithmeticDescription::creator(function_creator)
+            .features(FunctionFeatures::default().deterministic().num_arguments(2))
+    }
+}
+
+#[derive(Clone)]
+pub struct IntervalFunction<L: DateType, R: PrimitiveType, O: DateType, F> {
+    display_name: String,
+    result_type: DataTypePtr,
+    binary: ScalarBinaryExpression2<L, R, O, F>,
+    factor: i64,
+    metadata: Option<BTreeMap<String, String>>,
+}
+
+impl<L, R, O, F> IntervalFunction<L, R, O, F>
+where
+    L: DateType + Send + Sync + Clone,
+    R: PrimitiveType + Send + Sync + Clone,
+    O: DateType + Send + Sync + Clone,
+    F: ScalarBinaryFunction2<L, R, O> + Send + Sync + Clone + 'static,
+{
+    pub fn try_create_func(
+        display_name: &str,
+        result_type: DataTypePtr,
+        func: F,
+        factor: i64,
+        metadata: Option<BTreeMap<String, String>>,
+    ) -> Result<Box<dyn Function2>> {
+        let binary = ScalarBinaryExpression2::<L, R, O, _>::new(func);
+        Ok(Box::new(Self {
             display_name: display_name.to_string(),
+            result_type,
+            binary,
             factor,
-            op,
+            metadata,
         }))
     }
 }
 
-impl<T> Function for IntegerTypedIntervalFunction<T>
-where T: IntegerTypedArithmetic + Clone + Sync + Send + 'static
+impl<L, R, O, F> Function2 for IntervalFunction<L, R, O, F>
+where
+    L: DateType + Send + Sync + Clone,
+    R: PrimitiveType + Send + Sync + Clone,
+    O: DateType + Send + Sync + Clone,
+    F: ScalarBinaryFunction2<L, R, O> + Send + Sync + Clone + 'static,
 {
     fn name(&self) -> &str {
-        self.display_name.as_str()
+        "IntervalFunction"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        if args[0].is_date_or_date_time() {
-            Ok(args[0].clone())
-        } else {
-            Ok(args[1].clone())
-        }
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        Ok(self.result_type.clone())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        if !(matches!(
-            self.op,
-            DataValueBinaryOperator::Plus | DataValueBinaryOperator::Minus
-        )) {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Illegal operation {:?} between interval and date time.",
-                self.op,
-            )));
-        }
-
-        let date_col: &DataColumnWithField;
-        let integer_col: &DataColumnWithField;
-        if columns[0].data_type().is_date_or_date_time() && columns[1].data_type().is_integer() {
-            date_col = &columns[0];
-            integer_col = &columns[1];
-        } else if columns[1].data_type().is_date_or_date_time()
-            && columns[0].data_type().is_integer()
-        {
-            date_col = &columns[1];
-            integer_col = &columns[0];
-        } else {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Illegal arguments for function {}. Should be a date or dateTime plus or minus an integer.",
-                self.name())));
-        }
-
-        T::get_func(integer_col.data_type(), date_col.data_type())(
-            &self.op,
-            integer_col,
-            date_col,
-            self.factor,
-        )
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        // Todo(zhyass): define the ctx out of the eval.
+        let mut ctx = EvalContext::new(self.factor, None, self.metadata.clone());
+        let col = self
+            .binary
+            .eval(columns[0].column(), columns[1].column(), &mut ctx)?;
+        Ok(Arc::new(col))
     }
 }
 
-impl<T> fmt::Display for IntegerTypedIntervalFunction<T>
-where T: IntegerTypedArithmetic + Clone + Sync + Send + 'static
+impl<L, R, O, F> fmt::Display for IntervalFunction<L, R, O, F>
+where
+    L: DateType + Send + Sync + Clone,
+    R: PrimitiveType + Send + Sync + Clone,
+    O: DateType + Send + Sync + Clone,
+    F: ScalarBinaryFunction2<L, R, O> + Send + Sync + Clone + 'static,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}()", self.display_name)
     }
 }
 
-// Implement MonthsArithmetic
-#[derive(Clone, Debug)]
-pub struct MonthsArithmetic;
+pub trait IntervalArithmeticImpl {
+    type Date16Result: DateType + ToDateType;
+    type Date32Result: DateType + ToDateType;
 
-impl IntegerTypedArithmetic for MonthsArithmetic {
-    fn get_func(a: &DataType, b: &DataType) -> IntegerMonthsArithmeticFunction {
-        IntervalFunctionFactory::get_integer_months_arithmetic_func(a, b)
+    fn eval_date16<R: PrimitiveType + AsPrimitive<i64>>(
+        l: u16,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> Self::Date16Result;
+
+    fn eval_date32<R: PrimitiveType + AsPrimitive<i64>>(
+        l: i32,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> Self::Date32Result;
+
+    fn eval_datetime32<R: PrimitiveType + AsPrimitive<i64>>(
+        l: u32,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> u32;
+
+    fn eval_datetime64<R: PrimitiveType + AsPrimitive<i64>>(
+        l: i64,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> i64;
+}
+
+impl_interval_year_month!(AddYearsImpl, add_years_base);
+impl_interval_year_month!(AddMonthsImpl, add_months_base);
+
+#[derive(Clone)]
+pub struct AddTimesImpl;
+
+impl IntervalArithmeticImpl for AddTimesImpl {
+    type Date16Result = u32;
+    type Date32Result = i64;
+
+    fn eval_date16<R: PrimitiveType + AsPrimitive<i64>>(
+        l: u16,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> Self::Date16Result {
+        (l as i64 * 3600 * 24 + r.to_owned_scalar().as_() * ctx.factor) as Self::Date16Result
+    }
+
+    fn eval_date32<R: PrimitiveType + AsPrimitive<i64>>(
+        l: i32,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> Self::Date32Result {
+        l as i64 * 3600 * 24 + r.to_owned_scalar().as_() * ctx.factor
+    }
+
+    fn eval_datetime32<R: PrimitiveType + AsPrimitive<i64>>(
+        l: u32,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> u32 {
+        (l as i64 + r.to_owned_scalar().as_() * ctx.factor) as u32
+    }
+
+    fn eval_datetime64<R: PrimitiveType + AsPrimitive<i64>>(
+        l: i64,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> i64 {
+        let precision = ctx
+            .get_meta_value("precision".to_string())
+            .map_or(0, |v| v.parse::<u32>().unwrap());
+        let base = 10_i64.pow(precision);
+        let factor = ctx.factor * base;
+        l as i64 + r.to_owned_scalar().as_() * factor
     }
 }
-pub type MonthsArithmeticFunction = IntegerTypedIntervalFunction<MonthsArithmetic>;
 
-// Implement SecondsArithmetic
-#[derive(Clone, Debug)]
-pub struct SecondsArithmetic;
+#[derive(Clone)]
+pub struct AddDaysImpl;
 
-impl IntegerTypedArithmetic for SecondsArithmetic {
-    fn get_func(a: &DataType, b: &DataType) -> IntegerSecondsArithmeticFunction {
-        IntervalFunctionFactory::get_integer_seconds_arithmetic_func(a, b)
+impl IntervalArithmeticImpl for AddDaysImpl {
+    type Date16Result = u16;
+    type Date32Result = i32;
+
+    fn eval_date16<R: PrimitiveType + AsPrimitive<i64>>(
+        l: u16,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> Self::Date16Result {
+        (l as i64 + r.to_owned_scalar().as_() * ctx.factor) as Self::Date16Result
+    }
+
+    fn eval_date32<R: PrimitiveType + AsPrimitive<i64>>(
+        l: i32,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> Self::Date32Result {
+        (l as i64 + r.to_owned_scalar().as_() * ctx.factor) as Self::Date32Result
+    }
+
+    fn eval_datetime32<R: PrimitiveType + AsPrimitive<i64>>(
+        l: u32,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> u32 {
+        let factor = ctx.factor * 24 * 3600;
+        (l as i64 + r.to_owned_scalar().as_() * factor) as u32
+    }
+
+    fn eval_datetime64<R: PrimitiveType + AsPrimitive<i64>>(
+        l: i64,
+        r: R::RefType<'_>,
+        ctx: &mut EvalContext,
+    ) -> i64 {
+        let precision = ctx
+            .get_meta_value("precision".to_string())
+            .map_or(0, |v| v.parse::<u32>().unwrap());
+        let base = 10_i64.pow(precision);
+        let factor = ctx.factor * 24 * 3600 * base;
+        l as i64 + r.to_owned_scalar().as_() * factor
     }
 }
-pub type SecondsArithmeticFunction = IntegerTypedIntervalFunction<SecondsArithmetic>;
 
-// The function type for handling arithmetic operation of integer column representing number of months
-pub type IntegerMonthsArithmeticFunction = fn(
-    &DataValueBinaryOperator,
-    &DataColumnWithField,
-    &DataColumnWithField,
-    weight: i64, /* for year please pass in 12 */
-) -> Result<DataColumn>;
-
-// The function type for handling arithmetic operation of integer column representing number of seconds
-pub type IntegerSecondsArithmeticFunction = fn(
-    &DataValueBinaryOperator,
-    &DataColumnWithField,
-    &DataColumnWithField,
-    weight: i64, /* for minute pass in 60, for hour pass in 3600, etc */
-) -> Result<DataColumn>;
-
-pub struct IntervalFunctionFactory;
-
-impl IntervalFunctionFactory {
-    #[inline]
-    fn interval_operation<T, D, R>(
-        lhs: &DFPrimitiveArray<T>,
-        rhs: &DFPrimitiveArray<D>,
-        f: impl Fn(&T, &D) -> Result<R>,
-    ) -> Result<DFPrimitiveArray<R>>
-    where
-        T: DFPrimitiveType,
-        D: DFPrimitiveType,
-        R: DFPrimitiveType,
-    {
-        let data = lhs
-            .into_no_null_iter()
-            .zip(rhs.into_no_null_iter())
-            .map(|(t, d)| f(t, d))
-            .collect::<Result<Vec<R>>>()?;
-
-        let validity = combine_validities(lhs.inner().validity(), rhs.inner().validity());
-        let result = DFPrimitiveArray::<R>::new_from_owned_with_null_bitmap(data, validity);
-        Ok(result)
+fn add_years_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDate> {
+    let new_year = year + delta as i32;
+    let mut new_day = day;
+    if std::intrinsics::unlikely(month == 2 && day == 29) {
+        new_day = last_day_of_year_month(new_year, month);
     }
-
-    //////////////////////////////////////////////////////////////////////////////////////////////
-    //  Starting from here is interval typed arithmetic functions, including:
-    //   1. interval_month_plus_minus_date16 --------- Interval(YearMonth) +/-  Date16
-    //   2. interval_month_plus_minus_date32 --------- Interval(YearMonth) +/-  Date32
-    //   3. interval_month_plus_minus_datetime32 ----- Interval(YearMonth) +/-  DateTime32
-
-    pub fn interval_month_plus_minus_date16(
-        op: &DataValueBinaryOperator,
-        a: &DataColumnWithField,
-        b: &DataColumnWithField,
-    ) -> Result<DataColumn> {
-        let (interval, date16) = Self::validate_input(op, a, b)?;
-        Self::month_i64_plus_minus_date16(op, interval, date16, 1)
-    }
-
-    pub fn interval_month_plus_minus_date32(
-        op: &DataValueBinaryOperator,
-        a: &DataColumnWithField,
-        b: &DataColumnWithField,
-    ) -> Result<DataColumn> {
-        let (interval, date32) = Self::validate_input(op, a, b)?;
-        Self::month_i64_plus_minus_date32(op, interval, date32, 1)
-    }
-
-    pub fn interval_month_plus_minus_datetime32(
-        op: &DataValueBinaryOperator,
-        a: &DataColumnWithField,
-        b: &DataColumnWithField,
-    ) -> Result<DataColumn> {
-        let (interval, datetime) = Self::validate_input(op, a, b)?;
-        Self::month_i64_plus_minus_datetime32(op, interval, datetime, 1)
-    }
-
-    //  End of interval typed arithmetic functions.
-    //////////////////////////////////////////////////////////////////////////////////
-
-    //////////////////////////////////////////////////////////////////////////////////
-    //  Starting from here is integer month arithmetic functions. It handles plus/minus
-    //  operations between integer column and date|datetime column. The integer column
-    //  represents number of months.
-
-    pub fn get_integer_months_arithmetic_func(
-        integer: &DataType,
-        date_datetime: &DataType,
-    ) -> IntegerMonthsArithmeticFunction {
-        match date_datetime {
-            DataType::Date16 => match integer {
-                DataType::UInt8 => Self::month_u8_plus_minus_date16,
-                DataType::UInt16 => Self::month_u16_plus_minus_date16,
-                DataType::UInt32 => Self::month_u32_plus_minus_date16,
-                DataType::UInt64 => Self::month_u64_plus_minus_date16,
-                DataType::Int8 => Self::month_i8_plus_minus_date16,
-                DataType::Int16 => Self::month_i16_plus_minus_date16,
-                DataType::Int32 => Self::month_i32_plus_minus_date16,
-                DataType::Int64 => Self::month_i64_plus_minus_date16,
-                _ => unreachable!(),
-            },
-            DataType::Date32 => match integer {
-                DataType::UInt8 => Self::month_u8_plus_minus_date32,
-                DataType::UInt16 => Self::month_u16_plus_minus_date32,
-                DataType::UInt32 => Self::month_u32_plus_minus_date32,
-                DataType::UInt64 => Self::month_u64_plus_minus_date32,
-                DataType::Int8 => Self::month_i8_plus_minus_date32,
-                DataType::Int16 => Self::month_i16_plus_minus_date32,
-                DataType::Int32 => Self::month_i32_plus_minus_date32,
-                DataType::Int64 => Self::month_i64_plus_minus_date32,
-                _ => unreachable!(),
-            },
-            DataType::DateTime32(_) => match integer {
-                DataType::UInt8 => Self::month_u8_plus_minus_datetime32,
-                DataType::UInt16 => Self::month_u16_plus_minus_datetime32,
-                DataType::UInt32 => Self::month_u32_plus_minus_datetime32,
-                DataType::UInt64 => Self::month_u64_plus_minus_datetime32,
-                DataType::Int8 => Self::month_i8_plus_minus_datetime32,
-                DataType::Int16 => Self::month_i16_plus_minus_datetime32,
-                DataType::Int32 => Self::month_i32_plus_minus_datetime32,
-                DataType::Int64 => Self::month_i64_plus_minus_datetime32,
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
-        }
-    }
-
-    // date16 functions
-    crate::define_month_plus_minus_date!(month_i64_plus_minus_date16, i64, u16);
-    crate::define_month_plus_minus_date!(month_i32_plus_minus_date16, i32, u16);
-    crate::define_month_plus_minus_date!(month_i16_plus_minus_date16, i16, u16);
-    crate::define_month_plus_minus_date!(month_i8_plus_minus_date16, i8, u16);
-    crate::define_month_plus_minus_date!(month_u64_plus_minus_date16, u64, u16);
-    crate::define_month_plus_minus_date!(month_u32_plus_minus_date16, u32, u16);
-    crate::define_month_plus_minus_date!(month_u16_plus_minus_date16, u16, u16);
-    crate::define_month_plus_minus_date!(month_u8_plus_minus_date16, u8, u16);
-
-    // date32 functions
-    crate::define_month_plus_minus_date!(month_i64_plus_minus_date32, i64, i32);
-    crate::define_month_plus_minus_date!(month_i32_plus_minus_date32, i32, i32);
-    crate::define_month_plus_minus_date!(month_i16_plus_minus_date32, i16, i32);
-    crate::define_month_plus_minus_date!(month_i8_plus_minus_date32, i8, i32);
-    crate::define_month_plus_minus_date!(month_u64_plus_minus_date32, u64, i32);
-    crate::define_month_plus_minus_date!(month_u32_plus_minus_date32, u32, i32);
-    crate::define_month_plus_minus_date!(month_u16_plus_minus_date32, u16, i32);
-    crate::define_month_plus_minus_date!(month_u8_plus_minus_date32, u8, i32);
-
-    crate::define_month_plus_minus_datetime32!(month_i64_plus_minus_datetime32, i64);
-    crate::define_month_plus_minus_datetime32!(month_i32_plus_minus_datetime32, i32);
-    crate::define_month_plus_minus_datetime32!(month_i16_plus_minus_datetime32, i16);
-    crate::define_month_plus_minus_datetime32!(month_i8_plus_minus_datetime32, i8);
-    crate::define_month_plus_minus_datetime32!(month_u64_plus_minus_datetime32, u64);
-    crate::define_month_plus_minus_datetime32!(month_u32_plus_minus_datetime32, u32);
-    crate::define_month_plus_minus_datetime32!(month_u16_plus_minus_datetime32, u16);
-    crate::define_month_plus_minus_datetime32!(month_u8_plus_minus_datetime32, u8);
-
-    //  End of months integer arithmetic functions
-    //////////////////////////////////////////////////////////////////////////////////
-
-    //////////////////////////////////////////////////////////////////////////////////
-    //  Starting from here is integer seconds arithmetic functions. It handles plus/minus
-    //  operations between integer column and date|datetime column. The integer column
-    //  represents number of seconds.
-
-    pub fn get_integer_seconds_arithmetic_func(
-        integer: &DataType,
-        date_datetime: &DataType,
-    ) -> IntegerSecondsArithmeticFunction {
-        match date_datetime {
-            DataType::Date16 => match integer {
-                DataType::UInt8 => Self::time_secs_u8_plus_minus_date16,
-                DataType::UInt16 => Self::time_secs_u16_plus_minus_date16,
-                DataType::UInt32 => Self::time_secs_u32_plus_minus_date16,
-                DataType::UInt64 => Self::time_secs_u64_plus_minus_date16,
-                DataType::Int8 => Self::time_secs_i8_plus_minus_date16,
-                DataType::Int16 => Self::time_secs_i16_plus_minus_date16,
-                DataType::Int32 => Self::time_secs_i32_plus_minus_date16,
-                DataType::Int64 => Self::time_secs_i64_plus_minus_date16,
-                _ => unreachable!(),
-            },
-            DataType::Date32 => match integer {
-                DataType::UInt8 => Self::time_secs_u8_plus_minus_date32,
-                DataType::UInt16 => Self::time_secs_u16_plus_minus_date32,
-                DataType::UInt32 => Self::time_secs_u32_plus_minus_date32,
-                DataType::UInt64 => Self::time_secs_u64_plus_minus_date32,
-                DataType::Int8 => Self::time_secs_i8_plus_minus_date32,
-                DataType::Int16 => Self::time_secs_i16_plus_minus_date32,
-                DataType::Int32 => Self::time_secs_i32_plus_minus_date32,
-                DataType::Int64 => Self::time_secs_i64_plus_minus_date32,
-                _ => unreachable!(),
-            },
-            DataType::DateTime32(_) => match integer {
-                DataType::UInt8 => Self::time_secs_u8_plus_minus_datetime32,
-                DataType::UInt16 => Self::time_secs_u16_plus_minus_datetime32,
-                DataType::UInt32 => Self::time_secs_u32_plus_minus_datetime32,
-                DataType::UInt64 => Self::time_secs_u64_plus_minus_datetime32,
-                DataType::Int8 => Self::time_secs_i8_plus_minus_datetime32,
-                DataType::Int16 => Self::time_secs_i16_plus_minus_datetime32,
-                DataType::Int32 => Self::time_secs_i32_plus_minus_datetime32,
-                DataType::Int64 => Self::time_secs_i64_plus_minus_datetime32,
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
-        }
-    }
-
-    // date16 functions
-    crate::define_time_secs_plus_minus_date!(time_secs_i64_plus_minus_date16, i64, u16);
-    crate::define_time_secs_plus_minus_date!(time_secs_i32_plus_minus_date16, i32, u16);
-    crate::define_time_secs_plus_minus_date!(time_secs_i16_plus_minus_date16, i16, u16);
-    crate::define_time_secs_plus_minus_date!(time_secs_i8_plus_minus_date16, i8, u16);
-    crate::define_time_secs_plus_minus_date!(time_secs_u64_plus_minus_date16, u64, u16);
-    crate::define_time_secs_plus_minus_date!(time_secs_u32_plus_minus_date16, u32, u16);
-    crate::define_time_secs_plus_minus_date!(time_secs_u16_plus_minus_date16, u16, u16);
-    crate::define_time_secs_plus_minus_date!(time_secs_u8_plus_minus_date16, u8, u16);
-
-    // date32 functions
-    crate::define_time_secs_plus_minus_date!(time_secs_i64_plus_minus_date32, i64, i32);
-    crate::define_time_secs_plus_minus_date!(time_secs_i32_plus_minus_date32, i32, i32);
-    crate::define_time_secs_plus_minus_date!(time_secs_i16_plus_minus_date32, i16, i32);
-    crate::define_time_secs_plus_minus_date!(time_secs_i8_plus_minus_date32, i8, i32);
-    crate::define_time_secs_plus_minus_date!(time_secs_u64_plus_minus_date32, u64, i32);
-    crate::define_time_secs_plus_minus_date!(time_secs_u32_plus_minus_date32, u32, i32);
-    crate::define_time_secs_plus_minus_date!(time_secs_u16_plus_minus_date32, u16, i32);
-    crate::define_time_secs_plus_minus_date!(time_secs_u8_plus_minus_date32, u8, i32);
-
-    crate::define_time_secs_plus_minus_datetime32!(time_secs_i64_plus_minus_datetime32, i64);
-    crate::define_time_secs_plus_minus_datetime32!(time_secs_i32_plus_minus_datetime32, i32);
-    crate::define_time_secs_plus_minus_datetime32!(time_secs_i16_plus_minus_datetime32, i16);
-    crate::define_time_secs_plus_minus_datetime32!(time_secs_i8_plus_minus_datetime32, i8);
-    crate::define_time_secs_plus_minus_datetime32!(time_secs_u64_plus_minus_datetime32, u64);
-    crate::define_time_secs_plus_minus_datetime32!(time_secs_u32_plus_minus_datetime32, u32);
-    crate::define_time_secs_plus_minus_datetime32!(time_secs_u16_plus_minus_datetime32, u16);
-    crate::define_time_secs_plus_minus_datetime32!(time_secs_u8_plus_minus_datetime32, u8);
-
-    // End of seconds integer arithmetic functions
-    //////////////////////////////////////////////////////////////////////////////////
-
-    // A private helper function for validate operator, returns a tuple of
-    // (interval|integer, date16|date32|datetime32)
-    fn validate_input<'a>(
-        op: &DataValueBinaryOperator,
-        col0: &'a DataColumnWithField,
-        col1: &'a DataColumnWithField,
-    ) -> Result<(&'a DataColumnWithField, &'a DataColumnWithField)> {
-        match op {
-            DataValueBinaryOperator::Plus | DataValueBinaryOperator::Minus => {
-                if col0.data_type().is_integer() || col0.data_type().is_interval() {
-                    Ok((col0, col1))
-                } else {
-                    Ok((col1, col0))
-                }
-            }
-            _ => Result::Err(ErrorCode::IllegalDataType(format!(
-                "Illegal operation {:?} between interval and date time.",
-                op
-            ))),
-        }
-    }
-
-    // A private helper function to add/subtract month to/from days
-    fn days_plus_signed_months(days: i64, months: i64) -> Result<i32> {
-        let epoch = NaiveDate::from_ymd(1970, 1, 1);
-        let date = epoch
-            .checked_add_signed(Duration::days(days))
-            .ok_or_else(|| ErrorCode::Overflow(format!("Overflow on date with days {}.", days,)))?;
-        let new_date = Self::plus_months(date.year(), date.month0() as i64, date.day(), months)?;
-        let duration = new_date.signed_duration_since(epoch);
-        Ok(duration.num_days() as i32)
-    }
-
-    fn plus_months(year: i32, month0: i64, day: u32, months: i64) -> Result<NaiveDate> {
-        let total_months = month0 + months;
-        let mut new_year = year + (total_months / 12) as i32;
-        let mut new_month0 = total_months % 12;
-        if new_month0 < 0 {
-            new_year -= 1;
-            new_month0 += 12;
-        }
-
-        // Handle month last day overflow, "2020-2-29" + "1 year" should be "2021-2-28", or "1990-1-31" + "3 month" should be "1990-4-30".
-        let new_day = std::cmp::min::<u32>(
-            day,
-            Self::last_day_of_year_month(new_year, (new_month0 + 1) as u32),
-        );
-
-        NaiveDate::from_ymd_opt(new_year, (new_month0 + 1) as u32, new_day).ok_or_else(|| {
-            ErrorCode::Overflow(format!(
-                "Overflow on date YMD {}-{}-{}.",
-                new_year,
-                new_month0 + 1,
-                new_day
-            ))
-        })
-    }
-
-    // A private helper function to add/subtract month to/from chrono datetime object
-    fn datetime_plus_signed_months(dt: &DateTime<Utc>, months: i64) -> Result<DateTime<Utc>> {
-        let new_date = Self::plus_months(dt.year(), dt.month0() as i64, dt.day(), months)?;
-        Ok(DateTime::<Utc>::from_utc(
-            new_date.and_hms(dt.hour(), dt.minute(), dt.second()),
-            Utc,
+    NaiveDate::from_ymd_opt(new_year, month, new_day).ok_or_else(|| {
+        ErrorCode::Overflow(format!(
+            "Overflow on date YMD {}-{}-{}.",
+            new_year, month, new_day
         ))
+    })
+}
+
+fn add_months_base(year: i32, month: u32, day: u32, delta: i64) -> Result<NaiveDate> {
+    let total_months = month as i64 + delta - 1;
+    let mut new_year = year + (total_months / 12) as i32;
+    let mut new_month0 = total_months % 12;
+    if new_month0 < 0 {
+        new_year -= 1;
+        new_month0 += 12;
     }
 
-    // Get the last day of the year month, could be 28(non leap Feb), 29(leap year Feb), 30 or 31
-    fn last_day_of_year_month(year: i32, month: u32) -> u32 {
-        let is_leap_year = NaiveDate::from_ymd_opt(year, 2, 29).is_some();
-        if month == 2 && is_leap_year {
-            return 29;
-        }
-        let last_day_lookup = [0u32, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-        last_day_lookup[month as usize]
+    // Handle month last day overflow, "2020-2-29" + "1 year" should be "2021-2-28", or "1990-1-31" + "3 month" should be "1990-4-30".
+    let new_day = std::cmp::min::<u32>(
+        day,
+        last_day_of_year_month(new_year, (new_month0 + 1) as u32),
+    );
+
+    NaiveDate::from_ymd_opt(new_year, (new_month0 + 1) as u32, new_day).ok_or_else(|| {
+        ErrorCode::Overflow(format!(
+            "Overflow on date YMD {}-{}-{}.",
+            new_year,
+            new_month0 + 1,
+            new_day
+        ))
+    })
+}
+
+// Get the last day of the year month, could be 28(non leap Feb), 29(leap year Feb), 30 or 31
+fn last_day_of_year_month(year: i32, month: u32) -> u32 {
+    let is_leap_year = NaiveDate::from_ymd_opt(year, 2, 29).is_some();
+    if month == 2 && is_leap_year {
+        return 29;
     }
-
-    // A private helper function to convert seconds (since Unix epoch) to chrono DateTime
-    fn seconds_to_datetime(seconds: i64) -> Result<DateTime<Utc>> {
-        let naive = NaiveDateTime::from_timestamp_opt(seconds, 0);
-        if naive.is_none() {
-            return Err(ErrorCode::Overflow(format!(
-                "Overflow on datetime with seconds {}.",
-                seconds
-            )));
-        }
-        Ok(DateTime::<Utc>::from_utc(naive.unwrap(), Utc))
-    }
+    let last_day_lookup = [0u32, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    last_day_lookup[month as usize]
 }
 
-#[macro_export]
-macro_rules! define_month_plus_minus_datetime32 {
-    ($fn_name:ident, $type:ident) => {
-        fn $fn_name(
-            op: &DataValueBinaryOperator,
-            a: &DataColumnWithField,
-            b: &DataColumnWithField,
-            mul: i64,
-        ) -> Result<DataColumn> {
-            let (interval_months, datetime32) = Self::validate_input(op, a, b)?;
-
-            let res = Self::interval_operation(
-                interval_months.column().to_array()?.$type()?,
-                datetime32.column().to_array()?.u32()?,
-                |months: &$type, seconds: &u32| {
-                    let dt = Self::seconds_to_datetime(*seconds as i64)?;
-                    let new_dt = match op {
-                        DataValueBinaryOperator::Plus => {
-                            Self::datetime_plus_signed_months(&dt, (*months as i64) * mul)?
-                        }
-                        DataValueBinaryOperator::Minus => {
-                            Self::datetime_plus_signed_months(&dt, -(*months as i64) * mul)?
-                        }
-                        _ => unreachable!(),
-                    };
-                    Ok(new_dt.timestamp() as u32)
-                },
-            )?;
-            Ok(res.into())
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! define_month_plus_minus_date {
-    ($fn_name:ident, $month_type:ident, $date_type:ident) => {
-        fn $fn_name(
-            op: &DataValueBinaryOperator,
-            interval_months: &DataColumnWithField,
-            date: &DataColumnWithField,
-            mul: i64,
-        ) -> Result<DataColumn> {
-            let res = Self::interval_operation(
-                interval_months.column().to_array()?.$month_type()?,
-                date.column().to_array()?.$date_type()?,
-                |months: &$month_type, days: &$date_type| {
-                    let r = match op {
-                        DataValueBinaryOperator::Plus => {
-                            Self::days_plus_signed_months(*days as i64, (*months as i64 * mul))
-                        }
-                        DataValueBinaryOperator::Minus => {
-                            Self::days_plus_signed_months(*days as i64, -(*months as i64 * mul))
-                        }
-                        _ => unreachable!(),
-                    }? as $date_type;
-                    Ok(r)
-                },
-            )?;
-            Ok(res.into())
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! define_time_secs_plus_minus_datetime32 {
-    ($fn_name:ident, $type:ident) => {
-        fn $fn_name(
-            op: &DataValueBinaryOperator,
-            interval: &DataColumnWithField,
-            datetime: &DataColumnWithField,
-            mul: i64,
-        ) -> Result<DataColumn> {
-            let res = Self::interval_operation(
-                interval.column().to_array()?.$type()?,
-                datetime.column().to_array()?.u32()?,
-                |secs: &$type, dt: &u32| {
-                    let r = match op {
-                        DataValueBinaryOperator::Plus => (*dt as i64 + *secs as i64 * mul) as u32,
-                        DataValueBinaryOperator::Minus => (*dt as i64 - *secs as i64 * mul) as u32,
-                        _ => unreachable!(),
-                    };
-                    Ok(r)
-                },
-            )?;
-            Ok(res.into())
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! define_time_secs_plus_minus_date {
-    ($fn_name:ident, $seconds_type:ident, $date_type:ident) => {
-        fn $fn_name(
-            op: &DataValueBinaryOperator,
-            interval_seconds: &DataColumnWithField,
-            date: &DataColumnWithField,
-            mul: i64,
-        ) -> Result<DataColumn> {
-            let seconds_per_day = 24 * 3600_i64;
-            let res = Self::interval_operation(
-                interval_seconds.column().to_array()?.$seconds_type()?,
-                date.column().to_array()?.$date_type()?,
-                |secs: &$seconds_type, days: &$date_type| {
-                    let r = match op {
-                        DataValueBinaryOperator::Plus => {
-                            (*days as i64 + *secs as i64 * mul / seconds_per_day) as $date_type
-                        }
-                        DataValueBinaryOperator::Minus => {
-                            (*days as i64 - *secs as i64 * mul / seconds_per_day) as $date_type
-                        }
-                        _ => unreachable!(),
-                    };
-                    Ok(r)
-                },
-            )?;
-            Ok(res.into())
-        }
-    };
-}
+pub type AddYearsFunction = IntervalFunctionCreator<AddYearsImpl>;
+pub type AddMonthsFunction = IntervalFunctionCreator<AddMonthsImpl>;
+pub type AddDaysFunction = IntervalFunctionCreator<AddDaysImpl>;
+pub type AddTimesFunction = IntervalFunctionCreator<AddTimesImpl>;

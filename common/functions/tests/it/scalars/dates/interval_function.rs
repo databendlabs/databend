@@ -28,9 +28,7 @@ use common_datavalues2::DateTime32Type;
 use common_datavalues2::Series;
 use common_datavalues2::SeriesFrom;
 use common_exception::Result;
-use common_functions::scalars::MonthsArithmeticFunction;
-use common_functions::scalars::SecondsArithmeticFunction;
-
+/*
 #[test]
 fn test_add_months() -> Result<()> {
     let dt_to_days = |dt: &str| -> i64 {
@@ -237,3 +235,4 @@ fn test_add_subtract_seconds() -> Result<()> {
 
     Ok(())
 }
+ */
