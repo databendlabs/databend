@@ -95,11 +95,11 @@ where
         let lhs = columns[0].column();
         let rhs = columns[1].column();
 
-        let right = ColumnViewerIter::<R>::try_create(rhs)?;
+        let right = R::try_create_viewer(columns[1].column())?;
 
         match (lhs.is_const(), rhs.is_const()) {
             (false, true) => {
-                let r = right.viewer.value(0).to_owned_scalar().as_();
+                let r = right.value_at(0).to_owned_scalar().as_();
                 if r == M::zero() {
                     return Err(ErrorCode::BadArguments("Division by zero"));
                 }
@@ -108,9 +108,9 @@ where
                 Ok(Arc::new(col))
             }
             _ => {
-                let left = ColumnViewerIter::<L>::try_create(lhs)?;
-                let mut col_builder = MutablePrimitiveColumn::<O>::with_capacity(left.size);
-                for (l, r) in left.zip(right) {
+                let left = L::try_create_viewer(lhs)?;
+                let mut col_builder = MutablePrimitiveColumn::<O>::with_capacity(lhs.len());
+                for (l, r) in left.iter().zip(right.iter()) {
                     let l = l.to_owned_scalar().as_();
                     let r = r.to_owned_scalar().as_();
                     if std::intrinsics::unlikely(r == M::zero()) {

@@ -1,5 +1,5 @@
 [package]
-name = "dal_context"
+name = "common-dal-context"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 common-infallible = { path = "../infallible" }
-common-dal2 = { path = "../dal2" }
 
+opendal = "0.0.1"
 async-trait = "0.1.52"

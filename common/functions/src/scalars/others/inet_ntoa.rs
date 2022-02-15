@@ -17,18 +17,7 @@ use std::net::Ipv4Addr;
 use std::str;
 use std::sync::Arc;
 
-use common_datavalues2::type_string::StringType;
-use common_datavalues2::ColumnBuilder;
-use common_datavalues2::ColumnRef;
-use common_datavalues2::ColumnViewer;
-use common_datavalues2::ColumnsWithField;
-use common_datavalues2::DataTypePtr;
-use common_datavalues2::DataValue;
-use common_datavalues2::NullType;
-use common_datavalues2::NullableColumnBuilder;
-use common_datavalues2::NullableType;
-use common_datavalues2::TypeID;
-use common_datavalues2::UInt32Type;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -110,13 +99,13 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function2 for InetNtoaFunctionImpl<SUPPRES
                 &cast_to,
                 &cast_options,
             )?;
-            let viewer = ColumnViewer::<u32>::create(&column)?;
+            let viewer = u32::try_create_viewer(&column)?;
+            let viewer_iter = viewer.iter();
 
             let mut builder: NullableColumnBuilder<Vec<u8>> =
                 NullableColumnBuilder::with_capacity(input_rows);
 
-            for i in 0..input_rows {
-                let val = viewer.value(i);
+            for (i, val) in viewer_iter.enumerate() {
                 let addr_str = Ipv4Addr::from((val as u32).to_be_bytes()).to_string();
                 builder.append(addr_str.as_bytes(), viewer.valid_at(i));
             }
@@ -133,11 +122,11 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function2 for InetNtoaFunctionImpl<SUPPRES
                 &cast_to,
                 &cast_options,
             )?;
-            let viewer = ColumnViewer::<u32>::create(&column)?;
+
+            let viewer = u32::try_create_viewer(&column)?;
 
             let mut builder = ColumnBuilder::<Vec<u8>>::with_capacity(input_rows);
-            for i in 0..input_rows {
-                let val = viewer.value(i);
+            for val in viewer.iter() {
                 let addr_str = Ipv4Addr::from((val).to_be_bytes()).to_string();
                 builder.append(addr_str.as_bytes());
             }

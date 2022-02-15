@@ -136,12 +136,9 @@ impl MetaService for MetaServiceImpl {
         let action: MetaGrpcReadReq = request.try_into()?;
         tracing::info!("Receive read_action: {:?}", action);
 
-        let body = self.action_handler.execute_read(action).await?;
-        let r = RaftReply {
-            data: body,
-            error: "".to_string(),
-        };
-        Ok(Response::new(r))
+        let res = self.action_handler.execute_read(action).await;
+
+        Ok(Response::new(res))
     }
 
     type ExportStream =

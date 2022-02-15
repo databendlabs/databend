@@ -17,6 +17,7 @@ use std::fmt;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::SledOrderedSerde;
+use common_meta_types::anyerror::AnyError;
 use common_meta_types::MetaStorageError;
 use common_meta_types::NodeId;
 use openraft::storage::HardState;
@@ -86,7 +87,7 @@ impl SledOrderedSerde for RaftStateKey {
             return Ok(RaftStateKey::StateMachineId);
         }
 
-        Err(MetaStorageError::SledError(String::from(
+        Err(MetaStorageError::SledError(AnyError::error(
             "invalid key IVec",
         )))
     }

@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crc32fast::Hasher as CRC32;
+
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::AbsFunction;
-use crate::scalars::CRC32Function;
+use crate::scalars::BaseHashFunction;
 use crate::scalars::CeilFunction;
 use crate::scalars::DegressFunction;
 use crate::scalars::ExpFunction;
 use crate::scalars::FloorFunction;
+use crate::scalars::Function2Factory;
 use crate::scalars::LnFunction;
 use crate::scalars::Log10Function;
 use crate::scalars::Log2Function;
@@ -40,33 +43,38 @@ use crate::scalars::TrigonometricSinFunction;
 use crate::scalars::TrigonometricTanFunction;
 use crate::scalars::TruncNumberFunction;
 
+pub type CRC32Function = BaseHashFunction<CRC32, u32>;
+
 pub struct MathsFunction;
 
 impl MathsFunction {
-    pub fn register(factory: &mut FunctionFactory) {
+    pub fn register2(factory: &mut Function2Factory) {
+        factory.register("sign", SignFunction::desc());
         factory.register("pi", PiFunction::desc());
+        factory.register("crc32", CRC32Function::desc());
+        factory.register("exp", ExpFunction::desc());
+        factory.register("sqrt", SqrtFunction::desc());
+        factory.register("ceil", CeilFunction::desc());
+        factory.register("ceiling", CeilFunction::desc());
+        factory.register("floor", FloorFunction::desc());
+    }
+
+    pub fn register(factory: &mut FunctionFactory) {
         factory.register("abs", AbsFunction::desc());
         factory.register("sin", TrigonometricSinFunction::desc());
         factory.register("cos", TrigonometricCosFunction::desc());
         factory.register("tan", TrigonometricTanFunction::desc());
         factory.register("cot", TrigonometricCotFunction::desc());
-        factory.register("crc32", CRC32Function::desc());
         factory.register("degrees", DegressFunction::desc());
         factory.register("radians", RadiansFunction::desc());
         factory.register("log", LogFunction::desc());
         factory.register("log10", Log10Function::desc());
         factory.register("log2", Log2Function::desc());
         factory.register("ln", LnFunction::desc());
-        factory.register("ceil", CeilFunction::desc());
-        factory.register("ceiling", CeilFunction::desc());
-        factory.register("floor", FloorFunction::desc());
-        factory.register("exp", ExpFunction::desc());
         factory.register("asin", TrigonometricAsinFunction::desc());
         factory.register("acos", TrigonometricAcosFunction::desc());
         factory.register("atan", TrigonometricAtanFunction::desc());
         factory.register("atan2", TrigonometricAtan2Function::desc());
-        factory.register("sign", SignFunction::desc());
-        factory.register("sqrt", SqrtFunction::desc());
         factory.register("pow", PowFunction::desc());
         factory.register("power", PowFunction::desc());
         factory.register("rand", RandomFunction::desc());

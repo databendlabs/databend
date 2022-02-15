@@ -14,6 +14,8 @@
 
 use std::any::Any;
 
+use common_exception::Result;
+
 use super::column::ScalarColumn;
 use crate::prelude::*;
 
@@ -26,11 +28,20 @@ where for<'a> Self::ColumnType: ScalarColumn<RefItem<'a> = Self::RefType<'a>>
     type RefType<'a>: ScalarRef<'a, ScalarType = Self, ColumnType = Self::ColumnType>
     where Self: 'a;
 
+    /// Viewer is associated with scalar value
+    /// the big difference bewtween column is that Viewer may be nullable && constant
+    type Viewer<'a>: ScalarViewer<'a, ScalarItem = Self>
+    where Self: 'a;
+
     /// Get a reference of the current value.
     fn as_scalar_ref(&self) -> Self::RefType<'_>;
 
     /// Upcast GAT type's lifetime.
     fn upcast_gat<'short, 'long: 'short>(long: Self::RefType<'long>) -> Self::RefType<'short>;
+
+    fn try_create_viewer(col: &ColumnRef) -> Result<Self::Viewer<'_>> {
+        Self::Viewer::try_create(col)
+    }
 }
 
 pub trait ScalarRef<'a>: std::fmt::Debug + Clone + Copy + Send + 'a {
@@ -47,6 +58,7 @@ macro_rules! impl_primitive_scalar_type {
         impl Scalar for $native {
             type ColumnType = PrimitiveColumn<$native>;
             type RefType<'a> = $native;
+            type Viewer<'a> = PrimitiveViewer<'a, $native>;
 
             #[inline]
             fn as_scalar_ref(&self) -> $native {
@@ -87,6 +99,7 @@ impl_primitive_scalar_type!(f64);
 impl Scalar for bool {
     type ColumnType = BooleanColumn;
     type RefType<'a> = bool;
+    type Viewer<'a> = BooleanViewer;
 
     #[inline]
     fn as_scalar_ref(&self) -> bool {
@@ -113,6 +126,7 @@ impl<'a> ScalarRef<'a> for bool {
 impl Scalar for Vec<u8> {
     type ColumnType = StringColumn;
     type RefType<'a> = &'a [u8];
+    type Viewer<'a> = StringViewer<'a>;
 
     #[inline]
     fn as_scalar_ref(&self) -> &[u8] {

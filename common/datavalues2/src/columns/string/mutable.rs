@@ -23,11 +23,18 @@ pub struct MutableStringColumn {
 }
 
 impl MutableStringColumn {
+    pub fn from_data(values: Vec<u8>, offsets: Vec<i64>) -> Self {
+        Self {
+            last_size: *offsets.last().unwrap() as usize,
+            offsets,
+            values,
+        }
+    }
+
     #[inline]
     pub fn append_value(&mut self, v: impl AsRef<[u8]>) {
         let bytes = v.as_ref();
-        self.last_size += bytes.len();
-        self.offsets.push(self.last_size as i64);
+        self.add_offset(bytes.len());
         self.values.extend_from_slice(bytes);
     }
 
@@ -40,6 +47,20 @@ impl MutableStringColumn {
             offsets,
             values: Vec::with_capacity(values_capacity),
         }
+    }
+
+    pub fn values_mut(&mut self) -> &mut Vec<u8> {
+        &mut self.values
+    }
+
+    pub fn offsets_mut(&mut self) -> &mut Vec<i64> {
+        &mut self.offsets
+    }
+
+    #[inline]
+    pub fn add_offset(&mut self, offset: usize) {
+        self.last_size += offset;
+        self.offsets.push(self.last_size as i64);
     }
 }
 
@@ -97,8 +118,7 @@ impl ScalarColumnBuilder for MutableStringColumn {
     }
 
     fn push(&mut self, value: &[u8]) {
-        self.last_size += value.len();
-        self.offsets.push(self.last_size as i64);
+        self.add_offset(value.len());
         self.values.extend_from_slice(value);
     }
 

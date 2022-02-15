@@ -64,7 +64,7 @@ impl Function2 for Sha2HashFunction {
         if !args[1].data_type_id().is_numeric() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected second arg as integer type, but got {:?}",
-                args[0]
+                args[1]
             )));
         }
         Ok(StringType::arc())
@@ -75,14 +75,14 @@ impl Function2 for Sha2HashFunction {
         columns: &common_datavalues2::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues2::ColumnRef> {
-        let col_iter = ColumnViewerIter::<Vu8>::try_create(columns[0].column())?;
+        let col_viewer = Vu8::try_create_viewer(columns[0].column())?;
         let const_col: Result<&ConstColumn> = Series::check_get(columns[1].column());
 
         if let Ok(col) = const_col {
             let l = col.get_u64(0)?;
             let col = match l {
                 224 => {
-                    let iter = col_iter.map(|i| {
+                    let iter = col_viewer.iter().map(|i| {
                         let mut h = sha2::Sha224::new();
                         h.update(i);
                         format!("{:x}", h.finalize())
@@ -91,7 +91,7 @@ impl Function2 for Sha2HashFunction {
                     StringColumn::new_from_iter(iter)
                 }
                 256 | 0 => {
-                    let iter = col_iter.map(|i| {
+                    let iter = col_viewer.iter().map(|i| {
                         let mut h = sha2::Sha256::new();
                         h.update(i);
                         format!("{:x}", h.finalize())
@@ -99,7 +99,7 @@ impl Function2 for Sha2HashFunction {
                     StringColumn::new_from_iter(iter)
                 }
                 384 => {
-                    let iter = col_iter.map(|i| {
+                    let iter = col_viewer.iter().map(|i| {
                         let mut h = sha2::Sha384::new();
                         h.update(i);
                         format!("{:x}", h.finalize())
@@ -107,7 +107,7 @@ impl Function2 for Sha2HashFunction {
                     StringColumn::new_from_iter(iter)
                 }
                 512 => {
-                    let iter = col_iter.map(|i| {
+                    let iter = col_viewer.iter().map(|i| {
                         let mut h = sha2::Sha512::new();
                         h.update(i);
                         format!("{:x}", h.finalize())
@@ -125,10 +125,10 @@ impl Function2 for Sha2HashFunction {
             Ok(Arc::new(col))
         } else {
             let l = cast_column_field(&columns[1], &UInt16Type::arc())?;
-            let l_iter = ColumnViewerIter::<u16>::try_create(&l)?;
+            let l_viewer = u16::try_create_viewer(&l)?;
 
             let mut col_builder = MutableStringColumn::with_capacity(l.len());
-            for (i, l) in col_iter.zip(l_iter) {
+            for (i, l) in col_viewer.iter().zip(l_viewer.iter()) {
                 match l {
                     224 => {
                         let mut h = sha2::Sha224::new();

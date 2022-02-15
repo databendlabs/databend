@@ -12,11 +12,11 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-arrow = {path = "../arrow"}
-common-datavalues2 = {path = "../datavalues2"}
-common-exception = {path = "../exception"}
-common-io = {path = "../io"}
-
+common-arrow = { path = "../arrow" }
+common-datavalues2 = { path = "../datavalues2" }
+common-exception = { path = "../exception" }
+common-io = { path = "../io" }
+common-infallible = { path = "../infallible" }
 
 # Github dependencies
 

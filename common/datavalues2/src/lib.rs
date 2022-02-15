@@ -17,6 +17,7 @@
 //!
 
 #![feature(generic_associated_types)]
+#![feature(trusted_len)]
 
 #[macro_use]
 mod macros;

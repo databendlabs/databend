@@ -83,6 +83,11 @@ impl TypeID {
     }
 
     #[inline]
+    pub fn is_null(&self) -> bool {
+        matches!(self, TypeID::Null)
+    }
+
+    #[inline]
     pub fn is_integer(&self) -> bool {
         matches!(
             self,

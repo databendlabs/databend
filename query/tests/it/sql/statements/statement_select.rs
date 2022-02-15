@@ -42,6 +42,11 @@ async fn test_statement_select_analyze() -> Result<()> {
             expect: "QueryAnalyzeState { filter: (name = xxx), before_projection: [name], projection: [name] }",
         },
         TestCase {
+            name: "Simple filter query between",
+            query: "SELECT * FROM system.databases WHERE name = 'xxx' AND (name between 'aaa' and 'bbb')",
+            expect: "QueryAnalyzeState { filter: ((name = xxx) AND ((name >= aaa) and (name <= bbb))), before_projection: [name], projection: [name] }",
+        },
+        TestCase {
             name: "Simple having query",
             query: "SELECT * FROM system.databases HAVING name = 'xxx'",
             expect: "QueryAnalyzeState { before_projection: [name], having: (name = xxx), projection: [name] }",

@@ -42,8 +42,7 @@ SELECT '===exp===';
 
 SELECT exp(NULL);
 SELECT exp(2);
-SELECT exp('2');
-SELECT exp('a');
+SELECT exp('2'); -- {ErrorCode 1007}
 
 SELECT '===trigonometric===';
 
@@ -73,7 +72,7 @@ SELECT '===sqrt===';
 SELECT sqrt(4);
 SELECT sqrt(0);
 SELECT sqrt(-4);
-SELECT sqrt('a');
+SELECT sqrt('a'); -- {ErrorCode 1007}
 
 SELECT '===pow===';
 

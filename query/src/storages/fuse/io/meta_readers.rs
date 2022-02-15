@@ -17,12 +17,12 @@ use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::schema::FileMetaData;
-use common_dal::InputStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
 use futures::io::BufReader;
+use opendal::readers::SeekableReader;
 use serde::de::DeserializeOwned;
 
 use crate::sessions::QueryContext;
@@ -39,8 +39,9 @@ use crate::storages::fuse::meta::TableSnapshot;
 ///
 /// Mainly used as a auxiliary facility in the implementation of [Loader], such that the acquirement
 /// of an [BufReader] can be deferred or avoided (e.g. if hits cache).
+#[async_trait::async_trait]
 pub trait BufReaderProvider {
-    fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<InputStream>>;
+    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<SeekableReader>>;
 }
 
 /// A Newtype for [FileMetaData].
@@ -128,7 +129,7 @@ where
     V: DeserializeOwned,
 {
     async fn load(&self, key: &str, length_hint: Option<u64>) -> Result<V> {
-        let mut reader = self.buf_reader(key, length_hint)?;
+        let mut reader = self.buf_reader(key, length_hint).await?;
         let mut buffer = vec![];
 
         use futures::AsyncReadExt;
@@ -150,7 +151,7 @@ impl<T> Loader<BlockMeta> for T
 where T: BufReaderProvider + Sync
 {
     async fn load(&self, key: &str, length_hint: Option<u64>) -> Result<BlockMeta> {
-        let mut reader = self.buf_reader(key, length_hint)?;
+        let mut reader = self.buf_reader(key, length_hint).await?;
         let meta = read_metadata_async(&mut reader)
             .instrument(debug_span!("parquet_source_read_meta"))
             .await
@@ -159,21 +160,30 @@ where T: BufReaderProvider + Sync
     }
 }
 
+#[async_trait::async_trait]
 impl BufReaderProvider for &QueryContext {
-    fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<InputStream>> {
-        let accessor = self.get_storage_accessor()?;
-        let input_stream = accessor.get_input_stream(path, len)?;
+    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<SeekableReader>> {
+        let accessor = self.get_storage_accessor().await?;
+        let len = match len {
+            Some(l) => l,
+            None => {
+                let object = accessor.stat(path).run().await.map_err(|e| match e {
+                    opendal::error::Error::ObjectNotExist(msg) => ErrorCode::DalPathNotFound(msg),
+                    _ => ErrorCode::DalTransportError(e.to_string()),
+                })?;
+                object.size
+            }
+        };
+        let reader = SeekableReader::new(accessor, path, len);
         let read_buffer_size = self.get_settings().get_storage_read_buffer_size()?;
-        Ok(BufReader::with_capacity(
-            read_buffer_size as usize,
-            input_stream,
-        ))
+        Ok(BufReader::with_capacity(read_buffer_size as usize, reader))
     }
 }
 
+#[async_trait::async_trait]
 impl BufReaderProvider for Arc<QueryContext> {
-    fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<InputStream>> {
-        self.as_ref().buf_reader(path, len)
+    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<SeekableReader>> {
+        self.as_ref().buf_reader(path, len).await
     }
 }
 

@@ -15,6 +15,7 @@
 use common_meta_api::KVApi;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
+use common_meta_types::MetaError;
 use common_meta_types::PrefixListReply;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
@@ -26,26 +27,28 @@ use crate::MetaGrpcClient;
 
 #[tonic::async_trait]
 impl KVApi for MetaGrpcClient {
-    async fn upsert_kv(
-        &self,
-        act: UpsertKVAction,
-    ) -> common_exception::Result<UpsertKVActionReply> {
-        self.do_write(act).await
+    async fn upsert_kv(&self, act: UpsertKVAction) -> Result<UpsertKVActionReply, MetaError> {
+        let reply = self.do_write(act).await?;
+        Ok(reply)
     }
 
-    async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply> {
-        self.do_read(GetKVAction {
-            key: key.to_string(),
-        })
-        .await
+    async fn get_kv(&self, key: &str) -> Result<GetKVActionReply, MetaError> {
+        let reply = self
+            .do_read(GetKVAction {
+                key: key.to_string(),
+            })
+            .await?;
+        Ok(reply)
     }
 
-    async fn mget_kv(&self, keys: &[String]) -> common_exception::Result<MGetKVActionReply> {
+    async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVActionReply, MetaError> {
         let keys = keys.to_vec();
-        self.do_read(MGetKVAction { keys }).await
+        let reply = self.do_read(MGetKVAction { keys }).await?;
+        Ok(reply)
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> common_exception::Result<PrefixListReply> {
-        self.do_read(PrefixListReq(prefix.to_string())).await
+    async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply, MetaError> {
+        let reply = self.do_read(PrefixListReq(prefix.to_string())).await?;
+        Ok(reply)
     }
 }

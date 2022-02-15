@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_dal::InMemoryData;
+use common_datablocks::InMemoryData;
 use common_infallible::RwLock;
 use common_meta_api::MetaApi;
 

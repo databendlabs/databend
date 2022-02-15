@@ -78,7 +78,10 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let err = res.unwrap_err();
-            assert_eq!(ErrorCode::DatabaseAlreadyExists("").code(), err.code());
+            assert_eq!(
+                ErrorCode::DatabaseAlreadyExists("").code(),
+                ErrorCode::from(err).code()
+            );
         }
 
         tracing::info!("--- create db1 again with if_not_exists=true");
@@ -96,7 +99,10 @@ impl MetaApiTestSuite {
             let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let err = res.unwrap_err();
-            assert_eq!(ErrorCode::DatabaseAlreadyExists("").code(), err.code());
+            assert_eq!(
+                ErrorCode::DatabaseAlreadyExists("").code(),
+                ErrorCode::from(err).code()
+            );
         }
 
         tracing::info!("--- get db1");
@@ -140,9 +146,11 @@ impl MetaApiTestSuite {
             let res = mt.get_database(GetDatabaseReq::new(tenant, "absent")).await;
             tracing::debug!("=== get absent database res: {:?}", res);
             assert!(res.is_err());
-            let res = res.unwrap_err();
-            assert_eq!(1003, res.code());
-            assert_eq!("absent".to_string(), res.message());
+            let err = res.unwrap_err();
+            let err_code = ErrorCode::from(err);
+
+            assert_eq!(1003, err_code.code());
+            assert!(err_code.message().contains("absent"));
         }
 
         tracing::info!("--- drop db2");
@@ -159,7 +167,10 @@ impl MetaApiTestSuite {
         {
             let res = mt.get_database(GetDatabaseReq::new(tenant, "db2")).await;
             let err = res.unwrap_err();
-            assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
+            assert_eq!(
+                ErrorCode::UnknownDatabase("").code(),
+                ErrorCode::from(err).code()
+            );
         }
 
         tracing::info!("--- drop db2 with if_exists=true returns no error");
@@ -251,9 +262,11 @@ impl MetaApiTestSuite {
                 .await;
             tracing::debug!("=== get absent database res: {:?}", res);
             assert!(res.is_err());
-            let res = res.unwrap_err();
-            assert_eq!(ErrorCode::UnknownDatabase("").code(), res.code());
-            assert_eq!("absent".to_string(), res.message());
+            let err = res.unwrap_err();
+            let err = ErrorCode::from(err);
+
+            assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
+            assert!(err.message().contains("absent"));
         }
 
         tracing::info!("--- tenant2 get tenant1's db2");
@@ -262,8 +275,10 @@ impl MetaApiTestSuite {
             tracing::debug!("=== get other tenant's database res: {:?}", res);
             assert!(res.is_err());
             let res = res.unwrap_err();
-            assert_eq!(ErrorCode::UnknownDatabase("").code(), res.code());
-            assert_eq!("db2".to_string(), res.message());
+            let err = ErrorCode::from(res);
+
+            assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
+            assert_eq!("db2".to_string(), err.message());
         }
 
         tracing::info!("--- drop db2");
@@ -280,7 +295,10 @@ impl MetaApiTestSuite {
         {
             let res = mt.get_database(GetDatabaseReq::new(tenant1, "db2")).await;
             let err = res.unwrap_err();
-            assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
+            assert_eq!(
+                ErrorCode::UnknownDatabase("").code(),
+                ErrorCode::from(err).code()
+            );
         }
 
         tracing::info!("--- tenant1 drop db2 with if_exists=true returns no error");
@@ -371,6 +389,48 @@ impl MetaApiTestSuite {
         let db_name = "db1";
         let tbl_name = "tb2";
 
+        let schema = || {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                u64::to_data_type(),
+            )]))
+        };
+
+        let options = || maplit::hashmap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        tracing::info!("--- create table on unknown db");
+        // TODO(xp): test other table operation on unknown db.
+        {
+            let created_on = Utc::now();
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                tenant: tenant.to_string(),
+                db: db_name.to_string(),
+                table: tbl_name.to_string(),
+                table_meta: table_meta(created_on),
+            };
+
+            {
+                let res = mt.create_table(req).await;
+                tracing::debug!("create table on unknown db res: {:?}", res);
+
+                assert!(res.is_err());
+                let err = res.unwrap_err();
+                let err = ErrorCode::from(err);
+
+                assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
+            }
+        }
+
         tracing::info!("--- prepare db");
         {
             let plan = CreateDatabaseReq {
@@ -391,14 +451,6 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- create and get table");
         {
-            // Table schema with metadata(due to serde issue).
-            let schema = Arc::new(DataSchema::new(vec![DataField::new(
-                "number",
-                u64::to_data_type(),
-            )]));
-
-            let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
-
             let created_on = Utc::now();
 
             let mut req = CreateTableReq {
@@ -406,13 +458,7 @@ impl MetaApiTestSuite {
                 tenant: tenant.to_string(),
                 db: db_name.to_string(),
                 table: tbl_name.to_string(),
-                table_meta: TableMeta {
-                    schema: schema.clone(),
-                    engine: "JSON".to_string(),
-                    options: options.clone(),
-                    created_on,
-                    ..TableMeta::default()
-                },
+                table_meta: table_meta(created_on),
             };
 
             {
@@ -425,13 +471,7 @@ impl MetaApiTestSuite {
                     ident: TableIdent::new(1, 1),
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
-                    meta: TableMeta {
-                        schema: schema.clone(),
-                        engine: "JSON".to_owned(),
-                        options: options.clone(),
-                        created_on,
-                        ..Default::default()
-                    },
+                    meta: table_meta(created_on),
                 };
                 assert_eq!(want, got.as_ref().clone(), "get created table");
             }
@@ -447,13 +487,7 @@ impl MetaApiTestSuite {
                     ident: TableIdent::new(1, 1),
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
-                    meta: TableMeta {
-                        schema: schema.clone(),
-                        engine: "JSON".to_owned(),
-                        options: options.clone(),
-                        created_on,
-                        ..Default::default()
-                    },
+                    meta: table_meta(created_on),
                 };
                 assert_eq!(want, got.as_ref().clone(), "get created table");
             }
@@ -466,9 +500,11 @@ impl MetaApiTestSuite {
                 tracing::info!("create table res: {:?}", res);
 
                 let status = res.err().unwrap();
+                let err_code = ErrorCode::from(status);
+
                 assert_eq!(
                     format!("Code: 2302, displayText = table exists: {}.", tbl_name),
-                    status.to_string()
+                    err_code.to_string()
                 );
 
                 // get_table returns the old table
@@ -478,13 +514,7 @@ impl MetaApiTestSuite {
                     ident: TableIdent::new(1, 1),
                     desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
                     name: tbl_name.into(),
-                    meta: TableMeta {
-                        schema: schema.clone(),
-                        engine: "JSON".to_owned(),
-                        options: options.clone(),
-                        created_on,
-                        ..Default::default()
-                    },
+                    meta: table_meta(created_on),
                 };
                 assert_eq!(want, got.as_ref().clone(), "get old table");
             }
@@ -517,8 +547,10 @@ impl MetaApiTestSuite {
                         ))
                         .await;
 
-                    let got = got.unwrap_err();
-                    assert_eq!(ErrorCode::TableVersionMismatched("").code(), got.code());
+                    let err = got.unwrap_err();
+                    let err = ErrorCode::from(err);
+
+                    assert_eq!(ErrorCode::TableVersionMismatched("").code(), err.code());
 
                     // table is not affected.
                     let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
@@ -540,9 +572,11 @@ impl MetaApiTestSuite {
                 {
                     let res = mt.get_table((tenant, db_name, tbl_name).into()).await;
                     let status = res.err().unwrap();
+                    let err_code = ErrorCode::from(status);
+
                     assert_eq!(
                         format!("Code: 1025, displayText = Unknown table: '{:}'.", tbl_name),
-                        status.to_string(),
+                        err_code.to_string(),
                         "get dropped table {}",
                         tbl_name
                     );
@@ -561,7 +595,7 @@ impl MetaApiTestSuite {
                 let err = res.unwrap_err();
                 assert_eq!(
                     ErrorCode::UnknownTable("").code(),
-                    err.code(),
+                    ErrorCode::from(err).code(),
                     "drop table {} with if_exists=false again",
                     tbl_name
                 );
@@ -707,6 +741,7 @@ impl MetaApiTestSuite {
                 .await;
             tracing::debug!("get present database res: {:?}", res);
             let err = res.unwrap_err();
+            let err = ErrorCode::from(err);
             assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
             assert_eq!("nonexistent", err.message());
             assert_eq!("Code: 1003, displayText = nonexistent.", format!("{}", err));
@@ -890,7 +925,10 @@ impl MetaApiTestSuite {
                 .await;
             tracing::debug!("get present table res: {:?}", res);
             let err = res.unwrap_err();
-            assert_eq!(ErrorCode::UnknownTable("").code(), err.code());
+            assert_eq!(
+                ErrorCode::UnknownTable("").code(),
+                ErrorCode::from(err).code()
+            );
         }
 
         Ok(())

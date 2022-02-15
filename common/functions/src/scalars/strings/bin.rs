@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,14 +14,14 @@
 
 use std::fmt;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 #[derive(Clone)]
 pub struct BinFunction {
@@ -29,88 +29,78 @@ pub struct BinFunction {
 }
 
 impl BinFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(BinFunction {
             _display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
-impl Function for BinFunction {
+impl Function2 for BinFunction {
     fn name(&self) -> &str {
         "bin"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        if !args[0].is_numeric() && !args[0].is_null() {
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        if !args[0].data_type_id().is_numeric() {
             return Err(ErrorCode::IllegalDataType(format!(
-                "Expected number or null, but got {}",
-                args[0]
+                "Expected integer but got {}",
+                args[0].data_type_id()
             )));
         }
 
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+        Ok(StringType::arc())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let mut string_array = StringArrayBuilder::with_capacity(input_rows);
-        match columns[0].data_type() {
-            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
-                for value in columns[0]
-                    .column()
-                    .cast_with_type(&DataType::UInt64)?
-                    .to_minimal_array()?
-                    .u64()?
-                {
-                    string_array.append_option(value.map(|n| format!("{:b}", n)));
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        let mut builder: ColumnBuilder<Vu8> = ColumnBuilder::with_capacity(input_rows);
+
+        match columns[0].data_type().data_type_id() {
+            TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64 => {
+                let col = cast_column_field(&columns[0], &UInt64Type::arc())?;
+                let col = col.as_any().downcast_ref::<UInt64Column>().unwrap();
+                for val in col.iter() {
+                    builder.append(format!("{:b}", val).as_bytes());
                 }
             }
-            DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => {
-                for value in columns[0]
-                    .column()
-                    .cast_with_type(&DataType::Int64)?
-                    .to_minimal_array()?
-                    .i64()?
-                {
-                    string_array.append_option(value.map(|n| format!("{:b}", n)));
+            TypeID::Int8 | TypeID::Int16 | TypeID::Int32 | TypeID::Int64 => {
+                let col = cast_column_field(&columns[0], &Int64Type::arc())?;
+                let col = col.as_any().downcast_ref::<Int64Column>().unwrap();
+                for val in col.iter() {
+                    builder.append(format!("{:b}", val).as_bytes());
                 }
             }
-            DataType::Float32 | DataType::Float64 => {
-                for value in columns[0]
-                    .column()
-                    .cast_with_type(&DataType::Float64)?
-                    .to_minimal_array()?
-                    .f64()?
-                {
-                    string_array.append_option(value.map(|n| {
-                        if n.ge(&0f64) {
-                            format!(
-                                "{:b}",
-                                n.max(i64::MIN as f64).min(i64::MAX as f64).round() as i64
-                            )
-                        } else {
-                            format!(
-                                "{:b}",
-                                n.max(u64::MIN as f64).min(u64::MAX as f64).round() as u64
-                            )
-                        }
-                    }));
+            TypeID::Float32 | TypeID::Float64 => {
+                let col = cast_column_field(&columns[0], &Float64Type::arc())?;
+                let col = col.as_any().downcast_ref::<Float64Column>().unwrap();
+                for val in col.iter() {
+                    let val = if val.ge(&0f64) {
+                        format!(
+                            "{:b}",
+                            val.max(i64::MIN as f64).min(i64::MAX as f64).round() as i64
+                        )
+                    } else {
+                        format!(
+                            "{:b}",
+                            val.max(u64::MIN as f64).min(u64::MAX as f64).round() as u64
+                        )
+                    };
+                    builder.append(val.as_bytes());
                 }
             }
             _ => {
-                string_array.append_null();
+                return Err(ErrorCode::IllegalDataType(format!(
+                    "Expected integer but got {}",
+                    columns[0].data_type().data_type_id()
+                )));
             }
         }
-
-        let column: DataColumn = string_array.finish().into();
-        Ok(column.resize_constant(columns[0].column().len()))
+        Ok(builder.build(input_rows))
     }
 }
 

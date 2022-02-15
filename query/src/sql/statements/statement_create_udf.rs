@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
-use common_planners::CreateUDFPlan;
+use common_planners::CreateUserUDFPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 
@@ -37,8 +37,8 @@ pub struct DfCreateUDF {
 impl AnalyzableStatement for DfCreateUDF {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::CreateUDF(
-            CreateUDFPlan {
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::CreateUserUDF(CreateUserUDFPlan {
                 if_not_exists: self.if_not_exists,
                 udf: UserDefinedFunction::new(
                     self.udf_name.as_str(),
@@ -46,7 +46,7 @@ impl AnalyzableStatement for DfCreateUDF {
                     self.definition.as_str(),
                     self.description.as_str(),
                 ),
-            },
-        ))))
+            }),
+        )))
     }
 }

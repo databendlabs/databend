@@ -30,6 +30,7 @@ use common_meta_types::ForwardToLeader;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaError;
+use common_meta_types::MetaRaftError;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::RetryableError;
@@ -57,7 +58,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = MetaSrvTestContext::new(0);
-    let addr = tc.config.raft_config.raft_api_addr();
+    let addr = tc.config.raft_config.raft_api_addr().await?;
 
     let mn = MetaNode::boot(&tc.config.raft_config).await?;
 
@@ -161,11 +162,13 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
                 assert!(rst.is_err());
                 let e = rst.unwrap_err();
                 match e {
-                    MetaError::ForwardToLeader(ForwardToLeader { leader }) => {
-                        assert_eq!(Some(leader_id), leader);
+                    MetaError::MetaRaftError(MetaRaftError::ForwardToLeader(ForwardToLeader {
+                        leader_id: forward_leader_id,
+                    })) => {
+                        assert_eq!(Some(leader_id), forward_leader_id);
                     }
                     _ => {
-                        panic!("expect ForwardToLeader")
+                        panic!("expect MetaRaftError::ForwardToLeader")
                     }
                 }
             }
@@ -367,7 +370,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let leader_id = all[0].get_leader().await;
     let leader = all[leader_id as usize].clone();
 
-    let admin_req = join_req(node_id, tc2.config.raft_config.raft_api_addr(), 0);
+    let admin_req = join_req(node_id, tc2.config.raft_config.raft_api_addr().await?, 0);
     leader.handle_forwardable_request(admin_req).await?;
 
     all.push(mn2.clone());
@@ -390,10 +393,10 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
     tracing::info!("--- join node-3 by sending rpc `join` to a non-leader");
     {
-        let to_addr = tc1.config.raft_config.raft_api_addr();
+        let to_addr = tc1.config.raft_config.raft_api_addr().await?;
 
         let mut client = RaftServiceClient::connect(format!("http://{}", to_addr)).await?;
-        let admin_req = join_req(node_id, tc3.config.raft_config.raft_api_addr(), 1);
+        let admin_req = join_req(node_id, tc3.config.raft_config.raft_api_addr().await?, 1);
         client.forward(admin_req).await?;
     }
 
@@ -463,7 +466,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
 
     let leader_id = all[0].get_leader().await;
     let leader = all[leader_id as usize].clone();
-    let req = join_req(node_id, tc1.config.raft_config.raft_api_addr(), 1);
+    let req = join_req(node_id, tc1.config.raft_config.raft_api_addr().await?, 1);
     leader.handle_forwardable_request(req).await?;
 
     all.push(mn1.clone());
@@ -486,12 +489,12 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
 
     tracing::info!("--- join node-2 by sending rpc `join` to a non-leader");
     {
-        let req = join_req(node_id, tc2.config.raft_config.raft_api_addr(), 1);
+        let req = join_req(node_id, tc2.config.raft_config.raft_api_addr().await?, 1);
         leader.handle_forwardable_request(req).await?;
     }
     tracing::info!("--- join node-2 again");
     {
-        let req = join_req(node_id, tc2.config.raft_config.raft_api_addr(), 1);
+        let req = join_req(node_id, tc2.config.raft_config.raft_api_addr().await?, 1);
         mn1.handle_forwardable_request(req).await?;
     }
 
@@ -650,7 +653,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     tracing::info!("--- check state machine: nodes");
     {
         let node = leader.sto.get_node(&0).await?.unwrap();
-        assert_eq!(tc.config.raft_config.raft_api_addr(), node.address);
+        assert_eq!(tc.config.raft_config.raft_api_addr().await?, node.address);
     }
 
     Ok(())
@@ -748,7 +751,7 @@ pub(crate) async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvT
 
     let nid = 0;
     let mut tc = MetaSrvTestContext::new(nid);
-    let addr = tc.config.raft_config.raft_api_addr();
+    let addr = tc.config.raft_config.raft_api_addr().await?;
 
     // boot up a single-node cluster
     let mn = MetaNode::boot(&tc.config.raft_config).await?;
@@ -774,7 +777,7 @@ async fn start_meta_node_non_voter(
     id: NodeId,
 ) -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
     let mut tc = MetaSrvTestContext::new(id);
-    let addr = tc.config.raft_config.raft_api_addr();
+    let addr = tc.config.raft_config.raft_api_addr().await?;
 
     let raft_config = tc.config.raft_config.clone();
 
@@ -919,7 +922,7 @@ async fn test_meta_node_incr_seq() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = MetaSrvTestContext::new(0);
-    let addr = tc.config.raft_config.raft_api_addr();
+    let addr = tc.config.raft_config.raft_api_addr().await?;
 
     let _mn = MetaNode::boot(&tc.config.raft_config).await?;
     tc.assert_raft_server_connection().await?;

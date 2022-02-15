@@ -12,7 +12,7 @@ const config = {
     baseUrl: '/',
     onBrokenLinks: 'throw',
     onBrokenMarkdownLinks: 'warn',
-    favicon: 'img/favicon.png',
+    favicon: 'img/favicon.svg',
     organizationName: 'datafuselabs',
     projectName: 'databend',
 
@@ -103,7 +103,7 @@ const config = {
                 title: 'Databend',
                 logo: {
                     alt: 'Databend Logo',
-                    src: 'img/favicon.png',
+                    src: 'img/favicon.svg',
                 },
                 items: [
                     {

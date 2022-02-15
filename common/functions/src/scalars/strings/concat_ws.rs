@@ -14,14 +14,13 @@
 
 use std::fmt;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
-use common_exception::ErrorCode;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 #[derive(Clone)]
 pub struct ConcatWsFunction {
@@ -29,176 +28,169 @@ pub struct ConcatWsFunction {
 }
 
 impl ConcatWsFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(ConcatWsFunction {
             _display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(2, 1024),
         )
     }
 
-    fn concat_column_with_seperator(
-        seperator: &DataColumn,
-        acc: DataColumn,
-        columns: &DataColumnsWithField,
-    ) -> Result<DataColumn> {
-        if columns.is_empty() {
-            return Ok(acc);
-        }
-        let current = columns[0].column();
-        // if this column is DataType::Null, just skip it
-        if current.data_type().is_null() {
-            return Self::concat_column_with_seperator(seperator, acc, &columns[1..]);
-        }
-        // whether is the last column to decide decide add separator or not
-        let is_last = columns.len() == 1;
-        // add this column value with acc
-        let current = current.cast_with_type(&DataType::String)?;
-        let acc = acc.cast_with_type(&DataType::String)?;
-        let sep = seperator.cast_with_type(&DataType::String)?;
-        let column = match sep {
-            DataColumn::Constant(DataValue::String(Some(sep)), len) => match (acc, current) {
-                (DataColumn::Array(lhs), DataColumn::Array(rhs)) => {
-                    let l_array = lhs.string()?;
-                    let r_array = rhs.string()?;
-                    let mut builder = StringArrayBuilder::with_capacity(l_array.len());
-                    let iter = l_array.into_iter().zip(r_array.into_iter());
-                    for (l, r) in iter {
-                        match (l, r) {
-                            (Some(l), Some(r)) => {
-                                if is_last {
-                                    builder.append_value([l, r].concat());
-                                } else {
-                                    builder.append_value([l, r, sep.as_slice()].concat());
-                                }
-                            }
-                            (Some(l), None) => {
-                                // current row is NULL, do not add separator
-                                builder.append_value(l);
-                            }
-                            // acc column could never be null
-                            (None, _) => {
-                                return Err(ErrorCode::UnexpectedError("CONCAT_WS internal error"));
-                            }
-                        }
+    fn concat_column_with_constant_seperator(
+        sep: &[u8],
+        columns: &[ColumnWithField],
+        rows: usize,
+    ) -> Result<ColumnRef> {
+        let viewers = columns
+            .iter()
+            .map(|column| Vu8::try_create_viewer(column.column()))
+            .collect::<Result<Vec<_>>>()?;
+
+        let mut builder = MutableStringColumn::with_capacity(rows);
+        let mut buffer: Vec<u8> = Vec::with_capacity(32);
+        (0..rows).for_each(|row| {
+            buffer.clear();
+            for (idx, viewer) in viewers.iter().enumerate() {
+                if !viewer.null_at(row) {
+                    if idx > 0 {
+                        buffer.extend_from_slice(sep);
                     }
-                    Ok(DataColumn::Array(builder.finish().into_series()))
+
+                    buffer.extend_from_slice(viewer.value_at(row));
                 }
-                (DataColumn::Array(lhs), DataColumn::Constant(rhs, _)) => match rhs {
-                    DataValue::String(Some(r_value)) => {
-                        let l_array = lhs.string()?;
-                        let mut builder = StringArrayBuilder::with_capacity(len);
-                        let iter = l_array.into_iter();
-                        for val in iter {
-                            if let Some(val) = val {
-                                if is_last {
-                                    builder.append_value([val, r_value.as_slice()].concat());
-                                } else {
-                                    builder.append_value(
-                                        [val, r_value.as_slice(), sep.as_slice()].concat(),
-                                    );
-                                }
-                            } else {
-                                // this never happens, acc column could never be null
-                                return Err(ErrorCode::UnexpectedError("CONCAT_WS internal error"));
-                            }
-                        }
-                        let array = builder.finish();
-                        Ok(DataColumn::Array(array.into_series()))
+            }
+            builder.append_value(buffer.as_slice());
+        });
+        Ok(builder.to_column())
+    }
+
+    fn concat_column_nonull(
+        sep_column: &ColumnWithField,
+        columns: &[ColumnWithField],
+        rows: usize,
+    ) -> Result<ColumnRef> {
+        let sep_c = Series::check_get_scalar::<Vu8>(sep_column.column())?;
+        let viewers = columns
+            .iter()
+            .map(|column| Vu8::try_create_viewer(column.column()))
+            .collect::<Result<Vec<_>>>()?;
+
+        let mut builder = MutableStringColumn::with_capacity(rows);
+        let mut buffer: Vec<u8> = Vec::with_capacity(32);
+        (0..rows).for_each(|row| {
+            buffer.clear();
+            let sep = sep_c.get_data(row);
+            for (idx, viewer) in viewers.iter().enumerate() {
+                if !viewer.null_at(row) {
+                    if idx > 0 {
+                        buffer.extend_from_slice(sep);
                     }
-                    _ => Ok(DataColumn::Array(lhs)),
-                },
-                (DataColumn::Constant(lhs, _), DataColumn::Array(rhs)) => match lhs {
-                    DataValue::String(Some(l_value)) => {
-                        let r_array = rhs.string()?;
-                        let mut builder = StringArrayBuilder::with_capacity(len);
-                        let iter = r_array.into_iter();
-                        for val in iter {
-                            if let Some(val) = val {
-                                if is_last {
-                                    builder.append_value([l_value.as_slice(), val].concat());
-                                } else {
-                                    builder.append_value(
-                                        [l_value.as_slice(), val, sep.as_slice()].concat(),
-                                    );
-                                }
-                            } else {
-                                // r_value is NULL, do not add separator
-                                builder.append_value(l_value.as_slice());
-                            }
-                        }
-                        let array = builder.finish();
-                        Ok(DataColumn::Array(array.into_series()))
+
+                    buffer.extend_from_slice(viewer.value_at(row));
+                }
+            }
+            builder.append_value(buffer.as_slice());
+        });
+        Ok(builder.to_column())
+    }
+
+    fn concat_column_null(
+        sep_column: &ColumnWithField,
+        columns: &[ColumnWithField],
+        rows: usize,
+    ) -> Result<ColumnRef> {
+        let sep_viewer = Vu8::try_create_viewer(sep_column.column())?;
+        let viewers = columns
+            .iter()
+            .map(|column| Vu8::try_create_viewer(column.column()))
+            .collect::<Result<Vec<_>>>()?;
+
+        let mut builder = NullableColumnBuilder::<Vu8>::with_capacity(rows);
+        let mut buffer: Vec<u8> = Vec::with_capacity(32);
+        (0..rows).for_each(|row| {
+            buffer.clear();
+            if sep_viewer.null_at(row) {
+                builder.append_null();
+            }
+            let sep = sep_viewer.value_at(row);
+            for (idx, viewer) in viewers.iter().enumerate() {
+                if !viewer.null_at(row) {
+                    if idx > 0 {
+                        buffer.extend_from_slice(sep);
                     }
-                    // acc column could never be null
-                    _ => Err(ErrorCode::UnexpectedError("CONCAT_WS internal error")),
-                },
-                (DataColumn::Constant(lhs, _), DataColumn::Constant(rhs, _)) => match &lhs {
-                    DataValue::String(Some(l_val)) => match rhs {
-                        DataValue::String(Some(r_val)) => {
-                            let value = if is_last {
-                                DataValue::String(Some(
-                                    [l_val.as_slice(), r_val.as_slice()].concat(),
-                                ))
-                            } else {
-                                DataValue::String(Some(
-                                    [l_val.as_slice(), r_val.as_slice(), sep.as_slice()].concat(),
-                                ))
-                            };
-                            let column = DataColumn::Constant(value, len);
-                            Ok(column)
-                        }
-                        // current column is NULL, do not add separator
-                        _ => Ok(DataColumn::Constant(lhs.clone(), len)),
-                    },
-                    // acc column could never be NULL
-                    _ => Err(ErrorCode::UnexpectedError("CONCAT_WS internal error")),
-                },
-            },
-            // seprator must be DataColumn::Constant(DataValue::String(Some(x)))
-            _ => Err(ErrorCode::UnexpectedError(
-                "CONCAT_WS separator must be constant",
-            )),
-        }?;
-        let result = Self::concat_column_with_seperator(seperator, column, &columns[1..])?;
-        Ok(result)
+
+                    buffer.extend_from_slice(viewer.value_at(row));
+                }
+            }
+            builder.append(buffer.as_slice(), true);
+        });
+        Ok(builder.build(rows))
     }
 }
 
-impl Function for ConcatWsFunction {
+// https://dev.mysql.com/doc/refman/8.0/en/string-functions.html#function_concat-ws
+// concat_ws(NULL, "a", "b") -> "NULL"
+// concat_ws(",", NULL, NULL) -> ""
+// So we recusive call: concat_ws, if will skip nullvalues
+impl Function2 for ConcatWsFunction {
     fn name(&self) -> &str {
         "concat_ws"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        // concat_ws(NULL, "a", "b") -> NULL
-        // concat_ws(",", NULL, NULL) -> ""
-        let nullable = args[0].is_nullable();
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        if args[0].is_null() {
+            return Ok(NullType::arc());
+        }
 
-        let dt = if args[0].is_null() {
-            DataType::Null
-        } else {
-            DataType::String
-        };
+        for arg in args {
+            let arg = remove_nullable(*arg);
+            if !arg.is_null() {
+                assert_string(&arg)?;
+            }
+        }
 
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+        let dt = Vu8::to_data_type();
+        match args[0].is_nullable() {
+            true => Ok(wrap_nullable(&dt)),
+            false => Ok(dt),
+        }
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
         let seperator = &columns[0];
-        if seperator.column().data_type().is_null() {
-            return Ok(DataColumn::Constant(DataValue::Null, input_rows));
+        if seperator.data_type().is_null() {
+            return Ok(NullColumn::new(input_rows).arc());
         }
-        // simplify seperator with only one column
-        let acc = DataColumn::Constant(DataValue::String(Some(Vec::new())), input_rows);
-        let result = Self::concat_column_with_seperator(seperator.column(), acc, &columns[1..])?;
-        Ok(result)
+
+        // remove other null columns
+        let cols: Vec<ColumnWithField> = columns[1..]
+            .iter()
+            .filter(|c| !c.data_type().is_null())
+            .cloned()
+            .collect();
+
+        let viewer = Vu8::try_create_viewer(columns[0].column())?;
+        if seperator.column().is_const() {
+            if viewer.null_at(0) {
+                return Ok(NullColumn::new(input_rows).arc());
+            }
+            return Self::concat_column_with_constant_seperator(
+                viewer.value_at(0),
+                &cols,
+                input_rows,
+            );
+        }
+
+        match columns[0].data_type().is_nullable() {
+            false => Self::concat_column_nonull(&columns[0], &cols, input_rows),
+            true => Self::concat_column_null(&columns[0], &cols, input_rows),
+        }
     }
 
     fn passthrough_null(&self) -> bool {

@@ -78,20 +78,21 @@ fn test_builder() -> Result<()> {
 
         if column.is_nullable() {
             let mut builder = NullableColumnBuilder::<T>::with_capacity(size);
-            let viewer = ColumnViewer::<T>::create(column)?;
+            let viewer = T::try_create_viewer(column)?;
 
-            for row in 0..size {
-                builder.append(viewer.value(row), viewer.valid_at(row));
+            for i in 0..viewer.size() {
+                builder.append(viewer.value_at(i), viewer.valid_at(i));
             }
             let result = builder.build(size);
             Ok(result)
         } else {
             let mut builder = ColumnBuilder::<T>::with_capacity(size);
-            let viewer = ColumnViewer::<T>::create(column)?;
+            let viewer = T::try_create_viewer(column)?;
 
-            for row in 0..size {
-                builder.append(viewer.value(row));
+            for i in 0..viewer.size() {
+                builder.append(viewer.value_at(i));
             }
+
             let result = builder.build(size);
             Ok(result)
         }

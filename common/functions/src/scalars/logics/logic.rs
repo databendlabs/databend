@@ -14,14 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues2::BooleanType;
-use common_datavalues2::ColumnBuilder;
-use common_datavalues2::ColumnRef;
-use common_datavalues2::ColumnViewer;
-use common_datavalues2::ColumnsWithField;
-use common_datavalues2::DataTypePtr;
-use common_datavalues2::NullableColumnBuilder;
-use common_datavalues2::NullableType;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -72,24 +65,22 @@ impl LogicFunction {
 
         let col = cast_column_field(&columns[0], &dt)?;
 
-        if nullable {
-            let col_viewer = ColumnViewer::<bool>::create(&col)?;
+        let col_viewer = bool::try_create_viewer(&col)?;
 
+        if nullable {
             let mut builder = NullableColumnBuilder::<bool>::with_capacity(input_rows);
 
-            for idx in 0..input_rows {
-                builder.append(!col_viewer.value(idx), col_viewer.valid_at(idx));
+            for (idx, data) in col_viewer.iter().enumerate() {
+                builder.append(!data, col_viewer.valid_at(idx));
             }
 
             Ok(builder.build(input_rows))
         } else {
-            let col_viewer = ColumnViewer::<bool>::create(&col)?;
             let mut builder = ColumnBuilder::<bool>::with_capacity(input_rows);
 
-            for idx in 0..input_rows {
-                builder.append(!col_viewer.value(idx));
+            for value in col_viewer.iter() {
+                builder.append(!value);
             }
-
             Ok(builder.build(input_rows))
         }
     }
@@ -110,20 +101,19 @@ impl LogicFunction {
         let rhs = cast_column_field(&columns[1], &dt)?;
 
         if nullable {
-            let lhs_viewer = ColumnViewer::<bool>::create(&lhs)?;
-            let rhs_viewer = ColumnViewer::<bool>::create(&rhs)?;
+            let lhs_viewer = bool::try_create_viewer(&lhs)?;
+            let rhs_viewer = bool::try_create_viewer(&rhs)?;
+
+            let lhs_viewer_iter = lhs_viewer.iter();
+            let rhs_viewer_iter = rhs_viewer.iter();
 
             let mut builder = NullableColumnBuilder::<bool>::with_capacity(input_rows);
 
             macro_rules! calcute_with_null {
-                ($input_rows:expr, $lhs_viewer: expr, $rhs_viewer: expr, $builder: expr, $func: expr) => {
-                    for idx in 0..$input_rows {
-                        let (val, valid) = $func(
-                            $lhs_viewer.value(idx),
-                            $rhs_viewer.value(idx),
-                            $lhs_viewer.valid_at(idx),
-                            $rhs_viewer.valid_at(idx),
-                        );
+                ($lhs_viewer: expr, $rhs_viewer: expr,  $lhs_viewer_iter: expr, $rhs_viewer_iter: expr, $builder: expr, $func: expr) => {
+                    for (a, (idx, b)) in $lhs_viewer_iter.zip($rhs_viewer_iter.enumerate()) {
+                        let (val, valid) =
+                            $func(a, b, $lhs_viewer.valid_at(idx), $rhs_viewer.valid_at(idx));
                         $builder.append(val, valid);
                     }
                 };
@@ -131,27 +121,30 @@ impl LogicFunction {
 
             match self.op {
                 LogicOperator::And => calcute_with_null!(
-                    input_rows,
                     lhs_viewer,
                     rhs_viewer,
+                    lhs_viewer_iter,
+                    rhs_viewer_iter,
                     builder,
                     |lhs: bool, rhs: bool, l_valid: bool, r_valid: bool| -> (bool, bool) {
                         (lhs & rhs, l_valid & r_valid)
                     }
                 ),
                 LogicOperator::Or => calcute_with_null!(
-                    input_rows,
                     lhs_viewer,
                     rhs_viewer,
+                    lhs_viewer_iter,
+                    rhs_viewer_iter,
                     builder,
                     |lhs: bool, rhs: bool, _l_valid: bool, _r_valid: bool| -> (bool, bool) {
                         (lhs || rhs, lhs || rhs)
                     }
                 ),
                 LogicOperator::Xor => calcute_with_null!(
-                    input_rows,
                     lhs_viewer,
                     rhs_viewer,
+                    lhs_viewer_iter,
+                    rhs_viewer_iter,
                     builder,
                     |lhs: bool, rhs: bool, l_valid: bool, r_valid: bool| -> (bool, bool) {
                         (lhs ^ rhs, l_valid & r_valid)
@@ -162,36 +155,33 @@ impl LogicFunction {
 
             Ok(builder.build(input_rows))
         } else {
-            let lhs_viewer = ColumnViewer::<bool>::create(&lhs)?;
-            let rhs_viewer = ColumnViewer::<bool>::create(&rhs)?;
+            let lhs_viewer = bool::try_create_viewer(&lhs)?;
+            let rhs_viewer = bool::try_create_viewer(&rhs)?;
 
             let mut builder = ColumnBuilder::<bool>::with_capacity(input_rows);
 
             macro_rules! calcute {
-                ($input_rows:expr, $lhs_viewer: expr, $rhs_viewer: expr, $builder: expr, $func: expr) => {
-                    for idx in 0..$input_rows {
-                        $builder.append($func($lhs_viewer.value(idx), $rhs_viewer.value(idx)));
+                ($lhs_viewer: expr, $rhs_viewer: expr, $builder: expr, $func: expr) => {
+                    for (a, b) in ($lhs_viewer.iter().zip($rhs_viewer.iter())) {
+                        $builder.append($func(a, b));
                     }
                 };
             }
 
             match self.op {
                 LogicOperator::And => calcute!(
-                    input_rows,
                     lhs_viewer,
                     rhs_viewer,
                     builder,
                     |lhs: bool, rhs: bool| -> bool { lhs & rhs }
                 ),
                 LogicOperator::Or => calcute!(
-                    input_rows,
                     lhs_viewer,
                     rhs_viewer,
                     builder,
                     |lhs: bool, rhs: bool| -> bool { lhs || rhs }
                 ),
                 LogicOperator::Xor => calcute!(
-                    input_rows,
                     lhs_viewer,
                     rhs_viewer,
                     builder,

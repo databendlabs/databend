@@ -27,6 +27,7 @@ clickhouse_handler_port = 9001
 http_handler_host = "0.0.0.0"
 http_handler_port = 8001
 
+tenant_id = "test_tenant"
 cluster_id = "test_cluster"
 
 [log]

@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_meta_sled_store::SledOrderedSerde;
+use common_meta_types::anyerror::AnyError;
 use common_meta_types::MetaStorageError;
 use openraft::LogId;
 use openraft::Membership;
@@ -78,7 +79,7 @@ impl SledOrderedSerde for StateMachineMetaKey {
             return Ok(StateMachineMetaKey::LastMembership);
         }
 
-        Err(MetaStorageError::SledError(String::from(
+        Err(MetaStorageError::SledError(AnyError::error(
             "invalid key IVec",
         )))
     }
