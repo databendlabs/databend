@@ -57,56 +57,56 @@ pull_request_rules:
 
   - name: label on New Feature
     conditions:
-      - body~=New Feature
+      - body~=- New Feature
     actions:
       label:
         add:
           - pr-feature
   - name: label on Bug Fix
     conditions:
-      - body~=Bug Fix
+      - body~=- Bug Fix
     actions:
       label:
         add:
           - pr-bugfix
   - name: label on Improvement
     conditions:
-      - body~=Improvement
+      - body~=- Improvement
     actions:
       label:
         add:
           - pr-improvement
-  - name: label on Improvement
+  - name: label on Performance
     conditions:
-      - body~=Performance Improvement
+      - body~=- Performance Improvement
     actions:
       label:
         add:
           - pr-performance
   - name: label on Build/Testing/CI
     conditions:
-      - body~=Build/Testing/CI
+      - body~=- Build/Testing/CI
     actions:
       label:
         add:
           - pr-build
   - name: label on Documentation
     conditions:
-      - body~=Documentation|Website
+      - body~=- Documentation|Website
     actions:
       label:
         add:
           - pr-doc-fix
   - name: label on Not for changelog
     conditions:
-      - body~=Not for changelog
+      - body~=- Not for changelog
     actions:
       label:
         add:
           - pr-not-for-changelog
   - name: label on Other
     conditions:
-      - body~=Other
+      - body~=- Other
     actions:
       label:
         add:
