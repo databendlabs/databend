@@ -24,6 +24,7 @@ use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
 use futures::channel::*;
+use opendal::Accessor;
 
 use crate::catalogs::DatabaseCatalog;
 use crate::configs::Config;
@@ -219,5 +220,9 @@ impl Session {
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {
         malloc_size(self)
+    }
+
+    pub fn get_storage_accessor(self: &Arc<Self>) -> Arc<dyn Accessor> {
+        self.session_mgr.get_storage_accessor()
     }
 }

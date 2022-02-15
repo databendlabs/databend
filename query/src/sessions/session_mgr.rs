@@ -16,6 +16,7 @@ use std::collections::hash_map::Entry::Occupied;
 use std::collections::hash_map::Entry::Vacant;
 use std::collections::HashMap;
 use std::future::Future;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -28,6 +29,11 @@ use common_metrics::label_counter;
 use common_tracing::tracing;
 use futures::future::Either;
 use futures::StreamExt;
+use opendal::credential::Credential;
+use opendal::services::fs;
+use opendal::services::s3;
+use opendal::Accessor;
+use opendal::Scheme as DalSchema;
 
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
@@ -51,12 +57,14 @@ pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
     pub(in crate::sessions) storage_cache_manager: Arc<CacheManager>,
+    storage_accessor: Arc<dyn Accessor>,
 }
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
-        let storage_cache_mgr = CacheManager::init(&conf.query);
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
+        let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
+        let storage_accessor = Self::init_storage_accessor(&conf).await?;
 
         // Cluster discovery.
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
@@ -65,8 +73,9 @@ impl SessionManager {
         let user = UserApiProvider::create_global(conf.clone()).await?;
         let auth_manager = Arc::new(AuthMgr::create(conf.clone(), user.clone()).await?);
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
+        let max_sessions = conf.query.max_active_sessions as usize;
+        let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
 
-        let max_active_sessions = conf.query.max_active_sessions as usize;
         Ok(Arc::new(SessionManager {
             catalog,
             conf,
@@ -74,9 +83,10 @@ impl SessionManager {
             user_manager: user,
             http_query_manager,
             auth_manager,
-            max_sessions: max_active_sessions,
-            active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
-            storage_cache_manager: Arc::new(storage_cache_mgr),
+            max_sessions,
+            active_sessions,
+            storage_cache_manager,
+            storage_accessor,
         }))
     }
 
@@ -103,6 +113,10 @@ impl SessionManager {
 
     pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
         self.catalog.clone()
+    }
+
+    pub fn get_storage_accessor(self: &Arc<Self>) -> Arc<dyn Accessor> {
+        self.storage_accessor.clone()
     }
 
     pub fn get_storage_cache_manager(&self) -> &CacheManager {
@@ -214,6 +228,14 @@ impl SessionManager {
         }
     }
 
+    pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        self.active_sessions
+            .read()
+            .values()
+            .map(Session::process_info)
+            .collect::<Vec<_>>()
+    }
+
     fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Arc<Session>>>>) -> bool {
         // Read lock does not support reentrant
         // https://github.com/Amanieu/parking_lot/blob/lock_api-0.4.4/lock_api/src/rwlock.rs#L422
@@ -232,11 +254,38 @@ impl SessionManager {
         }
     }
 
-    pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        self.active_sessions
-            .read()
-            .values()
-            .map(Session::process_info)
-            .collect::<Vec<_>>()
+    // Init the storage data accessor by config.
+    async fn init_storage_accessor(conf: &Config) -> Result<Arc<dyn Accessor>> {
+        let storage_conf = &conf.storage;
+        let schema_name = &storage_conf.storage_type;
+        let schema = DalSchema::from_str(schema_name)
+            .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
+
+        let accessor: Arc<dyn Accessor> = match schema {
+            DalSchema::S3 => {
+                let s3_conf = &storage_conf.s3;
+                s3::Backend::build()
+                    .region(&s3_conf.region)
+                    .endpoint(&s3_conf.endpoint_url)
+                    .bucket(&s3_conf.bucket)
+                    .credential(Credential::hmac(
+                        &s3_conf.access_key_id,
+                        &s3_conf.secret_access_key,
+                    ))
+                    .finish()
+                    .await
+                    .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?
+            }
+            DalSchema::Azblob => {
+                todo!()
+            }
+            DalSchema::Fs => fs::Backend::build()
+                .root(&storage_conf.disk.data_path)
+                .finish()
+                .await
+                .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?,
+        };
+
+        Ok(accessor)
     }
 }
