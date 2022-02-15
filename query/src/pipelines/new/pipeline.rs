@@ -95,6 +95,7 @@ impl NewPipeline {
         match self.pipes.last() {
             None => Err(ErrorCode::LogicalError("")),
             Some(pipe) if pipe.output_size() == 0 => Err(ErrorCode::LogicalError("")),
+            Some(pipe) if pipe.output_size() == new_size => Ok(()),
             Some(pipe) => {
                 let processor = ResizeProcessor::create(pipe.output_size(), new_size);
                 let inputs_port = processor.get_inputs().to_vec();

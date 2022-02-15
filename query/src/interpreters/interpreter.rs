@@ -32,10 +32,6 @@ pub trait Interpreter: Sync + Send {
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream>;
 
-    fn execute_with_new_pipeline(&self) -> Result<NewPipeline> {
-        Err(ErrorCode::UnImplement(format!("Interpreter {} unimplemented new pipeline", self.name())))
-    }
-
     /// Do some start work for the interpreter.
     async fn start(&self) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(

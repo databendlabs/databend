@@ -33,8 +33,7 @@ use rand::RngCore;
 use regex::RegexSet;
 use tokio_stream::StreamExt;
 
-use crate::interpreters::{Interpreter, InterpreterFactory};
-use crate::pipelines::new::executor::PipelinePullingExecutor;
+use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::sessions::QueryContext;
@@ -149,7 +148,7 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for InteractiveWorker<W> {
     }
 
     async fn on_close<'a>(&'a mut self, id: u32)
-    where W: 'async_trait {
+        where W: 'async_trait {
         self.base.do_close(id).await;
     }
 
@@ -317,43 +316,20 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             .start()
             .await
             .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
-        let settings = context.get_settings();
-        let query_result = match settings.get_enable_new_processor_framework()? == 0 {
-            true => Self::execute_with_stream(&interpreter).await,
-            false => Self::execute_with_pipeline(&interpreter, context).await
-        };
+        let data_stream = interpreter.execute(None).await?;
+        histogram!(
+            super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
+            instant.elapsed()
+        );
 
+        let collector = data_stream.collect::<Result<Vec<DataBlock>>>();
+        let query_result = collector.await;
         // Write finish query log.
         let _ = interpreter
             .finish()
             .await
             .map_err(|e| tracing::error!("interpreter.finish.error: {:?}", e));
         query_result.map(|data| (data, Self::extra_info(context, instant)))
-    }
-
-    async fn execute_with_stream(interpreter: &Arc<dyn Interpreter>) -> Result<Vec<DataBlock>> {
-        let data_stream = interpreter.execute(None).await?;
-        // histogram!(
-        //     super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
-        //     instant.elapsed()
-        // );
-
-        data_stream.collect::<Result<Vec<DataBlock>>>().await
-    }
-
-    async fn execute_with_pipeline(interpreter: &Arc<dyn Interpreter>, context: &QueryContext) -> Result<Vec<DataBlock>> {
-        let mut pipeline = interpreter.execute_with_new_pipeline()?;
-        pipeline.set_max_threads(context.get_settings().get_max_threads()? as usize);
-        let mut executor = PipelinePullingExecutor::try_create(pipeline)?;
-
-        executor.start()?;
-        let mut data_blocks = vec![];
-        while let Some(data_block) = executor.pull_data() {
-            data_blocks.push(data_block);
-        }
-
-        executor.finish()?;
-        Ok(data_blocks)
     }
 
     fn extra_info(context: &Arc<QueryContext>, instant: Instant) -> String {

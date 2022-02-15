@@ -116,7 +116,6 @@ impl Sink for PullingSink {
     const NAME: &'static str = "PullingExecutorSink";
 
     fn on_finish(&mut self) -> Result<()> {
-        // println!("PullingSink on finish");
         if let PullingSink::Running(v) = self {
             *self = PullingSink::Finished;
         }
@@ -125,7 +124,6 @@ impl Sink for PullingSink {
     }
 
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        // println!("PullingSink consume");
         match self {
             PullingSink::Finished => Ok(()),
             PullingSink::Running(tx) => match tx.send(data_block) {

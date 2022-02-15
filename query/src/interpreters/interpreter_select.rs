@@ -13,9 +13,13 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use futures::Stream;
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::pin::Pin;
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::task::{Context, Poll};
+use common_datablocks::DataBlock;
 
 use common_datavalues2::DataSchemaRef;
-use common_exception::Result;
+use common_exception::{ErrorCode, Result};
 use common_planners::{PlanNode, PlanVisitor};
 use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
@@ -26,6 +30,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::new::{NewPipeline, QueryPipelineBuilder};
+use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::sessions::QueryContext;
 
 pub struct SelectInterpreter {
@@ -62,12 +67,48 @@ impl Interpreter for SelectInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         // TODO: maybe panic?
-        let optimized_plan = self.rewrite_plan()?;
-        plan_schedulers::schedule_query(&self.ctx, &optimized_plan).await
-    }
+        let settings = self.ctx.get_settings();
 
-    #[tracing::instrument(level = "debug", name = "select_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    fn execute_with_new_pipeline(&self) -> Result<NewPipeline> {
-        QueryPipelineBuilder::create(self.ctx.clone()).finalize(&self.select)
+        if settings.get_enable_new_processor_framework()? != 0 {
+            if !self.ctx.get_cluster().is_empty() {
+                return Err(ErrorCode::UnImplement("NewProcessor framework unsupported cluster query."));
+            }
+
+            let builder = QueryPipelineBuilder::create(self.ctx.clone());
+            let mut new_pipeline = builder.finalize(&self.select)?;
+            new_pipeline.set_max_threads(settings.get_max_threads()? as usize);
+            let mut executor = PipelinePullingExecutor::try_create(new_pipeline)?;
+
+            Ok(Box::pin(NewProcessorStreamWrap::create(executor)?))
+        } else {
+            let optimized_plan = self.rewrite_plan()?;
+            plan_schedulers::schedule_query(&self.ctx, &optimized_plan).await
+        }
+    }
+}
+
+struct NewProcessorStreamWrap {
+    executor: PipelinePullingExecutor,
+}
+
+impl NewProcessorStreamWrap {
+    pub fn create(mut executor: PipelinePullingExecutor) -> Result<Self> {
+        executor.start()?;
+        Ok(Self { executor })
+    }
+}
+
+impl Stream for NewProcessorStreamWrap {
+    type Item = Result<DataBlock>;
+
+    fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let self_ = Pin::get_mut(self);
+        match self_.executor.pull_data() {
+            Some(data) => Poll::Ready(Some(Ok(data))),
+            None => match self_.executor.finish() {
+                Ok(_) => Poll::Ready(None),
+                Err(cause) => Poll::Ready(Some(Err(cause))),
+            },
+        }
     }
 }

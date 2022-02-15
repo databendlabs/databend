@@ -66,10 +66,6 @@ impl Interpreter for InterceptorInterpreter {
         Ok(Box::pin(metric_stream))
     }
 
-    fn execute_with_new_pipeline(&self) -> Result<NewPipeline> {
-        self.inner.execute_with_new_pipeline()
-    }
-
     async fn start(&self) -> Result<()> {
         self.query_log.log_start().await
     }
