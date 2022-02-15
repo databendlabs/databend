@@ -151,7 +151,7 @@ where
     F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone + 'static,
 {
     fn name(&self) -> &str {
-        "IntervalFunction"
+        self.display_name.as_str()
     }
 
     fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
