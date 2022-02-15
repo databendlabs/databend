@@ -92,7 +92,9 @@ pull_request_rules:
           - pr-build
   - name: label on Documentation
     conditions:
-      - body~=- Documentation|Website
+      - or:
+          - body~=- Documentation
+          - body~=- Website
     actions:
       label:
         add:
