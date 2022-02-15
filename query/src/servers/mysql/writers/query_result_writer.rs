@@ -148,8 +148,12 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     let tz = data_type.tz();
                                     let tz = tz.cloned().unwrap_or_else(|| "UTC".to_string());
                                     let tz: Tz = tz.parse().unwrap();
-                                    let fmt =
-                                        format!("%Y-%m-%d %H:%M:%S%.{}f", data_type.precision());
+                                    let precision = data_type.precision();
+                                    let fmt = if precision == 0 {
+                                        "%Y-%m-%d %H:%M:%S".to_string()
+                                    } else {
+                                        format!("%Y-%m-%d %H:%M:%S%.{}f", precision)
+                                    };
 
                                     row_writer.write_col(
                                         v.to_date_time64(data_type.precision(), &tz)

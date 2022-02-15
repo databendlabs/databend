@@ -97,7 +97,7 @@ impl DataType for IntervalType {
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
         let value = data.as_i64()?;
 
-        let column = Series::from_data(&[value as u32]);
+        let column = Series::from_data(&[value]);
         Ok(Arc::new(ConstColumn::new(column, size)))
     }
 
