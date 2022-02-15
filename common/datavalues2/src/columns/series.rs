@@ -35,7 +35,7 @@ impl Series {
     /// Type promote to the nearest higher type.
     /// UInt8 -> UInt16 -> UInt32 -> UInt64 -> bitmap<128>
     /// Int8 -> Int16 -> Int32 -> Int64 -> bitmap<128>
-    pub(crate) fn type_promotion(column: &ColumnRef, datatype: TypeID) -> Option<TypeID> {
+    pub(crate) fn _type_promotion(column: &ColumnRef, _datatype: TypeID) -> Option<TypeID> {
         let _datatype_id = column.data_type().data_type_id();
         match _datatype_id {
             TypeID::UInt8 => Some(TypeID::UInt16),
