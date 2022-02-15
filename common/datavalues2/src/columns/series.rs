@@ -38,14 +38,14 @@ impl Series {
     pub(crate) fn type_promotion(column: &ColumnRef, datatype: TypeID) -> Option<TypeID> {
         let _datatype_id = column.data_type().data_type_id();
         match _datatype_id {
-            UInt8 => Some(TypeID::UInt16),
-            UInt16 => Some(TypeID::UInt32),
-            UInt32 => Some(TypeID::UInt64),
-            Int8 => Some(TypeID::Int16),
-            Int16 => Some(TypeID::Int32),
-            Int32 => Some(TypeID::Int64),
-            Float32 => Some(TypeID::Float64),
-            // Int64,UInt64,Float64
+            TypeID::UInt8 => Some(TypeID::UInt16),
+            TypeID::UInt16 => Some(TypeID::UInt32),
+            TypeID::UInt32 => Some(TypeID::UInt64),
+            TypeID::Int8 => Some(TypeID::Int16),
+            TypeID::Int16 => Some(TypeID::Int32),
+            TypeID::Int32 => Some(TypeID::Int64),
+            TypeID::Float32 => Some(TypeID::Float64),
+            // Int64,UInt64,Float64, these kind of types will be converted to bitvec
             _ => None,
         }
     }
