@@ -126,7 +126,7 @@ macro_rules! define_datetime64_add_year_months {
             .get_meta_value("precision".to_string())
             .map_or(0, |v| v.parse::<u32>().unwrap());
         let base = 10_i64.pow(9 - precision);
-        let nano =  $l * base;
+        let nano = $l * base;
         let naive =
             NaiveDateTime::from_timestamp_opt(nano / 1_000_000_000, (nano % 1_000_000_000) as u32);
         if naive.is_none() {
