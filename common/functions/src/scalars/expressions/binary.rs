@@ -19,12 +19,12 @@ use common_exception::Result;
 
 use super::EvalContext;
 
-pub trait ScalarBinaryFunction2<L: Scalar, R: Scalar, O: Scalar> {
+pub trait ScalarBinaryFunction<L: Scalar, R: Scalar, O: Scalar> {
     fn eval(&self, l: L::RefType<'_>, r: R::RefType<'_>, ctx: &mut EvalContext) -> O;
 }
 
 /// Blanket implementation for all binary expression functions
-impl<L: Scalar, R: Scalar, O: Scalar, F> ScalarBinaryFunction2<L, R, O> for F
+impl<L: Scalar, R: Scalar, O: Scalar, F> ScalarBinaryFunction<L, R, O> for F
 where F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O
 {
     fn eval(&self, i1: L::RefType<'_>, i2: R::RefType<'_>, ctx: &mut EvalContext) -> O {
@@ -34,13 +34,13 @@ where F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O
 
 /// A common struct to caculate binary expression scalar op.
 #[derive(Clone)]
-pub struct ScalarBinaryExpression2<L: Scalar, R: Scalar, O: Scalar, F> {
+pub struct ScalarBinaryExpression<L: Scalar, R: Scalar, O: Scalar, F> {
     func: F,
     _phantom: PhantomData<(L, R, O)>,
 }
 
-impl<L: Scalar, R: Scalar, O: Scalar, F> ScalarBinaryExpression2<L, R, O, F>
-where F: ScalarBinaryFunction2<L, R, O>
+impl<L: Scalar, R: Scalar, O: Scalar, F> ScalarBinaryExpression<L, R, O, F>
+where F: ScalarBinaryFunction<L, R, O>
 {
     /// Create a binary expression from generic columns  and a lambda function.
     pub fn new(func: F) -> Self {
@@ -112,99 +112,21 @@ where F: ScalarBinaryFunction2<L, R, O>
     }
 }
 
-pub trait ScalarBinaryFunction<L: Scalar, R: Scalar, O: Scalar> {
-    fn eval(&self, l: L::RefType<'_>, r: R::RefType<'_>) -> O;
-}
-
-/// Blanket implementation for all binary expression functions
-impl<L: Scalar, R: Scalar, O: Scalar, F> ScalarBinaryFunction<L, R, O> for F
-where F: Fn(L::RefType<'_>, R::RefType<'_>) -> O
-{
-    fn eval(&self, i1: L::RefType<'_>, i2: R::RefType<'_>) -> O {
-        self(i1, i2)
-    }
-}
-
-/// A common struct to caculate binary expression scalar op.
-#[derive(Clone)]
-pub struct ScalarBinaryExpression<L: Scalar, R: Scalar, O: Scalar, F> {
-    func: F,
-    _phantom: PhantomData<(L, R, O)>,
-}
-
-impl<L: Scalar, R: Scalar, O: Scalar, F> ScalarBinaryExpression<L, R, O, F>
-where F: ScalarBinaryFunction<L, R, O>
-{
-    /// Create a binary expression from generic columns  and a lambda function.
-    pub fn new(func: F) -> Self {
-        Self {
-            func,
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Evaluate the expression with the given array.
-    pub fn eval(&self, l: &ColumnRef, r: &ColumnRef) -> Result<<O as Scalar>::ColumnType> {
-        debug_assert!(
-            l.len() == r.len(),
-            "Size of columns must match to apply binary expression"
-        );
-
-        match (l.is_const(), r.is_const()) {
-            (false, true) => {
-                let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(l) };
-                let right = R::try_create_viewer(r)?;
-
-                let b = right.value_at(0);
-                let it = left.scalar_iter().map(|a| self.func.eval(a, b));
-                Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
-            }
-
-            (false, false) => {
-                let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(l) };
-                let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
-
-                let it = left
-                    .scalar_iter()
-                    .zip(right.scalar_iter())
-                    .map(|(a, b)| self.func.eval(a, b));
-                Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
-            }
-
-            (true, false) => {
-                let left = L::try_create_viewer(l)?;
-                let a = left.value_at(0);
-
-                let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
-                let it = right.scalar_iter().map(|b| self.func.eval(a, b));
-                Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
-            }
-
-            // True True ?
-            (true, true) => {
-                let left = L::try_create_viewer(l)?;
-                let right = R::try_create_viewer(r)?;
-
-                let it = left
-                    .iter()
-                    .zip(right.iter())
-                    .map(|(a, b)| self.func.eval(a, b));
-                Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
-            }
-        }
-    }
-}
-
 pub trait ScalarBinaryRefFunction<'a, L: Scalar, R: Scalar, O: Scalar> {
-    fn eval(&self, l: L::RefType<'a>, r: R::RefType<'a>) -> O::RefType<'a>;
+    fn eval(&self, l: L::RefType<'a>, r: R::RefType<'a>, ctx: &mut EvalContext) -> O::RefType<'a>;
 }
 
 /// Blanket implementation for all binary expression functions
 impl<'a, L: Scalar, R: Scalar, O: Scalar, F> ScalarBinaryRefFunction<'a, L, R, O> for F
-where F: Fn(L::RefType<'a>, R::RefType<'a>) -> O::RefType<'a>
+where F: Fn(L::RefType<'a>, R::RefType<'a>, &mut EvalContext) -> O::RefType<'a>
 {
-    fn eval(&self, i1: L::RefType<'a>, i2: R::RefType<'a>) -> O::RefType<'a> {
-        self(i1, i2)
+    fn eval(
+        &self,
+        i1: L::RefType<'a>,
+        i2: R::RefType<'a>,
+        ctx: &mut EvalContext,
+    ) -> O::RefType<'a> {
+        self(i1, i2, ctx)
     }
 }
 
@@ -224,20 +146,21 @@ where F: ScalarBinaryRefFunction<'a, L, R, O>
         &self,
         l: &'a ColumnRef,
         r: &'a ColumnRef,
+        ctx: &mut EvalContext,
     ) -> Result<<O as Scalar>::ColumnType> {
         debug_assert!(
             l.len() == r.len(),
             "Size of columns must match to apply binary expression"
         );
 
-        match (l.is_const(), r.is_const()) {
+        let result = match (l.is_const(), r.is_const()) {
             (false, true) => {
                 let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(l) };
                 let right = R::try_create_viewer(r)?;
 
                 let b = right.value_at(0);
-                let it = left.scalar_iter().map(|a| self.func.eval(a, b));
-                Ok(<O as Scalar>::ColumnType::from_iterator(it))
+                let it = left.scalar_iter().map(|a| self.func.eval(a, b, ctx));
+                <O as Scalar>::ColumnType::from_iterator(it)
             }
 
             (false, false) => {
@@ -247,8 +170,8 @@ where F: ScalarBinaryRefFunction<'a, L, R, O>
                 let it = left
                     .scalar_iter()
                     .zip(right.scalar_iter())
-                    .map(|(a, b)| self.func.eval(a, b));
-                Ok(<O as Scalar>::ColumnType::from_iterator(it))
+                    .map(|(a, b)| self.func.eval(a, b, ctx));
+                <O as Scalar>::ColumnType::from_iterator(it)
             }
 
             (true, false) => {
@@ -256,8 +179,8 @@ where F: ScalarBinaryRefFunction<'a, L, R, O>
                 let a = left.value_at(0);
 
                 let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
-                let it = right.scalar_iter().map(|b| self.func.eval(a, b));
-                Ok(<O as Scalar>::ColumnType::from_iterator(it))
+                let it = right.scalar_iter().map(|b| self.func.eval(a, b, ctx));
+                <O as Scalar>::ColumnType::from_iterator(it)
             }
 
             // True True ?
@@ -268,9 +191,14 @@ where F: ScalarBinaryRefFunction<'a, L, R, O>
                 let it = left
                     .iter()
                     .zip(right.iter())
-                    .map(|(a, b)| self.func.eval(a, b));
-                Ok(<O as Scalar>::ColumnType::from_iterator(it))
+                    .map(|(a, b)| self.func.eval(a, b, ctx));
+                <O as Scalar>::ColumnType::from_iterator(it)
             }
+        };
+
+        if let Some(error) = ctx.error.take() {
+            return Err(error);
         }
+        Ok(result)
     }
 }

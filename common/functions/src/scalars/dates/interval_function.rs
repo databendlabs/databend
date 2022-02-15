@@ -36,8 +36,8 @@ use crate::scalars::ArithmeticCreator;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::EvalContext;
 use crate::scalars::Function2;
-use crate::scalars::ScalarBinaryExpression2;
-use crate::scalars::ScalarBinaryFunction2;
+use crate::scalars::ScalarBinaryExpression;
+use crate::scalars::ScalarBinaryFunction;
 
 pub struct IntervalFunctionCreator<T> {
     t: PhantomData<T>,
@@ -113,7 +113,7 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
 pub struct IntervalFunction<L: DateType, R: PrimitiveType, O: DateType, F> {
     display_name: String,
     result_type: DataTypePtr,
-    binary: ScalarBinaryExpression2<L, R, O, F>,
+    binary: ScalarBinaryExpression<L, R, O, F>,
     factor: i64,
     metadata: Option<BTreeMap<String, String>>,
 }
@@ -123,7 +123,7 @@ where
     L: DateType + Send + Sync + Clone,
     R: PrimitiveType + Send + Sync + Clone,
     O: DateType + Send + Sync + Clone,
-    F: ScalarBinaryFunction2<L, R, O> + Send + Sync + Clone + 'static,
+    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone + 'static,
 {
     pub fn try_create_func(
         display_name: &str,
@@ -132,7 +132,7 @@ where
         factor: i64,
         metadata: Option<BTreeMap<String, String>>,
     ) -> Result<Box<dyn Function2>> {
-        let binary = ScalarBinaryExpression2::<L, R, O, _>::new(func);
+        let binary = ScalarBinaryExpression::<L, R, O, _>::new(func);
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
             result_type,
@@ -148,7 +148,7 @@ where
     L: DateType + Send + Sync + Clone,
     R: PrimitiveType + Send + Sync + Clone,
     O: DateType + Send + Sync + Clone,
-    F: ScalarBinaryFunction2<L, R, O> + Send + Sync + Clone + 'static,
+    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone + 'static,
 {
     fn name(&self) -> &str {
         "IntervalFunction"
@@ -173,7 +173,7 @@ where
     L: DateType + Send + Sync + Clone,
     R: PrimitiveType + Send + Sync + Clone,
     O: DateType + Send + Sync + Clone,
-    F: ScalarBinaryFunction2<L, R, O> + Send + Sync + Clone + 'static,
+    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone + 'static,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}()", self.display_name)

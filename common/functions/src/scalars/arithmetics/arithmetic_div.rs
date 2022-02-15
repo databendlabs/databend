@@ -22,10 +22,11 @@ use super::arithmetic_mul::arithmetic_mul_div_monotonicity;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
+use crate::scalars::EvalContext;
 use crate::scalars::Function2;
 use crate::scalars::Monotonicity2;
 
-fn div_scalar<L, R>(l: L::RefType<'_>, r: R::RefType<'_>) -> f64
+fn div_scalar<L, R>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> f64
 where
     L: PrimitiveType + AsPrimitive<f64>,
     R: PrimitiveType + AsPrimitive<f64>,

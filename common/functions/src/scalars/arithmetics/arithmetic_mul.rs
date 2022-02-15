@@ -24,10 +24,11 @@ use num_traits::WrappingMul;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
+use crate::scalars::EvalContext;
 use crate::scalars::Function2;
 use crate::scalars::Monotonicity2;
 
-fn mul_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>) -> O
+fn mul_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
 where
     L: PrimitiveType + AsPrimitive<O>,
     R: PrimitiveType + AsPrimitive<O>,
@@ -36,7 +37,7 @@ where
     l.to_owned_scalar().as_() * r.to_owned_scalar().as_()
 }
 
-fn wrapping_mul_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>) -> O
+fn wrapping_mul_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
 where
     L: PrimitiveType + AsPrimitive<O>,
     R: PrimitiveType + AsPrimitive<O>,

@@ -23,6 +23,7 @@ use crate::scalars::ArithmeticDivFunction;
 use crate::scalars::ArithmeticMinusFunction;
 use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticPlusFunction;
+use crate::scalars::EvalContext;
 use crate::scalars::Function2;
 use crate::scalars::Monotonicity2;
 use crate::scalars::ScalarBinaryExpression;
@@ -72,7 +73,11 @@ where
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        let col = self.binary.eval(columns[0].column(), columns[1].column())?;
+        let col = self.binary.eval(
+            columns[0].column(),
+            columns[1].column(),
+            &mut EvalContext::default(),
+        )?;
         Ok(Arc::new(col))
     }
 

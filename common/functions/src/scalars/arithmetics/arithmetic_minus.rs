@@ -25,11 +25,12 @@ use num_traits::WrappingSub;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
+use crate::scalars::EvalContext;
 use crate::scalars::Function2;
 use crate::scalars::Function2Factory;
 use crate::scalars::Monotonicity2;
 
-fn sub_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>) -> O
+fn sub_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
 where
     L: PrimitiveType + AsPrimitive<O>,
     R: PrimitiveType + AsPrimitive<O>,
@@ -38,7 +39,7 @@ where
     l.to_owned_scalar().as_() - r.to_owned_scalar().as_()
 }
 
-fn wrapping_sub_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>) -> O
+fn wrapping_sub_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
 where
     L: PrimitiveType + AsPrimitive<O>,
     R: PrimitiveType + AsPrimitive<O>,
