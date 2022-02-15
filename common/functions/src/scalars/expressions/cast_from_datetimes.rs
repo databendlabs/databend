@@ -55,8 +55,8 @@ pub fn cast_from_date16(
         }
 
         TypeID::DateTime64 => {
-            let it = c.iter().map(|v| *v as u64 * 24 * 3600 * 1_000_000_000);
-            let result = Arc::new(UInt64Column::from_iterator(it));
+            let it = c.iter().map(|v| *v as i64 * 24 * 3600 * 1_000_000_000);
+            let result = Arc::new(Int64Column::from_iterator(it));
             Ok((result, None))
         }
 
@@ -91,8 +91,8 @@ pub fn cast_from_date32(
         }
 
         TypeID::DateTime64 => {
-            let it = c.iter().map(|v| *v as u64 * 24 * 3600 * 1_000_000_000);
-            let result = Arc::new(UInt64Column::from_iterator(it));
+            let it = c.iter().map(|v| *v as i64 * 24 * 3600 * 1_000_000_000);
+            let result = Arc::new(Int64Column::from_iterator(it));
             Ok((result, None))
         }
 
@@ -133,8 +133,8 @@ pub fn cast_from_datetime32(
         }
 
         TypeID::DateTime64 => {
-            let it = c.iter().map(|v| *v as u64 * 1_000_000_000);
-            let result = Arc::new(UInt64Column::from_iterator(it));
+            let it = c.iter().map(|v| *v as i64 * 1_000_000_000);
+            let result = Arc::new(Int64Column::from_iterator(it));
             Ok((result, None))
         }
 
@@ -148,7 +148,7 @@ pub fn cast_from_datetime64(
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
     let c = Series::remove_nullable(column);
-    let c: &UInt64Column = Series::check_get(&c)?;
+    let c: &Int64Column = Series::check_get(&c)?;
     let size = c.len();
 
     let date_time64 = data_type.as_any().downcast_ref::<DateTime64Type>().unwrap();

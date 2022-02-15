@@ -2,7 +2,7 @@ SELECT today() >= 18869;
 SELECT now() >= 1630295616;
 select  toDateTime(1630320462), toUInt32(toDateTime(1630320462))  = 1630320462;
 select  toDate(18869), toUInt32(toDate(18869))  = 18869;
-select  toDateTime64(1640019661000), toUInt64(toDateTime64(1640019661000))  = 1640019661000;
+select  toDateTime64(1640019661000), toInt64(toDateTime64(1640019661000))  = 1640019661000;
 
 select toTypeName(today() + 3) = 'Date16';
 select toTypeName(today() - 3) = 'Date16';

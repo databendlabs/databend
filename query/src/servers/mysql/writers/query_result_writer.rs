@@ -142,7 +142,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     let tz: Tz = tz.parse().unwrap();
                                     row_writer.write_col(v.to_date_time(&tz).naive_local())?
                                 }
-                                (TypeID::DateTime64, DataValue::UInt64(v)) => {
+                                (TypeID::DateTime64, DataValue::Int64(v)) => {
                                     let data_type: &DateTime64Type =
                                         data_type.as_any().downcast_ref().unwrap();
                                     let tz = data_type.tz();

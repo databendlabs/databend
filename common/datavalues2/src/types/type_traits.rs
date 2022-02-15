@@ -18,7 +18,12 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::DFTryFrom;
+use crate::DataTypePtr;
 use crate::DataValue;
+use crate::Date16Type;
+use crate::Date32Type;
+use crate::DateTime32Type;
+use crate::DateTime64Type;
 use crate::Scalar;
 
 pub trait PrimitiveType:
@@ -80,3 +85,37 @@ impl_integer!(i64, i64);
 pub trait FloatType: PrimitiveType {}
 impl FloatType for f32 {}
 impl FloatType for f64 {}
+
+pub trait DateType: PrimitiveType {}
+impl DateType for u16 {}
+impl DateType for i32 {}
+impl DateType for u32 {}
+impl DateType for i64 {}
+
+pub trait ToDateType {
+    fn to_date_type() -> DataTypePtr;
+}
+
+impl ToDateType for u16 {
+    fn to_date_type() -> DataTypePtr {
+        Date16Type::arc()
+    }
+}
+
+impl ToDateType for i32 {
+    fn to_date_type() -> DataTypePtr {
+        Date32Type::arc()
+    }
+}
+
+impl ToDateType for u32 {
+    fn to_date_type() -> DataTypePtr {
+        DateTime32Type::arc(None)
+    }
+}
+
+impl ToDateType for i64 {
+    fn to_date_type() -> DataTypePtr {
+        DateTime64Type::arc(0, None)
+    }
+}

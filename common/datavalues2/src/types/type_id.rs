@@ -58,7 +58,7 @@ pub enum TypeID {
     DateTime32,
 
     /// A 64-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
-    /// in nanoseconds, it's physical type is UInt64
+    /// in nanoseconds, it's physical type is Int64
     DateTime64,
 
     /// Interval represents the time interval, e.g. the elapsed time between two date or datetime.
@@ -194,12 +194,12 @@ impl TypeID {
             Int16 => PhysicalTypeID::Int16,
 
             Int32 | Date32 => PhysicalTypeID::Int32,
-            Int64 | Interval => PhysicalTypeID::Int64,
+            Int64 | Interval | DateTime64 => PhysicalTypeID::Int64,
 
             UInt8 => PhysicalTypeID::UInt8,
             Date16 | UInt16 => PhysicalTypeID::UInt16,
             DateTime32 | UInt32 => PhysicalTypeID::UInt32,
-            DateTime64 | UInt64 => PhysicalTypeID::UInt64,
+            UInt64 => PhysicalTypeID::UInt64,
             Float32 => PhysicalTypeID::Float32,
             Float64 => PhysicalTypeID::Float64,
 

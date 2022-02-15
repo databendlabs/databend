@@ -157,7 +157,7 @@ impl DataField {
         let custom_metadata = match self.data_type() {
             DataType::DateTime32(tz) => tz.clone(),
             DataType::DateTime64(precision, tz) => {
-                let tz = tz.clone().unwrap_or("UTC".to_string());
+                let tz = tz.clone().unwrap_or_else(|| "UTC".to_string());
                 Some(format!("{}{}", precision, tz))
             }
             _ => None,

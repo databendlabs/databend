@@ -15,35 +15,9 @@
 use std::marker::PhantomData;
 
 use common_datavalues2::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
-#[derive(Debug, Clone)]
-pub struct EvalContext {
-    pub factor: i64,
-    pub error: Option<ErrorCode>,
-}
-
-
-impl EvalContext {
-    pub fn default() -> EvalContext {
-        EvalContext {
-            factor: 1,
-            error: None,
-        }
-    }
-
-    pub fn error(mut self, error: ErrorCode) -> EvalContext {
-        self.error = Some(error);
-        self
-    }
-
-    pub fn factor(mut self, factor: i64) -> EvalContext {
-        self.factor = factor;
-        self
-    }
-}
-
+use super::EvalContext;
 
 pub trait ScalarBinaryFunction2<L: Scalar, R: Scalar, O: Scalar> {
     fn eval(&self, l: L::RefType<'_>, r: R::RefType<'_>, ctx: &mut EvalContext) -> O;
@@ -57,7 +31,6 @@ where F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O
         self(i1, i2, ctx)
     }
 }
-
 
 /// A common struct to caculate binary expression scalar op.
 #[derive(Clone)]
@@ -78,7 +51,12 @@ where F: ScalarBinaryFunction2<L, R, O>
     }
 
     /// Evaluate the expression with the given array.
-    pub fn eval(&self, l: &ColumnRef, r: &ColumnRef, ctx: &mut EvalContext) -> Result<<O as Scalar>::ColumnType> {
+    pub fn eval(
+        &self,
+        l: &ColumnRef,
+        r: &ColumnRef,
+        ctx: &mut EvalContext,
+    ) -> Result<<O as Scalar>::ColumnType> {
         debug_assert!(
             l.len() == r.len(),
             "Size of columns must match to apply binary expression"
@@ -87,9 +65,9 @@ where F: ScalarBinaryFunction2<L, R, O>
         let result = match (l.is_const(), r.is_const()) {
             (false, true) => {
                 let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(l) };
-                let right = ColumnViewer::<R>::create(r)?;
+                let right = R::try_create_viewer(r)?;
 
-                let b = right.value(0);
+                let b = right.value_at(0);
                 let it = left.scalar_iter().map(|a| self.func.eval(a, b, ctx));
                 <O as Scalar>::ColumnType::from_owned_iterator(it)
             }
@@ -106,8 +84,8 @@ where F: ScalarBinaryFunction2<L, R, O>
             }
 
             (true, false) => {
-                let left = ColumnViewer::<L>::create(l)?;
-                let a = left.value(0);
+                let left = L::try_create_viewer(l)?;
+                let a = left.value_at(0);
 
                 let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
                 let it = right.scalar_iter().map(|b| self.func.eval(a, b, ctx));
@@ -116,10 +94,13 @@ where F: ScalarBinaryFunction2<L, R, O>
 
             // True True ?
             (true, true) => {
-                let left = ColumnViewerIter::<L>::try_create(l)?;
-                let right = ColumnViewerIter::<R>::try_create(r)?;
+                let left = L::try_create_viewer(l)?;
+                let right = R::try_create_viewer(r)?;
 
-                let it = left.zip(right).map(|(a, b)| self.func.eval(a, b, ctx));
+                let it = left
+                    .iter()
+                    .zip(right.iter())
+                    .map(|(a, b)| self.func.eval(a, b, ctx));
                 <O as Scalar>::ColumnType::from_owned_iterator(it)
             }
         };
