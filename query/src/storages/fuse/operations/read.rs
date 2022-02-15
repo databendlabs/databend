@@ -58,7 +58,7 @@ impl FuseTable {
                 },
             )
             .flatten();
-        let da = ctx.get_storage_operator().await?;
+        let operator = ctx.get_storage_operator().await?;
         let table_schema = self.table_info.schema();
 
         let part_stream = futures::stream::iter(iter);
@@ -66,7 +66,7 @@ impl FuseTable {
         let read_buffer_size = ctx.get_settings().get_storage_read_buffer_size()?;
         let stream = part_stream
             .map(move |part| {
-                let da = da.clone();
+                let da = operator.clone();
                 let table_schema = table_schema.clone();
                 let projection = projection.clone();
                 let reader = MetaReaders::block_meta_reader(ctx.clone());
