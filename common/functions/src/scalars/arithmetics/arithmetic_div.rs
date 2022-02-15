@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues2::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::traits::AsPrimitive;
@@ -45,25 +45,14 @@ impl ArithmeticDivFunction {
         let left_type = remove_nullable(args[0]).data_type_id();
         let right_type = remove_nullable(args[1]).data_type_id();
 
-        let error_fn = || -> Result<Box<dyn Function2>> {
-            Err(ErrorCode::BadDataValueType(format!(
-                "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
-                left_type, op, right_type
-            )))
-        };
-
-        with_match_primitive_type_id!(left_type, |$T| {
-            with_match_primitive_type_id!(right_type, |$D| {
+        with_match_primitive_types_error!(left_type, |$T| {
+            with_match_primitive_types_error!(right_type, |$D| {
                 BinaryArithmeticFunction::<$T, $D, f64, _>::try_create_func(
                     op,
                     Float64Type::arc(),
                     div_scalar::<$T, $D>
                 )
-            }, {
-                error_fn()
             })
-        }, {
-            error_fn()
         })
     }
 

@@ -94,7 +94,7 @@ where
             DataValueBinaryOperator::Minus => ArithmeticMinusFunction::get_monotonicity(args),
             DataValueBinaryOperator::Mul => ArithmeticMulFunction::get_monotonicity(args),
             DataValueBinaryOperator::Div => ArithmeticDivFunction::get_monotonicity(args),
-            _ => unreachable!(),
+            _ => Ok(Monotonicity2::default()),
         }
     }
 }

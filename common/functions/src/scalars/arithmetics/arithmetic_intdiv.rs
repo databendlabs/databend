@@ -12,18 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
-use std::marker::PhantomData;
-
 use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues2::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num_traits::AsPrimitive;
+use num::Zero;
 
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
+use crate::scalars::EvalContext;
 use crate::scalars::Function2;
+use crate::scalars::BinaryArithmeticFunction;
+
+fn intdiv_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, ctx: &mut EvalContext) -> O
+where
+    f64: AsPrimitive<O>,
+    L: PrimitiveType + AsPrimitive<f64>,
+    R: PrimitiveType + AsPrimitive<f64>,
+    O: IntegerType + Zero,
+{
+    let l = l.to_owned_scalar().as_();
+    let r = r.to_owned_scalar().as_();
+    if std::intrinsics::unlikely(r == 0.0) {
+        ctx.set_error(ErrorCode::BadArguments("Division by zero"));
+        return O::zero();
+    }
+    (l / r).as_()
+}
 
 pub struct ArithmeticIntDivFunction;
 
@@ -35,21 +51,14 @@ impl ArithmeticIntDivFunction {
         let left_type = remove_nullable(args[0]).data_type_id();
         let right_type = remove_nullable(args[1]).data_type_id();
 
-        let error_fn = || -> Result<Box<dyn Function2>> {
-            Err(ErrorCode::BadDataValueType(format!(
-                "DataValue Error: Unsupported arithmetic ({:?}) div ({:?})",
-                left_type, right_type
-            )))
-        };
-
-        with_match_primitive_type_id!(left_type, |$T| {
-            with_match_primitive_type_id!(right_type, |$D| {
-                Ok(Box::new(IntDivFunctionImpl::<$T, $D, <($T, $D) as ResultTypeOfBinary>::IntDiv>::default()))
-            }, {
-                error_fn()
+        with_match_primitive_types_error!(left_type, |$T| {
+            with_match_primitive_types_error!(right_type, |$D| {
+                BinaryArithmeticFunction::<$T, $D, <($T, $D) as ResultTypeOfBinary>::IntDiv, _>::try_create_func(
+                    DataValueBinaryOperator::IntDiv,
+                    <($T, $D) as ResultTypeOfBinary>::IntDiv::to_data_type(),
+                    intdiv_scalar::<$T, $D, _>
+                )
             })
-        }, {
-            error_fn()
         })
     }
 
@@ -60,51 +69,5 @@ impl ArithmeticIntDivFunction {
                 .monotonicity()
                 .num_arguments(2),
         )
-    }
-}
-
-#[derive(Clone, Default)]
-pub struct IntDivFunctionImpl<L, R, O> {
-    l: PhantomData<L>,
-    r: PhantomData<R>,
-    o: PhantomData<O>,
-}
-
-impl<L, R, O> Function2 for IntDivFunctionImpl<L, R, O>
-where
-    f64: AsPrimitive<O>,
-    L: PrimitiveType + AsPrimitive<f64>,
-    R: PrimitiveType + AsPrimitive<f64>,
-    O: IntegerType + ToDataType,
-{
-    fn name(&self) -> &str {
-        "IntDivFunctionImpl"
-    }
-
-    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        Ok(O::to_data_type())
-    }
-
-    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        let left = L::try_create_viewer(columns[0].column())?;
-        let right = R::try_create_viewer(columns[1].column())?;
-
-        let mut col_builder = MutablePrimitiveColumn::<O>::with_capacity(left.size());
-        for (l, r) in left.iter().zip(right.iter()) {
-            let l = l.to_owned_scalar().as_();
-            let r = r.to_owned_scalar().as_();
-            if std::intrinsics::unlikely(r == 0.0) {
-                return Err(ErrorCode::BadArguments("Division by zero"));
-            }
-            let o = AsPrimitive::<O>::as_(l / r);
-            col_builder.append_value(o);
-        }
-        Ok(col_builder.to_column())
-    }
-}
-
-impl<L, R, O> fmt::Display for IntDivFunctionImpl<L, R, O> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "div")
     }
 }
