@@ -13,11 +13,11 @@
 // limitations under the License.
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
 use common_datavalues2::prelude::*;
 use common_datavalues2::remove_nullable;
 use common_datavalues2::type_coercion::aggregate_types;
 use common_datavalues2::with_match_scalar_type;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::cast_column_field;
@@ -43,79 +43,38 @@ impl IfFunction {
         Function2Description::creator(Box::new(Self::try_create)).features(features)
     }
 
-    // handle cond is const or nullable
-    fn eval_cond_const_or_nullable(
+    // handle cond is const or nullable or null column
+    fn eval_cond_const(
         &self,
+        cond_col: &ColumnRef,
+        columns: &ColumnsWithField,
+    ) -> Result<ColumnRef> {
+        debug_assert!(cond_col.is_const());
+        // whether nullable or not, we can use viewer to make it
+        let cond_viewer = bool::try_create_viewer(cond_col)?;
+        if cond_viewer.value_at(0) {
+            return Ok(columns[0].column().clone());
+        } else {
+            return Ok(columns[1].column().clone());
+        }
+    }
+
+    // lhs is const column and:
+    // 1. rhs: const
+    // 2. rhs: nullable
+    // 3. rhs: scalar column
+    fn eval_const(
+        &self,
+        cond_col: &BooleanColumn,
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let cond_col = &columns[0];
-        let lhs_col = &columns[1];
-        let rhs_col = &columns[2];
-
-        if cond_col.column().is_const() {
-            // whether nullable or not, we can use viewer to make it
-            let cond_col = cast_column_field(cond_col, &BooleanType::arc())?;
-            let cond_viewer = bool::try_create_viewer(&cond_col)?;
-            if cond_viewer.value_at(0) && cond_viewer.valid_at(0) {
-                return Ok(lhs_col.column().clone());
-            } else {
-                return Ok(rhs_col.column().clone());
-            }
-        }
-
-        if cond_col.column().is_nullable() {
-            if cond_col.column().is_const() {
-                let cond_col = cast_column_field(cond_col, &BooleanType::arc())?;
-                let cond_viewer = bool::try_create_viewer(&cond_col)?;
-                if cond_viewer.valid_at(0) && cond_viewer.valid_at(0) {
-                    return Ok(lhs_col.column().clone());
-                } else {
-                    return Ok(rhs_col.column().clone());
-                }
-            } else {
-                // normal nullable cond column, not const
-                // make nullable cond to non-nullable BooleanColumn and then call eval
-                let cond_col = cast_column_field(cond_col, &BooleanType::arc())?;
-                let cond_viewer = bool::try_create_viewer(&cond_col)?;
-                let mut boolean_builder: ColumnBuilder<bool> =
-                    ColumnBuilder::with_capacity(input_rows);
-                for idx in 0..input_rows {
-                    if cond_viewer.valid_at(idx) && cond_viewer.value_at(idx) {
-                        boolean_builder.append(true);
-                    } else {
-                        boolean_builder.append(false);
-                    }
-                }
-                let cond_col = boolean_builder.build(input_rows);
-
-                let cond_field = DataField::new("cond", BooleanType::arc());
-                let cond_col = ColumnWithField::new(cond_col, cond_field);
-
-                let columns = vec![cond_col, lhs_col.clone(), rhs_col.clone()];
-                return self.eval(&columns, input_rows);
-            }
-        }
-
-        Err(ErrorCode::UnexpectedError("logic bug"))
-    }
-
-    // (cond is common column(no const and no nullable))
-    // lhs and rhs column should be normal column (no nullable(const) or const(nullable))
-    // handle when lhs: const
-    // 1. rhs: const
-    // 2. rhs: nullable
-    fn eval_const(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
-        let cond_col = &columns[0];
-        assert!(columns[1].column().is_const() || columns[2].column().is_const());
-        let (lhs_col, rhs_col, reverse) = if columns[1].column().is_const() {
-            (&columns[1], &columns[2], false)
+        debug_assert!(columns[0].column().is_const() || columns[1].column().is_const());
+        let (lhs_col, rhs_col, reverse) = if columns[0].column().is_const() {
+            (&columns[0], &columns[1], false)
         } else {
-            (&columns[2], &columns[1], true)
+            (&columns[1], &columns[0], true)
         };
-
-        let cond_col = cast_column_field(cond_col, &BooleanType::arc())?;
-        let cond_col = cond_col.as_any().downcast_ref::<BooleanColumn>().unwrap();
 
         // cast to least super type
         let dts = vec![lhs_col.data_type().clone(), rhs_col.data_type().clone()];
@@ -125,7 +84,9 @@ impl IfFunction {
         let rhs = cast_column_field(rhs_col, &least_supertype)?;
 
         let type_id = remove_nullable(&lhs.data_type()).data_type_id();
+
         if rhs.is_nullable() {
+            // rhs is nullable column
             with_match_scalar_type!(type_id.to_physical_type(), |$T| {
                 let left_viewer = $T::try_create_viewer(&lhs)?;
                 let l_val = left_viewer.value_at(0);
@@ -158,7 +119,7 @@ impl IfFunction {
                 unimplemented!()
             });
         } else if rhs.is_const() {
-            // rhs is const
+            // rhs is const column
             with_match_scalar_type!(type_id.to_physical_type(), |$T| {
                 let left_viewer = $T::try_create_viewer(&lhs)?;
                 let l_val = left_viewer.value_at(0);
@@ -176,90 +137,48 @@ impl IfFunction {
                 unimplemented!()
             });
         } else {
-            // rhs is primitive type
-            macro_rules! build_with_primitive_type {
-                ($column:ident, $T:ident) => {
-                    let left_viewer = $T::try_create_viewer(&lhs)?;
-                    let l_val = left_viewer.value_at(0);
-                    let rhs = $T::try_create_viewer(&rhs)?;
+            // rhs is scalar column
+            with_match_scalar_type!(type_id.to_physical_type(), |$T| {
+                let left_viewer = $T::try_create_viewer(&lhs)?;
+                let l_val = left_viewer.value_at(0);
+                let rhs = Series::check_get_scalar::<$T>(&rhs)?;
 
-                    if reverse {
-                        let iter = cond_col.iter().zip(rhs.iter()).map(|(predicate, r_val)| {
-                            if predicate {
-                                r_val
-                            } else {
-                                l_val
-                            }
-                        });
-                        let col = <$T as Scalar>::ColumnType::from_iterator(iter);
-                        return Ok(col.arc());
-                    } else {
-                        let iter = cond_col.iter().zip(rhs.iter()).map(|(predicate, r_val)| {
-                            if predicate {
-                                l_val
-                            } else {
-                                r_val
-                            }
-                        });
-                        let col = <$T as Scalar>::ColumnType::from_iterator(iter);
-                        return Ok(col.arc());
-                    }
-                };
-            }
-
-            match type_id {
-                TypeID::Boolean => {
-                    build_with_primitive_type!(BooleanColumn, bool);
+                if reverse {
+                    let iter = cond_col.iter().zip(rhs.scalar_iter()).map(|(predicate, r_val)| {
+                        if predicate {
+                            r_val
+                        } else {
+                            l_val
+                        }
+                    });
+                    let col = <$T as Scalar>::ColumnType::from_iterator(iter);
+                    return Ok(col.arc());
+                } else {
+                    let iter = cond_col.iter().zip(rhs.scalar_iter()).map(|(predicate, r_val)| {
+                        if predicate {
+                            l_val
+                        } else {
+                            r_val
+                        }
+                    });
+                    let col = <$T as Scalar>::ColumnType::from_iterator(iter);
+                    return Ok(col.arc());
                 }
-                TypeID::String => {
-                    build_with_primitive_type!(StringColumn, Vu8);
-                }
-                TypeID::Int8 => {
-                    build_with_primitive_type!(Int8Column, i8);
-                }
-                TypeID::Int16 => {
-                    build_with_primitive_type!(Int16Column, i16);
-                }
-                TypeID::Int32 => {
-                    build_with_primitive_type!(Int32Column, i32);
-                }
-                TypeID::Int64 => {
-                    build_with_primitive_type!(Int64Column, i64);
-                }
-                TypeID::UInt8 => {
-                    build_with_primitive_type!(UInt8Column, u8);
-                }
-                TypeID::UInt16 => {
-                    build_with_primitive_type!(Int8Column, u16);
-                }
-                TypeID::UInt32 => {
-                    build_with_primitive_type!(UInt32Column, u32);
-                }
-                TypeID::UInt64 => {
-                    build_with_primitive_type!(UInt64Column, u64);
-                }
-                TypeID::Float32 => {
-                    build_with_primitive_type!(Float32Column, f32);
-                }
-                TypeID::Float64 => {
-                    build_with_primitive_type!(Float64Column, f64);
-                }
-                _ => {
-                    unimplemented!()
-                }
-            }
+            }, {
+                unimplemented!()
+            });
         }
     }
 
-    // (cond is common column(no const and no nullable))
     // handle when one of then is nullable and both are not const
-    fn eval_nullable(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
-        let cond_col = &columns[0];
-        let lhs_col = &columns[1];
-        let rhs_col = &columns[2];
-
-        let cond_col = cast_column_field(cond_col, &BooleanType::arc())?;
-        let cond_col = cond_col.as_any().downcast_ref::<BooleanColumn>().unwrap();
+    fn eval_nullable(
+        &self,
+        cond_col: &BooleanColumn,
+        columns: &ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<ColumnRef> {
+        let lhs_col = &columns[0];
+        let rhs_col = &columns[1];
 
         let dts = vec![lhs_col.data_type().clone(), rhs_col.data_type().clone()];
         let least_supertype = aggregate_types(dts.as_slice())?;
@@ -270,8 +189,8 @@ impl IfFunction {
         let type_id = remove_nullable(&least_supertype).data_type_id();
 
         with_match_scalar_type!(type_id.to_physical_type(), |$T| {
-            let lhs_viewer = $T:: try_create_viewer(&lhs)?;
-            let rhs_viewer = $T:: try_create_viewer(&rhs)?;
+            let lhs_viewer = $T::try_create_viewer(&lhs)?;
+            let rhs_viewer = $T::try_create_viewer(&rhs)?;
             let mut builder = NullableColumnBuilder::<$T>::with_capacity(input_rows);
 
             for ((predicate, l), (row, r)) in cond_col
@@ -292,15 +211,14 @@ impl IfFunction {
         });
     }
 
-    // (cond is common column(no const and no nullable))
     // handle when both are not nullable or const
-    fn eval_generic(&self, columns: &ColumnsWithField) -> Result<ColumnRef> {
-        let cond_col = &columns[0];
-        let lhs_col = &columns[1];
-        let rhs_col = &columns[2];
-
-        let cond_col = cast_column_field(cond_col, &BooleanType::arc())?;
-        let cond_col = cond_col.as_any().downcast_ref::<BooleanColumn>().unwrap();
+    fn eval_generic(
+        &self,
+        cond_col: &BooleanColumn,
+        columns: &ColumnsWithField,
+    ) -> Result<ColumnRef> {
+        let lhs_col = &columns[0];
+        let rhs_col = &columns[1];
 
         let dts = vec![lhs_col.data_type().clone(), rhs_col.data_type().clone()];
         let least_supertype = aggregate_types(dts.as_slice())?;
@@ -308,19 +226,18 @@ impl IfFunction {
         let lhs = cast_column_field(lhs_col, &least_supertype)?;
         let rhs = cast_column_field(rhs_col, &least_supertype)?;
 
-        assert!(!least_supertype.is_nullable());
+        debug_assert!(!least_supertype.is_nullable());
         let type_id = least_supertype.data_type_id();
 
         with_match_scalar_type!(type_id.to_physical_type(), |$T| {
-            let lhs = $T::try_create_viewer(&lhs)?;
-            let rhs = $T::try_create_viewer(&rhs)?;
+            let lhs = Series::check_get_scalar::<$T>(&lhs)?;
+            let rhs = Series::check_get_scalar::<$T>(&rhs)?;
 
-            let iter =
-                cond_col
-                    .iter()
-                    .zip(lhs.iter())
-                    .zip(rhs.iter())
-                    .map(|((predicate, l_val), r_val)| if predicate { l_val } else { r_val });
+            let iter = cond_col
+                .scalar_iter()
+                .zip(lhs.scalar_iter())
+                .zip(rhs.scalar_iter())
+                .map(|((predicate, l), r)| if predicate { l } else { r });
 
             let col = <$T as Scalar>::ColumnType::from_iterator(iter);
             return Ok(col.arc());
@@ -343,29 +260,28 @@ impl Function2 for IfFunction {
     }
 
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
-        let cond_col = &columns[0];
-        let lhs_col = &columns[1];
-        let rhs_col = &columns[2];
+        let cond_col = columns[0].column();
+        let cond_col = DataBlock::cast_to_nonull_boolean(cond_col)?;
 
-        // 1. fast path for cond nullable or const
-        if cond_col.column().is_const() || cond_col.column().is_nullable() {
-            return self.eval_cond_const_or_nullable(columns, input_rows);
+        // 1. fast path for cond nullable or const or null column
+        if cond_col.is_const() {
+            return self.eval_cond_const(&cond_col, &columns[1..]);
         }
 
-        // 2. (cond is not const or nullable)
-        // handle when lhs / rhs is const
-        if lhs_col.column().is_const() || rhs_col.column().is_const() {
-            return self.eval_const(columns, input_rows);
+        let cond_col = Series::check_get_scalar::<bool>(&cond_col)?;
+
+        // 2. handle when lhs / rhs is const
+        if columns[1].column().is_const() || columns[2].column().is_const() {
+            return self.eval_const(cond_col, &columns[1..], input_rows);
         }
 
-        // 3. (cond is not const or nullable)
-        // columns are not const
-        if lhs_col.column().is_nullable() || rhs_col.column().is_nullable() {
-            return self.eval_nullable(columns, input_rows);
+        // 3. handle nullable column
+        if columns[1].column().is_nullable() || columns[2].column().is_nullable() {
+            return self.eval_nullable(cond_col, &columns[1..], input_rows);
         }
 
         // 4. all normal type and are not nullable/const
-        self.eval_generic(columns)
+        self.eval_generic(cond_col, &columns[1..])
     }
 
     fn passthrough_null(&self) -> bool {
