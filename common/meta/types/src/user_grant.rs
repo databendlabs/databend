@@ -16,6 +16,7 @@ use std::fmt;
 
 use enumflags2::BitFlags;
 
+use crate::UserIdentity;
 use crate::UserPrivilegeSet;
 use crate::UserPrivilegeType;
 
@@ -145,16 +146,16 @@ impl fmt::Display for GrantEntry {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct UserGrantSet {
-    grants: Vec<GrantEntry>,
+    entries: Vec<GrantEntry>,
 }
 
 impl UserGrantSet {
     pub fn empty() -> Self {
-        Self { grants: vec![] }
+        Self { entries: vec![] }
     }
 
     pub fn entries(&self) -> &[GrantEntry] {
-        &self.grants
+        &self.entries
     }
 
     pub fn verify_privilege(
@@ -164,7 +165,7 @@ impl UserGrantSet {
         object: &GrantObject,
         privilege: UserPrivilegeType,
     ) -> bool {
-        self.grants
+        self.entries
             .iter()
             .any(|e| e.verify_privilege(user, host, object, privilege))
     }
@@ -177,20 +178,20 @@ impl UserGrantSet {
         privileges: UserPrivilegeSet,
     ) {
         let privileges: BitFlags<UserPrivilegeType> = privileges.into();
-        let mut new_grants: Vec<GrantEntry> = vec![];
+        let mut new_entries: Vec<GrantEntry> = vec![];
         let mut changed = false;
 
-        for grant in self.grants.iter() {
-            let mut grant = grant.clone();
-            if grant.matches_entry(user, host_pattern, object) {
-                grant.privileges |= privileges;
+        for entry in self.entries.iter() {
+            let mut entry = entry.clone();
+            if entry.matches_entry(user, host_pattern, object) {
+                entry.privileges |= privileges;
                 changed = true;
             }
-            new_grants.push(grant);
+            new_entries.push(entry);
         }
 
         if !changed {
-            new_grants.push(GrantEntry::new(
+            new_entries.push(GrantEntry::new(
                 user.into(),
                 host_pattern.into(),
                 object.clone(),
@@ -198,7 +199,7 @@ impl UserGrantSet {
             ))
         }
 
-        self.grants = new_grants;
+        self.entries = new_entries;
     }
 
     pub fn revoke_privileges(
@@ -209,8 +210,8 @@ impl UserGrantSet {
         privileges: UserPrivilegeSet,
     ) {
         let privileges: BitFlags<UserPrivilegeType> = privileges.into();
-        let grants = self
-            .grants
+        let new_entries = self
+            .entries
             .iter()
             .map(|e| {
                 if e.matches_entry(user, host_pattern, object) {
@@ -223,6 +224,6 @@ impl UserGrantSet {
             })
             .filter(|e| e.privileges != BitFlags::empty())
             .collect::<Vec<_>>();
-        self.grants = grants;
+        self.entries = new_entries;
     }
 }
