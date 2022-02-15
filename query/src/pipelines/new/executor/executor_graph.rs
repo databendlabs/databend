@@ -20,6 +20,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_infallible::RwLockUpgradableReadGuard;
+use common_tracing::tracing;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
@@ -114,10 +115,6 @@ impl ExecutingGraph {
                         let edge_index = graph.add_edge(source_index, target_index, ());
 
                         let input_trigger = resize_node.create_trigger(edge_index);
-                        println!(
-                            "create trigger {:?} -> {:?} : {:?}, {:?}",
-                            source_index, target_index, edge_index, input_trigger as usize
-                        );
                         inputs_port[index].set_trigger(input_trigger);
                         edge_stack[index]
                             .set_trigger(graph[source_index].create_trigger(edge_index));
@@ -218,7 +215,6 @@ impl ExecutingGraph {
             if need_schedule_nodes.is_empty() {
                 let edge = need_schedule_edges.pop_front().unwrap();
                 let target_index = DirectedEdge::get_target(&edge, &locker.graph);
-                // println!("need schedule edges: {:?}", target_index);
 
                 let node = &locker.graph[target_index];
                 let node_state = node.state.lock().unwrap();
@@ -333,7 +329,7 @@ pub struct RunningGraph(RwLock<ExecutingGraph>);
 impl RunningGraph {
     pub fn create(pipeline: NewPipeline) -> Result<RunningGraph> {
         let graph_state = ExecutingGraph::create(pipeline)?;
-        println!("Created graph: {:?}", graph_state);
+        tracing::debug!("Create running graph:{:?}", graph_state);
         Ok(RunningGraph(RwLock::new(graph_state)))
     }
 

@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::pin::Pin;
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::task::Context;
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::task::Poll;
 use common_datablocks::DataBlock;
 use common_datavalues2::DataSchemaRef;
 use common_exception::ErrorCode;
