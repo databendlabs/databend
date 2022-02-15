@@ -43,7 +43,7 @@ impl FuseTable {
                 segments: vec![],
             };
             let new_snapshot_loc = io::snapshot_location(&new_snapshot.snapshot_id);
-            let da = ctx.get_storage_accessor().await?;
+            let da = ctx.get_storage_operator().await?;
             let bytes = serde_json::to_vec(&new_snapshot)?;
             da.write(&new_snapshot_loc, bytes.len() as u64)
                 .run(Box::new(Cursor::new(bytes)))

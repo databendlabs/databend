@@ -287,10 +287,10 @@ impl QueryContext {
         self.shared.session.session_mgr.get_storage_cache_manager()
     }
 
-    // Get the storage data accessor from the session manager.
-    pub async fn get_storage_accessor(&self) -> Result<Operator> {
-        let accessor = self.shared.session.get_storage_accessor();
-        Ok(Operator::new(accessor).layer(self.shared.dal_ctx.clone()))
+    // Get the storage data accessor operator from the session manager.
+    pub async fn get_storage_operator(&self) -> Result<Operator> {
+        let operator = self.shared.session.get_storage_operator();
+        Ok(operator.layer(self.shared.dal_ctx.clone()))
     }
 
     pub fn get_dal_context(&self) -> &DalContext {

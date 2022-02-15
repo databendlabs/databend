@@ -58,7 +58,7 @@ impl FuseTable {
                 },
             )
             .flatten();
-        let da = ctx.get_storage_accessor().await?;
+        let da = ctx.get_storage_operator().await?;
         let table_schema = self.table_info.schema();
 
         let part_stream = futures::stream::iter(iter);

@@ -33,6 +33,7 @@ use opendal::credential::Credential;
 use opendal::services::fs;
 use opendal::services::s3;
 use opendal::Accessor;
+use opendal::Operator;
 use opendal::Scheme as DalSchema;
 
 use crate::catalogs::DatabaseCatalog;
@@ -57,14 +58,14 @@ pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
     pub(in crate::sessions) storage_cache_manager: Arc<CacheManager>,
-    storage_accessor: Arc<dyn Accessor>,
+    storage_operator: Operator,
 }
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
         let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
-        let storage_accessor = Self::init_storage_accessor(&conf).await?;
+        let storage_accessor = Self::init_storage_operator(&conf).await?;
 
         // Cluster discovery.
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
@@ -86,7 +87,7 @@ impl SessionManager {
             max_sessions,
             active_sessions,
             storage_cache_manager,
-            storage_accessor,
+            storage_operator: storage_accessor,
         }))
     }
 
@@ -115,8 +116,8 @@ impl SessionManager {
         self.catalog.clone()
     }
 
-    pub fn get_storage_accessor(self: &Arc<Self>) -> Arc<dyn Accessor> {
-        self.storage_accessor.clone()
+    pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
+        self.storage_operator.clone()
     }
 
     pub fn get_storage_cache_manager(&self) -> &CacheManager {
@@ -254,8 +255,8 @@ impl SessionManager {
         }
     }
 
-    // Init the storage data accessor by config.
-    async fn init_storage_accessor(conf: &Config) -> Result<Arc<dyn Accessor>> {
+    // Init the storage operator by config.
+    async fn init_storage_operator(conf: &Config) -> Result<Operator> {
         let storage_conf = &conf.storage;
         let schema_name = &storage_conf.storage_type;
         let schema = DalSchema::from_str(schema_name)
@@ -286,6 +287,6 @@ impl SessionManager {
                 .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?,
         };
 
-        Ok(accessor)
+        Ok(Operator::new(accessor))
     }
 }
