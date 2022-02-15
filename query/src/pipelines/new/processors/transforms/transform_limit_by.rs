@@ -14,12 +14,14 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+
 use common_arrow::arrow;
 use common_arrow::arrow::array::BooleanArray;
-use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::bitmap::MutableBitmap;
-
-use common_datablocks::{DataBlock, HashMethod, HashMethodSerializer};
+use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_datablocks::DataBlock;
+use common_datablocks::HashMethod;
+use common_datablocks::HashMethodSerializer;
 use common_exception::Result;
 use common_planners::Expression;
 
@@ -36,11 +38,13 @@ pub struct TransformLimitBy {
 }
 
 impl TransformLimitBy {
-    pub fn try_create(input: Arc<InputPort>, output: Arc<OutputPort>, limit: usize, limit_by_exprs: &[Expression]) -> Result<ProcessorPtr> {
-        let limit_by_columns_name = limit_by_exprs
-            .iter()
-            .map(|col| col.column_name())
-            .collect();
+    pub fn try_create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        limit: usize,
+        limit_by_exprs: &[Expression],
+    ) -> Result<ProcessorPtr> {
+        let limit_by_columns_name = limit_by_exprs.iter().map(|col| col.column_name()).collect();
 
         Ok(Transformer::create(input, output, TransformLimitBy {
             limit,
@@ -75,7 +79,7 @@ impl Transform for TransformLimitBy {
         }
 
         let array = BooleanArray::from_data(ArrowType::Boolean, filter.into(), None);
-        let batch = block.clone().try_into()?;
+        let batch = block.try_into()?;
         let batch = arrow::compute::filter::filter_record_batch(&batch, &array)?;
         batch.try_into()
     }

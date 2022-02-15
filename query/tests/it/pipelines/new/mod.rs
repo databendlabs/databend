@@ -14,5 +14,3 @@
 
 mod executor;
 mod processors;
-
-use databend_query::pipelines::new;

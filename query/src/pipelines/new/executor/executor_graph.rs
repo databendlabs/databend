@@ -18,7 +18,6 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_infallible::RwLock;
 use common_infallible::RwLockUpgradableReadGuard;
 use petgraph::dot::Config;
@@ -99,7 +98,11 @@ impl ExecutingGraph {
         let mut edge_stack: Vec<Arc<OutputPort>> = Vec::new();
         for query_pipe in &pipeline.pipes {
             match query_pipe {
-                NewPipe::ResizePipe { processor, inputs_port, outputs_port, } => unsafe {
+                NewPipe::ResizePipe {
+                    processor,
+                    inputs_port,
+                    outputs_port,
+                } => unsafe {
                     assert_eq!(node_stack.len(), inputs_port.len());
 
                     let resize_node = Node::create(processor, inputs_port, outputs_port);
@@ -111,9 +114,13 @@ impl ExecutingGraph {
                         let edge_index = graph.add_edge(source_index, target_index, ());
 
                         let input_trigger = resize_node.create_trigger(edge_index);
-                        println!("create trigger {:?} -> {:?} : {:?}, {:?}", source_index, target_index, edge_index, input_trigger as usize);
+                        println!(
+                            "create trigger {:?} -> {:?} : {:?}, {:?}",
+                            source_index, target_index, edge_index, input_trigger as usize
+                        );
                         inputs_port[index].set_trigger(input_trigger);
-                        edge_stack[index].set_trigger(graph[source_index].create_trigger(edge_index));
+                        edge_stack[index]
+                            .set_trigger(graph[source_index].create_trigger(edge_index));
                         connect(&inputs_port[index], &edge_stack[index]);
                     }
 
@@ -148,7 +155,8 @@ impl ExecutingGraph {
                             p_outputs_port.push(outputs_port[index].clone());
                         }
 
-                        let target_node = Node::create(&processors[index], &p_inputs_port, &p_outputs_port);
+                        let target_node =
+                            Node::create(&processors[index], &p_inputs_port, &p_outputs_port);
                         let target_index = graph.add_node(target_node.clone());
                         processors[index].set_id(target_index);
 
@@ -194,7 +202,11 @@ impl ExecutingGraph {
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn schedule_queue(locker: &StateLockGuard, index: NodeIndex, schedule_queue: &mut ScheduleQueue) -> Result<()> {
+    pub unsafe fn schedule_queue(
+        locker: &StateLockGuard,
+        index: NodeIndex,
+        schedule_queue: &mut ScheduleQueue,
+    ) -> Result<()> {
         let mut need_schedule_nodes = VecDeque::new();
         let mut need_schedule_edges = VecDeque::new();
 

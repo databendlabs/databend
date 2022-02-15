@@ -1,6 +1,10 @@
-use common_datablocks::{HashMethod, HashMethodFixedKeys};
+use common_datablocks::HashMethod;
+use common_datablocks::HashMethodFixedKeys;
+use common_datavalues2::ColumnRef;
+use common_datavalues2::DataField;
+use common_datavalues2::PrimitiveType;
 use common_exception::Result;
-use common_datavalues2::{ColumnRef, DataField, PrimitiveType};
+
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 
@@ -9,15 +13,17 @@ pub trait GroupColumnsBuilder<Key> {
     fn finish(self) -> Result<Vec<ColumnRef>>;
 }
 
-pub struct FixedKeysGroupColumnsBuilder<T> where T: PrimitiveType {
+pub struct FixedKeysGroupColumnsBuilder<T>
+where T: PrimitiveType
+{
     data: Vec<T>,
     groups_fields: Vec<DataField>,
 }
 
 impl<T> FixedKeysGroupColumnsBuilder<T>
-    where
-        T: PrimitiveType,
-        HashMethodFixedKeys<T>: HashMethod<HashKey=T>,
+where
+    T: PrimitiveType,
+    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
 {
     pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
         Self {
@@ -28,9 +34,9 @@ impl<T> FixedKeysGroupColumnsBuilder<T>
 }
 
 impl<T> GroupColumnsBuilder<T> for FixedKeysGroupColumnsBuilder<T>
-    where
-        T: PrimitiveType,
-        HashMethodFixedKeys<T>: HashMethod<HashKey=T>,
+where
+    T: PrimitiveType,
+    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
 {
     #[inline]
     fn append_value(&mut self, v: &T) {
@@ -38,7 +44,7 @@ impl<T> GroupColumnsBuilder<T> for FixedKeysGroupColumnsBuilder<T>
     }
 
     #[inline]
-    fn finish(mut self) -> Result<Vec<ColumnRef>> {
+    fn finish(self) -> Result<Vec<ColumnRef>> {
         let mut keys = self.data;
         let rows = keys.len();
         let step = std::mem::size_of::<T>();
@@ -86,7 +92,7 @@ impl GroupColumnsBuilder<KeysRef> for SerializedKeysGroupColumnsBuilder {
         self.data.push(*v);
     }
 
-    fn finish(mut self) -> Result<Vec<ColumnRef>> {
+    fn finish(self) -> Result<Vec<ColumnRef>> {
         let mut keys = Vec::with_capacity(self.data.len());
 
         for v in &self.data {

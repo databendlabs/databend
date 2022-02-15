@@ -14,10 +14,9 @@
 //
 
 use std::any::Any;
-use std::cmp::max;
-use std::collections::HashMap;
 use std::mem::size_of;
 use std::sync::Arc;
+
 use chrono::NaiveDateTime;
 use common_datablocks::DataBlock;
 use common_datavalues2::chrono::TimeZone;
@@ -25,21 +24,23 @@ use common_datavalues2::chrono::Utc;
 use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::{MetaId, TableIdent};
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::{Expression, TruncateTablePlan};
+use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
-use crate::pipelines::new::{NewPipeline, SourcePipeBuilder};
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::{SyncSource, SyncSourcer};
 
 use super::numbers_stream::NumbersStream;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::SyncSource;
+use crate::pipelines::new::processors::SyncSourcer;
+use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::pipelines::transforms::get_sort_descriptions;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
@@ -184,7 +185,12 @@ impl Table for NumbersTable {
         )?))
     }
 
-    fn read2(&self, ctx: Arc<QueryContext>, plan: &ReadDataSourcePlan, pipeline: &mut NewPipeline) -> Result<()> {
+    fn read2(
+        &self,
+        ctx: Arc<QueryContext>,
+        plan: &ReadDataSourcePlan,
+        pipeline: &mut NewPipeline,
+    ) -> Result<()> {
         let mut source_builder = SourcePipeBuilder::create();
 
         for part_index in 0..plan.parts.len() {
@@ -194,8 +200,10 @@ impl Table for NumbersTable {
             source_builder.add_source(
                 source_output_port.clone(),
                 NumbersSource::create(
-                    source_output_port, source_ctx,
-                    &plan.parts[part_index].name, self.schema(),
+                    source_output_port,
+                    source_ctx,
+                    &plan.parts[part_index].name,
+                    self.schema(),
                 )?,
             );
         }
@@ -213,14 +221,24 @@ struct NumbersSource {
 }
 
 impl NumbersSource {
-    pub fn create(output: Arc<OutputPort>, ctx: Arc<QueryContext>, name: &str, schema: DataSchemaRef) -> Result<ProcessorPtr> {
+    pub fn create(
+        output: Arc<OutputPort>,
+        ctx: Arc<QueryContext>,
+        name: &str,
+        schema: DataSchemaRef,
+    ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
         let step = settings.get_max_block_size()?;
 
         let names: Vec<_> = name.split('-').collect();
         let (begin, end) = (names[1].parse::<u64>()?, names[2].parse::<u64>()?);
 
-        SyncSourcer::create(output, NumbersSource { schema, begin, end, step })
+        SyncSourcer::create(output, NumbersSource {
+            schema,
+            begin,
+            end,
+            step,
+        })
     }
 }
 
@@ -238,7 +256,9 @@ impl SyncSource for NumbersSource {
 
                 self.begin += step;
                 let column = UInt64Column::new_from_vec(column_data);
-                Ok(Some(DataBlock::create(self.schema.clone(), vec![Arc::new(column)])))
+                Ok(Some(DataBlock::create(self.schema.clone(), vec![
+                    Arc::new(column),
+                ])))
             }
         }
     }
@@ -250,7 +270,7 @@ impl TableFunction for NumbersTable {
     }
 
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
-        where Self: 'a {
+    where Self: 'a {
         self
     }
 }

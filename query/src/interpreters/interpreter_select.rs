@@ -13,24 +13,26 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use futures::Stream;
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::pin::Pin;
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::task::{Context, Poll};
-use common_datablocks::DataBlock;
 
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::pin::Pin;
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::task::Context;
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::task::Poll;
+use common_datablocks::DataBlock;
 use common_datavalues2::DataSchemaRef;
-use common_exception::{ErrorCode, Result};
-use common_planners::{PlanNode, PlanVisitor};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use futures::Stream;
 
 use crate::interpreters::plan_schedulers;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
-use crate::pipelines::new::{NewPipeline, QueryPipelineBuilder};
 use crate::pipelines::new::executor::PipelinePullingExecutor;
+use crate::pipelines::new::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 
 pub struct SelectInterpreter {
@@ -71,13 +73,15 @@ impl Interpreter for SelectInterpreter {
 
         if settings.get_enable_new_processor_framework()? != 0 {
             if !self.ctx.get_cluster().is_empty() {
-                return Err(ErrorCode::UnImplement("NewProcessor framework unsupported cluster query."));
+                return Err(ErrorCode::UnImplement(
+                    "NewProcessor framework unsupported cluster query.",
+                ));
             }
 
             let builder = QueryPipelineBuilder::create(self.ctx.clone());
             let mut new_pipeline = builder.finalize(&self.select)?;
             new_pipeline.set_max_threads(settings.get_max_threads()? as usize);
-            let mut executor = PipelinePullingExecutor::try_create(new_pipeline)?;
+            let executor = PipelinePullingExecutor::try_create(new_pipeline)?;
 
             Ok(Box::pin(NewProcessorStreamWrap::create(executor)?))
         } else {

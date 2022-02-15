@@ -14,7 +14,8 @@
 
 use std::sync::Arc;
 
-use common_datablocks::{DataBlock, SortColumnDescription};
+use common_datablocks::DataBlock;
+use common_datablocks::SortColumnDescription;
 use common_exception::Result;
 
 use crate::pipelines::new::processors::port::InputPort;
@@ -50,4 +51,3 @@ impl Transform for TransformSortPartial {
         DataBlock::sort_block(&block, &self.sort_columns_descriptions, self.limit)
     }
 }
-

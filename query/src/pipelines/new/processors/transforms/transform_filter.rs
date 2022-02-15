@@ -13,14 +13,16 @@ use crate::pipelines::new::processors::transforms::transform::Transform;
 use crate::pipelines::new::processors::transforms::transform::Transformer;
 use crate::pipelines::transforms::ExpressionExecutor;
 
-pub type TransformHaving = TransformFilterImpl::<true>;
-pub type TransformFilter = TransformFilterImpl::<false>;
+pub type TransformHaving = TransformFilterImpl<true>;
+pub type TransformFilter = TransformFilterImpl<false>;
 
 pub struct TransformFilterImpl<const HAVING: bool> {
     executor: Arc<ExpressionExecutor>,
 }
 
-impl<const HAVING: bool> TransformFilterImpl<HAVING> where Self: Transform {
+impl<const HAVING: bool> TransformFilterImpl<HAVING>
+where Self: Transform
+{
     pub fn try_create(
         schema: DataSchemaRef,
         predicate: Expression,

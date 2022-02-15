@@ -29,8 +29,6 @@ use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::StreamExt;
-use common_ast::parser::ast::Query;
-use crate::pipelines::new::NewPipeline;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;

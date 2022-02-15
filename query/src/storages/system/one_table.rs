@@ -13,27 +13,28 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues2::prelude::*;
 use common_exception::Result;
-use common_meta_types::{MetaId, TableIdent};
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::{Expression, Extras, TruncateTablePlan};
+use common_planners::Extras;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use crate::pipelines::new::{NewPipe, NewPipeline};
-use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::{SyncSource, SyncSourcer};
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
 
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::SyncSource;
+use crate::pipelines::new::processors::SyncSourcer;
+use crate::pipelines::new::NewPipe;
+use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 
@@ -93,7 +94,12 @@ impl Table for OneTable {
         )))
     }
 
-    fn read2(&self, _: Arc<QueryContext>, _: &ReadDataSourcePlan, pipeline: &mut NewPipeline) -> Result<()> {
+    fn read2(
+        &self,
+        _: Arc<QueryContext>,
+        _: &ReadDataSourcePlan,
+        pipeline: &mut NewPipeline,
+    ) -> Result<()> {
         let schema = self.table_info.schema();
         let output = OutputPort::create();
         pipeline.add_pipe(NewPipe::SimplePipe {
@@ -111,7 +117,7 @@ struct OneSource(Option<DataBlock>);
 impl OneSource {
     pub fn create(output: Arc<OutputPort>, schema: DataSchemaRef) -> Result<ProcessorPtr> {
         let column = UInt8Column::new_from_vec(vec![1u8]);
-        let data_block = DataBlock::create(schema.clone(), vec![Arc::new(column)]);
+        let data_block = DataBlock::create(schema, vec![Arc::new(column)]);
         SyncSourcer::create(output, OneSource(Some(data_block)))
     }
 }
@@ -123,4 +129,3 @@ impl SyncSource for OneSource {
         Ok(self.0.take())
     }
 }
-

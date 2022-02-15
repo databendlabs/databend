@@ -17,7 +17,6 @@ use common_datavalues2::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
-use crate::pipelines::new::NewPipeline;
 
 #[async_trait::async_trait]
 pub trait Interpreter: Sync + Send {

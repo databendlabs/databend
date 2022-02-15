@@ -1,16 +1,24 @@
 use std::borrow::BorrowMut;
 use std::sync::Arc;
+
 use bumpalo::Bump;
 use bytes::BytesMut;
 use common_datablocks::DataBlock;
-use common_datavalues2::{ColumnRef, DataSchemaRef, MutableColumn, MutableStringColumn, ScalarColumn, Series, StringColumn};
 use common_datavalues2::prelude::column::ScalarColumnBuilder;
+use common_datavalues2::ColumnRef;
+use common_datavalues2::DataSchemaRef;
+use common_datavalues2::MutableColumn;
+use common_datavalues2::MutableStringColumn;
+use common_datavalues2::ScalarColumn;
+use common_datavalues2::Series;
+use common_datavalues2::StringColumn;
 use common_exception::Result;
-use common_functions::aggregates::{AggregateFunctionRef, get_layout_offsets, StateAddr};
-use common_planners::Expression;
-use crate::pipelines::new::processors::AggregatorParams;
-use crate::pipelines::new::processors::processor::ProcessorPtr;
+use common_functions::aggregates::get_layout_offsets;
+use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::aggregates::StateAddr;
+
 use crate::pipelines::new::processors::transforms::transform_aggregator::Aggregator;
+use crate::pipelines::new::processors::AggregatorParams;
 
 pub type FinalSingleKeyAggregator = SingleKeyAggregator<true>;
 pub type PartialSingleKeyAggregator = SingleKeyAggregator<false>;
@@ -28,11 +36,13 @@ pub struct SingleKeyAggregator<const FINAL: bool> {
 impl<const FINAL: bool> SingleKeyAggregator<FINAL> {
     pub fn try_create(params: &Arc<AggregatorParams>) -> Result<Self> {
         let arena = Bump::new();
-        let (layout, offsets_aggregate_states) = unsafe { get_layout_offsets(&params.aggregate_functions) };
+        let (layout, offsets_aggregate_states) =
+            unsafe { get_layout_offsets(&params.aggregate_functions) };
 
         let places: Vec<usize> = {
             let place: StateAddr = arena.alloc_layout(layout).into();
-            params.aggregate_functions
+            params
+                .aggregate_functions
                 .iter()
                 .enumerate()
                 .map(|(idx, func)| {
@@ -53,7 +63,6 @@ impl<const FINAL: bool> SingleKeyAggregator<FINAL> {
         })
     }
 }
-
 
 impl Aggregator for SingleKeyAggregator<true> {
     const NAME: &'static str = "FinalSingleKeyAggregator";

@@ -14,13 +14,11 @@
 
 use std::cell::UnsafeCell;
 use std::collections::VecDeque;
-use std::fmt::Debug;
 use std::sync::Arc;
 
 use petgraph::prelude::EdgeIndex;
 use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
 
 pub struct UpdateList {
     inner: UnsafeCell<UpdateListMutable>,
@@ -102,7 +100,9 @@ impl UpdateList {
     pub unsafe fn create_trigger(self: &Arc<Self>, edge_index: EdgeIndex) -> *mut UpdateTrigger {
         let inner = &mut *self.inner.get();
         let update_trigger = UpdateTrigger::create(edge_index, self.clone());
-        inner.updated_triggers.push(Arc::new(UnsafeCell::new(update_trigger)));
+        inner
+            .updated_triggers
+            .push(Arc::new(UnsafeCell::new(update_trigger)));
         inner.updated_triggers.last().unwrap().get()
         // let update_trigger = UnsafeCell::new(UpdateTrigger::create(edge_index, self.clone()));
         // let res = update_trigger.get();
@@ -147,7 +147,6 @@ impl UpdateTrigger {
     #[inline(always)]
     pub unsafe fn update_input(self_: &*mut UpdateTrigger) {
         if !self_.is_null() {
-            let address = *self_ as usize;
             let self_ = &mut **self_;
             if self_.version == self_.prev_version {
                 self_.version += 1;

@@ -27,13 +27,13 @@ use crate::common::HashMapIterator;
 use crate::common::HashTableEntity;
 use crate::common::HashTableKeyable;
 use crate::common::KeyValueEntity;
+use crate::pipelines::new::processors::AggregatorParams as NewAggregatorParams;
 use crate::pipelines::transforms::group_by::aggregator_state_entity::ShortFixedKeyable;
 use crate::pipelines::transforms::group_by::aggregator_state_entity::ShortFixedKeysStateEntity;
 use crate::pipelines::transforms::group_by::aggregator_state_entity::StateEntity;
 use crate::pipelines::transforms::group_by::aggregator_state_iterator::ShortFixedKeysStateIterator;
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 use crate::pipelines::transforms::group_by::AggregatorParams;
-use crate::pipelines::new::processors::AggregatorParams as NewAggregatorParams;
 
 /// Aggregate state of the SELECT query, destroy when group by is completed.
 ///
@@ -41,10 +41,11 @@ use crate::pipelines::new::processors::AggregatorParams as NewAggregatorParams;
 ///     - Aggregate data(HashMap or MergeSort set in future)
 ///     - Aggregate function state data memory pool
 ///     - Group by key data memory pool (if necessary)
+#[allow(clippy::len_without_is_empty)]
 pub trait AggregatorState<Method: HashMethod>: Sync + Send {
     type Key;
     type Entity: StateEntity<Self::Key>;
-    type Iterator: Iterator<Item=*mut Self::Entity>;
+    type Iterator: Iterator<Item = *mut Self::Entity>;
 
     fn len(&self) -> usize;
 
@@ -108,10 +109,10 @@ impl<T: ShortFixedKeyable> Drop for ShortFixedKeysAggregatorState<T> {
 }
 
 impl<T> AggregatorState<HashMethodFixedKeys<T>> for ShortFixedKeysAggregatorState<T>
-    where
-        T: PrimitiveType + ShortFixedKeyable,
-        HashMethodFixedKeys<T>: HashMethod<HashKey=T>,
-        <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
+where
+    T: PrimitiveType + ShortFixedKeyable,
+    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
+    <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
 {
     type Key = T;
     type Entity = ShortFixedKeysStateEntity<T>;
@@ -194,10 +195,10 @@ unsafe impl<T: HashTableKeyable + Send> Send for LongerFixedKeysAggregatorState<
 unsafe impl<T: HashTableKeyable + Sync> Sync for LongerFixedKeysAggregatorState<T> {}
 
 impl<T> AggregatorState<HashMethodFixedKeys<T>> for LongerFixedKeysAggregatorState<T>
-    where
-        T: PrimitiveType,
-        HashMethodFixedKeys<T>: HashMethod<HashKey=T>,
-        <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
+where
+    T: PrimitiveType,
+    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
+    <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
 {
     type Key = T;
     type Entity = KeyValueEntity<T, usize>;
@@ -325,7 +326,7 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
 
     #[inline(always)]
     fn entity_by_key(&mut self, keys_ref: &KeysRef, inserted: &mut bool) -> *mut Self::Entity {
-        let state_entity = self.data_state_map.insert_key(&keys_ref, inserted);
+        let state_entity = self.data_state_map.insert_key(keys_ref, inserted);
 
         if *inserted {
             unsafe {

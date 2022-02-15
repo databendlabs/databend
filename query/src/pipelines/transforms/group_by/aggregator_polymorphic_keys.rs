@@ -24,16 +24,19 @@ use common_exception::Result;
 
 use crate::common::HashTable;
 use crate::pipelines::new::processors::AggregatorParams;
-use crate::pipelines::transforms::group_by::aggregator_groups_builder::{FixedKeysGroupColumnsBuilder, GroupColumnsBuilder, SerializedKeysGroupColumnsBuilder};
+use crate::pipelines::transforms::group_by::aggregator_groups_builder::FixedKeysGroupColumnsBuilder;
+use crate::pipelines::transforms::group_by::aggregator_groups_builder::GroupColumnsBuilder;
+use crate::pipelines::transforms::group_by::aggregator_groups_builder::SerializedKeysGroupColumnsBuilder;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::FixedKeysColumnBuilder;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::KeysColumnBuilder;
 use crate::pipelines::transforms::group_by::aggregator_keys_builder::SerializedKeysColumnBuilder;
-use crate::pipelines::transforms::group_by::aggregator_keys_iter::{FixedKeysColumnIter, KeysColumnIter, SerializedKeysColumnIter};
+use crate::pipelines::transforms::group_by::aggregator_keys_iter::FixedKeysColumnIter;
+use crate::pipelines::transforms::group_by::aggregator_keys_iter::KeysColumnIter;
+use crate::pipelines::transforms::group_by::aggregator_keys_iter::SerializedKeysColumnIter;
 use crate::pipelines::transforms::group_by::aggregator_state::LongerFixedKeysAggregatorState;
 use crate::pipelines::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
 use crate::pipelines::transforms::group_by::aggregator_state::ShortFixedKeysAggregatorState;
 use crate::pipelines::transforms::group_by::AggregatorState;
-use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 
 // Provide functions for all HashMethod to help implement polymorphic group by key
 //
@@ -82,7 +85,11 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
     fn keys_iter_from_column(&self, column: &ColumnRef) -> Result<Self::KeysColumnIter>;
 
     type GroupColumnsBuilder: GroupColumnsBuilder<<Self::State as AggregatorState<Method>>::Key>;
-    fn group_columns_builder(&self, capacity: usize, params: &AggregatorParams) -> Self::GroupColumnsBuilder;
+    fn group_columns_builder(
+        &self,
+        capacity: usize,
+        params: &AggregatorParams,
+    ) -> Self::GroupColumnsBuilder;
 }
 
 impl PolymorphicKeysHelper<HashMethodKeysU8> for HashMethodKeysU8 {
@@ -104,7 +111,11 @@ impl PolymorphicKeysHelper<HashMethodKeysU8> for HashMethodKeysU8 {
     }
 
     type GroupColumnsBuilder = FixedKeysGroupColumnsBuilder<u8>;
-    fn group_columns_builder(&self, capacity: usize, params: &AggregatorParams) -> Self::GroupColumnsBuilder {
+    fn group_columns_builder(
+        &self,
+        capacity: usize,
+        params: &AggregatorParams,
+    ) -> Self::GroupColumnsBuilder {
         FixedKeysGroupColumnsBuilder::<u8>::create(capacity, params)
     }
 }
@@ -128,7 +139,11 @@ impl PolymorphicKeysHelper<HashMethodKeysU16> for HashMethodKeysU16 {
     }
 
     type GroupColumnsBuilder = FixedKeysGroupColumnsBuilder<u16>;
-    fn group_columns_builder(&self, capacity: usize, params: &AggregatorParams) -> Self::GroupColumnsBuilder {
+    fn group_columns_builder(
+        &self,
+        capacity: usize,
+        params: &AggregatorParams,
+    ) -> Self::GroupColumnsBuilder {
         FixedKeysGroupColumnsBuilder::<u16>::create(capacity, params)
     }
 }
@@ -155,7 +170,11 @@ impl PolymorphicKeysHelper<HashMethodKeysU32> for HashMethodKeysU32 {
     }
 
     type GroupColumnsBuilder = FixedKeysGroupColumnsBuilder<u32>;
-    fn group_columns_builder(&self, capacity: usize, params: &AggregatorParams) -> Self::GroupColumnsBuilder {
+    fn group_columns_builder(
+        &self,
+        capacity: usize,
+        params: &AggregatorParams,
+    ) -> Self::GroupColumnsBuilder {
         FixedKeysGroupColumnsBuilder::<u32>::create(capacity, params)
     }
 }
@@ -182,7 +201,11 @@ impl PolymorphicKeysHelper<HashMethodKeysU64> for HashMethodKeysU64 {
     }
 
     type GroupColumnsBuilder = FixedKeysGroupColumnsBuilder<u64>;
-    fn group_columns_builder(&self, capacity: usize, params: &AggregatorParams) -> Self::GroupColumnsBuilder {
+    fn group_columns_builder(
+        &self,
+        capacity: usize,
+        params: &AggregatorParams,
+    ) -> Self::GroupColumnsBuilder {
         FixedKeysGroupColumnsBuilder::<u64>::create(capacity, params)
     }
 }
@@ -210,7 +233,11 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
     }
 
     type GroupColumnsBuilder = SerializedKeysGroupColumnsBuilder;
-    fn group_columns_builder(&self, capacity: usize, params: &AggregatorParams) -> Self::GroupColumnsBuilder {
+    fn group_columns_builder(
+        &self,
+        capacity: usize,
+        params: &AggregatorParams,
+    ) -> Self::GroupColumnsBuilder {
         SerializedKeysGroupColumnsBuilder::create(capacity, params)
     }
 }

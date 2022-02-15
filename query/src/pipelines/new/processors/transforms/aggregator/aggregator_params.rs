@@ -14,14 +14,20 @@
 
 use std::alloc::Layout;
 use std::sync::Arc;
-use common_datablocks::{DataBlock, HashMethodKind};
-use common_datavalues2::{DataField, DataSchemaRef};
 
+use common_datablocks::DataBlock;
+use common_datablocks::HashMethodKind;
+use common_datavalues2::DataField;
+use common_datavalues2::DataSchemaRef;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
-use common_planners::{AggregatorFinalPlan, AggregatorPartialPlan, Expression, PlanNode};
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
+use common_planners::AggregatorFinalPlan;
+use common_planners::AggregatorPartialPlan;
+use common_planners::Expression;
+
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::port::OutputPort;
 
 pub struct AggregatorParams {
     pub schema: DataSchemaRef,
@@ -61,8 +67,8 @@ impl AggregatorParams {
 
         let (states_layout, states_offsets) = unsafe { get_layout_offsets(&aggregate_functions) };
 
-
-        let group_data_fields = plan.group_expr
+        let group_data_fields = plan
+            .group_expr
             .iter()
             .map(|c| c.to_data_field(&plan.schema_before_group_by))
             .collect::<Result<Vec<_>>>()?;
@@ -95,7 +101,8 @@ impl AggregatorParams {
 
         let (states_layout, states_offsets) = unsafe { get_layout_offsets(&aggregate_functions) };
 
-        let group_data_fields = plan.group_expr
+        let group_data_fields = plan
+            .group_expr
             .iter()
             .map(|c| c.to_data_field(&before_schema))
             .collect::<Result<Vec<_>>>()?;
@@ -111,36 +118,6 @@ impl AggregatorParams {
             group_columns_name: group_cols.to_vec(),
             offsets_aggregate_states: states_offsets,
         }))
-    }
-
-    pub fn try_create(
-        schema: &DataSchemaRef,
-        before_schema: &DataSchemaRef,
-        exprs: &[Expression],
-        group_cols: &[String],
-    ) -> Result<Arc<AggregatorParams>> {
-        let mut aggregate_functions = Vec::with_capacity(exprs.len());
-        let mut aggregate_functions_column_name = Vec::with_capacity(exprs.len());
-        let mut aggregate_functions_arguments_name = Vec::with_capacity(exprs.len());
-
-        for expr in exprs.iter() {
-            aggregate_functions.push(expr.to_aggregate_function(before_schema)?);
-            aggregate_functions_column_name.push(expr.column_name());
-            aggregate_functions_arguments_name.push(expr.to_aggregate_function_names()?);
-        }
-
-        let (states_layout, states_offsets) = unsafe { get_layout_offsets(&aggregate_functions) };
-
-        unimplemented!()
-        // Ok(Arc::new(AggregatorParams {
-        //     aggregate_functions,
-        //     aggregate_functions_column_name,
-        //     aggregate_functions_arguments_name,
-        //     layout: states_layout,
-        //     schema: schema.clone(),
-        //     group_columns_name: group_cols.to_vec(),
-        //     offsets_aggregate_states: states_offsets,
-        // }))
     }
 }
 
@@ -170,4 +147,3 @@ impl AggregatorTransformParams {
         })
     }
 }
-

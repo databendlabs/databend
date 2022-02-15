@@ -148,7 +148,7 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for InteractiveWorker<W> {
     }
 
     async fn on_close<'a>(&'a mut self, id: u32)
-        where W: 'async_trait {
+    where W: 'async_trait {
         self.base.do_close(id).await;
     }
 
@@ -261,7 +261,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
             // Just compatibility for jdbc
             "(?i)^(/\\* mysql-connector-java(.*))",
         ])
-            .unwrap();
+        .unwrap();
         expr.is_match(query)
     }
 

@@ -16,17 +16,33 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::{AggregatorFinalPlan, AggregatorPartialPlan, AlterUDFPlan, AlterUserPlan, BroadcastPlan, CopyPlan, CreateDatabasePlan, CreateTablePlan, CreateUDFPlan, CreateUserPlan, CreateUserStagePlan, DescribeStagePlan, DescribeTablePlan, DropDatabasePlan, DropTablePlan, DropUDFPlan, DropUserPlan, DropUserStagePlan, EmptyPlan, ExplainPlan, Expression, ExpressionPlan, FilterPlan, GrantPrivilegePlan, HavingPlan, InsertPlan, KillPlan, LimitByPlan, LimitPlan, OptimizeTablePlan, ProjectionPlan, RemotePlan, RevokePrivilegePlan, SelectPlan, SettingPlan, ShowCreateDatabasePlan, ShowCreateTablePlan, ShowGrantsPlan, SinkPlan, SortPlan, StagePlan, SubQueriesSetPlan, TruncateTablePlan, UseDatabasePlan, UseTenantPlan};
+use common_planners::AggregatorFinalPlan;
+use common_planners::AggregatorPartialPlan;
+use common_planners::ExpressionPlan;
+use common_planners::FilterPlan;
+use common_planners::HavingPlan;
+use common_planners::LimitByPlan;
+use common_planners::LimitPlan;
 use common_planners::PlanNode;
 use common_planners::PlanVisitor;
+use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
+use common_planners::SelectPlan;
+use common_planners::SortPlan;
+use common_planners::SubQueriesSetPlan;
 
-use crate::pipelines::new::pipe::SourcePipeBuilder;
-use crate::pipelines::new::pipe::TransformPipeBuilder;
 use crate::pipelines::new::pipeline::NewPipeline;
-use crate::pipelines::new::processors::port::InputPort;
-use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::{AggregatorParams, ExpressionTransform, AggregatorTransformParams, TableSource, TransformAggregator, ProjectionTransform, TransformFilter, TransformHaving, TransformLimitBy, TransformSortPartial, TransformSortMerge, TransformLimit};
+use crate::pipelines::new::processors::AggregatorParams;
+use crate::pipelines::new::processors::AggregatorTransformParams;
+use crate::pipelines::new::processors::ExpressionTransform;
+use crate::pipelines::new::processors::ProjectionTransform;
+use crate::pipelines::new::processors::TransformAggregator;
+use crate::pipelines::new::processors::TransformFilter;
+use crate::pipelines::new::processors::TransformHaving;
+use crate::pipelines::new::processors::TransformLimit;
+use crate::pipelines::new::processors::TransformLimitBy;
+use crate::pipelines::new::processors::TransformSortMerge;
+use crate::pipelines::new::processors::TransformSortPartial;
 use crate::pipelines::transforms::get_sort_descriptions;
 use crate::sessions::QueryContext;
 
@@ -75,17 +91,18 @@ impl PlanVisitor for QueryPipelineBuilder {
         self.visit_plan_node(&plan.input)?;
 
         let aggregator_params = AggregatorParams::try_create_partial(plan)?;
-        self.pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformAggregator::try_create_partial(
-                transform_input_port.clone(),
-                transform_output_port.clone(),
-                AggregatorTransformParams::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    &aggregator_params,
-                )?,
-            )
-        })
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformAggregator::try_create_partial(
+                    transform_input_port.clone(),
+                    transform_output_port.clone(),
+                    AggregatorTransformParams::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        &aggregator_params,
+                    )?,
+                )
+            })
     }
 
     fn visit_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<()> {
@@ -93,71 +110,76 @@ impl PlanVisitor for QueryPipelineBuilder {
 
         self.pipeline.resize(1)?;
         let aggregator_params = AggregatorParams::try_create_final(plan)?;
-        self.pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformAggregator::try_create_final(
-                transform_input_port.clone(),
-                transform_output_port.clone(),
-                AggregatorTransformParams::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    &aggregator_params,
-                )?,
-            )
-        })
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformAggregator::try_create_final(
+                    transform_input_port.clone(),
+                    transform_output_port.clone(),
+                    AggregatorTransformParams::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        &aggregator_params,
+                    )?,
+                )
+            })
     }
 
     fn visit_projection(&mut self, plan: &ProjectionPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
 
-        self.pipeline.add_transform(|transform_input_port, transform_output_port| {
-            ProjectionTransform::try_create(
-                transform_input_port,
-                transform_output_port,
-                plan.input.schema(),
-                plan.schema(),
-                plan.expr.to_owned(),
-            )
-        })
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                ProjectionTransform::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    plan.input.schema(),
+                    plan.schema(),
+                    plan.expr.to_owned(),
+                )
+            })
     }
 
     fn visit_expression(&mut self, plan: &ExpressionPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
 
-        self.pipeline.add_transform(|transform_input_port, transform_output_port| {
-            ExpressionTransform::try_create(
-                transform_input_port,
-                transform_output_port,
-                plan.input.schema(),
-                plan.schema(),
-                plan.exprs.to_owned(),
-            )
-        })
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                ExpressionTransform::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    plan.input.schema(),
+                    plan.schema(),
+                    plan.exprs.to_owned(),
+                )
+            })
     }
 
     fn visit_filter(&mut self, plan: &FilterPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
 
-        self.pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformFilter::try_create(
-                plan.schema(),
-                plan.predicate.clone(),
-                transform_input_port,
-                transform_output_port,
-            )
-        })
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformFilter::try_create(
+                    plan.schema(),
+                    plan.predicate.clone(),
+                    transform_input_port,
+                    transform_output_port,
+                )
+            })
     }
 
     fn visit_having(&mut self, plan: &HavingPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
 
-        self.pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformHaving::try_create(
-                plan.schema(),
-                plan.predicate.clone(),
-                transform_input_port,
-                transform_output_port,
-            )
-        })
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformHaving::try_create(
+                    plan.schema(),
+                    plan.predicate.clone(),
+                    transform_input_port,
+                    transform_output_port,
+                )
+            })
     }
 
     fn visit_limit(&mut self, plan: &LimitPlan) -> Result<()> {
@@ -166,18 +188,21 @@ impl PlanVisitor for QueryPipelineBuilder {
         self.visit_plan_node(&plan.input)?;
 
         self.pipeline.resize(1)?;
-        self.pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformLimit::try_create(
-                plan.n.clone(),
-                plan.offset,
-                transform_input_port,
-                transform_output_port,
-            )
-        })
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformLimit::try_create(
+                    plan.n,
+                    plan.offset,
+                    transform_input_port,
+                    transform_output_port,
+                )
+            })
     }
 
     fn visit_sub_queries_sets(&mut self, _: &SubQueriesSetPlan) -> Result<()> {
-        Err(ErrorCode::UnImplement("New processor framework unsupported subquery."))
+        Err(ErrorCode::UnImplement(
+            "New processor framework unsupported subquery.",
+        ))
     }
 
     fn visit_sort(&mut self, plan: &SortPlan) -> Result<()> {
@@ -191,55 +216,59 @@ impl PlanVisitor for QueryPipelineBuilder {
         // processor 1: block ---> sort_stream
         // processor 2: block ---> sort_stream
         // processor 3: block ---> sort_stream
-        self.pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformSortPartial::try_create(
-                transform_input_port,
-                transform_output_port,
-                rows_limit.clone(),
-                get_sort_descriptions(&plan.schema, &plan.order_by)?,
-            )
-        })?;
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformSortPartial::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    rows_limit,
+                    get_sort_descriptions(&plan.schema, &plan.order_by)?,
+                )
+            })?;
 
         // processor 1: [sorted blocks ...] ---> merge to one sorted block
         // processor 2: [sorted blocks ...] ---> merge to one sorted block
         // processor 3: [sorted blocks ...] ---> merge to one sorted block
-        self.pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformSortMerge::try_create(
-                transform_input_port,
-                transform_output_port,
-                rows_limit.clone(),
-                get_sort_descriptions(&plan.schema, &plan.order_by)?,
-            )
-        })?;
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformSortMerge::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    rows_limit,
+                    get_sort_descriptions(&plan.schema, &plan.order_by)?,
+                )
+            })?;
 
         // processor1 sorted block --
         //                             \
         // processor2 sorted block ----> processor  --> merge to one sorted block
         //                             /
         // processor3 sorted block --
-        self.pipeline.resize(1);
-        self.pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformSortMerge::try_create(
-                transform_input_port,
-                transform_output_port,
-                rows_limit.clone(),
-                get_sort_descriptions(&plan.schema, &plan.order_by)?,
-            )
-        })
+        self.pipeline.resize(1)?;
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformSortMerge::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    rows_limit,
+                    get_sort_descriptions(&plan.schema, &plan.order_by)?,
+                )
+            })
     }
 
     fn visit_limit_by(&mut self, plan: &LimitByPlan) -> Result<()> {
         self.visit_plan_node(&plan.input)?;
 
         self.pipeline.resize(1)?;
-        self.pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformLimitBy::try_create(
-                transform_input_port,
-                transform_output_port,
-                plan.limit,
-                &plan.limit_by,
-            )
-        })
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformLimitBy::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    plan.limit,
+                    &plan.limit_by,
+                )
+            })
     }
 
     fn visit_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<()> {

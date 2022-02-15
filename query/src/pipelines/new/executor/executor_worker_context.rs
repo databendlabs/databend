@@ -166,7 +166,6 @@ impl ArcWake for ExecutingAsyncTaskWaker {
     }
 }
 
-
 impl Debug for ExecutorTask {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         unsafe {

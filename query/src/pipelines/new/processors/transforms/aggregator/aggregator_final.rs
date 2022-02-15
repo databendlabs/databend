@@ -1,21 +1,40 @@
 use std::borrow::BorrowMut;
 use std::sync::Arc;
-use common_datablocks::{DataBlock, HashMethod, HashMethodKeysU16, HashMethodKeysU32, HashMethodKeysU64, HashMethodKeysU8, HashMethodSerializer};
-use common_datavalues2::{ColumnRef, MutableColumn, ScalarColumn, Series, StringColumn};
+
+use common_datablocks::DataBlock;
+use common_datablocks::HashMethod;
+use common_datablocks::HashMethodKeysU16;
+use common_datablocks::HashMethodKeysU32;
+use common_datablocks::HashMethodKeysU64;
+use common_datablocks::HashMethodKeysU8;
+use common_datablocks::HashMethodSerializer;
+use common_datavalues2::MutableColumn;
+use common_datavalues2::ScalarColumn;
+use common_datavalues2::Series;
+use common_datavalues2::StringColumn;
 use common_exception::Result;
-use common_functions::aggregates::{StateAddr, StateAddrs};
-use crate::pipelines::new::processors::AggregatorParams;
-use crate::pipelines::transforms::group_by::StateEntity;
+use common_functions::aggregates::StateAddr;
+use common_functions::aggregates::StateAddrs;
+
 use crate::pipelines::new::processors::transforms::transform_aggregator::Aggregator;
-use crate::pipelines::transforms::group_by::{AggregatorState, GroupColumnsBuilder, KeysColumnIter, PolymorphicKeysHelper};
+use crate::pipelines::new::processors::AggregatorParams;
+use crate::pipelines::transforms::group_by::AggregatorState;
+use crate::pipelines::transforms::group_by::GroupColumnsBuilder;
+use crate::pipelines::transforms::group_by::KeysColumnIter;
+use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::transforms::group_by::StateEntity;
 
 pub type KeysU8FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU8>;
 pub type KeysU16FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU16>;
 pub type KeysU32FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU32>;
 pub type KeysU64FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU64>;
-pub type SerializerFinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodSerializer>;
+pub type SerializerFinalAggregator<const HAS_AGG: bool> =
+    FinalAggregator<HAS_AGG, HashMethodSerializer>;
 
-pub struct FinalAggregator<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> {
+pub struct FinalAggregator<
+    const HAS_AGG: bool,
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
+> {
     is_generated: bool,
 
     method: Method,
@@ -23,10 +42,17 @@ pub struct FinalAggregator<const HAS_AGG: bool, Method: HashMethod + Polymorphic
     params: Arc<AggregatorParams>,
 }
 
-impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> FinalAggregator<HAS_AGG, Method> {
+impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
+    FinalAggregator<HAS_AGG, Method>
+{
     pub fn create(method: Method, params: Arc<AggregatorParams>) -> Self {
         let state = method.aggregate_state();
-        Self { is_generated: false, state, method, params }
+        Self {
+            is_generated: false,
+            state,
+            method,
+            params,
+        }
     }
 }
 
@@ -60,7 +86,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> FinalAggregator<
     }
 }
 
-impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for FinalAggregator<true, Method> {
+impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
+    for FinalAggregator<true, Method>
+{
     const NAME: &'static str = "";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
@@ -92,7 +120,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for F
 
                 let mut data = states_binary_columns[idx].get_data(row);
                 aggregate_function.init_state(state_place);
-                aggregate_function.deserialize(state_place, &mut data);
+                aggregate_function.deserialize(state_place, &mut data)?;
                 aggregate_function.merge(final_place, state_place)?;
             }
         }
@@ -105,7 +133,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for F
             true => Ok(None),
             false => {
                 self.is_generated = true;
-                let mut group_columns_builder = self.method.group_columns_builder(self.state.len(), &self.params);
+                let mut group_columns_builder = self
+                    .method
+                    .group_columns_builder(self.state.len(), &self.params);
 
                 let aggregate_functions = &self.params.aggregate_functions;
                 let offsets_aggregate_states = &self.params.offsets_aggregate_states;
@@ -124,7 +154,8 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for F
 
                     for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
                         let arg_place = place.next(offsets_aggregate_states[idx]);
-                        let builder: &mut dyn MutableColumn = aggregates_column_builder[idx].borrow_mut();
+                        let builder: &mut dyn MutableColumn =
+                            aggregates_column_builder[idx].borrow_mut();
                         aggregate_function.merge_result(arg_place, builder)?;
                     }
 
@@ -146,12 +177,14 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for F
     }
 }
 
-impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for FinalAggregator<false, Method> {
+impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
+    for FinalAggregator<false, Method>
+{
     const NAME: &'static str = "";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         let key_array = block.column(0);
-        let keys_iter = self.method.keys_iter_from_column(&key_array)?;
+        let keys_iter = self.method.keys_iter_from_column(key_array)?;
 
         let mut inserted = true;
         for keys_ref in keys_iter.get_slice() {
@@ -166,7 +199,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for F
             true => Ok(None),
             false => {
                 self.is_generated = true;
-                let mut columns_builder = self.method.group_columns_builder(self.state.len(), &self.params);
+                let mut columns_builder = self
+                    .method
+                    .group_columns_builder(self.state.len(), &self.params);
                 for group_entity in self.state.iter() {
                     columns_builder.append_value(group_entity.get_state_key());
                 }

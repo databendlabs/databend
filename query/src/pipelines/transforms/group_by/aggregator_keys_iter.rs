@@ -1,23 +1,33 @@
-use common_arrow::arrow::types::Index;
-use common_datavalues2::{PrimitiveColumn, PrimitiveType, StringColumn};
-use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
+use common_datavalues2::PrimitiveColumn;
+use common_datavalues2::PrimitiveType;
+use common_datavalues2::StringColumn;
 use common_exception::Result;
+
+use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 
 pub trait KeysColumnIter<T> {
     fn get_slice(&self) -> &[T];
 }
 
-pub struct FixedKeysColumnIter<T> where T: PrimitiveType {
+pub struct FixedKeysColumnIter<T>
+where T: PrimitiveType
+{
     pub inner: PrimitiveColumn<T>,
 }
 
-impl<T> FixedKeysColumnIter<T> where T: PrimitiveType {
+impl<T> FixedKeysColumnIter<T>
+where T: PrimitiveType
+{
     pub fn create(inner: &PrimitiveColumn<T>) -> Result<Self> {
-        Ok(Self { inner: inner.clone() })
+        Ok(Self {
+            inner: inner.clone(),
+        })
     }
 }
 
-impl<T> KeysColumnIter<T> for FixedKeysColumnIter<T> where T: PrimitiveType {
+impl<T> KeysColumnIter<T> for FixedKeysColumnIter<T>
+where T: PrimitiveType
+{
     fn get_slice(&self) -> &[T] {
         self.inner.values()
     }
@@ -25,6 +35,7 @@ impl<T> KeysColumnIter<T> for FixedKeysColumnIter<T> where T: PrimitiveType {
 
 pub struct SerializedKeysColumnIter {
     inner: Vec<KeysRef>,
+    #[allow(unused)]
     column: StringColumn,
 }
 
@@ -41,7 +52,10 @@ impl SerializedKeysColumnIter {
             inner.push(KeysRef::create(address, offset_1 - offset));
         }
 
-        Ok(SerializedKeysColumnIter { inner, column: column.clone() })
+        Ok(SerializedKeysColumnIter {
+            inner,
+            column: column.clone(),
+        })
     }
 }
 
@@ -50,4 +64,3 @@ impl KeysColumnIter<KeysRef> for SerializedKeysColumnIter {
         self.inner.as_slice()
     }
 }
-

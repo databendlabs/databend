@@ -1,23 +1,43 @@
 use std::sync::Arc;
+
 use bytes::BytesMut;
-use common_datablocks::{DataBlock, HashMethod, HashMethodKeysU16, HashMethodKeysU32, HashMethodKeysU64, HashMethodKeysU8, HashMethodSerializer};
-use common_datavalues2::{ColumnRef, MutableColumn, MutableStringColumn};
+use common_datablocks::DataBlock;
+use common_datablocks::HashMethod;
+use common_datablocks::HashMethodKeysU16;
+use common_datablocks::HashMethodKeysU32;
+use common_datablocks::HashMethodKeysU64;
+use common_datablocks::HashMethodKeysU8;
+use common_datablocks::HashMethodSerializer;
 use common_datavalues2::prelude::column::ScalarColumnBuilder;
+use common_datavalues2::ColumnRef;
+use common_datavalues2::MutableColumn;
+use common_datavalues2::MutableStringColumn;
 use common_exception::Result;
-use common_functions::aggregates::{StateAddr, StateAddrs};
-use crate::pipelines::new::processors::AggregatorParams;
-use crate::pipelines::transforms::group_by::StateEntity;
-use crate::pipelines::transforms::group_by::KeysColumnBuilder;
+use common_functions::aggregates::StateAddr;
+use common_functions::aggregates::StateAddrs;
+
 use crate::pipelines::new::processors::transforms::transform_aggregator::Aggregator;
-use crate::pipelines::transforms::group_by::{AggregatorState, PolymorphicKeysHelper};
+use crate::pipelines::new::processors::AggregatorParams;
+use crate::pipelines::transforms::group_by::AggregatorState;
+use crate::pipelines::transforms::group_by::KeysColumnBuilder;
+use crate::pipelines::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::transforms::group_by::StateEntity;
 
-pub type KeysU8PartialAggregator<const HAS_AGG: bool> = PartialAggregator<HAS_AGG, HashMethodKeysU8>;
-pub type KeysU16PartialAggregator<const HAS_AGG: bool> = PartialAggregator<HAS_AGG, HashMethodKeysU16>;
-pub type KeysU32PartialAggregator<const HAS_AGG: bool> = PartialAggregator<HAS_AGG, HashMethodKeysU32>;
-pub type KeysU64PartialAggregator<const HAS_AGG: bool> = PartialAggregator<HAS_AGG, HashMethodKeysU64>;
-pub type SerializerPartialAggregator<const HAS_AGG: bool> = PartialAggregator<HAS_AGG, HashMethodSerializer>;
+pub type KeysU8PartialAggregator<const HAS_AGG: bool> =
+    PartialAggregator<HAS_AGG, HashMethodKeysU8>;
+pub type KeysU16PartialAggregator<const HAS_AGG: bool> =
+    PartialAggregator<HAS_AGG, HashMethodKeysU16>;
+pub type KeysU32PartialAggregator<const HAS_AGG: bool> =
+    PartialAggregator<HAS_AGG, HashMethodKeysU32>;
+pub type KeysU64PartialAggregator<const HAS_AGG: bool> =
+    PartialAggregator<HAS_AGG, HashMethodKeysU64>;
+pub type SerializerPartialAggregator<const HAS_AGG: bool> =
+    PartialAggregator<HAS_AGG, HashMethodSerializer>;
 
-pub struct PartialAggregator<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>> {
+pub struct PartialAggregator<
+    const HAS_AGG: bool,
+    Method: HashMethod + PolymorphicKeysHelper<Method>,
+> {
     is_generated: bool,
 
     method: Method,
@@ -25,10 +45,17 @@ pub struct PartialAggregator<const HAS_AGG: bool, Method: HashMethod + Polymorph
     params: Arc<AggregatorParams>,
 }
 
-impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send> PartialAggregator<HAS_AGG, Method> {
+impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
+    PartialAggregator<HAS_AGG, Method>
+{
     pub fn create(method: Method, params: Arc<AggregatorParams>) -> Self {
         let state = method.aggregate_state();
-        Self { is_generated: false, state, method, params }
+        Self {
+            is_generated: false,
+            state,
+            method,
+            params,
+        }
     }
 
     #[inline(always)]
@@ -41,7 +68,11 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
     /// Allocate aggregation function state for each key(the same key can always get the same state)
     #[inline(always)]
-    fn lookup_state(params: &Arc<AggregatorParams>, keys: Vec<Method::HashKey>, state: &mut Method::State) -> StateAddrs {
+    fn lookup_state(
+        params: &Arc<AggregatorParams>,
+        keys: Vec<Method::HashKey>,
+        state: &mut Method::State,
+    ) -> StateAddrs {
         let mut places = Vec::with_capacity(keys.len());
 
         let mut inserted = true;
@@ -64,9 +95,13 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 
     #[inline(always)]
-    fn aggregate_arguments(block: &DataBlock, params: &Arc<AggregatorParams>) -> Result<Vec<Vec<ColumnRef>>> {
+    fn aggregate_arguments(
+        block: &DataBlock,
+        params: &Arc<AggregatorParams>,
+    ) -> Result<Vec<Vec<ColumnRef>>> {
         let aggregate_functions_arguments = &params.aggregate_functions_arguments_name;
-        let mut aggregate_arguments_columns = Vec::with_capacity(aggregate_functions_arguments.len());
+        let mut aggregate_arguments_columns =
+            Vec::with_capacity(aggregate_functions_arguments.len());
         for function_arguments in aggregate_functions_arguments {
             let mut function_arguments_column = Vec::with_capacity(function_arguments.len());
 
@@ -83,7 +118,11 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
     #[inline(always)]
     #[allow(clippy::ptr_arg)] // &[StateAddr] slower than &StateAddrs ~20%
-    fn execute(params: &Arc<AggregatorParams>, block: &DataBlock, places: &StateAddrs) -> Result<()> {
+    fn execute(
+        params: &Arc<AggregatorParams>,
+        block: &DataBlock,
+        places: &StateAddrs,
+    ) -> Result<()> {
         let aggregate_functions = &params.aggregate_functions;
         let offsets_aggregate_states = &params.offsets_aggregate_states;
         let aggregate_arguments_columns = Self::aggregate_arguments(block, params)?;
@@ -156,7 +195,9 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 }
 
-impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for PartialAggregator<true, Method> {
+impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
+    for PartialAggregator<true, Method>
+{
     const NAME: &'static str = "";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
@@ -173,7 +214,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for P
     }
 }
 
-impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for PartialAggregator<false, Method> {
+impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
+    for PartialAggregator<false, Method>
+{
     const NAME: &'static str = "";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
@@ -195,7 +238,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator for P
                 }
 
                 let columns = keys_column_builder.finish();
-                Ok(Some(DataBlock::create(self.params.schema.clone(), vec![columns])))
+                Ok(Some(DataBlock::create(self.params.schema.clone(), vec![
+                    columns,
+                ])))
             }
         }
     }

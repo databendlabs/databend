@@ -73,7 +73,12 @@ impl GroupByPartialTransform {
 
         let stream = self.input.execute().await?;
         let aggr_exprs = &self.aggr_exprs;
-        let aggregator_params = AggregatorParams::try_create(&self.schema, &self.schema_before_group_by, aggr_exprs, &group_cols)?;
+        let aggregator_params = AggregatorParams::try_create(
+            &self.schema,
+            &self.schema_before_group_by,
+            aggr_exprs,
+            &group_cols,
+        )?;
 
         let aggregator = Aggregator::create(method, aggregator_params);
         let state = aggregator.aggregate(group_cols, stream).await?;

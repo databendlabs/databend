@@ -87,6 +87,7 @@ impl ExecutorTasksQueue {
         }
     }
 
+    #[allow(unused_assignments)]
     pub fn push_tasks(&self, ctx: &mut ExecutorWorkerContext, mut tasks: VecDeque<ExecutorTask>) {
         unsafe {
             let mut wake_worker_id = None;

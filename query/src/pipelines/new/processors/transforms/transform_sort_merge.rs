@@ -1,10 +1,15 @@
 use std::sync::Arc;
-use common_datablocks::{DataBlock, SortColumnDescription};
-use common_exception::{ErrorCode, Result};
-use common_planners::SortPlan;
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
+
+use common_datablocks::DataBlock;
+use common_datablocks::SortColumnDescription;
+use common_exception::ErrorCode;
+use common_exception::Result;
+
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::Event;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
 
 pub enum TransformSortMerge {
     Consume(ConsumeState),
@@ -20,42 +25,46 @@ impl TransformSortMerge {
         limit: Option<usize>,
         sort_columns_descriptions: Vec<SortColumnDescription>,
     ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(TransformSortMerge::Consume(ConsumeState {
-            limit,
-            input_port,
-            output_port,
-            sort_columns_descriptions,
-            input_data_blocks: vec![],
-        }))))
+        Ok(ProcessorPtr::create(Box::new(TransformSortMerge::Consume(
+            ConsumeState {
+                limit,
+                input_port,
+                output_port,
+                sort_columns_descriptions,
+                input_data_blocks: vec![],
+            },
+        ))))
     }
 
     #[inline(always)]
-    fn to_sorting_state(mut self) -> Result<Self> {
+    fn convert_to_sorting_state(self) -> Result<Self> {
         match self {
-            TransformSortMerge::Consume(state) => Ok(TransformSortMerge::Sorting(
-                SortingBlockState {
+            TransformSortMerge::Consume(state) => {
+                Ok(TransformSortMerge::Sorting(SortingBlockState {
                     input_port: state.input_port,
                     output_port: state.output_port,
                     blocks: state.input_data_blocks,
                     limit: state.limit,
                     sort_columns_descriptions: state.sort_columns_descriptions,
-                }
+                }))
+            }
+            _ => Err(ErrorCode::LogicalError(
+                "State invalid, must be consume state",
             )),
-            _ => Err(ErrorCode::LogicalError("State invalid, must be consume state")),
         }
     }
 
     #[inline(always)]
-    fn to_sorted_state(mut self, sorted_block: Option<DataBlock>) -> Result<Self> {
+    fn convert_to_sorted_state(self, sorted_block: Option<DataBlock>) -> Result<Self> {
         match self {
-            TransformSortMerge::Sorting(state) => Ok(TransformSortMerge::Sorted(
-                SortedState {
-                    sorted_block,
-                    input_port: state.input_port,
-                    output_port: state.output_port,
-                }
+            TransformSortMerge::Sorting(state) => Ok(TransformSortMerge::Sorted(SortedState {
+                sorted_block,
+                input_port: state.input_port,
+                output_port: state.output_port,
+            })),
+            _ => Err(ErrorCode::LogicalError(
+                "State invalid, must be sorting state",
             )),
-            _ => Err(ErrorCode::LogicalError("State invalid, must be sorting state")),
         }
     }
 
@@ -65,14 +74,16 @@ impl TransformSortMerge {
             if state.input_port.is_finished() {
                 let mut temp_state = TransformSortMerge::Finished;
                 std::mem::swap(self, &mut temp_state);
-                temp_state = temp_state.to_sorting_state()?;
+                temp_state = temp_state.convert_to_sorting_state()?;
                 std::mem::swap(self, &mut temp_state);
                 debug_assert!(matches!(temp_state, TransformSortMerge::Finished));
                 return Ok(Event::Sync);
             }
 
             if state.input_port.has_data() {
-                state.input_data_blocks.push(state.input_port.pull_data().unwrap()?);
+                state
+                    .input_data_blocks
+                    .push(state.input_port.pull_data().unwrap()?);
             }
 
             state.input_port.set_need_data();
@@ -124,14 +135,17 @@ impl Processor for TransformSortMerge {
                 true => None,
                 false => {
                     let desc = &state.sort_columns_descriptions;
-                    Some(DataBlock::merge_sort_blocks(&state.blocks, desc, state.limit)?)
+                    Some(DataBlock::merge_sort_blocks(
+                        &state.blocks,
+                        desc,
+                        state.limit,
+                    )?)
                 }
             };
 
-
             let mut temp_state = TransformSortMerge::Finished;
             std::mem::swap(self, &mut temp_state);
-            temp_state = temp_state.to_sorted_state(sorted_block)?;
+            temp_state = temp_state.convert_to_sorted_state(sorted_block)?;
             std::mem::swap(self, &mut temp_state);
             debug_assert!(matches!(temp_state, TransformSortMerge::Finished));
             return Ok(());
@@ -140,7 +154,6 @@ impl Processor for TransformSortMerge {
         Err(ErrorCode::LogicalError("State invalid. it's a bug."))
     }
 }
-
 
 pub struct SortedState {
     input_port: Arc<InputPort>,

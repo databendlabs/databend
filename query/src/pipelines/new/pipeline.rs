@@ -13,14 +13,16 @@
 // limitations under the License.
 
 use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::pipelines::new::pipe::{NewPipe, TransformPipeBuilder};
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
+use crate::pipelines::new::pipe::NewPipe;
+use crate::pipelines::new::pipe::TransformPipeBuilder;
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::ResizeProcessor;
-use crate::pipelines::new::SourcePipeBuilder;
 
 pub struct NewPipeline {
     max_threads: usize,
@@ -29,7 +31,10 @@ pub struct NewPipeline {
 
 impl NewPipeline {
     pub fn create() -> NewPipeline {
-        NewPipeline { max_threads: 0, pipes: Vec::new() }
+        NewPipeline {
+            max_threads: 0,
+            pipes: Vec::new(),
+        }
     }
 
     pub fn add_pipe(&mut self, pipe: NewPipe) {
@@ -76,8 +81,7 @@ impl NewPipeline {
     }
 
     pub fn add_transform<F>(&mut self, f: F) -> Result<()>
-        where F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>
-    {
+    where F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> {
         let mut transform_builder = TransformPipeBuilder::create();
         for _index in 0..self.output_len() {
             let input_port = InputPort::create();

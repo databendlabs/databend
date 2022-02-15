@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use common_datavalues2::DataSchemaRef;
 
 use common_exception::Result;
 use common_planners::PlanNode;
@@ -24,7 +23,6 @@ use crate::interpreters::access::ManagementModeAccess;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::InterpreterQueryLog;
-use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 
 pub struct InterceptorInterpreter {

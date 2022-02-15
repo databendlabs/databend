@@ -28,6 +28,5 @@ mod unsafe_cell_wrap;
 
 pub use pipe::NewPipe;
 pub use pipe::SourcePipeBuilder;
-
 pub use pipeline::NewPipeline;
 pub use pipeline_builder::QueryPipelineBuilder;

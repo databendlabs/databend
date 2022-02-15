@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::format;
 use std::sync::Arc;
-use std::thread::JoinHandle;
 
 use common_base::Thread;
 use common_exception::ErrorCode;
@@ -34,7 +32,10 @@ impl PipelineThreadsExecutor {
     pub fn create(pipeline: NewPipeline) -> Result<Arc<PipelineThreadsExecutor>> {
         let threads_num = pipeline.get_max_threads();
         let inner_executor = PipelineExecutor::create(pipeline, threads_num)?;
-        Ok(Arc::new(PipelineThreadsExecutor { threads_num, inner_executor }))
+        Ok(Arc::new(PipelineThreadsExecutor {
+            threads_num,
+            inner_executor,
+        }))
     }
 
     pub fn finish(&self) -> Result<()> {
@@ -47,12 +48,15 @@ impl PipelineThreadsExecutor {
         for thread_num in 0..self.threads_num {
             let worker_executor = self.inner_executor.clone();
             let name = format!("PipelineExecutor-{}", thread_num);
-            threads.push(Thread::named_spawn(Some(String::from(name)), move || unsafe {
+            threads.push(Thread::named_spawn(Some(name), move || unsafe {
                 match worker_executor.execute(thread_num) {
                     Ok(_) => Ok(()),
                     Err(cause) => {
                         worker_executor.finish();
-                        Err(cause.add_message_back(format!(" (while in processor thread {})", thread_num)))
+                        Err(cause.add_message_back(format!(
+                            " (while in processor thread {})",
+                            thread_num
+                        )))
                     }
                 }
             }));

@@ -15,22 +15,24 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::Event;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
-use crate::pipelines::new::processors::transforms::transform::Transform;
-use crate::pipelines::new::processors::transforms::transform::Transformer;
 
-pub struct TransformLimit {
-    limit: Option<usize>,
-    offset: usize,
-}
+pub struct TransformLimit;
 
 impl TransformLimit {
-    pub fn try_create(limit: Option<usize>, offset: usize, input: Arc<InputPort>, output: Arc<OutputPort>) -> Result<ProcessorPtr> {
+    pub fn try_create(
+        limit: Option<usize>,
+        offset: usize,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+    ) -> Result<ProcessorPtr> {
         match (limit, offset) {
             (None, 0) => Err(ErrorCode::LogicalError("It's a bug")),
             (Some(_), 0) => OnlyLimitTransform::create(input, output, limit, offset),
@@ -44,9 +46,9 @@ const ONLY_LIMIT: usize = 0;
 const ONLY_OFFSET: usize = 1;
 const OFFSET_AND_LIMIT: usize = 2;
 
-type OnlyLimitTransform = TransformLimitImpl::<ONLY_LIMIT>;
-type OnlyOffsetTransform = TransformLimitImpl::<ONLY_OFFSET>;
-type OffsetAndLimitTransform = TransformLimitImpl::<OFFSET_AND_LIMIT>;
+type OnlyLimitTransform = TransformLimitImpl<ONLY_LIMIT>;
+type OnlyOffsetTransform = TransformLimitImpl<ONLY_OFFSET>;
+type OffsetAndLimitTransform = TransformLimitImpl<OFFSET_AND_LIMIT>;
 
 struct TransformLimitImpl<const MODE: usize> {
     take_remaining: usize,
@@ -59,8 +61,15 @@ struct TransformLimitImpl<const MODE: usize> {
     output_data_block: Option<DataBlock>,
 }
 
-impl<const MODE: usize> TransformLimitImpl<MODE> where Self: Processor {
-    pub fn create(input: Arc<InputPort>, output: Arc<OutputPort>, limit: Option<usize>, offset: usize) -> Result<ProcessorPtr> {
+impl<const MODE: usize> TransformLimitImpl<MODE>
+where Self: Processor
+{
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        limit: Option<usize>,
+        offset: usize,
+    ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(Self {
             input,
             output,
@@ -106,7 +115,7 @@ impl<const MODE: usize> Processor for TransformLimitImpl<MODE> {
             ONLY_LIMIT => "LimitTransform",
             ONLY_OFFSET => "OffsetTransform",
             OFFSET_AND_LIMIT => "OffsetAndLimitTransform",
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -174,7 +183,7 @@ impl<const MODE: usize> Processor for TransformLimitImpl<MODE> {
                 ONLY_LIMIT => Some(self.take_rows(data_block)),
                 OFFSET_AND_LIMIT if self.skip_remaining != 0 => self.skip_rows(data_block),
                 OFFSET_AND_LIMIT => Some(self.take_rows(data_block)),
-                _ => unreachable!()
+                _ => unreachable!(),
             }
         }
 

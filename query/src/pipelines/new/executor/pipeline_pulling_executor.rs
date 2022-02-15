@@ -1,17 +1,19 @@
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvError, Sender, SyncSender};
-use std::thread::JoinHandle;
+
 use common_datablocks::DataBlock;
-use crate::pipelines::new::executor::pipeline_threads_executor::PipelineThreadsExecutor;
-use crate::pipelines::new::executor::PipelineExecutor;
-use crate::pipelines::new::{NewPipe, NewPipeline};
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_infallible::Mutex;
+
+use crate::pipelines::new::executor::pipeline_threads_executor::PipelineThreadsExecutor;
 use crate::pipelines::new::pipe::SinkPipeBuilder;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::{Sink, Sinker};
+use crate::pipelines::new::processors::Sink;
+use crate::pipelines::new::processors::Sinker;
+use crate::pipelines::new::NewPipeline;
 
 enum Executor {
     Inited(Arc<PipelineThreadsExecutor>),
@@ -73,13 +75,20 @@ impl PipelinePullingExecutor {
         Ok(())
     }
 
-    fn thread_function(state: Arc<Mutex<Executor>>, threads_executor: Arc<PipelineThreadsExecutor>) -> impl Fn() {
+    fn thread_function(
+        state: Arc<Mutex<Executor>>,
+        threads_executor: Arc<PipelineThreadsExecutor>,
+    ) -> impl Fn() {
         move || {
             let res = threads_executor.execute();
             let mut state = state.lock();
             match res {
-                Ok(_) => { *state = Executor::Finished(Ok(())); }
-                Err(cause) => { *state = Executor::Finished(Err(cause)); }
+                Ok(_) => {
+                    *state = Executor::Finished(Ok(()));
+                }
+                Err(cause) => {
+                    *state = Executor::Finished(Err(cause));
+                }
             }
         }
     }
@@ -116,7 +125,7 @@ impl Sink for PullingSink {
     const NAME: &'static str = "PullingExecutorSink";
 
     fn on_finish(&mut self) -> Result<()> {
-        if let PullingSink::Running(v) = self {
+        if let PullingSink::Running(_) = self {
             *self = PullingSink::Finished;
         }
 
@@ -128,8 +137,8 @@ impl Sink for PullingSink {
             PullingSink::Finished => Ok(()),
             PullingSink::Running(tx) => match tx.send(data_block) {
                 Ok(_) => Ok(()),
-                Err(cause) => Err(ErrorCode::LogicalError(format!("{:?}", cause)))
-            }
+                Err(cause) => Err(ErrorCode::LogicalError(format!("{:?}", cause))),
+            },
         }
     }
 }

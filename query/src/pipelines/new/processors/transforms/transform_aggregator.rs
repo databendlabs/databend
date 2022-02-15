@@ -1,17 +1,28 @@
-use std::alloc::Layout;
 use std::sync::Arc;
-use tonic::Code::Unimplemented;
-use common_datablocks::{DataBlock, HashMethodKeysU16, HashMethodKeysU32, HashMethodKeysU64, HashMethodKeysU8, HashMethodKind, HashMethodSerializer};
-use common_datavalues2::DataSchemaRef;
-use common_exception::{ErrorCode, Result};
-use common_functions::aggregates::{AggregateFunctionRef, get_layout_offsets};
-use common_planners::Expression;
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
-use crate::pipelines::new::processors::{AggregatorParams, AggregatorTransformParams, Processor};
-use crate::pipelines::new::processors::processor::{Event, ProcessorPtr};
-use crate::pipelines::new::processors::transforms::aggregator::{FinalSingleKeyAggregator, KeysU16FinalAggregator, KeysU16PartialAggregator, KeysU32FinalAggregator, KeysU32PartialAggregator, KeysU64FinalAggregator, KeysU64PartialAggregator, KeysU8FinalAggregator, KeysU8PartialAggregator, PartialAggregator, PartialSingleKeyAggregator, SerializerFinalAggregator, SerializerPartialAggregator};
-use crate::pipelines::new::processors::transforms::transform::Transform;
 
+use common_datablocks::DataBlock;
+use common_datablocks::HashMethodKind;
+use common_exception::ErrorCode;
+use common_exception::Result;
+
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::Event;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::transforms::aggregator::FinalSingleKeyAggregator;
+use crate::pipelines::new::processors::transforms::aggregator::KeysU16FinalAggregator;
+use crate::pipelines::new::processors::transforms::aggregator::KeysU16PartialAggregator;
+use crate::pipelines::new::processors::transforms::aggregator::KeysU32FinalAggregator;
+use crate::pipelines::new::processors::transforms::aggregator::KeysU32PartialAggregator;
+use crate::pipelines::new::processors::transforms::aggregator::KeysU64FinalAggregator;
+use crate::pipelines::new::processors::transforms::aggregator::KeysU64PartialAggregator;
+use crate::pipelines::new::processors::transforms::aggregator::KeysU8FinalAggregator;
+use crate::pipelines::new::processors::transforms::aggregator::KeysU8PartialAggregator;
+use crate::pipelines::new::processors::transforms::aggregator::PartialSingleKeyAggregator;
+use crate::pipelines::new::processors::transforms::aggregator::SerializerFinalAggregator;
+use crate::pipelines::new::processors::transforms::aggregator::SerializerPartialAggregator;
+use crate::pipelines::new::processors::AggregatorTransformParams;
+use crate::pipelines::new::processors::Processor;
 
 pub struct TransformAggregator;
 
@@ -58,7 +69,7 @@ impl TransformAggregator {
                     transform_params.transform_output_port,
                     SerializerFinalAggregator::<false>::create(method, aggregator_params),
                 ),
-            }
+            },
             false => match transform_params.method {
                 HashMethodKind::KeysU8(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
@@ -85,7 +96,7 @@ impl TransformAggregator {
                     transform_params.transform_output_port,
                     SerializerFinalAggregator::<true>::create(method, aggregator_params),
                 ),
-            }
+            },
         }
     }
 
@@ -131,7 +142,7 @@ impl TransformAggregator {
                     transform_params.transform_output_port,
                     SerializerPartialAggregator::<false>::create(method, aggregator_params),
                 ),
-            }
+            },
             false => match transform_params.method {
                 HashMethodKind::KeysU8(method) => AggregatorTransform::create(
                     transform_params.transform_input_port,
@@ -158,7 +169,7 @@ impl TransformAggregator {
                     transform_params.transform_output_port,
                     SerializerPartialAggregator::<true>::create(method, aggregator_params),
                 ),
-            }
+            },
         }
     }
 }
@@ -170,7 +181,6 @@ pub trait Aggregator: Sized + Send {
     fn generate(&mut self) -> Result<Option<DataBlock>>;
 }
 
-
 enum AggregatorTransform<TAggregator: Aggregator> {
     ConsumeData(ConsumeState<TAggregator>),
     Generate(GenerateState<TAggregator>),
@@ -178,29 +188,34 @@ enum AggregatorTransform<TAggregator: Aggregator> {
 }
 
 impl<TAggregator: Aggregator + 'static> AggregatorTransform<TAggregator> {
-    pub fn create(input_port: Arc<InputPort>, output_port: Arc<OutputPort>, inner: TAggregator) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(AggregatorTransform::<TAggregator>::ConsumeData(
+    pub fn create(
+        input_port: Arc<InputPort>,
+        output_port: Arc<OutputPort>,
+        inner: TAggregator,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(AggregatorTransform::<
+            TAggregator,
+        >::ConsumeData(
             ConsumeState {
                 inner,
                 input_port,
                 output_port,
                 input_data_block: None,
-            }
+            },
         ))))
     }
 
-    pub fn to_generate(self) -> Result<Self> {
+    pub fn convert_to_generate(self) -> Result<Self> {
         match self {
-            AggregatorTransform::ConsumeData(s) => Ok(AggregatorTransform::Generate(
-                GenerateState {
+            AggregatorTransform::ConsumeData(s) => {
+                Ok(AggregatorTransform::Generate(GenerateState {
                     inner: s.inner,
                     is_finished: false,
-                    input_port: s.input_port,
                     output_port: s.output_port,
                     output_data_block: None,
-                }
-            )),
-            _ => Err(ErrorCode::LogicalError(""))
+                }))
+            }
+            _ => Err(ErrorCode::LogicalError("")),
         }
     }
 }
@@ -238,7 +253,7 @@ impl<TAggregator: Aggregator + 'static> AggregatorTransform<TAggregator> {
             if state.input_port.is_finished() {
                 let mut temp_state = AggregatorTransform::Finished;
                 std::mem::swap(self, &mut temp_state);
-                temp_state = temp_state.to_generate()?;
+                temp_state = temp_state.convert_to_generate()?;
                 std::mem::swap(self, &mut temp_state);
                 debug_assert!(matches!(temp_state, AggregatorTransform::Finished));
                 return Ok(Event::Sync);
@@ -314,7 +329,6 @@ impl<TAggregator: Aggregator> ConsumeState<TAggregator> {
 struct GenerateState<TAggregator: Aggregator> {
     inner: TAggregator,
     is_finished: bool,
-    input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
     output_data_block: Option<DataBlock>,
 }
