@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+use std::convert::Infallible;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -36,7 +37,9 @@ impl MetaClientProvider {
     }
 
     /// Get meta async client, trait is defined in MetaApi.
-    pub async fn try_get_meta_client(&self) -> Result<Arc<MetaGrpcClient>> {
+    pub async fn try_get_meta_client(
+        &self,
+    ) -> std::result::Result<Arc<MetaGrpcClient>, Infallible> {
         let client = MetaGrpcClient::try_new(&self.grpc_conf).await?;
         Ok(Arc::new(client))
     }

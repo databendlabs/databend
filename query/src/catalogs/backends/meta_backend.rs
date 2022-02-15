@@ -70,7 +70,10 @@ impl MetaBackend {
         F: Send + Sync + 'static,
         T: Send + Sync + 'static,
     {
-        let cli = self.meta_api_provider.try_get_meta_client().await?;
+        let res: Result<_, std::convert::Infallible> =
+            self.meta_api_provider.try_get_meta_client().await;
+        let cli = res.unwrap();
+
         f(cli).await
     }
 }

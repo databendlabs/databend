@@ -420,7 +420,12 @@ impl MetaNode {
             for addr in addrs {
                 let mut client = RaftServiceClient::connect(format!("http://{}", addr))
                     .await
-                    .map_err(|e| MetaNetworkError::CannotConnectNode(e.to_string()))?;
+                    .map_err(|e| {
+                        MetaNetworkError::ConnectionError(ConnectionError::new(
+                            e,
+                            format!("while connect to {}", addr),
+                        ))
+                    })?;
 
                 let admin_req = ForwardRequest {
                     forward_to_leader: 1,

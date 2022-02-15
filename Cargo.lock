@@ -1599,6 +1599,7 @@ dependencies = [
 name = "common-grpc"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "async-trait",
  "common-arrow",
  "common-base",
@@ -1611,6 +1612,7 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio-stream",
  "tonic",
  "trust-dns-resolver",
