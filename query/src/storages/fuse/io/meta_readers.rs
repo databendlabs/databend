@@ -163,18 +163,18 @@ where T: BufReaderProvider + Sync
 #[async_trait::async_trait]
 impl BufReaderProvider for &QueryContext {
     async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<SeekableReader>> {
-        let accessor = self.get_storage_accessor().await?;
+        let operator = self.get_storage_operator().await?;
         let len = match len {
             Some(l) => l,
             None => {
-                let object = accessor.stat(path).run().await.map_err(|e| match e {
+                let object = operator.stat(path).run().await.map_err(|e| match e {
                     opendal::error::Error::ObjectNotExist(msg) => ErrorCode::DalPathNotFound(msg),
                     _ => ErrorCode::DalTransportError(e.to_string()),
                 })?;
                 object.size
             }
         };
-        let reader = SeekableReader::new(accessor, path, len);
+        let reader = SeekableReader::new(operator, path, len);
         let read_buffer_size = self.get_settings().get_storage_read_buffer_size()?;
         Ok(BufReader::with_capacity(read_buffer_size as usize, reader))
     }

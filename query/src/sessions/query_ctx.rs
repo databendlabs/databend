@@ -15,7 +15,6 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
@@ -38,12 +37,7 @@ use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
-use opendal::credential::Credential;
-use opendal::services::fs;
-use opendal::services::s3;
-use opendal::Accessor;
 use opendal::Operator;
-use opendal::Scheme as DalSchema;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
@@ -293,39 +287,10 @@ impl QueryContext {
         self.shared.session.session_mgr.get_storage_cache_manager()
     }
 
-    // Get the storage data accessor by config.
-    // TODO(xuanwo): we can build dal backend only once.
-    pub async fn get_storage_accessor(&self) -> Result<Operator> {
-        let storage_conf = &self.get_config().storage;
-        let schema_name = &storage_conf.storage_type;
-        let schema = DalSchema::from_str(schema_name)
-            .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
-        let da: Arc<dyn Accessor> = match schema {
-            DalSchema::S3 => {
-                let conf = &storage_conf.s3;
-                s3::Backend::build()
-                    .region(&conf.region)
-                    .endpoint(&conf.endpoint_url)
-                    .bucket(&conf.bucket)
-                    .credential(Credential::hmac(
-                        &conf.access_key_id,
-                        &conf.secret_access_key,
-                    ))
-                    .finish()
-                    .await
-                    .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?
-            }
-            DalSchema::Azblob => {
-                todo!()
-            }
-            DalSchema::Fs => fs::Backend::build()
-                .root(&storage_conf.disk.data_path)
-                .finish()
-                .await
-                .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?,
-        };
-
-        Ok(Operator::new(da).layer(self.shared.dal_ctx.clone()))
+    // Get the storage data accessor operator from the session manager.
+    pub async fn get_storage_operator(&self) -> Result<Operator> {
+        let operator = self.shared.session.get_storage_operator();
+        Ok(operator.layer(self.shared.dal_ctx.clone()))
     }
 
     pub fn get_dal_context(&self) -> &DalContext {

@@ -23,46 +23,15 @@ use crate::MetaError;
 use crate::MetaNetworkError;
 use crate::MetaResult;
 
-/// Some underlying mod still uses ErrorCode, need to build a mapping from supported ErrorCode to MetaError.
-///
-/// This is a temp workaround.
-impl From<ErrorCode> for MetaError {
-    fn from(err_code: ErrorCode) -> Self {
-        let code = err_code.code();
-
-        match code {
-            _ if code == ErrorCode::BadAddressFormat("").code() => {
-                MetaNetworkError::BadAddressFormat(err_code.message()).into()
-            }
-            _ if code == ErrorCode::TLSConfigurationFailure("").code() => {
-                MetaError::TLSConfigurationFailure(err_code.message())
-            }
-            _ if code == ErrorCode::CannotConnectNode("").code() => {
-                MetaNetworkError::CannotConnectNode(err_code.message()).into()
-            }
-
-            _ => {
-                unimplemented!("can not convert ErrorCode to MetaError: {}", err_code)
-            }
-        }
-    }
-}
-
 impl From<MetaError> for ErrorCode {
     fn from(e: MetaError) -> Self {
         match e {
             MetaError::AppError(app_err) => app_err.into(),
+            MetaError::MetaNetworkError(net_err) => net_err.into(),
 
-            // Except application error, all other errors are not handleable and can only be converted to a
-            // fatal error.
+            // Except application error and part of network error,
+            // all other errors are not handleable and can only be converted to a fatal error.
             //
-            MetaError::MetaNetworkError(ref net_err) => match net_err {
-                MetaNetworkError::CannotConnectNode(e) => {
-                    ErrorCode::CannotConnectNode(e.to_string())
-                }
-                MetaNetworkError::BadAddressFormat(e) => ErrorCode::BadAddressFormat(e.to_string()),
-                _ => ErrorCode::MetaServiceError(e.to_string()),
-            },
             MetaError::MetaRaftError(e) => ErrorCode::MetaServiceError(e.to_string()),
             MetaError::MetaStorageError(e) => ErrorCode::MetaServiceError(e.to_string()),
             MetaError::MetaResultError(e) => ErrorCode::MetaServiceError(e.to_string()),
@@ -74,10 +43,6 @@ impl From<MetaError> for ErrorCode {
                 ErrorCode::MetaServiceError("MetaStoreNotFound".to_string())
             }
             MetaError::LoadConfigError(e) => ErrorCode::MetaServiceError(e),
-            MetaError::TLSConfigurationFailure(e) => {
-                // temp workaround
-                ErrorCode::TLSConfigurationFailure(e)
-            }
             MetaError::StartMetaServiceError(e) => ErrorCode::MetaServiceError(e),
             MetaError::ConcurrentSnapshotInstall(e) => ErrorCode::MetaServiceError(e),
             MetaError::MetaServiceError(e) => ErrorCode::MetaServiceError(e),

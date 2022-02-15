@@ -1599,6 +1599,7 @@ dependencies = [
 name = "common-grpc"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "async-trait",
  "common-arrow",
  "common-base",
@@ -1611,6 +1612,7 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio-stream",
  "tonic",
  "trust-dns-resolver",
@@ -4747,9 +4749,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.0.1"
+version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7106bd15c6e3b276e7b001ea8df207262c0879c0aef1505fc29674462af7142f"
+checksum = "7855f448846e70ef495f58997c84ce3ab5c08f524fdf80f3bb2ada206238fc1f"
 dependencies = [
  "async-compat",
  "async-trait",

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use anyerror::AnyError;
 use common_base::tokio;
 use common_base::tokio::sync::oneshot;
 use common_base::tokio::sync::oneshot::Receiver;
@@ -70,15 +71,15 @@ impl GrpcServer {
 
         let builder = Server::builder();
 
-        let tls_conf = Self::tls_config(&self.conf).await.map_err(|e| {
-            MetaError::TLSConfigurationFailure(format!("failed to build ServerTlsConfig {}", e))
-        })?;
+        let tls_conf = Self::tls_config(&self.conf)
+            .await
+            .map_err(|e| MetaNetworkError::TLSConfigError(AnyError::new(&e)))?;
 
         let mut builder = if let Some(tls_conf) = tls_conf {
             tracing::info!("gRPC TLS enabled");
-            builder.tls_config(tls_conf).map_err(|e| {
-                MetaError::TLSConfigurationFailure(format!("gRPC server tls_config failure {}", e))
-            })?
+            builder
+                .tls_config(tls_conf)
+                .map_err(|e| MetaNetworkError::TLSConfigError(AnyError::new(&e)))?
         } else {
             builder
         };
@@ -175,7 +176,7 @@ impl GrpcServer {
         Ok(())
     }
 
-    async fn tls_config(conf: &Config) -> anyhow::Result<Option<ServerTlsConfig>> {
+    async fn tls_config(conf: &Config) -> Result<Option<ServerTlsConfig>, std::io::Error> {
         if conf.tls_rpc_server_enabled() {
             let cert = tokio::fs::read(conf.grpc_tls_server_cert.as_str()).await?;
             let key = tokio::fs::read(conf.grpc_tls_server_key.as_str()).await?;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use anyerror::AnyError;
+use common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
@@ -26,11 +27,30 @@ pub enum MetaNetworkError {
     #[error("{0}")]
     GetNodeAddrError(String),
 
-    #[error("{0}")]
-    CannotConnectNode(String),
+    #[error(transparent)]
+    TLSConfigError(AnyError),
 
-    #[error("{0}")]
-    BadAddressFormat(String),
+    #[error(transparent)]
+    BadAddressFormat(AnyError),
+}
+
+impl From<MetaNetworkError> for ErrorCode {
+    fn from(net_err: MetaNetworkError) -> Self {
+        match net_err {
+            MetaNetworkError::BadAddressFormat(any_err) => {
+                ErrorCode::BadAddressFormat(any_err.to_string())
+            }
+            MetaNetworkError::ConnectionError(any_err) => {
+                ErrorCode::CannotConnectNode(any_err.to_string())
+            }
+            MetaNetworkError::GetNodeAddrError(_) => {
+                ErrorCode::MetaServiceError(net_err.to_string())
+            }
+            MetaNetworkError::TLSConfigError(any_err) => {
+                ErrorCode::TLSConfigurationFailure(any_err.to_string())
+            }
+        }
+    }
 }
 
 pub type MetaNetworkResult<T> = std::result::Result<T, MetaNetworkError>;
@@ -54,6 +74,6 @@ impl ConnectionError {
 
 impl From<std::net::AddrParseError> for MetaNetworkError {
     fn from(error: std::net::AddrParseError) -> Self {
-        MetaNetworkError::BadAddressFormat(format!("Bad address format, cause: {}", error))
+        MetaNetworkError::BadAddressFormat(AnyError::new(&error))
     }
 }
