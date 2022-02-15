@@ -16,14 +16,14 @@ use common_datavalues2::prelude::*;
 use common_datavalues2::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use num_traits::AsPrimitive;
 use num::Zero;
+use num_traits::AsPrimitive;
 
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
+use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function2;
-use crate::scalars::BinaryArithmeticFunction;
 
 fn intdiv_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, ctx: &mut EvalContext) -> O
 where
