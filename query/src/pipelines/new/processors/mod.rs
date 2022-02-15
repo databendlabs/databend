@@ -33,6 +33,7 @@ pub use transforms::TransformFilter;
 pub use transforms::TransformHaving;
 pub use transforms::TransformLimitBy;
 pub use transforms::TransformSortMerge;
+pub use transforms::TransformLimit;
 pub use transforms::TransformSortPartial;
 pub use transforms::ExpressionTransform;
 pub use transforms::ProjectionTransform;

@@ -26,7 +26,7 @@ use crate::pipelines::new::pipe::TransformPipeBuilder;
 use crate::pipelines::new::pipeline::NewPipeline;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::{AggregatorParams, ExpressionTransform, AggregatorTransformParams, TableSource, TransformAggregator, ProjectionTransform, TransformFilter, TransformHaving, TransformLimitBy, TransformSortPartial, TransformSortMerge};
+use crate::pipelines::new::processors::{AggregatorParams, ExpressionTransform, AggregatorTransformParams, TableSource, TransformAggregator, ProjectionTransform, TransformFilter, TransformHaving, TransformLimitBy, TransformSortPartial, TransformSortMerge, TransformLimit};
 use crate::pipelines::transforms::get_sort_descriptions;
 use crate::sessions::QueryContext;
 
@@ -167,8 +167,17 @@ impl PlanVisitor for QueryPipelineBuilder {
 
         self.pipeline.resize(1)?;
         self.pipeline.add_transform(|transform_input_port, transform_output_port| {
-            unimplemented!()
+            TransformLimit::try_create(
+                plan.n.clone(),
+                plan.offset,
+                transform_input_port,
+                transform_output_port,
+            )
         })
+    }
+
+    fn visit_sub_queries_sets(&mut self, _: &SubQueriesSetPlan) -> Result<()> {
+        Err(ErrorCode::UnImplement("New processor framework unsupported subquery."))
     }
 
     fn visit_sort(&mut self, plan: &SortPlan) -> Result<()> {

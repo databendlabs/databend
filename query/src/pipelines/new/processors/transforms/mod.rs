@@ -35,3 +35,4 @@ pub use aggregator::AggregatorTransformParams;
 pub use transform_limit_by::TransformLimitBy;
 pub use transform_sort_merge::TransformSortMerge;
 pub use transform_sort_partial::TransformSortPartial;
+pub use transform_limit::TransformLimit;
