@@ -70,13 +70,11 @@ impl TypeFactory {
     pub fn get(&self, name: impl AsRef<str>) -> Result<&DataTypePtr> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
-        match self.case_insensitive_types.get(&lowercase_name) {
-            Some(desc) => Ok(desc),
-            None => Err(ErrorCode::IllegalDataType(format!(
-                "Unsupported data_type: {}",
-                origin_name
-            ))),
-        }
+        self.case_insensitive_types
+            .get(&lowercase_name)
+            .ok_or_else(|| {
+                ErrorCode::IllegalDataType(format!("Unsupported data_type: {}", origin_name))
+            })
     }
 
     pub fn register(&mut self, data_type: DataTypePtr) {

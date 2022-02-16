@@ -193,7 +193,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
             .map(|_| MutableStringColumn::with_capacity(groups.len() * 4))
             .collect();
 
-        let mut group_key_builder = self.method.state_array_builder(groups.len());
+        let mut group_key_builder = self.method.keys_column_builder(groups.len());
 
         let mut bytes = BytesMut::new();
         for group_entity in groups.iter() {

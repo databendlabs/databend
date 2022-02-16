@@ -34,7 +34,7 @@ pub async fn logs_handler(
 ) -> poem::Result<impl IntoResponse> {
     let data = select_table(sessions_extension.0).await.map_err(|err| {
         poem::Error::from_string(
-            format!("Failed to fetch log. Error: {}", err),
+            format!("Failed to fetch log. Error: {err}"),
             StatusCode::INTERNAL_SERVER_ERROR,
         )
     })?;
@@ -50,14 +50,14 @@ async fn select_table(sessions: &Arc<SessionManager>) -> Result<Body> {
         match tracing_table_stream.next().await {
             Some(res) => {
                 let block = res?;
-                yield format!("{:?}", block);
+                yield format!("{block:?}");
             },
             None => return,
         }
 
         while let Some(res) = tracing_table_stream.next().await {
             let block = res?;
-            yield format!(", {:?}", block);
+            yield format!(", {block:?}");
         }
     };
 

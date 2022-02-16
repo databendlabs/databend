@@ -75,11 +75,11 @@ impl QueryContextShared {
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
             conf,
+            session,
+            cluster_cache,
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             scan_progress: Arc::new(Progress::create()),
             result_progress: Arc::new(Progress::create()),
-            session,
-            cluster_cache,
             runtime: Arc::new(RwLock::new(None)),
             sources_abort_handle: Arc::new(RwLock::new(Vec::new())),
             ref_count: Arc::new(AtomicUsize::new(0)),

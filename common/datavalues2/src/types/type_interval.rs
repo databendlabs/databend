@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -24,18 +25,53 @@ use crate::prelude::*;
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct IntervalType {
-    unit: IntervalUnit,
+    kind: IntervalKind,
 }
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-pub enum IntervalUnit {
-    YearMonth,
-    DayTime,
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum IntervalKind {
+    Year,
+    Month,
+    Day,
+    Hour,
+    Minute,
+    Second,
+}
+
+impl fmt::Display for IntervalKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            IntervalKind::Year => "YEAR",
+            IntervalKind::Month => "MONTH",
+            IntervalKind::Day => "DAY",
+            IntervalKind::Hour => "HOUR",
+            IntervalKind::Minute => "MINUTE",
+            IntervalKind::Second => "SECOND",
+        })
+    }
+}
+
+impl From<String> for IntervalKind {
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "YEAR" => IntervalKind::Year,
+            "MONTH" => IntervalKind::Month,
+            "DAY" => IntervalKind::Day,
+            "HOUR" => IntervalKind::Hour,
+            "MINUTE" => IntervalKind::Minute,
+            "SECOND" => IntervalKind::Second,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl IntervalType {
-    pub fn arc(unit: IntervalUnit) -> DataTypePtr {
-        Arc::new(Self { unit })
+    pub fn arc(kind: IntervalKind) -> DataTypePtr {
+        Arc::new(Self { kind })
+    }
+
+    pub fn kind(&self) -> &IntervalKind {
+        &self.kind
     }
 }
 
@@ -61,7 +97,7 @@ impl DataType for IntervalType {
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
         let value = data.as_i64()?;
 
-        let column = Series::from_data(&[value as u32]);
+        let column = Series::from_data(&[value]);
         Ok(Arc::new(ConstColumn::new(column, size)))
     }
 
@@ -77,6 +113,13 @@ impl DataType for IntervalType {
         ArrowType::Int64
     }
 
+    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
+        let mut mp = BTreeMap::new();
+        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Interval".to_string());
+        mp.insert(ARROW_EXTENSION_META.to_string(), format!("{}", self.kind));
+        Some(mp)
+    }
+
     fn create_serializer(&self) -> Box<dyn TypeSerializer> {
         Box::new(DateSerializer::<i64>::default())
     }
@@ -87,21 +130,6 @@ impl DataType for IntervalType {
         })
     }
 
-    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
-        let mut mp = BTreeMap::new();
-        match self.unit {
-            IntervalUnit::YearMonth => mp.insert(
-                ARROW_EXTENSION_NAME.to_string(),
-                "IntervalYearMonth".to_string(),
-            ),
-            IntervalUnit::DayTime => mp.insert(
-                ARROW_EXTENSION_NAME.to_string(),
-                "IntervalDayTime".to_string(),
-            ),
-        };
-        Some(mp)
-    }
-
     fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn> {
         Box::new(MutablePrimitiveColumn::<i64>::with_capacity(capacity))
     }
@@ -109,6 +137,6 @@ impl DataType for IntervalType {
 
 impl std::fmt::Debug for IntervalType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}({:?})", self.name(), self.unit)
+        write!(f, "{}({:?})", self.name(), self.kind)
     }
 }

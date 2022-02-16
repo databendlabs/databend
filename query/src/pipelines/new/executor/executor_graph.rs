@@ -18,9 +18,9 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_infallible::RwLock;
 use common_infallible::RwLockUpgradableReadGuard;
+use common_tracing::tracing;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
@@ -50,7 +50,7 @@ enum State {
 }
 
 struct Node {
-    state: Mutex<State>,
+    state: std::sync::Mutex<State>,
     processor: ProcessorPtr,
 
     updated_list: Arc<UpdateList>,
@@ -67,7 +67,7 @@ impl Node {
         outputs_port: &[Arc<OutputPort>],
     ) -> Arc<Node> {
         Arc::new(Node {
-            state: Mutex::new(State::Idle),
+            state: std::sync::Mutex::new(State::Idle),
             processor: processor.clone(),
             updated_list: UpdateList::create(),
             inputs_port: inputs_port.to_vec(),
@@ -92,6 +92,7 @@ type StateLockGuard<'a> = RwLockUpgradableReadGuard<'a, ExecutingGraph>;
 
 impl ExecutingGraph {
     pub fn create(pipeline: NewPipeline) -> Result<ExecutingGraph> {
+        // let (nodes_size, edges_size) = pipeline.graph_size();
         let mut graph = StableGraph::new();
 
         let mut node_stack = Vec::new();
@@ -113,7 +114,8 @@ impl ExecutingGraph {
                         let source_index = node_stack[index];
                         let edge_index = graph.add_edge(source_index, target_index, ());
 
-                        inputs_port[index].set_trigger(resize_node.create_trigger(edge_index));
+                        let input_trigger = resize_node.create_trigger(edge_index);
+                        inputs_port[index].set_trigger(input_trigger);
                         edge_stack[index]
                             .set_trigger(graph[source_index].create_trigger(edge_index));
                         connect(&inputs_port[index], &edge_stack[index]);
@@ -215,7 +217,7 @@ impl ExecutingGraph {
                 let target_index = DirectedEdge::get_target(&edge, &locker.graph);
 
                 let node = &locker.graph[target_index];
-                let node_state = node.state.lock();
+                let node_state = node.state.lock().unwrap();
 
                 if matches!(*node_state, State::Idle) {
                     state_guard_cache = Some(node_state);
@@ -225,12 +227,12 @@ impl ExecutingGraph {
 
             if let Some(schedule_index) = need_schedule_nodes.pop_front() {
                 let node = &locker.graph[schedule_index];
-                let mut node_status = match state_guard_cache.take() {
-                    None => node.state.lock(),
-                    Some(status_guard) => status_guard,
-                };
 
-                *node_status = match node.processor.event()? {
+                if state_guard_cache.is_none() {
+                    state_guard_cache = Some(node.state.lock().unwrap());
+                }
+
+                *state_guard_cache.unwrap() = match node.processor.event()? {
                     Event::Finished => State::Finished,
                     Event::NeedData | Event::NeedConsume => State::Idle,
                     Event::Sync => {
@@ -304,7 +306,9 @@ impl ScheduleQueue {
             true => { /* do nothing*/ }
         }
 
-        self.schedule_tail(global, context)
+        if !self.sync_queue.is_empty() || !self.async_queue.is_empty() {
+            self.schedule_tail(global, context);
+        }
     }
 
     fn schedule_sync(&mut self, _: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
@@ -325,7 +329,7 @@ pub struct RunningGraph(RwLock<ExecutingGraph>);
 impl RunningGraph {
     pub fn create(pipeline: NewPipeline) -> Result<RunningGraph> {
         let graph_state = ExecutingGraph::create(pipeline)?;
-        // graph_state.initialize_tasks()?;
+        tracing::debug!("Create running graph:{:?}", graph_state);
         Ok(RunningGraph(RwLock::new(graph_state)))
     }
 

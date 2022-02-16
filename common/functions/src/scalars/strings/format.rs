@@ -25,6 +25,7 @@ use num_traits::AsPrimitive;
 use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::EvalContext;
 use crate::scalars::Function2;
 use crate::scalars::Function2Description;
 use crate::scalars::ScalarBinaryExpression;
@@ -73,7 +74,7 @@ impl Function2 for FormatFunction {
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$F| {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$N| {
                     let binary = ScalarBinaryExpression::<$F, $N, Vu8, _>::new(format_en_us);
-                    let col = binary.eval(columns[0].column(), columns[1].column())?;
+                    let col = binary.eval(columns[0].column(), columns[1].column(), &mut EvalContext::default())?;
                     Ok(col.arc())
                 },{
                     unreachable!()
@@ -85,7 +86,7 @@ impl Function2 for FormatFunction {
     }
 }
 
-fn format_en_us<L, R>(number: L, precision: R) -> Vec<u8>
+fn format_en_us<L, R>(number: L, precision: R, _ctx: &mut EvalContext) -> Vec<u8>
 where
     L: AsPrimitive<f64> + AsPrimitive<i64>,
     R: AsPrimitive<i64>,

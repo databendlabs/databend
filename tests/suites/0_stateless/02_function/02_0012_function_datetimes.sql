@@ -2,7 +2,7 @@ SELECT today() >= 18869;
 SELECT now() >= 1630295616;
 select  toDateTime(1630320462), toUInt32(toDateTime(1630320462))  = 1630320462;
 select  toDate(18869), toUInt32(toDate(18869))  = 18869;
-select  toDateTime64(1640019661000), toUInt64(toDateTime64(1640019661000))  = 1640019661000;
+select  toDateTime64(1640019661000), toInt64(toDateTime64(1640019661000))  = 1640019661000;
 
 select toTypeName(today() + 3) = 'Date16';
 select toTypeName(today() - 3) = 'Date16';
@@ -100,24 +100,24 @@ select '===addYears===';
 
 select '===subtractMonths===';
 select subtractMonths(toDate(18321), cast(13, INT16)); -- 2020-2-29 - 13 months
--- comment temporarily --
---select toDate(18321) -  interval '13' month;
+select toDate(18321) -  interval '13' month;
 
 select subtractMonths(toDateTime(1582970400), cast(122, INT16)); -- 2020-2-29T10:00:00 - (12*10 + 2) months
---select toDateTime(1582970400) -  interval '122' month;
+select toDateTime(1582970400) -  interval '122' month;
 select '===subtractMonths===';
 
 select '===addDays===';
 select addDays(toDate(18321), cast(1, INT16)); -- 2020-2-29 + 1 day
---select toDate(18321) + interval '1' day;
+select toDate(18321) + interval '1' day;
 
 select addDays(toDateTime(1582970400), cast(-1, INT16)); -- 2020-2-29T10:00:00 - 1 day
---select toDateTime(1582970400) + interval '-1' day;
+select toDateTime(1582970400) + interval '-1' day;
 select '===addDays===';
 
 select '===addHours===';
 select addHours(toDateTime(1582970400), cast(25, INT32)); -- 2020-2-29T10:00:00 + 25 hours
---select toDateTime(1582970400) + interval '25' hour;
+select toDateTime(1582970400) + interval '25' hour;
+select addHours(toDate(18321), cast(1.2, Float32));
 select '===addHours===';
 
 select '===subtractMinutes===';

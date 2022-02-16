@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::thread::Builder;
 use std::thread::JoinHandle;
 
 use crate::runtime_tracker::ThreadTracker;
@@ -19,18 +20,35 @@ use crate::runtime_tracker::ThreadTracker;
 pub struct Thread;
 
 impl Thread {
+    pub fn named_spawn<F, T>(mut name: Option<String>, f: F) -> JoinHandle<T>
+    where
+        F: FnOnce() -> T,
+        F: Send + 'static,
+        T: Send + 'static,
+    {
+        let mut thread_builder = Builder::new();
+
+        if let Some(named) = name.take() {
+            thread_builder = thread_builder.name(named);
+        }
+
+        match ThreadTracker::current_runtime_tracker() {
+            None => thread_builder.spawn(f).unwrap(),
+            Some(runtime_tracker) => thread_builder
+                .spawn(move || {
+                    ThreadTracker::create(runtime_tracker);
+                    f()
+                })
+                .unwrap(),
+        }
+    }
+
     pub fn spawn<F, T>(f: F) -> JoinHandle<T>
     where
         F: FnOnce() -> T,
         F: Send + 'static,
         T: Send + 'static,
     {
-        match ThreadTracker::current_runtime_tracker() {
-            None => std::thread::spawn(f),
-            Some(runtime_tracker) => std::thread::spawn(move || {
-                ThreadTracker::create(runtime_tracker);
-                f()
-            }),
-        }
+        Self::named_spawn(None, f)
     }
 }
