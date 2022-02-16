@@ -110,6 +110,10 @@ impl MetaSrvTestContext {
 
         config.raft_config.raft_api_port = config_id;
 
+        // when running unit tests, both raft_{listen|advertise}_host is "127.0.0.1"
+        config.raft_config.raft_listen_host = "127.0.0.1".to_string();
+        config.raft_config.raft_advertise_host = "127.0.0.1".to_string();
+
         let host = "127.0.0.1";
 
         // We use a single sled db for all unit test. Every unit test need a unique prefix so that it opens different tree.
