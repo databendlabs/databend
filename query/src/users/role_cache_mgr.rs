@@ -29,15 +29,8 @@ use common_tracing::tracing;
 use crate::users::UserApiProvider;
 
 struct CachedRoles {
+    #[allow(dead_code)]
     roles: HashMap<String, RoleInfo>,
-}
-
-impl CachedRoles {
-    fn empty() -> Self {
-        Self {
-            roles: HashMap::new(),
-        }
-    }
 }
 
 pub struct RoleCacheMgr {

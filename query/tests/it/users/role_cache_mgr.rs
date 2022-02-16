@@ -12,22 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
+use common_base::tokio;
+use common_exception::Result;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct RoleIdentity {
-    pub name: String,
-    pub host: String,
-}
-
-impl RoleIdentity {
-    pub fn new(name: String, host: String) -> Self {
-        Self { name, host }
-    }
-}
-
-impl fmt::Display for RoleIdentity {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
-        write!(f, "'{}'@'{}'", self.name, self.host)
-    }
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_find_all_related_roles() -> Result<()> {
+    Ok(())
 }
