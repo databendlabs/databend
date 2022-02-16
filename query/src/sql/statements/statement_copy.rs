@@ -16,8 +16,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datavalues2::DataSchemaRefExt;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::CopyPlan;
+use common_planners::FileFormatType;
 use common_planners::PlanNode;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
@@ -31,8 +33,9 @@ pub struct DfCopy {
     pub name: ObjectName,
     pub columns: Vec<Ident>,
     pub location: String,
-    pub format: String,
-    pub options: HashMap<String, String>,
+    pub credential_options: HashMap<String, String>,
+    pub encryption_options: HashMap<String, String>,
+    pub file_format_options: HashMap<String, String>,
 }
 
 #[async_trait::async_trait]
@@ -60,14 +63,22 @@ impl AnalyzableStatement for DfCopy {
             schema = DataSchemaRefExt::create(fields);
         }
 
+        // File format type.
+        let format = self
+            .file_format_options
+            .get("TYPE")
+            .as_ref()
+            .ok_or_else(|| ErrorCode::SyntaxException("File Format TYPE must be specified"))?;
+        let file_format_type = FileFormatType::to_file_format(format)?;
+
         let plan_node = CopyPlan {
             db_name,
             tbl_name,
             tbl_id,
             schema,
+            file_format_type,
             location: self.location.clone(),
-            format: self.format.clone(),
-            options: self.options.clone(),
+            options: self.file_format_options.clone(),
         };
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Copy(

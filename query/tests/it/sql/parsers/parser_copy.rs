@@ -32,10 +32,37 @@ fn copy_test() -> Result<()> {
             columns: vec![],
             location: "@my_ext_stage/tutorials/sample.csv".to_string(),
             format: "csv".to_string(),
-            options: maplit::hashmap! {
+            file_format_options: maplit::hashmap! {
                 "csv_header".into() => "1".into(),
                 "field_delimitor".into() => ",".into(),
          }
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn copy_from_external_test() -> Result<()> {
+    let ident = Ident::new("test_csv");
+    let v = vec![ident];
+    let name = ObjectName(v);
+
+    expect_parse_ok(
+        "copy into mytable
+        from 's3://mybucket/data/files'
+        credentials=(aws_key_id='$AWS_ACCESS_KEY_ID' aws_secret_key='$AWS_SECRET_ACCESS_KEY')
+        encryption=(master_key = '$MASER_KEY')
+        file_format = (type = csv field_delimiter = '|' skip_header = 1);",
+        DfStatement::Copy(DfCopy {
+            name,
+            columns: vec![],
+            location: "@my_ext_stage/tutorials/sample.csv".to_string(),
+            format: "csv".to_string(),
+            file_format_options: maplit::hashmap! {
+                   "csv_header".into() => "1".into(),
+                   "field_delimitor".into() => ",".into(),
+            },
         }),
     )?;
 

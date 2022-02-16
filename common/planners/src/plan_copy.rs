@@ -15,7 +15,11 @@
 use std::collections::HashMap;
 
 use common_datavalues2::DataSchemaRef;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_meta_types::MetaId;
+
+use crate::UserStagePlan;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct CopyPlan {
@@ -23,9 +27,7 @@ pub struct CopyPlan {
     pub tbl_name: String,
     pub tbl_id: MetaId,
     pub schema: DataSchemaRef,
-    pub location: String,
-    pub format: String,
-    pub options: HashMap<String, String>,
+    pub stage: UserStagePlan,
 }
 
 impl CopyPlan {
