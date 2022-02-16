@@ -28,6 +28,7 @@ use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeType;
+use common_tracing::tracing;
 
 use crate::users::UserApiProvider;
 
@@ -68,7 +69,7 @@ impl RoleCacheMgr {
         let handle = tokio::spawn(async move {
             while true {
                 match load_roles_data(&user_api, tenant).await {
-                    Err(_) => (),
+                    Err(err) => tracing::warn!("role_cache_mgr load roles data failed: {}", err),
                     Ok(data) => {
                         let cached = cache.write();
                         *cached = data;
@@ -106,11 +107,15 @@ impl RoleCacheMgr {
     }
 }
 
+fn make_role_cache_key(tenant: &str, role_identity: &UserIdentity) -> String {
+    format!("{}/{}", tenant, role_identity.to_string())
+}
+
 async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &str) -> Result<CachedRoles> {
     let roles = user_api.get_roles(tenant).await?;
     let roles_map = roles
         .into_iter()
-        .map(|r| (r.to_string(), r))
+        .map(|r| (make_role_cache_key(tenant, &r.identity()), r))
         .collect::<HashMap<_, _>>();
     Ok(CachedRoles {
         roles: roles_map,

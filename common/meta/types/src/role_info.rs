@@ -18,6 +18,7 @@ use serde::Serialize;
 use crate::MetaError;
 use crate::MetaResult;
 use crate::UserGrantSet;
+use crate::UserIdentity;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(default)]
@@ -32,6 +33,13 @@ impl RoleInfo {
         Self {
             name,
             grants: UserGrantSet::empty(),
+        }
+    }
+
+    pub fn identity(&self) -> UserIdentity {
+        UserIdentity {
+            username: self.name.clone(),
+            hostname: "%".to_string(),
         }
     }
 }
