@@ -22,8 +22,8 @@ use common_base::tokio::task::JoinHandle;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::GrantObject;
+use common_meta_types::RoleIdentity;
 use common_meta_types::RoleInfo;
-use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeType;
 use common_tracing::tracing;
 
@@ -45,7 +45,7 @@ impl CachedRoles {
 
 pub struct RoleCacheMgr {
     user_api: Arc<UserApiProvider>,
-    cache: Arc<RwLock<CachedRoles>>,
+    cache: Arc<RwLock<HashMap<String, CachedRoles>>>,
     polling_interval: Duration,
     polling_join_handle: Option<JoinHandle<()>>,
 }
@@ -54,24 +54,31 @@ impl RoleCacheMgr {
     pub fn new(user_api: Arc<UserApiProvider>) -> Self {
         Self {
             user_api,
-            cache: Arc::new(RwLock::new(CachedRoles::empty())),
+            cache: Arc::new(RwLock::new(HashMap::empty())),
             polling_interval: Duration::new(15, 0),
             polling_join_handle: None,
         }
     }
 
-    pub fn start_polling(&mut self, tenant: &str) {
+    pub fn start_polling(&mut self) {
         let user_api = self.user_api.clone();
         let cache = self.cache.clone();
-        let tenant = tenant.to_string();
         let polling_interval = self.polling_interval;
         let handle = tokio::spawn(async move {
             loop {
-                match load_roles_data(&user_api, &tenant).await {
-                    Err(err) => tracing::warn!("role_cache_mgr load roles data failed: {}", err),
-                    Ok(data) => {
-                        let mut cached = cache.write();
-                        *cached = data;
+                let tenants: Vec<String> = {
+                    let cached = cache.read();
+                    cached.keys().collect()
+                };
+                for tenant in tenants {
+                    match load_roles_data(&user_api, &tenant).await {
+                        Err(err) => {
+                            tracing::warn!("role_cache_mgr load roles data failed: {}", err)
+                        }
+                        Ok(data) => {
+                            let mut cached = cache.write();
+                            cached.insert(tenant.to_string(), data);
+                        }
                     }
                 }
                 tokio::time::sleep(polling_interval).await
@@ -80,9 +87,9 @@ impl RoleCacheMgr {
         self.polling_join_handle.replace(handle);
     }
 
-    pub fn invalidate_cache(&mut self) {
+    pub fn invalidate_cache(&mut self, tenant: &str) {
         let mut cached = self.cache.write();
-        *cached = CachedRoles::empty();
+        cached.insert(tenant.to_string(), CachedRoles::empty());
     }
 
     pub async fn verify_privilege(
@@ -92,26 +99,27 @@ impl RoleCacheMgr {
         _object: &GrantObject,
         _privilege: UserPrivilegeType,
     ) -> Result<bool> {
-        if self.need_reload() {
-            let data = load_roles_data(&self.user_api, tenant).await?;
-            let mut cached = self.cache.write();
-            *cached = data;
-        }
-        let _cached = self.cache.read();
+        self.maybe_reload(tenant);
         Ok(false)
     }
 
-    fn need_reload(&self) -> bool {
-        let cached = self.cache.read();
-        let last_cache_time: &Option<Instant> = &cached.last_cache_time;
-        match last_cache_time {
-            None => true,
-            Some(t) => t.elapsed() >= self.polling_interval,
+    // Load roles data if not found in cache. Watch this tenant's role data in background if
+    // once it loads successfully.
+    async fn maybe_reload(&self, tenant: &str) -> Result<()> {
+        let need_reload = {
+            let cached = self.cache.read();
+            cached.get(tenant).is_none()
+        };
+        if need_reload {
+            let data = load_roles_data(&self.user_api, tenant).await?;
+            let mut cached = self.cache.write();
+            cached.insert(tenant.to_string(), data);
         }
+        Ok(())
     }
 }
 
-fn make_role_cache_key(tenant: &str, role_identity: &UserIdentity) -> String {
+fn make_role_cache_key(tenant: &str, role_identity: &RoleIdentity) -> String {
     format!("{}/{}", tenant, role_identity)
 }
 
@@ -129,9 +137,9 @@ async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &str) -> Resul
 
 // An role can be granted with multiple roles, find all the related roles in a DFS manner
 fn find_all_related_roles(
-    cache: &HashMap<String, RoleInfo>,
-    roles: &[RoleIdentity],
-    tenant: &str,
+    _cache: &HashMap<String, RoleInfo>,
+    _roles: &[RoleIdentity],
+    _tenant: &str,
 ) -> Vec<RoleInfo> {
     vec![]
 }
