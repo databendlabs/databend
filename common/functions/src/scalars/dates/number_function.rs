@@ -110,7 +110,7 @@ impl NumberOperator<u16> for ToStartOfYear {
     }
 
     fn return_type() -> Option<common_datavalues2::DataTypePtr> {
-        Some(Date32Type::arc())
+        Some(Date16Type::arc())
     }
 }
 
@@ -131,7 +131,7 @@ impl NumberOperator<u16> for ToStartOfISOYear {
     }
 
     fn return_type() -> Option<common_datavalues2::DataTypePtr> {
-        Some(Date32Type::arc())
+        Some(Date16Type::arc())
     }
 }
 
@@ -148,7 +148,7 @@ impl NumberOperator<u16> for ToStartOfQuarter {
     }
 
     fn return_type() -> Option<common_datavalues2::DataTypePtr> {
-        Some(Date32Type::arc())
+        Some(Date16Type::arc())
     }
 }
 
@@ -164,7 +164,7 @@ impl NumberOperator<u16> for ToStartOfMonth {
     }
 
     fn return_type() -> Option<common_datavalues2::DataTypePtr> {
-        Some(Date32Type::arc())
+        Some(Date16Type::arc())
     }
 }
 
