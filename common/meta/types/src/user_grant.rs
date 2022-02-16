@@ -87,17 +87,7 @@ impl GrantEntry {
         }
     }
 
-    pub fn verify_privilege(
-        &self,
-        user: &str,
-        host: &str,
-        object: &GrantObject,
-        privilege: UserPrivilegeType,
-    ) -> bool {
-        if !self.matches_user_host(user, host) {
-            return false;
-        }
-
+    pub fn verify_privilege(&self, object: &GrantObject, privilege: UserPrivilegeType) -> bool {
         // the verified object should be smaller than the object inside my grant entry.
         if !self.object.contains(object) {
             return false;
@@ -106,20 +96,8 @@ impl GrantEntry {
         self.privileges.contains(privilege)
     }
 
-    pub fn matches_entry(&self, user: &str, host_pattern: &str, object: &GrantObject) -> bool {
-        self.user == user && self.host_pattern == host_pattern && &self.object == object
-    }
-
-    fn matches_user_host(&self, user: &str, host: &str) -> bool {
-        self.user == user && Self::match_host_pattern(&self.host_pattern, host)
-    }
-
-    fn match_host_pattern(host_pattern: &str, host: &str) -> bool {
-        // TODO: support IP pattern like 0.2.%.%
-        if host_pattern == "%" {
-            return true;
-        }
-        host_pattern == host
+    pub fn matches_entry(&self, object: &GrantObject) -> bool {
+        &self.object == object
     }
 
     fn has_all_available_privileges(&self) -> bool {
@@ -129,6 +107,7 @@ impl GrantEntry {
     }
 }
 
+// TODO: remove user and host fields in the GrantEntry struct
 impl fmt::Display for GrantEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         let privileges: UserPrivilegeSet = self.privileges.into();
@@ -172,21 +151,16 @@ impl UserGrantSet {
     }
 
     pub fn revoke_role(&mut self, role: &RoleIdentity) {
-        self.roles.remove(&role);
+        self.roles.remove(role);
     }
 
-    pub fn verify_privilege(
-        &self,
-        user: &str,
-        host: &str,
-        object: &GrantObject,
-        privilege: UserPrivilegeType,
-    ) -> bool {
+    pub fn verify_privilege(&self, object: &GrantObject, privilege: UserPrivilegeType) -> bool {
         self.entries
             .iter()
-            .any(|e| e.verify_privilege(user, host, object, privilege))
+            .any(|e| e.verify_privilege(object, privilege))
     }
 
+    // TODO: remove the user and host parameters
     pub fn grant_privileges(
         &mut self,
         user: &str,
@@ -200,7 +174,7 @@ impl UserGrantSet {
 
         for entry in self.entries.iter() {
             let mut entry = entry.clone();
-            if entry.matches_entry(user, host_pattern, object) {
+            if entry.matches_entry(object) {
                 entry.privileges |= privileges;
                 changed = true;
             }
@@ -219,19 +193,13 @@ impl UserGrantSet {
         self.entries = new_entries;
     }
 
-    pub fn revoke_privileges(
-        &mut self,
-        user: &str,
-        host_pattern: &str,
-        object: &GrantObject,
-        privileges: UserPrivilegeSet,
-    ) {
+    pub fn revoke_privileges(&mut self, object: &GrantObject, privileges: UserPrivilegeSet) {
         let privileges: BitFlags<UserPrivilegeType> = privileges.into();
         let new_entries = self
             .entries
             .iter()
             .map(|e| {
-                if e.matches_entry(user, host_pattern, object) {
+                if e.matches_entry(object) {
                     let mut e = e.clone();
                     e.privileges ^= privileges;
                     e

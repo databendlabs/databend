@@ -38,6 +38,7 @@ use crate::sessions::session_ref::SessionRef;
 use crate::sessions::ProcessInfo;
 use crate::storages::cache::CacheManager;
 use crate::users::auth::auth_mgr::AuthMgr;
+use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
 
 pub struct SessionManager {
@@ -46,6 +47,7 @@ pub struct SessionManager {
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
     pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
+    pub(in crate::sessions) role_cache_manager: Arc<RoleCacheMgr>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
 
     pub(in crate::sessions) max_sessions: usize,
@@ -65,12 +67,14 @@ impl SessionManager {
         let user = UserApiProvider::create_global(conf.clone()).await?;
         let auth_manager = Arc::new(AuthMgr::create(conf.clone(), user.clone()).await?);
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
+        let role_cache_manager = Arc::new(RoleCacheMgr::new(user.clone()));
 
         let max_active_sessions = conf.query.max_active_sessions as usize;
         Ok(Arc::new(SessionManager {
             catalog,
             conf,
             discovery,
+            role_cache_manager,
             user_manager: user,
             http_query_manager,
             auth_manager,

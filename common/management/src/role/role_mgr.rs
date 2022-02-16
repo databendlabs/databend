@@ -108,6 +108,7 @@ impl RoleApi for RoleMgr {
         }
     }
 
+    // TODO: add host parameter
     async fn get_role(&self, role_name: &str, seq: Option<u64>) -> Result<SeqV<RoleInfo>> {
         let key = format!("{}/{}", self.role_prefix, role_name);
         let kv_api = self.kv_api.clone();
@@ -160,20 +161,19 @@ impl RoleApi for RoleMgr {
     async fn revoke_role_privileges(
         &self,
         role_name: String,
-        host_name: String,
+        _host_name: String,
         object: GrantObject,
         privileges: UserPrivilegeSet,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
         let role_val_seq = self.get_role(&role_name, seq);
         let mut role_info = role_val_seq.await?.data;
-        role_info
-            .grants
-            .revoke_privileges(&role_name, &host_name, &object, privileges);
+        role_info.grants.revoke_privileges(&object, privileges);
         let seq = self.upsert_role_info(&role_info, seq).await?;
         Ok(Some(seq))
     }
 
+    // TODO: add host parameter
     async fn drop_role(&self, role_name: String, seq: Option<u64>) -> Result<()> {
         let key = format!("{}/{}", self.role_prefix, role_name);
         let kv_api = self.kv_api.clone();

@@ -186,12 +186,7 @@ impl Session {
     ) -> Result<()> {
         // TODO: cache the grants info for current user
         let current_user = self.get_current_user()?;
-        let ok = current_user.grants.verify_privilege(
-            &current_user.name,
-            &current_user.hostname,
-            object,
-            privilege,
-        );
+        let ok = current_user.grants.verify_privilege(object, privilege);
         if !ok {
             return Err(ErrorCode::PermissionDenied(format!(
                 "Permission denied, user '{}'@'{}' requires {} privilege on {}",
