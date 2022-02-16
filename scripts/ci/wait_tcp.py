@@ -12,7 +12,7 @@ def tcp_ping(port, timeout):
     while time.time() - now < timeout:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.connect(('127.0.0.1', port))
+                sock.connect(('0.0.0.0', port))
                 print("OK :{} is listening".format(port))
                 return
         except:
