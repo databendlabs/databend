@@ -85,21 +85,20 @@ impl RoleCacheMgr {
         *cached = CachedRoles::empty();
     }
 
-    pub async fn validate_privilege(
+    pub async fn verify_privilege(
         &self,
         tenant: &str,
-        _roles: &[UserIdentity],
+        role_identies: &[RoleIdentity],
         _object: &GrantObject,
         _privilege: UserPrivilegeType,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         if self.need_reload() {
             let data = load_roles_data(&self.user_api, tenant).await?;
             let mut cached = self.cache.write();
             *cached = data;
         }
         let _cached = self.cache.read();
-        // TODO
-        Ok(())
+        Ok(false)
     }
 
     fn need_reload(&self) -> bool {
@@ -126,4 +125,13 @@ async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &str) -> Resul
         roles: roles_map,
         last_cache_time: Some(Instant::now()),
     })
+}
+
+// An role can be granted with multiple roles, find all the related roles in a DFS manner
+fn find_all_related_roles(
+    cache: &HashMap<String, RoleInfo>,
+    roles: &[RoleIdentity],
+    tenant: &str,
+) -> Vec<RoleInfo> {
+    vec![]
 }
