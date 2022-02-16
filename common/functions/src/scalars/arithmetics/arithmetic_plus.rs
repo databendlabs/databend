@@ -17,6 +17,7 @@ use std::ops::Add;
 use common_datavalues2::prelude::*;
 use common_datavalues2::with_match_date_type_error;
 use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues2::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::traits::AsPrimitive;
@@ -25,10 +26,12 @@ use num_traits::WrappingAdd;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
+use crate::scalars::EvalContext;
 use crate::scalars::Function2;
+use crate::scalars::Function2Factory;
 use crate::scalars::Monotonicity2;
 
-fn add_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>) -> O
+fn add_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
 where
     L: PrimitiveType + AsPrimitive<O>,
     R: PrimitiveType + AsPrimitive<O>,
@@ -37,7 +40,7 @@ where
     l.to_owned_scalar().as_() + r.to_owned_scalar().as_()
 }
 
-fn wrapping_add_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>) -> O
+fn wrapping_add_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
 where
     L: PrimitiveType + AsPrimitive<O>,
     R: PrimitiveType + AsPrimitive<O>,
@@ -56,8 +59,10 @@ impl ArithmeticPlusFunction {
         args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function2>> {
         let op = DataValueBinaryOperator::Plus;
-        let left_type = remove_nullable(args[0]).data_type_id();
-        let right_type = remove_nullable(args[1]).data_type_id();
+        let left_arg = remove_nullable(args[0]);
+        let right_arg = remove_nullable(args[1]);
+        let left_type = left_arg.data_type_id();
+        let right_type = right_arg.data_type_id();
 
         let error_fn = || -> Result<Box<dyn Function2>> {
             Err(ErrorCode::BadDataValueType(format!(
@@ -66,41 +71,42 @@ impl ArithmeticPlusFunction {
             )))
         };
 
-        if left_type.is_interval() || right_type.is_interval() {
-            todo!()
-        }
-
         // Only support one of argument types is date type.
         if left_type.is_date_or_date_time() {
             return with_match_date_type_error!(left_type, |$T| {
                 with_match_primitive_type_id!(right_type, |$D| {
                     BinaryArithmeticFunction::<$T, $D, $T, _>::try_create_func(
                         op,
-                        args[0].clone(),
+                        left_arg,
                         add_scalar::<$T, $D, _>,
                     )
                 },{
-                    error_fn()
+                    if right_type.is_interval() {
+                        let interval = right_arg.as_any().downcast_ref::<IntervalType>().unwrap();
+                        let kind = interval.kind();
+                        let function_name = format!("add{}s", kind);
+                        Function2Factory::instance().get(function_name, &[&left_arg, &Int64Type::arc()])
+                    } else {
+                        error_fn()
+                    }
                 })
             });
         }
 
         if right_type.is_date_or_date_time() {
-            return with_match_primitive_type_id!(left_type, |$T| {
-                with_match_date_type_error!(right_type, |$D| {
+            return with_match_date_type_error!(right_type, |$D| {
+                with_match_primitive_types_error!(left_type, |$T| {
                     BinaryArithmeticFunction::<$T, $D, $D, _>::try_create_func(
                         op,
-                        args[1].clone(),
+                        right_arg,
                         add_scalar::<$T, $D, _>,
                     )
                 })
-            },{
-                error_fn()
             });
         }
 
-        with_match_primitive_type_id!(left_type, |$T| {
-            with_match_primitive_type_id!(right_type, |$D| {
+        with_match_primitive_types_error!(left_type, |$T| {
+            with_match_primitive_types_error!(right_type, |$D| {
                 let result_type = <($T, $D) as ResultTypeOfBinary>::AddMul::to_data_type();
                 match result_type.data_type_id() {
                     TypeID::UInt64 => BinaryArithmeticFunction::<$T, $D, u64, _>::try_create_func(
@@ -119,11 +125,7 @@ impl ArithmeticPlusFunction {
                         add_scalar::<$T, $D, _>,
                     ),
                 }
-            }, {
-                error_fn()
             })
-        }, {
-            error_fn()
         })
     }
 

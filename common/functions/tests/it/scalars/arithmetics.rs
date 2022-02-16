@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues2::chrono;
 use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
@@ -115,355 +116,267 @@ fn test_arithmetic_function() -> Result<()> {
     Ok(())
 }
 
-/*
-use common_datavalues::chrono;
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
-use common_exception::Result;
-use common_functions::scalars::*;
-
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::test_scalar_functions_with_type;
-use crate::scalars::scalar_function_test::ScalarFunctionTestWithType;
-
 #[test]
 fn test_arithmetic_date_interval() -> Result<()> {
+    let to_day16 = |y: i32, m: u32, d: u32| -> u16 {
+        let d = chrono::NaiveDate::from_ymd(y, m, d)
+            .signed_duration_since(chrono::NaiveDate::from_ymd(1970, 1, 1));
+        d.num_days() as u16
+    };
+
+    let to_day32 = |y: i32, m: u32, d: u32| -> i32 {
+        let d = chrono::NaiveDate::from_ymd(y, m, d)
+            .signed_duration_since(chrono::NaiveDate::from_ymd(1970, 1, 1));
+        d.num_days() as i32
+    };
+
     let to_seconds = |y: i32, m: u32, d: u32, h: u32, min: u32, s: u32| -> u32 {
         let date_time = chrono::NaiveDate::from_ymd(y, m, d).and_hms(h, min, s);
         date_time.timestamp() as u32
     };
 
-    let to_days = |y: i32, m: u32, d: u32| -> i32 {
-        let date_time = chrono::NaiveDate::from_ymd(y, m, d).and_hms(0, 0, 1);
-        (date_time.timestamp() / (24 * 3600)) as i32
-    };
-
-    let daytime_to_ms = |days: i64, hour: i64, minute: i64, second: i64| -> i64 {
-        (days * 24 * 3600 * 1000) + (hour * 3600 * 1000) + (minute * 60 * 1000) + (second * 1000)
+    let to_milliseconds = |y: i32, m: u32, d: u32, h: u32, min: u32, sec: u32, milli: u32| -> i64 {
+        let date_time = chrono::NaiveDate::from_ymd(y, m, d).and_hms_milli(h, min, sec, milli);
+        date_time.timestamp_millis()
     };
 
     let tests = vec![
         (
             ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::DateTime32(None), false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::YearMonth), false),
+                &Date16Type::arc(),
+                &IntervalType::arc(IntervalKind::Year),
             ])?,
-            ScalarFunctionTestWithType {
-                name: "datetime-add-year-month-passed",
-                nullable: false,
+            ScalarFunction2Test {
+                name: "date16-add-years-passed",
                 columns: vec![
-                    DataColumnWithField::new(
-                        Series::new(vec![
-                            to_seconds(2020, 2, 29, 10, 30, 00), /* 2020-2-29-10:30:00 */
-                            to_seconds(2000, 1, 31, 15, 00, 00),
-                        ])
-                        .into(),
-                        DataField::new("dummy_1", DataType::DateTime32(None), false),
-                    ),
-                    DataColumnWithField::new(
-                        Series::new(vec![
-                            12i64,       /* 1 year */
-                            20 * 12 + 1, /* 20 years and 1 month */
-                        ])
-                        .into(),
-                        DataField::new(
-                            "dummy_1",
-                            DataType::Interval(IntervalUnit::YearMonth),
-                            false,
-                        ),
-                    ),
+                    Series::from_data(vec![
+                        to_day16(2020, 2, 29), /* 2020-2-29 */
+                        to_day16(2016, 2, 29), /* 2016-2-29 */
+                    ]),
+                    Series::from_data(vec![-1i64, 4]),
                 ],
-                expect: Series::new(vec![
-                    to_seconds(2021, 2, 28, 10, 30, 00), /* 2021-2-28-10:30:00 */
-                    to_seconds(2020, 2, 29, 15, 00, 00),
-                ])
-                .into(),
-                error: "",
-            },
-        ),
-        (
-            ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::DateTime32(None), false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::YearMonth), false),
-            ])?,
-            ScalarFunctionTestWithType {
-                name: "datetime-add-year-month-passed",
-                nullable: false,
-                columns: vec![
-                    DataColumnWithField::new(
-                        Series::new(vec![
-                            to_seconds(2021, 2, 28, 10, 30, 00),
-                            to_seconds(2020, 2, 29, 15, 00, 00),
-                        ])
-                        .into(),
-                        DataField::new("dummy_1", DataType::DateTime32(None), false),
-                    ),
-                    DataColumnWithField::new(
-                        Series::new(vec![-12i64 /* -1 year */, -1 /* -1 month */]).into(),
-                        DataField::new(
-                            "dummy_1",
-                            DataType::Interval(IntervalUnit::YearMonth),
-                            false,
-                        ),
-                    ),
-                ],
-                expect: Series::new(vec![
-                    to_seconds(2020, 2, 28, 10, 30, 00),
-                    to_seconds(2020, 1, 29, 15, 00, 00),
-                ])
-                .into(),
-                error: "",
-            },
-        ),
-        (
-            ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::DateTime32(None), false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::DayTime), false),
-            ])?,
-            ScalarFunctionTestWithType {
-                name: "datetime-add-day-time-passed",
-                nullable: false,
-                columns: vec![
-                    DataColumnWithField::new(
-                        Series::new(vec![
-                            to_seconds(2020, 3, 1, 10, 30, 00),
-                            to_seconds(2020, 3, 1, 10, 30, 00),
-                        ])
-                        .into(),
-                        DataField::new("dummy_1", DataType::DateTime32(None), false),
-                    ),
-                    DataColumnWithField::new(
-                        Series::new(vec![
-                            daytime_to_ms(-1, 0, 0, 0),
-                            daytime_to_ms(-1, -1, 0, 0),
-                        ])
-                        .into(),
-                        DataField::new("dummy_1", DataType::Interval(IntervalUnit::DayTime), false),
-                    ),
-                ],
-                expect: Series::new(vec![
-                    to_seconds(2020, 2, 29, 10, 30, 00),
-                    to_seconds(2020, 2, 29, 9, 30, 00),
-                ])
-                .into(),
+                expect: Series::from_data(vec![
+                    to_day16(2019, 2, 28), /* 2019-2-28 */
+                    to_day16(2020, 2, 29), /* 2020-2-29 */
+                ]),
                 error: "",
             },
         ),
         (
             ArithmeticMinusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::DateTime32(None), false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::DayTime), false),
+                &Date32Type::arc(),
+                &IntervalType::arc(IntervalKind::Year),
             ])?,
-            ScalarFunctionTestWithType {
-                name: "datetime-minus-day-time-passed",
-                nullable: false,
+            ScalarFunction2Test {
+                name: "date32-sub-years-passed",
                 columns: vec![
-                    DataColumnWithField::new(
-                        Series::new(vec![
-                            to_seconds(2020, 2, 29, 10, 30, 00),
-                            to_seconds(2020, 2, 29, 9, 30, 00),
-                        ])
-                        .into(),
-                        DataField::new("dummy_1", DataType::DateTime32(None), false),
-                    ),
-                    DataColumnWithField::new(
-                        Series::new(vec![
-                            daytime_to_ms(-1, 0, 0, 0),
-                            daytime_to_ms(-1, -1, 0, 0),
-                        ])
-                        .into(),
-                        DataField::new("dummy_1", DataType::Interval(IntervalUnit::DayTime), false),
-                    ),
+                    Series::from_data(vec![
+                        to_day32(2400, 2, 29), /* 2400-2-29 */
+                        to_day32(1960, 2, 29), /* 1960-2-29 */
+                    ]),
+                    Series::from_data(vec![1i64, -4]),
                 ],
-                expect: Series::new(vec![
-                    to_seconds(2020, 3, 1, 10, 30, 00),
-                    to_seconds(2020, 3, 1, 10, 30, 00),
-                ])
-                .into(),
+                expect: Series::from_data(vec![
+                    to_day32(2399, 2, 28), /* 2399-2-28 */
+                    to_day32(1964, 2, 29), /* 1964-2-29 */
+                ]),
                 error: "",
             },
         ),
         (
             ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Date32, false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::YearMonth), false),
+                &DateTime32Type::arc(None),
+                &IntervalType::arc(IntervalKind::Year),
             ])?,
-            ScalarFunctionTestWithType {
-                name: "date32-plus-year-month",
-                nullable: false,
+            ScalarFunction2Test {
+                name: "datetime32-add-years-passed",
                 columns: vec![
-                    DataColumnWithField::new(
-                        Series::new(vec![to_days(2020, 2, 29), to_days(2000, 1, 31)]).into(),
-                        DataField::new("dummy_1", DataType::Date32, false),
-                    ),
-                    DataColumnWithField::new(
-                        Series::new(vec![
-                            12i64,       /* 1 year */
-                            20 * 12 + 1, /* 20 years and 1 month */
-                        ])
-                        .into(),
-                        DataField::new(
-                            "dummy_1",
-                            DataType::Interval(IntervalUnit::YearMonth),
-                            false,
-                        ),
-                    ),
+                    Series::from_data(vec![
+                        to_seconds(2020, 2, 29, 10, 30, 00), /* 2020-2-29 10:30:00 */
+                        to_seconds(2021, 2, 28, 10, 30, 00), /* 2021-2-28 10:30:00 */
+                    ]),
+                    Series::from_data(vec![1i64, -1]),
                 ],
-                expect: Series::new(vec![to_days(2021, 2, 28), to_days(2020, 2, 29)]).into(),
+                expect: Series::from_data(vec![
+                    to_seconds(2021, 2, 28, 10, 30, 00), /* 2021-2-28 10:30:00 */
+                    to_seconds(2020, 2, 28, 10, 30, 00), /* 2020-2-28 10:30:00 */
+                ]),
                 error: "",
             },
         ),
         (
             ArithmeticMinusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Date32, false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::YearMonth), false),
+                &DateTime64Type::arc(3, None),
+                &IntervalType::arc(IntervalKind::Year),
             ])?,
-            ScalarFunctionTestWithType {
-                name: "date32-minus-year-month",
-                nullable: false,
+            ScalarFunction2Test {
+                name: "datetime64-sub-years-passed",
                 columns: vec![
-                    DataColumnWithField::new(
-                        Series::new(vec![to_days(2020, 2, 29), to_days(2000, 1, 31)]).into(),
-                        DataField::new("dummy_1", DataType::Date32, false),
-                    ),
-                    DataColumnWithField::new(
-                        Series::new(vec![
-                            -12i64,         /* - 1 year */
-                            -(20 * 12 + 1), /* - 20 years and 1 month */
-                        ])
-                        .into(),
-                        DataField::new(
-                            "dummy_1",
-                            DataType::Interval(IntervalUnit::YearMonth),
-                            false,
-                        ),
-                    ),
+                    Series::from_data(vec![
+                        to_milliseconds(2020, 2, 29, 10, 30, 00, 000), /* 2020-2-29 10:30:00.000 */
+                        to_milliseconds(1960, 2, 29, 10, 30, 00, 000), /* 1960-2-29 10:30:00.000 */
+                    ]),
+                    Series::from_data(vec![1i64, -4]),
                 ],
-                expect: Series::new(vec![to_days(2021, 2, 28), to_days(2020, 2, 29)]).into(),
+                expect: Series::from_data(vec![
+                    to_milliseconds(2019, 2, 28, 10, 30, 00, 000), /* 2019-2-28 10:30:00.000 */
+                    to_milliseconds(1964, 2, 29, 10, 30, 00, 000), /* 1964-2-29 10:30:00.000 */
+                ]),
                 error: "",
             },
         ),
         (
             ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Date32, false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::DayTime), false),
+                &Date16Type::arc(),
+                &IntervalType::arc(IntervalKind::Month),
             ])?,
-            ScalarFunctionTestWithType {
-                name: "date32-plus-day-time",
-                nullable: false,
+            ScalarFunction2Test {
+                name: "date16-add-months-passed",
                 columns: vec![
-                    DataColumnWithField::new(
-                        Series::new(vec![to_days(2020, 3, 1), to_days(2021, 3, 1)]).into(),
-                        DataField::new("dummy_1", DataType::Date32, false),
-                    ),
-                    DataColumnWithField::new(
-                        Series::new(vec![
-                            daytime_to_ms(-1, 0, 0, 0),
-                            daytime_to_ms(-1, -1, 0, 0),
-                        ])
-                        .into(),
-                        DataField::new("dummy_1", DataType::Interval(IntervalUnit::DayTime), false),
-                    ),
+                    Series::from_data(vec![
+                        to_day16(2020, 3, 31), /* 2020-3-31 */
+                        to_day16(2000, 1, 31), /* 2000-1-31 */
+                    ]),
+                    Series::from_data(vec![-1i64, 241]),
                 ],
-                expect: Series::new(vec![to_days(2020, 2, 29), to_days(2021, 2, 28)]).into(),
+                expect: Series::from_data(vec![
+                    to_day16(2020, 2, 29), /* 2020-2-29 */
+                    to_day16(2020, 2, 29), /* 2020-2-29 */
+                ]),
+                error: "",
+            },
+        ),
+        (
+            ArithmeticPlusFunction::try_create_func("", &[
+                &DateTime32Type::arc(None),
+                &IntervalType::arc(IntervalKind::Month),
+            ])?,
+            ScalarFunction2Test {
+                name: "datetime32-add-months-passed",
+                columns: vec![
+                    Series::from_data(vec![
+                        to_seconds(2020, 3, 31, 10, 30, 00), /* 2020-3-31 10:30:00 */
+                        to_seconds(2000, 1, 31, 10, 30, 00), /* 2000-1-31 10:30:00 */
+                    ]),
+                    Series::from_data(vec![-1i64, 241]),
+                ],
+                expect: Series::from_data(vec![
+                    to_seconds(2020, 2, 29, 10, 30, 00), /* 2020-2-29 10:30:00 */
+                    to_seconds(2020, 2, 29, 10, 30, 00), /* 2020-2-29 10:30:00 */
+                ]),
                 error: "",
             },
         ),
         (
             ArithmeticMinusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Date32, false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::DayTime), false),
+                &Date32Type::arc(),
+                &IntervalType::arc(IntervalKind::Day),
             ])?,
-            ScalarFunctionTestWithType {
-                name: "date32-minus-day-time",
-                nullable: false,
+            ScalarFunction2Test {
+                name: "date32-sub-days-passed",
                 columns: vec![
-                    DataColumnWithField::new(
-                        Series::new(vec![to_days(2020, 3, 1), to_days(2021, 3, 1)]).into(),
-                        DataField::new("dummy_1", DataType::Date32, false),
-                    ),
-                    DataColumnWithField::new(
-                        Series::new(vec![daytime_to_ms(1, 0, 0, 0), daytime_to_ms(1, 1, 0, 0)])
-                            .into(),
-                        DataField::new("dummy_1", DataType::Interval(IntervalUnit::DayTime), false),
-                    ),
+                    Series::from_data(vec![
+                        to_day32(2400, 2, 29), /* 2400-2-29 */
+                        to_day32(1960, 2, 29), /* 1960-2-29 */
+                    ]),
+                    Series::from_data(vec![30i64, -30]),
                 ],
-                expect: Series::new(vec![to_days(2020, 2, 29), to_days(2021, 2, 28)]).into(),
+                expect: Series::from_data(vec![
+                    to_day32(2400, 1, 30), /* 2400-1-30 */
+                    to_day32(1960, 3, 30), /* 1960-3-30 */
+                ]),
                 error: "",
             },
         ),
         (
             ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Date16, false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::YearMonth), false),
+                &DateTime64Type::arc(3, None),
+                &IntervalType::arc(IntervalKind::Day),
             ])?,
-            ScalarFunctionTestWithType {
-                name: "date16-plus-year-month",
-                nullable: false,
+            ScalarFunction2Test {
+                name: "datetime64-add-days-passed",
                 columns: vec![
-                    DataColumnWithField::new(
-                        Series::new(vec![
-                            to_days(2020, 2, 29) as u16,
-                            to_days(2000, 1, 31) as u16,
-                        ])
-                        .into(),
-                        DataField::new("dummy_1", DataType::Date16, false),
-                    ),
-                    DataColumnWithField::new(
-                        Series::new(vec![
-                            12i64,       /* 1 year */
-                            20 * 12 + 1, /* 20 years and 1 month */
-                        ])
-                        .into(),
-                        DataField::new(
-                            "dummy_1",
-                            DataType::Interval(IntervalUnit::YearMonth),
-                            false,
-                        ),
-                    ),
+                    Series::from_data(vec![
+                        to_milliseconds(2020, 2, 29, 10, 30, 00, 000), /* 2020-2-29 10:30:00.000 */
+                        to_milliseconds(1960, 2, 29, 10, 30, 00, 000), /* 1960-2-29 10:30:00.000 */
+                    ]),
+                    Series::from_data(vec![-30i64, 30]),
                 ],
-                expect: Series::new(vec![
-                    to_days(2021, 2, 28) as u16,
-                    to_days(2020, 2, 29) as u16,
-                ])
-                .into(),
+                expect: Series::from_data(vec![
+                    to_milliseconds(2020, 1, 30, 10, 30, 00, 000), /* 2020-1-30 10:30:00.000 */
+                    to_milliseconds(1960, 3, 30, 10, 30, 00, 000), /* 1960-3-30 10:30:00.000 */
+                ]),
                 error: "",
             },
         ),
         (
             ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Date16, false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::DayTime), false),
+                &Date16Type::arc(),
+                &IntervalType::arc(IntervalKind::Hour),
             ])?,
-            ScalarFunctionTestWithType {
-                name: "date16-plus-day-time",
-                nullable: false,
+            ScalarFunction2Test {
+                name: "date16-add-hours-passed",
                 columns: vec![
-                    DataColumnWithField::new(
-                        Series::new(vec![
-                            to_days(2020, 2, 29) as u16,
-                            to_days(2021, 2, 28) as u16,
-                        ])
-                        .into(),
-                        DataField::new("dummy_1", DataType::Date16, false),
-                    ),
-                    DataColumnWithField::new(
-                        Series::new(vec![daytime_to_ms(1, 0, 0, 0), daytime_to_ms(1, 1, 0, 0)])
-                            .into(),
-                        DataField::new("dummy_1", DataType::Interval(IntervalUnit::DayTime), false),
-                    ),
+                    Series::from_data(vec![
+                        to_day16(2020, 3, 1),  /* 2020-3-31 */
+                        to_day16(2000, 1, 31), /* 2000-1-31 */
+                    ]),
+                    Series::from_data(vec![-1i64, 1]),
                 ],
-                expect: Series::new(vec![to_days(2020, 3, 1) as u16, to_days(2021, 3, 1) as u16])
-                    .into(),
+                expect: Series::from_data(vec![
+                    to_seconds(2020, 2, 29, 23, 00, 00), /* 2020-2-29 23:00:00 */
+                    to_seconds(2000, 1, 31, 1, 00, 00),  /* 2000-1-31 1:00:00 */
+                ]),
+                error: "",
+            },
+        ),
+        (
+            ArithmeticMinusFunction::try_create_func("", &[
+                &Date32Type::arc(),
+                &IntervalType::arc(IntervalKind::Minute),
+            ])?,
+            ScalarFunction2Test {
+                name: "date32-sub-minutes-passed",
+                columns: vec![
+                    Series::from_data(vec![
+                        to_day32(2400, 2, 29), /* 2400-2-29 */
+                        to_day32(1960, 2, 29), /* 1960-2-29 */
+                    ]),
+                    Series::from_data(vec![61i64, -30]),
+                ],
+                expect: Series::from_data(vec![
+                    to_milliseconds(2400, 2, 28, 22, 59, 00, 000) / 1000, /* 2400-2-28 22:59:00 */
+                    to_milliseconds(1960, 2, 29, 00, 30, 00, 000) / 1000, /* 1960-2-29 00:30:00 */
+                ]),
+                error: "",
+            },
+        ),
+        (
+            ArithmeticMinusFunction::try_create_func("", &[
+                &DateTime32Type::arc(None),
+                &IntervalType::arc(IntervalKind::Second),
+            ])?,
+            ScalarFunction2Test {
+                name: "datetime32-sub-seconds-passed",
+                columns: vec![
+                    Series::from_data(vec![
+                        to_seconds(2020, 3, 31, 10, 30, 00), /* 2020-3-31 10:30:00 */
+                        to_seconds(2000, 1, 31, 10, 30, 00), /* 2000-1-31 10:30:00 */
+                    ]),
+                    Series::from_data(vec![-120i64, 23]),
+                ],
+                expect: Series::from_data(vec![
+                    to_seconds(2020, 3, 31, 10, 32, 00), /* 2020-3-31 10:32:00 */
+                    to_seconds(2000, 1, 31, 10, 29, 37), /* 2000-1-31 10:29:37 */
+                ]),
                 error: "",
             },
         ),
     ];
 
     for (test_function, test) in tests {
-        test_scalar_functions_with_type(test_function, &[test])?;
+        test_scalar_functions2(test_function, &[test])?
     }
 
     Ok(())
 }
- */

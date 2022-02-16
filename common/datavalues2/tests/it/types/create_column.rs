@@ -53,9 +53,9 @@ fn test_create_constant() -> Result<()> {
         Test {
             name: "datetime64",
             data_type: DateTime64Type::arc(3, None),
-            value: DataValue::UInt64(1630320462),
+            value: DataValue::Int64(1630320462),
             size: 2,
-            column_expected: Series::from_data(vec![1630320462u64, 1630320462]),
+            column_expected: Series::from_data(vec![1630320462i64, 1630320462]),
         },
         Test {
             name: "date32",

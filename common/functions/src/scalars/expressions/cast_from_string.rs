@@ -77,11 +77,11 @@ pub fn cast_from_string(
             Ok((builder.build(size), Some(bitmap.into())))
         }
         TypeID::DateTime64 => {
-            let mut builder = ColumnBuilder::<u64>::with_capacity(size);
+            let mut builder = ColumnBuilder::<i64>::with_capacity(size);
             for (row, v) in str_column.iter().enumerate() {
                 match string_to_datetime64(v) {
                     Some(d) => {
-                        builder.append(d.timestamp_nanos() as u64);
+                        builder.append(d.timestamp_nanos());
                     }
                     None => bitmap.set(row, false),
                 }

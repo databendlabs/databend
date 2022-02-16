@@ -147,14 +147,21 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
 pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
     if let Some(m) = f.metadata() {
         if let Some(custom_name) = m.get(ARROW_EXTENSION_NAME) {
-            let metatada = m.get(ARROW_EXTENSION_META).cloned();
+            let metadata = m.get(ARROW_EXTENSION_META).cloned();
             match custom_name.as_str() {
                 "Date" | "Date16" => return Date16Type::arc(),
                 "Date32" => return Date32Type::arc(),
-                "DateTime" | "DateTime32" => return DateTime32Type::arc(metatada),
-                "DateTime64" => return DateTime64Type::arc(3, metatada),
-                "IntervalDayTime" => return IntervalType::arc(IntervalUnit::DayTime),
-                "IntervalYearMonth" => return IntervalType::arc(IntervalUnit::YearMonth),
+                "DateTime" | "DateTime32" => return DateTime32Type::arc(metadata),
+                "DateTime64" => match metadata {
+                    Some(meta) => {
+                        let mut chars = meta.chars();
+                        let precision = chars.next().unwrap().to_digit(10).unwrap();
+                        let tz = chars.collect::<String>();
+                        return DateTime64Type::arc(precision as usize, Some(tz));
+                    }
+                    None => return DateTime64Type::arc(3, None),
+                },
+                "Interval" => return IntervalType::arc(metadata.unwrap().into()),
                 _ => {}
             }
         }
