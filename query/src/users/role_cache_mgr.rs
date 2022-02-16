@@ -81,6 +81,11 @@ impl RoleCacheMgr {
         self.polling_join_handle.replace(handle);
     }
 
+    pub fn invalidate_cache(&mut self) {
+        let cached = self.cache.write();
+        *cached = CachedRoles::empty();
+    }
+
     pub async fn validate_privilege(
         &self,
         tenant: &str,
@@ -94,6 +99,7 @@ impl RoleCacheMgr {
             *cached = data;
         }
         cached = self.cache.read();
+        // TODO
         Ok(())
     }
 
