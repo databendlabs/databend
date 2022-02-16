@@ -10,6 +10,8 @@ grpc_api_address   = "0.0.0.0:9191"
 id            = 1
 raft_dir      = "./_meta1"
 raft_api_port = 28103
+raft_listen_host = "127.0.0.1"
+raft_advertise_host = "127.0.0.1"
 
 # Start up mode: single node cluster
 single        = true
