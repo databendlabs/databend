@@ -49,6 +49,7 @@ mod user_setting;
 mod user_stage;
 
 pub mod error_context;
+mod role_identity;
 
 // reexport
 
