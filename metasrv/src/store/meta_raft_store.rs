@@ -15,6 +15,7 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::io::Cursor;
+use std::io::ErrorKind;
 use std::ops::RangeBounds;
 
 use anyerror::AnyError;
@@ -50,6 +51,7 @@ use openraft::RaftStorage;
 use openraft::SnapshotMeta;
 use openraft::StorageError;
 
+use crate::export::exported_line_to_json;
 use crate::store::ToStorageError;
 use crate::Opened;
 
@@ -224,6 +226,33 @@ impl MetaRaftStore {
 
         *sm = new_sm;
         Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn export(&self) -> Result<Vec<String>, std::io::Error> {
+        let mut res = vec![];
+
+        let state_kvs = self.raft_state.inner.export()?;
+        let log_kvs = self.log.inner.export()?;
+        let sm_kvs = self.state_machine.write().await.sm_tree.export()?;
+
+        for kv in state_kvs.iter() {
+            let line = exported_line_to_json("state", kv)
+                .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
+            res.push(line);
+        }
+        for kv in log_kvs.iter() {
+            let line = exported_line_to_json("log", kv)
+                .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
+            res.push(line);
+        }
+        for kv in sm_kvs.iter() {
+            let line = exported_line_to_json("sm", kv)
+                .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
+            res.push(line);
+        }
+
+        Ok(res)
     }
 }
 
