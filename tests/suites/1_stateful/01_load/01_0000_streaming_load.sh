@@ -13,6 +13,16 @@ if [ ! -f /tmp/ontime.csv ]; then
 fi
 
 
+# do the Data integrity check
+sha256sum -c $CURDIR/ontime.sha1sum.txt
+if [ $? -eq 0 ]; then
+	echo "dataset checksum passed"
+else
+	echo "current dataset is not our stateful test dataset"
+	exit 1
+fi
+
+
 curl -H "insert_sql:insert into ontime_streaming_load format CSV" -H "csv_header:1" -F  "upload=@/tmp/ontime.csv"  -XPUT http://localhost:8001/v1/streaming_load > /dev/null 2>&1
 
 
