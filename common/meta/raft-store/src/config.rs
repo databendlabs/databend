@@ -54,7 +54,7 @@ pub const KVSRV_BOOT: &str = "KVSRV_BOOT";
 pub const KVSRV_SINGLE: &str = "KVSRV_SINGLE";
 pub const KVSRV_ID: &str = "KVSRV_ID";
 
-pub const DEFAULT_LISTEN_HOST: &str = "0.0.0.0";
+pub const DEFAULT_LISTEN_HOST: &str = "127.0.0.1";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Parser)]
 #[serde(default)]
@@ -73,8 +73,8 @@ pub struct RaftConfig {
     /// The hostname that other nodes will use to connect this node.
     /// This host should be stored in raft store and be replicated to the raft cluster,
     /// i.e., when calling add_node().
-    /// If empty, use `hostname(1)` by default.
-    #[clap(long, env = KVSRV_LISTEN_HOST, default_value = "")]
+    /// Use `localhost` by default.
+    #[clap(long, env = KVSRV_LISTEN_HOST, default_value = "localhost")]
     pub raft_advertise_host: String,
 
     /// The listening port for metadata communication.
