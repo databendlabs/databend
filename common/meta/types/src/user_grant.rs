@@ -142,8 +142,8 @@ impl UserGrantSet {
         &self.entries
     }
 
-    pub fn roles(&self) -> &HashSet<RoleIdentity> {
-        &self.roles
+    pub fn roles(&self) -> Vec<RoleIdentity> {
+        self.roles.iter().cloned().collect::<Vec<_>>()
     }
 
     pub fn grant_role(&mut self, role: RoleIdentity) {

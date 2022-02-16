@@ -51,10 +51,13 @@ impl Interpreter for DropTableInterpreter {
         let tbl_name = self.plan.table.as_str();
         let tbl = self.ctx.get_table(db_name, tbl_name).await.ok();
 
-        self.ctx.get_current_session().validate_privilege(
-            &GrantObject::Database(db_name.into()),
-            UserPrivilegeType::Drop,
-        )?;
+        self.ctx
+            .get_current_session()
+            .validate_privilege(
+                &GrantObject::Database(db_name.into()),
+                UserPrivilegeType::Drop,
+            )
+            .await?;
 
         let catalog = self.ctx.get_catalog();
         catalog.drop_table(self.plan.clone().into()).await?;

@@ -54,7 +54,7 @@ impl RoleCacheMgr {
     pub fn new(user_api: Arc<UserApiProvider>) -> Self {
         Self {
             user_api,
-            cache: Arc::new(RwLock::new(HashMap::empty())),
+            cache: Arc::new(RwLock::new(HashMap::new())),
             polling_interval: Duration::new(15, 0),
             polling_join_handle: None,
         }
@@ -68,7 +68,7 @@ impl RoleCacheMgr {
             loop {
                 let tenants: Vec<String> = {
                     let cached = cache.read();
-                    cached.keys().collect()
+                    cached.keys().map(|k| k.clone()).collect()
                 };
                 for tenant in tenants {
                     match load_roles_data(&user_api, &tenant).await {

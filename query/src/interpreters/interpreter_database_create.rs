@@ -52,7 +52,8 @@ impl Interpreter for CreateDatabaseInterpreter {
     ) -> Result<SendableDataBlockStream> {
         self.ctx
             .get_current_session()
-            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Create)?;
+            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Create)
+            .await?;
 
         let catalog = self.ctx.get_catalog();
         catalog.create_database(self.plan.clone().into()).await?;
