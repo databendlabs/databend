@@ -12,7 +12,6 @@ queue_rules:
       - check-success~=test_stateful_standalone
 
 pull_request_rules:
-
   - name: put bug fix pr to queue with high priority
     conditions:
       - "#approved-reviews-by>=2"
@@ -33,7 +32,6 @@ pull_request_rules:
       queue:
         name: shared_queue
 
-
   # if there is a conflict in a approved PR, ping the author.
   - name: ping author on conflicts
     conditions:
@@ -45,3 +43,73 @@ pull_request_rules:
           This pull request has merge conflicts that must be resolved before it can be merged. @{{author}} please update it 🙏.
 
           Try `@mergify update` or update manually.
+
+  - name: Welcome new contributor
+    conditions:
+      - author!=Mergify
+    actions:
+      comment:
+        message: |
+          Thanks for the contribution!
+          I have applied any labels matching special text in your PR Changelog.
+
+          Please review the labels and make any necessary changes.
+
+  - name: label on New Feature
+    conditions:
+      - body~=- New Feature
+    actions:
+      label:
+        add:
+          - pr-feature
+  - name: label on Bug Fix
+    conditions:
+      - body~=- Bug Fix
+    actions:
+      label:
+        add:
+          - pr-bugfix
+  - name: label on Improvement
+    conditions:
+      - body~=- Improvement
+    actions:
+      label:
+        add:
+          - pr-improvement
+  - name: label on Performance
+    conditions:
+      - body~=- Performance Improvement
+    actions:
+      label:
+        add:
+          - pr-performance
+  - name: label on Build/Testing/CI
+    conditions:
+      - body~=- Build/Testing/CI
+    actions:
+      label:
+        add:
+          - pr-build
+  - name: label on Documentation
+    conditions:
+      - or:
+          - body~=- Documentation
+          - body~=- Website
+    actions:
+      label:
+        add:
+          - pr-doc-fix
+  - name: label on Not for changelog
+    conditions:
+      - body~=- Not for changelog
+    actions:
+      label:
+        add:
+          - pr-not-for-changelog
+  - name: label on Other
+    conditions:
+      - body~=- Other
+    actions:
+      label:
+        add:
+          - pr-other

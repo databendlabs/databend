@@ -51,9 +51,6 @@ pub enum MetaError {
     LoadConfigError(String),
 
     #[error("{0}")]
-    TLSConfigurationFailure(String),
-
-    #[error("{0}")]
     StartMetaServiceError(String),
 
     #[error("{0}")]

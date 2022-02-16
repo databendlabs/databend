@@ -21,6 +21,7 @@ use std::task;
 use std::task::Poll;
 use std::time::Duration;
 
+use anyerror::AnyError;
 use common_base::tokio;
 use common_base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
@@ -31,6 +32,8 @@ use hyper::client::HttpConnector;
 use hyper::service::Service;
 use hyper::Uri;
 use once_cell::sync::Lazy;
+use serde::Deserialize;
+use serde::Serialize;
 use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
@@ -141,12 +144,12 @@ impl ConnectionFactory {
         addr: impl ToString,
         timeout: Option<Duration>,
         rpc_client_config: Option<RpcClientTlsConfig>,
-    ) -> Result<Channel> {
+    ) -> std::result::Result<Channel, GrpcConnectionError> {
         match format!("http://{}", addr.to_string()).parse::<Uri>() {
-            Err(error) => Result::Err(ErrorCode::BadAddressFormat(format!(
-                "Node address format is not parse: {}",
-                error
-            ))),
+            Err(error) => Err(GrpcConnectionError::InvalidUri {
+                uri: addr.to_string(),
+                source: AnyError::new(&error),
+            }),
             Ok(uri) => {
                 let mut inner_connector = HttpConnector::new_with_resolver(DNSService);
                 inner_connector.set_nodelay(true);
@@ -158,16 +161,16 @@ impl ConnectionFactory {
                 let mut endpoint = if let Some(conf) = rpc_client_config {
                     tracing::info!("tls rpc enabled");
                     let client_tls_config = Self::client_tls_config(&conf).map_err(|e| {
-                        ErrorCode::TLSConfigurationFailure(format!(
-                            "loading client tls config failure: {} ",
-                            e
-                        ))
+                        GrpcConnectionError::TLSConfigError {
+                            action: "loading".to_string(),
+                            source: AnyError::new(&e),
+                        }
                     })?;
                     builder.tls_config(client_tls_config).map_err(|e| {
-                        ErrorCode::TLSConfigurationFailure(format!(
-                            "builder tls_config failure: {}",
-                            e
-                        ))
+                        GrpcConnectionError::TLSConfigError {
+                            action: "building".to_string(),
+                            source: AnyError::new(&e),
+                        }
                     })?
                 } else {
                     builder
@@ -178,11 +181,11 @@ impl ConnectionFactory {
                 }
 
                 match endpoint.connect_with_connector_lazy(inner_connector) {
-                    Ok(channel) => Result::Ok(channel),
-                    Err(error) => Result::Err(ErrorCode::CannotConnectNode(format!(
-                        "Cannot to RPC server: {:?} error: {}",
-                        uri, error
-                    ))),
+                    Ok(channel) => Ok(channel),
+                    Err(error) => Err(GrpcConnectionError::CannotConnect {
+                        uri: uri.to_string(),
+                        source: AnyError::new(&error),
+                    }),
                 }
             }
         }
@@ -196,5 +199,43 @@ impl ConnectionFactory {
             .domain_name(conf.domain_name.to_string())
             .ca_certificate(server_root_ca_cert);
         Ok(tls)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+pub enum GrpcConnectionError {
+    #[error("invalid uri: {uri}, error: {source}")]
+    InvalidUri {
+        uri: String,
+        #[source]
+        source: AnyError,
+    },
+
+    #[error("{action} client tls config, error: {source}")]
+    TLSConfigError {
+        action: String,
+        #[source]
+        source: AnyError,
+    },
+
+    #[error("can not connect to {uri}, error: {source}")]
+    CannotConnect {
+        uri: String,
+        #[source]
+        source: AnyError,
+    },
+}
+
+impl From<GrpcConnectionError> for ErrorCode {
+    fn from(ge: GrpcConnectionError) -> Self {
+        match ge {
+            GrpcConnectionError::InvalidUri { .. } => ErrorCode::BadAddressFormat(ge.to_string()),
+            GrpcConnectionError::TLSConfigError { .. } => {
+                ErrorCode::TLSConfigurationFailure(ge.to_string())
+            }
+            GrpcConnectionError::CannotConnect { .. } => {
+                ErrorCode::CannotConnectNode(ge.to_string())
+            }
+        }
     }
 }
