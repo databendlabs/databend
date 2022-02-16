@@ -13,16 +13,13 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicPtr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
-use std::time::SystemTime;
 
 use common_base::tokio;
 use common_base::tokio::task::JoinHandle;
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_infallible::RwLock;
 use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
@@ -66,46 +63,48 @@ impl RoleCacheMgr {
     pub fn start_polling(&mut self, tenant: &str) {
         let user_api = self.user_api.clone();
         let cache = self.cache.clone();
+        let tenant = tenant.to_string();
+        let polling_interval = self.polling_interval;
         let handle = tokio::spawn(async move {
-            while true {
-                match load_roles_data(&user_api, tenant).await {
+            loop {
+                match load_roles_data(&user_api, &tenant).await {
                     Err(err) => tracing::warn!("role_cache_mgr load roles data failed: {}", err),
                     Ok(data) => {
-                        let cached = cache.write();
+                        let mut cached = cache.write();
                         *cached = data;
                     }
                 }
-                tokio::time::sleep(self.polling_interval.clone()).await
+                tokio::time::sleep(polling_interval).await
             }
         });
         self.polling_join_handle.replace(handle);
     }
 
     pub fn invalidate_cache(&mut self) {
-        let cached = self.cache.write();
+        let mut cached = self.cache.write();
         *cached = CachedRoles::empty();
     }
 
     pub async fn validate_privilege(
         &self,
         tenant: &str,
-        roles: &[UserIdentity],
-        object: &GrantObject,
-        privilege: UserPrivilegeType,
+        _roles: &[UserIdentity],
+        _object: &GrantObject,
+        _privilege: UserPrivilegeType,
     ) -> Result<()> {
         if self.need_reload() {
             let data = load_roles_data(&self.user_api, tenant).await?;
-            let cached = self.cache.write();
+            let mut cached = self.cache.write();
             *cached = data;
         }
-        cached = self.cache.read();
+        let _cached = self.cache.read();
         // TODO
         Ok(())
     }
 
     fn need_reload(&self) -> bool {
         let cached = self.cache.read();
-        let last_cache_time: &Option<Instant> = &*cached.last_cache_time;
+        let last_cache_time: &Option<Instant> = &cached.last_cache_time;
         match last_cache_time {
             None => true,
             Some(t) => t.elapsed() >= self.polling_interval,
@@ -114,7 +113,7 @@ impl RoleCacheMgr {
 }
 
 fn make_role_cache_key(tenant: &str, role_identity: &UserIdentity) -> String {
-    format!("{}/{}", tenant, role_identity.to_string())
+    format!("{}/{}", tenant, role_identity)
 }
 
 async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &str) -> Result<CachedRoles> {

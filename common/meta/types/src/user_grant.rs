@@ -16,7 +16,6 @@ use std::fmt;
 
 use enumflags2::BitFlags;
 
-use crate::UserIdentity;
 use crate::UserPrivilegeSet;
 use crate::UserPrivilegeType;
 

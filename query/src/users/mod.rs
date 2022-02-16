@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod access;
 mod role_mgr;
 mod user;
 mod user_api;
