@@ -24,6 +24,7 @@ use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
+use common_meta_types::RoleIdentity;
 use common_meta_types::RoleInfo;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
@@ -57,7 +58,7 @@ impl RoleMgr {
         role_info: &RoleInfo,
         seq: Option<u64>,
     ) -> common_exception::Result<u64> {
-        let key = format!("{}/{}", self.role_prefix, &role_info.name);
+        let key = self.make_role_key(&role_info.identity());
         let value = serde_json::to_vec(&role_info)?;
 
         let match_seq = match seq {
@@ -82,13 +83,17 @@ impl RoleMgr {
             ))),
         }
     }
+
+    fn make_role_key(&self, role: &RoleIdentity) -> String {
+        format!("{}/{}@{}", self.role_prefix, role.name, role.host)
+    }
 }
 
 #[async_trait::async_trait]
 impl RoleApi for RoleMgr {
     async fn add_role(&self, role_info: &RoleInfo) -> common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
-        let key = format!("{}/{}", self.role_prefix, &role_info.name);
+        let key = self.make_role_key(&role_info.identity());
         let value = serde_json::to_vec(&role_info)?;
 
         let kv_api = self.kv_api.clone();
@@ -108,19 +113,22 @@ impl RoleApi for RoleMgr {
         }
     }
 
-    // TODO: add host parameter
-    async fn get_role(&self, role_name: &str, seq: Option<u64>) -> Result<SeqV<RoleInfo>> {
-        let key = format!("{}/{}", self.role_prefix, role_name);
+    async fn get_role(
+        &self,
+        role_identity: &RoleIdentity,
+        seq: Option<u64>,
+    ) -> Result<SeqV<RoleInfo>> {
+        let key = self.make_role_key(role_identity);
         let kv_api = self.kv_api.clone();
         let res = kv_api.get_kv(&key).await?;
         let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownRole(format!("unknown role {}", role_name)))?;
+            res.ok_or_else(|| ErrorCode::UnknownRole(format!("unknown role {}", role_identity)))?;
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             Ok(_) => Ok(seq_value.into_seqv()?),
             Err(_) => Err(ErrorCode::UnknownRole(format!(
                 "unknown role {}",
-                role_name
+                role_identity
             ))),
         }
     }
@@ -143,39 +151,36 @@ impl RoleApi for RoleMgr {
 
     async fn grant_role_privileges(
         &self,
-        role_name: String,
-        host_name: String,
+        role: &RoleIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
-        let role_val_seq = self.get_role(&role_name, seq);
+        let role_val_seq = self.get_role(role, seq);
         let mut role_info = role_val_seq.await?.data;
         role_info
             .grants
-            .grant_privileges(&role_name, &host_name, &object, privileges);
+            .grant_privileges(&role.name, &role.host, &object, privileges);
         let seq = self.upsert_role_info(&role_info, seq).await?;
         Ok(Some(seq))
     }
 
     async fn revoke_role_privileges(
         &self,
-        role_name: String,
-        _host_name: String,
+        role: &RoleIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
-        let role_val_seq = self.get_role(&role_name, seq);
+        let role_val_seq = self.get_role(role, seq);
         let mut role_info = role_val_seq.await?.data;
         role_info.grants.revoke_privileges(&object, privileges);
         let seq = self.upsert_role_info(&role_info, seq).await?;
         Ok(Some(seq))
     }
 
-    // TODO: add host parameter
-    async fn drop_role(&self, role_name: String, seq: Option<u64>) -> Result<()> {
-        let key = format!("{}/{}", self.role_prefix, role_name);
+    async fn drop_role(&self, role: &RoleIdentity, seq: Option<u64>) -> Result<()> {
+        let key = self.make_role_key(role);
         let kv_api = self.kv_api.clone();
         let res = kv_api
             .upsert_kv(UpsertKVAction::new(
@@ -188,10 +193,7 @@ impl RoleApi for RoleMgr {
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {
-            Err(ErrorCode::UnknownRole(format!(
-                "unknown role {}",
-                role_name
-            )))
+            Err(ErrorCode::UnknownRole(format!("unknown role {}", role)))
         }
     }
 }
