@@ -443,23 +443,6 @@ impl MetaApiTestSuite {
             }
         }
 
-        tracing::info!("--- upsert table on unknown db");
-        {
-            // casually create a upsert table plan
-            // should be not vunerable?
-            let ident = TableIdent::new(114, 514);
-            let plan = UpsertTableOptionReq::new(&ident, "key1", "key2");
-
-            let got = mt.upsert_table_option(plan).await;
-            tracing::debug!("upsert table on unknow db got: {:?}", got);
-
-            assert!(got.is_err());
-            let err = got.unwrap_err();
-            let err = ErrorCode::from(err);
-
-            assert_eq!(unknown_database_code, err.code());
-        }
-
         tracing::info!("--- drop table on unknown db");
         {
             // casually create a drop table plan
