@@ -157,7 +157,7 @@ impl ClusterDiscovery {
 
     pub async fn register_to_metastore(self: &Arc<Self>, cfg: &Config) -> Result<()> {
         let cpus = cfg.query.num_cpus;
-        // TODO: 0.0.0.0 || ::0
+        // TODO: 127.0.0.1 || ::0
         let address = cfg.query.flight_api_address.clone();
         let node_info = NodeInfo::create(self.local_id.clone(), cpus, address);
 

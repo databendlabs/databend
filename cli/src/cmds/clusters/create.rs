@@ -148,14 +148,14 @@ pub fn generate_query_config() -> QueryConfig {
         config.query.flight_api_address = Status::find_unused_local_port()
     }
     if config.query.mysql_handler_host.is_empty() {
-        config.query.mysql_handler_host = "0.0.0.0".to_string();
+        config.query.mysql_handler_host = "127.0.0.1".to_string();
     }
     if config.query.clickhouse_handler_host.is_empty() {
-        config.query.clickhouse_handler_host = "0.0.0.0".to_string();
+        config.query.clickhouse_handler_host = "127.0.0.1".to_string();
     }
 
     if config.query.http_handler_host.is_empty() {
-        config.query.http_handler_host = "0.0.0.0".to_string();
+        config.query.http_handler_host = "127.0.0.1".to_string();
     }
     if !portpicker::is_free(config.query.mysql_handler_port) {
         config.query.mysql_handler_port = portpicker::pick_unused_port().unwrap();
@@ -467,7 +467,7 @@ impl CreateCommand {
             config.raft_config.raft_api_port = portpicker::pick_unused_port().unwrap() as u32;
         }
         if config.raft_config.raft_api_host.is_empty() {
-            config.raft_config.raft_api_host = "0.0.0.0".to_string();
+            config.raft_config.raft_api_host = "127.0.0.1".to_string();
         }
         config
     }
