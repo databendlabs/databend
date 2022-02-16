@@ -27,6 +27,7 @@ use crate::prelude::*;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct DateTime32Type {
+    /// tz indicates the timezone, if it's None, it's UTC.
     tz: Option<String>,
 }
 

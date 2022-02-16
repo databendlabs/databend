@@ -19,6 +19,7 @@ use common_exception::Result;
 
 use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::EvalContext;
 use crate::scalars::Function2;
 use crate::scalars::Function2Description;
 use crate::scalars::ScalarBinaryExpression;
@@ -54,7 +55,11 @@ impl Function2 for FindInSetFunction {
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
         let binary = ScalarBinaryExpression::<Vu8, Vu8, u64, _>::new(find_in_set);
-        let col = binary.eval(columns[0].column(), columns[1].column())?;
+        let col = binary.eval(
+            columns[0].column(),
+            columns[1].column(),
+            &mut EvalContext::default(),
+        )?;
         Ok(col.arc())
     }
 }
@@ -66,7 +71,7 @@ impl fmt::Display for FindInSetFunction {
 }
 
 #[inline]
-fn find_in_set(str: &[u8], list: &[u8]) -> u64 {
+fn find_in_set(str: &[u8], list: &[u8], _ctx: &mut EvalContext) -> u64 {
     if str.is_empty() || str.len() > list.len() {
         return 0;
     }

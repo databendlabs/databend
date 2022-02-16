@@ -232,7 +232,7 @@ fn create_blocks() -> Vec<DataBlock> {
         Series::from_data(vec![1_u16, 3, 5, 7]),
         Series::from_data(vec![1_u32, 3, 5, 7]),
         Series::from_data(vec![1_u32, 3, 5, 7]),
-        Series::from_data(vec![1_u64, 3, 5, 7]),
+        Series::from_data(vec![1_i64, 3, 5, 7]),
         Series::from_data(vec![1_i64, 3, 5, 7]),
         Series::from_data(vec!["Alice", "Bob", "Batman", "Superman"]),
     ]);
@@ -251,7 +251,7 @@ fn create_blocks() -> Vec<DataBlock> {
         Series::from_data(vec![9_u16, 11, 13, 15]),
         Series::from_data(vec![9_u32, 11, 13, 15]),
         Series::from_data(vec![9_u32, 11, 13, 15]),
-        Series::from_data(vec![9_u64, 11, 13, 15]),
+        Series::from_data(vec![9_i64, 11, 13, 15]),
         Series::from_data(vec![9_i64, 11, 13, 15]),
         Series::from_data(vec!["Iron man", "Thor", "Professor X", "Wolverine"]),
     ]);

@@ -86,8 +86,8 @@ impl Function2 for RunningDifferenceFunction {
             TypeID::UInt16 | TypeID::Date16 => compute_u16(col, input_rows),
             TypeID::Int32 | TypeID::Date32 => compute_i32(col, input_rows),
             TypeID::UInt32 | TypeID::DateTime32 => compute_u32(col, input_rows),
-            TypeID::Int64 | TypeID::Interval => compute_i64(col, input_rows),
-            TypeID::UInt64 | TypeID::DateTime64 => compute_u64(col, input_rows),
+            TypeID::Int64 | TypeID::Interval | TypeID::DateTime64 => compute_i64(col, input_rows),
+            TypeID::UInt64 => compute_u64(col, input_rows),
             TypeID::Float32 => compute_f32(col, input_rows),
             TypeID::Float64 => compute_f64(col, input_rows),
 

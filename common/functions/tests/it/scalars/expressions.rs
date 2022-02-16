@@ -164,7 +164,7 @@ fn test_binary_contains() {
     struct Contains {}
 
     impl ScalarBinaryFunction<Vu8, Vu8, bool> for Contains {
-        fn eval(&self, a: &'_ [u8], b: &'_ [u8]) -> bool {
+        fn eval(&self, a: &'_ [u8], b: &'_ [u8], _ctx: &mut EvalContext) -> bool {
             a.windows(b.len()).any(|window| window == b)
         }
     }
@@ -175,7 +175,9 @@ fn test_binary_contains() {
         let l = Series::from_data(vec!["11", "22", "33"]);
         let r = Series::from_data(vec!["1", "2", "43"]);
         let expected = Series::from_data(vec![true, true, false]);
-        let result = binary_expression.eval(&l, &r).unwrap();
+        let result = binary_expression
+            .eval(&l, &r, &mut EvalContext::default())
+            .unwrap();
         let result = Arc::new(result) as ColumnRef;
         assert!(result == expected);
     }

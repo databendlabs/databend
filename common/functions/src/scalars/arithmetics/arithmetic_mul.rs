@@ -15,7 +15,7 @@
 use std::ops::Mul;
 
 use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues2::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::traits::AsPrimitive;
@@ -24,10 +24,11 @@ use num_traits::WrappingMul;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
+use crate::scalars::EvalContext;
 use crate::scalars::Function2;
 use crate::scalars::Monotonicity2;
 
-fn mul_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>) -> O
+fn mul_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
 where
     L: PrimitiveType + AsPrimitive<O>,
     R: PrimitiveType + AsPrimitive<O>,
@@ -36,7 +37,7 @@ where
     l.to_owned_scalar().as_() * r.to_owned_scalar().as_()
 }
 
-fn wrapping_mul_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>) -> O
+fn wrapping_mul_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
 where
     L: PrimitiveType + AsPrimitive<O>,
     R: PrimitiveType + AsPrimitive<O>,
@@ -58,15 +59,8 @@ impl ArithmeticMulFunction {
         let left_type = remove_nullable(args[0]).data_type_id();
         let right_type = remove_nullable(args[1]).data_type_id();
 
-        let error_fn = || -> Result<Box<dyn Function2>> {
-            Err(ErrorCode::BadDataValueType(format!(
-                "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
-                left_type, op, right_type
-            )))
-        };
-
-        with_match_primitive_type_id!(left_type, |$T| {
-            with_match_primitive_type_id!(right_type, |$D| {
+        with_match_primitive_types_error!(left_type, |$T| {
+            with_match_primitive_types_error!(right_type, |$D| {
                 let result_type = <($T, $D) as ResultTypeOfBinary>::AddMul::to_data_type();
                 match result_type.data_type_id() {
                     TypeID::UInt64 => BinaryArithmeticFunction::<$T, $D, u64, _>::try_create_func(
@@ -85,11 +79,7 @@ impl ArithmeticMulFunction {
                         mul_scalar::<$T, $D, _>,
                     ),
                 }
-            }, {
-                error_fn()
             })
-        }, {
-            error_fn()
         })
     }
 

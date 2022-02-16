@@ -39,10 +39,12 @@ where T: AsPrimitive<i64>
     }
 
     fn to_date_time64(&self, precision: &u32, tz: &Tz) -> DateTime<Tz> {
-        if *precision <= 3 {
-            tz.timestamp_millis(self.as_())
-        } else {
-            tz.timestamp_nanos(self.as_())
-        }
+        let base10: i64 = 10;
+        let nano = self.as_() * base10.pow(9 - precision);
+
+        let sec = nano / 1_000_000_000;
+        let nsec = nano % 1_000_000_000;
+
+        tz.timestamp(sec, nsec as u32)
     }
 }
