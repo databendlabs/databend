@@ -160,9 +160,14 @@ impl Config {
         load_field_from_env!(cfg.grpc_tls_server_cert, String, GRPC_TLS_SERVER_CERT);
         load_field_from_env!(cfg.grpc_tls_server_key, String, GRPC_TLS_SERVER_KEY);
         load_field_from_env!(
-            cfg.raft_config.raft_api_host,
+            cfg.raft_config.raft_listen_host,
             String,
-            raft_config::KVSRV_API_HOST
+            raft_config::KVSRV_LISTEN_HOST
+        );
+        load_field_from_env!(
+            cfg.raft_config.raft_advertise_host,
+            String,
+            raft_config::KVSRV_ADVERTISE_HOST
         );
         load_field_from_env!(
             cfg.raft_config.raft_api_port,

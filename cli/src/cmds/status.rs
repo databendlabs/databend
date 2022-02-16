@@ -343,8 +343,12 @@ impl LocalRuntime for LocalMetaConfig {
                 conf.raft_config.raft_api_port.to_string(),
             )
             .env(
-                common_meta_raft_store::config::KVSRV_API_HOST,
-                conf.raft_config.raft_api_host,
+                common_meta_raft_store::config::KVSRV_LISTEN_HOST,
+                conf.raft_config.raft_listen_host,
+            )
+            .env(
+                common_meta_raft_store::config::KVSRV_ADVERTISE_HOST,
+                conf.raft_config.raft_advertise_host,
             )
             .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
             .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });
