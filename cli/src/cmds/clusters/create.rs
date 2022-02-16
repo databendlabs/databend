@@ -24,6 +24,8 @@ use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
 use clap::ValueHint;
+use common_meta_raft_store::config::get_default_raft_advertise_host;
+use common_meta_raft_store::config::get_default_raft_listen_host;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use lexical_util::num::AsPrimitive;
@@ -466,8 +468,11 @@ impl CreateCommand {
         if !portpicker::is_free(config.raft_config.raft_api_port.as_u16()) {
             config.raft_config.raft_api_port = portpicker::pick_unused_port().unwrap() as u32;
         }
-        if config.raft_config.raft_api_host.is_empty() {
-            config.raft_config.raft_api_host = "0.0.0.0".to_string();
+        if config.raft_config.raft_listen_host.is_empty() {
+            config.raft_config.raft_listen_host = get_default_raft_listen_host();
+        }
+        if config.raft_config.raft_advertise_host.is_empty() {
+            config.raft_config.raft_advertise_host = get_default_raft_advertise_host();
         }
         config
     }
