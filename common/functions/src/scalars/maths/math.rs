@@ -57,6 +57,8 @@ impl MathsFunction {
         factory.register("ceil", CeilFunction::desc());
         factory.register("ceiling", CeilFunction::desc());
         factory.register("floor", FloorFunction::desc());
+        factory.register("degrees", DegressFunction::desc());
+        factory.register("radians", RadiansFunction::desc());
     }
 
     pub fn register(factory: &mut FunctionFactory) {
@@ -65,8 +67,6 @@ impl MathsFunction {
         factory.register("cos", TrigonometricCosFunction::desc());
         factory.register("tan", TrigonometricTanFunction::desc());
         factory.register("cot", TrigonometricCotFunction::desc());
-        factory.register("degrees", DegressFunction::desc());
-        factory.register("radians", RadiansFunction::desc());
         factory.register("log", LogFunction::desc());
         factory.register("log10", Log10Function::desc());
         factory.register("log2", Log2Function::desc());
