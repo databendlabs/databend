@@ -406,8 +406,9 @@ impl MetaApiTestSuite {
             ..TableMeta::default()
         };
 
-        tracing::info!("--- create table on unknown db");
-        // TODO(xp): test other table operation on unknown db.
+        let unknown_database_code = ErrorCode::UnknownDatabase("").code();
+
+        tracing::info!("--- create or get table on unknown db");
         {
             let created_on = Utc::now();
 
@@ -418,7 +419,7 @@ impl MetaApiTestSuite {
                 table: tbl_name.to_string(),
                 table_meta: table_meta(created_on),
             };
-
+            // test create table
             {
                 let res = mt.create_table(req).await;
                 tracing::debug!("create table on unknown db res: {:?}", res);
@@ -427,8 +428,55 @@ impl MetaApiTestSuite {
                 let err = res.unwrap_err();
                 let err = ErrorCode::from(err);
 
-                assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
+                assert_eq!(unknown_database_code, err.code());
+            };
+            // test get table
+            {
+                let got = mt.get_table((tenant, db_name, tbl_name).into()).await;
+                tracing::debug!("get table on unknown db got: {:?}", got);
+
+                assert!(got.is_err());
+                let err = got.unwrap_err();
+                let err = ErrorCode::from(err);
+
+                assert_eq!(unknown_database_code, err.code());
             }
+        }
+
+        tracing::info!("--- upsert table on unknown db");
+        {
+            // casually create a upsert table plan
+            // should be not vunerable?
+            let ident = TableIdent::new(114, 514);
+            let plan = UpsertTableOptionReq::new(&ident, "key1", "key2");
+
+            let got = mt.upsert_table_option(plan).await;
+            tracing::debug!("upsert table on unknow db got: {:?}", got);
+
+            assert!(got.is_err());
+            let err = got.unwrap_err();
+            let err = ErrorCode::from(err);
+
+            assert_eq!(unknown_database_code, err.code());
+        }
+
+        tracing::info!("--- drop table on unknown db");
+        {
+            // casually create a drop table plan
+            // should be not vunerable?
+            let plan = DropTableReq {
+                if_exists: false,
+                tenant: tenant.into(),
+                db: db_name.into(),
+                table: tbl_name.into(),
+            };
+
+            let got = mt.drop_table(plan).await;
+            tracing::debug!("--- drop table on unknown database got: {:?}", got);
+
+            assert!(got.is_err());
+            let code = ErrorCode::from(got.unwrap_err()).code();
+            assert_eq!(unknown_database_code, code);
         }
 
         tracing::info!("--- prepare db");
@@ -518,46 +566,48 @@ impl MetaApiTestSuite {
                 };
                 assert_eq!(want, got.as_ref().clone(), "get old table");
             }
+        }
 
-            tracing::info!("--- upsert table options");
+        tracing::info!("--- upsert table options");
+        {
+            tracing::info!("--- upsert table options with key1=val1");
             {
-                tracing::info!("--- upsert table options with key1=val1");
-                {
-                    let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
 
-                    mt.upsert_table_option(UpsertTableOptionReq::new(&table.ident, "key1", "val1"))
-                        .await?;
+                mt.upsert_table_option(UpsertTableOptionReq::new(&table.ident, "key1", "val1"))
+                    .await?;
 
-                    let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
-                    assert_eq!(table.options().get("key1"), Some(&"val1".into()));
-                }
-
-                tracing::info!("--- upsert table options with key1=val1");
-                {
-                    let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
-
-                    let got = mt
-                        .upsert_table_option(UpsertTableOptionReq::new(
-                            &TableIdent {
-                                table_id: table.ident.table_id,
-                                version: table.ident.version - 1,
-                            },
-                            "key1",
-                            "val2",
-                        ))
-                        .await;
-
-                    let err = got.unwrap_err();
-                    let err = ErrorCode::from(err);
-
-                    assert_eq!(ErrorCode::TableVersionMismatched("").code(), err.code());
-
-                    // table is not affected.
-                    let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
-                    assert_eq!(table.options().get("key1"), Some(&"val1".into()));
-                }
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+                assert_eq!(table.options().get("key1"), Some(&"val1".into()));
             }
 
+            tracing::info!("--- upsert table options with key1=val1");
+            {
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+
+                let got = mt
+                    .upsert_table_option(UpsertTableOptionReq::new(
+                        &TableIdent {
+                            table_id: table.ident.table_id,
+                            version: table.ident.version - 1,
+                        },
+                        "key1",
+                        "val2",
+                    ))
+                    .await;
+
+                let err = got.unwrap_err();
+                let err = ErrorCode::from(err);
+
+                assert_eq!(ErrorCode::TableVersionMismatched("").code(), err.code());
+
+                // table is not affected.
+                let table = mt.get_table((tenant, "db1", "tb2").into()).await.unwrap();
+                assert_eq!(table.options().get("key1"), Some(&"val1".into()));
+            }
+        }
+        tracing::info!("--- drop table");
+        {
             tracing::info!("--- drop table with if_exists = false");
             {
                 let plan = DropTableReq {
@@ -824,7 +874,7 @@ impl MetaApiTestSuite {
                 u64::to_data_type(),
             )]));
 
-            let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
+            let options = maplit::hashmap! {"opt-1".into() => "val-1".into()};
             for tb in tables {
                 let req = CreateTableReq {
                     if_not_exists: false,
