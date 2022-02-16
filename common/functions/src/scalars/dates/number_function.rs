@@ -14,7 +14,6 @@
 
 use std::fmt;
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 use common_datavalues2::chrono::DateTime;
 use common_datavalues2::chrono::Datelike;
@@ -30,7 +29,6 @@ use crate::scalars::function2_factory::Function2Description;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::CastFunction;
 use crate::scalars::Function2;
-use crate::scalars::Function2Convertor;
 use crate::scalars::Monotonicity2;
 use crate::scalars::RoundFunction;
 use crate::scalars::ScalarUnaryExpression;

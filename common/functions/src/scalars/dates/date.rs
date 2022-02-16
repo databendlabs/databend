@@ -40,8 +40,6 @@ use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
 use crate::scalars::function2_factory::Factory2Creator;
-use crate::scalars::function_factory::FactoryCreator;
-use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
