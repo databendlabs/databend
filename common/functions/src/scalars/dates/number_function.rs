@@ -29,6 +29,7 @@ use crate::scalars::function2_factory::Function2Description;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::CastFunction;
 use crate::scalars::Function2;
+use crate::scalars::Function2Adapter;
 use crate::scalars::Monotonicity2;
 use crate::scalars::RoundFunction;
 use crate::scalars::ScalarUnaryExpression;
@@ -52,6 +53,10 @@ pub trait NumberOperator<R> {
         Err(ErrorCode::UnknownException(
             "Always monotonous, has no factor function",
         ))
+    }
+
+    fn return_type() -> Option<common_datavalues2::DataTypePtr> {
+        None
     }
 }
 
@@ -103,6 +108,10 @@ impl NumberOperator<u16> for ToStartOfYear {
         let end: DateTime<Utc> = Utc.ymd(value.year(), 1, 1).and_hms(0, 0, 0);
         get_day(end) as u16
     }
+
+    fn return_type() -> Option<common_datavalues2::DataTypePtr> {
+        Some(Date32Type::arc())
+    }
 }
 
 #[derive(Clone)]
@@ -120,6 +129,10 @@ impl NumberOperator<u16> for ToStartOfISOYear {
         let end: DateTime<Utc> = Utc.timestamp_millis(result);
         get_day(end) as u16
     }
+
+    fn return_type() -> Option<common_datavalues2::DataTypePtr> {
+        Some(Date32Type::arc())
+    }
 }
 
 #[derive(Clone)]
@@ -133,6 +146,10 @@ impl NumberOperator<u16> for ToStartOfQuarter {
         let date = Utc.ymd(value.year(), new_month, 1).and_hms(0, 0, 0);
         get_day(date) as u16
     }
+
+    fn return_type() -> Option<common_datavalues2::DataTypePtr> {
+        Some(Date32Type::arc())
+    }
 }
 
 #[derive(Clone)]
@@ -144,6 +161,10 @@ impl NumberOperator<u16> for ToStartOfMonth {
     fn to_number(value: DateTime<Utc>) -> u16 {
         let date = Utc.ymd(value.year(), value.month(), 1).and_hms(0, 0, 0);
         get_day(date) as u16
+    }
+
+    fn return_type() -> Option<common_datavalues2::DataTypePtr> {
+        Some(Date32Type::arc())
     }
 }
 
@@ -313,7 +334,10 @@ where
         &self,
         _args: &[&common_datavalues2::DataTypePtr],
     ) -> Result<common_datavalues2::DataTypePtr> {
-        Ok(R::to_data_type())
+        match T::return_type() {
+            None => Ok(R::to_data_type()),
+            Some(v) => Ok(v),
+        }
     }
 
     fn eval(
@@ -364,6 +388,8 @@ where
             // Always monotonous, has no factor function.
             Err(_) => return Ok(Monotonicity2::clone_without_range(&args[0])),
         };
+
+        let func = Function2Adapter::create(func);
 
         if args[0].left.is_none() || args[0].right.is_none() {
             return Ok(Monotonicity2::default());
