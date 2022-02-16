@@ -67,22 +67,22 @@ async fn test_export() -> anyhow::Result<()> {
         }
 
         let want = vec![
-            r#"["state",4,"Id",{"NodeId":0}]"#, //
-            r#"["state",4,"HardState",{"HardState":{"current_term":1,"voted_for":0}}]"#, //
-            r#"["log",1,0,{"log_id":{"term":0,"index":0},"payload":{"Membership":{"configs":[[0]],"all_nodes":[0]}}}]"#, //
-            r#"["log",1,1,{"log_id":{"term":1,"index":1},"payload":"Blank"}]"#, //
-            r#"["log",1,2,{"log_id":{"term":1,"index":2},"payload":{"Normal":{"txid":null,"cmd":{"AddNode":{"node_id":0,"node":{"name":"","address":"127.0.0.1:29000"}}}}}}]"#, //
-            r#"["log",1,3,{"log_id":{"term":1,"index":3},"payload":{"Normal":{"txid":null,"cmd":{"UpsertKV":{"key":"foo","seq":"Any","value":{"Update":[102,111,111]},"value_meta":null}}}}}]"#, //
-            r#"["log",1,4,{"log_id":{"term":1,"index":4},"payload":{"Normal":{"txid":null,"cmd":{"UpsertKV":{"key":"bar","seq":"Any","value":{"Update":[98,97,114]},"value_meta":null}}}}}]"#, //
-            r#"["log",1,5,{"log_id":{"term":1,"index":5},"payload":{"Normal":{"txid":null,"cmd":{"UpsertKV":{"key":"wow","seq":"Any","value":{"Update":[119,111,119]},"value_meta":null}}}}}]"#, //
-            r#"["sm",2,0,{"name":"","address":"127.0.0.1:29000"}]"#, //
-            r#"["sm",3,"LastApplied",{"LogId":{"term":1,"index":5}}]"#, //
-            r#"["sm",3,"Initialized",{"Bool":true}]"#,               //
-            r#"["sm",3,"LastMembership",{"Membership":{"log_id":{"term":0,"index":0},"membership":{"configs":[[0]],"all_nodes":[0]}}}]"#, //
-            r#"["sm",6,"bar",{"seq":2,"meta":null,"data":[98,97,114]}]"#, //
-            r#"["sm",6,"foo",{"seq":1,"meta":null,"data":[102,111,111]}]"#, //
-            r#"["sm",6,"wow",{"seq":3,"meta":null,"data":[119,111,119]}]"#, //
-            r#"["sm",7,"generic-kv",3]"#,                                 //
+            r#"["state",4,"sledks::RaftStateKV","Id",{"NodeId":0}]"#, //
+            r#"["state",4,"sledks::RaftStateKV","HardState",{"HardState":{"current_term":1,"voted_for":0}}]"#, //
+            r#"["log",1,"sledks::Logs",0,{"log_id":{"term":0,"index":0},"payload":{"Membership":{"configs":[[0]],"all_nodes":[0]}}}]"#, //
+            r#"["log",1,"sledks::Logs",1,{"log_id":{"term":1,"index":1},"payload":"Blank"}]"#, //
+            r#"["log",1,"sledks::Logs",2,{"log_id":{"term":1,"index":2},"payload":{"Normal":{"txid":null,"cmd":{"AddNode":{"node_id":0,"node":{"name":"","address":"127.0.0.1:29000"}}}}}}]"#, //
+            r#"["log",1,"sledks::Logs",3,{"log_id":{"term":1,"index":3},"payload":{"Normal":{"txid":null,"cmd":{"UpsertKV":{"key":"foo","seq":"Any","value":{"Update":[102,111,111]},"value_meta":null}}}}}]"#, //
+            r#"["log",1,"sledks::Logs",4,{"log_id":{"term":1,"index":4},"payload":{"Normal":{"txid":null,"cmd":{"UpsertKV":{"key":"bar","seq":"Any","value":{"Update":[98,97,114]},"value_meta":null}}}}}]"#, //
+            r#"["log",1,"sledks::Logs",5,{"log_id":{"term":1,"index":5},"payload":{"Normal":{"txid":null,"cmd":{"UpsertKV":{"key":"wow","seq":"Any","value":{"Update":[119,111,119]},"value_meta":null}}}}}]"#, //
+            r#"["sm",2,"sledks::Nodes",0,{"name":"","address":"127.0.0.1:29000"}]"#, //
+            r#"["sm",3,"sledks::StateMachineMeta","LastApplied",{"LogId":{"term":1,"index":5}}]"#, //
+            r#"["sm",3,"sledks::StateMachineMeta","Initialized",{"Bool":true}]"#, //
+            r#"["sm",3,"sledks::StateMachineMeta","LastMembership",{"Membership":{"log_id":{"term":0,"index":0},"membership":{"configs":[[0]],"all_nodes":[0]}}}]"#, //
+            r#"["sm",6,"sledks::GenericKV","bar",{"seq":2,"meta":null,"data":[98,97,114]}]"#, //
+            r#"["sm",6,"sledks::GenericKV","foo",{"seq":1,"meta":null,"data":[102,111,111]}]"#, //
+            r#"["sm",6,"sledks::GenericKV","wow",{"seq":3,"meta":null,"data":[119,111,119]}]"#, //
+            r#"["sm",7,"sledks::Sequences","generic-kv",3]"#,                                 //
         ];
 
         // The addresses are built from random number.

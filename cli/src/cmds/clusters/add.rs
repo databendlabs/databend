@@ -75,16 +75,15 @@ impl AddCommand {
                 )
                 .await
                 {
-                    writer.write_err(format!("Cannot provision query service, error: {:?}", e));
+                    writer.write_err(format!("Cannot provision query service, error: {e:?}"));
                 }
                 writer.write_ok(format!(
-                    "successfully added query instance {} on local",
-                    file_name
+                    "successfully added query instance {file_name} on local"
                 ));
                 Ok(())
             }
             Err(e) => {
-                writer.write_err(format!("{:?}", e));
+                writer.write_err(format!("{e:?}"));
                 Ok(())
             }
         }
@@ -108,16 +107,14 @@ impl AddCommand {
         if let Some(port) = args.value_of("mysql_handler_port") {
             if !portpicker::is_free(port.parse().unwrap()) {
                 return Err(CliError::Unknown(format!(
-                    "mysql handler port {} is used by other processes",
-                    port
+                    "mysql handler port {port} is used by other processes",
                 )));
             }
         }
         if let Some(port) = args.value_of("clickhouse_handler_port") {
             if !portpicker::is_free(port.parse().unwrap()) {
                 return Err(CliError::Unknown(format!(
-                    "clickhouse handler port {} is used by other processes",
-                    port
+                    "clickhouse handler port {port} is used by other processes",
                 )));
             }
         }

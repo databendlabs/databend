@@ -17,6 +17,12 @@ path = "src/bin/metasrv.rs"
 doctest = false
 test = false
 
+[[bin]]
+name = "metactl"
+path = "src/bin/metactl.rs"
+doctest = false
+test = false
+
 [features]
 default = ["simd"]
 simd = ["common-arrow/simd"]

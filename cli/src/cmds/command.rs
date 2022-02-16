@@ -77,7 +77,7 @@ pub trait Command: DynClone + Send + Sync {
         // show help on not founding subcommand
         self.clap()
             .print_help()
-            .map_err(|err| CliError::Unknown(format!("unexpected err: {:?}", err)))?;
+            .map_err(|err| CliError::Unknown(format!("unexpected err: {err:?}")))?;
         Ok(())
     }
 }
