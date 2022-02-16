@@ -99,14 +99,14 @@ impl QueryCommand {
                     for query in queries
                         .split(';')
                         .filter(|elem| !elem.trim().is_empty())
-                        .map(|elem| format!("{};", elem))
+                        .map(|elem| format!("{elem};"))
                         .collect::<Vec<String>>()
                     {
                         writer.write_debug(format!("Execute query {} on {}", query.clone(), url));
                         if let Err(e) =
                             query_writer(&cli, url.as_str(), query.clone(), writer).await
                         {
-                            writer.write_err(format!("Query {} execution error: {:?}", query, e));
+                            writer.write_err(format!("Query {query} execution error: {e:?}"));
                         }
                     }
                 } else {
@@ -120,7 +120,7 @@ impl QueryCommand {
             }
             Err(e) => {
                 writer.write_err(format!(
-                "Query command precheck failed, error {:?}, please run `bendctl cluster create` to create a new local cluster or '\\admin' switch to the admin mode", e));
+                "Query command precheck failed, error {e:?}, please run `bendctl cluster create` to create a new local cluster or '\\admin' switch to the admin mode"));
                 Ok(())
             }
         }

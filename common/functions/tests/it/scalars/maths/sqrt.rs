@@ -12,45 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions2;
+use crate::scalars::scalar_function2_test::ScalarFunction2Test;
 
 #[test]
 fn test_sqrt_function() -> Result<()> {
     let tests = vec![
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "sqrt-with-literal",
-            nullable: true,
-            columns: vec![Series::new(vec![4]).into()],
-            expect: Series::new(vec![2_f64]).into(),
+            columns: vec![Series::from_data(vec![4])],
+            expect: Series::from_data(vec![2_f64]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "sqrt-with-series",
-            nullable: true,
-            columns: vec![Series::new(vec![4, 16, 0]).into()],
-            expect: Series::new(vec![2_f64, 4.0, 0.0]).into(),
+            columns: vec![Series::from_data(vec![4, 16, 0])],
+            expect: Series::from_data(vec![2_f64, 4.0, 0.0]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "sqrt-with-null",
-            nullable: true,
-            columns: vec![Series::new(vec![Some(4), None]).into()],
-            expect: Series::new(vec![Some(2_f64), None]).into(),
-            error: "",
-        },
-        ScalarFunctionTest {
-            name: "sqrt-with-negative",
-            nullable: true,
-            columns: vec![Series::new(vec![4, -4]).into()],
-            expect: Series::new(vec![Some(2_f64), None]).into(),
+            columns: vec![Series::from_data(vec![Some(4), None])],
+            expect: Series::from_data(vec![Some(2_f64), None]),
             error: "",
         },
     ];
 
-    test_scalar_functions(SqrtFunction::try_create("sqrt")?, &tests)
+    test_scalar_functions2(SqrtFunction::try_create("sqrt")?, &tests)
 }

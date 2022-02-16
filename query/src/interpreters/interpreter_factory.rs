@@ -17,8 +17,10 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
+use common_planners::ShowPlan;
 
 use super::DescribeUserStageInterpreter;
+use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::AlterUserUDFInterpreter;
 use crate::interpreters::CopyInterpreter;
@@ -45,7 +47,14 @@ use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SettingInterpreter;
 use crate::interpreters::ShowCreateDatabaseInterpreter;
 use crate::interpreters::ShowCreateTableInterpreter;
+use crate::interpreters::ShowDatabasesInterpreter;
+use crate::interpreters::ShowFunctionsInterpreter;
 use crate::interpreters::ShowGrantsInterpreter;
+use crate::interpreters::ShowMetricsInterpreter;
+use crate::interpreters::ShowProcessListInterpreter;
+use crate::interpreters::ShowSettingsInterpreter;
+use crate::interpreters::ShowTablesInterpreter;
+use crate::interpreters::ShowUsersInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
 use crate::interpreters::UseTenantInterpreter;
@@ -69,6 +78,35 @@ impl InterpreterFactory {
             // Copy.
             PlanNode::Copy(v) => CopyInterpreter::try_create(ctx_clone, v),
 
+            // Show.
+            PlanNode::Show(ShowPlan::ShowDatabases(v)) => {
+                ShowDatabasesInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowTables(v)) => {
+                ShowTablesInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowEngines(v)) => {
+                ShowEnginesInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowFunctions(v)) => {
+                ShowFunctionsInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowGrants(v)) => {
+                ShowGrantsInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowMetrics(v)) => {
+                ShowMetricsInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowProcessList(v)) => {
+                ShowProcessListInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowSettings(v)) => {
+                ShowSettingsInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowUsers(v)) => {
+                ShowUsersInterpreter::try_create(ctx_clone, v)
+            }
+
             // Database.
             PlanNode::CreateDatabase(v) => CreateDatabaseInterpreter::try_create(ctx_clone, v),
             PlanNode::DropDatabase(v) => DropDatabaseInterpreter::try_create(ctx_clone, v),
@@ -79,9 +117,10 @@ impl InterpreterFactory {
             // Table.
             PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DropTable(v) => DropTableInterpreter::try_create(ctx_clone, v),
-            PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::OptimizeTable(v) => OptimizeTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),
 
             // User.
             PlanNode::CreateUser(v) => CreateUserInterpreter::try_create(ctx_clone, v),
@@ -93,7 +132,6 @@ impl InterpreterFactory {
             // Stage.
             PlanNode::CreateUserStage(v) => CreateUserStageInterpreter::try_create(ctx_clone, v),
             PlanNode::DropUserStage(v) => DropUserStageInterpreter::try_create(ctx_clone, v),
-            PlanNode::ShowGrants(v) => ShowGrantsInterpreter::try_create(ctx_clone, v),
             PlanNode::DescribeUserStage(v) => {
                 DescribeUserStageInterpreter::try_create(ctx_clone, v)
             }
@@ -102,9 +140,6 @@ impl InterpreterFactory {
             PlanNode::CreateUserUDF(v) => CreateUserUDFInterpreter::try_create(ctx_clone, v),
             PlanNode::DropUserUDF(v) => DropUserUDFInterpreter::try_create(ctx_clone, v),
             PlanNode::AlterUserUDF(v) => AlterUserUDFInterpreter::try_create(ctx_clone, v),
-
-            // Show.
-            PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),
 
             // Use.
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx_clone, v),

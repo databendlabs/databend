@@ -18,6 +18,7 @@ use common_exception::Result;
 use common_meta_types::UserIdentity;
 use common_planners::PlanNode;
 use common_planners::ShowGrantsPlan;
+use common_planners::ShowPlan;
 use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
@@ -33,10 +34,10 @@ pub struct DfShowGrants {
 impl AnalyzableStatement for DfShowGrants {
     #[tracing::instrument(level = "debug", skip(self, _ctx), fields(_ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::ShowGrants(
-            ShowGrantsPlan {
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Show(
+            ShowPlan::ShowGrants(ShowGrantsPlan {
                 user_identity: self.user_identity.clone(),
-            },
+            }),
         ))))
     }
 }

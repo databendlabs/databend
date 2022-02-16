@@ -138,7 +138,7 @@ async fn test_join() -> anyhow::Result<()> {
     let mut tc1 = MetaSrvTestContext::new(1);
 
     tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr()];
+    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?];
 
     start_metasrv_with_context(&mut tc0).await?;
     start_metasrv_with_context(&mut tc1).await?;

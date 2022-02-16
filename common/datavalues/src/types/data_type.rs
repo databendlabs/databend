@@ -51,7 +51,7 @@ pub enum DataType {
     DateTime32(Option<String>),
 
     /// A 64-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
-    /// in nanoseconds, it's physical type is UInt64
+    /// in nanoseconds, it's physical type is Int64
     /// The time resolution is determined by the precision parameter, range from 0 to 9
     /// Typically are used - 3 (milliseconds), 6 (microseconds), 9 (nanoseconds)
     /// Option<String> indicates the timezone, if it's None, it's UTC
@@ -220,7 +220,7 @@ impl DataType {
             Date32 => ArrowDataType::Int32,
             // we don't use DataType::Extension because extension types are not supported in parquet
             DateTime32(_) => ArrowDataType::UInt32,
-            DateTime64(_, _) => ArrowDataType::UInt64,
+            DateTime64(_, _) => ArrowDataType::Int64,
             List(dt) => ArrowDataType::LargeList(Box::new(dt.to_arrow())),
             Struct(fs) => {
                 let arrows_fields = fs.iter().map(|f| f.to_arrow()).collect();

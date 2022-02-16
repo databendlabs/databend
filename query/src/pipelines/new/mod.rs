@@ -12,7 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// pub mod executor;
+
+// #[cfg(test)]
 pub mod executor;
+
+// #[not(cfg(test))]
+// mod executor;
+
 mod pipe;
 mod pipeline;
 mod pipeline_builder;
@@ -20,4 +27,6 @@ pub mod processors;
 mod unsafe_cell_wrap;
 
 pub use pipe::NewPipe;
+pub use pipe::SourcePipeBuilder;
 pub use pipeline::NewPipeline;
+pub use pipeline_builder::QueryPipelineBuilder;

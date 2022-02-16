@@ -16,6 +16,7 @@ use clap::Parser;
 use common_meta_raft_store::config as raft_config;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_types::MetaError;
+use common_meta_types::MetaResult;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -24,7 +25,7 @@ macro_rules! load_field_from_env {
         if let Some(env_var) = std::env::var_os($env) {
             $field = env_var
                 .into_string()
-                .expect(format!("connot convert {} to string", $env).as_str())
+                .expect(format!("cannot convert {} to string", $env).as_str())
                 .parse::<$field_type>()
                 .expect(format!("cannot convert {} to {}", $env, stringify!($field_type)).as_str());
         }
@@ -115,6 +116,11 @@ impl Config {
         !self.grpc_tls_server_key.is_empty() && !self.grpc_tls_server_cert.is_empty()
     }
 
+    pub fn check(&self) -> MetaResult<()> {
+        self.raft_config.check()?;
+        Ok(())
+    }
+
     /// First load configs from args.
     /// If config file is not empty, e.g: `-c xx.toml`, reload config from the file.
     /// Prefer to use environment variables in cloud native deployment.
@@ -126,6 +132,7 @@ impl Config {
         }
 
         Self::load_from_env(&mut cfg);
+        cfg.check()?;
         Ok(cfg)
     }
 
@@ -137,6 +144,7 @@ impl Config {
         let cfg = toml::from_str::<Config>(txt.as_str())
             .map_err(|e| MetaError::LoadConfigError(format!("{:?}", e)))?;
 
+        cfg.check()?;
         Ok(cfg)
     }
 

@@ -53,22 +53,24 @@ impl ExecutorTasksQueue {
     ///
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn steal_task_to_context(&self, context: &mut ExecutorWorkerContext) {
-        let mut workers_tasks = self.workers_tasks.lock();
-        if !workers_tasks.is_empty() {
-            let task = workers_tasks.pop_task(context.get_worker_num());
-            context.set_task(task);
+        {
+            let mut workers_tasks = self.workers_tasks.lock();
+            if !workers_tasks.is_empty() {
+                let task = workers_tasks.pop_task(context.get_worker_num());
+                context.set_task(task);
 
-            let workers_notify = context.get_workers_notify();
-            if !workers_tasks.is_empty() && !workers_notify.is_empty() {
-                let worker_id = context.get_worker_num();
-                let wakeup_worker_id = workers_tasks.best_worker_id(worker_id + 1);
-                workers_notify.wakeup(wakeup_worker_id);
+                let workers_notify = context.get_workers_notify();
+                if !workers_tasks.is_empty() && !workers_notify.is_empty() {
+                    let worker_id = context.get_worker_num();
+                    let wakeup_worker_id = workers_tasks.best_worker_id(worker_id + 1);
+                    drop(workers_tasks);
+                    workers_notify.wakeup(wakeup_worker_id);
+                }
+
+                return;
             }
-
-            return;
         }
 
-        drop(workers_tasks);
         context.get_workers_notify().wait(context.get_worker_num());
     }
 
@@ -85,18 +87,23 @@ impl ExecutorTasksQueue {
         }
     }
 
+    #[allow(unused_assignments)]
     pub fn push_tasks(&self, ctx: &mut ExecutorWorkerContext, mut tasks: VecDeque<ExecutorTask>) {
         unsafe {
-            let worker_id = ctx.get_worker_num();
-            let mut workers_tasks = self.workers_tasks.lock();
-            while let Some(task) = tasks.pop_front() {
-                workers_tasks.push_task(worker_id, task);
+            let mut wake_worker_id = None;
+            {
+                let worker_id = ctx.get_worker_num();
+                let mut workers_tasks = self.workers_tasks.lock();
+                while let Some(task) = tasks.pop_front() {
+                    workers_tasks.push_task(worker_id, task);
+                }
+
+                wake_worker_id = Some(workers_tasks.best_worker_id(worker_id + 1));
             }
 
-            let wake_worker_id = workers_tasks.best_worker_id(worker_id + 1);
-
-            drop(workers_tasks);
-            ctx.get_workers_notify().wakeup(wake_worker_id);
+            if let Some(wake_worker_id) = wake_worker_id {
+                ctx.get_workers_notify().wakeup(wake_worker_id);
+            }
         }
     }
 

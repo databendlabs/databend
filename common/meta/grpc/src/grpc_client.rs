@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::Infallible;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,15 +21,18 @@ use common_arrow::arrow_format::flight::data::BasicAuth;
 use common_base::tokio::sync::RwLock;
 use common_containers::ItemManager;
 use common_containers::Pool;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::SerializedError;
 use common_grpc::ConnectionFactory;
+use common_grpc::GrpcConnectionError;
 use common_grpc::RpcClientTlsConfig;
+use common_meta_types::anyerror::AnyError;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::HandshakeRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::ConnectionError;
+use common_meta_types::MetaError;
+use common_meta_types::MetaNetworkError;
 use common_tracing::tracing;
 use futures::stream::StreamExt;
 use prost::Message;
@@ -58,17 +62,29 @@ struct MetaChannelManager {
 impl ItemManager for MetaChannelManager {
     type Key = String;
     type Item = Channel;
-    type Error = ErrorCode;
+    type Error = MetaError;
 
     async fn build(&self, addr: &Self::Key) -> std::result::Result<Self::Item, Self::Error> {
-        ConnectionFactory::create_rpc_channel(addr, self.timeout, self.conf.clone())
+        let ch = ConnectionFactory::create_rpc_channel(addr, self.timeout, self.conf.clone())
+            .map_err(|e| match e {
+                GrpcConnectionError::InvalidUri { .. } => MetaNetworkError::BadAddressFormat(
+                    AnyError::new(&e).add_context(|| "while creating rpc channel"),
+                ),
+                GrpcConnectionError::TLSConfigError { .. } => MetaNetworkError::TLSConfigError(
+                    AnyError::new(&e).add_context(|| "while creating rpc channel"),
+                ),
+                GrpcConnectionError::CannotConnect { .. } => MetaNetworkError::ConnectionError(
+                    ConnectionError::new(e, "while creating rpc channel"),
+                ),
+            })?;
+        Ok(ch)
     }
 
     async fn check(&self, mut ch: Self::Item) -> std::result::Result<Self::Item, Self::Error> {
         futures::future::poll_fn(|cx| ch.poll_ready(cx))
             .await
             .map_err(|e| {
-                ErrorCode::CannotConnectNode(format!("Check rpc connect failed, error: {}", e))
+                MetaNetworkError::ConnectionError(ConnectionError::new(e, "while check item"))
             })?;
         Ok(ch)
     }
@@ -85,7 +101,9 @@ pub struct MetaGrpcClient {
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 impl MetaGrpcClient {
-    pub async fn try_new(conf: &MetaGrpcClientConf) -> Result<MetaGrpcClient> {
+    pub async fn try_new(
+        conf: &MetaGrpcClientConf,
+    ) -> std::result::Result<MetaGrpcClient, Infallible> {
         let mgr = MetaChannelManager {
             timeout: Some(Duration::from_secs(conf.client_timeout_in_second)),
             conf: conf.meta_service_config.tls_conf.clone(),
@@ -121,7 +139,10 @@ impl MetaGrpcClient {
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn make_client(
         &self,
-    ) -> Result<MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>> {
+    ) -> std::result::Result<
+        MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>,
+        MetaError,
+    > {
         let channel = self.conn_pool.get(&self.addr).await?;
         tracing::debug!("connecting to {}, channel: {:?}", &self.addr, channel);
 
@@ -148,7 +169,7 @@ impl MetaGrpcClient {
         client: &mut MetaServiceClient<Channel>,
         username: &str,
         password: &str,
-    ) -> Result<Vec<u8>> {
+    ) -> std::result::Result<Vec<u8>, MetaError> {
         let auth = BasicAuth {
             username: username.to_string(),
             password: password.to_string(),
@@ -172,7 +193,7 @@ impl MetaGrpcClient {
     }
 
     #[tracing::instrument(level = "debug", skip(self, v))]
-    pub(crate) async fn do_write<T, R>(&self, v: T) -> Result<R>
+    pub(crate) async fn do_write<T, R>(&self, v: T) -> std::result::Result<R, MetaError>
     where
         T: RequestFor<Reply = R> + Into<MetaGrpcWriteReq>,
         R: DeserializeOwned,
@@ -201,19 +222,15 @@ impl MetaGrpcClient {
             }
         };
 
-        let result = result?;
+        let raft_reply = result?;
 
-        if result.error.is_empty() {
-            let v = serde_json::from_str::<R>(&result.data)?;
-            Ok(v)
-        } else {
-            let e: SerializedError = serde_json::from_str(&result.error)?;
-            Err(e.into())
-        }
+        let res: std::result::Result<R, MetaError> = raft_reply.into();
+
+        res
     }
 
     #[tracing::instrument(level = "debug", skip(self, v))]
-    pub(crate) async fn do_read<T, R>(&self, v: T) -> Result<R>
+    pub(crate) async fn do_read<T, R>(&self, v: T) -> std::result::Result<R, MetaError>
     where
         T: RequestFor<Reply = R>,
         T: Into<MetaGrpcReadReq>,
@@ -225,6 +242,7 @@ impl MetaGrpcClient {
 
         let mut client = self.make_client().await?;
         let result = client.read_msg(req).await;
+
         let rpc_res: std::result::Result<RaftReply, Status> = match result {
             Ok(r) => Ok(r.into_inner()),
             Err(s) => {
@@ -244,13 +262,8 @@ impl MetaGrpcClient {
         };
         let raft_reply = rpc_res?;
 
-        if raft_reply.error.is_empty() {
-            let v = serde_json::from_str::<R>(&raft_reply.data)?;
-            Ok(v)
-        } else {
-            let e: SerializedError = serde_json::from_str(&raft_reply.error)?;
-            Err(e.into())
-        }
+        let res: std::result::Result<R, MetaError> = raft_reply.into();
+        res
     }
 }
 

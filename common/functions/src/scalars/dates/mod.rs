@@ -19,11 +19,14 @@ mod number_function;
 mod round_function;
 mod simple_date;
 mod week_date;
+#[macro_use]
+mod macros;
 
 pub use date::DateFunction;
-pub use interval_function::IntervalFunctionFactory;
-pub use interval_function::MonthsArithmeticFunction;
-pub use interval_function::SecondsArithmeticFunction;
+pub use interval_function::AddDaysFunction;
+pub use interval_function::AddMonthsFunction;
+pub use interval_function::AddTimesFunction;
+pub use interval_function::AddYearsFunction;
 pub use number_function::ToDayOfMonthFunction;
 pub use number_function::ToDayOfWeekFunction;
 pub use number_function::ToDayOfYearFunction;

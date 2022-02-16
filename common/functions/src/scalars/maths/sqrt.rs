@@ -14,14 +14,16 @@
 
 use std::fmt;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
-use common_exception::ErrorCode;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::Result;
+use num::cast::AsPrimitive;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function2_factory::Function2Description;
+use crate::scalars::function_common::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
 pub struct SqrtFunction {
@@ -29,49 +31,41 @@ pub struct SqrtFunction {
 }
 
 impl SqrtFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(SqrtFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
-impl Function for SqrtFunction {
+fn sqrt<S>(value: S) -> f64
+where S: AsPrimitive<f64> {
+    value.as_().sqrt()
+}
+
+impl Function2 for SqrtFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
-            Ok(DataType::Float64)
-        } else {
-            Err(ErrorCode::IllegalDataType(format!(
-                "Expected numeric types, but got {}",
-                args[0]
-            )))
-        }?;
-
-        // sqrt on negative returns null, so nullable should be true.
-        Ok(DataTypeAndNullable::create(&data_type, true))
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        assert_numeric(args[0])?;
+        Ok(Float64Type::arc())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let opt_iter = columns[0]
-            .column()
-            .to_minimal_array()?
-            .cast_with_type(&DataType::Float64)?;
-        let opt_iter = opt_iter
-            .f64()?
-            .into_iter()
-            .map(|v| v.and_then(|&v| if v >= 0_f64 { Some(v.sqrt()) } else { None }));
-        let result = DFFloat64Array::new_from_opt_iter(opt_iter);
-        let column: DataColumn = result.into();
-        Ok(column.resize_constant(columns[0].column().len()))
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
+             let unary = ScalarUnaryExpression::<$S, f64, _>::new(sqrt::<$S>);
+             let col = unary.eval(columns[0].column())?;
+             Ok(col.arc())
+        },{
+            unreachable!()
+        })
     }
 }
 

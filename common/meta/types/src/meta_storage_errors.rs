@@ -22,6 +22,7 @@ use sled::transaction::UnabortableTransactionError;
 use thiserror::Error;
 
 use crate::error_context::ErrorWithContext;
+use crate::MatchSeq;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
 pub enum MetaStorageError {
@@ -37,6 +38,9 @@ pub enum MetaStorageError {
     #[error(transparent)]
     SledError(AnyError),
 
+    #[error(transparent)]
+    Damaged(AnyError),
+
     /// Error that is related to snapshot
     #[error(transparent)]
     SnapshotError(AnyError),
@@ -50,6 +54,65 @@ pub enum MetaStorageError {
     AppError(#[from] AppError),
 }
 
+/// Output message for end users, with sensitive info stripped.
+pub trait AppErrorMessage: Display {
+    fn message(&self) -> String {
+        format!("{}", self)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("DatabaseAlreadyExists: `{db_name}` while `{context}`")]
+pub struct DatabaseAlreadyExists {
+    db_name: String,
+    context: String,
+}
+
+impl DatabaseAlreadyExists {
+    pub fn new(db_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            db_name: db_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("TableAlreadyExists: {table_name} while {context}")]
+pub struct TableAlreadyExists {
+    table_name: String,
+    context: String,
+}
+
+impl TableAlreadyExists {
+    pub fn new(table_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            table_name: table_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, thiserror::Error)]
+#[error("TableVersionMismatched: {table_id} expect `{expect}` but `{curr}`  while `{context}`")]
+pub struct TableVersionMismatched {
+    table_id: u64,
+    expect: MatchSeq,
+    curr: u64,
+    context: String,
+}
+
+impl TableVersionMismatched {
+    pub fn new(table_id: u64, expect: MatchSeq, curr: u64, context: impl Into<String>) -> Self {
+        Self {
+            table_id,
+            expect,
+            curr,
+            context: context.into(),
+        }
+    }
+}
+
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[error("UnknownDatabase: `{db_name}` while `{context}`")]
 pub struct UnknownDatabase {
@@ -58,8 +121,11 @@ pub struct UnknownDatabase {
 }
 
 impl UnknownDatabase {
-    pub fn new(db_name: String, context: String) -> Self {
-        Self { db_name, context }
+    pub fn new(db_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            db_name: db_name.into(),
+            context: context.into(),
+        }
     }
 }
 
@@ -77,6 +143,22 @@ impl UnknownDatabaseId {
 }
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[error("UnknownTable: `{table_name}` while `{context}`")]
+pub struct UnknownTable {
+    table_name: String,
+    context: String,
+}
+
+impl UnknownTable {
+    pub fn new(table_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            table_name: table_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[error("UnknownTableId: `{table_id}` while `{context}`")]
 pub struct UnknownTableId {
     table_id: u64,
@@ -84,13 +166,25 @@ pub struct UnknownTableId {
 }
 
 impl UnknownTableId {
-    pub fn new(table_id: u64, context: String) -> UnknownTableId {
-        Self { table_id, context }
+    pub fn new(table_id: u64, context: impl Into<String>) -> UnknownTableId {
+        Self {
+            table_id,
+            context: context.into(),
+        }
     }
 }
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum AppError {
+    #[error(transparent)]
+    TableVersionMismatched(#[from] TableVersionMismatched),
+
+    #[error(transparent)]
+    TableAlreadyExists(#[from] TableAlreadyExists),
+
+    #[error(transparent)]
+    DatabaseAlreadyExists(#[from] DatabaseAlreadyExists),
+
     #[error(transparent)]
     UnknownDatabase(#[from] UnknownDatabase),
 
@@ -98,15 +192,46 @@ pub enum AppError {
     UnknownDatabaseId(#[from] UnknownDatabaseId),
 
     #[error(transparent)]
+    UnknownTable(#[from] UnknownTable),
+
+    #[error(transparent)]
     UnknownTableId(#[from] UnknownTableId),
+}
+
+impl AppErrorMessage for UnknownDatabase {
+    fn message(&self) -> String {
+        self.db_name.to_string()
+    }
+}
+impl AppErrorMessage for UnknownTable {
+    fn message(&self) -> String {
+        format!("Unknown table: '{}'", self.table_name)
+    }
+}
+
+impl AppErrorMessage for UnknownTableId {}
+impl AppErrorMessage for UnknownDatabaseId {}
+impl AppErrorMessage for DatabaseAlreadyExists {}
+impl AppErrorMessage for TableVersionMismatched {}
+
+impl AppErrorMessage for TableAlreadyExists {
+    fn message(&self) -> String {
+        format!("table exists: {}", self.table_name)
+    }
 }
 
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
-            AppError::UnknownDatabase(err) => ErrorCode::UnknownDatabase(err.to_string()),
-            AppError::UnknownDatabaseId(err) => ErrorCode::UnknownDatabaseId(err.to_string()),
-            AppError::UnknownTableId(err) => ErrorCode::UnknownTableId(err.to_string()),
+            AppError::UnknownDatabase(err) => ErrorCode::UnknownDatabase(err.message()),
+            AppError::UnknownDatabaseId(err) => ErrorCode::UnknownDatabaseId(err.message()),
+            AppError::UnknownTableId(err) => ErrorCode::UnknownTableId(err.message()),
+            AppError::UnknownTable(err) => ErrorCode::UnknownTable(err.message()),
+            AppError::DatabaseAlreadyExists(err) => ErrorCode::DatabaseAlreadyExists(err.message()),
+            AppError::TableAlreadyExists(err) => ErrorCode::TableAlreadyExists(err.message()),
+            AppError::TableVersionMismatched(err) => {
+                ErrorCode::TableVersionMismatched(err.message())
+            }
         }
     }
 }

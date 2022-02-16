@@ -14,14 +14,14 @@
 
 use std::fmt;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
-use common_exception::ErrorCode;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::assert_numeric;
+use crate::scalars::default_column_cast;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 #[derive(Clone)]
 pub struct CharFunction {
@@ -29,14 +29,14 @@ pub struct CharFunction {
 }
 
 impl CharFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(CharFunction {
             _display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(1, 1024),
@@ -44,72 +44,58 @@ impl CharFunction {
     }
 }
 
-impl Function for CharFunction {
+impl Function2 for CharFunction {
     fn name(&self) -> &str {
         "char"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let nullable = args.iter().any(|arg| arg.is_nullable());
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         for arg in args {
-            if !arg.is_numeric() && !arg.is_null() {
-                return Err(ErrorCode::IllegalDataType(format!(
-                    "Expected numeric type or null, but got {}",
-                    arg
-                )));
-            }
+            assert_numeric(*arg)?;
         }
-        let dt = DataType::String;
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+        Ok(Vu8::to_data_type())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let row_count = columns[0].column().len();
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
         let column_count = columns.len();
-        let mut values: Vec<u8> = Vec::with_capacity(row_count * column_count);
+        let mut values: Vec<u8> = Vec::with_capacity(input_rows * column_count);
         let values_ptr = values.as_mut_ptr();
 
-        let mut offsets: Vec<i64> = Vec::with_capacity(row_count + 1);
+        let mut offsets: Vec<i64> = Vec::with_capacity(input_rows + 1);
         offsets.push(0);
 
+        let u8_type = u8::to_data_type();
         for (i, column) in columns.iter().enumerate() {
             let column = column.column();
-            if column.data_type().is_null() {
-                return Ok(DataColumn::Constant(DataValue::Null, row_count));
-            }
-            let column = column.cast_with_type(&DataType::UInt8)?;
-            match column {
-                DataColumn::Array(uint8_arr) => {
-                    let uint8_arr = uint8_arr.u8()?;
-                    for (j, ch) in uint8_arr.into_no_null_iter().enumerate() {
+            let column = default_column_cast(column, &u8_type)?;
+
+            match column.is_const() {
+                false => {
+                    let u8_c = Series::check_get_scalar::<u8>(&column)?;
+                    for (j, ch) in u8_c.iter().enumerate() {
                         unsafe {
                             *values_ptr.add(column_count * j + i) = *ch;
                         }
                     }
                 }
-                DataColumn::Constant(uint8_arr, _) => unsafe {
-                    let value = uint8_arr.as_u64().unwrap_or(0) as u8;
-                    for j in 0..row_count {
+                true => unsafe {
+                    let value = column.get_u64(0)? as u8;
+                    for j in 0..input_rows {
                         *values_ptr.add(column_count * j + i) = value;
                     }
                 },
             }
         }
-        for i in 1..row_count + 1 {
+        for i in 1..input_rows + 1 {
             offsets.push(i as i64 * column_count as i64);
         }
 
         unsafe {
-            offsets.set_len(row_count + 1);
-            values.set_len(row_count * column_count);
-
-            // Validity will be injected after evaluation.
-            Ok(DataColumn::from(DFStringArray::from_data_unchecked(
-                offsets.into(),
-                values.into(),
-                None,
-            )))
+            offsets.set_len(input_rows + 1);
+            values.set_len(input_rows * column_count);
         }
+        let mut builder = MutableStringColumn::from_data(values, offsets);
+        Ok(builder.to_column())
     }
 }
 

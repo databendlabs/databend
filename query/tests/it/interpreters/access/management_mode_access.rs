@@ -32,6 +32,46 @@ async fn test_management_mode_access() -> Result<()> {
 
     let groups: Vec<TestGroup> = vec![
         TestGroup {
+            name: "show",
+            tests: vec![
+                Test {
+                    name: "show-databases",
+                    query: "SHOW DATABASES",
+                    is_err: false,
+                },
+                Test {
+                    name: "show-engines",
+                    query: "SHOW ENGINES",
+                    is_err: false,
+                },
+                Test {
+                    name: "show-functions",
+                    query: "SHOW FUNCTIONS",
+                    is_err: false,
+                },
+                Test {
+                    name: "show-grants",
+                    query: "SHOW GRANTS",
+                    is_err: false,
+                },
+                Test {
+                    name: "show-settings",
+                    query: "SHOW SETTINGS",
+                    is_err: false,
+                },
+                Test {
+                    name: "show-tables",
+                    query: "SHOW TABLES",
+                    is_err: false,
+                },
+                Test {
+                    name: "show-users",
+                    query: "SHOW USERS",
+                    is_err: false,
+                },
+            ],
+        },
+        TestGroup {
             name: "database",
             tests: vec![
                 Test {
@@ -102,6 +142,21 @@ async fn test_management_mode_access() -> Result<()> {
                 Test {
                     name: "insert-denied",
                     query: "insert into t1 values(1)",
+                    is_err: true,
+                },
+                Test {
+                    name: "select-denied",
+                    query: "SELECT * FROM t1",
+                    is_err: true,
+                },
+                Test {
+                    name: "show-processlist-denied",
+                    query: "SHOW PROCESSLIST",
+                    is_err: true,
+                },
+                Test {
+                    name: "show-metrics-denied",
+                    query: "SHOW METRICS",
                     is_err: true,
                 },
             ],

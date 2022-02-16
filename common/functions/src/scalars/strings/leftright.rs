@@ -13,166 +13,98 @@
 // limitations under the License.
 
 use std::fmt;
-use std::marker::PhantomData;
+use std::sync::Arc;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
-use common_exception::ErrorCode;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::Result;
-use itertools::izip;
+use num_traits::AsPrimitive;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::assert_numeric;
+use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::EvalContext;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
+use crate::scalars::ScalarBinaryExpression;
 
-pub type LeftFunction = LeftRightFunction<Left>;
-pub type RightFunction = LeftRightFunction<Right>;
+pub type LeftFunction = LeftRightFunction<true>;
+pub type RightFunction = LeftRightFunction<false>;
 
-pub trait LeftRightOperator: Send + Sync + Clone + Default + 'static {
-    fn apply<'a>(&'a mut self, str: &'a [u8], i: &u64) -> &'a [u8];
+#[inline]
+fn left<'a, S>(str: &'a [u8], index: S, _ctx: &mut EvalContext) -> &'a [u8]
+where S: AsPrimitive<usize> {
+    let index = index.as_();
+    if index < str.len() {
+        return &str[0..index];
+    }
+    str
 }
 
-#[derive(Clone, Default)]
-pub struct Left {}
-
-impl LeftRightOperator for Left {
-    #[inline]
-    fn apply<'a>(&'a mut self, str: &'a [u8], i: &u64) -> &'a [u8] {
-        if *i == 0 {
-            return &str[0..0];
-        }
-        let i = *i as usize;
-        if i < str.len() {
-            return &str[0..i];
-        }
-        str
+#[inline]
+fn right<'a, S>(str: &'a [u8], index: S, _ctx: &mut EvalContext) -> &'a [u8]
+where S: AsPrimitive<usize> {
+    let index = index.as_();
+    if index < str.len() {
+        return &str[str.len() - index..];
     }
-}
-
-#[derive(Clone, Default)]
-pub struct Right {}
-
-impl LeftRightOperator for Right {
-    #[inline]
-    fn apply<'a>(&'a mut self, str: &'a [u8], i: &u64) -> &'a [u8] {
-        if *i == 0 {
-            return &str[0..0];
-        }
-        let i = *i as usize;
-        if i < str.len() {
-            return &str[str.len() - i..];
-        }
-        str
-    }
+    str
 }
 
 #[derive(Clone)]
-pub struct LeftRightFunction<T> {
+pub struct LeftRightFunction<const IS_LEFT: bool> {
     display_name: String,
-    _marker: PhantomData<T>,
 }
 
-impl<T: LeftRightOperator> LeftRightFunction<T> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+impl<const IS_LEFT: bool> LeftRightFunction<IS_LEFT> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
-            _marker: PhantomData,
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }
 
-impl<T: LeftRightOperator> Function for LeftRightFunction<T> {
+impl<const IS_LEFT: bool> Function2 for LeftRightFunction<IS_LEFT> {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        if !args[0].is_numeric() && !args[0].is_string() && !args[0].is_null() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected integer or string or null, but got {}",
-                args[0]
-            )));
-        }
-        if !args[1].is_unsigned_integer() && !args[1].is_string() && !args[1].is_null() {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected integer or string or null, but got {}",
-                args[1]
-            )));
-        }
-
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        assert_string(args[0])?;
+        assert_numeric(args[1])?;
+        Ok(Vu8::to_data_type())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let mut op = T::default();
-
-        let s_column = columns[0].column().cast_with_type(&DataType::String)?;
-        let i_column = columns[1].column().cast_with_type(&DataType::UInt64)?;
-
-        let r_column: DataColumn = match (s_column, i_column) {
-            // #00
-            (
-                DataColumn::Constant(DataValue::String(s), _),
-                DataColumn::Constant(DataValue::UInt64(i), _),
-            ) => {
-                if let (Some(s), Some(i)) = (s, i) {
-                    DataColumn::Constant(
-                        DataValue::String(Some(op.apply(&s, &i).to_owned())),
-                        input_rows,
-                    )
-                } else {
-                    DataColumn::Constant(DataValue::Null, input_rows)
-                }
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        match IS_LEFT {
+            true => {
+                with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$S| {
+                    let binary = ScalarBinaryExpression::<Vu8, $S, Vu8, _>::new_ref(left);
+                    let col = binary.eval_ref(columns[0].column(), columns[1].column(), &mut EvalContext::default())?;
+                    Ok(Arc::new(col))
+                },{
+                    unreachable!()
+                })
             }
-            // #10
-            (DataColumn::Array(s_series), DataColumn::Constant(DataValue::UInt64(i), _)) => {
-                if let Some(i) = i {
-                    let mut r_array = StringArrayBuilder::with_capacity(input_rows);
-                    for os in s_series.string()? {
-                        r_array.append_option(os.map(|s| op.apply(s, &i)));
-                    }
-                    r_array.finish().into()
-                } else {
-                    DataColumn::Constant(DataValue::Null, input_rows)
-                }
+            false => {
+                with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$S| {
+                    let binary = ScalarBinaryExpression::<Vu8, $S, Vu8, _>::new_ref(right);
+                    let col = binary.eval_ref(columns[0].column(), columns[1].column(), &mut EvalContext::default())?;
+                    Ok(Arc::new(col))
+                },{
+                    unreachable!()
+                })
             }
-            // #01
-            (DataColumn::Constant(DataValue::String(s), _), DataColumn::Array(i_series)) => {
-                if let Some(s) = s {
-                    let mut r_array = StringArrayBuilder::with_capacity(input_rows);
-                    for oi in i_series.u64()? {
-                        r_array.append_option(oi.map(|i| op.apply(&s, i)));
-                    }
-                    r_array.finish().into()
-                } else {
-                    DataColumn::Constant(DataValue::Null, input_rows)
-                }
-            }
-            // #11
-            (DataColumn::Array(s_series), DataColumn::Array(i_series)) => {
-                let mut r_array = StringArrayBuilder::with_capacity(input_rows);
-                for s_i in izip!(s_series.string()?, i_series.u64()?) {
-                    r_array.append_option(match s_i {
-                        (Some(s), Some(i)) => Some(op.apply(s, i)),
-                        _ => None,
-                    });
-                }
-                r_array.finish().into()
-            }
-            _ => DataColumn::Constant(DataValue::Null, input_rows),
-        };
-        Ok(r_column)
+        }
     }
 }
 
-impl<F> fmt::Display for LeftRightFunction<F> {
+impl<const IS_LEFT: bool> fmt::Display for LeftRightFunction<IS_LEFT> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&self.display_name)
     }

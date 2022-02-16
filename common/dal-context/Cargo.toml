@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 common-infallible = { path = "../infallible" }
-common-dal2 = { path = "../dal2" }
 
+opendal = "0.0.2"
 async-trait = "0.1.52"

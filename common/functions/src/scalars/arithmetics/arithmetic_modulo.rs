@@ -18,7 +18,7 @@ use std::ops::Rem;
 use std::sync::Arc;
 
 use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues2::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num_traits::AsPrimitive;
@@ -38,23 +38,12 @@ impl ArithmeticModuloFunction {
         let left_type = remove_nullable(args[0]).data_type_id();
         let right_type = remove_nullable(args[1]).data_type_id();
 
-        let error_fn = || -> Result<Box<dyn Function2>> {
-            Err(ErrorCode::BadDataValueType(format!(
-                "DataValue Error: Unsupported arithmetic ({:?}) modulo ({:?})",
-                left_type, right_type
-            )))
-        };
-
-        with_match_primitive_type_id!(left_type, |$T| {
-            with_match_primitive_type_id!(right_type, |$D| {
+        with_match_primitive_types_error!(left_type, |$T| {
+            with_match_primitive_types_error!(right_type, |$D| {
                 Ok(Box::new(
                         ModuloFunctionImpl::<$T, $D, <($T, $D) as ResultTypeOfBinary>::LeastSuper, <($T, $D) as ResultTypeOfBinary>::Modulo>::default()
                 ))
-            }, {
-                error_fn()
             })
-        }, {
-            error_fn()
         })
     }
 
@@ -94,29 +83,62 @@ where
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
         let lhs = columns[0].column();
         let rhs = columns[1].column();
-
-        let right = R::try_create_viewer(columns[1].column())?;
-
         match (lhs.is_const(), rhs.is_const()) {
             (false, true) => {
+                let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(lhs) };
+                let right = R::try_create_viewer(rhs)?;
+
                 let r = right.value_at(0).to_owned_scalar().as_();
                 if r == M::zero() {
                     return Err(ErrorCode::BadArguments("Division by zero"));
                 }
-                let left: &PrimitiveColumn<L> = Series::check_get(lhs)?;
                 let col = rem_scalar::<L, M, O>(left, &r)?;
                 Ok(Arc::new(col))
             }
-            _ => {
-                let left = L::try_create_viewer(lhs)?;
+            (false, false) => {
+                let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(lhs) };
+                let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(rhs) };
+
                 let mut col_builder = MutablePrimitiveColumn::<O>::with_capacity(lhs.len());
-                for (l, r) in left.iter().zip(right.iter()) {
+                for (l, r) in left.scalar_iter().zip(right.scalar_iter()) {
                     let l = l.to_owned_scalar().as_();
                     let r = r.to_owned_scalar().as_();
                     if std::intrinsics::unlikely(r == M::zero()) {
                         return Err(ErrorCode::BadArguments("Division by zero"));
                     }
-                    let o = AsPrimitive::<O>::as_(l % r);
+                    let o = (l % r).as_();
+                    col_builder.append_value(o);
+                }
+                Ok(col_builder.to_column())
+            }
+            (true, false) => {
+                let left = L::try_create_viewer(lhs)?;
+                let l = left.value_at(0).to_owned_scalar().as_();
+                let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(rhs) };
+
+                let mut col_builder = MutablePrimitiveColumn::<O>::with_capacity(rhs.len());
+                for r in right.scalar_iter() {
+                    let r = r.to_owned_scalar().as_();
+                    if std::intrinsics::unlikely(r == M::zero()) {
+                        return Err(ErrorCode::BadArguments("Division by zero"));
+                    }
+                    let o = (l % r).as_();
+                    col_builder.append_value(o);
+                }
+                Ok(col_builder.to_column())
+            }
+            (true, true) => {
+                let left = L::try_create_viewer(lhs)?;
+                let right = R::try_create_viewer(rhs)?;
+
+                let mut col_builder = MutablePrimitiveColumn::<O>::with_capacity(lhs.len());
+                for (l, r) in left.iter().zip(right.iter()) {
+                    let l = l.to_owned_scalar().as_();
+                    let r = r.to_owned_scalar().as_();
+                    if r == M::zero() {
+                        return Err(ErrorCode::BadArguments("Division by zero"));
+                    }
+                    let o = (l % r).as_();
                     col_builder.append_value(o);
                 }
                 Ok(col_builder.to_column())

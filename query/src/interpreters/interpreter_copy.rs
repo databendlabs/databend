@@ -14,10 +14,6 @@
 
 use std::sync::Arc;
 
-use common_dal2::credential::Credential;
-use common_dal2::readers::SeekableReader;
-use common_dal2::services::s3;
-use common_dal2::Operator as DalOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::CopyPlan;
@@ -32,6 +28,10 @@ use futures::TryStreamExt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_until;
 use nom::IResult;
+use opendal::credential::Credential;
+use opendal::readers::SeekableReader;
+use opendal::services::s3;
+use opendal::Operator as DalOperator;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;

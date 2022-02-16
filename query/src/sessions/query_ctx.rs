@@ -15,7 +15,6 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
@@ -24,12 +23,6 @@ use common_base::tokio::task::JoinHandle;
 use common_base::Progress;
 use common_base::ProgressValues;
 use common_base::TrySpawn;
-use common_dal2::credential::Credential;
-use common_dal2::services::fs;
-use common_dal2::services::s3;
-use common_dal2::Accessor;
-use common_dal2::Operator;
-use common_dal2::Scheme as DalSchema;
 use common_dal_context::DalContext;
 use common_dal_context::DalMetrics;
 use common_exception::ErrorCode;
@@ -44,6 +37,7 @@ use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use opendal::Operator;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
@@ -201,10 +195,10 @@ impl QueryContext {
     }
 
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
-        let tenent_id = self.get_tenant();
+        let tenant_id = self.get_tenant();
         let catalog = self.get_catalog();
         match catalog
-            .get_database(tenent_id.as_str(), &new_database_name)
+            .get_database(tenant_id.as_str(), &new_database_name)
             .await
         {
             Ok(_) => self.shared.set_current_database(new_database_name),
@@ -293,39 +287,10 @@ impl QueryContext {
         self.shared.session.session_mgr.get_storage_cache_manager()
     }
 
-    // Get the storage data accessor by config.
-    // TODO(xuanwo): we can build dal backend only once.
-    pub async fn get_storage_accessor(&self) -> Result<Operator> {
-        let storage_conf = &self.get_config().storage;
-        let schema_name = &storage_conf.storage_type;
-        let schema = DalSchema::from_str(schema_name)
-            .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
-        let da: Arc<dyn Accessor> = match schema {
-            DalSchema::S3 => {
-                let conf = &storage_conf.s3;
-                s3::Backend::build()
-                    .region(&conf.region)
-                    .endpoint(&conf.endpoint_url)
-                    .bucket(&conf.bucket)
-                    .credential(Credential::hmac(
-                        &conf.access_key_id,
-                        &conf.secret_access_key,
-                    ))
-                    .finish()
-                    .await
-                    .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?
-            }
-            DalSchema::Azblob => {
-                todo!()
-            }
-            DalSchema::Fs => fs::Backend::build()
-                .root(&storage_conf.disk.data_path)
-                .finish()
-                .await
-                .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?,
-        };
-
-        Ok(Operator::new(da).layer(self.shared.dal_ctx.clone()))
+    // Get the storage data accessor operator from the session manager.
+    pub async fn get_storage_operator(&self) -> Result<Operator> {
+        let operator = self.shared.session.get_storage_operator();
+        Ok(operator.layer(self.shared.dal_ctx.clone()))
     }
 
     pub fn get_dal_context(&self) -> &DalContext {

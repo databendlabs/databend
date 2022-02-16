@@ -189,8 +189,7 @@ pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
             }
         }
         return Err(CliError::Unknown(format!(
-            "cannot connect to the provided mirror {:?}",
-            custom
+            "cannot connect to the provided mirror {custom:?}",
         )));
     }
 

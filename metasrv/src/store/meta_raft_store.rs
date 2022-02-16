@@ -36,7 +36,7 @@ use common_meta_sled_store::openraft::StateMachineChanges;
 use common_meta_types::error_context::WithContext;
 use common_meta_types::AppliedState;
 use common_meta_types::LogEntry;
-use common_meta_types::MetaError;
+use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaResult;
 use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
@@ -475,30 +475,36 @@ impl MetaRaftStore {
         let sm = self.state_machine.read().await;
         let ms = self.get_membership().await.expect("get membership config");
 
-        let membership = ms.unwrap();
-
-        let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
-        let voters = nodes
-            .into_iter()
-            .filter(|(node_id, _)| membership.membership.contains(node_id))
-            .map(|(_, node)| node)
-            .collect();
-        Ok(voters)
+        match ms {
+            Some(membership) => {
+                let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
+                let voters = nodes
+                    .into_iter()
+                    .filter(|(node_id, _)| membership.membership.contains(node_id))
+                    .map(|(_, node)| node)
+                    .collect();
+                Ok(voters)
+            }
+            None => Ok(vec![]),
+        }
     }
 
     pub async fn get_non_voters(&self) -> MetaResult<Vec<Node>> {
         let sm = self.state_machine.read().await;
         let ms = self.get_membership().await.expect("get membership config");
 
-        let membership = ms.unwrap();
-
-        let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
-        let non_voters = nodes
-            .into_iter()
-            .filter(|(node_id, _)| !membership.membership.contains(node_id))
-            .map(|(_, node)| node)
-            .collect();
-        Ok(non_voters)
+        match ms {
+            Some(membership) => {
+                let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
+                let non_voters = nodes
+                    .into_iter()
+                    .filter(|(node_id, _)| !membership.membership.contains(node_id))
+                    .map(|(_, node)| node)
+                    .collect();
+                Ok(non_voters)
+            }
+            None => Ok(vec![]),
+        }
     }
 
     pub async fn get_node_addr(&self, node_id: &NodeId) -> MetaResult<String> {
@@ -506,7 +512,7 @@ impl MetaRaftStore {
             .get_node(node_id)
             .await?
             .map(|n| n.address)
-            .ok_or_else(|| MetaError::UnknownNode(format!("node id: {}", node_id)))?;
+            .ok_or_else(|| MetaNetworkError::GetNodeAddrError(format!("node id: {}", node_id)))?;
 
         Ok(addr)
     }

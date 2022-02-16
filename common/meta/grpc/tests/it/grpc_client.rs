@@ -15,6 +15,7 @@
 use std::time::Duration;
 
 use common_base::tokio;
+use common_exception::ErrorCode;
 use common_meta_api::MetaApi;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::GetDatabaseReq;
@@ -37,9 +38,10 @@ async fn test_grpc_client_action_timeout() {
     let res = client
         .get_database(GetDatabaseReq::new("tenant1", "xx"))
         .await;
-    let actual = res.unwrap_err().message();
-    let expect = "status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} }";
-    assert_eq!(actual, expect);
+    let got = res.unwrap_err();
+    let got = ErrorCode::from(got).message();
+    let expect = "ConnectionError:  source: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} } source: transport error source: Timeout expired";
+    assert_eq!(got, expect);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -51,7 +53,8 @@ async fn test_grpc_client_handshake_timeout() {
         .await
         .unwrap();
     let client = res.make_client().await;
-    let actual = client.unwrap_err().message();
-    let expect = "status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} }";
-    assert_eq!(actual, expect);
+    let got = client.unwrap_err();
+    let got = ErrorCode::from(got).message();
+    let expect = "ConnectionError:  source: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} } source: transport error source: Timeout expired";
+    assert_eq!(got, expect);
 }

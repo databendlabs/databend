@@ -15,6 +15,7 @@
 mod log;
 #[macro_use]
 mod testing;
+mod config;
 mod state;
 mod state_machine;
 mod types;

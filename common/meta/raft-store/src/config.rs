@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::net::Ipv4Addr;
+
 use clap::Parser;
+use common_exception::Result;
+use common_grpc::DNSResolver;
+use common_meta_types::MetaError;
 use common_meta_types::MetaResult;
 use common_meta_types::NodeId;
 use once_cell::sync::Lazy;
@@ -144,8 +149,22 @@ impl RaftConfig {
         <Self as Parser>::parse_from(&Vec::<&'static str>::new())
     }
 
-    pub fn raft_api_addr(&self) -> String {
+    fn raft_api_addr_string(&self) -> String {
         format!("{}:{}", self.raft_api_host, self.raft_api_port)
+    }
+
+    /// Support ip address and hostname
+    pub async fn raft_api_addr(&self) -> Result<String> {
+        let _ipv4_addr = self.raft_api_host.as_str().parse::<Ipv4Addr>();
+        match _ipv4_addr {
+            Ok(_) => Ok(self.raft_api_addr_string()),
+            Err(_) => {
+                let _ip_addrs = DNSResolver::instance()?
+                    .resolve(self.raft_api_host.clone())
+                    .await?;
+                Ok(format!("{}:{}", _ip_addrs[0], self.raft_api_port))
+            }
+        }
     }
 
     /// Returns true to fsync after a write operation to meta.
@@ -154,6 +173,17 @@ impl RaftConfig {
     }
 
     pub fn check(&self) -> MetaResult<()> {
+        if !self.join.is_empty() && self.single {
+            return Err(MetaError::InvalidConfig(String::from(
+                "--join and --single can not be both set",
+            )));
+        }
+        let self_addr = self.raft_api_addr_string();
+        if self.join.contains(&self_addr) {
+            return Err(MetaError::InvalidConfig(String::from(
+                "--join must not be set to itself",
+            )));
+        }
         Ok(())
     }
 

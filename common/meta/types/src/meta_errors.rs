@@ -13,35 +13,30 @@
 // limitations under the License.
 
 use anyerror::AnyError;
-use common_exception::SerializedError;
-use openraft::error::ChangeMembershipError;
-use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
 
+use crate::AppError;
+use crate::MetaNetworkError;
+use crate::MetaRaftError;
+use crate::MetaResultError;
 use crate::MetaStorageError;
 
 /// Top level error MetaNode would return.
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum MetaError {
     #[error(transparent)]
-    ForwardToLeader(#[from] ForwardToLeader),
+    MetaNetworkError(#[from] MetaNetworkError),
 
     #[error(transparent)]
-    ChangeMembershipError(#[from] ChangeMembershipError),
-
-    #[error(transparent)]
-    ConnectionError(#[from] ConnectionError),
-
-    #[error(transparent)]
-    ErrorCode(#[from] SerializedError),
+    MetaRaftError(#[from] MetaRaftError),
 
     #[error(transparent)]
     MetaStorageError(MetaStorageError),
 
-    #[error("{0}")]
-    UnknownError(String),
+    #[error(transparent)]
+    MetaResultError(#[from] MetaResultError),
 
     #[error("{0}")]
     InvalidConfig(String),
@@ -56,25 +51,13 @@ pub enum MetaError {
     LoadConfigError(String),
 
     #[error("{0}")]
-    TLSConfigurationFailure(String),
-
-    #[error("{0}")]
     StartMetaServiceError(String),
-
-    #[error("{0}")]
-    BadAddressFormat(String),
 
     #[error("{0}")]
     ConcurrentSnapshotInstall(String),
 
     #[error("{0}")]
-    UnknownNode(String),
-
-    #[error("{0}")]
     MetaServiceError(String),
-
-    #[error("{0}")]
-    CannotConnectNode(String),
 
     #[error("{0}")]
     IllegalRoleInfoFormat(String),
@@ -82,52 +65,34 @@ pub enum MetaError {
     #[error("{0}")]
     IllegalUserInfoFormat(String),
 
-    #[error("{0}")]
-    UnknownException(String),
+    /// type to represent serialize/deserialize errors
+    #[error(transparent)]
+    SerdeError(AnyError),
+
+    /// Error when encoding auth
+    #[error(transparent)]
+    EncodeError(AnyError),
+
+    #[error(transparent)]
+    AppError(#[from] AppError),
+
+    /// Any other unclassified error.
+    /// Other crate may return general error such as ErrorCode or anyhow::Error, which can not be classified by type.
+    #[error(transparent)]
+    Fatal(AnyError),
 }
 
 pub type MetaResult<T> = std::result::Result<T, MetaError>;
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[error("ConnectionError: {msg} source: {source}")]
-pub struct ConnectionError {
-    msg: String,
-    #[source]
-    source: AnyError,
-}
-
-impl ConnectionError {
-    pub fn new(source: tonic::transport::Error, msg: String) -> Self {
-        Self {
-            msg,
-            source: AnyError::new(&source),
-        }
-    }
-}
-
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[error("InvalidMembership")]
 pub struct InvalidMembership {}
 
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[error("ForwardToLeader: {leader:?}")]
-pub struct ForwardToLeader {
-    pub leader: Option<NodeId>,
+impl From<MetaStorageError> for MetaError {
+    fn from(e: MetaStorageError) -> Self {
+        match e {
+            MetaStorageError::AppError(app_err) => MetaError::AppError(app_err),
+            _ => MetaError::MetaStorageError(e),
+        }
+    }
 }
-
-#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum RetryableError {
-    /// Trying to write to a non-leader returns the latest leader the raft node knows,
-    /// to indicate the client to retry.
-    #[error("request must be forwarded to leader: {leader}")]
-    ForwardToLeader { leader: NodeId },
-}
-
-/*
-/// Error used to trigger Raft shutdown from storage.
-#[derive(Clone, Debug, Error)]
-pub enum ShutdownError {
-    #[error("unsafe storage error")]
-    UnsafeStorageError,
-}
-*/
