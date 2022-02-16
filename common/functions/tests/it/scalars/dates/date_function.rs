@@ -403,7 +403,7 @@ fn test_todatofweek_function() -> Result<()> {
             name: "test_todayofweek_date32_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
-                DataField::new("dummy_1", DateTime32Type::arc(None)),
+                DataField::new("dummy_1", Date32Type::arc()),
             )],
             expect: Series::from_data(vec![4u8]),
             error: "",
@@ -465,7 +465,7 @@ fn test_todayofmonth_function() -> Result<()> {
             name: "test_todayofmonth_date32_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
-                DataField::new("dummy_1", DateTime32Type::arc(None)),
+                DataField::new("dummy_1", Date32Type::arc()),
             )],
             expect: Series::from_data(vec![1u8]),
             error: "",
@@ -527,7 +527,7 @@ fn test_tohour_function() -> Result<()> {
             name: "test_tohour_date32_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
-                DataField::new("dummy_1", DateTime32Type::arc(None)),
+                DataField::new("dummy_1", Date32Type::arc()),
             )],
             expect: Series::from_data(vec![0u8]),
             error: "",
@@ -589,7 +589,7 @@ fn test_tominute_function() -> Result<()> {
             name: "test_tominute_date32_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
-                DataField::new("dummy_1", DateTime32Type::arc(None)),
+                DataField::new("dummy_1", Date32Type::arc()),
             )],
             expect: Series::from_data(vec![0u8]),
             error: "",
@@ -651,7 +651,7 @@ fn test_tosecond_function() -> Result<()> {
             name: "test_tosecond_date32_constant",
             columns: vec![ColumnWithField::new(
                 Arc::new(ConstColumn::new(Series::from_data(vec![0i32]), 1)),
-                DataField::new("dummy_1", DateTime32Type::arc(None)),
+                DataField::new("dummy_1", Date32Type::arc()),
             )],
             expect: Series::from_data(vec![0u8]),
             error: "",

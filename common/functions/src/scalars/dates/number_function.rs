@@ -30,8 +30,10 @@ use crate::scalars::function2_factory::Function2Description;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::CastFunction;
 use crate::scalars::Function2;
+use crate::scalars::Function2Convertor;
 use crate::scalars::Monotonicity2;
 use crate::scalars::RoundFunction;
+use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone, Debug)]
 pub struct NumberFunction<T, R> {
@@ -227,7 +229,6 @@ impl NumberOperator<u8> for ToHour {
     // ToHour is NOT a monotonic function in general, unless the time range is within the same day.
     fn factor_function() -> Result<Box<dyn Function2>> {
         let func2 = CastFunction::create("toDate", Date16Type::arc().name()).unwrap();
-        //let adapter = Function2Convertor::create(func2);
 
         Ok(func2)
     }
@@ -304,7 +305,7 @@ where
 impl<T, R> Function2 for NumberFunction<T, R>
 where
     T: NumberOperator<R> + Clone + Sync + Send,
-    R: PrimitiveType + Clone + ToDataType + common_datavalues2::Scalar<RefType<'static> = R>,
+    R: PrimitiveType + Clone + ToDataType,
 {
     fn name(&self) -> &str {
         self.display_name.as_str()
@@ -320,59 +321,37 @@ where
     fn eval(
         &self,
         columns: &common_datavalues2::ColumnsWithField,
-        input_rows: usize,
+        _input_rows: usize,
     ) -> Result<common_datavalues2::ColumnRef> {
         let type_id = columns[0].field().data_type().data_type_id();
-        let column = columns[0].column();
+
         let number_array= match type_id {
             TypeID::Date16 => {
-                if column.is_const() {
-                    let column: &ConstColumn = Series::check_get(column)?;
-                    let date_time = Utc.timestamp(column.get(0).as_i64()? * 24 * 3600, 0_u32);
-                    let column = PrimitiveColumn::new_from_vec(vec![T::to_number(date_time)]).arc();
-                    Ok(Arc::new(ConstColumn::new(column, input_rows)).arc())
-                }else {
-                    let mut array = Vec::with_capacity(input_rows);
-                    for i in 0..column.len() {
-                        let v = column.get(i).as_i64()?;
-                        let date_time = Utc.timestamp(v * 24 * 3600, 0_u32);
-                        array.push(T::to_number(date_time));
-                    }
-                    Ok(PrimitiveColumn::new_from_vec(array).arc())
-                }
+                let unary = ScalarUnaryExpression::<u16, R, _>::new(|v| {
+                    let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
+                    T::to_number(date_time)
+                });
+                let col = unary.eval(columns[0].column())?;
+                Ok(col.arc())
+
             },
             TypeID::Date32 => {
-                if column.is_const() {
-                    let column: &ConstColumn = Series::check_get(column)?;
-                    let date_time = Utc.timestamp(column.get(0).as_i64()? * 24 * 3600, 0_u32);
-                    let column = PrimitiveColumn::new_from_vec(vec![T::to_number(date_time)]).arc();
-                    Ok(Arc::new(ConstColumn::new(column, input_rows)).arc())
-                }else {
-                    let mut array = Vec::with_capacity(input_rows);
-                    for i in 0..column.len() {
-                        let v = column.get(i).as_i64()?;
-                        let date_time = Utc.timestamp(v * 24 * 3600, 0_u32);
-                        array.push(T::to_number(date_time));
-                    }
-                    Ok(PrimitiveColumn::new_from_vec(array).arc())
-                }
+                let unary = ScalarUnaryExpression::<i32, R, _>::new(|v| {
+                    let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
+                    T::to_number(date_time)
+                });
+                let col = unary.eval(columns[0].column())?;
+                Ok(col.arc())
             },
             TypeID::DateTime32 => {
-                if column.is_const() {
-                    let column: &ConstColumn = Series::check_get(column)?;
-                    let date_time = Utc.timestamp(column.get(0).as_i64()?, 0_u32);
-                    let column = PrimitiveColumn::new_from_vec(vec![T::to_number(date_time)]).arc();
-                    Ok(ConstColumn::new(column, input_rows).arc())
-                }else {
-                    let mut array = Vec::with_capacity(input_rows);
-                    for i in 0..column.len() {
-                        let v = column.get(i).as_u64()?;
-                        let date_time = Utc.timestamp(v as i64, 0_u32);
-                        array.push(T::to_number(date_time));
-                    }
-                    Ok(PrimitiveColumn::new_from_vec(array).arc())
-                }
-            },
+                let unary = ScalarUnaryExpression::<u32, R, _>::new(|v| {
+                    let date_time = Utc.timestamp(v as i64 , 0_u32);
+                    T::to_number(date_time)
+                });
+                let col = unary.eval(columns[0].column())?;
+                Ok(col.arc())
+
+                },
             other => Result::Err(ErrorCode::IllegalDataType(format!(
                 "Illegal type {:?} of argument of function {}.Should be a date16/data32 or a dateTime32",
                 other,

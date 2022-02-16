@@ -21,6 +21,7 @@ use common_exception::Result;
 
 use crate::scalars::Function2;
 use crate::scalars::Monotonicity2;
+use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
 pub struct RoundFunction {
@@ -70,22 +71,11 @@ impl Function2 for RoundFunction {
     fn eval(
         &self,
         columns: &common_datavalues2::ColumnsWithField,
-        input_rows: usize,
+        _input_rows: usize,
     ) -> Result<common_datavalues2::ColumnRef> {
-        let column = columns[0].column();
-        if column.is_const() {
-            let column: &ConstColumn = Series::check_get(column)?;
-            let value = column.get(0).as_u64()?;
-            let column = PrimitiveColumn::new_from_vec(vec![self.execute(value as u32)]).arc();
-            Ok(Arc::new(ConstColumn::new(column, input_rows)))
-        } else {
-            let mut result = Vec::with_capacity(column.len());
-            for i in 0..column.len() {
-                let val = column.get(i).as_u64()? as u32;
-                result.push(self.execute(val));
-            }
-            Ok(PrimitiveColumn::new_from_vec(result).arc())
-        }
+        let unary = ScalarUnaryExpression::<u32, _, _>::new(|val| self.execute(val));
+        let col = unary.eval(columns[0].column())?;
+        Ok(col.arc())
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
