@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_datavalues2::DataSchema;
 use common_exception::ErrorCode;
@@ -24,6 +23,7 @@ use futures::stream::try_unfold;
 use futures::stream::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use opendal::Operator;
 
 use crate::storages::fuse::io::block_writer;
 use crate::storages::fuse::io::locations::gen_block_location;
@@ -36,7 +36,7 @@ pub type SegmentInfoStream =
 
 pub struct BlockStreamWriter {
     num_block_threshold: usize,
-    data_accessor: Arc<dyn DataAccessor>,
+    data_accessor: Operator,
     data_schema: Arc<DataSchema>,
     number_of_blocks_accumulated: usize,
     statistics_accumulator: Option<StatisticsAccumulator>,
@@ -44,7 +44,7 @@ pub struct BlockStreamWriter {
 
 impl BlockStreamWriter {
     pub async fn write_block_stream(
-        data_accessor: Arc<dyn DataAccessor>,
+        data_accessor: Operator,
         block_stream: SendableDataBlockStream,
         data_schema: Arc<DataSchema>,
         row_per_block: usize,
@@ -72,7 +72,7 @@ impl BlockStreamWriter {
 
     pub fn new(
         num_block_threshold: usize,
-        data_accessor: Arc<dyn DataAccessor>,
+        data_accessor: Operator,
         data_schema: Arc<DataSchema>,
     ) -> Self {
         Self {
@@ -118,7 +118,8 @@ impl BlockStreamWriter {
         let schema = block.schema().to_arrow();
         let location = gen_block_location();
         let file_size =
-            block_writer::write_block(&schema, block, &self.data_accessor, &location).await?;
+            block_writer::write_block(&schema, block, self.data_accessor.clone(), &location)
+                .await?;
         acc = partial_acc.end(file_size, location);
         self.number_of_blocks_accumulated += 1;
         if self.number_of_blocks_accumulated >= self.num_block_threshold {

@@ -337,9 +337,10 @@ impl ExpressionAnalyzer {
             ));
         }
 
-        let expression = args.remove(0);
-        let low_expression = args.remove(0);
-        let high_expression = args.remove(0);
+        let s_args = args.split_off(args.len() - 3);
+        let expression = s_args[0].clone();
+        let low_expression = s_args[1].clone();
+        let high_expression = s_args[2].clone();
 
         match negated {
             false => args.push(

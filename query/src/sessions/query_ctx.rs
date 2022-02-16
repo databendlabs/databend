@@ -15,7 +15,6 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
@@ -24,14 +23,8 @@ use common_base::tokio::task::JoinHandle;
 use common_base::Progress;
 use common_base::ProgressValues;
 use common_base::TrySpawn;
-use common_dal::AzureBlobAccessor;
-use common_dal::DalContext;
-use common_dal::DalMetrics;
-use common_dal::DataAccessor;
-use common_dal::DataAccessorInterceptor;
-use common_dal::Local;
-use common_dal::StorageScheme;
-use common_dal::S3;
+use common_dal_context::DalContext;
+use common_dal_context::DalMetrics;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -44,11 +37,11 @@ use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use opendal::Operator;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;
-use crate::configs::AzureStorageBlobConfig;
 use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::ProcessInfo;
@@ -202,10 +195,10 @@ impl QueryContext {
     }
 
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
-        let tenent_id = self.get_tenant();
+        let tenant_id = self.get_tenant();
         let catalog = self.get_catalog();
         match catalog
-            .get_database(tenent_id.as_str(), &new_database_name)
+            .get_database(tenant_id.as_str(), &new_database_name)
             .await
         {
             Ok(_) => self.shared.set_current_database(new_database_name),
@@ -294,38 +287,10 @@ impl QueryContext {
         self.shared.session.session_mgr.get_storage_cache_manager()
     }
 
-    // Get the storage data accessor by config.
-    pub fn get_storage_accessor(&self) -> Result<Arc<dyn DataAccessor>> {
-        let storage_conf = &self.get_config().storage;
-        let scheme_name = &storage_conf.storage_type;
-        let scheme = StorageScheme::from_str(scheme_name)?;
-        let da: Arc<dyn DataAccessor> = match scheme {
-            StorageScheme::S3 => {
-                let conf = &storage_conf.s3;
-                Arc::new(S3::try_create(
-                    &conf.region,
-                    &conf.endpoint_url,
-                    &conf.bucket,
-                    &conf.access_key_id,
-                    &conf.secret_access_key,
-                    conf.enable_pod_iam_policy,
-                )?)
-            }
-            StorageScheme::AzureStorageBlob => {
-                let conf: &AzureStorageBlobConfig = &storage_conf.azure_storage_blob;
-                Arc::new(AzureBlobAccessor::with_credentials(
-                    &conf.account,
-                    &conf.container,
-                    &conf.master_key,
-                ))
-            }
-            StorageScheme::LocalFs => Arc::new(Local::new(storage_conf.disk.data_path.as_str())),
-        };
-
-        Ok(Arc::new(DataAccessorInterceptor::new(
-            self.shared.dal_ctx.clone(),
-            da,
-        )))
+    // Get the storage data accessor operator from the session manager.
+    pub async fn get_storage_operator(&self) -> Result<Operator> {
+        let operator = self.shared.session.get_storage_operator();
+        Ok(operator.layer(self.shared.dal_ctx.clone()))
     }
 
     pub fn get_dal_context(&self) -> &DalContext {

@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::DropUDFPlan;
+use common_planners::DropUserUDFPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 
@@ -33,11 +33,11 @@ pub struct DfDropUDF {
 impl AnalyzableStatement for DfDropUDF {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::DropUDF(
-            DropUDFPlan {
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::DropUserUDF(DropUserUDFPlan {
                 if_exists: self.if_exists,
                 name: self.udf_name.clone(),
-            },
-        ))))
+            }),
+        )))
     }
 }

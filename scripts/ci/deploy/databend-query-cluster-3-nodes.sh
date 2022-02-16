@@ -33,7 +33,6 @@ python3 scripts/ci/wait_tcp.py --timeout 5 --port 28202
 nohup ./target/debug/databend-meta -c scripts/ci/deploy/config/databend-meta-node-3.toml &
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 28302
 
-
 echo 'Start databend-query node-1'
 nohup target/debug/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml &
 

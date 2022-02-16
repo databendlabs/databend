@@ -14,14 +14,14 @@
 
 use std::fmt;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 #[derive(Clone)]
 pub struct UnhexFunction {
@@ -29,59 +29,67 @@ pub struct UnhexFunction {
 }
 
 impl UnhexFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(UnhexFunction {
             _display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
-impl Function for UnhexFunction {
+impl Function2 for UnhexFunction {
     fn name(&self) -> &str {
         "unhex"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        if !args[0].is_string() && !args[0].is_null() {
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        if !args[0].data_type_id().is_string() && !args[0].data_type_id().is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
-                args[0]
+                args[0].data_type_id()
             )));
         }
 
-        let dt = DataType::String;
-        Ok(DataTypeAndNullable::create(&dt, true))
+        Ok(StringType::arc())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
         const BUFFER_SIZE: usize = 32;
 
-        let array = columns[0]
-            .column()
-            .cast_with_type(&DataType::String)?
-            .to_minimal_array()?;
-        let c_array = array.string()?;
+        let col = cast_column_field(&columns[0], &StringType::arc())?;
+        let col = col.as_any().downcast_ref::<StringColumn>().unwrap();
 
-        let column: DataColumn = transform(c_array, c_array.inner().values().len(), |x, buffer| {
-            if x.len() <= BUFFER_SIZE * 2 {
-                let size = x.len() / 2;
+        let mut builder: ColumnBuilder<Vu8> = ColumnBuilder::with_capacity(input_rows);
 
+        for val in col.iter() {
+            if val.len() <= BUFFER_SIZE * 2 {
+                let size = val.len() / 2;
+                let mut buffer = vec![0u8; size];
                 let buffer = &mut buffer[0..size];
-                match hex::decode_to_slice(x, buffer) {
-                    Ok(()) => Some(size),
-                    Err(_) => None,
+
+                match hex::decode_to_slice(val, buffer) {
+                    Ok(()) => builder.append(buffer),
+                    Err(err) => {
+                        return Err(ErrorCode::UnexpectedError(format!(
+                            "{} can not unhex because: {}",
+                            String::from_utf8_lossy(val),
+                            err
+                        )))
+                    }
                 }
             } else {
-                None
+                return Err(ErrorCode::UnexpectedError(format!(
+                    "{} is too long than buffer size",
+                    String::from_utf8_lossy(val)
+                )));
             }
-        })
-        .into();
-        Ok(column)
+        }
+
+        Ok(builder.build(input_rows))
     }
 }
 

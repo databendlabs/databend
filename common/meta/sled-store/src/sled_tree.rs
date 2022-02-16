@@ -18,15 +18,15 @@ use std::ops::Bound;
 use std::ops::Deref;
 use std::ops::RangeBounds;
 
+use common_meta_types::error_context::WithContext;
 use common_meta_types::MetaStorageError;
 use common_meta_types::MetaStorageResult;
-use common_meta_types::ToMetaStorageError;
 use common_tracing::tracing;
-use sled::transaction::abort;
 use sled::transaction::ConflictableTransactionError;
 use sled::transaction::TransactionResult;
 use sled::transaction::TransactionalTree;
 
+use crate::sled::transaction::TransactionError;
 use crate::store::Store;
 use crate::SledKeySpace;
 
@@ -69,9 +69,7 @@ impl SledTree {
         }
         let t = db
             .open_tree(&tree_name)
-            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                format!("open tree: {}", tree_name)
-            })?;
+            .context(|| format!("open tree: {}", tree_name))?;
 
         tracing::debug!("SledTree opened tree: {}", tree_name);
 
@@ -109,8 +107,8 @@ impl SledTree {
     pub fn txn<T>(
         &self,
         sync: bool,
-        f: impl Fn(TransactionSledTree<'_>) -> MetaStorageResult<T>,
-    ) -> MetaStorageResult<T> {
+        f: impl Fn(TransactionSledTree<'_>) -> Result<T, MetaStorageError>,
+    ) -> Result<T, MetaStorageError> {
         let sync = sync && self.sync;
 
         let result: TransactionResult<T, MetaStorageError> = self.tree.transaction(move |tree| {
@@ -123,13 +121,45 @@ impl SledTree {
                     }
                     Ok(r)
                 }
-                Err(e) => {
-                    tracing::warn!("txn abort: {}", e);
-                    abort(e)?
+                Err(meta_sto_err) => {
+                    tracing::warn!("txn error: {:?}", meta_sto_err);
+
+                    match &meta_sto_err {
+                        MetaStorageError::BytesError(_e) => {
+                            Err(ConflictableTransactionError::Abort(meta_sto_err))
+                        }
+                        MetaStorageError::SerdeError(_e) => {
+                            Err(ConflictableTransactionError::Abort(meta_sto_err))
+                        }
+                        MetaStorageError::SledError(_e) => {
+                            Err(ConflictableTransactionError::Abort(meta_sto_err))
+                        }
+                        MetaStorageError::TransactionConflict => {
+                            Err(ConflictableTransactionError::Conflict)
+                        }
+                        MetaStorageError::AppError(_app_err) => {
+                            Err(ConflictableTransactionError::Abort(meta_sto_err))
+                        }
+                        MetaStorageError::SnapshotError(_e) => {
+                            Err(ConflictableTransactionError::Abort(meta_sto_err))
+                        }
+                        MetaStorageError::Damaged(_e) => {
+                            Err(ConflictableTransactionError::Abort(meta_sto_err))
+                        }
+                    }
                 }
             }
         });
-        result.map_err(MetaStorageError::from)
+
+        match result {
+            Ok(x) => Ok(x),
+            Err(txn_err) => match txn_err {
+                TransactionError::Abort(meta_sto_err) => Err(meta_sto_err),
+                TransactionError::Storage(sto_err) => {
+                    Err(MetaStorageError::SerdeError(sto_err.to_string()))
+                }
+            },
+        }
     }
 
     /// Return true if the tree contains the key.
@@ -138,9 +168,7 @@ impl SledTree {
         let got = self
             .tree
             .contains_key(KV::serialize_key(key)?)
-            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                format!("contains_key: {}:{}", self.name, key)
-            })?;
+            .context(|| format!("contains_key: {}:{}", self.name, key))?;
 
         Ok(got)
     }
@@ -171,7 +199,7 @@ impl SledTree {
                     None => None,
                 }
             })
-            .map_error_to_meta_storage_error(MetaStorageError::SledError, mes)?;
+            .context(mes)?;
 
         self.flush_async(true).await?;
 
@@ -188,9 +216,7 @@ impl SledTree {
         let got = self
             .tree
             .get(KV::serialize_key(key)?)
-            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                format!("get: {}:{}", self.name, key)
-            })?;
+            .context(|| format!("get: {}:{}", self.name, key))?;
 
         let v = match got {
             None => None,
@@ -214,7 +240,7 @@ impl SledTree {
             Some(res) => res,
         };
 
-        let last = last.map_error_to_meta_storage_error(MetaStorageError::SledError, || "last")?;
+        let last = last.context(|| "last")?;
 
         let (k, v) = last;
         let key = KV::deserialize_key(k)?;
@@ -228,9 +254,7 @@ impl SledTree {
         let removed = self
             .tree
             .remove(KV::serialize_key(key)?)
-            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                format!("removed: {}", key,)
-            })?;
+            .context(|| format!("remove: {}", key,))?;
 
         self.flush_async(flush).await?;
 
@@ -257,18 +281,13 @@ impl SledTree {
         let range_mes = self.range_message::<KV, _>(&range);
 
         for item in self.tree.range(sled_range) {
-            let (k, _) = item
-                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                    format!("range_remove: {}", range_mes,)
-                })?;
+            let (k, _) = item.context(|| format!("range_remove: {}", range_mes,))?;
             batch.remove(k);
         }
 
         self.tree
             .apply_batch(batch)
-            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                format!("batch remove: {}", range_mes,)
-            })?;
+            .context(|| format!("batch remove: {}", range_mes,))?;
 
         self.flush_async(flush).await?;
 
@@ -288,10 +307,7 @@ impl SledTree {
         // Convert K range into sled::IVec range
         let range = KV::serialize_range(&range)?;
         for item in self.tree.range(range) {
-            let (k, _) = item
-                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                    format!("range_get: {}", range_mes,)
-                })?;
+            let (k, _) = item.context(|| format!("range_get: {}", range_mes,))?;
 
             let key = KV::deserialize_key(k)?;
             res.push(key);
@@ -313,10 +329,7 @@ impl SledTree {
         // Convert K range into sled::IVec range
         let range = KV::serialize_range(&range)?;
         for item in self.tree.range(range) {
-            let (k, v) = item
-                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                    format!("range_get: {}", range_mes,)
-                })?;
+            let (k, v) = item.context(|| format!("range_get: {}", range_mes,))?;
 
             let key = KV::deserialize_key(k)?;
             let value = KV::deserialize_value(v)?;
@@ -342,10 +355,7 @@ impl SledTree {
 
         let it = self.tree.range(range);
         let it = it.map(move |item| {
-            let (k, v) = item
-                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                    format!("range_get: {}", range_mes,)
-                })?;
+            let (k, v) = item.context(|| format!("range_get: {}", range_mes,))?;
 
             let key = KV::deserialize_key(k)?;
             let value = KV::deserialize_value(v)?;
@@ -365,7 +375,7 @@ impl SledTree {
 
         let pref = KV::serialize_key(prefix)?;
         for item in self.tree.scan_prefix(pref) {
-            let (k, v) = item.map_error_to_meta_storage_error(MetaStorageError::SledError, mes)?;
+            let (k, v) = item.context(mes)?;
 
             let key = KV::deserialize_key(k)?;
             let value = KV::deserialize_value(v)?;
@@ -383,16 +393,13 @@ impl SledTree {
     {
         let mut res = vec![];
 
-        let range_mes = self.range_message::<KV, _>(&range);
+        let mes = || format!("range_get: {}", self.range_message::<KV, _>(&range));
 
         // Convert K range into sled::IVec range
         let range = KV::serialize_range(&range)?;
 
         for item in self.tree.range(range) {
-            let (_, v) = item
-                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                    format!("range_get: {}", range_mes,)
-                })?;
+            let (_, v) = item.context(mes)?;
 
             let ent = KV::deserialize_value(v)?;
             res.push(ent);
@@ -413,9 +420,7 @@ impl SledTree {
             batch.insert(k, v);
         }
 
-        self.tree
-            .apply_batch(batch)
-            .map_error_to_meta_storage_error(MetaStorageError::SledError, || "batch append")?;
+        self.tree.apply_batch(batch).context(|| "batch append")?;
 
         self.flush_async(true).await?;
 
@@ -443,9 +448,7 @@ impl SledTree {
 
         self.tree
             .apply_batch(batch)
-            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                "batch append_values"
-            })?;
+            .context(|| "batch append_values")?;
 
         self.flush_async(true).await?;
 
@@ -462,9 +465,7 @@ impl SledTree {
         let prev = self
             .tree
             .insert(k, v)
-            .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                format!("insert_value {}", key)
-            })?;
+            .context(|| format!("insert_value {}", key))?;
 
         let prev = match prev {
             None => None,
@@ -508,9 +509,7 @@ impl SledTree {
             self.tree
                 .flush_async()
                 .await
-                .map_error_to_meta_storage_error(MetaStorageError::SledError, || {
-                    "flush sled-tree"
-                })?;
+                .context(|| "flust sled-tree")?;
         }
         Ok(())
     }
@@ -548,10 +547,7 @@ impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
         let k = KV::serialize_key(key)?;
         let v = KV::serialize_value(value)?;
 
-        let prev = self.txn_tree.insert(k, v).map_err(|e| {
-            let e: ConflictableTransactionError = e.into();
-            MetaStorageError::from(e)
-        })?;
+        let prev = self.txn_tree.insert(k, v)?;
         match prev {
             Some(v) => Ok(Some(KV::deserialize_value(v)?)),
             None => Ok(None),
@@ -560,10 +556,7 @@ impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
 
     fn get(&self, key: &KV::K) -> Result<Option<KV::V>, Self::Error> {
         let k = KV::serialize_key(key)?;
-        let got = self.txn_tree.get(k).map_err(|e| {
-            let e: ConflictableTransactionError = e.into();
-            MetaStorageError::from(e)
-        })?;
+        let got = self.txn_tree.get(k)?;
 
         match got {
             Some(v) => Ok(Some(KV::deserialize_value(v)?)),
@@ -573,10 +566,7 @@ impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
 
     fn remove(&self, key: &KV::K) -> Result<Option<KV::V>, Self::Error> {
         let k = KV::serialize_key(key)?;
-        let removed = self.txn_tree.remove(k).map_err(|e| {
-            let e: ConflictableTransactionError = e.into();
-            MetaStorageError::from(e)
-        })?;
+        let removed = self.txn_tree.remove(k)?;
 
         match removed {
             Some(v) => Ok(Some(KV::deserialize_value(v)?)),
@@ -588,10 +578,7 @@ impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
     where F: FnMut(Option<KV::V>) -> Option<KV::V> {
         let key_ivec = KV::serialize_key(key)?;
 
-        let old_val_ivec = self.txn_tree.get(&key_ivec).map_err(|e| {
-            let e: ConflictableTransactionError = e.into();
-            MetaStorageError::from(e)
-        })?;
+        let old_val_ivec = self.txn_tree.get(&key_ivec)?;
         let old_val: Result<Option<KV::V>, MetaStorageError> = match old_val_ivec {
             Some(v) => Ok(Some(KV::deserialize_value(v)?)),
             None => Ok(None),
@@ -601,17 +588,8 @@ impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
 
         let new_val = f(old_val);
         let _ = match new_val {
-            Some(ref v) => self
-                .txn_tree
-                .insert(key_ivec, KV::serialize_value(v)?)
-                .map_err(|e| {
-                    let e: ConflictableTransactionError = e.into();
-                    MetaStorageError::from(e)
-                })?,
-            None => self.txn_tree.remove(key_ivec).map_err(|e| {
-                let e: ConflictableTransactionError = e.into();
-                MetaStorageError::from(e)
-            })?,
+            Some(ref v) => self.txn_tree.insert(key_ivec, KV::serialize_value(v)?)?,
+            None => self.txn_tree.remove(key_ivec)?,
         };
 
         Ok(new_val)

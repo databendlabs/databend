@@ -34,7 +34,7 @@ pub async fn cluster_list_handler(
 ) -> poem::Result<impl IntoResponse> {
     let nodes = list_nodes(sessions.0).await.map_err(|cause| {
         poem::Error::from_string(
-            format!("Failed to fetch cluster nodes list. cause: {}", cause),
+            format!("Failed to fetch cluster nodes list. cause: {cause}"),
             StatusCode::INTERNAL_SERVER_ERROR,
         )
     })?;

@@ -15,8 +15,10 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::io::Cursor;
+use std::io::ErrorKind;
 use std::ops::RangeBounds;
 
+use anyerror::AnyError;
 use common_base::tokio::sync::RwLock;
 use common_base::tokio::sync::RwLockWriteGuard;
 use common_meta_raft_store::config::RaftConfig;
@@ -32,13 +34,14 @@ use common_meta_sled_store::openraft::EffectiveMembership;
 use common_meta_sled_store::openraft::ErrorSubject;
 use common_meta_sled_store::openraft::ErrorVerb;
 use common_meta_sled_store::openraft::StateMachineChanges;
+use common_meta_types::error_context::WithContext;
 use common_meta_types::AppliedState;
 use common_meta_types::LogEntry;
-use common_meta_types::MetaError;
+use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaResult;
+use common_meta_types::MetaStorageError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
-use common_meta_types::ToMetaError;
 use common_tracing::tracing;
 use openraft::async_trait::async_trait;
 use openraft::raft::Entry;
@@ -48,6 +51,7 @@ use openraft::RaftStorage;
 use openraft::SnapshotMeta;
 use openraft::StorageError;
 
+use crate::export::exported_line_to_json;
 use crate::store::ToStorageError;
 use crate::Opened;
 
@@ -156,15 +160,15 @@ impl MetaRaftStore {
 
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
     #[tracing::instrument(level = "debug", skip(self, data))]
-    pub async fn install_snapshot(&self, data: &[u8]) -> MetaResult<()> {
+    pub async fn install_snapshot(&self, data: &[u8]) -> Result<(), MetaStorageError> {
         let mut sm = self.state_machine.write().await;
 
         let (sm_id, prev_sm_id) = self.raft_state.read_state_machine_id()?;
         if sm_id != prev_sm_id {
-            return Err(MetaError::ConcurrentSnapshotInstall(format!(
+            return Err(MetaStorageError::SnapshotError(AnyError::error(format!(
                 "another snapshot install is not finished yet: {} {}",
                 sm_id, prev_sm_id
-            )));
+            ))));
         }
 
         let new_sm_id = sm_id + 1;
@@ -189,10 +193,7 @@ impl MetaRaftStore {
         for x in snap.kvs.into_iter() {
             let k = &x[0];
             let v = &x[1];
-            tree.insert(k, v.clone())
-                .map_error_to_meta_error(MetaError::MetaStoreDamaged, || {
-                    "fail to insert snapshot"
-                })?;
+            tree.insert(k, v.clone()).context(|| "insert snapshot")?;
         }
 
         tracing::info!(
@@ -201,9 +202,7 @@ impl MetaRaftStore {
             new_sm.get_last_applied()?,
         );
 
-        tree.flush_async()
-            .await
-            .map_error_to_meta_error(MetaError::MetaStoreDamaged, || "fail to flush snapshot")?;
+        tree.flush_async().await.context(|| "flush snapshot")?;
 
         tracing::info!("flushed tree, no_kvs: {}", nkvs);
 
@@ -227,6 +226,33 @@ impl MetaRaftStore {
 
         *sm = new_sm;
         Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn export(&self) -> Result<Vec<String>, std::io::Error> {
+        let mut res = vec![];
+
+        let state_kvs = self.raft_state.inner.export()?;
+        let log_kvs = self.log.inner.export()?;
+        let sm_kvs = self.state_machine.write().await.sm_tree.export()?;
+
+        for kv in state_kvs.iter() {
+            let line = exported_line_to_json("state", kv)
+                .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
+            res.push(line);
+        }
+        for kv in log_kvs.iter() {
+            let line = exported_line_to_json("log", kv)
+                .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
+            res.push(line);
+        }
+        for kv in sm_kvs.iter() {
+            let line = exported_line_to_json("sm", kv)
+                .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
+            res.push(line);
+        }
+
+        Ok(res)
     }
 }
 
@@ -478,30 +504,36 @@ impl MetaRaftStore {
         let sm = self.state_machine.read().await;
         let ms = self.get_membership().await.expect("get membership config");
 
-        let membership = ms.unwrap();
-
-        let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
-        let voters = nodes
-            .into_iter()
-            .filter(|(node_id, _)| membership.membership.contains(node_id))
-            .map(|(_, node)| node)
-            .collect();
-        Ok(voters)
+        match ms {
+            Some(membership) => {
+                let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
+                let voters = nodes
+                    .into_iter()
+                    .filter(|(node_id, _)| membership.membership.contains(node_id))
+                    .map(|(_, node)| node)
+                    .collect();
+                Ok(voters)
+            }
+            None => Ok(vec![]),
+        }
     }
 
     pub async fn get_non_voters(&self) -> MetaResult<Vec<Node>> {
         let sm = self.state_machine.read().await;
         let ms = self.get_membership().await.expect("get membership config");
 
-        let membership = ms.unwrap();
-
-        let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
-        let non_voters = nodes
-            .into_iter()
-            .filter(|(node_id, _)| !membership.membership.contains(node_id))
-            .map(|(_, node)| node)
-            .collect();
-        Ok(non_voters)
+        match ms {
+            Some(membership) => {
+                let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
+                let non_voters = nodes
+                    .into_iter()
+                    .filter(|(node_id, _)| !membership.membership.contains(node_id))
+                    .map(|(_, node)| node)
+                    .collect();
+                Ok(non_voters)
+            }
+            None => Ok(vec![]),
+        }
     }
 
     pub async fn get_node_addr(&self, node_id: &NodeId) -> MetaResult<String> {
@@ -509,7 +541,7 @@ impl MetaRaftStore {
             .get_node(node_id)
             .await?
             .map(|n| n.address)
-            .ok_or_else(|| MetaError::UnknownNode(format!("node id: {}", node_id)))?;
+            .ok_or_else(|| MetaNetworkError::GetNodeAddrError(format!("node id: {}", node_id)))?;
 
         Ok(addr)
     }

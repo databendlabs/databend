@@ -12,7 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod aggregator;
 mod transform;
+mod transform_aggregator;
 mod transform_dummy;
+mod transform_expression;
+mod transform_filter;
+mod transform_limit;
+mod transform_limit_by;
+mod transform_sort_merge;
+mod transform_sort_partial;
 
+pub use aggregator::AggregatorParams;
+pub use aggregator::AggregatorTransformParams;
+pub use transform_aggregator::TransformAggregator;
 pub use transform_dummy::TransformDummy;
+pub use transform_expression::ExpressionTransform;
+pub use transform_expression::ProjectionTransform;
+pub use transform_filter::TransformFilter;
+pub use transform_filter::TransformHaving;
+pub use transform_limit::TransformLimit;
+pub use transform_limit_by::TransformLimitBy;
+pub use transform_sort_merge::TransformSortMerge;
+pub use transform_sort_partial::TransformSortPartial;

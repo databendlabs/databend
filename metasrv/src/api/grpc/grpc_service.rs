@@ -39,7 +39,6 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::executor::ActionHandler;
-use crate::export::exported_line_to_json;
 use crate::meta_service::meta_service_impl::GrpcStream;
 use crate::meta_service::MetaNode;
 
@@ -136,12 +135,9 @@ impl MetaService for MetaServiceImpl {
         let action: MetaGrpcReadReq = request.try_into()?;
         tracing::info!("Receive read_action: {:?}", action);
 
-        let body = self.action_handler.execute_read(action).await?;
-        let r = RaftReply {
-            data: body,
-            error: "".to_string(),
-        };
-        Ok(Response::new(r))
+        let res = self.action_handler.execute_read(action).await;
+
+        Ok(Response::new(res))
     }
 
     type ExportStream =
@@ -157,24 +153,7 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<Self::ExportStream>, Status> {
         let meta_node = &self.action_handler.meta_node;
 
-        let mut res = vec![];
-
-        let state_kvs = meta_node.sto.raft_state.inner.export()?;
-        let log_kvs = meta_node.sto.log.inner.export()?;
-        let sm_kvs = meta_node.sto.state_machine.write().await.sm_tree.export()?;
-
-        for kv in state_kvs.iter() {
-            let line = exported_line_to_json("state", kv)?;
-            res.push(line);
-        }
-        for kv in log_kvs.iter() {
-            let line = exported_line_to_json("log", kv)?;
-            res.push(line);
-        }
-        for kv in sm_kvs.iter() {
-            let line = exported_line_to_json("sm", kv)?;
-            res.push(line);
-        }
+        let res = meta_node.sto.export().await?;
 
         let stream = ExportStream { data: res };
 

@@ -51,7 +51,7 @@ impl DirectedEdge {
 
 struct UpdateListMutable {
     updated_edges: Vec<DirectedEdge>,
-    updated_triggers: Vec<UnsafeCell<UpdateTrigger>>,
+    updated_triggers: Vec<Arc<UnsafeCell<UpdateTrigger>>>,
 }
 
 impl UpdateList {
@@ -100,8 +100,14 @@ impl UpdateList {
     pub unsafe fn create_trigger(self: &Arc<Self>, edge_index: EdgeIndex) -> *mut UpdateTrigger {
         let inner = &mut *self.inner.get();
         let update_trigger = UpdateTrigger::create(edge_index, self.clone());
-        inner.updated_triggers.push(UnsafeCell::new(update_trigger));
+        inner
+            .updated_triggers
+            .push(Arc::new(UnsafeCell::new(update_trigger)));
         inner.updated_triggers.last().unwrap().get()
+        // let update_trigger = UnsafeCell::new(UpdateTrigger::create(edge_index, self.clone()));
+        // let res = update_trigger.get();
+        // inner.updated_triggers.push(update_trigger);
+        // res
     }
 }
 

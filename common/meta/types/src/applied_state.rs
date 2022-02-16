@@ -19,6 +19,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::AddResult;
+use crate::AppError;
 use crate::Change;
 use crate::DatabaseMeta;
 use crate::MetaError;
@@ -49,6 +50,8 @@ pub enum AppliedState {
 
     KV(Change<Vec<u8>>),
 
+    AppError(AppError),
+
     #[try_into(ignore)]
     None,
 }
@@ -65,6 +68,11 @@ where
     type Error = MetaError;
 
     fn try_into(self) -> Result<AddResult<T, ID>, Self::Error> {
+        // TODO(xp): maybe better to replace with specific error?
+        if let AppliedState::AppError(app_err) = self {
+            return Err(MetaError::AppError(app_err));
+        }
+
         let typ = std::any::type_name::<T>();
 
         let ch = TryInto::<Change<T, ID>>::try_into(self).expect(typ);
@@ -112,6 +120,7 @@ impl AppliedState {
             AppliedState::TableMeta(ref ch) => ch.changed(),
             AppliedState::KV(ref ch) => ch.changed(),
             AppliedState::None => false,
+            AppliedState::AppError(_e) => false,
         }
     }
 
@@ -140,6 +149,7 @@ impl AppliedState {
             AppliedState::TableMeta(Change { ref prev, .. }) => prev.is_none(),
             AppliedState::KV(Change { ref prev, .. }) => prev.is_none(),
             AppliedState::None => true,
+            AppliedState::AppError(_e) => true,
         }
     }
 
@@ -152,6 +162,7 @@ impl AppliedState {
             AppliedState::TableMeta(Change { ref result, .. }) => result.is_none(),
             AppliedState::KV(Change { ref result, .. }) => result.is_none(),
             AppliedState::None => true,
+            AppliedState::AppError(_e) => true,
         }
     }
 }

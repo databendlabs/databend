@@ -81,26 +81,15 @@ impl StringFunction {
         factory.register("character_length", CharLengthFunction::desc());
         factory.register("ord", OrdFunction::desc());
         factory.register("length", LengthFunction::desc());
-    }
-
-    pub fn register(factory: &mut FunctionFactory) {
         factory.register("bin", BinFunction::desc());
-        factory.register("hex", HexFunction::desc());
         factory.register("oct", OctFunction::desc());
+        factory.register("hex", HexFunction::desc());
+        factory.register("unhex", UnhexFunction::desc());
         factory.register("repeat", RepeatFunction::desc());
+        factory.register("substring", SubstringFunction::desc());
         factory.register("mid", SubstringFunction::desc());
         factory.register("substr", SubstringFunction::desc());
-        factory.register("substring", SubstringFunction::desc());
         factory.register("substring_index", SubstringIndexFunction::desc());
-        factory.register("unhex", UnhexFunction::desc());
-        factory.register("locate", LocateFunction::desc());
-        factory.register("position", PositionFunction::desc());
-        factory.register("instr", InstrFunction::desc());
-        factory.register("insert", InsertFunction::desc());
-        factory.register("field", FieldFunction::desc());
-        factory.register("concat", ConcatFunction::desc());
-        factory.register("replace", ReplaceFunction::desc());
-        factory.register("strcmp", StrcmpFunction::desc());
         factory.register("left", LeftFunction::desc());
         factory.register("right", RightFunction::desc());
         factory.register("concat_ws", ConcatWsFunction::desc());
@@ -112,5 +101,16 @@ impl StringFunction {
         factory.register("find_in_set", FindInSetFunction::desc());
         factory.register("format", FormatFunction::desc());
         factory.register("char", CharFunction::desc());
+    }
+
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("locate", LocateFunction::desc());
+        factory.register("position", PositionFunction::desc());
+        factory.register("instr", InstrFunction::desc());
+        factory.register("insert", InsertFunction::desc());
+        factory.register("field", FieldFunction::desc());
+        factory.register("concat", ConcatFunction::desc());
+        factory.register("replace", ReplaceFunction::desc());
+        factory.register("strcmp", StrcmpFunction::desc());
     }
 }

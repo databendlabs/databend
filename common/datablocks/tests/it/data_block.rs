@@ -53,7 +53,7 @@ fn test_data_block_convert() -> Result<()> {
         Series::from_data(vec![1u16, 2, 3]),
         Series::from_data(vec![1i32, 2, 3]),
         Series::from_data(vec![1u32, 2, 3]),
-        Series::from_data(vec![1u64, 2, 3]),
+        Series::from_data(vec![1i64, 2, 3]),
     ]);
     assert_eq!(&schema, block.schema());
 

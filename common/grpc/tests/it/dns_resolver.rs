@@ -20,6 +20,5 @@ use common_grpc::DNSResolver;
 async fn test_resolver_github() -> Result<()> {
     let addrs = DNSResolver::instance()?.resolve("github.com").await?;
     assert_ne!(addrs.len(), 0);
-
     Ok(())
 }

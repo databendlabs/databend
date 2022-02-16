@@ -141,10 +141,10 @@ where F: Fn(bool) -> bool {
 
     let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
 
-    let lhs = ColumnViewerIter::<Vu8>::try_create(lhs)?;
-    let rhs = ColumnViewerIter::<Vu8>::try_create(rhs)?;
+    let lhs = Vu8::try_create_viewer(lhs)?;
+    let rhs = Vu8::try_create_viewer(rhs)?;
 
-    for (lhs_value, rhs_value) in lhs.zip(rhs) {
+    for (lhs_value, rhs_value) in lhs.iter().zip(rhs.iter()) {
         let pattern = if let Some(pattern) = map.get(rhs_value) {
             pattern
         } else {
@@ -171,18 +171,18 @@ where F: Fn(bool) -> bool {
 #[inline]
 pub fn a_like_binary_scalar<F>(lhs: &ColumnRef, rhs: &[u8], op: F) -> Result<BooleanColumn>
 where F: Fn(bool) -> bool {
-    let iter = ColumnViewerIter::<Vu8>::try_create(lhs)?;
+    let viewer = Vu8::try_create_viewer(lhs)?;
     let column = match check_pattern_type(rhs, false) {
-        PatternType::OrdinalStr => BooleanColumn::from_iterator(iter.map(|x| x == rhs)),
+        PatternType::OrdinalStr => BooleanColumn::from_iterator(viewer.iter().map(|x| x == rhs)),
         PatternType::EndOfPercent => {
             // fast path, can use starts_with
             let starts_with = &rhs[..rhs.len() - 1];
-            BooleanColumn::from_iterator(iter.map(|x| op(x.starts_with(starts_with))))
+            BooleanColumn::from_iterator(viewer.iter().map(|x| op(x.starts_with(starts_with))))
         }
         PatternType::StartOfPercent => {
             // fast path, can use ends_with
             let ends_with = &rhs[1..];
-            BooleanColumn::from_iterator(iter.map(|x| op(x.ends_with(ends_with))))
+            BooleanColumn::from_iterator(viewer.iter().map(|x| op(x.ends_with(ends_with))))
         }
         PatternType::PatternStr => {
             let pattern = simdutf8::basic::from_utf8(rhs).map_err(|e| {
@@ -195,7 +195,7 @@ where F: Fn(bool) -> bool {
             let re = BytesRegex::new(&re_pattern).map_err(|e| {
                 ErrorCode::BadArguments(format!("Unable to build regex from LIKE pattern: {}", e))
             })?;
-            BooleanColumn::from_iterator(iter.map(|x| op(re.is_match(x))))
+            BooleanColumn::from_iterator(viewer.iter().map(|x| op(re.is_match(x))))
         }
     };
     Ok(column)

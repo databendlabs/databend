@@ -18,12 +18,12 @@ use common_datavalues2::DataSchema;
 use common_datavalues2::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct DropUDFPlan {
+pub struct DropUserUDFPlan {
     pub if_exists: bool,
     pub name: String,
 }
 
-impl DropUDFPlan {
+impl DropUserUDFPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

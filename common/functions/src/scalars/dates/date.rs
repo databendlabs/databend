@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataValueBinaryOperator;
 use common_exception::Result;
 
-use super::interval_function::MonthsArithmeticFunction;
-use super::interval_function::SecondsArithmeticFunction;
 use super::now::NowFunction;
 use super::number_function::ToMondayFunction;
+use super::AddDaysFunction;
+use super::AddMonthsFunction;
+use super::AddTimesFunction;
+use super::AddYearsFunction;
 use super::RoundFunction;
 use super::ToDayOfMonthFunction;
 use super::ToDayOfWeekFunction;
@@ -65,90 +66,8 @@ impl DateFunction {
         )
     }
 
-    fn month_arithmetic_function_creator(factor: i64) -> FunctionDescription {
-        /* one year is 12 months */
-        let function_creator: FactoryCreator = match factor.is_positive() {
-            true => Box::new(move |display_name| {
-                MonthsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueBinaryOperator::Plus,
-                    factor,
-                )
-            }),
-            false => Box::new(move |display_name| {
-                MonthsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueBinaryOperator::Minus,
-                    -factor,
-                )
-            }),
-        };
-
-        FunctionDescription::creator(function_creator)
-            .features(FunctionFeatures::default().deterministic().num_arguments(2))
-    }
-
-    fn seconds_arithmetic_function_creator(factor: i64) -> FunctionDescription {
-        /* one day is 24 * 3600 seconds */
-        let function_creator: FactoryCreator = match factor.is_positive() {
-            true => Box::new(move |display_name| {
-                SecondsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueBinaryOperator::Plus,
-                    factor,
-                )
-            }),
-            false => Box::new(move |display_name| {
-                SecondsArithmeticFunction::try_create(
-                    display_name,
-                    DataValueBinaryOperator::Minus,
-                    -factor,
-                )
-            }),
-        };
-
-        FunctionDescription::creator(function_creator)
-            .features(FunctionFeatures::default().deterministic().num_arguments(2))
-    }
-
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("toStartOfWeek", ToStartOfWeekFunction::desc());
-
-        //interval functions
-        factory.register("addYears", Self::month_arithmetic_function_creator(12));
-        factory.register("addMonths", Self::month_arithmetic_function_creator(1));
-        factory.register(
-            "addDays",
-            Self::seconds_arithmetic_function_creator(24 * 3600),
-        );
-        factory.register("addHours", Self::seconds_arithmetic_function_creator(3600));
-        factory.register("addMinutes", Self::seconds_arithmetic_function_creator(60));
-        factory.register("addSeconds", Self::seconds_arithmetic_function_creator(1));
-
-        factory.register(
-            "subtractYears",
-            Self::month_arithmetic_function_creator(-12),
-        );
-        factory.register(
-            "subtractMonths",
-            Self::month_arithmetic_function_creator(-1),
-        );
-        factory.register(
-            "subtractDays",
-            Self::seconds_arithmetic_function_creator(-(24 * 3600)),
-        );
-        factory.register(
-            "subtractHours",
-            Self::seconds_arithmetic_function_creator(-3600),
-        );
-        factory.register(
-            "subtractMinutes",
-            Self::seconds_arithmetic_function_creator(-60),
-        );
-        factory.register(
-            "subtractSeconds",
-            Self::seconds_arithmetic_function_creator(-1),
-        );
     }
 
     pub fn register2(factory: &mut Function2Factory) {
@@ -185,5 +104,19 @@ impl DateFunction {
         factory.register("timeSlot", Self::round_function_creator(30 * 60));
         factory.register("toStartOfHour", Self::round_function_creator(60 * 60));
         factory.register("toStartOfDay", Self::round_function_creator(60 * 60 * 24));
+
+        //interval functions
+        factory.register_arithmetic("addYears", AddYearsFunction::desc(1));
+        factory.register_arithmetic("addMonths", AddMonthsFunction::desc(1));
+        factory.register_arithmetic("addDays", AddDaysFunction::desc(1));
+        factory.register_arithmetic("addHours", AddTimesFunction::desc(3600));
+        factory.register_arithmetic("addMinutes", AddTimesFunction::desc(60));
+        factory.register_arithmetic("addSeconds", AddTimesFunction::desc(1));
+        factory.register_arithmetic("subtractYears", AddYearsFunction::desc(-1));
+        factory.register_arithmetic("subtractMonths", AddMonthsFunction::desc(-1));
+        factory.register_arithmetic("subtractDays", AddDaysFunction::desc(-1));
+        factory.register_arithmetic("subtractHours", AddTimesFunction::desc(-3600));
+        factory.register_arithmetic("subtractMinutes", AddTimesFunction::desc(-60));
+        factory.register_arithmetic("subtractSeconds", AddTimesFunction::desc(-1));
     }
 }

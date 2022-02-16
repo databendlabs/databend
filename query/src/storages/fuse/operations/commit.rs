@@ -27,6 +27,7 @@ use common_meta_types::TableInfo;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
+use futures::io::Cursor;
 use uuid::Uuid;
 
 use crate::catalogs::Catalog;
@@ -163,8 +164,12 @@ impl FuseTable {
         let uuid = new_snapshot.snapshot_id;
         let snapshot_loc = io::snapshot_location(&uuid);
         let bytes = serde_json::to_vec(&new_snapshot)?;
-        let da = ctx.get_storage_accessor()?;
-        da.put(&snapshot_loc, bytes).await?;
+        let operator = ctx.get_storage_operator().await?;
+        operator
+            .write(&snapshot_loc, bytes.len() as u64)
+            .run(Box::new(Cursor::new(bytes)))
+            .await
+            .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 
         Self::commit_to_meta_server(ctx, &self.get_table_info().ident, snapshot_loc).await?;
         ctx.get_dal_context().inc_write_rows(rows_written as usize);

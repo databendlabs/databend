@@ -120,7 +120,7 @@ impl ViewCommand {
                 }
             }
             Err(e) => {
-                writer.write_err(format!("View precheck failed: {:?}", e));
+                writer.write_err(format!("View precheck failed: {e:?}"));
             }
         }
         Ok(())

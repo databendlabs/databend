@@ -15,9 +15,11 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UpsertTableOptionReq;
 use common_planners::TruncateTablePlan;
+use futures::io::Cursor;
 use uuid::Uuid;
 
 use crate::catalogs::Catalog;
@@ -41,9 +43,13 @@ impl FuseTable {
                 segments: vec![],
             };
             let new_snapshot_loc = io::snapshot_location(&new_snapshot.snapshot_id);
-            let da = ctx.get_storage_accessor()?;
+            let operator = ctx.get_storage_operator().await?;
             let bytes = serde_json::to_vec(&new_snapshot)?;
-            da.put(&new_snapshot_loc, bytes).await?;
+            operator
+                .write(&new_snapshot_loc, bytes.len() as u64)
+                .run(Box::new(Cursor::new(bytes)))
+                .await
+                .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 
             if plan.purge {
                 let keep_last_snapshot = false;

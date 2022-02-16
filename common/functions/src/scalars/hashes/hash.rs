@@ -19,6 +19,7 @@ use twox_hash::XxHash64;
 
 use super::BaseHashFunction;
 use crate::scalars::Blake3HashFunction;
+use crate::scalars::City64WithSeedFunction;
 use crate::scalars::Function2Factory;
 use crate::scalars::Md5HashFunction;
 use crate::scalars::Sha1HashFunction;
@@ -43,5 +44,6 @@ impl HashesFunction {
         factory.register("xxhash64", XxHash64Function::desc());
         factory.register("siphash64", SipHash64Function::desc());
         factory.register("siphash", SipHash64Function::desc());
+        factory.register("city64WithSeed", City64WithSeedFunction::desc());
     }
 }

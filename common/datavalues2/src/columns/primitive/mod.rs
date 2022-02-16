@@ -238,9 +238,9 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         (0..self.len()).for_each(|i| {
             let offset: usize = offsets[i];
             let data = unsafe { self.value_unchecked(i) };
-            for _ in previous_offset..offset {
-                builder.append_value(data);
-            }
+            builder
+                .values
+                .extend(std::iter::repeat(data).take(offset - previous_offset));
             previous_offset = offset;
         });
         builder.to_column()

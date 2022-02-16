@@ -173,12 +173,12 @@ impl IntoColumn for ArrayRef {
             UInt8 => Arc::new(UInt8Column::from_arrow_array(self.as_ref())),
             UInt16 | Date16 => Arc::new(UInt16Column::from_arrow_array(self.as_ref())),
             UInt32 | DateTime32 => Arc::new(UInt32Column::from_arrow_array(self.as_ref())),
-            UInt64 | DateTime64 => Arc::new(UInt64Column::from_arrow_array(self.as_ref())),
+            UInt64 => Arc::new(UInt64Column::from_arrow_array(self.as_ref())),
 
             Int8 => Arc::new(Int8Column::from_arrow_array(self.as_ref())),
             Int16 => Arc::new(Int16Column::from_arrow_array(self.as_ref())),
             Int32 | Date32 => Arc::new(Int32Column::from_arrow_array(self.as_ref())),
-            Int64 | Interval => Arc::new(Int64Column::from_arrow_array(self.as_ref())),
+            Int64 | Interval | DateTime64 => Arc::new(Int64Column::from_arrow_array(self.as_ref())),
 
             Float32 => Arc::new(Float32Column::from_arrow_array(self.as_ref())),
             Float64 => Arc::new(Float64Column::from_arrow_array(self.as_ref())),
@@ -239,7 +239,7 @@ impl std::fmt::Debug for dyn Column + '_ {
         let dt = self.data_type().data_type_id();
         let col = self.convert_full_column();
         with_match_primitive_type_id!(dt, |$T| {
-            fmt_dyn!(&self, PrimitiveColumn<$T>, f)
+            fmt_dyn!(col, PrimitiveColumn<$T>, f)
         }, {
             use crate::types::type_id::TypeID::*;
             match dt {

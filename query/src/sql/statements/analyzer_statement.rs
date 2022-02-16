@@ -107,7 +107,7 @@ impl Debug for QueryAnalyzeState {
         }
 
         if !self.group_by_expressions.is_empty() {
-            debug_struct.field("group_by", &self.group_by_expressions);
+            debug_struct.field("aggregator", &self.group_by_expressions);
         }
 
         if !self.aggregate_expressions.is_empty() {

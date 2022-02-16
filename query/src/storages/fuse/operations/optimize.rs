@@ -17,8 +17,9 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_cache::Cache;
-use common_dal::DataAccessor;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use opendal::Operator;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::snapshot_location;
@@ -33,7 +34,7 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         keep_last_snapshot: bool,
     ) -> Result<()> {
-        let da = ctx.get_storage_accessor()?;
+        let accessor = ctx.get_storage_operator().await?;
         let tbl_info = self.get_table_info();
         let snapshot_loc = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
         let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
@@ -74,7 +75,7 @@ impl FuseTable {
 
         // 1. remove blocks
         for x in block_delta {
-            self.remove_location(da.clone(), x).await?;
+            self.remove_location(accessor.clone(), x).await?;
             if let Some(c) = ctx.get_storage_cache_manager().get_block_meta_cache() {
                 let cache = &mut *c.write().await;
                 cache.pop(x.as_str());
@@ -83,7 +84,7 @@ impl FuseTable {
 
         // 2. remove the segments
         for x in seg_delta {
-            self.remove_location(da.clone(), x.as_str()).await?;
+            self.remove_location(accessor.clone(), x.as_str()).await?;
             if let Some(c) = ctx.get_storage_cache_manager().get_table_segment_cache() {
                 let cache = &mut *c.write().await;
                 cache.pop(x.as_str());
@@ -93,7 +94,7 @@ impl FuseTable {
         // 3. remove the snapshots
         for x in snapshots.iter().rev() {
             let loc = snapshot_location(&x.snapshot_id);
-            self.remove_location(da.clone(), loc.as_str()).await?;
+            self.remove_location(accessor.clone(), loc.as_str()).await?;
             if let Some(c) = ctx.get_storage_cache_manager().get_table_snapshot_cache() {
                 let cache = &mut *c.write().await;
                 cache.pop(loc.as_str());
@@ -121,9 +122,13 @@ impl FuseTable {
 
     async fn remove_location(
         &self,
-        data_accessor: Arc<dyn DataAccessor>,
+        data_accessor: Operator,
         location: impl AsRef<str>,
     ) -> Result<()> {
-        data_accessor.remove(location.as_ref()).await
+        data_accessor
+            .delete(location.as_ref())
+            .run()
+            .await
+            .map_err(|e| ErrorCode::DalTransportError(e.to_string()))
     }
 }

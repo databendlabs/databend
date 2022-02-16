@@ -57,7 +57,7 @@ and each cluster may consist of many nodes. Each node is a compute unit, and is 
 
 * Processors
 
-  A vector-based query execution pipeline, which is build by planner instructions.
+  A vector-based query execution pipeline, which is built by planner instructions.
   Each pipeline executor is a processor(such as `SourceTransform`, `FilterTransform`, etc.), it has zero or more inputs and zero or more outputs, and connected as a pipeline, it also can be distributed on multiple nodes judged by your query workload.
   
   For example:
@@ -77,11 +77,11 @@ and each cluster may consist of many nodes. Each node is a compute unit, and is 
 
   The cache utilizes local SSDs for caching Data and Indexes based on the version within a node. The cache can be warmed up with different strategies:
   
-  * LOAD_ON_DEMAND - Load index or table data on demand(By Default).
+  * LOAD_ON_DEMAND - Load indexes or table data on demand(By Default).
   * LOAD_INDEXES - Load indexes only.
   * LOAD_ALL - Load full data and indexes.
 
-Node is the smallest unit of the compute layer, they can be registered as one cluster via namespace.
+Node is the smallest unit of the compute layer. A set of nodes can be registered as one cluster via namespace.
 Many clusters can attach the same database, so they can serve the query in parallel by different users.
 When you add new nodes to a cluster, the currently running computational tasks can be scaled(known as work-stealing) guarantee.
 

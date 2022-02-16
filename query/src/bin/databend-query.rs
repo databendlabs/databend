@@ -47,7 +47,6 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     // Prefer to use env variable in cloud native deployment
     // Override configs based on env variables
     conf = Config::load_from_env(&conf)?;
-    conf.initial_dir()?;
 
     if conf.meta.meta_address.is_empty() {
         MetaEmbedded::init_global_meta_store(conf.meta.meta_embedded_dir.clone()).await?;

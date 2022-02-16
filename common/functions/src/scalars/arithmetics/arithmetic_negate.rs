@@ -15,7 +15,7 @@
 use std::ops::Neg;
 
 use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues2::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::traits::AsPrimitive;
@@ -63,14 +63,8 @@ impl ArithmeticNegateFunction {
     ) -> Result<Box<dyn Function2>> {
         let arg_type = remove_nullable(args[0]).data_type_id();
         let op = DataValueUnaryOperator::Negate;
-        let error_fn = || -> Result<Box<dyn Function2>> {
-            Err(ErrorCode::BadDataValueType(format!(
-                "DataValue Error: Unsupported arithmetic {} ({:?})",
-                op, arg_type
-            )))
-        };
 
-        with_match_primitive_type_id!(arg_type, |$T| {
+        with_match_primitive_types_error!(arg_type, |$T| {
             let result_type = <$T as ResultTypeOfUnary>::Negate::to_data_type();
             match result_type.data_type_id() {
                 TypeID::Int64 => UnaryArithmeticFunction::<$T, i64, _>::try_create_func(
@@ -99,8 +93,6 @@ impl ArithmeticNegateFunction {
                     NegFunction::default(),
                 ),
             }
-        }, {
-            error_fn()
         })
     }
 
