@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::Instant;
 
 use common_base::tokio;
 use common_base::tokio::task::JoinHandle;
@@ -31,14 +30,12 @@ use crate::users::UserApiProvider;
 
 struct CachedRoles {
     roles: HashMap<String, RoleInfo>,
-    last_cache_time: Option<Instant>,
 }
 
 impl CachedRoles {
     fn empty() -> Self {
         Self {
             roles: HashMap::new(),
-            last_cache_time: None,
         }
     }
 }
@@ -52,28 +49,34 @@ pub struct RoleCacheMgr {
 
 impl RoleCacheMgr {
     pub fn new(user_api: Arc<UserApiProvider>) -> Self {
-        Self {
+        let mut mgr = Self {
             user_api,
             cache: Arc::new(RwLock::new(HashMap::new())),
             polling_interval: Duration::new(15, 0),
             polling_join_handle: None,
-        }
+        };
+        mgr.background_polling();
+        mgr
     }
 
-    pub fn start_polling(&mut self) {
+    pub fn background_polling(&mut self) {
         let user_api = self.user_api.clone();
         let cache = self.cache.clone();
         let polling_interval = self.polling_interval;
-        let handle = tokio::spawn(async move {
+        self.polling_join_handle = Some(tokio::spawn(async move {
             loop {
                 let tenants: Vec<String> = {
                     let cached = cache.read();
-                    cached.keys().map(|k| k.clone()).collect()
+                    cached.keys().cloned().collect()
                 };
                 for tenant in tenants {
                     match load_roles_data(&user_api, &tenant).await {
                         Err(err) => {
-                            tracing::warn!("role_cache_mgr load roles data failed: {}", err)
+                            tracing::warn!(
+                                "role_cache_mgr load roles data of tenant {} failed: {}",
+                                tenant,
+                                err,
+                            )
                         }
                         Ok(data) => {
                             let mut cached = cache.write();
@@ -83,23 +86,22 @@ impl RoleCacheMgr {
                 }
                 tokio::time::sleep(polling_interval).await
             }
-        });
-        self.polling_join_handle.replace(handle);
+        }));
     }
 
     pub fn invalidate_cache(&mut self, tenant: &str) {
         let mut cached = self.cache.write();
-        cached.insert(tenant.to_string(), CachedRoles::empty());
+        cached.remove(tenant);
     }
 
     pub async fn verify_privilege(
         &self,
         tenant: &str,
-        role_identies: &[RoleIdentity],
+        _role_identies: &[RoleIdentity],
         _object: &GrantObject,
         _privilege: UserPrivilegeType,
     ) -> Result<bool> {
-        self.maybe_reload(tenant);
+        self.maybe_reload(tenant).await?;
         Ok(false)
     }
 
@@ -119,24 +121,17 @@ impl RoleCacheMgr {
     }
 }
 
-fn make_role_cache_key(tenant: &str, role_identity: &RoleIdentity) -> String {
-    format!("{}/{}", tenant, role_identity)
-}
-
 async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &str) -> Result<CachedRoles> {
     let roles = user_api.get_roles(tenant).await?;
     let roles_map = roles
         .into_iter()
-        .map(|r| (make_role_cache_key(tenant, &r.identity()), r))
+        .map(|r| (r.identity().to_string(), r))
         .collect::<HashMap<_, _>>();
-    Ok(CachedRoles {
-        roles: roles_map,
-        last_cache_time: Some(Instant::now()),
-    })
+    Ok(CachedRoles { roles: roles_map })
 }
 
 // An role can be granted with multiple roles, find all the related roles in a DFS manner
-fn find_all_related_roles(
+fn _find_all_related_roles(
     _cache: &HashMap<String, RoleInfo>,
     _roles: &[RoleIdentity],
     _tenant: &str,
