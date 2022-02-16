@@ -83,8 +83,8 @@ sled_tree_prefix = "sled_foo"
     assert_eq!(cfg.grpc_tls_server_cert, "grpc server cert");
     assert_eq!(cfg.grpc_tls_server_key, "grpc server key");
     assert_eq!(cfg.raft_config.config_id, "raft config id");
-    assert_eq!(cfg.raft_config.raft_api_host, "127.0.0.1");
     assert_eq!(cfg.raft_config.raft_listen_host, "127.0.0.1");
+    assert_eq!(cfg.raft_config.raft_advertise_host, "127.0.0.1");
     assert_eq!(cfg.raft_config.raft_api_port, 11000);
     assert_eq!(cfg.raft_config.raft_dir, "raft dir");
     assert!(cfg.raft_config.no_sync);
