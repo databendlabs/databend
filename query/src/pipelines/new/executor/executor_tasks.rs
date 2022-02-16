@@ -117,8 +117,12 @@ impl ExecutorTasksQueue {
 
             // The finished when wait the lock tasks. TODO: maybe use try lock.
             match task.finished.load(Ordering::Relaxed) {
-                true => Some(task),
+                true => {
+                    println!("finished_executing_async_task");
+                    Some(task)
+                },
                 false => {
+                    println!("push_executing_async_task");
                     workers_tasks.push_executing_async_task(worker_id, task);
                     None
                 }

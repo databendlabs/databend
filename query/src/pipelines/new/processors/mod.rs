@@ -34,6 +34,8 @@ pub use sinks::SyncSenderSink;
 pub use sources::SyncReceiverSource;
 pub use sources::SyncSource;
 pub use sources::SyncSourcer;
+pub use sources::AsyncSourcer;
+pub use sources::AsyncSource;
 pub use sources::TableSource;
 pub use transforms::AggregatorParams;
 pub use transforms::AggregatorTransformParams;

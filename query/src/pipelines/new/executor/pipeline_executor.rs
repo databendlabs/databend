@@ -15,12 +15,12 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_exception::Result;
+use common_exception::{ErrorCode, Result};
 
 use crate::pipelines::new::executor::executor_graph::RunningGraph;
 use crate::pipelines::new::executor::executor_notify::WorkersNotify;
 use crate::pipelines::new::executor::executor_tasks::ExecutorTasksQueue;
-use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
+use crate::pipelines::new::executor::executor_worker_context::{ExecutorTask, ExecutorWorkerContext};
 use crate::pipelines::new::pipeline::NewPipeline;
 
 pub struct PipelineExecutor {
@@ -73,12 +73,11 @@ impl PipelineExecutor {
             }
 
             while context.has_task() {
-                let executed_pid = context.execute_task(&self.global_tasks_queue)?;
-
-                // We immediately schedule the processor again.
-                let schedule_queue = self.graph.schedule_queue(executed_pid)?;
-                // println!("{} queue: {:?}", std::thread::current().name().unwrap(), schedule_queue);
-                schedule_queue.schedule(&self.global_tasks_queue, &mut context);
+                if let Some(executed_pid) = context.execute_task(&self.global_tasks_queue)? {
+                    // We immediately schedule the processor again.
+                    let schedule_queue = self.graph.schedule_queue(executed_pid)?;
+                    schedule_queue.schedule(&self.global_tasks_queue, &mut context);
+                }
             }
         }
 

@@ -81,13 +81,26 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
     }
 
     fn event(&mut self) -> Result<Event> {
-        Ok(match &self.generated_data {
-            None if self.is_finish => self.close_output(),
-            None => Event::Async,
-            Some(_) if self.output.can_push() => self.push_data(),
-            Some(_) if self.output.is_finished() => self.close_output(),
-            Some(_) => Event::NeedConsume,
-        })
+        if self.is_finish {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
+        if self.output.is_finished() {
+            return Ok(Event::Finished);
+        }
+
+        if !self.output.can_push() {
+            return Ok(Event::NeedConsume);
+        }
+
+        match self.generated_data.take() {
+            None => Ok(Event::Async),
+            Some(data_block) => {
+                self.output.push_data(Ok(data_block));
+                Ok(Event::NeedConsume)
+            }
+        }
     }
 
     async fn async_process(&mut self) -> Result<()> {

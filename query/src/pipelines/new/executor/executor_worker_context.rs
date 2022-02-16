@@ -64,7 +64,12 @@ impl ExecutorWorkerContext {
         self.task = task
     }
 
-    pub unsafe fn execute_task(&mut self, queue: &ExecutorTasksQueue) -> Result<NodeIndex> {
+
+    pub fn take_task(&mut self) -> ExecutorTask {
+        std::mem::replace(&mut self.task, ExecutorTask::None)
+    }
+
+    pub unsafe fn execute_task(&mut self, queue: &ExecutorTasksQueue) -> Result<Option<NodeIndex>> {
         // println!("{} execute task {:?}", std::thread::current().name().unwrap(), self.task);
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::LogicalError("Execute none task.")),
@@ -76,16 +81,16 @@ impl ExecutorWorkerContext {
         }
     }
 
-    unsafe fn execute_sync_task(&mut self, processor: ProcessorPtr) -> Result<NodeIndex> {
+    unsafe fn execute_sync_task(&mut self, processor: ProcessorPtr) -> Result<Option<NodeIndex>> {
         processor.process()?;
-        Ok(processor.id())
+        Ok(Some(processor.id()))
     }
 
     unsafe fn execute_async_task(
         &mut self,
         processor: ProcessorPtr,
         queue: &ExecutorTasksQueue,
-    ) -> Result<NodeIndex> {
+    ) -> Result<Option<NodeIndex>> {
         let id = processor.id();
         let worker_id = self.worker_num;
         let finished = Arc::new(AtomicBool::new(false));
@@ -105,29 +110,30 @@ impl ExecutorWorkerContext {
         &mut self,
         mut task: ExecutingAsyncTask,
         queue: &ExecutorTasksQueue,
-    ) -> Result<NodeIndex> {
+    ) -> Result<Option<NodeIndex>> {
         task.finished.store(false, Ordering::Relaxed);
 
         let id = task.id;
         loop {
             let workers_notify = self.get_workers_notify().clone();
-            let waker =
-                ExecutingAsyncTaskWaker::create(&task.finished, task.worker_id, workers_notify);
+            let waker = ExecutingAsyncTaskWaker::create(&task.finished, task.worker_id, workers_notify);
 
             let waker = futures::task::waker_ref(&waker);
             let mut cx = Context::from_waker(&waker);
 
             match task.future.as_mut().poll(&mut cx) {
                 Poll::Ready(Ok(_)) => {
-                    return Ok(id);
+                    println!("ready ok future");
+                    return Ok(Some(id));
                 }
                 Poll::Ready(Err(cause)) => {
+                    println!("ready err future");
                     return Err(cause);
                 }
                 Poll::Pending => {
                     match queue.push_executing_async_task(task.worker_id, task) {
                         None => {
-                            return Ok(id);
+                            return Ok(None);
                         }
                         Some(t) => {
                             task = t;
@@ -161,6 +167,7 @@ impl ExecutingAsyncTaskWaker {
 
 impl ArcWake for ExecutingAsyncTaskWaker {
     fn wake_by_ref(arc_self: &Arc<Self>) {
+        println!("wakeup future {:?}", ErrorCode::Ok(""));
         arc_self.1.store(true, Ordering::Release);
         arc_self.2.wakeup(arc_self.0);
     }
