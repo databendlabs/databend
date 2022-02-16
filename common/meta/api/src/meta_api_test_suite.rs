@@ -653,6 +653,16 @@ impl MetaApiTestSuite {
         let tenant = "tenant1";
         let db_name = "db1";
 
+        tracing::info!("--- list table on unknown db");
+        {
+            let res = mt.list_tables(ListTableReq::new(tenant, db_name)).await;
+            tracing::debug!("list table on unknown db res: {:?}", res);
+            assert!(res.is_err());
+
+            let code = ErrorCode::from(res.unwrap_err()).code();
+            assert_eq!(ErrorCode::UnknownDatabase("").code(), code);
+        }
+
         tracing::info!("--- prepare db");
         {
             let res = self.create_database(mt, tenant, db_name).await?;
