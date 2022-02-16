@@ -101,16 +101,16 @@ impl StringFunction {
         factory.register("find_in_set", FindInSetFunction::desc());
         factory.register("format", FormatFunction::desc());
         factory.register("char", CharFunction::desc());
+        factory.register("insert", InsertFunction::desc());
+        factory.register("field", FieldFunction::desc());
+        factory.register("concat", ConcatFunction::desc());
+        factory.register("replace", ReplaceFunction::desc());
+        factory.register("strcmp", StrcmpFunction::desc());
     }
 
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("locate", LocateFunction::desc());
         factory.register("position", PositionFunction::desc());
         factory.register("instr", InstrFunction::desc());
-        factory.register("insert", InsertFunction::desc());
-        factory.register("field", FieldFunction::desc());
-        factory.register("concat", ConcatFunction::desc());
-        factory.register("replace", ReplaceFunction::desc());
-        factory.register("strcmp", StrcmpFunction::desc());
     }
 }

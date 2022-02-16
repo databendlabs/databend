@@ -58,7 +58,7 @@ impl Function2 for CharFunction {
 
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
         let column_count = columns.len();
-        let mut values: Vec<u8> = Vec::with_capacity(input_rows * column_count);
+        let mut values: Vec<u8> = vec![0; input_rows * column_count];
         let values_ptr = values.as_mut_ptr();
 
         let mut offsets: Vec<i64> = Vec::with_capacity(input_rows + 1);
@@ -88,11 +88,6 @@ impl Function2 for CharFunction {
         }
         for i in 1..input_rows + 1 {
             offsets.push(i as i64 * column_count as i64);
-        }
-
-        unsafe {
-            offsets.set_len(input_rows + 1);
-            values.set_len(input_rows * column_count);
         }
         let mut builder = MutableStringColumn::from_data(values, offsets);
         Ok(builder.to_column())
