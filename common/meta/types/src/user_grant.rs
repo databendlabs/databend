@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::fmt;
 
 use enumflags2::BitFlags;
 
+use crate::role_identity::RoleIdentity;
 use crate::UserPrivilegeSet;
 use crate::UserPrivilegeType;
 
@@ -146,15 +148,31 @@ impl fmt::Display for GrantEntry {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct UserGrantSet {
     entries: Vec<GrantEntry>,
+    roles: HashSet<RoleIdentity>,
 }
 
 impl UserGrantSet {
     pub fn empty() -> Self {
-        Self { entries: vec![] }
+        Self {
+            entries: vec![],
+            roles: HashSet::new(),
+        }
     }
 
     pub fn entries(&self) -> &[GrantEntry] {
         &self.entries
+    }
+
+    pub fn roles(&self) -> &HashSet<RoleIdentity> {
+        &self.roles
+    }
+
+    pub fn grant_role(&mut self, role: RoleIdentity) {
+        self.roles.insert(role);
+    }
+
+    pub fn revoke_role(&mut self, role: &RoleIdentity) {
+        self.roles.remove(&role);
     }
 
     pub fn verify_privilege(
