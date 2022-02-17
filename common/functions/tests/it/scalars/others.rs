@@ -348,7 +348,7 @@ fn test_try_inet_ntoa_function() -> Result<()> {
         ScalarFunction2Test {
             name: "integer_input_u8",
             columns: vec![Series::from_data(vec![Some(0_u8)])],
-            expect: Series::from_data(vec![Some("127.0.0.1")]),
+            expect: Series::from_data(vec![Some("0.0.0.0")]),
             error: "",
         },
         ScalarFunction2Test {
@@ -398,7 +398,7 @@ fn test_inet_ntoa_function() -> Result<()> {
         ScalarFunction2Test {
             name: "integer_input_u8",
             columns: vec![Series::from_data([Some(0_u8)])],
-            expect: Series::from_data([Some("127.0.0.1")]),
+            expect: Series::from_data([Some("0.0.0.0")]),
             error: "",
         },
         ScalarFunction2Test {
