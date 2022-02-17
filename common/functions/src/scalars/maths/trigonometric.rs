@@ -128,9 +128,6 @@ impl Function2 for TrigonometricFunction {
                 })
             }
 
-            //   let y_series = y_column.to_minimal_array()?;
-            //                     let x_series = x_column.to_minimal_array()?;
-            //                     binary(y_series.f64()?, x_series.f64()?, |y, x| y.atan2(x))
             _ => {
                 with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
                     with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {

@@ -40,7 +40,6 @@ use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
 use crate::scalars::function2_factory::Factory2Creator;
-use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function2;
 use crate::scalars::Function2Description;
@@ -62,10 +61,6 @@ impl DateFunction {
                 .monotonicity()
                 .num_arguments(1),
         )
-    }
-
-    pub fn register(factory: &mut FunctionFactory) {
-        factory.register("toStartOfWeek", ToStartOfWeekFunction::desc());
     }
 
     pub fn register2(factory: &mut Function2Factory) {
@@ -102,6 +97,8 @@ impl DateFunction {
         factory.register("timeSlot", Self::round_function_creator(30 * 60));
         factory.register("toStartOfHour", Self::round_function_creator(60 * 60));
         factory.register("toStartOfDay", Self::round_function_creator(60 * 60 * 24));
+
+        factory.register("toStartOfWeek", ToStartOfWeekFunction::desc());
 
         //interval functions
         factory.register_arithmetic("addYears", AddYearsFunction::desc(1));
