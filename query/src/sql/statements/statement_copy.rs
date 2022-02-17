@@ -91,13 +91,12 @@ impl AnalyzableStatement for DfCopy {
         let format = self
             .file_format_options
             .get("TYPE")
-            .as_ref()
             .ok_or_else(|| ErrorCode::SyntaxException("File format type must be specified"))?;
         let file_format = Self::to_file_format(format)?;
 
         // Parse uri.
         let uri = uriparse::URIReference::try_from(self.location.as_str())
-            .map_err(|e| ErrorCode::SyntaxException("File location uri must be specified"))?;
+            .map_err(|_e| ErrorCode::SyntaxException("File location uri must be specified"))?;
 
         // File storage plan.
         let stage_storage = match uri.scheme() {

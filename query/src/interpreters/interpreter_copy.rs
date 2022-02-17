@@ -16,26 +16,13 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_planners::CopyPlan;
-use common_streams::DataBlockStream;
-use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
-use common_streams::SourceFactory;
-use common_streams::SourceParams;
-use common_streams::SourceStream;
-use futures::io::BufReader;
-use futures::TryStreamExt;
-use nom::bytes::complete::tag;
-use nom::bytes::complete::take_until;
-use nom::IResult;
-use opendal::credential::Credential;
-use opendal::readers::SeekableReader;
-use opendal::services::s3;
-use opendal::Operator as DalOperator;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
+#[allow(dead_code)]
 pub struct CopyInterpreter {
     ctx: Arc<QueryContext>,
     plan: CopyPlan,
@@ -44,10 +31,6 @@ pub struct CopyInterpreter {
 impl CopyInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(CopyInterpreter { ctx, plan }))
-    }
-
-    async fn get_dal(&self) -> Result<DalOperator> {
-        todo!()
     }
 }
 

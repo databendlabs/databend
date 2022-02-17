@@ -216,16 +216,12 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => {
                 //TODO:make stage to sql parser keyword
-                if w.value.to_uppercase() == "STAGE" {
-                    self.parse_create_stage()
-                } else {
-                    match w.keyword {
-                        Keyword::TABLE => self.parse_create_table(),
-                        Keyword::DATABASE => self.parse_create_database(),
-                        Keyword::USER => self.parse_create_user(),
-                        Keyword::FUNCTION => self.parse_create_udf(),
-                        _ => self.expected("create statement", Token::Word(w)),
-                    }
+                match w.keyword {
+                    Keyword::TABLE => self.parse_create_table(),
+                    Keyword::DATABASE => self.parse_create_database(),
+                    Keyword::USER => self.parse_create_user(),
+                    Keyword::FUNCTION => self.parse_create_udf(),
+                    _ => self.expected("create statement", Token::Word(w)),
                 }
             }
             unexpected => self.expected("create statement", unexpected),
@@ -293,30 +289,20 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_describe(&mut self) -> Result<DfStatement, ParserError> {
-        if self.consume_token("stage") {
-            self.parse_desc_stage()
-        } else {
-            self.consume_token("table");
-            self.parse_desc_table()
-        }
+        self.consume_token("table");
+        self.parse_desc_table()
     }
 
     /// Drop database/table.
     fn parse_drop(&mut self) -> Result<DfStatement, ParserError> {
         match self.parser.next_token() {
-            Token::Word(w) => {
-                if w.value.to_uppercase() == "STAGE" {
-                    self.parse_drop_stage()
-                } else {
-                    match w.keyword {
-                        Keyword::DATABASE => self.parse_drop_database(),
-                        Keyword::TABLE => self.parse_drop_table(),
-                        Keyword::USER => self.parse_drop_user(),
-                        Keyword::FUNCTION => self.parse_drop_udf(),
-                        _ => self.expected("drop statement", Token::Word(w)),
-                    }
-                }
-            }
+            Token::Word(w) => match w.keyword {
+                Keyword::DATABASE => self.parse_drop_database(),
+                Keyword::TABLE => self.parse_drop_table(),
+                Keyword::USER => self.parse_drop_user(),
+                Keyword::FUNCTION => self.parse_drop_udf(),
+                _ => self.expected("drop statement", Token::Word(w)),
+            },
             unexpected => self.expected("drop statement", unexpected),
         }
     }
