@@ -31,38 +31,12 @@ use crate::StringColumn;
 pub struct Series;
 
 impl Series {
-    /// Type promotion to identify the nullable value.
-    /// Type promote to the nearest higher type.
-    /// UInt8 -> UInt16 -> UInt32 -> UInt64 -> bitmap<128>
-    /// Int8 -> Int16 -> Int32 -> Int64 -> bitmap<128>
-    pub fn type_promotion(column: &ColumnRef) -> Result<ColumnRef> {
-        let _datatype_id = column.data_type().data_type_id();
-        let _datatype_bytes_size = column.data_type().data_type_id().numeric_byte_size();
-        match _datatype_bytes_size{
-            Ok(1) => Int8Type::arc()
-                .create_constant_column(&DataValue::Int64(0), 2),
-            Ok(2) => Int8Type::arc()
-                .create_constant_column(&DataValue::Int64(0), 4),
-            Ok(4) => Int8Type::arc()
-                .create_constant_column(&DataValue::Int64(0), 8),
-            _ => StringType::arc()
-                .create_constant_column(&DataValue::String("".as_bytes().to_vec()),128),
-        }
-    }
-
     /// Get a pointer to the underlying data of this Series.
     /// Can be useful for fast comparisons.
     /// # Safety
     /// Assumes that the `column` is  T.
     pub unsafe fn static_cast<T>(column: &ColumnRef) -> &T {
         let object = column.as_ref();
-        let _promoted_type_id = Series::type_promotion(column);
-        let mut ret_typeid = TypeID::String;
-        // match _promoted_type_id {
-        //     Ok(typ) => ret_typeid = typ,
-        //     Err(_) => todo!(),
-        // }
-        // .as_ref().create_column();
         &*(object as *const dyn Column as *const T)
     }
 
