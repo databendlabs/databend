@@ -49,6 +49,7 @@ mod user_setting;
 mod user_stage;
 
 pub mod error_context;
+mod principal_identity;
 mod role_identity;
 
 // reexport
@@ -117,6 +118,7 @@ pub use meta_storage_errors::UnknownTableId;
 pub use operation::MetaId;
 pub use operation::MetaVersion;
 pub use operation::Operation;
+pub use principal_identity::PrincipalIdentity;
 pub use raft_txid::RaftTxId;
 pub use raft_types::LogId;
 pub use raft_types::LogIndex;

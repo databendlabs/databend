@@ -182,6 +182,8 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::CreateUDF(v) => v.analyze(ctx).await,
             DfStatement::DropUDF(v) => v.analyze(ctx).await,
             DfStatement::AlterUDF(v) => v.analyze(ctx).await,
+            DfStatement::CreateRole(v) => v.analyze(ctx).await,
+            DfStatement::DropRole(v) => v.analyze(ctx).await,
             DfStatement::ShowEngines(v) => v.analyze(ctx).await,
         }
     }

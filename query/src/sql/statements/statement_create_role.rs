@@ -14,9 +14,7 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::AuthInfo;
 use common_meta_types::RoleIdentity;
 use common_planners::CreateRolePlan;
 use common_planners::PlanNode;
@@ -36,7 +34,7 @@ pub struct DfCreateRole {
 impl AnalyzableStatement for DfCreateRole {
     #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        Ok(AalyzedResult::SimpleQuery(Box::new(PlanNode::CreateRole(
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::CreateRole(
             CreateRolePlan {
                 if_not_exists: self.if_not_exists,
                 role_identity: self.role_identity.clone(),

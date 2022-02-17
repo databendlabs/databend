@@ -21,7 +21,7 @@ use databend_query::sql::statements::DfAuthOption;
 use databend_query::sql::statements::DfCreateUser;
 use databend_query::sql::statements::DfDropUser;
 use databend_query::sql::statements::DfGrantObject;
-use databend_query::sql::statements::DfGrantStatement;
+use databend_query::sql::statements::DfGrantPrivilegeStatement;
 use databend_query::sql::statements::DfRevokeStatement;
 use databend_query::sql::statements::DfShowGrants;
 use databend_query::sql::*;
@@ -274,7 +274,7 @@ fn show_grants_test() -> Result<()> {
 fn grant_privilege_test() -> Result<()> {
     expect_parse_ok(
         "GRANT ALL ON * TO 'test'@'localhost'",
-        DfStatement::GrantPrivilege(DfGrantStatement {
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
@@ -284,7 +284,7 @@ fn grant_privilege_test() -> Result<()> {
 
     expect_parse_ok(
         "GRANT ALL PRIVILEGES ON * TO 'test'@'localhost'",
-        DfStatement::GrantPrivilege(DfGrantStatement {
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
@@ -294,7 +294,7 @@ fn grant_privilege_test() -> Result<()> {
 
     expect_parse_ok(
         "GRANT INSERT ON `db1`.`tb1` TO 'test'@'localhost'",
-        DfStatement::GrantPrivilege(DfGrantStatement {
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Table(Some("db1".into()), "tb1".into()),
@@ -308,7 +308,7 @@ fn grant_privilege_test() -> Result<()> {
 
     expect_parse_ok(
         "GRANT INSERT ON `tb1` TO 'test'@'localhost'",
-        DfStatement::GrantPrivilege(DfGrantStatement {
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Table(None, "tb1".into()),
@@ -322,7 +322,7 @@ fn grant_privilege_test() -> Result<()> {
 
     expect_parse_ok(
         "GRANT INSERT ON `db1`.'*' TO 'test'@'localhost'",
-        DfStatement::GrantPrivilege(DfGrantStatement {
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(Some("db1".into())),
@@ -336,7 +336,7 @@ fn grant_privilege_test() -> Result<()> {
 
     expect_parse_ok(
         "GRANT CREATE, SELECT ON * TO 'test'@'localhost'",
-        DfStatement::GrantPrivilege(DfGrantStatement {
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
@@ -351,7 +351,7 @@ fn grant_privilege_test() -> Result<()> {
 
     expect_parse_ok(
         "GRANT CREATE USER, CREATE ROLE, CREATE, SELECT ON * TO 'test'@'localhost'",
-        DfStatement::GrantPrivilege(DfGrantStatement {
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),

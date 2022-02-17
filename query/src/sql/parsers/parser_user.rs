@@ -15,6 +15,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
+use common_meta_types::PrincipalIdentity;
 use common_meta_types::RoleIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
@@ -29,9 +30,10 @@ use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfAuthOption;
 use crate::sql::statements::DfCreateRole;
 use crate::sql::statements::DfCreateUser;
+use crate::sql::statements::DfDropRole;
 use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfGrantObject;
-use crate::sql::statements::DfGrantStatement;
+use crate::sql::statements::DfGrantPrivilegeStatement;
 use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfShowGrants;
 use crate::sql::DfParser;
@@ -42,7 +44,7 @@ impl<'a> DfParser<'a> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let (name, hostname) = self.parse_principal_identity();
+        let (name, hostname) = self.parse_principal_identity()?;
         let auth_option = self.parse_auth_option()?;
 
         let create = DfCreateUser {
@@ -79,7 +81,7 @@ impl<'a> DfParser<'a> {
 
     pub(crate) fn parse_drop_user(&mut self) -> Result<DfStatement, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let (name, hostname) = self.parse_principal_name()?;
+        let (name, hostname) = self.parse_principal_identity()?;
         let drop = DfDropUser {
             if_exists,
             name,
@@ -93,7 +95,7 @@ impl<'a> DfParser<'a> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let (name, host) = self.parse_principal_identity();
+        let (name, host) = self.parse_principal_identity()?;
 
         let create = DfCreateRole {
             if_not_exists,
@@ -105,8 +107,8 @@ impl<'a> DfParser<'a> {
     // Drop role
     pub(crate) fn parse_drop_role(&mut self) -> Result<DfStatement, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let (name, host) = self.parse_principal_name()?;
-        let drop = DropRole {
+        let (name, host) = self.parse_principal_identity()?;
+        let drop = DfDropRole {
             if_exists,
             role_identity: RoleIdentity::new(name, host),
         };
@@ -123,10 +125,10 @@ impl<'a> DfParser<'a> {
         if !self.parser.parse_keyword(Keyword::TO) {
             return self.expected("keyword TO", self.parser.peek_token());
         }
-        let (name, hostname) = self.parse_principal_identity()?;
-        let grant = DfGrantStatement {
-            name,
-            hostname,
+        let (name, host) = self.parse_principal_identity()?;
+        let principal = PrincipalIdentity::User(UserIdentity::new(name, host));
+        let grant = DfGrantPrivilegeStatement {
+            principal,
             on,
             priv_types: privileges,
         };

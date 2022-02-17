@@ -12,23 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::fmt;
 
-use common_datavalues2::DataSchema;
-use common_datavalues2::DataSchemaRef;
-use common_meta_types::GrantObject;
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserPrivilegeSet;
+use crate::RoleIdentity;
+use crate::UserIdentity;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct GrantPrivilegePlan {
-    pub principal: PrincipalIdentity,
-    pub priv_types: UserPrivilegeSet,
-    pub on: GrantObject,
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum PrincipalIdentity {
+    User(UserIdentity),
+    Role(RoleIdentity),
 }
 
-impl GrantPrivilegePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+impl fmt::Display for PrincipalIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
+        match self {
+            PrincipalIdentity::User(u) => write!(f, "{}", u),
+            PrincipalIdentity::Role(r) => write!(f, "{}", r),
+        }
     }
 }

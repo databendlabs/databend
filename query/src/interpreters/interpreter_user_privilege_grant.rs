@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::GrantObject;
+use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_planners::GrantPrivilegePlan;
 use common_streams::DataBlockStream;
@@ -60,15 +61,24 @@ impl Interpreter for GrantPrivilegeInterpreter {
 
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
-        user_mgr
-            .grant_user_privileges(
-                &tenant,
-                &plan.name,
-                &plan.hostname,
-                plan.on,
-                plan.priv_types,
-            )
-            .await?;
+        match &plan.principal {
+            PrincipalIdentity::User(user) => {
+                user_mgr
+                    .grant_user_privileges(
+                        &tenant,
+                        &user.username,
+                        &user.hostname,
+                        plan.on,
+                        plan.priv_types,
+                    )
+                    .await?;
+            }
+            PrincipalIdentity::Role(role) => {
+                user_mgr
+                    .grant_role_privileges(&tenant, role, plan.on, plan.priv_types)
+                    .await?;
+            }
+        }
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
