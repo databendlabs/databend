@@ -116,7 +116,7 @@ impl<'a> DfParser<'a> {
         if !self.parser.parse_keyword(Keyword::TO) {
             return self.expected("keyword TO", self.parser.peek_token());
         }
-        let (name, hostname) = self.parse_user_identity()?;
+        let (name, hostname) = self.parse_principal_identity()?;
         let grant = DfGrantStatement {
             name,
             hostname,
@@ -136,7 +136,7 @@ impl<'a> DfParser<'a> {
         if !self.parser.parse_keyword(Keyword::FROM) {
             return self.expected("keyword FROM", self.parser.peek_token());
         }
-        let (username, hostname) = self.parse_user_identity()?;
+        let (username, hostname) = self.parse_principal_identity()?;
         let revoke = DfRevokeStatement {
             username,
             hostname,
@@ -156,20 +156,22 @@ impl<'a> DfParser<'a> {
         }
 
         // SHOW GRANTS FOR 'u1'@'%'
-        let (username, hostname) = self.parse_user_identity()?;
+        let (username, hostname) = self.parse_principal_identity()?;
         Ok(DfStatement::ShowGrants(DfShowGrants {
             user_identity: Some(UserIdentity { username, hostname }),
         }))
     }
 
-    fn parse_user_identity(&mut self) -> Result<(String, String), ParserError> {
-        let username = self.parser.parse_literal_string()?;
-        let hostname = if self.consume_token("@") {
+    /// A principal can be an user or an role, the formats are same: 'name'@'host',
+    /// the host part can be omitted, take '%' as default.
+    fn parse_principal_identity(&mut self) -> Result<(String, String), ParserError> {
+        let name = self.parser.parse_literal_string()?;
+        let host = if self.consume_token("@") {
             self.parser.parse_literal_string()?
         } else {
             String::from("%")
         };
-        Ok((username, hostname))
+        Ok((name, host))
     }
 
     /// Parse a possibly qualified, possibly quoted identifier or wild card, e.g.
