@@ -74,7 +74,7 @@ pub struct RaftConfig {
     /// This host should be stored in raft store and be replicated to the raft cluster,
     /// i.e., when calling add_node().
     /// Use `localhost` by default.
-    #[clap(long, env = KVSRV_LISTEN_HOST, default_value = "localhost")]
+    #[clap(long, env = KVSRV_ADVERTISE_HOST, default_value = "localhost")]
     pub raft_advertise_host: String,
 
     /// The listening port for metadata communication.
@@ -178,6 +178,10 @@ impl RaftConfig {
 
     fn raft_api_listen_host_string(&self) -> String {
         format!("{}:{}", self.raft_listen_host, self.raft_api_port)
+    }
+
+    pub fn raft_api_advertise_host_string(&self) -> String {
+        format!("{}:{}", self.raft_advertise_host, self.raft_api_port)
     }
 
     /// Support ip address and hostname
