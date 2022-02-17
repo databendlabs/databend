@@ -211,9 +211,7 @@ impl UserApi for UserMgr {
     ) -> Result<Option<u64>> {
         let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
         let mut user_info = user_val_seq.await?.data;
-        user_info
-            .grants
-            .revoke_privileges(&username, &hostname, &object, privileges);
+        user_info.grants.revoke_privileges(&object, privileges);
         let seq = self.upsert_user_info(&user_info, seq).await?;
         Ok(Some(seq))
     }
