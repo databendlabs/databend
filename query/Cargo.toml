@@ -95,6 +95,7 @@ tokio-rustls = "0.23.2"
 tokio-stream = { version = "0.1.8", features = ["net"] }
 toml = "0.5.8"
 tonic = "0.6.2"
+uriparse = "0.6.3"
 uuid = { version = "1.0.0-alpha.1", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 parquet-format-async-temp = "0.2.0"

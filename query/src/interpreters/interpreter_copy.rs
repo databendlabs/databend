@@ -46,6 +46,10 @@ impl CopyInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(CopyInterpreter { ctx, plan }))
     }
+
+    async fn get_dal(&self) -> Result<DalOperator> {
+        todo!()
+    }
 }
 
 #[async_trait::async_trait]

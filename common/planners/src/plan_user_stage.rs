@@ -12,12 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_exception::ErrorCode;
-use common_exception::Result;
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub enum FileFormatType {
     Csv,
     Json,
@@ -27,41 +22,28 @@ pub enum FileFormatType {
     Xml,
 }
 
-impl FileFormatType {
-    pub fn to_file_format(typ: &str) -> Result<FileFormatType> {
-        Ok(match typ.to_uppercase().as_str() {
-            "CSV" => FileFormatType::Csv,
-            "JSON" => FileFormatType::Json,
-            "AVRO" => FileFormatType::Avro,
-            "ORC" => FileFormatType::Orc,
-            "PARQUET" => FileFormatType::Parquet,
-            "XML" => FileFormatType::Xml,
-            _ => Err(ErrorCode::SyntaxException(
-                "Unknown file format type, must one of  { CSV | JSON | AVRO | ORC | PARQUET | XML }",
-            )),
-        })
-    }
-}
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct DiskStoragePlan {}
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
-pub struct DiskStorage {}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
-pub struct S3Storage {
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct S3StoragePlan {
     pub credentials_aws_key_id: String,
     pub credentials_aws_secret_key: String,
     pub encryption_master_key: String,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
-pub enum FileStorageType {
-    Disk(DiskStorage),
-    S3(S3Storage),
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub enum FileStoragePlan {
+    // Location is local.
+    Disk(DiskStoragePlan),
+
+    // Location is aws s3.
+    S3(S3StoragePlan),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct UserStagePlan {
     pub location: String,
-    pub storage: FileStorageType,
+    pub storage: FileStoragePlan,
     pub file_format_type: FileFormatType,
 }

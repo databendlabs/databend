@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use common_datavalues2::DataSchemaRef;
-use common_exception::ErrorCode;
-use common_exception::Result;
 use common_meta_types::MetaId;
 
 use crate::UserStagePlan;
@@ -27,7 +23,8 @@ pub struct CopyPlan {
     pub tbl_name: String,
     pub tbl_id: MetaId,
     pub schema: DataSchemaRef,
-    pub stage: UserStagePlan,
+    pub stage_name: Option<String>,
+    pub stage_plan: UserStagePlan,
 }
 
 impl CopyPlan {
