@@ -17,10 +17,11 @@ runs:
 
     - name: Ubuntu install mold and clang
       shell: bash
-      if: ${{ matrix.config.os == 'ubuntu.latest' }}
+      if: ${{ matrix.config.os == 'ubuntu-latest' }}
       run: |
         apt update
         sudo apt install mold clang libc6
+        echo $(whereis mold)
 
     - name: Config Cargo
       shell: bash
