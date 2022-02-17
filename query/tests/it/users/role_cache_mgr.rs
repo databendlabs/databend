@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// use std::collections::HashMap;
+
 use common_base::tokio;
 use common_exception::Result;
+// use common_meta_types::RoleInfo;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_find_all_related_roles() -> Result<()> {
+    // let cached: HashMap<String, RoleInfo> = HashMap::new();
     Ok(())
 }

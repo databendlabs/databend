@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -90,12 +92,20 @@ impl RoleCacheMgr {
     pub async fn verify_privilege(
         &self,
         tenant: &str,
-        _role_identies: &[RoleIdentity],
-        _object: &GrantObject,
-        _privilege: UserPrivilegeType,
+        role_identies: &[RoleIdentity],
+        object: &GrantObject,
+        privilege: UserPrivilegeType,
     ) -> Result<bool> {
         self.maybe_reload(tenant).await?;
-        Ok(false)
+        let cached = self.cache.read();
+        let cached_roles = match cached.get(tenant) {
+            None => return Ok(false),
+            Some(cached_roles) => cached_roles,
+        };
+        let related_roles = find_all_related_roles(&cached_roles.roles, role_identies);
+        Ok(related_roles
+            .iter()
+            .any(|r| r.grants.verify_privilege(object, privilege)))
     }
 
     // Load roles data if not found in cache. Watch this tenant's role data in background if
@@ -124,10 +134,27 @@ async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &str) -> Resul
 }
 
 // An role can be granted with multiple roles, find all the related roles in a DFS manner
-fn _find_all_related_roles(
-    _cache: &HashMap<String, RoleInfo>,
-    _roles: &[RoleIdentity],
-    _tenant: &str,
+fn find_all_related_roles(
+    cache: &HashMap<String, RoleInfo>,
+    role_identities: &[RoleIdentity],
 ) -> Vec<RoleInfo> {
-    vec![]
+    let mut visited: HashSet<RoleIdentity> = HashSet::new();
+    let mut result: Vec<RoleInfo> = vec![];
+    let mut q: VecDeque<RoleIdentity> = role_identities.iter().cloned().collect();
+    while let Some(role_identity) = q.pop_front() {
+        if visited.contains(&role_identity) {
+            continue;
+        }
+        let cache_key = role_identity.to_string();
+        visited.insert(role_identity);
+        let role = match cache.get(&cache_key) {
+            None => continue,
+            Some(role) => role,
+        };
+        result.push(role.clone());
+        for related_role in role.grants.roles() {
+            q.push_back(related_role);
+        }
+    }
+    result
 }
