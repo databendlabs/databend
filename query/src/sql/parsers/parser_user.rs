@@ -40,13 +40,7 @@ impl<'a> DfParser<'a> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let name = self.parser.parse_literal_string()?;
-        let hostname = if self.consume_token("@") {
-            self.parser.parse_literal_string()?
-        } else {
-            String::from("%")
-        };
-
+        let (name, hostname) = self.parse_principal_identity();
         let auth_option = self.parse_auth_option()?;
 
         let create = DfCreateUser {
@@ -63,19 +57,11 @@ impl<'a> DfParser<'a> {
         let if_current_user = self.consume_token("USER")
             && self.parser.expect_token(&Token::LParen).is_ok()
             && self.parser.expect_token(&Token::RParen).is_ok();
-        let name = if !if_current_user {
-            self.parser.parse_literal_string()?
+
+        let (name, hostname) = if !if_current_user {
+            self.parse_principal_identity()?
         } else {
-            String::from("")
-        };
-        let hostname = if !if_current_user {
-            if self.consume_token("@") {
-                self.parser.parse_literal_string()?
-            } else {
-                String::from("%")
-            }
-        } else {
-            String::from("")
+            ("".to_string(), "".to_string())
         };
 
         let auth_option = self.parse_auth_option()?;
@@ -92,12 +78,7 @@ impl<'a> DfParser<'a> {
 
     pub(crate) fn parse_drop_user(&mut self) -> Result<DfStatement, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let name = self.parser.parse_literal_string()?;
-        let hostname = if self.consume_token("@") {
-            self.parser.parse_literal_string()?
-        } else {
-            String::from("%")
-        };
+        let (name, hostname) = self.parse_principal_name()?;
         let drop = DfDropUser {
             if_exists,
             name,
