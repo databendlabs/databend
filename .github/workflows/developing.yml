@@ -18,6 +18,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_HOME: $HOME/.cargo
   PROTOC: protoc
 
 jobs:

@@ -24,7 +24,8 @@ runs:
 
     - name: Config Cargo
       shell: bash
-      run: cp -p ./.cargo/ci.toml /.cargo/config.toml
+      run: |
+        mv ./.cargo/ci.toml $HOME/.cargo/config.toml
 
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
