@@ -42,12 +42,18 @@ Finally, the databend-related binary files are at ./target/release/{databend-met
 export STORAGE_TYPE=s3
 export S3_STORAGE_BUCKET=<your-s3-bucket>
 export S3_STORAGE_REGION=<your-s3-region>
-export S3_STORAGE_ENDPOINT_URL=<your-bucket>.s3.amazonaws.com
+export S3_STORAGE_ENDPOINT_URL=https://s3.amazonaws.com
 export S3_STORAGE_ACCESS_KEY_ID=<your-s3-key-id>
 export S3_STORAGE_SECRET_ACCESS_KEY=<your-s3-access-key>
 
 echo "Starting standalone DatabendQuery(release)"
 ./scripts/ci/deploy/databend-query-standalone.sh release
+```
+
+For S3 compatible services, please also set `S3_STORAGE_ENDPOINT_URL` to your S3 endpoint.
+
+```shell
+export S3_STORAGE_ENDPOINT_URL=http://127.0.0.1:9000
 ```
 
 ### 2.3 Test Databend
