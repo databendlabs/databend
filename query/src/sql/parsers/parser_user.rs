@@ -26,6 +26,7 @@ use sqlparser::tokenizer::Token;
 use crate::parser_err;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfAuthOption;
+use crate::sql::statements::DfCreateRole;
 use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfGrantObject;
@@ -49,8 +50,21 @@ impl<'a> DfParser<'a> {
             hostname,
             auth_options: auth_option,
         };
-
         Ok(DfStatement::CreateUser(create))
+    }
+
+    pub(crate) fn parse_create_role(&mut self) -> Result<DfStatement, ParserError> {
+        let if_not_exists =
+            self.parser
+                .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let (name, host) = self.parse_principal_identity();
+
+        let create = DfCreateRole {
+            if_not_exists,
+            name,
+            host,
+        };
+        Ok(DfStatement::CreateRole(create))
     }
 
     pub(crate) fn parse_alter_user(&mut self) -> Result<DfStatement, ParserError> {

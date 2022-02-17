@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues2::DataSchemaRef;
 
+use crate::plan_role_create::CreateRolePlan;
 use crate::AdminUseTenantPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
@@ -117,6 +118,9 @@ pub enum PlanNode {
     DropUser(DropUserPlan),
     GrantPrivilege(GrantPrivilegePlan),
     RevokePrivilege(RevokePrivilegePlan),
+
+    // Role.
+    CreateRole(CreateRolePlan),
 
     // Stage.
     CreateUserStage(CreateUserStagePlan),
