@@ -79,7 +79,7 @@ impl Function for ComparisonLikeFunction {
         args: &[&common_datavalues::DataTypePtr],
     ) -> Result<common_datavalues::DataTypePtr> {
         // expect array & struct
-        let not_string = args.iter().all(|arg| arg.data_type_id() != TypeID::String);
+        let not_string = args.iter().any(|arg| arg.data_type_id() != TypeID::String);
         if not_string {
             return Err(ErrorCode::BadArguments(format!(
                 "Illegal types {:?} of argument of function {}, must be strings",

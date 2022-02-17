@@ -111,15 +111,26 @@ fn test_not_eq_comparison_function() -> Result<()> {
 
 #[test]
 fn test_like_comparison_function() -> Result<()> {
-    let tests = vec![ScalarFunctionTest {
-        name: "like-passed",
-        columns: vec![
-            Series::from_data(vec!["abc", "abd", "abe", "abf"]),
-            Series::from_data(vec!["a%", "_b_", "abe", "a"]),
-        ],
-        expect: Series::from_data(vec![true, true, true, false]),
-        error: "",
-    }];
+    let tests = vec![
+        ScalarFunctionTest {
+            name: "like-passed",
+            columns: vec![
+                Series::from_data(vec!["abc", "abd", "abe", "abf"]),
+                Series::from_data(vec!["a%", "_b_", "abe", "a"]),
+            ],
+            expect: Series::from_data(vec![true, true, true, false]),
+            error: "",
+        },
+        ScalarFunctionTest {
+            name: "like-with-type-error",
+            columns: vec![
+                Series::from_data(vec!["abc", "abd"]),
+                Series::from_data(vec![1, 2]),
+            ],
+            expect: Series::from_data(vec![true, true]),
+            error: "Illegal types [String, Int32] of argument of function like, must be strings",
+        },
+    ];
 
     test_scalar_functions(ComparisonLikeFunction::try_create_like("")?, &tests)
 }
@@ -141,15 +152,26 @@ fn test_not_like_comparison_function() -> Result<()> {
 
 #[test]
 fn test_regexp_comparison_function() -> Result<()> {
-    let tests = vec![ScalarFunctionTest {
-        name: "regexp-passed",
-        columns: vec![
-            Series::from_data(vec!["abc", "abd", "abe", "abf", "abc", ""]),
-            Series::from_data(vec!["^a", "^b", "abe", "a", "", ""]),
-        ],
-        expect: Series::from_data(vec![true, false, true, true, false, true]),
-        error: "",
-    }];
+    let tests = vec![
+        ScalarFunctionTest {
+            name: "regexp-passed",
+            columns: vec![
+                Series::from_data(vec!["abc", "abd", "abe", "abf", "abc", ""]),
+                Series::from_data(vec!["^a", "^b", "abe", "a", "", ""]),
+            ],
+            expect: Series::from_data(vec![true, false, true, true, false, true]),
+            error: "",
+        },
+        ScalarFunctionTest {
+            name: "regexp-with-type-error",
+            columns: vec![
+                Series::from_data(vec!["abc", "abd"]),
+                Series::from_data(vec![1, 2]),
+            ],
+            expect: Series::from_data(vec![true, false]),
+            error: "Illegal types [String, Int32] of argument of function regexp, must be strings",
+        },
+    ];
 
     test_scalar_functions(ComparisonRegexpFunction::try_create_regexp("")?, &tests)
 }
