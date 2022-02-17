@@ -97,8 +97,15 @@ impl Series {
 
     pub fn remove_nullable(column: &ColumnRef) -> ColumnRef {
         if column.is_nullable() {
-            let col = unsafe { Self::static_cast::<NullableColumn>(column) };
-            col.inner().clone()
+            //constant nullable ?
+            if column.is_const() {
+                let col: &ConstColumn = unsafe { Self::static_cast(column) };
+                let inner = Self::remove_nullable(col.inner());
+                ConstColumn::new(inner, col.len()).arc()
+            } else {
+                let col = unsafe { Self::static_cast::<NullableColumn>(column) };
+                col.inner().clone()
+            }
         } else {
             column.clone()
         }
