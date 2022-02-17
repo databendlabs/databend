@@ -79,13 +79,14 @@ fn test_grant_object_contains() -> Result<()> {
         },
     ];
     for t in tests {
-        assert!(
-            t.lhs.contains(&t.rhs) == t.expect,
+        assert_eq!(
+            t.lhs.contains(&t.rhs),
+            t.expect,
             "{} contains {} expect {}",
             &t.lhs,
             &t.rhs,
             &t.expect,
-        )
+        );
     }
     Ok(())
 }
@@ -106,8 +107,8 @@ fn test_user_grant_entry() -> Result<()> {
         &GrantObject::Database("db1".into()),
         UserPrivilegeType::Insert
     ));
-    assert!(!grant.verify_privilege(
-        &GrantObject::Database("db1".into()),
+    assert!(grant.verify_privilege(
+        &GrantObject::Database("db2".into()),
         UserPrivilegeType::Create
     ));
 
@@ -184,7 +185,7 @@ fn test_user_grant_set() -> Result<()> {
         &GrantObject::Table("db1".into(), "table1".into()),
         make_bitflags!(UserPrivilegeType::{Select | Create}).into(),
     );
-    assert_eq!(3, grants.entries().len());
+    assert_eq!(2, grants.entries().len());
 
     grants.revoke_privileges(
         &GrantObject::Global,

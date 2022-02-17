@@ -26,7 +26,7 @@ impl RoleIdentity {
     }
 
     pub fn parse(identity: &str) -> Self {
-        let chunks: Vec<_> = identity.split("@").collect();
+        let chunks: Vec<_> = identity.split('@').collect();
         let name = chunks[0].trim_matches('\'').to_string();
         if chunks.len() <= 1 {
             return Self {
