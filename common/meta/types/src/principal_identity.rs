@@ -23,6 +23,12 @@ pub enum PrincipalIdentity {
     Role(RoleIdentity),
 }
 
+impl PrincipalIdentity {
+    pub fn user(name: String, host: String) -> Self {
+        PrincipalIdentity::User(UserIdentity::new(name, host))
+    }
+}
+
 impl fmt::Display for PrincipalIdentity {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         match self {
