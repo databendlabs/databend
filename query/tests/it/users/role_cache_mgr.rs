@@ -45,7 +45,7 @@ async fn test_role_cache_mgr() -> Result<()> {
         role_cache_mgr
             .verify_privilege(
                 "tenant1",
-                &vec![RoleIdentity::parse("role1")],
+                &[RoleIdentity::parse("role1")],
                 &GrantObject::Database("db1".to_string()),
                 UserPrivilegeType::Create,
             )
@@ -55,7 +55,7 @@ async fn test_role_cache_mgr() -> Result<()> {
         !role_cache_mgr
             .verify_privilege(
                 "tenant1",
-                &vec![RoleIdentity::parse("role1")],
+                &[RoleIdentity::parse("role1")],
                 &GrantObject::Global,
                 UserPrivilegeType::Create,
             )
@@ -65,7 +65,7 @@ async fn test_role_cache_mgr() -> Result<()> {
         !role_cache_mgr
             .verify_privilege(
                 "tenant2",
-                &vec![RoleIdentity::parse("role1")],
+                &[RoleIdentity::parse("role1")],
                 &GrantObject::Database("db1".to_string()),
                 UserPrivilegeType::Create,
             )
