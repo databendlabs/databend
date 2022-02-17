@@ -66,6 +66,14 @@ impl DateTime64Type {
         let v = v * 10_i64.pow(9 - self.precision as u32);
         v / 1_000_000_000
     }
+
+    pub fn format_string(&self) -> String {
+        if self.precision == 0 {
+            "%Y-%m-%d %H:%M:%S".to_string()
+        } else {
+            format!("%Y-%m-%d %H:%M:%S%.{}f", self.precision)
+        }
+    }
 }
 
 #[typetag::serde]
