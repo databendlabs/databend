@@ -862,7 +862,7 @@ impl Status {
 
     pub fn find_unused_local_port() -> String {
         format!(
-            "0.0.0.0:{}",
+            "127.0.0.1:{}",
             portpicker::pick_unused_port().expect("cannot find a non-occupied port")
         )
     }

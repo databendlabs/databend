@@ -48,7 +48,7 @@ macro_rules! build_status {
             path: Some("./".to_string()),
             log_dir: Some("./".to_string()),
         };
-        query_config.config.query.http_handler_host = "0.0.0.0".to_string();
+        query_config.config.query.http_handler_host = "127.0.0.1".to_string();
         query_config.config.query.http_handler_port = $http_port;
         query_config.config.query.http_api_address = format!("127.0.0.1:456");
 
@@ -81,7 +81,7 @@ fn test_generate_query_probe() -> Result<()> {
         let (_, query_url) = build_query_endpoint(&status).unwrap();
         assert_eq!(
             query_url,
-            "http://0.0.0.0:8888/v1/query?wait_time=-1".to_string()
+            "http://127.0.0.1:8888/v1/query?wait_time=-1".to_string()
         );
     }
     Ok(())
