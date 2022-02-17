@@ -39,23 +39,24 @@ use super::ToYYYYMMFunction;
 use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
-use crate::scalars::function_factory::FactoryCreator;
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function2_factory::Factory2Creator;
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 use crate::scalars::Function2Factory;
 
 #[derive(Clone)]
 pub struct DateFunction {}
 
 impl DateFunction {
-    fn round_function_creator(round: u32) -> FunctionDescription {
-        let creator: FactoryCreator = Box::new(move |display_name| -> Result<Box<dyn Function>> {
-            RoundFunction::try_create(display_name, round)
-        });
+    fn round_function_creator(round: u32) -> Function2Description {
+        let creator: Factory2Creator =
+            Box::new(move |display_name| -> Result<Box<dyn Function2>> {
+                RoundFunction::try_create(display_name, round)
+            });
 
-        FunctionDescription::creator(creator).features(
+        Function2Description::creator(creator).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()
@@ -64,6 +65,13 @@ impl DateFunction {
     }
 
     pub fn register(factory: &mut FunctionFactory) {
+        factory.register("toStartOfWeek", ToStartOfWeekFunction::desc());
+    }
+
+    pub fn register2(factory: &mut Function2Factory) {
+        factory.register("today", TodayFunction::desc());
+        factory.register("yesterday", YesterdayFunction::desc());
+        factory.register("tomorrow", TomorrowFunction::desc());
         factory.register("now", NowFunction::desc());
         factory.register("toYYYYMM", ToYYYYMMFunction::desc());
         factory.register("toYYYYMMDD", ToYYYYMMDDFunction::desc());
@@ -71,7 +79,7 @@ impl DateFunction {
         factory.register("toStartOfYear", ToStartOfYearFunction::desc());
         factory.register("toStartOfISOYear", ToStartOfISOYearFunction::desc());
         factory.register("toStartOfQuarter", ToStartOfQuarterFunction::desc());
-        factory.register("toStartOfWeek", ToStartOfWeekFunction::desc());
+
         factory.register("toStartOfMonth", ToStartOfMonthFunction::desc());
         factory.register("toMonth", ToMonthFunction::desc());
         factory.register("toDayOfYear", ToDayOfYearFunction::desc());
@@ -94,12 +102,8 @@ impl DateFunction {
         factory.register("timeSlot", Self::round_function_creator(30 * 60));
         factory.register("toStartOfHour", Self::round_function_creator(60 * 60));
         factory.register("toStartOfDay", Self::round_function_creator(60 * 60 * 24));
-    }
 
-    pub fn register2(factory: &mut Function2Factory) {
-        factory.register("today", TodayFunction::desc());
-        factory.register("yesterday", YesterdayFunction::desc());
-        factory.register("tomorrow", TomorrowFunction::desc());
+        //interval functions
         factory.register_arithmetic("addYears", AddYearsFunction::desc(1));
         factory.register_arithmetic("addMonths", AddMonthsFunction::desc(1));
         factory.register_arithmetic("addDays", AddDaysFunction::desc(1));
