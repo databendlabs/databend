@@ -50,7 +50,8 @@ impl Interpreter for KillInterpreter {
     ) -> Result<SendableDataBlockStream> {
         self.ctx
             .get_current_session()
-            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super)?;
+            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super)
+            .await?;
 
         let id = &self.plan.id;
         match self.ctx.get_session_by_id(id) {

@@ -49,7 +49,8 @@ impl Interpreter for DropDatabaseInterpreter {
     ) -> Result<SendableDataBlockStream> {
         self.ctx
             .get_current_session()
-            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Drop)?;
+            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Drop)
+            .await?;
 
         let catalog = self.ctx.get_catalog();
         catalog.drop_database(self.plan.clone().into()).await?;

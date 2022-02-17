@@ -15,6 +15,7 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
+use common_meta_types::RoleIdentity;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserPrivilegeSet;
 
@@ -22,9 +23,9 @@ use crate::users::UserApiProvider;
 
 impl UserApiProvider {
     // Get one role from by tenant.
-    pub async fn get_role(&self, tenant: &str, role_name: &str) -> Result<RoleInfo> {
+    pub async fn get_role(&self, tenant: &str, role: &RoleIdentity) -> Result<RoleInfo> {
         let client = self.get_role_api_client(tenant)?;
-        let role_data = client.get_role(role_name, None).await?.data;
+        let role_data = client.get_role(role, None).await?.data;
         Ok(role_data)
     }
 
@@ -59,20 +60,13 @@ impl UserApiProvider {
     pub async fn grant_role_privileges(
         &self,
         tenant: &str,
-        role_name: &str,
-        host_name: &str,
+        role: &RoleIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
         let client = self.get_role_api_client(tenant)?;
         client
-            .grant_role_privileges(
-                role_name.to_string(),
-                host_name.to_string(),
-                object,
-                privileges,
-                None,
-            )
+            .grant_role_privileges(role, object, privileges, None)
             .await
             .map_err(|e| e.add_message_back("(while set role privileges)"))
     }
@@ -80,28 +74,26 @@ impl UserApiProvider {
     pub async fn revoke_role_privileges(
         &self,
         tenant: &str,
-        role_name: &str,
-        host_name: &str,
+        role: &RoleIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
         let client = self.get_role_api_client(tenant)?;
         client
-            .revoke_role_privileges(
-                role_name.to_string(),
-                host_name.to_string(),
-                object,
-                privileges,
-                None,
-            )
+            .revoke_role_privileges(role, object, privileges, None)
             .await
             .map_err(|e| e.add_message_back("(while revoke role privileges)"))
     }
 
     // Drop a role by name
-    pub async fn drop_role(&self, tenant: &str, role_name: &str, if_exists: bool) -> Result<()> {
+    pub async fn drop_role(
+        &self,
+        tenant: &str,
+        role: &RoleIdentity,
+        if_exists: bool,
+    ) -> Result<()> {
         let client = self.get_role_api_client(tenant)?;
-        let drop_role = client.drop_role(role_name.to_string(), None);
+        let drop_role = client.drop_role(role, None);
         match drop_role.await {
             Ok(res) => Ok(res),
             Err(e) => {

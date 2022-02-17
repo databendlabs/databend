@@ -17,21 +17,31 @@ use serde::Serialize;
 
 use crate::MetaError;
 use crate::MetaResult;
+use crate::RoleIdentity;
 use crate::UserGrantSet;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(default)]
 pub struct RoleInfo {
     pub name: String,
+    pub host: String,
 
     pub grants: UserGrantSet,
 }
 
 impl RoleInfo {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: String, host: String) -> Self {
         Self {
             name,
+            host,
             grants: UserGrantSet::empty(),
+        }
+    }
+
+    pub fn identity(&self) -> RoleIdentity {
+        RoleIdentity {
+            name: self.name.clone(),
+            host: self.host.clone(),
         }
     }
 }
