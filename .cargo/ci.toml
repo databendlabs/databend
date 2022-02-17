@@ -1,0 +1,5 @@
+# ci.toml
+# this file will be moved to $CARGO_HOME as cargo config of CI
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+link-arg = { "-fuse-ld" = "mold" }

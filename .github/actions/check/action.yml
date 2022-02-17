@@ -1,5 +1,5 @@
-name: 'Check'
-description: 'Check will do all essential checks'
+name: "Check"
+description: "Check will do all essential checks"
 inputs:
   github_token:
     description: "Github Token"
@@ -12,8 +12,19 @@ runs:
 
     - uses: arduino/setup-protoc@v1
       with:
-        version: '3.x'
+        version: "3.x"
         repo-token: ${{ inputs.github_token }}
+
+    - name: Ubuntu install mold and clang
+      shell: bash
+      if: ${{ matrix.config.os == 'ubuntu.latest' }}
+      run: |
+        apt update
+        sudo apt install mold clang libc6
+
+    - name: Config Cargo
+      shell: bash
+      run: mv -p ./.cargo/ci.toml /.cargo/config.toml
 
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1

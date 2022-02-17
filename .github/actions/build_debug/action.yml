@@ -1,5 +1,5 @@
-name: 'Build Debug'
-description: 'Build with debug profile'
+name: "Build Debug"
+description: "Build with debug profile"
 inputs:
   github_token:
     description: "Github Token"
@@ -12,7 +12,7 @@ runs:
 
     - uses: arduino/setup-protoc@v1
       with:
-        version: '3.x'
+        version: "3.x"
         repo-token: ${{ inputs.github_token }}
 
     - name: Add rust target
