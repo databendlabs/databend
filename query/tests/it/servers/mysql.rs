@@ -35,7 +35,7 @@ async fn test_generic_code_with_on_query() -> Result<()> {
     let mut handler =
         MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
-    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
+    let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let runnable_server = handler.start(listening).await?;
     let mut connection = create_connection(runnable_server.port()).await?;
     let result = connection.query_iter("SELECT 1, 2, 3;").await;
@@ -50,7 +50,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
     let mut handler =
         MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
-    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
+    let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
 
     {
@@ -109,7 +109,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
     let mut handler =
         MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
-    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
+    let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
 
     let start_barriers = Arc::new(Barrier::new(3));

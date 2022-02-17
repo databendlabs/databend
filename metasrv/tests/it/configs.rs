@@ -47,17 +47,18 @@ fn test_load_config() -> anyhow::Result<()> {
         r#"
 log_level = "ERROR"
 log_dir = "foo/logs"
-metric_api_address = "0.0.0.0:8000"
-admin_api_address = "0.0.0.0:9000"
+metric_api_address = "127.0.0.1:8000"
+admin_api_address = "127.0.0.1:9000"
 admin_tls_server_cert = "admin tls cert"
 admin_tls_server_key = "admin tls key"
-grpc_api_address = "0.0.0.0:10000"
+grpc_api_address = "127.0.0.1:10000"
 grpc_tls_server_cert = "grpc server cert"
 grpc_tls_server_key = "grpc server key"
 
 [raft_config]
 config_id = "raft config id"
-raft_listen_host = "0.0.0.0"
+raft_api_host = "127.0.0.1"
+raft_listen_host = "127.0.0.1"
 raft_api_port = 11000
 raft_dir = "raft dir"
 no_sync = true
@@ -74,15 +75,15 @@ sled_tree_prefix = "sled_foo"
     let mut cfg = Config::load_from_toml(file_path.to_str().unwrap())?;
     assert_eq!(cfg.log_level, "ERROR");
     assert_eq!(cfg.log_dir, "foo/logs");
-    assert_eq!(cfg.metric_api_address, "0.0.0.0:8000");
-    assert_eq!(cfg.admin_api_address, "0.0.0.0:9000");
+    assert_eq!(cfg.metric_api_address, "127.0.0.1:8000");
+    assert_eq!(cfg.admin_api_address, "127.0.0.1:9000");
     assert_eq!(cfg.admin_tls_server_cert, "admin tls cert");
     assert_eq!(cfg.admin_tls_server_key, "admin tls key");
-    assert_eq!(cfg.grpc_api_address, "0.0.0.0:10000");
+    assert_eq!(cfg.grpc_api_address, "127.0.0.1:10000");
     assert_eq!(cfg.grpc_tls_server_cert, "grpc server cert");
     assert_eq!(cfg.grpc_tls_server_key, "grpc server key");
     assert_eq!(cfg.raft_config.config_id, "raft config id");
-    assert_eq!(cfg.raft_config.raft_listen_host, "0.0.0.0");
+    assert_eq!(cfg.raft_config.raft_listen_host, "127.0.0.1");
     assert_eq!(cfg.raft_config.raft_api_port, 11000);
     assert_eq!(cfg.raft_config.raft_dir, "raft dir");
     assert!(cfg.raft_config.no_sync);
