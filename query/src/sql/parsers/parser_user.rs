@@ -15,6 +15,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
+use common_meta_types::RoleIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
@@ -53,20 +54,6 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::CreateUser(create))
     }
 
-    pub(crate) fn parse_create_role(&mut self) -> Result<DfStatement, ParserError> {
-        let if_not_exists =
-            self.parser
-                .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let (name, host) = self.parse_principal_identity();
-
-        let create = DfCreateRole {
-            if_not_exists,
-            name,
-            host,
-        };
-        Ok(DfStatement::CreateRole(create))
-    }
-
     pub(crate) fn parse_alter_user(&mut self) -> Result<DfStatement, ParserError> {
         let if_current_user = self.consume_token("USER")
             && self.parser.expect_token(&Token::LParen).is_ok()
@@ -99,6 +86,31 @@ impl<'a> DfParser<'a> {
             hostname,
         };
         Ok(DfStatement::DropUser(drop))
+    }
+
+    // Create role
+    pub(crate) fn parse_create_role(&mut self) -> Result<DfStatement, ParserError> {
+        let if_not_exists =
+            self.parser
+                .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let (name, host) = self.parse_principal_identity();
+
+        let create = DfCreateRole {
+            if_not_exists,
+            role_identity: RoleIdentity::new(name, host),
+        };
+        Ok(DfStatement::CreateRole(create))
+    }
+
+    // Drop role
+    pub(crate) fn parse_drop_role(&mut self) -> Result<DfStatement, ParserError> {
+        let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let (name, host) = self.parse_principal_name()?;
+        let drop = DropRole {
+            if_exists,
+            role_identity: RoleIdentity::new(name, host),
+        };
+        Ok(DfStatement::DropRole(drop))
     }
 
     // Grant.

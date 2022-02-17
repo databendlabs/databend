@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,12 +19,12 @@ use common_datavalues2::DataSchemaRef;
 use common_meta_types::RoleIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct CreateRolePlan {
-    pub if_not_exists: bool,
+pub struct DropRolePlan {
+    pub if_exists: bool,
     pub role_identity: RoleIdentity,
 }
 
-impl CreateRolePlan {
+impl DropRolePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

@@ -29,6 +29,7 @@ mod statement_create_user;
 mod statement_describe_stage;
 mod statement_describe_table;
 mod statement_drop_database;
+mod statement_drop_role;
 mod statement_drop_stage;
 mod statement_drop_table;
 mod statement_drop_udf;

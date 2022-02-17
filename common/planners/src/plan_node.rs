@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_datavalues2::DataSchemaRef;
 
-use crate::plan_role_create::CreateRolePlan;
 use crate::AdminUseTenantPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
@@ -25,6 +24,7 @@ use crate::AlterUserUDFPlan;
 use crate::BroadcastPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
+use crate::CreateRolePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
@@ -32,6 +32,7 @@ use crate::CreateUserUDFPlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
+use crate::DropRolePlan;
 use crate::DropTablePlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
@@ -121,6 +122,7 @@ pub enum PlanNode {
 
     // Role.
     CreateRole(CreateRolePlan),
+    DropRole(DropRolePlan),
 
     // Stage.
     CreateUserStage(CreateUserStagePlan),

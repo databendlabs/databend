@@ -112,6 +112,7 @@ pub enum DfStatement {
 
     // Role
     CreateRole(DfCreateRole),
+    DropRole(DfDropRole),
 
     // Copy
     Copy(DfCopy),
