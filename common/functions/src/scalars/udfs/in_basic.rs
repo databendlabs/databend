@@ -17,6 +17,7 @@ use std::fmt;
 
 use common_datavalues2::prelude::*;
 use common_datavalues2::type_coercion::aggregate_types;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use ordered_float::OrderedFloat;
 
@@ -92,6 +93,19 @@ impl<const NEGATED: bool> Function2 for InFunction<NEGATED> {
     }
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        for dt in args {
+            let type_id = remove_nullable(dt).data_type_id();
+            if type_id.is_date_or_date_time()
+                || type_id.is_interval()
+                || type_id.is_array()
+                || type_id.is_struct()
+            {
+                return Err(ErrorCode::UnexpectedError(format!(
+                    "{} type is not supported for IN now",
+                    type_id
+                )));
+            }
+        }
         let input_dt = remove_nullable(args[0]).data_type_id();
         if input_dt == TypeID::Null {
             return Ok(NullType::arc());
@@ -100,6 +114,21 @@ impl<const NEGATED: bool> Function2 for InFunction<NEGATED> {
     }
 
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        for col in columns {
+            let dt = col.column().data_type();
+            let type_id = remove_nullable(&dt).data_type_id();
+            if type_id.is_date_or_date_time()
+                || type_id.is_interval()
+                || type_id.is_array()
+                || type_id.is_struct()
+            {
+                return Err(ErrorCode::UnexpectedError(format!(
+                    "{} type is not supported for IN now",
+                    type_id
+                )));
+            }
+        }
+
         let input_col = &columns[0];
         let input_dt = remove_nullable(input_col.data_type()).data_type_id();
         if input_dt == TypeID::Null {
