@@ -12,38 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
-pub enum FileFormatType {
-    Csv,
-    Json,
-    Avro,
-    Orc,
-    Parquet,
-    Xml,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
-pub struct DiskStoragePlan {}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
-pub struct S3StoragePlan {
-    pub credentials_aws_key_id: String,
-    pub credentials_aws_secret_key: String,
-    pub encryption_master_key: String,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
-pub enum FileStoragePlan {
-    // Location is local.
-    Disk(DiskStoragePlan),
-
-    // Location is aws s3.
-    S3(S3StoragePlan),
-}
+use common_meta_types::UserStageInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct UserStagePlan {
-    pub location: String,
-    pub storage: FileStoragePlan,
-    pub file_format_type: FileFormatType,
+    pub stage_info: UserStageInfo,
 }

@@ -52,7 +52,7 @@ impl TryFrom<Vec<u8>> for UserSetting {
     fn try_from(value: Vec<u8>) -> Result<Self> {
         match serde_json::from_slice(&value) {
             Ok(info) => Ok(info),
-            Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
+            Err(serialize_error) => Err(ErrorCode::IllegalUserSettingFormat(format!(
                 "Cannot deserialize setting from bytes. cause {}",
                 serialize_error
             ))),

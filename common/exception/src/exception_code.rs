@@ -155,6 +155,7 @@ build_exceptions! {
     UserAlreadyExists(2202),
     IllegalUserInfoFormat(2203),
     UnknownRole(2204),
+    IllegalUserSettingFormat(2205),
 
     // Meta api error codes.
     DatabaseAlreadyExists(2301),
@@ -169,6 +170,7 @@ build_exceptions! {
     // Stage error codes.
     UnknownStage(2501),
     StageAlreadyExists(2502),
+    IllegalUserStageFormat(2503),
 
     // User defined function error codes.
     IllegalUDFFormat(2601),
