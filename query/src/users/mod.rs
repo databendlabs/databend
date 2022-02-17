@@ -20,7 +20,7 @@ mod user_stage;
 mod user_udf;
 
 pub mod auth;
-mod role_cache_mgr;
+pub mod role_cache_mgr;
 mod user_setting;
 
 pub use role_cache_mgr::RoleCacheMgr;

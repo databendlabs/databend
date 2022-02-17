@@ -92,7 +92,7 @@ impl RoleCacheMgr {
     pub async fn verify_privilege(
         &self,
         tenant: &str,
-        role_identies: &[RoleIdentity],
+        role_identities: &[RoleIdentity],
         object: &GrantObject,
         privilege: UserPrivilegeType,
     ) -> Result<bool> {
@@ -102,7 +102,7 @@ impl RoleCacheMgr {
             None => return Ok(false),
             Some(cached_roles) => cached_roles,
         };
-        let related_roles = find_all_related_roles(&cached_roles.roles, role_identies);
+        let related_roles = find_all_related_roles(&cached_roles.roles, role_identities);
         Ok(related_roles
             .iter()
             .any(|r| r.grants.verify_privilege(object, privilege)))
@@ -134,7 +134,7 @@ async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &str) -> Resul
 }
 
 // An role can be granted with multiple roles, find all the related roles in a DFS manner
-fn find_all_related_roles(
+pub fn find_all_related_roles(
     cache: &HashMap<String, RoleInfo>,
     role_identities: &[RoleIdentity],
 ) -> Vec<RoleInfo> {

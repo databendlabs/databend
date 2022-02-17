@@ -24,6 +24,19 @@ impl RoleIdentity {
     pub fn new(name: String, host: String) -> Self {
         Self { name, host }
     }
+
+    pub fn parse(identity: &str) -> Self {
+        let chunks: Vec<_> = identity.split("@").collect();
+        let name = chunks[0].trim_matches('\'').to_string();
+        if chunks.len() <= 1 {
+            return Self {
+                name,
+                host: "%".to_string(),
+            };
+        }
+        let host = chunks[1].trim_matches('\'').to_string();
+        Self { name, host }
+    }
 }
 
 impl fmt::Display for RoleIdentity {
