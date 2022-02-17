@@ -14,7 +14,7 @@ fi
 
 
 # do the Data integrity check
-sha256sum -c $CURDIR/ontime.sha1sum.txt
+echo "429c47cdd49b7d75eec9b9244c8b1288edd132506203e37d2d1e70e1ac1eccc7 /tmp/ontime.csv" | sha256sum --check
 if [ $? -eq 0 ]; then
 	echo "dataset checksum passed"
 else
