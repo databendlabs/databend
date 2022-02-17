@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use common_base::tokio;
 use common_base::tokio::task::JoinHandle;
@@ -31,8 +32,8 @@ use common_tracing::tracing;
 use crate::users::UserApiProvider;
 
 struct CachedRoles {
-    #[allow(dead_code)]
     roles: HashMap<String, RoleInfo>,
+    cached_at: Instant,
 }
 
 pub struct RoleCacheMgr {
@@ -113,7 +114,14 @@ impl RoleCacheMgr {
     async fn maybe_reload(&self, tenant: &str) -> Result<()> {
         let need_reload = {
             let cached = self.cache.read();
-            cached.get(tenant).is_none()
+            match cached.get(tenant) {
+                None => true,
+                Some(cached_roles) => {
+                    // if the cache is too old, force reload the data (the background polling task
+                    // may got some network errors, leaves the cache outdated)
+                    cached_roles.cached_at.elapsed() >= self.polling_interval * 2
+                }
+            }
         };
         if need_reload {
             let data = load_roles_data(&self.user_api, tenant).await?;
@@ -130,7 +138,10 @@ async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &str) -> Resul
         .into_iter()
         .map(|r| (r.identity().to_string(), r))
         .collect::<HashMap<_, _>>();
-    Ok(CachedRoles { roles: roles_map })
+    Ok(CachedRoles {
+        roles: roles_map,
+        cached_at: Instant::now(),
+    })
 }
 
 // An role can be granted with multiple roles, find all the related roles in a DFS manner

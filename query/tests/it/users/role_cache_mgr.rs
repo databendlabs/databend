@@ -17,9 +17,62 @@ use std::collections::HashSet;
 
 use common_base::tokio;
 use common_exception::Result;
+use common_meta_types::GrantObject;
 use common_meta_types::RoleIdentity;
 use common_meta_types::RoleInfo;
+use common_meta_types::UserPrivilegeSet;
+use common_meta_types::UserPrivilegeType;
 use databend_query::users::role_cache_mgr::find_all_related_roles;
+use databend_query::users::RoleCacheMgr;
+use databend_query::users::UserApiProvider;
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_role_cache_mgr() -> Result<()> {
+    let conf = crate::tests::ConfigBuilder::create().config();
+    let user_api = UserApiProvider::create_global(conf).await?;
+
+    let mut role1 = RoleInfo::new("role1".to_string(), "%".to_string());
+    role1.grants.grant_privileges(
+        "role1",
+        "%",
+        &GrantObject::Database("db1".to_string()),
+        UserPrivilegeSet::available_privileges_on_database(),
+    );
+    user_api.add_role("tenant1", role1).await?;
+
+    let role_cache_mgr = RoleCacheMgr::new(user_api);
+    assert!(
+        role_cache_mgr
+            .verify_privilege(
+                "tenant1",
+                &vec![RoleIdentity::parse("role1")],
+                &GrantObject::Database("db1".to_string()),
+                UserPrivilegeType::Create,
+            )
+            .await?
+    );
+    assert!(
+        !role_cache_mgr
+            .verify_privilege(
+                "tenant1",
+                &vec![RoleIdentity::parse("role1")],
+                &GrantObject::Global,
+                UserPrivilegeType::Create,
+            )
+            .await?
+    );
+    assert!(
+        !role_cache_mgr
+            .verify_privilege(
+                "tenant2",
+                &vec![RoleIdentity::parse("role1")],
+                &GrantObject::Database("db1".to_string()),
+                UserPrivilegeType::Create,
+            )
+            .await?
+    );
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_find_all_related_roles() -> Result<()> {
