@@ -26,7 +26,6 @@ use super::cast_with_type::CastOptions;
 
 const DATE_FMT: &str = "%Y-%m-%d";
 const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
-const TIME64_FMT: &str = "%Y-%m-%d %H:%M:%S%.f";
 
 pub fn cast_from_date16(
     column: &ColumnRef,
@@ -144,6 +143,7 @@ pub fn cast_from_datetime32(
 
 pub fn cast_from_datetime64(
     column: &ColumnRef,
+    from_type: &DataTypePtr,
     data_type: &DataTypePtr,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
@@ -151,21 +151,22 @@ pub fn cast_from_datetime64(
     let c: &Int64Column = Series::check_get(&c)?;
     let size = c.len();
 
-    let date_time64 = data_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
+    let date_time64 = from_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
 
     match data_type.data_type_id() {
         TypeID::String => {
             let mut builder = MutableStringColumn::with_capacity(size);
             for v in c.iter() {
-                let s = datetime_to_string(date_time64.utc_timestamp(*v), TIME64_FMT);
+                let s = datetime_to_string(
+                    date_time64.utc_timestamp(*v),
+                    date_time64.format_string().as_str(),
+                );
                 builder.append_value(s.as_bytes());
             }
             Ok((builder.to_column(), None))
         }
 
         TypeID::Date16 => {
-            let date_time64 = data_type.as_any().downcast_ref::<DateTime64Type>().unwrap();
-
             let it = c
                 .iter()
                 .map(|v| (date_time64.seconds(*v) / 24 / 3600) as u16);
