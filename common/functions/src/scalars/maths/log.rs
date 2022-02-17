@@ -14,153 +14,134 @@
 
 use std::f64::consts::E;
 use std::fmt;
+use std::marker::PhantomData;
+use std::sync::Arc;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::Result;
+use num_traits::AsPrimitive;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::EvalContext;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
+use crate::scalars::ScalarBinaryExpression;
+use crate::scalars::ScalarUnaryExpression;
+
+/// Const f64 is now allowed.
+/// feature(adt_const_params) is not stable & complete
+pub trait Base: Send + Sync + Clone + 'static {
+    fn base() -> f64;
+}
 
 #[derive(Clone)]
-pub struct GenericLogFunction {
-    display_name: String,
-    default_base: f64,
+pub struct EBase;
+
+#[derive(Clone)]
+pub struct TenBase;
+
+#[derive(Clone)]
+pub struct TwoBase;
+
+impl Base for EBase {
+    fn base() -> f64 {
+        E
+    }
 }
 
-impl GenericLogFunction {
-    pub fn try_create(display_name: &str, default_base: f64) -> Result<Box<dyn Function>> {
+impl Base for TenBase {
+    fn base() -> f64 {
+        10f64
+    }
+}
+
+impl Base for TwoBase {
+    fn base() -> f64 {
+        2f64
+    }
+}
+#[derive(Clone)]
+pub struct GenericLogFunction<T> {
+    display_name: String,
+    t: PhantomData<T>,
+}
+
+impl<T: Base> GenericLogFunction<T> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
-            default_base,
+            t: PhantomData,
         }))
     }
-}
 
-impl Function for GenericLogFunction {
-    fn name(&self) -> &str {
-        &*self.display_name
-    }
-
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::Float64;
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        Ok(DataTypeAndNullable::create(&dt, nullable))
-    }
-
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let result = if columns.len() == 1 {
-            // Log(num) with default_base if one arg
-            let num_series = columns[0]
-                .column()
-                .to_minimal_array()?
-                .cast_with_type(&DataType::Float64)?;
-            num_series
-                .f64()?
-                .apply_cast_numeric(|v| v.log(self.default_base))
-        } else {
-            // Log(base, num) if two args
-            let base_column: &DataColumn =
-                &columns[0].column().cast_with_type(&DataType::Float64)?;
-            let num_column: &DataColumn =
-                &columns[1].column().cast_with_type(&DataType::Float64)?;
-
-            match (base_column, num_column) {
-                (DataColumn::Array(base_series), DataColumn::Constant(v, _)) => {
-                    if v.is_null() {
-                        DFFloat64Array::full_null(input_rows)
-                    } else {
-                        let v: f64 = DFTryFrom::try_from(v.clone())?;
-                        base_series.f64()?.apply_cast_numeric(|base| v.log(base))
-                    }
-                }
-                (DataColumn::Constant(base, _), DataColumn::Array(num_series)) => {
-                    if base.is_null() {
-                        DFFloat64Array::full_null(input_rows)
-                    } else {
-                        let base = DFTryFrom::try_from(base.clone())?;
-                        num_series.f64()?.apply_cast_numeric(|v| v.log(base))
-                    }
-                }
-                _ => {
-                    let base_series = base_column.to_minimal_array()?;
-                    let num_series = num_column.to_minimal_array()?;
-
-                    // The log function has default null behavior for null input, that is, LOG(null) = null.
-                    // So the passthrough_null method has default behavior to be true, we don't need to zip validity.
-                    binary_with_validity(
-                        num_series.f64()?,
-                        base_series.f64()?,
-                        |num, base| num.log(base),
-                        None,
-                    )
-                }
-            }
-        };
-
-        let column: DataColumn = result.into();
-        Ok(column.resize_constant(columns[0].column().len()))
-    }
-}
-
-impl fmt::Display for GenericLogFunction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.display_name.to_uppercase())
-    }
-}
-
-pub struct LogFunction {}
-
-impl LogFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, E)
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(1, 2),
         )
     }
-}
 
-pub struct LnFunction {}
-
-impl LnFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, E)
+    fn log<S>(value: S) -> f64
+    where S: AsPrimitive<f64> {
+        value.as_().log(T::base())
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().num_arguments(1))
-    }
-}
-
-pub struct Log10Function {}
-
-impl Log10Function {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, 10_f64)
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().num_arguments(1))
+    fn log_with_base<S, B>(base: S, value: B, _ctx: &mut EvalContext) -> f64
+    where
+        S: AsPrimitive<f64>,
+        B: AsPrimitive<f64>,
+    {
+        value.as_().log(base.as_())
     }
 }
 
-pub struct Log2Function {}
-
-impl Log2Function {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, 2_f64)
+impl<T: Base> Function2 for GenericLogFunction<T> {
+    fn name(&self) -> &str {
+        &*self.display_name
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().num_arguments(1))
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
+        Ok(f64::to_data_type())
+    }
+
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        if columns.len() == 1 {
+            with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
+                let unary = ScalarUnaryExpression::<$S, f64, _>::new(Self::log);
+                let col = unary.eval(columns[0].column())?;
+                Ok(Arc::new(col))
+            },{
+                unreachable!()
+            })
+        } else {
+            with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
+                with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
+                    let binary = ScalarBinaryExpression::<$S, $T, f64, _>::new(Self::log_with_base);
+                    let col = binary.eval(columns[0].column(), columns[1].column(), &mut EvalContext::default())?;
+                    Ok(Arc::new(col))
+                },{
+                    unreachable!()
+                })
+            },{
+                unreachable!()
+            })
+        }
     }
 }
+
+impl<T: Base> fmt::Display for GenericLogFunction<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.display_name.to_uppercase())
+    }
+}
+
+pub type LnFunction = GenericLogFunction<EBase>;
+pub type LogFunction = GenericLogFunction<EBase>;
+pub type Log10Function = GenericLogFunction<TenBase>;
+pub type Log2Function = GenericLogFunction<TwoBase>;

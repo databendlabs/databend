@@ -24,6 +24,7 @@ use common_base::tokio::sync::Notify;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
+use common_grpc::GrpcConnectionError;
 use common_grpc::RpcClientTlsConfig;
 use databend_query::api::DatabendQueryFlightDispatcher;
 use databend_query::api::RpcService;
@@ -102,6 +103,11 @@ async fn test_tls_rpc_server_invalid_client_config() -> Result<()> {
     let r = ConnectionFactory::create_rpc_channel("fake:1234", None, Some(client_conf));
     assert!(r.is_err());
     let e = r.unwrap_err();
-    assert_eq!(e.code(), ErrorCode::TLSConfigurationFailure("").code());
+    match e {
+        GrpcConnectionError::TLSConfigError { action, .. } => {
+            assert_eq!("loading", action);
+        }
+        _ => unimplemented!("expect TLSConfigError"),
+    }
     Ok(())
 }

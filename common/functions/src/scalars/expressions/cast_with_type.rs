@@ -128,7 +128,9 @@ pub fn cast_with_type(
         TypeID::Date16 => cast_from_date16(column, &nonull_data_type, cast_options),
         TypeID::Date32 => cast_from_date32(column, &nonull_data_type, cast_options),
         TypeID::DateTime32 => cast_from_datetime32(column, &nonull_data_type, cast_options),
-        TypeID::DateTime64 => cast_from_datetime64(column, &nonull_data_type, cast_options),
+        TypeID::DateTime64 => {
+            cast_from_datetime64(column, &nonull_from_type, &nonull_data_type, cast_options)
+        }
         // TypeID::Interval => arrow_cast_compute(column, &nonull_data_type, cast_options),
         _ => arrow_cast_compute(column, &nonull_data_type, cast_options),
     }?;

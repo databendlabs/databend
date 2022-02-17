@@ -784,6 +784,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "handlebars",
+ "hostname",
  "http",
  "httpmock",
  "indicatif",
@@ -1599,6 +1600,7 @@ dependencies = [
 name = "common-grpc"
 version = "0.1.0"
 dependencies = [
+ "anyerror",
  "async-trait",
  "common-arrow",
  "common-base",
@@ -1611,6 +1613,7 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio-stream",
  "tonic",
  "trust-dns-resolver",
@@ -1752,6 +1755,7 @@ dependencies = [
  "common-tracing",
  "derive_more",
  "futures",
+ "hostname",
  "maplit",
  "once_cell",
  "pretty_assertions",
@@ -4747,9 +4751,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.0.1"
+version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7106bd15c6e3b276e7b001ea8df207262c0879c0aef1505fc29674462af7142f"
+checksum = "26cbd65e273b6aea4b6a1e34646b36d9d1ad54d153a5d6c25ffda62d31fcd77f"
 dependencies = [
  "async-compat",
  "async-trait",

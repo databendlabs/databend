@@ -48,24 +48,22 @@ pub fn unpack(tar_file: &str, target_dir: &str) -> Result<()> {
     let res = archive.unpack(target_dir);
     return match res {
         Ok(_) => {
-            if Path::new(format!("{}/GNUSparseFile.0", target_dir).as_str()).exists()
-                && Path::new(format!("{}/GNUSparseFile.0", target_dir).as_str()).is_dir()
+            if Path::new(format!("{target_dir}/GNUSparseFile.0").as_str()).exists()
+                && Path::new(format!("{target_dir}/GNUSparseFile.0").as_str()).is_dir()
             {
                 let options = dir::CopyOptions::new(); //Initialize default values for CopyOptions
 
                 let mut from_paths = Vec::new();
-                from_paths.push(format!("{}/GNUSparseFile.0/databend-query", target_dir));
-                from_paths.push(format!("{}/GNUSparseFile.0/databend-meta", target_dir));
+                from_paths.push(format!("{target_dir}/GNUSparseFile.0/databend-query"));
+                from_paths.push(format!("{target_dir}/GNUSparseFile.0/databend-meta"));
                 move_items(&from_paths, target_dir, &options)
                     .expect("cannot move executable files");
-                if let Ok(()) = std::fs::remove_dir_all(format!("{}/GNUSparseFile.0", target_dir)) {
-                }
+                if let Ok(()) = std::fs::remove_dir_all(format!("{target_dir}/GNUSparseFile.0")) {}
             }
             Ok(())
         }
         Err(e) => Err(CliError::Unknown(format!(
-            "cannot unpack file {} to {}, error: {}",
-            tar_file, target_dir, e
+            "cannot unpack file {tar_file} to {target_dir}, error: {e}"
         ))),
     };
 }
@@ -100,12 +98,8 @@ pub fn download(url: &str, target_file: &str) -> Result<()> {
         .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
         .progress_chars("#>-"));
 
-    let mut out = File::create(target_file).unwrap_or_else(|_| {
-        panic!(
-            "{}",
-            format!("cannot create target file {}", target_file).as_str()
-        )
-    });
+    let mut out = File::create(target_file)
+        .unwrap_or_else(|_| panic!("cannot create target file {target_file}"));
     io::copy(&mut pb.wrap_read(res.into_reader()), &mut out)
         .expect("cannot download to target file");
     Ok(())
@@ -131,7 +125,7 @@ pub fn get_rust_architecture() -> Result<String> {
     let os = match os {
         "darwin" => "apple-darwin".to_string(),
         "macos" => "apple-darwin".to_string(),
-        "linux" => format!("unknown-linux-{}", clib),
+        "linux" => format!("unknown-linux-{clib}"),
         _ => {
             return Err(CliError::Unknown(format!(
                 "Unsupported architecture os: {}, arch {}",
@@ -141,7 +135,7 @@ pub fn get_rust_architecture() -> Result<String> {
         }
     };
 
-    Ok(format!("{}-{}", arch, os))
+    Ok(format!("{arch}-{os}"))
 }
 
 fn get_latest_tag(conf: &Config) -> Result<String> {

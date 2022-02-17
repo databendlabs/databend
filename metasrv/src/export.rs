@@ -25,7 +25,7 @@ macro_rules! to_line {
             let key = <<$key_space as SledKeySpace>::K as SledOrderedSerde>::de($vec_key)?;
             let val = <<$key_space as SledKeySpace>::V as SledSerde>::de($vec_value)?;
 
-            let line = serde_json::to_string(&($typ, $prefix, key, val))?;
+            let line = serde_json::to_string(&($typ, $prefix, stringify!($key_space), key, val))?;
             return Ok(line);
         }
     };

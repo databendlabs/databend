@@ -24,6 +24,7 @@ use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
 use futures::channel::*;
+use opendal::Operator;
 
 use crate::catalogs::DatabaseCatalog;
 use crate::configs::Config;
@@ -179,26 +180,30 @@ impl Session {
         self.session_ctx.set_current_user(user)
     }
 
-    pub fn validate_privilege(
+    pub async fn validate_privilege(
         self: &Arc<Self>,
         object: &GrantObject,
         privilege: UserPrivilegeType,
     ) -> Result<()> {
-        // TODO: cache the grants info for current user
         let current_user = self.get_current_user()?;
-        let ok = current_user.grants.verify_privilege(
-            &current_user.name,
-            &current_user.hostname,
-            object,
-            privilege,
-        );
-        if !ok {
-            return Err(ErrorCode::PermissionDenied(format!(
-                "Permission denied, user '{}'@'{}' requires {} privilege on {}",
-                &current_user.name, &current_user.hostname, privilege, object
-            )));
+        let user_verified = current_user.grants.verify_privilege(object, privilege);
+        if user_verified {
+            return Ok(());
         }
-        Ok(())
+
+        let tenant = self.get_current_tenant();
+        let role_cache = self.session_mgr.get_role_cache_manager();
+        let role_verified = role_cache
+            .verify_privilege(&tenant, &current_user.grants.roles(), object, privilege)
+            .await?;
+        if role_verified {
+            return Ok(());
+        }
+
+        Err(ErrorCode::PermissionDenied(format!(
+            "Permission denied, user '{}'@'{}' requires {} privilege on {}",
+            &current_user.name, &current_user.hostname, privilege, object
+        )))
     }
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
@@ -219,5 +224,9 @@ impl Session {
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {
         malloc_size(self)
+    }
+
+    pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
+        self.session_mgr.get_storage_operator()
     }
 }

@@ -19,16 +19,15 @@ use common_datavalues2::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::cast_with_type;
 use crate::scalars::ArithmeticDivFunction;
 use crate::scalars::ArithmeticMinusFunction;
 use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticPlusFunction;
+use crate::scalars::EvalContext;
 use crate::scalars::Function2;
 use crate::scalars::Monotonicity2;
 use crate::scalars::ScalarBinaryExpression;
 use crate::scalars::ScalarBinaryFunction;
-use crate::scalars::DEFAULT_CAST_OPTIONS;
 
 #[derive(Clone)]
 pub struct BinaryArithmeticFunction<L: Scalar, R: Scalar, O: Scalar, F> {
@@ -74,13 +73,12 @@ where
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        let col = self.binary.eval(columns[0].column(), columns[1].column())?;
-        let col_type = col.data_type();
-        let result: ColumnRef = Arc::new(col);
-        if col_type != self.result_type {
-            return cast_with_type(&result, &col_type, &self.result_type, &DEFAULT_CAST_OPTIONS);
-        }
-        Ok(result)
+        let col = self.binary.eval(
+            columns[0].column(),
+            columns[1].column(),
+            &mut EvalContext::default(),
+        )?;
+        Ok(Arc::new(col))
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
@@ -96,7 +94,7 @@ where
             DataValueBinaryOperator::Minus => ArithmeticMinusFunction::get_monotonicity(args),
             DataValueBinaryOperator::Mul => ArithmeticMulFunction::get_monotonicity(args),
             DataValueBinaryOperator::Div => ArithmeticDivFunction::get_monotonicity(args),
-            _ => unreachable!(),
+            _ => Ok(Monotonicity2::default()),
         }
     }
 }

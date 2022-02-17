@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::Infallible;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
@@ -22,7 +23,9 @@ use common_containers::ItemManager;
 use common_containers::Pool;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
+use common_grpc::GrpcConnectionError;
 use common_grpc::RpcClientTlsConfig;
+use common_meta_types::anyerror::AnyError;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::HandshakeRequest;
 use common_meta_types::protobuf::RaftReply;
@@ -62,7 +65,18 @@ impl ItemManager for MetaChannelManager {
     type Error = MetaError;
 
     async fn build(&self, addr: &Self::Key) -> std::result::Result<Self::Item, Self::Error> {
-        let ch = ConnectionFactory::create_rpc_channel(addr, self.timeout, self.conf.clone())?;
+        let ch = ConnectionFactory::create_rpc_channel(addr, self.timeout, self.conf.clone())
+            .map_err(|e| match e {
+                GrpcConnectionError::InvalidUri { .. } => MetaNetworkError::BadAddressFormat(
+                    AnyError::new(&e).add_context(|| "while creating rpc channel"),
+                ),
+                GrpcConnectionError::TLSConfigError { .. } => MetaNetworkError::TLSConfigError(
+                    AnyError::new(&e).add_context(|| "while creating rpc channel"),
+                ),
+                GrpcConnectionError::CannotConnect { .. } => MetaNetworkError::ConnectionError(
+                    ConnectionError::new(e, "while creating rpc channel"),
+                ),
+            })?;
         Ok(ch)
     }
 
@@ -70,7 +84,7 @@ impl ItemManager for MetaChannelManager {
         futures::future::poll_fn(|cx| ch.poll_ready(cx))
             .await
             .map_err(|e| {
-                MetaNetworkError::from(ConnectionError::new(e, "when create_rpc_channel"))
+                MetaNetworkError::ConnectionError(ConnectionError::new(e, "while check item"))
             })?;
         Ok(ch)
     }
@@ -87,7 +101,9 @@ pub struct MetaGrpcClient {
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 impl MetaGrpcClient {
-    pub async fn try_new(conf: &MetaGrpcClientConf) -> Result<MetaGrpcClient> {
+    pub async fn try_new(
+        conf: &MetaGrpcClientConf,
+    ) -> std::result::Result<MetaGrpcClient, Infallible> {
         let mgr = MetaChannelManager {
             timeout: Some(Duration::from_secs(conf.client_timeout_in_second)),
             conf: conf.meta_service_config.tls_conf.clone(),

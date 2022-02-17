@@ -185,7 +185,7 @@ impl LoadCommand {
                     .await
             }
             Err(e) => {
-                writer.write_err(format!("Query command precheck failed, error {:?}", e));
+                writer.write_err(format!("Query command precheck failed, error {e:?}"));
                 Ok(())
             }
         }
@@ -208,7 +208,7 @@ impl LoadCommand {
         let mut headers = HeaderMap::new();
         headers.insert(
             "insert_sql",
-            format!("INSERT INTO {} format CSV", table_with_schema)
+            format!("INSERT INTO {table_with_schema} format CSV")
                 .parse()
                 .unwrap(),
         );
@@ -294,10 +294,10 @@ async fn table_exists(status: &Status, table: Option<&str>) -> Result<()> {
     match table {
         Some(t) => {
             let (cli, url) = build_query_endpoint(status)?;
-            let query = format!("SHOW TABLES LIKE '{}';", t);
+            let query = format!("SHOW TABLES LIKE '{t}';");
             let (col, data, _) = execute_query_json(&cli, &url, query).await?;
             if col.is_none() || data.is_empty() {
-                return Err(CliError::Unknown(format!("table {} not found", t)));
+                return Err(CliError::Unknown(format!("table {t} not found")));
             }
         }
         None => return Err(CliError::Unknown("no table found in argument".to_string())),

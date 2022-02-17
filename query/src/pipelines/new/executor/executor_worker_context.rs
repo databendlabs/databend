@@ -65,6 +65,7 @@ impl ExecutorWorkerContext {
     }
 
     pub unsafe fn execute_task(&mut self, queue: &ExecutorTasksQueue) -> Result<NodeIndex> {
+        // println!("{} execute task {:?}", std::thread::current().name().unwrap(), self.task);
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::LogicalError("Execute none task.")),
             ExecutorTask::Sync(processor) => self.execute_sync_task(processor),

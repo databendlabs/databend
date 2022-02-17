@@ -53,10 +53,13 @@ impl Interpreter for CreateTableInterpreter {
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        self.ctx.get_current_session().validate_privilege(
-            &GrantObject::Database(self.plan.db.clone()),
-            UserPrivilegeType::Create,
-        )?;
+        self.ctx
+            .get_current_session()
+            .validate_privilege(
+                &GrantObject::Database(self.plan.db.clone()),
+                UserPrivilegeType::Create,
+            )
+            .await?;
 
         match &self.plan.as_select {
             Some(select_plan_node) => {

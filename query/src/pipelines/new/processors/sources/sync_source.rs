@@ -49,28 +49,6 @@ impl<T: 'static + SyncSource> SyncSourcer<T> {
             generated_data: None,
         })))
     }
-
-    #[inline(always)]
-    fn push_data(&mut self) -> Event {
-        if let Some(generated_data) = self.generated_data.take() {
-            self.output.push_data(Ok(generated_data));
-        }
-
-        Event::NeedConsume
-    }
-
-    #[inline(always)]
-    fn close_output(&mut self) -> Event {
-        if !self.is_finish {
-            self.is_finish = true;
-        }
-
-        if !self.output.is_finished() {
-            self.output.finish();
-        }
-
-        Event::Finished
-    }
 }
 
 #[async_trait::async_trait]
@@ -80,13 +58,26 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
     }
 
     fn event(&mut self) -> Result<Event> {
-        Ok(match &self.generated_data {
-            None if self.is_finish => self.close_output(),
-            None => Event::Sync,
-            Some(_) if self.output.can_push() => self.push_data(),
-            Some(_) if self.output.is_finished() => self.close_output(),
-            Some(_) => Event::NeedConsume,
-        })
+        if self.is_finish {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
+        if self.output.is_finished() {
+            return Ok(Event::Finished);
+        }
+
+        if !self.output.can_push() {
+            return Ok(Event::NeedConsume);
+        }
+
+        match self.generated_data.take() {
+            None => Ok(Event::Sync),
+            Some(data_block) => {
+                self.output.push_data(Ok(data_block));
+                Ok(Event::NeedConsume)
+            }
+        }
     }
 
     fn process(&mut self) -> Result<()> {

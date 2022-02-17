@@ -74,7 +74,7 @@ impl Settings {
         let values = vec![
             // max_block_size
             SettingValue {
-                default_value:DataValue::UInt64(10000),
+                default_value: DataValue::UInt64(10000),
                 user_setting: UserSetting::create("max_block_size", DataValue::UInt64(10000)),
                 level: ScopeLevel::Session,
                 desc: "Maximum block size for reading",
@@ -82,7 +82,7 @@ impl Settings {
 
             // max_threads
             SettingValue {
-                default_value:DataValue::UInt64(16),
+                default_value: DataValue::UInt64(16),
                 user_setting: UserSetting::create("max_threads", DataValue::UInt64(16)),
                 level: ScopeLevel::Session,
                 desc: "The maximum number of threads to execute the request. By default, it is determined automatically.",
@@ -90,10 +90,10 @@ impl Settings {
 
             // flight_client_timeout
             SettingValue {
-                default_value:DataValue::UInt64(60),
+                default_value: DataValue::UInt64(60),
                 user_setting: UserSetting::create("flight_client_timeout", DataValue::UInt64(60)),
                 level: ScopeLevel::Session,
-                desc:"Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds",
+                desc: "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds",
             },
 
             // parallel_read_threads
@@ -101,15 +101,15 @@ impl Settings {
                 default_value: DataValue::UInt64(1),
                 user_setting: UserSetting::create("parallel_read_threads", DataValue::UInt64(1)),
                 level: ScopeLevel::Session,
-                desc:"The maximum number of parallelism for reading data. By default, it is 1.",
+                desc: "The maximum number of parallelism for reading data. By default, it is 1.",
             },
 
             // storage_read_buffer_size
             SettingValue {
-                default_value: DataValue::UInt64(1024*1024),
-                user_setting: UserSetting::create("storage_read_buffer_size", DataValue::UInt64(1024*1024)),
+                default_value: DataValue::UInt64(1024 * 1024),
+                user_setting: UserSetting::create("storage_read_buffer_size", DataValue::UInt64(1024 * 1024)),
                 level: ScopeLevel::Session,
-                desc:"The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.",
+                desc: "The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.",
             },
 
             // storage_backoff_init_delay_ms
@@ -117,23 +117,31 @@ impl Settings {
                 default_value: DataValue::UInt64(5),
                 user_setting: UserSetting::create("storage_occ_backoff_init_delay_ms", DataValue::UInt64(5)),
                 level: ScopeLevel::Session,
-                desc:"The initial retry delay in millisecond. By default, it is 5 ms.",
+                desc: "The initial retry delay in millisecond. By default, it is 5 ms.",
             },
 
             // storage_occ_backoff_max_delay_ms
             SettingValue {
-                default_value:DataValue::UInt64(20*1000),
-                user_setting: UserSetting::create("storage_occ_backoff_max_delay_ms", DataValue::UInt64(20*1000)),
+                default_value: DataValue::UInt64(20 * 1000),
+                user_setting: UserSetting::create("storage_occ_backoff_max_delay_ms", DataValue::UInt64(20 * 1000)),
                 level: ScopeLevel::Session,
-                desc:"The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing. By default, it is 20 seconds.",
+                desc: "The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing. By default, it is 20 seconds.",
             },
 
             // storage_occ_backoff_max_elapsed_ms
             SettingValue {
-                default_value:DataValue::UInt64(120*1000),
-                user_setting: UserSetting::create("storage_occ_backoff_max_elapsed_ms", DataValue::UInt64(120*1000)),
+                default_value: DataValue::UInt64(120 * 1000),
+                user_setting: UserSetting::create("storage_occ_backoff_max_elapsed_ms", DataValue::UInt64(120 * 1000)),
                 level: ScopeLevel::Session,
-                desc:"The maximum elapsed time after the occ starts, beyond which there will be no more retries. By default, it is 2 minutes.",
+                desc: "The maximum elapsed time after the occ starts, beyond which there will be no more retries. By default, it is 2 minutes.",
+            },
+
+            // enable_new_processor_framework
+            SettingValue {
+                default_value: DataValue::UInt64(0),
+                user_setting: UserSetting::create("enable_new_processor_framework", DataValue::UInt64(0)),
+                level: ScopeLevel::Session,
+                desc: "Enable new processor framework if value != 0, default value: 0",
             },
         ];
 
@@ -222,6 +230,11 @@ impl Settings {
         self.try_get_u64(key)
     }
 
+    pub fn get_enable_new_processor_framework(&self) -> Result<u64> {
+        let key = "enable_new_processor_framework";
+        self.try_get_u64(key)
+    }
+
     fn check_and_get_setting_value(&self, key: &str) -> Result<SettingValue> {
         let settings = self.settings.read();
         let setting = settings
@@ -291,7 +304,7 @@ impl Settings {
                 return Err(ErrorCode::UnknownVariable(format!(
                     "Unsupported variable:{:?} type:{:?} when set_settings().",
                     key, v
-                )))
+                )));
             }
         }
 

@@ -38,6 +38,7 @@ impl PipelineExecutor {
             let graph = RunningGraph::create(pipeline)?;
             let mut init_schedule_queue = graph.init_schedule_queue()?;
 
+            // println!("Init queue: {:?}", init_schedule_queue);
             let mut tasks = VecDeque::new();
             while let Some(task) = init_schedule_queue.pop_task() {
                 tasks.push_back(task);
@@ -60,7 +61,7 @@ impl PipelineExecutor {
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn execute_with_single_worker(&self, worker_num: usize) -> Result<()> {
+    pub unsafe fn execute(&self, worker_num: usize) -> Result<()> {
         let workers_notify = self.workers_notify.clone();
         let mut context = ExecutorWorkerContext::create(worker_num, workers_notify);
 
@@ -76,6 +77,7 @@ impl PipelineExecutor {
 
                 // We immediately schedule the processor again.
                 let schedule_queue = self.graph.schedule_queue(executed_pid)?;
+                // println!("{} queue: {:?}", std::thread::current().name().unwrap(), schedule_queue);
                 schedule_queue.schedule(&self.global_tasks_queue, &mut context);
             }
         }

@@ -42,7 +42,8 @@ pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
     ver
 });
 
-pub const KVSRV_API_HOST: &str = "KVSRV_API_HOST";
+pub const KVSRV_LISTEN_HOST: &str = "KVSRV_LISTEN_HOST";
+pub const KVSRV_ADVERTISE_HOST: &str = "KVSRV_ADVERTISE_HOST";
 pub const KVSRV_API_PORT: &str = "KVSRV_API_PORT";
 pub const KVSRV_RAFT_DIR: &str = "KVSRV_RAFT_DIR";
 pub const KVSRV_NO_SYNC: &str = "KVSRV_NO_SYNC";
@@ -53,6 +54,8 @@ pub const KVSRV_BOOT: &str = "KVSRV_BOOT";
 pub const KVSRV_SINGLE: &str = "KVSRV_SINGLE";
 pub const KVSRV_ID: &str = "KVSRV_ID";
 
+pub const DEFAULT_LISTEN_HOST: &str = "127.0.0.1";
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Parser)]
 #[serde(default)]
 pub struct RaftConfig {
@@ -61,9 +64,18 @@ pub struct RaftConfig {
     #[clap(long, default_value = "")]
     pub config_id: String,
 
-    /// The listening host for metadata communication.
-    #[clap(long, env = KVSRV_API_HOST, default_value = "127.0.0.1")]
-    pub raft_api_host: String,
+    /// The local listening host for metadata communication.
+    /// This config does not need to be stored in raft-store,
+    /// only used when metasrv startup and listen to.
+    #[clap(long, env = KVSRV_LISTEN_HOST, default_value = DEFAULT_LISTEN_HOST)]
+    pub raft_listen_host: String,
+
+    /// The hostname that other nodes will use to connect this node.
+    /// This host should be stored in raft store and be replicated to the raft cluster,
+    /// i.e., when calling add_node().
+    /// Use `localhost` by default.
+    #[clap(long, env = KVSRV_ADVERTISE_HOST, default_value = "localhost")]
+    pub raft_advertise_host: String,
 
     /// The listening port for metadata communication.
     #[clap(long, env = KVSRV_API_PORT, default_value = "28004")]
@@ -119,11 +131,26 @@ pub struct RaftConfig {
     pub sled_tree_prefix: String,
 }
 
+pub fn get_default_raft_advertise_host() -> String {
+    match hostname::get() {
+        Ok(h) => match h.into_string() {
+            Ok(h) => h,
+            _ => "UnknownHost".to_string(),
+        },
+        _ => "UnknownHost".to_string(),
+    }
+}
+
+pub fn get_default_raft_listen_host() -> String {
+    DEFAULT_LISTEN_HOST.to_string()
+}
+
 impl Default for RaftConfig {
     fn default() -> Self {
         Self {
             config_id: "".to_string(),
-            raft_api_host: "127.0.0.1".to_string(),
+            raft_listen_host: get_default_raft_listen_host(),
+            raft_advertise_host: get_default_raft_advertise_host(),
             raft_api_port: 28004,
             raft_dir: "./_meta".to_string(),
             no_sync: false,
@@ -149,18 +176,22 @@ impl RaftConfig {
         <Self as Parser>::parse_from(&Vec::<&'static str>::new())
     }
 
-    fn raft_api_addr_string(&self) -> String {
-        format!("{}:{}", self.raft_api_host, self.raft_api_port)
+    fn raft_api_listen_host_string(&self) -> String {
+        format!("{}:{}", self.raft_listen_host, self.raft_api_port)
+    }
+
+    pub fn raft_api_advertise_host_string(&self) -> String {
+        format!("{}:{}", self.raft_advertise_host, self.raft_api_port)
     }
 
     /// Support ip address and hostname
     pub async fn raft_api_addr(&self) -> Result<String> {
-        let _ipv4_addr = self.raft_api_host.as_str().parse::<Ipv4Addr>();
-        match _ipv4_addr {
-            Ok(_) => Ok(self.raft_api_addr_string()),
+        let ipv4_addr = self.raft_advertise_host.as_str().parse::<Ipv4Addr>();
+        match ipv4_addr {
+            Ok(addr) => Ok(format!("{}:{}", addr, self.raft_api_port)),
             Err(_) => {
                 let _ip_addrs = DNSResolver::instance()?
-                    .resolve(self.raft_api_host.clone())
+                    .resolve(self.raft_advertise_host.clone())
                     .await?;
                 Ok(format!("{}:{}", _ip_addrs[0], self.raft_api_port))
             }
@@ -178,7 +209,7 @@ impl RaftConfig {
                 "--join and --single can not be both set",
             )));
         }
-        let self_addr = self.raft_api_addr_string();
+        let self_addr = self.raft_api_listen_host_string();
         if self.join.contains(&self_addr) {
             return Err(MetaError::InvalidConfig(String::from(
                 "--join must not be set to itself",
