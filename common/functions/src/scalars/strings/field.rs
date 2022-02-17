@@ -14,13 +14,13 @@
 
 use std::fmt;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 #[derive(Clone)]
 pub struct FieldFunction {
@@ -28,14 +28,14 @@ pub struct FieldFunction {
 }
 
 impl FieldFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(FieldFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(2, usize::MAX - 1),
@@ -43,99 +43,45 @@ impl FieldFunction {
     }
 }
 
-impl Function for FieldFunction {
+impl Function2 for FieldFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::UInt64;
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        for arg in args {
+            assert_string(*arg)?;
+        }
+        Ok(u64::to_data_type())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let s_column = columns[0].column().cast_with_type(&DataType::String)?;
-        let r_column: DataColumn = match s_column {
-            DataColumn::Constant(DataValue::String(s), _) => {
-                let mut r_column = DataColumn::Constant(DataValue::UInt64(Some(0)), input_rows);
-                if let Some(s) = s {
-                    for (i, c) in columns.iter().enumerate().skip(1) {
-                        match c.column().cast_with_type(&DataType::String)? {
-                            DataColumn::Constant(DataValue::String(ss), _) => {
-                                if let Some(ss) = ss {
-                                    if s == ss {
-                                        r_column = DataColumn::Constant(
-                                            DataValue::UInt64(Some(i as u64)),
-                                            input_rows,
-                                        );
-                                        break;
-                                    }
-                                }
-                            }
-                            DataColumn::Array(ss_series) => {
-                                let s = Some(&s[..]);
-                                let ss_array = ss_series.string()?;
-                                if ss_array.into_iter().any(|ss| ss == s) {
-                                    r_column = ss_array
-                                        .apply_cast_numeric(|ss| {
-                                            (if Some(ss) == s { i } else { 0 }) as u64
-                                        })
-                                        .into();
-                                    break;
-                                }
-                            }
-                            _ => continue,
-                        }
-                    }
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        let basic_viewer = Vu8::try_create_viewer(columns[0].column())?;
+
+        let viewers = columns
+            .iter()
+            .skip(1)
+            .map(|c| Vu8::try_create_viewer(c.column()))
+            .collect::<Result<Vec<_>>>()?;
+
+        let mut values = Vec::with_capacity(input_rows);
+        let mut flag: bool;
+        for row in 0..input_rows {
+            flag = false;
+            let value = basic_viewer.value_at(row);
+            for (i, viewer) in viewers.iter().enumerate() {
+                if viewer.value_at(row) == value {
+                    flag = true;
+                    values.push((i + 1) as u64);
+                    break;
                 }
-                r_column
             }
-            DataColumn::Array(s_series) => {
-                let mut r_column = DataColumn::Constant(DataValue::UInt64(Some(0)), input_rows);
-                let s_array = s_series.string()?;
-                for (i, c) in columns.iter().enumerate().skip(1) {
-                    match c.column().cast_with_type(&DataType::String)? {
-                        DataColumn::Constant(DataValue::String(ss), _) => {
-                            if let Some(ss) = ss {
-                                let ss = Some(&ss[..]);
-                                if s_array.into_iter().any(|s| s == ss) {
-                                    r_column = s_array
-                                        .apply_cast_numeric(|s| {
-                                            (if Some(s) == ss { i } else { 0 }) as u64
-                                        })
-                                        .into();
-                                    break;
-                                }
-                            }
-                        }
-                        DataColumn::Array(ss_series) => {
-                            let ss_array = ss_series.string()?;
-                            if s_array
-                                .into_iter()
-                                .zip(ss_array.into_iter())
-                                .any(|(s, ss)| s.is_some() && s == ss)
-                            {
-                                r_column = DFUInt64Array::from_iter(
-                                    s_array
-                                        .into_iter()
-                                        .zip(ss_array.into_iter())
-                                        .map(|(s, ss)| {
-                                            (if s.is_some() && s == ss { i } else { 0 }) as u64
-                                        }),
-                                )
-                                .into();
-                                break;
-                            }
-                        }
-                        _ => continue,
-                    }
-                }
-                r_column
+            if !flag {
+                values.push(0);
             }
-            _ => DataColumn::Constant(DataValue::UInt64(Some(0)), input_rows),
-        };
-        Ok(r_column)
+        }
+
+        Ok(UInt64Column::from_vecs(values).arc())
     }
 }
 
