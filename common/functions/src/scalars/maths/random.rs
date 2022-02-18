@@ -13,16 +13,19 @@
 // limitations under the License.
 
 use std::fmt;
+use std::sync::Arc;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
-use common_exception::ErrorCode;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::Result;
+use num_traits::AsPrimitive;
 use rand::prelude::*;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
+use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
 pub struct RandomFunction {
@@ -30,84 +33,55 @@ pub struct RandomFunction {
 }
 
 impl RandomFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(RandomFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().variadic_arguments(0, 1))
     }
 }
 
-impl Function for RandomFunction {
+impl Function2 for RandomFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        let data_type = if args.is_empty()
-            || matches!(
-                args[0].data_type(),
-                DataType::UInt8
-                    | DataType::UInt16
-                    | DataType::UInt32
-                    | DataType::UInt64
-                    | DataType::Int8
-                    | DataType::Int16
-                    | DataType::Int32
-                    | DataType::Int64
-                    | DataType::Float32
-                    | DataType::Float64
-                    | DataType::String
-                    | DataType::Null
-            ) {
-            Ok(DataType::Float64)
-        } else {
-            Err(ErrorCode::IllegalDataType(format!(
-                "Expected numeric types, but got {}",
-                args[0]
-            )))
-        }?;
-        Ok(DataTypeAndNullable::create(&data_type, nullable))
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
+        Ok(f64::to_data_type())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let r_column: DataColumn = match columns.len() {
-            1 => {
-                let seed_column: &DataColumn =
-                    &columns[0].column().cast_with_type(&DataType::UInt64)?;
-
-                match seed_column {
-                    DataColumn::Constant(seed, _) => {
-                        let s: u64 = if seed.is_null() {
-                            0
-                        } else {
-                            DFTryFrom::try_from(seed.clone())?
-                        };
-                        let mut rng = rand::rngs::StdRng::seed_from_u64(s);
-                        DFFloat64Array::new_from_iter(
-                            (0..input_rows).into_iter().map(|_| rng.gen::<f64>()),
-                        )
-                    }
-
-                    DataColumn::Array(seed_series) => seed_series.u64()?.apply_cast_numeric(|s| {
-                        let mut rng = StdRng::seed_from_u64(s);
-                        rng.gen::<f64>()
-                    }),
-                }
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        match columns.len() {
+            0 => {
+                let mut rng = rand::thread_rng();
+                Ok(Float64Column::from_owned_iterator(
+                    (0..input_rows).into_iter().map(|_| rng.gen::<f64>()),
+                )
+                .arc())
             }
             _ => {
-                let mut rng = rand::thread_rng();
-                DFFloat64Array::new_from_iter((0..input_rows).into_iter().map(|_| rng.gen::<f64>()))
+                with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
+                      let unary = ScalarUnaryExpression::<$T, f64, _>::new(rand_seed);
+                    let col = unary.eval(columns[0].column())?;
+                    Ok(Arc::new(col))
+                },{
+                    unreachable!()
+                })
             }
         }
-        .into();
-        Ok(r_column.resize_constant(input_rows))
     }
+}
+
+fn rand_seed<T: AsPrimitive<u64>>(seed: T) -> f64 {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed.as_());
+    rng.gen::<f64>()
 }
 
 impl fmt::Display for RandomFunction {

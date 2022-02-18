@@ -38,7 +38,7 @@ fn test_raft_config() -> anyhow::Result<()> {
         let port = 22222;
         let raft_config = &RaftConfig {
             single: false,
-            raft_api_host: addr.clone(),
+            raft_listen_host: addr.clone(),
             raft_api_port: port,
             join: vec![format!("{}:{}", addr, port)],
             ..Default::default()

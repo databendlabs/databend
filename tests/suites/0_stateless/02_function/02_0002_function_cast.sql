@@ -29,3 +29,6 @@ SELECT  toDate('2021-03-05') + 1 = toDate('2021-03-06');
 SELECT  toString(toDate('2021-03-05') + 1) = '2021-03-06';
 SELECT toDateTime(toDate('2021-03-05')) = toDateTime('2021-03-05 00:00:00');
 SELECT toDate(toDateTime('2021-03-05 01:00:00')) = toDate('2021-03-05');
+SELECT toString(toDateTime64(1640019661000)) = '2021-12-20 17:01:01.000';
+SELECT toDate(toDateTime64(1640019661000)) = toDate('2021-12-20');
+SELECT toDateTime(toDateTime64(1640019661000)) = toDateTime('2021-12-20 17:01:01');

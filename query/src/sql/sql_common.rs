@@ -54,8 +54,7 @@ impl SQLCommon {
                 }
             }
             _ => Result::Err(ErrorCode::IllegalDataType(format!(
-                "The SQL data type {:?} is not implemented",
-                sql_type
+                "The SQL data type {sql_type:?} is not implemented",
             ))),
         }
     }
