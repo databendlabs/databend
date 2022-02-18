@@ -81,7 +81,7 @@ impl<const T: u8> Function for LocatingFunction<T> {
         let p_column = if T == FUNC_LOCATE && columns.len() == 3 {
             default_column_cast(columns[2].column(), &u64::to_data_type())?
         } else {
-            ConstColumn::new(Series::from_data(vec![0u64]), input_rows).arc()
+            ConstColumn::new(Series::from_data(vec![1u64]), input_rows).arc()
         };
 
         let ss_column = Vu8::try_create_viewer(ss_column)?;
