@@ -25,7 +25,7 @@ pub fn codegen_arithmetic_type() {
     use DataValueBinaryOperator::*;
     use DataValueUnaryOperator::*;
 
-    let dest = Path::new("common/datavalues2/src/types");
+    let dest = Path::new("common/datavalues/src/types");
     let path = dest.join("arithmetics_type.rs");
 
     let mut file = File::create(&path).expect("open");
