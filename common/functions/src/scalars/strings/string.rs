@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::AsciiFunction;
 use crate::scalars::Base64DecodeFunction;
 use crate::scalars::Base64EncodeFunction;

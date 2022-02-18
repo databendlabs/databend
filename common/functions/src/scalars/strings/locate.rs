@@ -16,14 +16,11 @@ use std::fmt;
 
 use common_datavalues2::prelude::*;
 use common_exception::Result;
-use itertools::izip;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::default_column_cast;
-use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
 use crate::scalars::Function2;
 use crate::scalars::Function2Description;
 
@@ -80,10 +77,11 @@ impl<const T: u8> Function2 for LocatingFunction<T> {
             (columns[0].column(), columns[1].column())
         };
 
+        // TODO, improve the performance using matching macros.
         let p_column = if T == FUNC_LOCATE && columns.len() == 3 {
             default_column_cast(columns[2].column(), &u64::to_data_type())?
         } else {
-            ConstColumn::new(Series::from_data(vec![0]), input_rows).arc()
+            ConstColumn::new(Series::from_data(vec![0u64]), input_rows).arc()
         };
 
         let ss_column = Vu8::try_create_viewer(ss_column)?;
