@@ -45,10 +45,8 @@ pub trait WeekResultFunction<R> {
 
     fn return_type() -> Result<DataTypePtr>;
     fn to_number(_value: DateTime<Utc>, mode: u64) -> R;
-    fn factor_function() -> Result<Box<dyn Function>> {
-        Err(ErrorCode::UnknownException(
-            "Always monotonous, has no factor function",
-        ))
+    fn factor_function() -> Option<Box<dyn Function>> {
+        None
     }
 }
 
@@ -186,8 +184,8 @@ where
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         let func = match T::factor_function() {
-            Ok(f) => f,
-            Err(_) => return Ok(Monotonicity::clone_without_range(&args[0])),
+            Some(f) => f,
+            None => return Ok(Monotonicity::clone_without_range(&args[0])),
         };
 
         if args[0].left.is_none() || args[0].right.is_none() {

@@ -456,12 +456,12 @@ fn test_abs_function() -> Result<()> {
 fn test_dates_function() -> Result<()> {
     let test_suite = vec![
         Test {
-            name: "f(x) = toStartOfWeek(x+12)",
+            name: "f(x) = toStartOfWeek(z+12)",
             expr: Expression::create_scalar_function("toStartOfWeek", vec![add(
-                col("x"),
+                col("z"),
                 lit(12i32),
             )]),
-            column: "x",
+            column: "z",
             left: None,
             right: None,
             expect_mono: Monotonicity {
