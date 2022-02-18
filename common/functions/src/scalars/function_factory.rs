@@ -20,8 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
-use crate::scalars::Function;
-use crate::scalars::MathsFunction;
+use super::Function;
 
 pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send + Sync>;
 
@@ -115,9 +114,6 @@ pub struct FunctionFactory {
 
 static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     let mut function_factory = FunctionFactory::create();
-
-    MathsFunction::register(&mut function_factory);
-
     Arc::new(function_factory)
 });
 
