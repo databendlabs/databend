@@ -109,7 +109,6 @@ impl Default for StageStorage {
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct StageParams {
-    pub typ: StageType,
     pub location: String,
     pub storage: StageStorage,
 }
@@ -122,6 +121,7 @@ pub struct CopyOptions {}
 #[serde(default)]
 pub struct UserStageInfo {
     pub stage_name: String,
+    pub stage_type: StageType,
     pub stage_params: StageParams,
     pub file_format: StageFileFormatType,
     pub copy_option: CopyOptions,

@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::BroadcastPlan;
+use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::DropDatabasePlan;
@@ -71,6 +72,7 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
             PlanNode::DropDatabase(plan) => Self::format_drop_database(f, plan),
             PlanNode::CreateTable(plan) => Self::format_create_table(f, plan),
             PlanNode::DropTable(plan) => Self::format_drop_table(f, plan),
+            PlanNode::Copy(plan) => Self::format_copy(f, plan),
             _ => {
                 let mut printed = true;
 
@@ -277,5 +279,10 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
     fn format_drop_table(f: &mut Formatter, plan: &DropTablePlan) -> fmt::Result {
         write!(f, "Drop table {:}.{:},", plan.db, plan.table)?;
         write!(f, " if_exists:{:}", plan.if_exists)
+    }
+
+    fn format_copy(f: &mut Formatter, plan: &CopyPlan) -> fmt::Result {
+        write!(f, "Copy into {:}.{:}", plan.db_name, plan.tbl_name)?;
+        write!(f, " ,stage_plan:{:?}", plan.stage_plan)
     }
 }

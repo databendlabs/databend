@@ -44,22 +44,6 @@ pub struct DfCopy {
     pub file_format_options: HashMap<String, String>,
 }
 
-impl DfCopy {
-    fn to_file_format(typ: &str) -> Result<StageFileFormatType> {
-        match typ.to_uppercase().as_str() {
-            "CSV" => Ok(StageFileFormatType::Csv),
-            "JSON" => Ok(StageFileFormatType::Json),
-            "AVRO" => Ok(StageFileFormatType::Avro),
-            "ORC" => Ok(StageFileFormatType::Orc),
-            "PARQUET" => Ok(StageFileFormatType::Parquet),
-            "XML" => Ok(StageFileFormatType::Xml),
-            _ => Err(ErrorCode::SyntaxException(
-                "Unknown file format type, must one of  { CSV | JSON | AVRO | ORC | PARQUET | XML }",
-            )),
-        }
-    }
-}
-
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCopy {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
@@ -85,8 +69,63 @@ impl AnalyzableStatement for DfCopy {
             schema = DataSchemaRefExt::create(fields);
         }
 
-        // TODO(bohu): Add `from @stage_name` check.
+        // Stage info.
+        let stage_info = if self.location.starts_with('@') {
+            self.analyze_internal().await?
+        } else {
+            self.analyze_external().await?
+        };
 
+        // Stage plan.
+        let stage_plan = UserStagePlan { stage_info };
+
+        // Copy plan.
+        let plan_node = CopyPlan {
+            db_name,
+            tbl_name,
+            tbl_id,
+            schema,
+            stage_plan,
+        };
+
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Copy(
+            plan_node,
+        ))))
+    }
+}
+
+impl DfCopy {
+    fn to_file_format(typ: &str) -> Result<StageFileFormatType> {
+        match typ.to_uppercase().as_str() {
+            "CSV" => Ok(StageFileFormatType::Csv),
+            "JSON" => Ok(StageFileFormatType::Json),
+            "AVRO" => Ok(StageFileFormatType::Avro),
+            "ORC" => Ok(StageFileFormatType::Orc),
+            "PARQUET" => Ok(StageFileFormatType::Parquet),
+            "XML" => Ok(StageFileFormatType::Xml),
+            _ => Err(ErrorCode::SyntaxException(
+                "Unknown file format type, must one of  { CSV | JSON | AVRO | ORC | PARQUET | XML }",
+            )),
+        }
+    }
+
+    // Internal stage(start with `@`):
+    // copy into mytable from @my_ext_stage
+    // file_format = (type = csv);
+    async fn analyze_internal(&self) -> Result<UserStageInfo> {
+        // TODO(bohu): get stage info from metasrv by stage name.
+        Ok(UserStageInfo {
+            stage_type: StageType::Internal,
+            ..Default::default()
+        })
+    }
+
+    // External stage(location starts without `@`):
+    // copy into table from 's3://mybucket/data/files'
+    // credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
+    // encryption=(master_key = 'my_master_key')
+    // file_format = (type = csv field_delimiter = '|' skip_header = 1)"
+    async fn analyze_external(&self) -> Result<UserStageInfo> {
         // File format type.
         let format = self
             .file_format_options
@@ -108,17 +147,17 @@ impl AnalyzableStatement for DfCopy {
                 "s3" => {
                     let credentials_aws_key_id = self
                         .credential_options
-                        .get("aws_key_id")
+                        .get("AWS_KEY_ID")
                         .unwrap_or(&"".to_string())
                         .clone();
                     let credentials_aws_secret_key = self
                         .credential_options
-                        .get("aws_key_id")
+                        .get("AWS_KEY_ID")
                         .unwrap_or(&"".to_string())
                         .clone();
                     let encryption_master_key = self
                         .encryption_options
-                        .get("master_key")
+                        .get("MASTER_KEY")
                         .unwrap_or(&"".to_string())
                         .clone();
 
@@ -138,35 +177,16 @@ impl AnalyzableStatement for DfCopy {
 
         // Stage params.
         let stage_params = StageParams {
-            typ: StageType::External,
             location: self.location.clone(),
             storage: stage_storage,
         };
 
         // Stage info.
-        let stage_info = UserStageInfo {
-            stage_name: "".to_string(),
+        Ok(UserStageInfo {
+            stage_type: StageType::External,
             stage_params,
             file_format,
-            copy_option: Default::default(),
-            comment: "".to_string(),
-        };
-
-        // Stage plan.
-        let stage_plan = UserStagePlan { stage_info };
-
-        // Copy plan.
-        let plan_node = CopyPlan {
-            db_name,
-            tbl_name,
-            tbl_id,
-            schema,
-            stage_plan,
-            stage_name: None,
-        };
-
-        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Copy(
-            plan_node,
-        ))))
+            ..Default::default()
+        })
     }
 }

@@ -345,7 +345,7 @@ impl<'a> DfParser<'a> {
             }
             let value = self.parse_value_or_ident()?;
 
-            options.insert(name.to_string(), value);
+            options.insert(name.to_string().to_uppercase(), value);
         }
         Ok(options)
     }

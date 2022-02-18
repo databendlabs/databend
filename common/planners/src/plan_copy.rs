@@ -23,7 +23,6 @@ pub struct CopyPlan {
     pub tbl_name: String,
     pub tbl_id: MetaId,
     pub schema: DataSchemaRef,
-    pub stage_name: Option<String>,
     pub stage_plan: UserStagePlan,
 }
 
