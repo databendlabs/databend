@@ -223,7 +223,7 @@ impl<'a> DfParser<'a> {
                         Keyword::TABLE => self.parse_create_table(),
                         Keyword::DATABASE => self.parse_create_database(),
                         Keyword::USER => self.parse_create_user(),
-                        // TODO: Keyword::ROLE => self.parse_create_role(),
+                        Keyword::ROLE => self.parse_create_role(),
                         Keyword::FUNCTION => self.parse_create_udf(),
                         _ => self.expected("create statement", Token::Word(w)),
                     }
@@ -313,7 +313,7 @@ impl<'a> DfParser<'a> {
                         Keyword::DATABASE => self.parse_drop_database(),
                         Keyword::TABLE => self.parse_drop_table(),
                         Keyword::USER => self.parse_drop_user(),
-                        // TODO: Keyword::ROLE => self.parse_drop_role(),
+                        Keyword::ROLE => self.parse_drop_role(),
                         Keyword::FUNCTION => self.parse_drop_udf(),
                         _ => self.expected("drop statement", Token::Word(w)),
                     }

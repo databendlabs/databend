@@ -91,7 +91,6 @@ impl<'a> DfParser<'a> {
     }
 
     // Create role
-    #[allow(dead_code)]
     pub(crate) fn parse_create_role(&mut self) -> Result<DfStatement, ParserError> {
         let if_not_exists =
             self.parser
@@ -106,7 +105,6 @@ impl<'a> DfParser<'a> {
     }
 
     // Drop role
-    #[allow(dead_code)]
     pub(crate) fn parse_drop_role(&mut self) -> Result<DfStatement, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let (name, host) = self.parse_principal_identity()?;
