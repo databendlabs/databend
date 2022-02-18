@@ -331,6 +331,20 @@ fn grant_privilege_test() -> Result<()> {
     )?;
 
     expect_parse_ok(
+        "GRANT CREATE, SELECT ON * TO USER 'test'@'localhost'",
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
+            principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
+            on: DfGrantObject::Database(None),
+            priv_types: {
+                let mut privileges = UserPrivilegeSet::empty();
+                privileges.set_privilege(UserPrivilegeType::Select);
+                privileges.set_privilege(UserPrivilegeType::Create);
+                privileges
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
         "GRANT CREATE, SELECT ON * TO 'test'@'localhost'",
         DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
             principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
@@ -355,6 +369,33 @@ fn grant_privilege_test() -> Result<()> {
                 privileges.set_privilege(UserPrivilegeType::CreateUser);
                 privileges.set_privilege(UserPrivilegeType::CreateRole);
                 privileges.set_privilege(UserPrivilegeType::Select);
+                privileges
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
+        "GRANT CREATE USER, CREATE ROLE ON * TO ROLE 'myrole'@'%'",
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
+            principal: PrincipalIdentity::role("myrole".to_string(), "%".to_string()),
+            on: DfGrantObject::Database(None),
+            priv_types: {
+                let mut privileges = UserPrivilegeSet::empty();
+                privileges.set_privilege(UserPrivilegeType::CreateUser);
+                privileges.set_privilege(UserPrivilegeType::CreateRole);
+                privileges
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
+        "GRANT CREATE USER ON * TO ROLE 'myrole'",
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
+            principal: PrincipalIdentity::role("myrole".to_string(), "%".to_string()),
+            on: DfGrantObject::Database(None),
+            priv_types: {
+                let mut privileges = UserPrivilegeSet::empty();
+                privileges.set_privilege(UserPrivilegeType::CreateUser);
                 privileges
             },
         }),
