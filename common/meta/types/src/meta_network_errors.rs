@@ -52,9 +52,7 @@ impl From<MetaNetworkError> for ErrorCode {
             MetaNetworkError::TLSConfigError(any_err) => {
                 ErrorCode::TLSConfigurationFailure(any_err.to_string())
             }
-            MetaNetworkError::DnsParseError(any_err) => {
-                ErrorCode::DnsParseError(any_err.to_string())
-            }
+            MetaNetworkError::DnsParseError(any_err) => ErrorCode::DnsParseError(any_err),
         }
     }
 }

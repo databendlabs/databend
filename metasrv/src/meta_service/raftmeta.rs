@@ -205,7 +205,7 @@ impl MetaNode {
         let meta_srv_impl = RaftServiceImpl::create(mn.clone());
         let meta_srv = RaftServiceServer::new(meta_srv_impl);
 
-        let host_port: Vec<&str> = addr.split(":").collect();
+        let host_port: Vec<&str> = addr.split(':').collect();
         let host = host_port[0];
         let port = host_port[1];
         let ipv4_addr = host.parse::<Ipv4Addr>();
@@ -218,7 +218,7 @@ impl MetaNode {
                         e
                     ))
                 })?;
-                let ip_addrs = resolver.resolve(host.clone()).await.map_err(|e| {
+                let ip_addrs = resolver.resolve(host).await.map_err(|e| {
                     MetaNetworkError::GetNodeAddrError(format!(
                         "resolve addr {} error: {}",
                         host, e
