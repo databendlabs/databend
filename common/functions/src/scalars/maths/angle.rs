@@ -15,14 +15,16 @@
 use std::fmt;
 use std::marker::PhantomData;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
-use common_exception::ErrorCode;
+use common_datavalues2::prelude::*;
+use common_datavalues2::with_match_primitive_type_id;
 use common_exception::Result;
+use num::cast::AsPrimitive;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function2_factory::Function2Description;
+use crate::scalars::function_common::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
 pub struct AngleFunction<T> {
@@ -31,56 +33,45 @@ pub struct AngleFunction<T> {
 }
 
 pub trait AngleConvertFunction {
-    fn convert(v: f64) -> f64;
+    fn convert(v: impl AsPrimitive<f64>) -> f64;
 }
 
 impl<T> AngleFunction<T>
 where T: AngleConvertFunction + Clone + Sync + Send + 'static
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(AngleFunction::<T> {
             _display_name: display_name.to_string(),
             t: PhantomData,
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
-impl<T> Function for AngleFunction<T>
+impl<T> Function2 for AngleFunction<T>
 where T: AngleConvertFunction + Clone + Sync + Send + 'static
 {
     fn name(&self) -> &str {
         "AngleFunction"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-
-        let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
-            Ok(DataType::Float64)
-        } else {
-            Err(ErrorCode::IllegalDataType(format!(
-                "Expected numeric, but got {}",
-                args[0]
-            )))
-        }?;
-
-        Ok(DataTypeAndNullable::create(&data_type, nullable))
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        assert_numeric(args[0])?;
+        Ok(Float64Type::arc())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let result = columns[0]
-            .column()
-            .to_minimal_array()?
-            .cast_with_type(&DataType::Float64)?
-            .f64()?
-            .apply_cast_numeric(T::convert);
-        let column: DataColumn = result.into();
-        Ok(column.resize_constant(columns[0].column().len()))
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
+             let unary = ScalarUnaryExpression::<$S, f64, _>::new(T::convert);
+             let col = unary.eval(columns[0].column())?;
+             Ok(col.arc())
+        },{
+            unreachable!()
+        })
     }
 }
 
@@ -94,8 +85,8 @@ impl<T> fmt::Display for AngleFunction<T> {
 pub struct ToDegrees;
 
 impl AngleConvertFunction for ToDegrees {
-    fn convert(v: f64) -> f64 {
-        v.to_degrees()
+    fn convert(v: impl AsPrimitive<f64>) -> f64 {
+        v.as_().to_degrees()
     }
 }
 
@@ -103,8 +94,8 @@ impl AngleConvertFunction for ToDegrees {
 pub struct ToRadians;
 
 impl AngleConvertFunction for ToRadians {
-    fn convert(v: f64) -> f64 {
-        v.to_radians()
+    fn convert(v: impl AsPrimitive<f64>) -> f64 {
+        v.as_().to_radians()
     }
 }
 
