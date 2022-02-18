@@ -289,15 +289,16 @@ where
         let mut offsize = 0;
         let mut size = step;
         // If any of these columns is nullable.
-        let group_columns_has_nullable = false;
+        let mut group_columns_nullable = HashSet::new();
+        check_group_columns_has_nullable(group_columns, &group_columns_nullable);
         // todo!() check this.
-        if group_columns_has_nullable {
+        if group_columns_nullable.size() != 0 {
             let mut null_part_offset = 0;
-
             init_nullable_offset(&mut null_part_offset, group_columns)?;
             let mut nullable_column_index = 0;
             while size > 0 {
-                build_keys_with_nullable_column(size, &mut offsize, group_columns, ptr, step, nullable_column_index, null_part_offset)?;
+                
+                build_keys_with_nullable_column(size, &mut offsize, group_columns, ptr, step, &nullable_column_index, null_part_offset)?;
                 size /= 2;
             }
         }else{
@@ -308,6 +309,74 @@ where
 
         }
         Ok(group_keys)
+    }
+
+    fn check_group_columns_has_nullable(
+        &self,
+        group_columns: &[&ColumnRef],
+        group_columns_nullable: &HashSet<String>,
+    ) -> Result<()> {
+        for group_column in group_columns.iter() {
+            if group_column.is_nullable() {
+                group_columns_nullable.add(group_column.name().to_string());
+            }
+        }
+        Ok(());
+    }
+
+    fn group_by_get_indices(
+        &self,
+        block: &DataBlock,
+        column_names: &[String],
+    ) -> Result<GroupIndices<Self::HashKey>> {
+        // Table for <group_key, (indices, keys) >
+        let mut group_indices = GroupIndices::<Self::HashKey>::default();
+        // 1. Get group by columns.
+        let mut group_columns = Vec::with_capacity(column_names.len());
+        {
+            for col in column_names {
+                group_columns.push(block.try_column_by_name(col)?);
+            }
+        }
+
+        // 2. Build serialized keys
+        let group_keys = self.build_keys(&group_columns, block.num_rows())?;
+        // 2. Make group with indices.
+        {
+            for (row, group_key) in group_keys.iter().enumerate().take(block.num_rows()) {
+                match group_indices.get_mut(group_key) {
+                    None => {
+                        let mut group_values = Vec::with_capacity(group_columns.len());
+                        for col in &group_columns {
+                            group_values.push(col.get(row));
+                        }
+                        group_indices.insert(group_key.clone(), (vec![row as u32], group_values));
+                    }
+                    Some((v, _)) => {
+                        v.push(row as u32);
+                    }
+                }
+            }
+        }
+
+        Ok(group_indices)
+    }
+
+    fn group_by(
+        &self,
+        block: &DataBlock,
+        column_names: &[String],
+    ) -> Result<GroupBlock<Self::HashKey>> {
+        let group_indices = self.group_by_get_indices(block, column_names)?;
+        // Table for <(group_key, keys, block)>
+        let mut group_blocks = GroupBlock::<Self::HashKey>::with_capacity(group_indices.len());
+
+        for (group_key, (group_indices, group_keys)) in group_indices {
+            let take_block = DataBlock::block_take_by_indices(block, &group_indices)?;
+            group_blocks.push((group_key, group_keys, take_block));
+        }
+
+        Ok(group_blocks)
     }
 }
 
@@ -343,24 +412,31 @@ fn build(
 
 #[inline]
 fn build_keys_with_nullable_column(
-    &self,
     mem_size: usize,
     offsize: &mut usize,
     group_columns: &[&ColumnRef],
     writer: *mut u8,
     step: usize,
-    i: usize,
+    index: &mut usize,
     null_offset: usize,
 ) -> Result<()> {
     for col in group_columns.iter() {
         let data_type = col.data_type();
         let type_id = data_type.data_type_id();
         let size = type_id.numeric_byte_size()?;
+        
         if size == mem_size {
+            if col.is_null() {
+                let writer = unsafe { writer.add(*offsize) };
+                Series::fixed_hash_with_nullable(col, writer, step, index, null_offset)?;
+                *offsize += size;
+                index +=1;
+        }else{
             let writer = unsafe { writer.add(*offsize) };
-            Series::fixed_hash_with_nullable(col, writer, step, i, null_offset)?;
+            Series::fixed_hash(col, writer, step)?;
             *offsize += size;
         }
+    }
     }
     Ok(())
 }
