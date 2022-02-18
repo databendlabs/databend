@@ -15,8 +15,11 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::StageStorage;
+use common_meta_types::UserStageInfo;
 use common_planners::CopyPlan;
 use common_streams::SendableDataBlockStream;
+use opendal::credential::Credential;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -32,6 +35,28 @@ impl CopyInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(CopyInterpreter { ctx, plan }))
     }
+
+    async fn get_dal(&self, stage: UserStageInfo) -> Result<DalOperator> {
+        match stage.stage_params.storage {
+            StageStorage::S3(s3) => {
+                let key_id = s3.credentials_aws_key_id;
+                let secret_key = s3.credentials_aws_secret_key;
+                let credential = Credential::hmac(&key_id, &secret_key);
+
+                let mut builder = opendal::services::s3::Backend::build();
+                Ok(opendal::Operator::new(
+                    builder
+                        .region(&conf.region)
+                        .endpoint(&conf.endpoint_url)
+                        .bucket(&conf.bucket)
+                        .credential(credential)
+                        .finish()
+                        .await
+                        .unwrap(),
+                ))
+            }
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -44,6 +69,9 @@ impl Interpreter for CopyInterpreter {
         &self,
         mut _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        todo!()
+        let stage_info = self.plan.stage_plan.stage_info.clone();
+        match stage_info.stage_params.storage {
+            StageStorage::S3(s3) => {}
+        }
     }
 }

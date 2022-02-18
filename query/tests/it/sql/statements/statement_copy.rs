@@ -62,6 +62,16 @@ async fn test_statement_copy() -> Result<()> {
             err: "Code: 1005, displayText = File location scheme must be specified.",
         },
         TestCase {
+            name: "copy-external-location-unsupported-failed",
+            query: "copy into system.configs
+        from 's4://mybucket/data/files'
+        credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
+        encryption=(master_key = 'my_master_key')
+        file_format = (type = csv field_delimiter = '|' skip_header = 1)",
+            expect: "",
+            err: "Code: 1005, displayText = File location uri unsupported, must be one of [s3, @stage].",
+        },
+        TestCase {
             name: "copy-internal-passed",
             query: "copy into system.configs
         from '@mystage'
