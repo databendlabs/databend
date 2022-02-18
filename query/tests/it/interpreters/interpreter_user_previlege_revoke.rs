@@ -78,8 +78,8 @@ async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
         .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create));
     user_mgr.add_role(&tenant, role_info).await?;
 
-    let query = format!("REVOKE ALL ON *.* FROM ROLE 'role1'");
-    let plan = PlanParser::parse(ctx.clone(), &query).await?;
+    let query = "REVOKE ALL ON *.* FROM ROLE 'role1'";
+    let plan = PlanParser::parse(ctx.clone(), query).await?;
     let executor = InterpreterFactory::get(ctx, plan.clone())?;
     assert_eq!(executor.name(), "RevokePrivilegeInterpreter");
     let mut stream = executor.execute(None).await?;
