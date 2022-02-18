@@ -105,18 +105,12 @@ async fn test_user_manager() -> Result<()> {
             .grant_user_privileges(tenant, user, hostname, GrantObject::Global, add_priv)
             .await?;
         let new_user = user_mgr.get_user(tenant, user, hostname).await?;
-        assert!(new_user.grants.verify_privilege(
-            user,
-            hostname,
-            &GrantObject::Global,
-            UserPrivilegeType::Set
-        ));
-        assert!(!new_user.grants.verify_privilege(
-            user,
-            hostname,
-            &GrantObject::Global,
-            UserPrivilegeType::Create
-        ));
+        assert!(new_user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Set));
+        assert!(!new_user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create));
         user_mgr.drop_user(tenant, user, hostname, true).await?;
     }
 
@@ -227,30 +221,18 @@ async fn test_user_manager_with_root_user() -> Result<()> {
         let user = user_mgr.get_user(tenant, username1, hostname1).await?;
         assert_eq!(user.name, username1);
         assert_eq!(user.hostname, hostname1);
-        assert!(user.grants.verify_privilege(
-            username1,
-            hostname1,
-            &GrantObject::Global,
-            UserPrivilegeType::Create
-        ));
-        assert!(user.grants.verify_privilege(
-            username1,
-            hostname1,
-            &GrantObject::Global,
-            UserPrivilegeType::Select
-        ));
-        assert!(user.grants.verify_privilege(
-            username1,
-            hostname1,
-            &GrantObject::Global,
-            UserPrivilegeType::Insert
-        ));
-        assert!(user.grants.verify_privilege(
-            username1,
-            hostname1,
-            &GrantObject::Global,
-            UserPrivilegeType::Super
-        ));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Select));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Insert));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super));
     }
 
     // Get user via username `default` and hostname `localhost`.
@@ -258,30 +240,18 @@ async fn test_user_manager_with_root_user() -> Result<()> {
         let user = user_mgr.get_user(tenant, username1, hostname2).await?;
         assert_eq!(user.name, username1);
         assert_eq!(user.hostname, hostname2);
-        assert!(user.grants.verify_privilege(
-            username1,
-            hostname2,
-            &GrantObject::Global,
-            UserPrivilegeType::Create
-        ));
-        assert!(user.grants.verify_privilege(
-            username1,
-            hostname2,
-            &GrantObject::Global,
-            UserPrivilegeType::Select
-        ));
-        assert!(user.grants.verify_privilege(
-            username1,
-            hostname2,
-            &GrantObject::Global,
-            UserPrivilegeType::Insert
-        ));
-        assert!(user.grants.verify_privilege(
-            username1,
-            hostname2,
-            &GrantObject::Global,
-            UserPrivilegeType::Super
-        ));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Select));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Insert));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super));
     }
 
     // Get user via username `default` and hostname `otherhost`.
@@ -297,30 +267,18 @@ async fn test_user_manager_with_root_user() -> Result<()> {
         let user = user_mgr.get_user(tenant, username2, hostname1).await?;
         assert_eq!(user.name, username2);
         assert_eq!(user.hostname, hostname1);
-        assert!(user.grants.verify_privilege(
-            username2,
-            hostname1,
-            &GrantObject::Global,
-            UserPrivilegeType::Create
-        ));
-        assert!(user.grants.verify_privilege(
-            username2,
-            hostname1,
-            &GrantObject::Global,
-            UserPrivilegeType::Select
-        ));
-        assert!(user.grants.verify_privilege(
-            username2,
-            hostname1,
-            &GrantObject::Global,
-            UserPrivilegeType::Insert
-        ));
-        assert!(user.grants.verify_privilege(
-            username2,
-            hostname1,
-            &GrantObject::Global,
-            UserPrivilegeType::Super
-        ));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Select));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Insert));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super));
     }
 
     // Get user via username `root` and hostname `localhost`.
@@ -328,30 +286,18 @@ async fn test_user_manager_with_root_user() -> Result<()> {
         let user = user_mgr.get_user(tenant, username2, hostname2).await?;
         assert_eq!(user.name, username2);
         assert_eq!(user.hostname, hostname2);
-        assert!(user.grants.verify_privilege(
-            username2,
-            hostname2,
-            &GrantObject::Global,
-            UserPrivilegeType::Create
-        ));
-        assert!(user.grants.verify_privilege(
-            username2,
-            hostname2,
-            &GrantObject::Global,
-            UserPrivilegeType::Select
-        ));
-        assert!(user.grants.verify_privilege(
-            username2,
-            hostname2,
-            &GrantObject::Global,
-            UserPrivilegeType::Insert
-        ));
-        assert!(user.grants.verify_privilege(
-            username2,
-            hostname2,
-            &GrantObject::Global,
-            UserPrivilegeType::Super
-        ));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Select));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Insert));
+        assert!(user
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Super));
     }
 
     // Get user via username `root` and hostname `otherhost`.

@@ -12,45 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions2;
+use crate::scalars::scalar_function2_test::ScalarFunction2Test;
 
 #[test]
 fn test_abs_function() -> Result<()> {
     let tests = vec![
-        ScalarFunctionTest {
-            name: "abs(-1)",
-            nullable: false,
-            columns: vec![Series::new([-1]).into()],
-            expect: Series::new(vec![1_u32]).into(),
+        ScalarFunction2Test {
+            name: "abs(1)",
+            columns: vec![Series::from_data([1_u32])],
+            expect: Series::from_data(vec![1_u32]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "abs(-10086)",
-            nullable: false,
-            columns: vec![Series::new([-10086]).into()],
-            expect: Series::new(vec![10086_u32]).into(),
+            columns: vec![Series::from_data([-10086])],
+            expect: Series::from_data(vec![10086_i32]),
             error: "",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "abs('-2.0')",
-            nullable: false,
-            columns: vec![Series::new(["-2.0"]).into()],
-            expect: Series::new(vec![2.0_f64]).into(),
-            error: "",
+            columns: vec![Series::from_data(["-2.0"])],
+            expect: Series::from_data(vec![2.0_f64]),
+            error: "Expected a numeric type, but got String",
         },
-        ScalarFunctionTest {
+        ScalarFunction2Test {
             name: "abs(true)",
-            nullable: false,
-            columns: vec![Series::new([false]).into()],
-            expect: Series::new([0_u8]).into(),
-            error: "Expected numeric types, but got Boolean",
+            columns: vec![Series::from_data([false])],
+            expect: Series::from_data([0_u8]),
+            error: "Expected a numeric type, but got Boolean",
         },
     ];
 
-    test_scalar_functions(AbsFunction::try_create("abs(false)")?, &tests)
+    test_scalar_functions2(AbsFunction::try_create("abs(false)")?, &tests)
 }

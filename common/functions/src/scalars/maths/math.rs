@@ -16,7 +16,6 @@ use crc32fast::Hasher as CRC32;
 
 use super::round::RoundNumberFunction;
 use super::round::TruncNumberFunction;
-use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::AbsFunction;
 use crate::scalars::BaseHashFunction;
 use crate::scalars::CeilFunction;
@@ -49,6 +48,7 @@ pub struct MathsFunction;
 
 impl MathsFunction {
     pub fn register2(factory: &mut Function2Factory) {
+        factory.register("abs", AbsFunction::desc());
         factory.register("sign", SignFunction::desc());
         factory.register("pi", PiFunction::desc());
         factory.register("crc32", CRC32Function::desc());
@@ -76,10 +76,6 @@ impl MathsFunction {
         factory.register("acos", TrigonometricAcosFunction::desc());
         factory.register("atan", TrigonometricAtanFunction::desc());
         factory.register("atan2", TrigonometricAtan2Function::desc());
-    }
-
-    pub fn register(factory: &mut FunctionFactory) {
-        factory.register("abs", AbsFunction::desc());
 
         factory.register("degrees", DegressFunction::desc());
         factory.register("radians", RadiansFunction::desc());

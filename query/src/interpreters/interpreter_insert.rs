@@ -55,10 +55,13 @@ impl Interpreter for InsertInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
 
-        self.ctx.get_current_session().validate_privilege(
-            &GrantObject::Table(plan.database_name.clone(), plan.table_name.clone()),
-            UserPrivilegeType::Insert,
-        )?;
+        self.ctx
+            .get_current_session()
+            .validate_privilege(
+                &GrantObject::Table(plan.database_name.clone(), plan.table_name.clone()),
+                UserPrivilegeType::Insert,
+            )
+            .await?;
 
         let table = self
             .ctx

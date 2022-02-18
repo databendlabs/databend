@@ -103,7 +103,7 @@ async fn test_clickhouse_insert_to_fuse_table() -> Result<()> {
             .build()?,
     );
 
-    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
+    let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
 
     let mut conn = create_conn(listening.port()).await?;
@@ -195,7 +195,7 @@ async fn start_server(max_sessions: u64) -> Result<(Box<dyn Server>, SocketAddr)
             .build()?,
     );
 
-    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
+    let listening = "127.0.0.1:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
     Ok((handler, listening))
 }

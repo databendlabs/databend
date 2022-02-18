@@ -76,7 +76,7 @@ fn test_generate_local_meta_config() -> Result<()> {
             "--profile",
             "local",
             "--meta-address",
-            "0.0.0.0:7777",
+            "127.0.0.1:7777",
             "--log_level",
             "DEBUG",
             "--version",
@@ -108,7 +108,7 @@ fn test_generate_local_meta_config() -> Result<()> {
         assert_eq!(config.as_ref().unwrap().config.log_level, "DEBUG");
         assert_eq!(
             config.as_ref().unwrap().config.grpc_api_address,
-            "0.0.0.0:7777"
+            "127.0.0.1:7777"
         );
     }
     Ok(())
@@ -214,7 +214,7 @@ fn test_generate_local_query_config() -> Result<()> {
             "--profile",
             "local",
             "--meta-address",
-            "0.0.0.0:7777",
+            "127.0.0.1:7777",
             "--log_level",
             "DEBUG",
             "--version",

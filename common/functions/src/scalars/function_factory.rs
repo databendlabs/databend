@@ -22,9 +22,7 @@ use once_cell::sync::Lazy;
 
 use crate::scalars::DateFunction;
 use crate::scalars::Function;
-use crate::scalars::MathsFunction;
 use crate::scalars::StringFunction;
-use crate::scalars::UdfFunction;
 
 pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send + Sync>;
 
@@ -120,9 +118,7 @@ static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     let mut function_factory = FunctionFactory::create();
 
     StringFunction::register(&mut function_factory);
-    UdfFunction::register(&mut function_factory);
     DateFunction::register(&mut function_factory);
-    MathsFunction::register(&mut function_factory);
 
     Arc::new(function_factory)
 });
