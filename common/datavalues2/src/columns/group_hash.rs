@@ -42,7 +42,7 @@ impl Series {
         step: usize,
         i: usize,
         null_offset: usize,
-    ) {
+    ) -> Result<()> {
         let column = column.convert_full_column();
         // TODO support nullable
         let column = Series::remove_nullable(&column);
@@ -90,6 +90,22 @@ pub trait GroupHash: Debug {
         )))
     }
 
+    /// IMO: To Support hash nullable column, this method should be added with some
+    /// variable about ith column in this run to do hash, Then we can fill the bits  into the right
+    /// position.
+    fn fixed_hash_with_nullable(
+        &self,
+        _ptr: *mut u8,
+        _step: usize,
+        _i: usize,
+        _null_offset: usize,
+    ) -> Result<()> {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported apply fn fixed_hash_with_nullable operation for {:?}",
+            self,
+        )))
+    }
+
     fn serialize(&self, _vec: &mut Vec<Vec<u8>>) -> Result<()> {
         Err(ErrorCode::BadDataValueType(format!(
             "Unsupported apply fn serialize operation for {:?}",
@@ -119,6 +135,31 @@ where
         Ok(())
     }
 
+    /// Argument i is the index of the nullable column, start from 0, like array index.
+    fn fixed_hash_with_nullable(
+        &self,
+        ptr: *mut u8,
+        step: usize,
+        i: usize,
+        null_offset: usize,
+    ) -> Result<()> {
+        let mut ptr = ptr;
+
+        for value in self.values().iter() {
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    value as *const T as *const u8,
+                    ptr,
+                    std::mem::size_of::<T>(),
+                );
+                // Write the nullable to the proper position
+                std::ptr::write(ptr.add(null_offset + i), 1);
+                ptr = ptr.add(step);
+            }
+        }
+        Ok(())
+    }
+
     fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
         assert_eq!(vec.len(), self.len());
         for (value, vec) in self.iter().zip(vec.iter_mut()) {
@@ -135,6 +176,28 @@ impl GroupHash for BooleanColumn {
         for value in self.values().iter() {
             unsafe {
                 std::ptr::copy_nonoverlapping(&(value as u8) as *const u8, ptr, 1);
+                ptr = ptr.add(step);
+            }
+        }
+        Ok(())
+    }
+
+    /// i is the index of the nullable column, start from 0, like array index.
+    fn fixed_hash_with_nullable(
+        &self,
+        ptr: *mut u8,
+        step: usize,
+        i: usize,
+        null_offset: usize,
+    ) -> Result<()> {
+        let mut ptr = ptr;
+
+        for value in self.values().iter() {
+            unsafe {
+                std::ptr::copy_nonoverlapping(&(value as u8) as *const u8, ptr, 1);
+                ptr = ptr.add(step);
+                // Write the nullable to the proper position
+                std::ptr::write(ptr.add(null_offset + i), 1);
                 ptr = ptr.add(step);
             }
         }

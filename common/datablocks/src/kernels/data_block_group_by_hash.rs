@@ -289,10 +289,9 @@ where
         let mut offsize = 0;
         let mut size = step;
         // If any of these columns is nullable.
-        let mut group_columns_nullable = HashSet::new();
-        check_group_columns_has_nullable(group_columns, &group_columns_nullable);
-        // todo!() check this.
-        if group_columns_nullable.size() != 0 {
+
+        let group_columns_has_nullable_one = check_group_columns_has_nullable(group_columns);
+        if group_columns_has_nullable_one {
             let mut null_part_offset = 0;
             init_nullable_offset(&mut null_part_offset, group_columns)?;
             let mut nullable_column_index = 0;
@@ -303,7 +302,7 @@ where
                     group_columns,
                     ptr,
                     step,
-                    &nullable_column_index,
+                    &mut nullable_column_index,
                     null_part_offset,
                 )?;
                 size /= 2;
@@ -315,19 +314,6 @@ where
             }
         }
         Ok(group_keys)
-    }
-
-    fn check_group_columns_has_nullable(
-        &self,
-        group_columns: &[&ColumnRef],
-        group_columns_nullable: &HashSet<String>,
-    ) -> Result<()> {
-        for group_column in group_columns.iter() {
-            if group_column.is_nullable() {
-                group_columns_nullable.add(group_column.name().to_string());
-            }
-        }
-        Ok(());
     }
 
     fn group_by_get_indices(
@@ -434,9 +420,9 @@ fn build_keys_with_nullable_column(
         if size == mem_size {
             if col.is_null() {
                 let writer = unsafe { writer.add(*offsize) };
-                Series::fixed_hash_with_nullable(col, writer, step, index, null_offset)?;
+                Series::fixed_hash_with_nullable(col, writer, step, index.to_owned(), null_offset)?;
                 *offsize += size;
-                index += 1;
+                *index += 1;
             } else {
                 let writer = unsafe { writer.add(*offsize) };
                 Series::fixed_hash(col, writer, step)?;
@@ -445,4 +431,14 @@ fn build_keys_with_nullable_column(
         }
     }
     Ok(())
+}
+
+#[inline]
+fn check_group_columns_has_nullable(group_columns: &[&ColumnRef]) -> bool {
+    for group_column in group_columns.iter() {
+        if group_column.is_nullable() {
+            return true;
+        }
+    }
+    false
 }
