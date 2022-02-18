@@ -19,7 +19,7 @@ use bumpalo::Bump;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodSerializer;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_functions::aggregates::StateAddr;
 
 use crate::common::HashMap;

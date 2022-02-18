@@ -19,13 +19,13 @@ use crate::scalars::ArithmeticModuloFunction;
 use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticNegateFunction;
 use crate::scalars::ArithmeticPlusFunction;
-use crate::scalars::Function2Factory;
+use crate::scalars::FunctionFactory;
 
 #[derive(Clone)]
 pub struct ArithmeticFunction;
 
 impl ArithmeticFunction {
-    pub fn register(factory: &mut Function2Factory) {
+    pub fn register(factory: &mut FunctionFactory) {
         factory.register_arithmetic("negate", ArithmeticNegateFunction::desc());
         factory.register_arithmetic("+", ArithmeticPlusFunction::desc());
         factory.register_arithmetic("plus", ArithmeticPlusFunction::desc());

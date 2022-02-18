@@ -19,7 +19,7 @@ use common_io::prelude::*;
 use crate::prelude::*;
 
 pub struct BooleanDeserializer {
-    pub builder: BooleanArrayBuilder,
+    pub builder: MutableBooleanColumn,
 }
 
 impl TypeDeserializer for BooleanDeserializer {
@@ -27,6 +27,10 @@ impl TypeDeserializer for BooleanDeserializer {
         let value: bool = reader.read_scalar()?;
         self.builder.append_value(value);
         Ok(())
+    }
+
+    fn de_default(&mut self) {
+        self.builder.append_value(false);
     }
 
     fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
@@ -40,24 +44,19 @@ impl TypeDeserializer for BooleanDeserializer {
     }
 
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        let v = if reader.eq_ignore_ascii_case(b"false") {
-            Some(false)
-        } else if reader.eq_ignore_ascii_case(b"true") {
-            Some(true)
-        } else if reader.eq_ignore_ascii_case(b"null") {
-            None
+        let v = if reader.eq_ignore_ascii_case(b"true") {
+            Ok(true)
+        } else if reader.eq_ignore_ascii_case(b"false") {
+            Ok(false)
         } else {
-            return Err(ErrorCode::BadBytes("Incorrect boolean value"));
-        };
-        self.builder.append_option(v);
+            Err(ErrorCode::BadBytes("Incorrect boolean value"))
+        }?;
+
+        self.builder.append_value(v);
         Ok(())
     }
 
-    fn de_null(&mut self) {
-        self.builder.append_null()
-    }
-
-    fn finish_to_series(&mut self) -> Series {
-        self.builder.finish().into_series()
+    fn finish_to_column(&mut self) -> ColumnRef {
+        self.builder.to_column()
     }
 }

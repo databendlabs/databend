@@ -12,29 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions2;
-use crate::scalars::scalar_function2_test::ScalarFunction2Test;
+use crate::scalars::scalar_function2_test::test_scalar_functions;
+use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_pow_function() -> Result<()> {
     let tests = vec![
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "pow-with-literal",
             columns: vec![Series::from_data([2]), Series::from_data([2])],
             expect: Series::from_data(vec![4_f64]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "pow-with-series",
             columns: vec![Series::from_data([2, 2]), Series::from_data([2, -2])],
             expect: Series::from_data([4_f64, 0.25]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "pow-with-null",
             columns: vec![
                 Series::from_data([Some(2), None, None]),
@@ -43,7 +43,7 @@ fn test_pow_function() -> Result<()> {
             expect: Series::from_data([Some(4_f64), None, None]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "pow-x-constant",
             columns: vec![
                 ConstColumn::new(Series::from_data(vec![2]), 3).arc(),
@@ -52,7 +52,7 @@ fn test_pow_function() -> Result<()> {
             expect: Series::from_data([Some(4_f64), Some(0.25), None]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "pow-y-constant",
             columns: vec![
                 Series::from_data([Some(2), Some(-2), None]),
@@ -63,5 +63,5 @@ fn test_pow_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions2(PowFunction::try_create("pow")?, &tests)
+    test_scalar_functions(PowFunction::try_create("pow")?, &tests)
 }

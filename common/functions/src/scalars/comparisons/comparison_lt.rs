@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::DataValueComparisonOperator;
+use common_datavalues::DataValueComparisonOperator;
 use common_exception::Result;
 
-use crate::scalars::function2_factory::Function2Description;
+use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ComparisonFunction;
-use crate::scalars::Function2;
+use crate::scalars::Function;
 
 pub struct ComparisonLtFunction;
 
 impl ComparisonLtFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         ComparisonFunction::try_create_func(DataValueComparisonOperator::Lt)
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function(">=")

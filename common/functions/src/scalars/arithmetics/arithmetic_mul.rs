@@ -14,8 +14,8 @@
 
 use std::ops::Mul;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_types_error;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::traits::AsPrimitive;
@@ -25,8 +25,8 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::EvalContext;
-use crate::scalars::Function2;
-use crate::scalars::Monotonicity2;
+use crate::scalars::Function;
+use crate::scalars::Monotonicity;
 
 fn mul_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
 where
@@ -54,7 +54,7 @@ impl ArithmeticMulFunction {
     pub fn try_create_func(
         _display_name: &str,
         args: &[&DataTypePtr],
-    ) -> Result<Box<dyn Function2>> {
+    ) -> Result<Box<dyn Function>> {
         let op = DataValueBinaryOperator::Mul;
         let left_type = remove_nullable(args[0]).data_type_id();
         let right_type = remove_nullable(args[1]).data_type_id();
@@ -92,15 +92,15 @@ impl ArithmeticMulFunction {
         )
     }
 
-    pub fn get_monotonicity(args: &[Monotonicity2]) -> Result<Monotonicity2> {
+    pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
         arithmetic_mul_div_monotonicity(args, DataValueBinaryOperator::Mul)
     }
 }
 
 pub fn arithmetic_mul_div_monotonicity(
-    args: &[Monotonicity2],
+    args: &[Monotonicity],
     op: DataValueBinaryOperator,
-) -> Result<Monotonicity2> {
+) -> Result<Monotonicity> {
     if !matches!(
         op,
         DataValueBinaryOperator::Mul | DataValueBinaryOperator::Div
@@ -116,7 +116,7 @@ pub fn arithmetic_mul_div_monotonicity(
 
     match (f_x.is_constant, g_x.is_constant) {
         // both f(x) and g(x) are constant
-        (true, true) => Ok(Monotonicity2::create_constant()),
+        (true, true) => Ok(Monotonicity::create_constant()),
 
         //f(x) is constant
         (true, false) => {
@@ -124,7 +124,7 @@ pub fn arithmetic_mul_div_monotonicity(
                 1 => {
                     match op {
                         // 12 * g(x)
-                        DataValueBinaryOperator::Mul => Ok(Monotonicity2::create(
+                        DataValueBinaryOperator::Mul => Ok(Monotonicity::create(
                             g_x.is_monotonic,
                             g_x.is_positive,
                             g_x.is_constant,
@@ -133,9 +133,9 @@ pub fn arithmetic_mul_div_monotonicity(
                         _ => {
                             if g_x.compare_with_zero()? == 0 {
                                 // unknown monotonicity
-                                Ok(Monotonicity2::default())
+                                Ok(Monotonicity::default())
                             } else {
-                                Ok(Monotonicity2::create(
+                                Ok(Monotonicity::create(
                                     g_x.is_monotonic,
                                     !g_x.is_positive, // flip the is_positive
                                     g_x.is_constant,
@@ -147,7 +147,7 @@ pub fn arithmetic_mul_div_monotonicity(
                 -1 => {
                     match op {
                         // -12 * g(x)
-                        DataValueBinaryOperator::Mul => Ok(Monotonicity2::create(
+                        DataValueBinaryOperator::Mul => Ok(Monotonicity::create(
                             g_x.is_monotonic,
                             !g_x.is_positive, // flip the is_positive
                             g_x.is_constant,
@@ -156,9 +156,9 @@ pub fn arithmetic_mul_div_monotonicity(
                         _ => {
                             if g_x.compare_with_zero()? == 0 {
                                 // unknown monotonicity
-                                Ok(Monotonicity2::default())
+                                Ok(Monotonicity::default())
                             } else {
-                                Ok(Monotonicity2::create(
+                                Ok(Monotonicity::create(
                                     g_x.is_monotonic,
                                     g_x.is_positive,
                                     g_x.is_constant,
@@ -176,7 +176,7 @@ pub fn arithmetic_mul_div_monotonicity(
             match g_x.compare_with_zero()? {
                 1 => {
                     // f(x) *|/ 12
-                    Ok(Monotonicity2::create(
+                    Ok(Monotonicity::create(
                         f_x.is_monotonic,
                         f_x.is_positive,
                         f_x.is_constant,
@@ -184,7 +184,7 @@ pub fn arithmetic_mul_div_monotonicity(
                 }
                 -1 => {
                     // f(x) *|/ (-12), need to flip the is_positive for negative constant value.
-                    Ok(Monotonicity2::create(
+                    Ok(Monotonicity::create(
                         f_x.is_monotonic,
                         !f_x.is_positive,
                         f_x.is_constant,
@@ -222,7 +222,7 @@ pub fn arithmetic_mul_div_monotonicity(
                         if f_x_compare_with_zero == -1 {
                             is_positive = !is_positive;
                         }
-                        Ok(Monotonicity2::create(is_monotonic, is_positive, false))
+                        Ok(Monotonicity::create(is_monotonic, is_positive, false))
                     }
                     (-1, 1) | (1, -1) => {
                         // For case f(x) >= 0 && g(x) <= 0, we have following results. (f(x) <= 0 && g(x) >= 0 just need to flip the is_positive)
@@ -246,13 +246,13 @@ pub fn arithmetic_mul_div_monotonicity(
                         if f_x_compare_with_zero == -1 {
                             is_positive = !is_positive;
                         }
-                        Ok(Monotonicity2::create(is_monotonic, is_positive, false))
+                        Ok(Monotonicity::create(is_monotonic, is_positive, false))
                     }
-                    _ => Ok(Monotonicity2::default()),
+                    _ => Ok(Monotonicity::default()),
                 }
             } else {
                 // unknown monotonicity
-                Ok(Monotonicity2::default())
+                Ok(Monotonicity::default())
             }
         }
     }

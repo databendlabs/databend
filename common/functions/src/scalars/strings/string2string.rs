@@ -15,16 +15,16 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::StringType;
-use common_datavalues2::TypeID;
+use common_datavalues::prelude::*;
+use common_datavalues::StringType;
+use common_datavalues::TypeID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 // use common_tracing::tracing;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 pub trait StringOperator: Send + Sync + Clone + Default + 'static {
     fn try_apply<'a>(&'a mut self, _: &'a [u8], _: &mut [u8]) -> Result<usize>;
@@ -44,28 +44,28 @@ pub struct String2StringFunction<T> {
 }
 
 impl<T: StringOperator> String2StringFunction<T> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
             _marker: PhantomData,
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
-impl<T: StringOperator> Function2 for String2StringFunction<T> {
+impl<T: StringOperator> Function for String2StringFunction<T> {
     fn name(&self) -> &str {
         &self.display_name
     }
 
     fn return_type(
         &self,
-        args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         if args[0].data_type_id() != TypeID::String {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string arg, but got {:?}",
@@ -77,9 +77,9 @@ impl<T: StringOperator> Function2 for String2StringFunction<T> {
 
     fn eval(
         &self,
-        columns: &common_datavalues2::ColumnsWithField,
+        columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         let mut op = T::default();
         let column: &StringColumn = Series::check_get(columns[0].column())?;
         let estimate_bytes = op.estimate_bytes(column);

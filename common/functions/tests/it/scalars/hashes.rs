@@ -15,7 +15,7 @@
 use std::hash::Hash;
 use std::hash::Hasher;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::Blake3HashFunction;
 use common_functions::scalars::City64WithSeedFunction;
@@ -28,13 +28,13 @@ use common_functions::scalars::XxHash64Function;
 use naive_cityhash::cityhash64_with_seed;
 use twox_hash::XxHash32;
 
-use super::scalar_function2_test::test_scalar_functions2;
-use super::scalar_function2_test::ScalarFunction2Test;
+use super::scalar_function2_test::test_scalar_functions;
+use super::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_siphash_function() -> Result<()> {
     let tests = vec![
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "Int8Array siphash",
             columns: vec![Series::from_data(vec![1i8, 2, 1])],
             expect: Series::from_data(vec![
@@ -44,7 +44,7 @@ fn test_siphash_function() -> Result<()> {
             ]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "Int16Array siphash",
             columns: vec![Series::from_data(vec![1i16, 2, 1])],
             expect: Series::from_data(vec![
@@ -54,7 +54,7 @@ fn test_siphash_function() -> Result<()> {
             ]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "Int32Array siphash",
             columns: vec![Series::from_data(vec![1i32, 2, 1])],
             expect: Series::from_data(vec![
@@ -64,7 +64,7 @@ fn test_siphash_function() -> Result<()> {
             ]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "Int64Array siphash",
             columns: vec![Series::from_data(vec![1i64, 2, 1])],
             expect: Series::from_data(vec![
@@ -74,7 +74,7 @@ fn test_siphash_function() -> Result<()> {
             ]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "UInt8Array siphash",
             columns: vec![Series::from_data(vec![1u8, 2, 1])],
             expect: Series::from_data(vec![
@@ -84,7 +84,7 @@ fn test_siphash_function() -> Result<()> {
             ]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "UInt16Array siphash",
             columns: vec![Series::from_data(vec![1u16, 2, 1])],
             expect: Series::from_data(vec![
@@ -94,7 +94,7 @@ fn test_siphash_function() -> Result<()> {
             ]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "UInt32Array siphash",
             columns: vec![Series::from_data(vec![1u32, 2, 1])],
             expect: Series::from_data(vec![
@@ -104,7 +104,7 @@ fn test_siphash_function() -> Result<()> {
             ]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "UInt64Array siphash",
             columns: vec![Series::from_data(vec![1u64, 2, 1])],
             expect: Series::from_data(vec![
@@ -114,7 +114,7 @@ fn test_siphash_function() -> Result<()> {
             ]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "Float32Array siphash",
             columns: vec![Series::from_data(vec![1.0f32, 2., 1.])],
             expect: Series::from_data(vec![
@@ -124,7 +124,7 @@ fn test_siphash_function() -> Result<()> {
             ]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "Float64Array siphash",
             columns: vec![Series::from_data(vec![1.0f64, 2., 1.])],
             expect: Series::from_data(vec![
@@ -136,73 +136,73 @@ fn test_siphash_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions2(SipHash64Function::try_create("siphash")?, &tests)
+    test_scalar_functions(SipHash64Function::try_create("siphash")?, &tests)
 }
 
 #[test]
 fn test_md5hash_function() -> Result<()> {
-    let tests = vec![ScalarFunction2Test {
+    let tests = vec![ScalarFunctionTest {
         name: "valid input",
         columns: vec![Series::from_data(["testing"])],
         expect: Series::from_data(["ae2b1fca515949e5d54fb22b8ed95575"]),
         error: "",
     }];
 
-    test_scalar_functions2(Md5HashFunction::try_create("md5")?, &tests)
+    test_scalar_functions(Md5HashFunction::try_create("md5")?, &tests)
 }
 
 #[test]
 fn test_sha1hash_function() -> Result<()> {
-    let tests = vec![ScalarFunction2Test {
+    let tests = vec![ScalarFunctionTest {
         name: "valid input",
         columns: vec![Series::from_data(["abc"])],
         expect: Series::from_data(["a9993e364706816aba3e25717850c26c9cd0d89d"]),
         error: "",
     }];
 
-    test_scalar_functions2(Sha1HashFunction::try_create("sha1")?, &tests)
+    test_scalar_functions(Sha1HashFunction::try_create("sha1")?, &tests)
 }
 
 #[test]
 fn test_sha2hash_function() -> Result<()> {
     let tests = vec![
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "Sha0 (256)",
             columns: vec![Series::from_data(["abc"]), Series::from_data([0_u32])],
             expect: Series::from_data(["ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "Sha224",
             columns: vec![Series::from_data(["abc"]), Series::from_data([224_u32])],
             expect: Series::from_data(["23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7"]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "Sha256",
             columns: vec![Series::from_data(["abc"]), Series::from_data([256_u32])],
             expect: Series::from_data(["ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "Sha384",
             columns: vec![Series::from_data(["abc"]), Series::from_data([384_u32])],
             expect: Series::from_data(["cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7"]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "Sha512",
             columns: vec![Series::from_data(["abc"]), Series::from_data([512_u32])],
             expect: Series::from_data(["ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "InvalidSha",
             columns: vec![Series::from_data(["abc"]), Series::from_data([1_u32])],
             expect: Series::from_data([Option::<&str>::None]),
             error: "Expected [0, 224, 256, 384, 512] as sha2 encode options, but got 1",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "Sha Length as Const Field",
             columns: vec![
                 Series::from_data(["abc"]),
@@ -211,7 +211,7 @@ fn test_sha2hash_function() -> Result<()> {
             expect: Series::from_data(["23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7"]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "Sha Length with null value",
             columns: vec![
                 Series::from_data([Option::<&str>::None]),
@@ -222,12 +222,12 @@ fn test_sha2hash_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions2(Sha2HashFunction::try_create("sha2")?, &tests)
+    test_scalar_functions(Sha2HashFunction::try_create("sha2")?, &tests)
 }
 
 #[test]
 fn test_blake3hash_function() -> Result<()> {
-    let tests = vec![ScalarFunction2Test {
+    let tests = vec![ScalarFunctionTest {
         name: "valid input",
         columns: vec![Series::from_data(["testing"])],
         expect: Series::from_data([
@@ -236,31 +236,31 @@ fn test_blake3hash_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions2(Blake3HashFunction::try_create("blake3")?, &tests)
+    test_scalar_functions(Blake3HashFunction::try_create("blake3")?, &tests)
 }
 
 #[test]
 fn test_xxhash32_function() -> Result<()> {
-    let tests = vec![ScalarFunction2Test {
+    let tests = vec![ScalarFunctionTest {
         name: "valid input",
         columns: vec![Series::from_data(["testing"])],
         expect: Series::from_data([210358520u32]),
         error: "",
     }];
 
-    test_scalar_functions2(XxHash32Function::try_create("xxhash32")?, &tests)
+    test_scalar_functions(XxHash32Function::try_create("xxhash32")?, &tests)
 }
 
 #[test]
 fn test_xxhash64_function() -> Result<()> {
-    let tests = vec![ScalarFunction2Test {
+    let tests = vec![ScalarFunctionTest {
         name: "valid input",
         columns: vec![Series::from_data(["testing"])],
         expect: Series::from_data([5654940910216186247u64]),
         error: "",
     }];
 
-    test_scalar_functions2(XxHash64Function::try_create("xxhash64")?, &tests)
+    test_scalar_functions(XxHash64Function::try_create("xxhash64")?, &tests)
 }
 
 #[test]
@@ -288,7 +288,7 @@ fn test_cityhash64_with_seed_u8() -> Result<()> {
         let hashed = cityhash64_with_seed(&[v], seeds[i]);
         expected_result.push(hashed);
     }
-    let test0 = ScalarFunction2Test {
+    let test0 = ScalarFunctionTest {
         name: "u8 valid input without null",
         columns: vec![Series::from_data(to_hash), Series::from_data(seeds)],
         expect: Series::from_data(expected_result),
@@ -305,7 +305,7 @@ fn test_cityhash64_with_seed_u8() -> Result<()> {
     let data_type = UInt64Type::arc();
     let data_value = DataValue::UInt64(seed);
     let seed_column = data_type.create_constant_column(&data_value, to_hash.len())?;
-    let test1 = ScalarFunction2Test {
+    let test1 = ScalarFunctionTest {
         name: "u8 valid input without null, constant seed",
         columns: vec![Series::from_data(to_hash), seed_column],
         expect: Series::from_data(expected_result),
@@ -313,7 +313,7 @@ fn test_cityhash64_with_seed_u8() -> Result<()> {
     };
 
     let tests = vec![test0, test1];
-    test_scalar_functions2(
+    test_scalar_functions(
         City64WithSeedFunction::try_create("city64WithSeed")?,
         &tests,
     )
@@ -334,7 +334,7 @@ fn test_cityhash64_with_seed_string() -> Result<()> {
             None => expected_result.push(None),
         }
     }
-    let test0 = ScalarFunction2Test {
+    let test0 = ScalarFunctionTest {
         name: "String + Nullable(Seed)",
         columns: vec![Series::from_data(to_hash), Series::from_data(seeds)],
         expect: Series::from_data(expected_result),
@@ -356,7 +356,7 @@ fn test_cityhash64_with_seed_string() -> Result<()> {
     let data_type = UInt64Type::arc();
     let data_value = DataValue::UInt64(seed);
     let seed_column = data_type.create_constant_column(&data_value, to_hash.len())?;
-    let test1 = ScalarFunction2Test {
+    let test1 = ScalarFunctionTest {
         name: "Nullable(String) + constant seed",
         columns: vec![Series::from_data(to_hash), seed_column],
         expect: Series::from_data(expected_result),
@@ -364,7 +364,7 @@ fn test_cityhash64_with_seed_string() -> Result<()> {
     };
 
     let tests = vec![test0, test1];
-    test_scalar_functions2(
+    test_scalar_functions(
         City64WithSeedFunction::try_create("city64WithSeed")?,
         &tests,
     )

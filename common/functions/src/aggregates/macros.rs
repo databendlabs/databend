@@ -46,7 +46,7 @@ macro_rules! with_match_primitive_type_ids {
     (
     $type0:expr, $type1:expr, | $_a:tt $T0:ident, $_b:tt $T1:ident | $body:tt,  $nbody:tt
 ) => {{
-        use common_datavalues2::prelude::TypeID::*;
+        use common_datavalues::prelude::TypeID::*;
 
         macro_rules! __with_types__ {
             ( $_a $T0:ident, $_b $T1:ident ) => {

@@ -22,21 +22,24 @@ use num::cast::AsPrimitive;
 
 use crate::prelude::*;
 
-pub struct DateDeserializer<T: DFPrimitiveType> {
-    pub builder: PrimitiveArrayBuilder<T>,
+pub struct DateDeserializer<T: PrimitiveType> {
+    pub builder: MutablePrimitiveColumn<T>,
 }
 
 impl<T> TypeDeserializer for DateDeserializer<T>
 where
     i64: AsPrimitive<T>,
-    T: DFPrimitiveType,
+    T: PrimitiveType,
     T: Unmarshal<T> + StatBuffer + FromLexical,
-    DFPrimitiveArray<T>: IntoSeries,
 {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;
         self.builder.append_value(value);
         Ok(())
+    }
+
+    fn de_default(&mut self) {
+        self.builder.append_value(T::default());
     }
 
     fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
@@ -49,11 +52,6 @@ where
     }
 
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        if reader.eq_ignore_ascii_case(b"null") {
-            self.builder.append_null();
-            return Ok(());
-        }
-
         match lexical_core::parse::<T>(reader) {
             Ok(v) => {
                 self.builder.append_value(v);
@@ -73,11 +71,7 @@ where
         }
     }
 
-    fn de_null(&mut self) {
-        self.builder.append_null()
-    }
-
-    fn finish_to_series(&mut self) -> Series {
-        self.builder.finish().into_series()
+    fn finish_to_column(&mut self) -> ColumnRef {
+        self.builder.to_column()
     }
 }

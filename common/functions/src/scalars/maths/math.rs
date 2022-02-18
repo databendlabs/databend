@@ -22,7 +22,7 @@ use crate::scalars::CeilFunction;
 use crate::scalars::DegressFunction;
 use crate::scalars::ExpFunction;
 use crate::scalars::FloorFunction;
-use crate::scalars::Function2Factory;
+use crate::scalars::FunctionFactory;
 use crate::scalars::LnFunction;
 use crate::scalars::Log10Function;
 use crate::scalars::Log2Function;
@@ -47,7 +47,7 @@ pub type CRC32Function = BaseHashFunction<CRC32, u32>;
 pub struct MathsFunction;
 
 impl MathsFunction {
-    pub fn register2(factory: &mut Function2Factory) {
+    pub fn register2(factory: &mut FunctionFactory) {
         factory.register("abs", AbsFunction::desc());
         factory.register("sign", SignFunction::desc());
         factory.register("pi", PiFunction::desc());

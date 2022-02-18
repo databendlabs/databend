@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::scalars::Function2Factory;
+use crate::scalars::FunctionFactory;
 use crate::scalars::IfFunction;
 
 #[derive(Clone)]
 pub struct ConditionalFunction;
 
 impl ConditionalFunction {
-    pub fn register(factory: &mut Function2Factory) {
+    pub fn register(factory: &mut FunctionFactory) {
         factory.register("if", IfFunction::desc());
     }
 }

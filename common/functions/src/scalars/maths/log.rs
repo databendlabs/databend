@@ -17,16 +17,16 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_type_id;
 use common_exception::Result;
 use num_traits::AsPrimitive;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::EvalContext;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::ScalarBinaryExpression;
 use crate::scalars::ScalarUnaryExpression;
 
@@ -69,22 +69,22 @@ pub struct GenericLogFunction<T> {
 }
 
 impl<T: Base> GenericLogFunction<T> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
             t: PhantomData,
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(1, 2),
         )
     }
 
-    fn log<S>(value: S) -> f64
+    fn log<S>(value: S, _ctx: &mut EvalContext) -> f64
     where S: AsPrimitive<f64> {
         value.as_().log(T::base())
     }
@@ -98,7 +98,7 @@ impl<T: Base> GenericLogFunction<T> {
     }
 }
 
-impl<T: Base> Function2 for GenericLogFunction<T> {
+impl<T: Base> Function for GenericLogFunction<T> {
     fn name(&self) -> &str {
         &*self.display_name
     }
@@ -111,10 +111,11 @@ impl<T: Base> Function2 for GenericLogFunction<T> {
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        let mut ctx = EvalContext::default();
         if columns.len() == 1 {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
                 let unary = ScalarUnaryExpression::<$S, f64, _>::new(Self::log);
-                let col = unary.eval(columns[0].column())?;
+                let col = unary.eval(columns[0].column(), &mut ctx)?;
                 Ok(Arc::new(col))
             },{
                 unreachable!()
@@ -123,7 +124,7 @@ impl<T: Base> Function2 for GenericLogFunction<T> {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
                     let binary = ScalarBinaryExpression::<$S, $T, f64, _>::new(Self::log_with_base);
-                    let col = binary.eval(columns[0].column(), columns[1].column(), &mut EvalContext::default())?;
+                    let col = binary.eval(columns[0].column(), columns[1].column(), &mut ctx)?;
                     Ok(Arc::new(col))
                 },{
                     unreachable!()

@@ -20,7 +20,7 @@ use twox_hash::XxHash64;
 use super::BaseHashFunction;
 use crate::scalars::Blake3HashFunction;
 use crate::scalars::City64WithSeedFunction;
-use crate::scalars::Function2Factory;
+use crate::scalars::FunctionFactory;
 use crate::scalars::Md5HashFunction;
 use crate::scalars::Sha1HashFunction;
 use crate::scalars::Sha2HashFunction;
@@ -33,7 +33,7 @@ pub type XxHash64Function = BaseHashFunction<XxHash64, u64>;
 pub type SipHash64Function = BaseHashFunction<DefaultHasher, u64>;
 
 impl HashesFunction {
-    pub fn register2(factory: &mut Function2Factory) {
+    pub fn register2(factory: &mut FunctionFactory) {
         factory.register("md5", Md5HashFunction::desc());
         factory.register("sha", Sha1HashFunction::desc());
         factory.register("sha1", Sha1HashFunction::desc());

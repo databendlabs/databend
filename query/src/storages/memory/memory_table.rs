@@ -18,7 +18,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::ColumnRef;
+use common_datavalues::ColumnRef;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::TableInfo;

@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues2::DataSchema;
+use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_planners::AdminUseTenantPlan;
 use common_streams::DataBlockStream;

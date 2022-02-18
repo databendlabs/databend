@@ -14,7 +14,7 @@
 
 use std::marker::PhantomData;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use super::EvalContext;

@@ -15,7 +15,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -24,8 +24,8 @@ use crate::scalars::ArithmeticMinusFunction;
 use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::EvalContext;
-use crate::scalars::Function2;
-use crate::scalars::Monotonicity2;
+use crate::scalars::Function;
+use crate::scalars::Monotonicity;
 use crate::scalars::ScalarBinaryExpression;
 use crate::scalars::ScalarBinaryFunction;
 
@@ -47,7 +47,7 @@ where
         op: DataValueBinaryOperator,
         result_type: DataTypePtr,
         func: F,
-    ) -> Result<Box<dyn Function2>> {
+    ) -> Result<Box<dyn Function>> {
         let binary = ScalarBinaryExpression::<L, R, O, _>::new(func);
         Ok(Box::new(Self {
             op,
@@ -57,7 +57,7 @@ where
     }
 }
 
-impl<L, R, O, F> Function2 for BinaryArithmeticFunction<L, R, O, F>
+impl<L, R, O, F> Function for BinaryArithmeticFunction<L, R, O, F>
 where
     L: Scalar + Send + Sync + Clone,
     R: Scalar + Send + Sync + Clone,
@@ -81,7 +81,7 @@ where
         Ok(Arc::new(col))
     }
 
-    fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         if args.len() != 2 {
             return Err(ErrorCode::BadArguments(format!(
                 "Invalid argument lengths {} for get_monotonicity",
@@ -94,7 +94,7 @@ where
             DataValueBinaryOperator::Minus => ArithmeticMinusFunction::get_monotonicity(args),
             DataValueBinaryOperator::Mul => ArithmeticMulFunction::get_monotonicity(args),
             DataValueBinaryOperator::Div => ArithmeticDivFunction::get_monotonicity(args),
-            _ => Ok(Monotonicity2::default()),
+            _ => Ok(Monotonicity::default()),
         }
     }
 }

@@ -19,7 +19,7 @@ use std::time::Instant;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodKind;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
