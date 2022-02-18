@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::PrincipalIdentity;
 use common_planners::RevokePrivilegePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -57,15 +58,25 @@ impl Interpreter for RevokePrivilegeInterpreter {
 
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
-        user_mgr
-            .revoke_user_privileges(
-                &tenant,
-                &plan.username,
-                &plan.hostname,
-                plan.on,
-                plan.priv_types,
-            )
-            .await?;
+
+        match plan.principal {
+            PrincipalIdentity::User(user) => {
+                user_mgr
+                    .revoke_user_privileges(
+                        &tenant,
+                        &user.username,
+                        &user.hostname,
+                        plan.on,
+                        plan.priv_types,
+                    )
+                    .await?;
+            }
+            PrincipalIdentity::Role(role) => {
+                user_mgr
+                    .revoke_role_privileges(&tenant, &role, plan.on, plan.priv_types)
+                    .await?;
+            }
+        }
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

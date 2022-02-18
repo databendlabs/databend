@@ -393,8 +393,7 @@ fn revoke_privilege_test() -> Result<()> {
     expect_parse_ok(
         "REVOKE ALL ON * FROM 'test'@'localhost'",
         DfStatement::RevokePrivilege(DfRevokeStatement {
-            username: String::from("test"),
-            hostname: String::from("localhost"),
+            principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
             on: DfGrantObject::Database(None),
             priv_types: UserPrivilegeSet::all_privileges(),
         }),

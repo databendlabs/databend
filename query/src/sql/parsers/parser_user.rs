@@ -144,10 +144,9 @@ impl<'a> DfParser<'a> {
         if !self.parser.parse_keyword(Keyword::FROM) {
             return self.expected("keyword FROM", self.parser.peek_token());
         }
-        let (username, hostname) = self.parse_principal_name_and_host()?;
+        let principal = self.parse_principal_identity()?;
         let revoke = DfRevokeStatement {
-            username,
-            hostname,
+            principal,
             on,
             priv_types: privileges,
         };
@@ -178,7 +177,7 @@ impl<'a> DfParser<'a> {
         // USER keyword can be omitted
         self.consume_token("USER");
         let (name, host) = self.parse_principal_name_and_host()?;
-        return Ok(PrincipalIdentity::user(name, host));
+        Ok(PrincipalIdentity::user(name, host))
     }
 
     /// A principal can be an user or an role, the formats are same: 'name'@'host',
