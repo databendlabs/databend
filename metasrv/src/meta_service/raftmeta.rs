@@ -133,7 +133,7 @@ impl MetaNodeBuilder {
             sto.get_node_addr(&node_id).await?
         };
 
-        tracing::info!("about to start raft grpc on {}", addr);
+        tracing::info!("about to start raft grpc on host {}", addr);
 
         MetaNode::start_grpc(mn.clone(), &addr).await?;
 
@@ -227,6 +227,8 @@ impl MetaNode {
                 format!("{}:{}", ip_addrs[0], port)
             }
         };
+
+        tracing::info!("about to start raft grpc on resolved addr {}", addr);
 
         let addr_str = addr.to_string();
         let ret = addr.parse::<std::net::SocketAddr>();
