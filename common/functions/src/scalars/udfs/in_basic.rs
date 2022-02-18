@@ -15,31 +15,27 @@
 use std::collections::HashSet;
 use std::fmt;
 
-use common_datavalues::columns::DataColumn;
-use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::prelude::MutableArrayBuilder;
-use common_datavalues::prelude::MutableBooleanArrayBuilder;
-use common_datavalues::types::merge_types;
-use common_datavalues::DataType;
-use common_datavalues::DataTypeAndNullable;
-use common_datavalues::DataValue;
+use common_datavalues2::prelude::*;
+use common_datavalues2::type_coercion::aggregate_types;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use ordered_float::OrderedFloat;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 #[derive(Clone)]
 pub struct InFunction<const NEGATED: bool>;
 
 impl<const NEGATED: bool> InFunction<NEGATED> {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(InFunction::<NEGATED> {}))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> Function2Description {
+        Function2Description::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .bool_function()
                 .variadic_arguments(2, usize::MAX),
@@ -47,270 +43,146 @@ impl<const NEGATED: bool> InFunction<NEGATED> {
     }
 }
 
-macro_rules! basic_contains {
-    // bool no_null_iter returns bool not &bool, other types no_null_iter return &T
-    ($INPUT_DT: expr, $INPUT_ARRAY: expr, $CHECK_ARRAY: expr, $NEGATED: expr, $BUILDER: expr, $CAST_TYPE: ident, bool) => {
-        let mut vals_set = HashSet::new();
-        for array in $CHECK_ARRAY {
-            let array = array.column().cast_with_type($INPUT_DT)?;
-            let data = array.try_get(0)?;
-            match data {
-                DataValue::$CAST_TYPE(Some(val)) => {
-                    vals_set.insert(val);
-                }
-                DataValue::$CAST_TYPE(None) => {
-                    continue;
-                }
-                DataValue::Null => {
-                    continue;
-                }
-                _ => {
-                    return Err(ErrorCode::LogicalError("it's a bug"));
-                }
+macro_rules! scalar_contains {
+    ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident) => {{
+        let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
+        let mut vals_set = HashSet::with_capacity($ROWS - 1);
+        for col in &$COLUMNS[1..] {
+            let col = cast_column_field(col, &$CAST_TYPE)?;
+            let col_viewer = $T::try_create_viewer(&col)?;
+            if col_viewer.valid_at(0) {
+                let val = col_viewer.value_at(0).to_owned_scalar();
+                vals_set.insert(val);
             }
         }
-        let arr = $INPUT_ARRAY.bool()?;
-        for val in arr.into_no_null_iter() {
-            let contains = vals_set.contains(&val);
-            $BUILDER.push((contains && !NEGATED) || (!contains && NEGATED));
+        let input_viewer = $T::try_create_viewer(&$INPUT_COL)?;
+        for (row, val) in input_viewer.iter().enumerate() {
+            let contains = vals_set.contains(&val.to_owned());
+            let valid = input_viewer.valid_at(row);
+            builder.append(valid && ((contains && !NEGATED) || (!contains && NEGATED)));
         }
-    };
-    ($INPUT_DT: expr, $INPUT_ARRAY: expr, $CHECK_ARRAY: expr, $NEGATED: expr, $BUILDER: expr, $CAST_TYPE: ident, $PRIMITIVE_TYPE: ident) => {
-        let mut vals_set = HashSet::new();
-        for array in $CHECK_ARRAY {
-            let array = array.column().cast_with_type($INPUT_DT)?;
-            let data = array.try_get(0)?;
-            match data {
-                DataValue::$CAST_TYPE(Some(val)) => {
-                    vals_set.insert(val);
-                }
-                DataValue::$CAST_TYPE(None) => {
-                    continue;
-                }
-                DataValue::Null => {
-                    continue;
-                }
-                _ => {
-                    return Err(ErrorCode::LogicalError("it's a bug"));
-                }
-            }
-        }
-        let arr = $INPUT_ARRAY.$PRIMITIVE_TYPE()?;
-        for val in arr.into_no_null_iter() {
-            let contains = vals_set.contains(val);
-            $BUILDER.push((contains && !NEGATED) || (!contains && NEGATED));
-        }
-    };
+        return Ok(builder.build($ROWS));
+    }};
 }
 
-// float type can not impl Hash and Eq trait, so it can not use HashSet
-// maybe we can find some more efficient way to make it.
 macro_rules! float_contains {
-    ($INPUT_DT: expr, $INPUT_ARRAY: expr, $CHECK_ARRAY: expr, $NEGATED: expr, $BUILDER: expr, $CAST_TYPE: ident, $PRIMITIVE_TYPE: ident) => {
-        let mut vals_set = Vec::new();
-        for array in $CHECK_ARRAY {
-            let array = array.column().cast_with_type($INPUT_DT)?;
-            let data = array.try_get(0)?;
-            match data {
-                DataValue::$CAST_TYPE(Some(val)) => {
-                    vals_set.push(val);
-                }
-                DataValue::$CAST_TYPE(None) => {
-                    continue;
-                }
-                DataValue::Null => {
-                    continue;
-                }
-                _ => {
-                    return Err(ErrorCode::LogicalError("it's a bug"));
-                }
+    ($T: ident, $INPUT_COL: expr, $ROWS: expr, $COLUMNS: expr, $CAST_TYPE: ident) => {{
+        let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity($ROWS);
+        let mut vals_set = HashSet::with_capacity($ROWS - 1);
+        for col in &$COLUMNS[1..] {
+            let col = cast_column_field(col, &$CAST_TYPE)?;
+            let col_viewer = $T::try_create_viewer(&col)?;
+            if col_viewer.valid_at(0) {
+                let val = col_viewer.value_at(0);
+                vals_set.insert(OrderedFloat::from(val));
             }
         }
-        let arr = $INPUT_ARRAY.$PRIMITIVE_TYPE()?;
-        for val in arr.into_no_null_iter() {
-            let contains = vals_set.contains(val);
-            $BUILDER.push((contains && !NEGATED) || (!contains && NEGATED));
+        let input_viewer = $T::try_create_viewer(&$INPUT_COL)?;
+        for (row, val) in input_viewer.iter().enumerate() {
+            let contains = vals_set.contains(&OrderedFloat::from(val));
+            let valid = input_viewer.valid_at(row);
+            builder.append(valid && ((contains && !NEGATED) || (!contains && NEGATED)));
         }
-    };
+        return Ok(builder.build($ROWS));
+    }};
 }
 
-impl<const NEGATED: bool> Function for InFunction<NEGATED> {
+impl<const NEGATED: bool> Function2 for InFunction<NEGATED> {
     fn name(&self) -> &str {
         "InFunction"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let input_dt = args[0].data_type();
-        if input_dt == &DataType::Null {
-            return Ok(DataTypeAndNullable::create(input_dt, false));
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        for dt in args {
+            let type_id = remove_nullable(dt).data_type_id();
+            if type_id.is_date_or_date_time()
+                || type_id.is_interval()
+                || type_id.is_array()
+                || type_id.is_struct()
+            {
+                return Err(ErrorCode::UnexpectedError(format!(
+                    "{} type is not supported for IN now",
+                    type_id
+                )));
+            }
         }
-
-        let dt = DataType::Boolean;
-        Ok(DataTypeAndNullable::create(&dt, false))
+        let input_dt = remove_nullable(args[0]).data_type_id();
+        if input_dt == TypeID::Null {
+            return Ok(NullType::arc());
+        }
+        Ok(BooleanType::arc())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let input_column = columns[0].column();
-
-        let input_array = match input_column {
-            DataColumn::Array(array) => array.to_owned(),
-            DataColumn::Constant(scalar, _) => scalar.to_array()?,
-        };
-
-        let input_dt = input_array.data_type();
-        if input_dt == &DataType::Null {
-            return Ok(DataColumn::Constant(DataValue::Null, input_rows));
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        for col in columns {
+            let dt = col.column().data_type();
+            let type_id = remove_nullable(&dt).data_type_id();
+            if type_id.is_date_or_date_time()
+                || type_id.is_interval()
+                || type_id.is_array()
+                || type_id.is_struct()
+            {
+                return Err(ErrorCode::UnexpectedError(format!(
+                    "{} type is not supported for IN now",
+                    type_id
+                )));
+            }
         }
-        let mut builder = MutableBooleanArrayBuilder::<false>::with_capacity(input_column.len());
 
-        let check_arrays = &columns[1..];
-
-        let mut least_super_dt = input_dt.clone();
-        for array in check_arrays {
-            least_super_dt = merge_types(&least_super_dt, array.data_type())?;
+        let input_col = &columns[0];
+        let input_dt = remove_nullable(input_col.data_type()).data_type_id();
+        if input_dt == TypeID::Null {
+            let col = NullType::arc().create_constant_column(&DataValue::Null, input_rows)?;
+            return Ok(col);
         }
-        let input_array = input_array.cast_with_type(&least_super_dt)?;
 
-        match least_super_dt {
-            DataType::Boolean => {
-                basic_contains!(
-                    &least_super_dt,
-                    input_array,
-                    check_arrays,
-                    NEGATED,
-                    builder,
-                    Boolean,
-                    bool
-                );
+        let types: Vec<DataTypePtr> = columns.iter().map(|col| col.column().data_type()).collect();
+        let least_super_dt = aggregate_types(&types)?;
+        let least_super_type_id = remove_nullable(&least_super_dt).data_type_id();
+
+        let input_col = cast_column_field(input_col, &least_super_dt)?;
+
+        match least_super_type_id {
+            TypeID::Boolean => {
+                scalar_contains!(bool, input_col, input_rows, columns, least_super_dt)
             }
-            DataType::UInt8 => {
-                basic_contains!(
-                    &least_super_dt,
-                    input_array,
-                    check_arrays,
-                    NEGATED,
-                    builder,
-                    UInt8,
-                    u8
-                );
+            TypeID::UInt8 => {
+                scalar_contains!(u8, input_col, input_rows, columns, least_super_dt)
             }
-            DataType::UInt16 => {
-                basic_contains!(
-                    &least_super_dt,
-                    input_array,
-                    check_arrays,
-                    NEGATED,
-                    builder,
-                    UInt16,
-                    u16
-                );
+            TypeID::UInt16 => {
+                scalar_contains!(u16, input_col, input_rows, columns, least_super_dt)
             }
-            DataType::UInt32 => {
-                basic_contains!(
-                    &least_super_dt,
-                    input_array,
-                    check_arrays,
-                    NEGATED,
-                    builder,
-                    UInt32,
-                    u32
-                );
+            TypeID::UInt32 => {
+                scalar_contains!(u32, input_col, input_rows, columns, least_super_dt)
             }
-            DataType::UInt64 => {
-                basic_contains!(
-                    &least_super_dt,
-                    input_array,
-                    check_arrays,
-                    NEGATED,
-                    builder,
-                    UInt64,
-                    u64
-                );
+            TypeID::UInt64 => {
+                scalar_contains!(u64, input_col, input_rows, columns, least_super_dt)
             }
-            DataType::Int8 => {
-                basic_contains!(
-                    &least_super_dt,
-                    input_array,
-                    check_arrays,
-                    NEGATED,
-                    builder,
-                    Int8,
-                    i8
-                );
+            TypeID::Int8 => {
+                scalar_contains!(i8, input_col, input_rows, columns, least_super_dt)
             }
-            DataType::Int16 => {
-                basic_contains!(
-                    &least_super_dt,
-                    input_array,
-                    check_arrays,
-                    NEGATED,
-                    builder,
-                    Int16,
-                    i16
-                );
+            TypeID::Int16 => {
+                scalar_contains!(i16, input_col, input_rows, columns, least_super_dt)
             }
-            DataType::Int32 => {
-                basic_contains!(
-                    &least_super_dt,
-                    input_array,
-                    check_arrays,
-                    NEGATED,
-                    builder,
-                    Int32,
-                    i32
-                );
+            TypeID::Int32 => {
+                scalar_contains!(i32, input_col, input_rows, columns, least_super_dt)
             }
-            DataType::Int64 => {
-                basic_contains!(
-                    &least_super_dt,
-                    input_array,
-                    check_arrays,
-                    NEGATED,
-                    builder,
-                    Int64,
-                    i64
-                );
+            TypeID::Int64 => {
+                scalar_contains!(i64, input_col, input_rows, columns, least_super_dt)
             }
-            DataType::Float32 => {
-                float_contains!(
-                    &least_super_dt,
-                    input_array,
-                    check_arrays,
-                    NEGATED,
-                    builder,
-                    Float32,
-                    f32
-                );
+            TypeID::String => {
+                scalar_contains!(Vu8, input_col, input_rows, columns, least_super_dt)
             }
-            DataType::Float64 => {
-                float_contains!(
-                    &least_super_dt,
-                    input_array,
-                    check_arrays,
-                    NEGATED,
-                    builder,
-                    Float64,
-                    f64
-                );
+            TypeID::Float32 => {
+                float_contains!(f32, input_col, input_rows, columns, least_super_dt);
             }
-            DataType::String => {
-                basic_contains!(
-                    &least_super_dt,
-                    input_array,
-                    check_arrays,
-                    NEGATED,
-                    builder,
-                    String,
-                    string
-                );
+            TypeID::Float64 => {
+                float_contains!(f64, input_col, input_rows, columns, least_super_dt);
             }
-            DataType::Struct(_) => {}
             _ => {
                 unimplemented!()
             }
         }
-
-        Ok(DataColumn::Array(builder.as_series()))
     }
 
     fn passthrough_null(&self) -> bool {

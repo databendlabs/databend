@@ -159,6 +159,16 @@ impl TypeID {
     }
 
     #[inline]
+    pub fn is_array(&self) -> bool {
+        matches!(self, TypeID::Array)
+    }
+
+    #[inline]
+    pub fn is_struct(&self) -> bool {
+        matches!(self, TypeID::Struct)
+    }
+
+    #[inline]
     pub fn is_quoted(&self) -> bool {
         matches!(
             self,

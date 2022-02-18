@@ -416,6 +416,8 @@ impl MetaNode {
             // Joining a node with log has risk messing up the data in this node and in the target cluster.
 
             let addrs = &conf.join;
+            // Join cluster use advertise host instead of listen host
+            let raft_advertise_host = conf.raft_api_advertise_host_string();
             #[allow(clippy::never_loop)]
             for addr in addrs {
                 let mut client = RaftServiceClient::connect(format!("http://{}", addr))
@@ -431,10 +433,7 @@ impl MetaNode {
                     forward_to_leader: 1,
                     body: ForwardRequestBody::Join(JoinRequest {
                         node_id: conf.id,
-                        address: conf
-                            .raft_api_addr()
-                            .await
-                            .map_err(|e| MetaError::Fatal(AnyError::new(&e)))?,
+                        address: raft_advertise_host,
                     }),
                 };
 
