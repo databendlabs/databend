@@ -15,12 +15,17 @@ runs:
         version: "3.x"
         repo-token: ${{ inputs.github_token }}
 
-    - name: Ubuntu install mold and clang
+    - uses: Warchant/setup-mold@v1
+      with:
+        version: "v1.0.3"
+        default: false
+
+    - name: Ubuntu install clang and glibc
       shell: bash
       run: |
         sudo apt update
-        sudo apt install mold clang libc6
-        echo $(whereis mold)
+        sudo apt install clang libc6
+        whereis mold
 
     - name: Config Cargo
       shell: bash
