@@ -49,6 +49,7 @@ pub struct MathsFunction;
 
 impl MathsFunction {
     pub fn register2(factory: &mut Function2Factory) {
+        factory.register("abs", AbsFunction::desc());
         factory.register("sign", SignFunction::desc());
         factory.register("pi", PiFunction::desc());
         factory.register("crc32", CRC32Function::desc());
@@ -62,7 +63,6 @@ impl MathsFunction {
     }
 
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("abs", AbsFunction::desc());
         factory.register("sin", TrigonometricSinFunction::desc());
         factory.register("cos", TrigonometricCosFunction::desc());
         factory.register("tan", TrigonometricTanFunction::desc());

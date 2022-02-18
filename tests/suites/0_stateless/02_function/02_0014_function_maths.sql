@@ -7,8 +7,8 @@ SELECT '===abs===';
 
 SELECT abs(-1);
 SELECT abs(-10086);
-SELECT abs('-233.0');
-SELECT abs('blah') = 0;
+SELECT abs('-233.0'); -- {ErrorCode 1007}
+SELECT abs('blah'); -- {ErrorCode 1007}
 SELECT abs(TRUE); -- {ErrorCode 1007}
 SELECT abs(NULL);
 SELECT abs(value) FROM math_sample_numbers;
