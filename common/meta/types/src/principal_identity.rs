@@ -27,6 +27,10 @@ impl PrincipalIdentity {
     pub fn user(name: String, host: String) -> Self {
         PrincipalIdentity::User(UserIdentity::new(name, host))
     }
+
+    pub fn role(name: String, host: String) -> Self {
+        PrincipalIdentity::Role(RoleIdentity::new(name, host))
+    }
 }
 
 impl fmt::Display for PrincipalIdentity {
