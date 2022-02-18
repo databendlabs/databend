@@ -20,12 +20,17 @@ runs:
         version: "v1.0.3"
         default: false
 
+    - name: Ubuntu move mold to /usr/bin
+      shell: bash
+      run: |
+        MOLD_PATH=$(whereis mold | awk '{print $2}')
+        sudo cp $MOLD_PATH /usr/bin
+
     - name: Ubuntu install clang and glibc
       shell: bash
       run: |
         sudo apt update
         sudo apt install clang libc6
-        whereis mold
 
     - name: Config Cargo
       shell: bash
