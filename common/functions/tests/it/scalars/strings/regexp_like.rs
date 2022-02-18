@@ -42,7 +42,7 @@ fn test_regexp_like_function() -> Result<()> {
             error: "",
         },
         ScalarFunction2Test {
-            name: "regexp-like-with-type-error",
+            name: "regexp-like-type-error",
             columns: vec![
                 Series::from_data(vec!["abc", "abd"]),
                 Series::from_data(vec![2, 3]),
@@ -51,7 +51,7 @@ fn test_regexp_like_function() -> Result<()> {
             error: "Expected string arg, but got [String, Int32]",
         },
         ScalarFunction2Test {
-            name: "regexp-like-with-match-type-error",
+            name: "regexp-like-match-type-error",
             columns: vec![
                 Series::from_data(vec!["abc"]),
                 Series::from_data(vec!["abc"]),
@@ -61,7 +61,7 @@ fn test_regexp_like_function() -> Result<()> {
             error: "Incorrect arguments to REGEXP_LIKE match type: x",
         },
         ScalarFunction2Test {
-            name: "regexp-like-with-match-type-error",
+            name: "regexp-like-match-type-error2",
             columns: vec![
                 Series::from_data(vec!["abc"]),
                 Series::from_data(vec!["abc"]),
