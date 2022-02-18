@@ -297,16 +297,22 @@ where
             init_nullable_offset(&mut null_part_offset, group_columns)?;
             let mut nullable_column_index = 0;
             while size > 0 {
-                
-                build_keys_with_nullable_column(size, &mut offsize, group_columns, ptr, step, &nullable_column_index, null_part_offset)?;
+                build_keys_with_nullable_column(
+                    size,
+                    &mut offsize,
+                    group_columns,
+                    ptr,
+                    step,
+                    &nullable_column_index,
+                    null_part_offset,
+                )?;
                 size /= 2;
             }
-        }else{
+        } else {
             while size > 0 {
-                build(size, &mut offsize, group_columns, ptr, step,)?;
+                build(size, &mut offsize, group_columns, ptr, step)?;
                 size /= 2;
             }
-
         }
         Ok(group_keys)
     }
@@ -424,19 +430,19 @@ fn build_keys_with_nullable_column(
         let data_type = col.data_type();
         let type_id = data_type.data_type_id();
         let size = type_id.numeric_byte_size()?;
-        
+
         if size == mem_size {
             if col.is_null() {
                 let writer = unsafe { writer.add(*offsize) };
                 Series::fixed_hash_with_nullable(col, writer, step, index, null_offset)?;
                 *offsize += size;
-                index +=1;
-        }else{
-            let writer = unsafe { writer.add(*offsize) };
-            Series::fixed_hash(col, writer, step)?;
-            *offsize += size;
+                index += 1;
+            } else {
+                let writer = unsafe { writer.add(*offsize) };
+                Series::fixed_hash(col, writer, step)?;
+                *offsize += size;
+            }
         }
-    }
     }
     Ok(())
 }

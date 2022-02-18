@@ -57,7 +57,6 @@ impl Series {
         })
     }
 
-
     /// Apply binary mode function to each element of the column.
     /// WARN: Can't use `&mut [Vec<u8>]` because it has performance drawback.
     /// Refer: https://github.com/rust-lang/rust-clippy/issues/8334
