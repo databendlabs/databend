@@ -34,6 +34,10 @@ impl DataBlock {
             let typ = column.data_type();
             if typ.data_type_id().is_integer() {
                 group_key_len += typ.data_type_id().numeric_byte_size()?;
+                // If column is nullable, we will add one byte to identify `null` value for every row.
+                if (column.is_nullable()){
+                    group_key_len += 1;
+                }
             } else {
                 return Ok(HashMethodKind::Serializer(HashMethodSerializer::default()));
             }

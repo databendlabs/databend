@@ -36,6 +36,28 @@ impl Series {
         })
     }
 
+    pub fn fixed_hash_with_nullable(
+        column: &ColumnRef,
+        ptr: *mut u8,
+        step: usize,
+        i: usize,
+        null_offset: usize,
+    ) {
+        let column = column.convert_full_column();
+        // TODO support nullable
+        let column = Series::remove_nullable(&column);
+        let type_id = column.data_type_id().to_physical_type();
+        with_match_scalar_type!(type_id, |$T| {
+            let col: &<$T as Scalar>::ColumnType = Series::check_get(&column)?;
+            GroupHash::fixed_hash_with_nullable(col, ptr, step, i, null_offset)
+        }, {
+            Err(ErrorCode::BadDataValueType(
+                format!("Unsupported apply fn fixed_hash operation for column: {:?}", column.data_type()),
+            ))
+        })
+    }
+
+
     /// Apply binary mode function to each element of the column.
     /// WARN: Can't use `&mut [Vec<u8>]` because it has performance drawback.
     /// Refer: https://github.com/rust-lang/rust-clippy/issues/8334

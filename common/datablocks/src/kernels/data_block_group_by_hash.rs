@@ -120,6 +120,8 @@ pub type HashMethodKeysU16 = HashMethodFixedKeys<u16>;
 pub type HashMethodKeysU32 = HashMethodFixedKeys<u32>;
 pub type HashMethodKeysU64 = HashMethodFixedKeys<u64>;
 
+/// These methods are `generic` method to generate hash key,
+/// that is the 'binary` representation of each column value as hash key.
 pub enum HashMethodKind {
     Serializer(HashMethodSerializer),
     KeysU8(HashMethodKeysU8),
@@ -271,18 +273,51 @@ where
         format!("FixedKeys{}", std::mem::size_of::<Self::HashKey>())
     }
 
+    ///Build hash keys in the way that all the values of one row in these group columns coined
+    /// into one hash key, as a result the binary representation of these combined value is a hashkey
+    /// for this row. In normal situation, All columns are not nullable, then we just move these value
+    /// to another position row by row, that's trivial. When some columns are nullable, then we will
+    /// make the value of this value (null) represented by 0, and set `1`in the proper byte to identify
+    /// this `null` value.
+    /// Example: the column1 and column3 are nullable type.
+    /// The memory layout is split into [[value_part][null_part]]:
+    /// [[column1_value, column2_value, ..., nullable_byte_for_column1, nullable_byte_for_column3], [...]]
     fn build_keys(&self, group_columns: &[&ColumnRef], rows: usize) -> Result<Vec<Self::HashKey>> {
         let step = std::mem::size_of::<T>();
         let mut group_keys: Vec<T> = vec![T::default(); rows];
         let ptr = group_keys.as_mut_ptr() as *mut u8;
         let mut offsize = 0;
         let mut size = step;
-        while size > 0 {
-            build(size, &mut offsize, group_columns, ptr, step)?;
-            size /= 2;
+        // If any of these columns is nullable.
+        let group_columns_has_nullable = false;
+        // todo!() check this.
+        if group_columns_has_nullable {
+            let mut null_part_offset = 0;
+
+            init_nullable_offset(&mut null_part_offset, group_columns)?;
+            let mut nullable_column_index = 0;
+            while size > 0 {
+                build_keys_with_nullable_column(size, &mut offsize, group_columns, ptr, step, nullable_column_index, null_part_offset)?;
+                size /= 2;
+            }
+        }else{
+            while size > 0 {
+                build(size, &mut offsize, group_columns, ptr, step,)?;
+                size /= 2;
+            }
+
         }
         Ok(group_keys)
     }
+}
+
+/// Init the nullable part's offset in bytes. It follows the values part.
+#[inline]
+fn init_nullable_offset(null_part_offset: &mut usize, group_keys: &[&ColumnRef]) -> Result<()> {
+    for group_key_column in group_keys {
+        *null_part_offset += group_key_column.data_type_id().numeric_byte_size()?;
+    }
+    Ok(())
 }
 
 #[inline]
@@ -300,6 +335,30 @@ fn build(
         if size == mem_size {
             let writer = unsafe { writer.add(*offsize) };
             Series::fixed_hash(col, writer, step)?;
+            *offsize += size;
+        }
+    }
+    Ok(())
+}
+
+#[inline]
+fn build_keys_with_nullable_column(
+    &self,
+    mem_size: usize,
+    offsize: &mut usize,
+    group_columns: &[&ColumnRef],
+    writer: *mut u8,
+    step: usize,
+    i: usize,
+    null_offset: usize,
+) -> Result<()> {
+    for col in group_columns.iter() {
+        let data_type = col.data_type();
+        let type_id = data_type.data_type_id();
+        let size = type_id.numeric_byte_size()?;
+        if size == mem_size {
+            let writer = unsafe { writer.add(*offsize) };
+            Series::fixed_hash_with_nullable(col, writer, step, i, null_offset)?;
             *offsize += size;
         }
     }
