@@ -15,6 +15,9 @@ runs:
         version: "3.x"
         repo-token: ${{ inputs.github_token }}
 
+    - name: Set up building environment
+      uses: ./.github/actions/build_setup
+
     - name: Add rust target
       shell: bash
       run: rustup target add ${{ matrix.config.target }}

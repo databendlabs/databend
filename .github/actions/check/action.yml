@@ -15,28 +15,6 @@ runs:
         version: "3.x"
         repo-token: ${{ inputs.github_token }}
 
-    - uses: Warchant/setup-mold@v1
-      with:
-        version: "v1.0.3"
-        default: false
-
-    - name: Ubuntu move mold to /usr/bin
-      shell: bash
-      run: |
-        MOLD_PATH=$(whereis mold | awk '{print $2}')
-        sudo cp $MOLD_PATH /usr/bin
-
-    - name: Ubuntu install clang and glibc
-      shell: bash
-      run: |
-        sudo apt update
-        sudo apt install clang libc6
-
-    - name: Config Cargo
-      shell: bash
-      run: |
-        mv ./.cargo/ci.toml $HOME/.cargo/config.toml
-
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
       with:

@@ -1,0 +1,33 @@
+name: "Build Setup"
+description: "Set up building environment"
+inputs:
+  github_token:
+    description: "Github Token"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Configure Cargo
+      shell: bash
+      run: |
+        cp ./.cargo/ci.toml $HOME/.cargo/config.toml
+
+    - name: Ubuntu install clang and library
+      if: ${{matrix.config.os == 'ubuntu-latest'}}
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang libc++-dev
+
+    - uses: Warchant/setup-mold@v1
+      if: ${{matrix.config.os == 'ubuntu-latest'}}
+      with:
+        version: "v1.0.3"
+        default: false
+
+    - name: Ubuntu Copy Mold to /usr/bin
+      if: ${{matrix.config.os == 'ubuntu-latest'}}
+      shell: bash
+      run: |
+        MOLD_PATH=$(whereis mold | awk '{print $2}')
+        sudo cp $MOLD_PATH /usr/bin/
