@@ -32,6 +32,7 @@ use crate::interpreters::CreateUserStageInterpreter;
 use crate::interpreters::CreateUserUDFInterpreter;
 use crate::interpreters::DescribeTableInterpreter;
 use crate::interpreters::DropDatabaseInterpreter;
+use crate::interpreters::DropRoleInterpreter;
 use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::DropUserStageInterpreter;
@@ -132,6 +133,7 @@ impl InterpreterFactory {
 
             // Role
             PlanNode::CreateRole(v) => CreateRoleInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropRole(v) => DropRoleInterpreter::try_create(ctx_clone, v),
 
             // Stage.
             PlanNode::CreateUserStage(v) => CreateUserStageInterpreter::try_create(ctx_clone, v),

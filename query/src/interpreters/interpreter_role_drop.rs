@@ -15,8 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::RoleInfo;
-use common_planners::CreateRolePlan;
+use common_planners::DropRolePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -26,21 +25,21 @@ use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
-pub struct CreateRoleInterpreter {
+pub struct DropRoleInterpreter {
     ctx: Arc<QueryContext>,
-    plan: CreateRolePlan,
+    plan: DropRolePlan,
 }
 
-impl CreateRoleInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateRolePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(CreateRoleInterpreter { ctx, plan }))
+impl DropRoleInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropRolePlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(DropRoleInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreateRoleInterpreter {
+impl Interpreter for DropRoleInterpreter {
     fn name(&self) -> &str {
-        "CreateRoleInterpreter"
+        "DropRoleInterpreter"
     }
 
     #[tracing::instrument(level = "debug", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
@@ -48,12 +47,13 @@ impl Interpreter for CreateRoleInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        // TODO: add privilege check about CREATE ROLE
+        // TODO: add privilege check about DROP role
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
-        let role_info = RoleInfo::new(plan.role_identity.name, plan.role_identity.host);
-        user_mgr.add_role(&tenant, role_info).await?;
+        user_mgr
+            .drop_role(&tenant, &plan.role_identity, plan.if_exists)
+            .await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
