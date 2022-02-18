@@ -18,7 +18,7 @@ use std::io::BufReader;
 use std::task::Poll;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use futures::Stream;
 

@@ -14,33 +14,33 @@
 
 use std::f64::consts::PI;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions2;
-use crate::scalars::scalar_function2_test::ScalarFunction2Test;
+use crate::scalars::scalar_function2_test::test_scalar_functions;
+use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_degress_function() -> Result<()> {
-    let tests = vec![ScalarFunction2Test {
+    let tests = vec![ScalarFunctionTest {
         name: "degress-passed",
         columns: vec![Series::from_data([Some(PI), Some(PI / 2.0), None])],
         expect: Series::from_data([Some(180_f64), Some(90.0), None]),
         error: "",
     }];
 
-    test_scalar_functions2(DegressFunction::try_create("degrees")?, &tests)
+    test_scalar_functions(DegressFunction::try_create("degrees")?, &tests)
 }
 
 #[test]
 fn test_radians_function() -> Result<()> {
-    let tests = vec![ScalarFunction2Test {
+    let tests = vec![ScalarFunctionTest {
         name: "radians-passed",
         columns: vec![Series::from_data([Some(180), None])],
         expect: Series::from_data([Some(PI), None]),
         error: "",
     }];
 
-    test_scalar_functions2(RadiansFunction::try_create("radians")?, &tests)
+    test_scalar_functions(RadiansFunction::try_create("radians")?, &tests)
 }

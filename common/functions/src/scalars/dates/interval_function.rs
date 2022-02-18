@@ -17,12 +17,12 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_datavalues2::chrono::Datelike;
-use common_datavalues2::chrono::Duration;
-use common_datavalues2::chrono::NaiveDate;
-use common_datavalues2::chrono::NaiveDateTime;
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_types_error;
+use common_datavalues::chrono::Datelike;
+use common_datavalues::chrono::Duration;
+use common_datavalues::chrono::NaiveDate;
+use common_datavalues::chrono::NaiveDateTime;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num_traits::AsPrimitive;
@@ -35,7 +35,7 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticCreator;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::EvalContext;
-use crate::scalars::Function2;
+use crate::scalars::Function;
 use crate::scalars::ScalarBinaryExpression;
 use crate::scalars::ScalarBinaryFunction;
 
@@ -50,7 +50,7 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
         display_name: &str,
         factor: i64,
         args: &[&DataTypePtr],
-    ) -> Result<Box<dyn Function2>> {
+    ) -> Result<Box<dyn Function>> {
         let left_arg = remove_nullable(args[0]);
         let right_arg = remove_nullable(args[1]);
         let left_type = left_arg.data_type_id();
@@ -131,7 +131,7 @@ where
         func: F,
         factor: i64,
         metadata: Option<BTreeMap<String, String>>,
-    ) -> Result<Box<dyn Function2>> {
+    ) -> Result<Box<dyn Function>> {
         let binary = ScalarBinaryExpression::<L, R, O, _>::new(func);
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
@@ -143,7 +143,7 @@ where
     }
 }
 
-impl<L, R, O, F> Function2 for IntervalFunction<L, R, O, F>
+impl<L, R, O, F> Function for IntervalFunction<L, R, O, F>
 where
     L: DateType + Send + Sync + Clone,
     R: PrimitiveType + Send + Sync + Clone,

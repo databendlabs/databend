@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-use common_datavalues2::DataValue;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;

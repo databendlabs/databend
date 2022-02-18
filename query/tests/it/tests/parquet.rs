@@ -22,7 +22,7 @@ use common_arrow::arrow::io::parquet::write::Version;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 
 // Used to create test parquet files from blocks.
 pub struct ParquetTestData {}

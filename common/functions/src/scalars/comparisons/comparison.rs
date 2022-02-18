@@ -16,11 +16,11 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_arrow::arrow::compute::comparison;
-use common_datavalues2::prelude::*;
-use common_datavalues2::type_coercion::compare_coercion;
-use common_datavalues2::BooleanType;
-use common_datavalues2::DataValueComparisonOperator;
-use common_datavalues2::TypeID;
+use common_datavalues::prelude::*;
+use common_datavalues::type_coercion::compare_coercion;
+use common_datavalues::BooleanType;
+use common_datavalues::DataValueComparisonOperator;
+use common_datavalues::TypeID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -33,8 +33,8 @@ use crate::scalars::ComparisonLtEqFunction;
 use crate::scalars::ComparisonLtFunction;
 use crate::scalars::ComparisonNotEqFunction;
 use crate::scalars::ComparisonRegexpFunction;
-use crate::scalars::Function2;
-use crate::scalars::Function2Factory;
+use crate::scalars::Function;
+use crate::scalars::FunctionFactory;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
@@ -42,7 +42,7 @@ pub struct ComparisonFunction {
 }
 
 impl ComparisonFunction {
-    pub fn register(factory: &mut Function2Factory) {
+    pub fn register(factory: &mut FunctionFactory) {
         factory.register("=", ComparisonEqFunction::desc());
         factory.register("<", ComparisonLtFunction::desc());
         factory.register(">", ComparisonGtFunction::desc());
@@ -58,20 +58,20 @@ impl ComparisonFunction {
         factory.register("not rlike", ComparisonRegexpFunction::desc_unregexp());
     }
 
-    pub fn try_create_func(op: DataValueComparisonOperator) -> Result<Box<dyn Function2>> {
+    pub fn try_create_func(op: DataValueComparisonOperator) -> Result<Box<dyn Function>> {
         Ok(Box::new(ComparisonFunction { op }))
     }
 }
 
-impl Function2 for ComparisonFunction {
+impl Function for ComparisonFunction {
     fn name(&self) -> &str {
         "ComparisonFunction"
     }
 
     fn return_type(
         &self,
-        args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         // expect array & struct
         let has_array_struct = args
             .iter()
@@ -90,9 +90,9 @@ impl Function2 for ComparisonFunction {
 
     fn eval(
         &self,
-        columns: &common_datavalues2::ColumnsWithField,
+        columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         if columns[0].data_type() != columns[1].data_type() {
             // TODO cached it inside the function
             let least_supertype = compare_coercion(columns[0].data_type(), columns[1].data_type())?;

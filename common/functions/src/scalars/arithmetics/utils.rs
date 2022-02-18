@@ -14,7 +14,7 @@
 
 use std::ops::Rem;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use num::cast::AsPrimitive;
 use strength_reduce::StrengthReducedU16;

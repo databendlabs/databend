@@ -772,7 +772,7 @@ dependencies = [
  "comfy-table",
  "common-base",
  "common-building",
- "common-datavalues2",
+ "common-datavalues",
  "common-meta-raft-store",
  "common-tracing",
  "csv",
@@ -1307,7 +1307,7 @@ dependencies = [
 name = "codegen"
 version = "0.1.0"
 dependencies = [
- "common-datavalues2",
+ "common-datavalues",
 ]
 
 [[package]]
@@ -1478,7 +1478,7 @@ dependencies = [
  "ahash",
  "comfy-table",
  "common-arrow",
- "common-datavalues2",
+ "common-datavalues",
  "common-exception",
  "common-infallible",
  "common-io",
@@ -1490,35 +1490,10 @@ dependencies = [
 name = "common-datavalues"
 version = "0.1.0"
 dependencies = [
- "ahash",
- "chrono",
- "chrono-tz",
- "common-arrow",
- "common-exception",
- "common-io",
- "common-macros",
- "common-mem-allocator",
- "lexical-core",
- "num",
- "ordered-float 2.10.0",
- "pretty_assertions",
- "regex",
- "seahash",
- "serde",
- "serde_json",
- "simdutf8",
- "strength_reduce",
-]
-
-[[package]]
-name = "common-datavalues2"
-version = "0.1.0"
-dependencies = [
  "chrono",
  "chrono-tz",
  "common-arrow",
  "common-clickhouse-srv",
- "common-datavalues",
  "common-exception",
  "common-io",
  "common-macros",
@@ -1566,7 +1541,6 @@ dependencies = [
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
- "common-datavalues2",
  "common-exception",
  "common-io",
  "crc32fast",
@@ -1654,7 +1628,7 @@ dependencies = [
  "async-trait",
  "common-ast",
  "common-base",
- "common-datavalues2",
+ "common-datavalues",
  "common-exception",
  "common-functions",
  "common-meta-api",
@@ -1685,7 +1659,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "common-base",
- "common-datavalues2",
+ "common-datavalues",
  "common-exception",
  "common-meta-types",
  "common-tracing",
@@ -1793,7 +1767,7 @@ dependencies = [
  "anyerror",
  "anyhow",
  "common-building",
- "common-datavalues2",
+ "common-datavalues",
  "common-exception",
  "derive_more",
  "enumflags2",
@@ -1834,7 +1808,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
  "common-datablocks",
- "common-datavalues2",
+ "common-datavalues",
  "common-exception",
  "common-functions",
  "common-infallible",
@@ -1854,7 +1828,7 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-datablocks",
- "common-datavalues2",
+ "common-datavalues",
  "common-exception",
  "common-functions",
  "common-io",
@@ -2386,7 +2360,7 @@ dependencies = [
  "common-clickhouse-srv",
  "common-dal-context",
  "common-datablocks",
- "common-datavalues2",
+ "common-datavalues",
  "common-exception",
  "common-functions",
  "common-grpc",
@@ -6023,12 +5997,6 @@ dependencies = [
  "ring",
  "untrusted",
 ]
-
-[[package]]
-name = "seahash"
-version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
 
 [[package]]
 name = "security-framework"

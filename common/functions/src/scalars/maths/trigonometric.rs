@@ -15,16 +15,16 @@
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_type_id;
 use common_exception::Result;
 use num_traits::AsPrimitive;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::EvalContext;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::ScalarBinaryExpression;
 use crate::scalars::ScalarUnaryExpression;
 
@@ -62,12 +62,12 @@ impl fmt::Display for Trigonometric {
 }
 
 impl TrigonometricFunction {
-    pub fn try_create_func(t: Trigonometric) -> Result<Box<dyn Function2>> {
+    pub fn try_create_func(t: Trigonometric) -> Result<Box<dyn Function>> {
         Ok(Box::new(TrigonometricFunction { t }))
     }
 }
 
-impl Function2 for TrigonometricFunction {
+impl Function for TrigonometricFunction {
     fn name(&self) -> &str {
         "TrigonometricFunction"
     }
@@ -80,44 +80,45 @@ impl Function2 for TrigonometricFunction {
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        let mut ctx = EvalContext::default();
         match columns.len() {
             1 => {
                 with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
                    match self.t {
                         Trigonometric::COS => {
-                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S|  AsPrimitive::<f64>::as_(v).cos());
-                           let col = unary.eval(columns[0].column())?;
+                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext|  AsPrimitive::<f64>::as_(v).cos());
+                           let col = unary.eval(columns[0].column(), &mut ctx)?;
                            Ok(Arc::new(col))
                         },
                         Trigonometric::SIN => {
-                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S|  AsPrimitive::<f64>::as_(v).sin());
-                           let col = unary.eval(columns[0].column())?;
+                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext|  AsPrimitive::<f64>::as_(v).sin());
+                           let col = unary.eval(columns[0].column(), &mut ctx)?;
                            Ok(Arc::new(col))
                         },
                         Trigonometric::COT => {
-                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S| 1.0 /  AsPrimitive::<f64>::as_(v).tan());
-                           let col = unary.eval(columns[0].column())?;
+                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext| 1.0 /  AsPrimitive::<f64>::as_(v).tan());
+                           let col = unary.eval(columns[0].column(), &mut ctx)?;
                            Ok(Arc::new(col))
                         },
                         Trigonometric::TAN => {
-                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S| AsPrimitive::<f64>::as_(v).tan());
-                           let col = unary.eval(columns[0].column())?;
+                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).tan());
+                           let col = unary.eval(columns[0].column(), &mut ctx)?;
                            Ok(Arc::new(col))
                         },
                         // the range [0, pi] or NaN if the number is outside the range
                         Trigonometric::ACOS => {
-                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S| AsPrimitive::<f64>::as_(v).acos());
-                           let col = unary.eval(columns[0].column())?;
+                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).acos());
+                           let col = unary.eval(columns[0].column(), &mut ctx)?;
                            Ok(Arc::new(col))
                         },
                         Trigonometric::ASIN => {
-                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S| AsPrimitive::<f64>::as_(v).asin());
-                           let col = unary.eval(columns[0].column())?;
+                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).asin());
+                           let col = unary.eval(columns[0].column(), &mut ctx)?;
                            Ok(Arc::new(col))
                         },
                         Trigonometric::ATAN => {
-                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S| AsPrimitive::<f64>::as_(v).atan());
-                           let col = unary.eval(columns[0].column())?;
+                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).atan());
+                           let col = unary.eval(columns[0].column(), &mut ctx)?;
                            Ok(Arc::new(col))
                         },
                         _ => unreachable!(),
@@ -162,12 +163,12 @@ impl fmt::Display for TrigonometricFunction {
 pub struct TrigonometricSinFunction;
 
 impl TrigonometricSinFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         TrigonometricFunction::try_create_func(Trigonometric::SIN)
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -175,12 +176,12 @@ impl TrigonometricSinFunction {
 pub struct TrigonometricCosFunction;
 
 impl TrigonometricCosFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         TrigonometricFunction::try_create_func(Trigonometric::COS)
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -188,12 +189,12 @@ impl TrigonometricCosFunction {
 pub struct TrigonometricTanFunction;
 
 impl TrigonometricTanFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         TrigonometricFunction::try_create_func(Trigonometric::TAN)
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -201,12 +202,12 @@ impl TrigonometricTanFunction {
 pub struct TrigonometricCotFunction;
 
 impl TrigonometricCotFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         TrigonometricFunction::try_create_func(Trigonometric::COT)
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -214,12 +215,12 @@ impl TrigonometricCotFunction {
 pub struct TrigonometricAsinFunction;
 
 impl TrigonometricAsinFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         TrigonometricFunction::try_create_func(Trigonometric::ASIN)
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -227,12 +228,12 @@ impl TrigonometricAsinFunction {
 pub struct TrigonometricAcosFunction;
 
 impl TrigonometricAcosFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         TrigonometricFunction::try_create_func(Trigonometric::ACOS)
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
@@ -240,12 +241,12 @@ impl TrigonometricAcosFunction {
 pub struct TrigonometricAtanFunction;
 
 impl TrigonometricAtanFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         TrigonometricFunction::try_create_func(Trigonometric::ATAN)
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(1, 2),
@@ -256,12 +257,12 @@ impl TrigonometricAtanFunction {
 pub struct TrigonometricAtan2Function;
 
 impl TrigonometricAtan2Function {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         TrigonometricFunction::try_create_func(Trigonometric::ATAN2)
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create_func))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }

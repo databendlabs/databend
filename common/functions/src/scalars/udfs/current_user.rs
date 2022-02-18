@@ -14,23 +14,23 @@
 
 use std::fmt;
 
-use common_datavalues2::StringType;
+use common_datavalues::StringType;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
 pub struct CurrentUserFunction {}
 
 impl CurrentUserFunction {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(CurrentUserFunction {}))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .context_function()
                 .num_arguments(1),
@@ -38,23 +38,23 @@ impl CurrentUserFunction {
     }
 }
 
-impl Function2 for CurrentUserFunction {
+impl Function for CurrentUserFunction {
     fn name(&self) -> &str {
         "CurrentUserFunction"
     }
 
     fn return_type(
         &self,
-        _args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        _args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         Ok(StringType::arc())
     }
 
     fn eval(
         &self,
-        columns: &common_datavalues2::ColumnsWithField,
+        columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         Ok(columns[0].column().clone())
     }
 }

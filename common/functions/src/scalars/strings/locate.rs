@@ -14,15 +14,15 @@
 
 use std::fmt;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::default_column_cast;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 const FUNC_LOCATE: u8 = 1;
 const FUNC_POSITION: u8 = 2;
@@ -38,13 +38,13 @@ pub struct LocatingFunction<const T: u8> {
 }
 
 impl<const T: u8> LocatingFunction<T> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(LocatingFunction::<T> {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
+    pub fn desc() -> FunctionDescription {
         let mut feature = FunctionFeatures::default().deterministic();
         feature = if T == FUNC_LOCATE {
             feature.variadic_arguments(2, 3)
@@ -52,11 +52,11 @@ impl<const T: u8> LocatingFunction<T> {
             feature.num_arguments(2)
         };
 
-        Function2Description::creator(Box::new(Self::try_create)).features(feature)
+        FunctionDescription::creator(Box::new(Self::try_create)).features(feature)
     }
 }
 
-impl<const T: u8> Function2 for LocatingFunction<T> {
+impl<const T: u8> Function for LocatingFunction<T> {
     fn name(&self) -> &str {
         &*self.display_name
     }

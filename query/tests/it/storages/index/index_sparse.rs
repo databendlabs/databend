@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::col;
 use common_planners::lit;

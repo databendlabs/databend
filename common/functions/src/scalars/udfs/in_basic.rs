@@ -15,27 +15,27 @@
 use std::collections::HashSet;
 use std::fmt;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::type_coercion::aggregate_types;
+use common_datavalues::prelude::*;
+use common_datavalues::type_coercion::aggregate_types;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use ordered_float::OrderedFloat;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
 pub struct InFunction<const NEGATED: bool>;
 
 impl<const NEGATED: bool> InFunction<NEGATED> {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(InFunction::<NEGATED> {}))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .bool_function()
                 .variadic_arguments(2, usize::MAX),
@@ -87,7 +87,7 @@ macro_rules! float_contains {
     }};
 }
 
-impl<const NEGATED: bool> Function2 for InFunction<NEGATED> {
+impl<const NEGATED: bool> Function for InFunction<NEGATED> {
     fn name(&self) -> &str {
         "InFunction"
     }

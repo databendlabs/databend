@@ -13,7 +13,125 @@
 // limitations under the License.
 
 #[macro_export]
-macro_rules! with_match_primitive_type {
+macro_rules! for_all_scalar_types {
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { i8 },
+            { i16 },
+            { i32 },
+            { i64 },
+            { u8 },
+            { u16 },
+            { u32 },
+            { u64 },
+            { f32 },
+            { f64 },
+            { bool },
+            { Vu8 }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! for_all_primitive_types{
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { i8 },
+            { i16 },
+            { i32 },
+            { i64 },
+            { u8 },
+            { u16 },
+            { u32 },
+            { u64 },
+            { f32 },
+            { f64 }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! for_all_primitive_boolean_types{
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { i8 },
+            { i16 },
+            { i32 },
+            { i64 },
+            { u8 },
+            { u16 },
+            { u32 },
+            { u64 },
+            { f32 },
+            { f64 },
+            { bool }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! for_all_scalar_varints{
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { i8, Int8 },
+            { i16, Int16 },
+            { i32, Int32 },
+            { i64, Int64 },
+            { u8, UInt8 },
+            { u16, UInt16 },
+            { u32, UInt32 },
+            { u64, UInt64 },
+            { f32, Float32 },
+            { f64, Float64 },
+            { bool, Boolean },
+            { Vu8, String }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! for_all_integer_types{
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            { i8 },
+            { i16 },
+            { i32 },
+            { i64 },
+            { u8 },
+            { u16 },
+            { u32 },
+            { u64 }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! with_match_physical_primitive_type {(
+    $key_type:expr, | $_:tt $T:ident | $($body:tt)*
+) => ({
+    macro_rules! __with_ty__ {( $_ $T:ident ) => ( $($body)* )}
+    match $key_type {
+        PhysicalTypeID::Int8 => __with_ty__! { i8 },
+        PhysicalTypeID::Int16 => __with_ty__! { i16 },
+        PhysicalTypeID::Int32 => __with_ty__! { i32 },
+        PhysicalTypeID::Int64 => __with_ty__! { i64 },
+        PhysicalTypeID::UInt8 => __with_ty__! { u8 },
+        PhysicalTypeID::UInt16 => __with_ty__! { u16 },
+        PhysicalTypeID::UInt32 => __with_ty__! { u32 },
+        PhysicalTypeID::UInt64 => __with_ty__! { u64 },
+        PhysicalTypeID::Float32 => __with_ty__! { f32 },
+        PhysicalTypeID::Float64 => __with_ty__! { f64 },
+        _ => unreachable!()
+    }
+})}
+
+#[macro_export]
+macro_rules! with_match_scalar_type {
     (
     $key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt
 ) => {{
@@ -22,19 +140,23 @@ macro_rules! with_match_primitive_type {
                 $body
             };
         }
-        use crate::prelude::DataType::*;
+
+        type C = Vec<u8>;
 
         match $key_type {
-            Int8 => __with_ty__! { i8 },
-            Int16 => __with_ty__! { i16 },
-            Int32 => __with_ty__! { i32 },
-            Int64 => __with_ty__! { i64 },
-            UInt8 => __with_ty__! { u8 },
-            UInt16 => __with_ty__! { u16 },
-            UInt32 => __with_ty__! { u32 },
-            UInt64 => __with_ty__! { u64 },
-            Float32 => __with_ty__! { f32 },
-            Float64 => __with_ty__! { f64 },
+            PhysicalTypeID::Boolean => __with_ty__! { bool },
+            PhysicalTypeID::String => __with_ty__! { C },
+
+            PhysicalTypeID::Int8 => __with_ty__! { i8 },
+            PhysicalTypeID::Int16 => __with_ty__! { i16 },
+            PhysicalTypeID::Int32 => __with_ty__! { i32 },
+            PhysicalTypeID::Int64 => __with_ty__! { i64 },
+            PhysicalTypeID::UInt8 => __with_ty__! { u8 },
+            PhysicalTypeID::UInt16 => __with_ty__! { u16 },
+            PhysicalTypeID::UInt32 => __with_ty__! { u32 },
+            PhysicalTypeID::UInt64 => __with_ty__! { u64 },
+            PhysicalTypeID::Float32 => __with_ty__! { f32 },
+            PhysicalTypeID::Float64 => __with_ty__! { f64 },
 
             _ => $nbody,
         }
@@ -42,179 +164,141 @@ macro_rules! with_match_primitive_type {
 }
 
 #[macro_export]
-macro_rules! match_data_type_apply_macro_ca {
-    ($self:expr, $macro:ident, $macro_string:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
+macro_rules! with_match_scalar_types_error {(
+    $key_type:expr, | $_:tt $T:ident | $($body:tt)*
+) => ({
+    macro_rules! __with_ty__ {( $_ $T:ident ) => ( $($body)* )}
+    use common_exception::ErrorCode;
+    type C = Vec<u8>;
+    match $key_type {
+        PhysicalTypeID::Boolean => __with_ty__! { bool },
+       	PhysicalTypeID::String => __with_ty__! { C },
 
-        match $self.data_type() {
-            DataType::String => $macro_string!($self.string().unwrap() $(, $opt_args)*),
-            DataType::Boolean => $macro_bool!($self.bool().unwrap() $(, $opt_args)*),
-            DataType::UInt8 => $macro!($self.u8().unwrap() $(, $opt_args)*),
-            DataType::UInt16 => $macro!($self.u16().unwrap() $(, $opt_args)*),
-            DataType::UInt32 => $macro!($self.u32().unwrap() $(, $opt_args)*),
-            DataType::UInt64 => $macro!($self.u64().unwrap() $(, $opt_args)*),
-            DataType::Int8 => $macro!($self.i8().unwrap() $(, $opt_args)*),
-            DataType::Int16 => $macro!($self.i16().unwrap() $(, $opt_args)*),
-            DataType::Int32 => $macro!($self.i32().unwrap() $(, $opt_args)*),
-            DataType::Int64 => $macro!($self.i64().unwrap() $(, $opt_args)*),
-            DataType::Float32 => $macro!($self.f32().unwrap() $(, $opt_args)*),
-            DataType::Float64 => $macro!($self.f64().unwrap() $(, $opt_args)*),
-            DataType::Date16 => $macro!($self.u16().unwrap() $(, $opt_args)*),
-            DataType::Date32 => $macro!($self.i32().unwrap() $(, $opt_args)*),
-            _ => unimplemented!(),
-        }
-    }};
-}
-
-// doesn't include Bool and String
-#[macro_export]
-macro_rules! apply_method_numeric_series {
-    ($self:ident, $method:ident, $($args:expr),*) => {
-        match $self.data_type() {
-            DataType::UInt8 => $self.u8().unwrap().$method($($args),*),
-            DataType::UInt16 => $self.u16().unwrap().$method($($args),*),
-            DataType::UInt32 => $self.u32().unwrap().$method($($args),*),
-            DataType::UInt64 => $self.u64().unwrap().$method($($args),*),
-            DataType::Int8 => $self.i8().unwrap().$method($($args),*),
-            DataType::Int16 => $self.i16().unwrap().$method($($args),*),
-            DataType::Int32 => $self.i32().unwrap().$method($($args),*),
-            DataType::Int64 => $self.i64().unwrap().$method($($args),*),
-            DataType::Float32 => $self.f32().unwrap().$method($($args),*),
-            DataType::Float64 => $self.f64().unwrap().$method($($args),*),
-            DataType::Date16 => $self.u16().unwrap().$method($($args),*),
-            DataType::Date32 => $self.i32().unwrap().$method($($args),*),
-
-            _ => unimplemented!(),
-        }
+       	PhysicalTypeID::Int8 => __with_ty__! { i8 },
+        PhysicalTypeID::Int16 => __with_ty__! { i16 },
+        PhysicalTypeID::Int32 => __with_ty__! { i32 },
+        PhysicalTypeID::Int64 => __with_ty__! { i64 },
+        PhysicalTypeID::UInt8 => __with_ty__! { u8 },
+        PhysicalTypeID::UInt16 => __with_ty__! { u16 },
+        PhysicalTypeID::UInt32 => __with_ty__! { u32 },
+        PhysicalTypeID::UInt64 => __with_ty__! { u64 },
+        PhysicalTypeID::Float32 => __with_ty__! { f32 },
+        PhysicalTypeID::Float64 => __with_ty__! { f64 },
+        v => return Err(ErrorCode::BadDataValueType(
+            format!("Ops is not support on datatype: {:?}",v)
+        ))
     }
+})}
+
+#[macro_export]
+macro_rules! with_match_primitive_type_id {
+    ($key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt) => {{
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident ) => {
+                $body
+            };
+        }
+
+        match $key_type {
+            TypeID::Int8 => __with_ty__! { i8 },
+            TypeID::Int16 => __with_ty__! { i16 },
+            TypeID::Int32 => __with_ty__! { i32 },
+            TypeID::Int64 => __with_ty__! { i64 },
+            TypeID::UInt8 => __with_ty__! { u8 },
+            TypeID::UInt16 => __with_ty__! { u16 },
+            TypeID::UInt32 => __with_ty__! { u32 },
+            TypeID::UInt64 => __with_ty__! { u64 },
+            TypeID::Float32 => __with_ty__! { f32 },
+            TypeID::Float64 => __with_ty__! { f64 },
+
+            _ => $nbody,
+        }
+    }};
 }
 
 #[macro_export]
-macro_rules! match_data_type_apply_macro {
-    ($obj:expr, $macro:ident, $macro_string:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
-        match $obj {
-            DataType::String => $macro_string!($($opt_args)*),
-            DataType::Boolean => $macro_bool!($($opt_args)*),
-            DataType::UInt8 => $macro!(u8 $(, $opt_args)*),
-            DataType::UInt16 => $macro!(u16 $(, $opt_args)*),
-            DataType::UInt32 => $macro!(u32 $(, $opt_args)*),
-            DataType::UInt64 => $macro!(u64 $(, $opt_args)*),
-            DataType::Int8 => $macro!(i8 $(, $opt_args)*),
-            DataType::Int16 => $macro!(i16 $(, $opt_args)*),
-            DataType::Int32 => $macro!(i32 $(, $opt_args)*),
-            DataType::Int64 => $macro!(i64 $(, $opt_args)*),
-            DataType::Float32 => $macro!(f32 $(, $opt_args)*),
-            DataType::Float64 => $macro!(f64 $(, $opt_args)*),
-            _ => unimplemented!(),
+macro_rules! with_match_primitive_types_error {
+    ($key_type:expr, | $_:tt $T:ident | $body:tt) => {{
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident ) => {
+                $body
+            };
+        }
+
+        match $key_type {
+            TypeID::Int8 => __with_ty__! { i8 },
+            TypeID::Int16 => __with_ty__! { i16 },
+            TypeID::Int32 => __with_ty__! { i32 },
+            TypeID::Int64 => __with_ty__! { i64 },
+            TypeID::UInt8 => __with_ty__! { u8 },
+            TypeID::UInt16 => __with_ty__! { u16 },
+            TypeID::UInt32 => __with_ty__! { u32 },
+            TypeID::UInt64 => __with_ty__! { u64 },
+            TypeID::Float32 => __with_ty__! { f32 },
+            TypeID::Float64 => __with_ty__! { f64 },
+            v => Err(ErrorCode::BadDataValueType(format!(
+                "Ops is not support on datatype: {:?}",
+                v
+            ))),
         }
     }};
 }
 
-macro_rules! format_data_value_with_option {
-    ($F:expr, $EXPR:expr) => {{
-        match $EXPR {
-            Some(e) => write!($F, "{}", e),
-            None => write!($F, "NULL"),
+#[macro_export]
+macro_rules! with_match_date_type_error {
+    ($key_type:expr, | $_:tt $T:ident | $body:tt) => {{
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident ) => {
+                $body
+            };
+        }
+
+        match $key_type {
+            TypeID::Date16 => __with_ty__! { u16},
+            TypeID::Date32 => __with_ty__! { i32},
+            TypeID::DateTime32 => __with_ty__! { u32},
+            TypeID::DateTime64 => __with_ty__! { i64},
+            v => Err(ErrorCode::BadDataValueType(format!(
+                "Ops is not support on datatype: {:?}",
+                v
+            ))),
         }
     }};
 }
 
-macro_rules! typed_cast_from_data_value_to_std {
-    ($SCALAR:ident, $NATIVE:ident) => {
+macro_rules! try_cast_data_value_to_std {
+    ($NATIVE: ident, $AS_FN: ident) => {
         impl DFTryFrom<DataValue> for $NATIVE {
             fn try_from(value: DataValue) -> Result<Self> {
-                match value {
-                    DataValue::$SCALAR(Some(inner_value)) => Ok(inner_value),
-                    _ => Err(ErrorCode::BadDataValueType(format!(
-                        "DataValue Error:  Cannot convert {:?} to {}",
-                        value,
-                        std::any::type_name::<Self>()
-                    ))),
-                }
+                let v = value.$AS_FN()?;
+                Ok(v as $NATIVE)
+            }
+        }
+
+        impl DFTryFrom<&DataValue> for $NATIVE {
+            fn try_from(value: &DataValue) -> Result<Self> {
+                let v = value.$AS_FN()?;
+                Ok(v as $NATIVE)
             }
         }
     };
 }
 
 macro_rules! std_to_data_value {
-    ($SCALAR:ident, $NATIVE:ident) => {
+    ($SCALAR:ident, $NATIVE:ident, $UPPER: ident) => {
         impl From<$NATIVE> for DataValue {
             fn from(value: $NATIVE) -> Self {
-                DataValue::$SCALAR(Some(value))
+                DataValue::$SCALAR(value as $UPPER)
             }
         }
 
         impl From<Option<$NATIVE>> for DataValue {
             fn from(value: Option<$NATIVE>) -> Self {
-                DataValue::$SCALAR(value)
+                match value {
+                    Some(v) => DataValue::$SCALAR(v as $UPPER),
+                    None => DataValue::Null,
+                }
             }
         }
     };
-}
-
-macro_rules! build_constant_series {
-    ($ARRAY: ident, $VALUES: expr, $SIZE: expr) => {
-        match $VALUES {
-            Some(v) => $ARRAY::full(*v, $SIZE).into_series(),
-            None => $ARRAY::full_null($SIZE).into_series(),
-        }
-    };
-}
-
-macro_rules! build_list_series {
-    ($TYPE:ty,  $VALUES:expr, $SIZE:expr, $D_TYPE: expr) => {{
-        type B = ListPrimitiveArrayBuilder<$TYPE>;
-        let mut builder = B::with_capacity(0, $SIZE);
-        match $VALUES {
-            None => (0..$SIZE).for_each(|_| {
-                builder.append_null();
-            }),
-            Some(v) => {
-                let series = DataValue::try_into_data_array(&v, $D_TYPE)?;
-                (0..$SIZE).for_each(|_| {
-                    builder.append_series(&series);
-                })
-            }
-        }
-        Ok(builder.finish().into_series())
-    }};
-}
-
-macro_rules! try_build_array {
-    ($VALUE_BUILDER_TY:ident, $DF_TY:ty, $SCALAR_TY:ident, $VALUES:expr) => {{
-        let mut builder = $VALUE_BUILDER_TY::<$DF_TY>::with_capacity($VALUES.len());
-        for value in $VALUES.iter() {
-            match value {
-                DataValue::$SCALAR_TY(Some(v)) => builder.append_value(*v),
-                DataValue::$SCALAR_TY(None) => builder.append_null(),
-                _ => unreachable!(),
-            }
-        }
-        Ok(builder.finish().into_series())
-    }};
-
-    // Boolean
-    ($VALUES:expr) => {{
-        let mut builder = BooleanArrayBuilder::with_capacity($VALUES.len());
-        for value in $VALUES.iter() {
-            match value {
-                DataValue::Boolean(Some(v)) => builder.append_value(*v),
-                DataValue::Boolean(None) => builder.append_null(),
-                _ => unreachable!(),
-            }
-        }
-        Ok(builder.finish().into_series())
-    }};
-
-    // String
-    ($string:ident, $VALUES:expr) => {{
-        let mut builder = StringArrayBuilder::with_capacity($VALUES.len());
-        for value in $VALUES.iter() {
-            match value {
-                DataValue::String(Some(v)) => builder.append_value(v),
-                DataValue::String(None) => builder.append_null(),
-                _ => unreachable!(),
-            }
-        }
-        Ok(builder.finish().into_series())
-    }};
 }

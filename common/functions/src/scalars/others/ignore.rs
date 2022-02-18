@@ -15,16 +15,16 @@
 use std::fmt;
 use std::str;
 
-use common_datavalues2::BooleanType;
-use common_datavalues2::ColumnRef;
-use common_datavalues2::ColumnsWithField;
-use common_datavalues2::DataTypePtr;
-use common_datavalues2::DataValue;
+use common_datavalues::BooleanType;
+use common_datavalues::ColumnRef;
+use common_datavalues::ColumnsWithField;
+use common_datavalues::DataTypePtr;
+use common_datavalues::DataValue;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 // ignore(...) is a function that takes any arguments, and always returns 0.
 // it can be used in performance tests
@@ -35,14 +35,14 @@ pub struct IgnoreFunction {
 }
 
 impl IgnoreFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(IgnoreFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .bool_function()
@@ -57,7 +57,7 @@ impl fmt::Display for IgnoreFunction {
     }
 }
 
-impl Function2 for IgnoreFunction {
+impl Function for IgnoreFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }

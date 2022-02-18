@@ -15,7 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datavalues2::DataSchemaRef;
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
 use common_meta_types::TableInfo;

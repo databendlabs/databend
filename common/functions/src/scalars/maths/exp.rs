@@ -14,15 +14,16 @@
 
 use std::fmt;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_type_id;
 use common_exception::Result;
 use num::cast::AsPrimitive;
 
-use crate::scalars::function2_factory::Function2Description;
 use crate::scalars::function_common::assert_numeric;
+use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
+use crate::scalars::EvalContext;
+use crate::scalars::Function;
 use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
@@ -31,24 +32,24 @@ pub struct ExpFunction {
 }
 
 impl ExpFunction {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(ExpFunction {
             _display_name: _display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
-fn exp<S>(value: S) -> f64
+fn exp<S>(value: S, _ctx: &mut EvalContext) -> f64
 where S: AsPrimitive<f64> {
     value.as_().exp()
 }
 
-impl Function2 for ExpFunction {
+impl Function for ExpFunction {
     fn name(&self) -> &str {
         &*self._display_name
     }
@@ -59,9 +60,10 @@ impl Function2 for ExpFunction {
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
              let unary = ScalarUnaryExpression::<$S, f64, _>::new(exp::<$S>);
-             let col = unary.eval(columns[0].column())?;
+             let col = unary.eval(columns[0].column(), &mut ctx)?;
              Ok(col.arc())
         },{
             unreachable!()

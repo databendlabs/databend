@@ -14,7 +14,7 @@
 
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 

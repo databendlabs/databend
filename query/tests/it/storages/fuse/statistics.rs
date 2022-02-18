@@ -14,7 +14,7 @@
 //
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use databend_query::storages::fuse::statistics::accumulator;
 use databend_query::storages::fuse::statistics::reducers;
 use databend_query::storages::fuse::statistics::StatisticsAccumulator;

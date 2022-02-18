@@ -16,22 +16,22 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::ops::Sub;
 
-use common_datavalues2::chrono::DateTime;
-use common_datavalues2::chrono::Datelike;
-use common_datavalues2::chrono::Duration;
-use common_datavalues2::chrono::TimeZone;
-use common_datavalues2::chrono::Utc;
-use common_datavalues2::prelude::*;
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Datelike;
+use common_datavalues::chrono::Duration;
+use common_datavalues::chrono::TimeZone;
+use common_datavalues::chrono::Utc;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::assert_date_or_datetime;
 use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Adapter;
-use crate::scalars::Function2Description;
-use crate::scalars::Monotonicity2;
+use crate::scalars::Function;
+use crate::scalars::FunctionAdapter;
+use crate::scalars::FunctionDescription;
+use crate::scalars::Monotonicity;
 
 #[derive(Clone, Debug)]
 pub struct WeekFunction<T, R> {
@@ -45,7 +45,7 @@ pub trait WeekResultFunction<R> {
 
     fn return_type() -> Result<DataTypePtr>;
     fn to_number(_value: DateTime<Utc>, mode: u64) -> R;
-    fn factor_function() -> Result<Box<dyn Function2>> {
+    fn factor_function() -> Result<Box<dyn Function>> {
         Err(ErrorCode::UnknownException(
             "Always monotonous, has no factor function",
         ))
@@ -81,7 +81,7 @@ where
     for<'a> R: Scalar<RefType<'a> = R>,
     for<'a> R: ScalarRef<'a, ScalarType = R, ColumnType = PrimitiveColumn<R>>,
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(WeekFunction::<T, R> {
             display_name: display_name.to_string(),
             t: PhantomData,
@@ -89,7 +89,7 @@ where
         }))
     }
 
-    pub fn desc() -> Function2Description {
+    pub fn desc() -> FunctionDescription {
         let mut features = FunctionFeatures::default()
             .monotonicity()
             .variadic_arguments(1, 2);
@@ -98,11 +98,11 @@ where
             features = features.deterministic();
         }
 
-        Function2Description::creator(Box::new(Self::try_create)).features(features)
+        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }
 
-impl<T, R> Function2 for WeekFunction<T, R>
+impl<T, R> Function for WeekFunction<T, R>
 where
     T: WeekResultFunction<R> + Clone + Sync + Send,
     R: PrimitiveType + Clone,
@@ -184,25 +184,25 @@ where
         }
     }
 
-    fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         let func = match T::factor_function() {
             Ok(f) => f,
-            Err(_) => return Ok(Monotonicity2::clone_without_range(&args[0])),
+            Err(_) => return Ok(Monotonicity::clone_without_range(&args[0])),
         };
 
         if args[0].left.is_none() || args[0].right.is_none() {
-            return Ok(Monotonicity2::default());
+            return Ok(Monotonicity::default());
         }
 
-        let func = Function2Adapter::create(func);
+        let func = FunctionAdapter::create(func);
         let left_val = func.eval(&[args[0].left.clone().unwrap()], 1)?.get(0);
         let right_val = func.eval(&[args[0].right.clone().unwrap()], 1)?.get(0);
         // The function is monotonous, if the factor eval returns the same values for them.
         if left_val == right_val {
-            return Ok(Monotonicity2::clone_without_range(&args[0]));
+            return Ok(Monotonicity::clone_without_range(&args[0]));
         }
 
-        Ok(Monotonicity2::default())
+        Ok(Monotonicity::default())
     }
 }
 

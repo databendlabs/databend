@@ -15,13 +15,13 @@
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues2::StructColumn;
-use common_datavalues2::StructType;
+use common_datavalues::StructColumn;
+use common_datavalues::StructType;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
 pub struct TupleFunction {
@@ -29,14 +29,14 @@ pub struct TupleFunction {
 }
 
 impl TupleFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(TupleFunction {
             _display_name: "tuple".to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(1, usize::MAX),
@@ -44,15 +44,15 @@ impl TupleFunction {
     }
 }
 
-impl Function2 for TupleFunction {
+impl Function for TupleFunction {
     fn name(&self) -> &str {
         "TupleFunction"
     }
 
     fn return_type(
         &self,
-        args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         let names = (0..args.len())
             .map(|i| format!("item_{}", i))
             .collect::<Vec<_>>();
@@ -63,9 +63,9 @@ impl Function2 for TupleFunction {
 
     fn eval(
         &self,
-        columns: &common_datavalues2::ColumnsWithField,
+        columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         let mut cols = vec![];
         let mut types = vec![];
 

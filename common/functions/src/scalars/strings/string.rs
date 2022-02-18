@@ -26,7 +26,7 @@ use crate::scalars::ExportSetFunction;
 use crate::scalars::FieldFunction;
 use crate::scalars::FindInSetFunction;
 use crate::scalars::FormatFunction;
-use crate::scalars::Function2Factory;
+use crate::scalars::FunctionFactory;
 use crate::scalars::HexFunction;
 use crate::scalars::InsertFunction;
 use crate::scalars::InstrFunction;
@@ -60,7 +60,7 @@ use crate::scalars::UpperFunction;
 pub struct StringFunction;
 
 impl StringFunction {
-    pub fn register2(factory: &mut Function2Factory) {
+    pub fn register2(factory: &mut FunctionFactory) {
         factory.register("to_base64", Base64EncodeFunction::desc());
         factory.register("from_base64", Base64DecodeFunction::desc());
         factory.register("rtrim", RTrimFunction::desc());

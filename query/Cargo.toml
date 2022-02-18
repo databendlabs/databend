@@ -29,7 +29,7 @@ common-base = { path = "../common/base" }
 common-cache = { path = "../common/cache" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 common-datablocks = { path = "../common/datablocks" }
-common-datavalues2 = { path = "../common/datavalues2" }
+common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
 common-grpc = { path = "../common/grpc" }
 common-functions = { path = "../common/functions" }

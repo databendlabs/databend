@@ -15,22 +15,23 @@
 use std::fmt;
 use std::marker::PhantomData;
 
-use common_datavalues2::chrono::DateTime;
-use common_datavalues2::chrono::Datelike;
-use common_datavalues2::chrono::TimeZone;
-use common_datavalues2::chrono::Timelike;
-use common_datavalues2::chrono::Utc;
-use common_datavalues2::prelude::*;
-use common_datavalues2::Date16Type;
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Datelike;
+use common_datavalues::chrono::TimeZone;
+use common_datavalues::chrono::Timelike;
+use common_datavalues::chrono::Utc;
+use common_datavalues::prelude::*;
+use common_datavalues::Date16Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function2_factory::Function2Description;
+use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::CastFunction;
-use crate::scalars::Function2;
-use crate::scalars::Function2Adapter;
-use crate::scalars::Monotonicity2;
+use crate::scalars::EvalContext;
+use crate::scalars::Function;
+use crate::scalars::FunctionAdapter;
+use crate::scalars::Monotonicity;
 use crate::scalars::RoundFunction;
 use crate::scalars::ScalarUnaryExpression;
 
@@ -49,13 +50,13 @@ pub trait NumberOperator<R> {
     // For example, ToDayOfYear is monotonous only when the time range is the same year.
     // So we can use ToStartOfYearFunction to check whether the time range is in the same year.
     // If the function always monotonous, just return error.
-    fn factor_function() -> Result<Box<dyn Function2>> {
+    fn factor_function() -> Result<Box<dyn Function>> {
         Err(ErrorCode::UnknownException(
             "Always monotonous, has no factor function",
         ))
     }
 
-    fn return_type() -> Option<common_datavalues2::DataTypePtr> {
+    fn return_type() -> Option<common_datavalues::DataTypePtr> {
         None
     }
 }
@@ -109,7 +110,7 @@ impl NumberOperator<u16> for ToStartOfYear {
         get_day(end) as u16
     }
 
-    fn return_type() -> Option<common_datavalues2::DataTypePtr> {
+    fn return_type() -> Option<common_datavalues::DataTypePtr> {
         Some(Date16Type::arc())
     }
 }
@@ -130,7 +131,7 @@ impl NumberOperator<u16> for ToStartOfISOYear {
         get_day(end) as u16
     }
 
-    fn return_type() -> Option<common_datavalues2::DataTypePtr> {
+    fn return_type() -> Option<common_datavalues::DataTypePtr> {
         Some(Date16Type::arc())
     }
 }
@@ -147,7 +148,7 @@ impl NumberOperator<u16> for ToStartOfQuarter {
         get_day(date) as u16
     }
 
-    fn return_type() -> Option<common_datavalues2::DataTypePtr> {
+    fn return_type() -> Option<common_datavalues::DataTypePtr> {
         Some(Date16Type::arc())
     }
 }
@@ -163,7 +164,7 @@ impl NumberOperator<u16> for ToStartOfMonth {
         get_day(date) as u16
     }
 
-    fn return_type() -> Option<common_datavalues2::DataTypePtr> {
+    fn return_type() -> Option<common_datavalues::DataTypePtr> {
         Some(Date16Type::arc())
     }
 }
@@ -180,7 +181,7 @@ impl NumberOperator<u8> for ToMonth {
 
     // ToMonth is NOT a monotonic function in general, unless the time range is within the same year.
     // For example, date(2020-12-01) < date(2021-5-5), while ToMonth(2020-12-01) > ToMonth(2021-5-5).
-    fn factor_function() -> Result<Box<dyn Function2>> {
+    fn factor_function() -> Result<Box<dyn Function>> {
         ToStartOfYearFunction::try_create("toStartOfYear")
     }
 }
@@ -197,7 +198,7 @@ impl NumberOperator<u16> for ToDayOfYear {
 
     // ToDayOfYear is NOT a monotonic function in general, unless the time range is within the same year.
     // For example, date(2020-12-01) < date(2021-5-5), while ToDayOfYear(2020-12-01) > ToDayOfYear(2021-5-5).
-    fn factor_function() -> Result<Box<dyn Function2>> {
+    fn factor_function() -> Result<Box<dyn Function>> {
         ToStartOfYearFunction::try_create("toStartOfYear")
     }
 }
@@ -214,7 +215,7 @@ impl NumberOperator<u8> for ToDayOfMonth {
 
     // ToDayOfMonth is not a monotonic function in general, unless the time range is within the same month.
     // For example, date(2021-11-20) < date(2021-12-01), while ToDayOfMonth(2021-11-20) > ToDayOfMonth(2021-12-01).
-    fn factor_function() -> Result<Box<dyn Function2>> {
+    fn factor_function() -> Result<Box<dyn Function>> {
         ToStartOfMonthFunction::try_create("toStartOfMonth")
     }
 }
@@ -230,7 +231,7 @@ impl NumberOperator<u8> for ToDayOfWeek {
     }
 
     // ToDayOfWeek is NOT a monotonic function in general, unless the time range is within the same week.
-    fn factor_function() -> Result<Box<dyn Function2>> {
+    fn factor_function() -> Result<Box<dyn Function>> {
         ToMondayFunction::try_create("toMonday")
     }
 }
@@ -246,7 +247,7 @@ impl NumberOperator<u8> for ToHour {
     }
 
     // ToHour is NOT a monotonic function in general, unless the time range is within the same day.
-    fn factor_function() -> Result<Box<dyn Function2>> {
+    fn factor_function() -> Result<Box<dyn Function>> {
         let func2 = CastFunction::create("toDate", Date16Type::arc().name()).unwrap();
 
         Ok(func2)
@@ -264,7 +265,7 @@ impl NumberOperator<u8> for ToMinute {
     }
 
     // ToMinute is NOT a monotonic function in general, unless the time range is within the same hour.
-    fn factor_function() -> Result<Box<dyn Function2>> {
+    fn factor_function() -> Result<Box<dyn Function>> {
         RoundFunction::try_create("toStartOfHour", 60 * 60)
     }
 }
@@ -280,7 +281,7 @@ impl NumberOperator<u8> for ToSecond {
     }
 
     // ToSecond is NOT a monotonic function in general, unless the time range is within the same minute.
-    fn factor_function() -> Result<Box<dyn Function2>> {
+    fn factor_function() -> Result<Box<dyn Function>> {
         RoundFunction::try_create("toStartOfMinute", 60)
     }
 }
@@ -300,9 +301,9 @@ impl NumberOperator<u16> for ToMonday {
 impl<T, R> NumberFunction<T, R>
 where
     T: NumberOperator<R> + Clone + Sync + Send + 'static,
-    R: PrimitiveType + Clone + ToDataType + common_datavalues2::Scalar<RefType<'static> = R>,
+    R: PrimitiveType + Clone + ToDataType + common_datavalues::Scalar<RefType<'static> = R>,
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(NumberFunction::<T, R> {
             display_name: display_name.to_string(),
             t: PhantomData,
@@ -310,18 +311,18 @@ where
         }))
     }
 
-    pub fn desc() -> Function2Description {
+    pub fn desc() -> FunctionDescription {
         let mut features = FunctionFeatures::default().monotonicity().num_arguments(1);
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();
         }
 
-        Function2Description::creator(Box::new(Self::try_create)).features(features)
+        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }
 
-impl<T, R> Function2 for NumberFunction<T, R>
+impl<T, R> Function for NumberFunction<T, R>
 where
     T: NumberOperator<R> + Clone + Sync + Send,
     R: PrimitiveType + Clone + ToDataType,
@@ -332,8 +333,8 @@ where
 
     fn return_type(
         &self,
-        _args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        _args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         match T::return_type() {
             None => Ok(R::to_data_type()),
             Some(v) => Ok(v),
@@ -342,35 +343,35 @@ where
 
     fn eval(
         &self,
-        columns: &common_datavalues2::ColumnsWithField,
+        columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         let type_id = columns[0].field().data_type().data_type_id();
 
         let number_array= match type_id {
             TypeID::Date16 => {
-                let unary = ScalarUnaryExpression::<u16, R, _>::new(|v| {
+                let unary = ScalarUnaryExpression::<u16, R, _>::new(|v: u16, _ctx: &mut EvalContext| {
                     let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
                     T::to_number(date_time)
                 });
-                let col = unary.eval(columns[0].column())?;
+                let col = unary.eval(columns[0].column(), &mut EvalContext::default())?;
                 Ok(col.arc())
 
             },
             TypeID::Date32 => {
-                let unary = ScalarUnaryExpression::<i32, R, _>::new(|v| {
+                let unary = ScalarUnaryExpression::<i32, R, _>::new(|v:i32, _ctx: &mut EvalContext| {
                     let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
                     T::to_number(date_time)
                 });
-                let col = unary.eval(columns[0].column())?;
+                let col = unary.eval(columns[0].column(), &mut EvalContext::default())?;
                 Ok(col.arc())
             },
             TypeID::DateTime32 => {
-                let unary = ScalarUnaryExpression::<u32, R, _>::new(|v| {
+                let unary = ScalarUnaryExpression::<u32, R, _>::new(|v:u32, _ctx: &mut EvalContext| {
                     let date_time = Utc.timestamp(v as i64 , 0_u32);
                     T::to_number(date_time)
                 });
-                let col = unary.eval(columns[0].column())?;
+                let col = unary.eval(columns[0].column(), &mut EvalContext::default())?;
                 Ok(col.arc())
 
                 },
@@ -382,27 +383,27 @@ where
         Ok(number_array)
     }
 
-    fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         let func = match T::factor_function() {
             Ok(f) => f,
             // Always monotonous, has no factor function.
-            Err(_) => return Ok(Monotonicity2::clone_without_range(&args[0])),
+            Err(_) => return Ok(Monotonicity::clone_without_range(&args[0])),
         };
 
-        let func = Function2Adapter::create(func);
+        let func = FunctionAdapter::create(func);
 
         if args[0].left.is_none() || args[0].right.is_none() {
-            return Ok(Monotonicity2::default());
+            return Ok(Monotonicity::default());
         }
 
         let left_val = func.eval(&[args[0].left.clone().unwrap()], 1)?.get(0);
         let right_val = func.eval(&[args[0].right.clone().unwrap()], 1)?.get(0);
         // The function is monotonous, if the factor eval returns the same values for them.
         if left_val == right_val {
-            return Ok(Monotonicity2::clone_without_range(&args[0]));
+            return Ok(Monotonicity::clone_without_range(&args[0]));
         }
 
-        Ok(Monotonicity2::default())
+        Ok(Monotonicity::default())
     }
 }
 
