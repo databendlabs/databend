@@ -106,9 +106,6 @@ impl StringFunction {
         factory.register("concat", ConcatFunction::desc());
         factory.register("replace", ReplaceFunction::desc());
         factory.register("strcmp", StrcmpFunction::desc());
-    }
-
-    pub fn register(factory: &mut FunctionFactory) {
         factory.register("locate", LocateFunction::desc());
         factory.register("position", PositionFunction::desc());
         factory.register("instr", InstrFunction::desc());

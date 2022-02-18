@@ -14,14 +14,18 @@
 
 use std::fmt;
 
-use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues2::prelude::*;
 use common_exception::Result;
 use itertools::izip;
 
+use crate::scalars::assert_numeric;
+use crate::scalars::assert_string;
+use crate::scalars::default_column_cast;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
+use crate::scalars::Function2;
+use crate::scalars::Function2Description;
 
 const FUNC_LOCATE: u8 = 1;
 const FUNC_POSITION: u8 = 2;
@@ -37,13 +41,13 @@ pub struct LocatingFunction<const T: u8> {
 }
 
 impl<const T: u8> LocatingFunction<T> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
         Ok(Box::new(LocatingFunction::<T> {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> FunctionDescription {
+    pub fn desc() -> Function2Description {
         let mut feature = FunctionFeatures::default().deterministic();
         feature = if T == FUNC_LOCATE {
             feature.variadic_arguments(2, 3)
@@ -51,190 +55,47 @@ impl<const T: u8> LocatingFunction<T> {
             feature.num_arguments(2)
         };
 
-        FunctionDescription::creator(Box::new(Self::try_create)).features(feature)
+        Function2Description::creator(Box::new(Self::try_create)).features(feature)
     }
 }
 
-impl<const T: u8> Function for LocatingFunction<T> {
+impl<const T: u8> Function2 for LocatingFunction<T> {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::UInt64;
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        assert_string(args[0])?;
+        assert_string(args[1])?;
+        if args.len() > 2 {
+            assert_numeric(args[2])?;
+        }
+        Ok(u64::to_data_type())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
         let (ss_column, s_column) = if T == FUNC_INSTR {
-            (
-                columns[1].column().cast_with_type(&DataType::String)?,
-                columns[0].column().cast_with_type(&DataType::String)?,
-            )
+            (columns[1].column(), columns[0].column())
         } else {
-            (
-                columns[0].column().cast_with_type(&DataType::String)?,
-                columns[1].column().cast_with_type(&DataType::String)?,
-            )
+            (columns[0].column(), columns[1].column())
         };
 
         let p_column = if T == FUNC_LOCATE && columns.len() == 3 {
-            columns[2].column().cast_with_type(&DataType::UInt64)?
+            default_column_cast(columns[2].column(), &u64::to_data_type())?
         } else {
-            DataColumn::Constant(DataValue::UInt64(Some(1)), input_rows)
+            ConstColumn::new(Series::from_data(vec![0]), input_rows).arc()
         };
 
-        let r_column: DataColumn = match (ss_column, s_column, p_column) {
-            (
-                DataColumn::Constant(DataValue::String(ss), _),
-                DataColumn::Constant(DataValue::String(s), _),
-                DataColumn::Constant(DataValue::UInt64(p), _),
-            ) => {
-                if let (Some(ss), Some(s), Some(p)) = (ss, s, p) {
-                    DataColumn::Constant(DataValue::UInt64(Some(find_at(&s, &ss, &p))), input_rows)
-                } else {
-                    DataColumn::Constant(DataValue::Null, input_rows)
-                }
-            }
-            (
-                DataColumn::Constant(DataValue::String(ss), _),
-                DataColumn::Array(s_series),
-                DataColumn::Constant(DataValue::UInt64(p), _),
-            ) => {
-                if let (Some(ss), Some(p)) = (ss, p) {
-                    let s_array = s_series.string()?;
-                    DFUInt64Array::new_from_iter_validity(
-                        s_array.into_no_null_iter().map(|s| find_at(s, &ss, &p)),
-                        s_array.inner().validity().cloned(),
-                    )
-                    .into()
-                } else {
-                    DataColumn::Constant(DataValue::Null, input_rows)
-                }
-            }
-            (
-                DataColumn::Array(ss_series),
-                DataColumn::Constant(DataValue::String(s), _),
-                DataColumn::Constant(DataValue::UInt64(p), _),
-            ) => {
-                if let (Some(s), Some(p)) = (s, p) {
-                    let ss_array = ss_series.string()?;
-                    DFUInt64Array::new_from_iter_validity(
-                        ss_array.into_no_null_iter().map(|ss| find_at(&s, ss, &p)),
-                        ss_array.inner().validity().cloned(),
-                    )
-                    .into()
-                } else {
-                    DataColumn::Constant(DataValue::Null, input_rows)
-                }
-            }
-            (
-                DataColumn::Array(ss_series),
-                DataColumn::Array(s_series),
-                DataColumn::Constant(DataValue::UInt64(p), _),
-            ) => {
-                if let Some(p) = p {
-                    let ss_array = ss_series.string()?;
-                    let s_array = s_series.string()?;
-                    DFUInt64Array::new_from_iter_validity(
-                        ss_array
-                            .into_no_null_iter()
-                            .zip(s_array.into_no_null_iter())
-                            .map(|(ss, s)| find_at(s, ss, &p)),
-                        combine_validities(ss_array.inner().validity(), s_array.inner().validity()),
-                    )
-                    .into()
-                } else {
-                    DataColumn::Constant(DataValue::Null, input_rows)
-                }
-            }
-            (
-                DataColumn::Constant(DataValue::String(ss), _),
-                DataColumn::Constant(DataValue::String(s), _),
-                DataColumn::Array(p_series),
-            ) => {
-                if let (Some(ss), Some(s)) = (ss, s) {
-                    let p_array = p_series.u64()?;
-                    DFUInt64Array::new_from_iter_validity(
-                        p_array.into_no_null_iter().map(|p| find_at(&s, &ss, p)),
-                        p_array.inner().validity().cloned(),
-                    )
-                    .into()
-                } else {
-                    DataColumn::Constant(DataValue::Null, input_rows)
-                }
-            }
-            (
-                DataColumn::Constant(DataValue::String(ss), _),
-                DataColumn::Array(s_series),
-                DataColumn::Array(p_series),
-            ) => {
-                if let Some(ss) = ss {
-                    let s_array = s_series.string()?;
-                    let p_array = p_series.u64()?;
-                    DFUInt64Array::new_from_iter_validity(
-                        s_array
-                            .into_no_null_iter()
-                            .zip(p_array.into_no_null_iter())
-                            .map(|(s, p)| find_at(s, &ss, p)),
-                        combine_validities(s_array.inner().validity(), p_array.inner().validity()),
-                    )
-                    .into()
-                } else {
-                    DataColumn::Constant(DataValue::Null, input_rows)
-                }
-            }
-            (
-                DataColumn::Array(ss_series),
-                DataColumn::Constant(DataValue::String(s), _),
-                DataColumn::Array(p_series),
-            ) => {
-                if let Some(s) = s {
-                    let ss_array = ss_series.string()?;
-                    let p_array = p_series.u64()?;
-                    DFUInt64Array::new_from_iter_validity(
-                        ss_array
-                            .into_no_null_iter()
-                            .zip(p_array.into_no_null_iter())
-                            .map(|(ss, p)| find_at(&s, ss, p)),
-                        combine_validities(ss_array.inner().validity(), p_array.inner().validity()),
-                    )
-                    .into()
-                } else {
-                    DataColumn::Constant(DataValue::Null, input_rows)
-                }
-            }
-            (
-                DataColumn::Array(ss_series),
-                DataColumn::Array(s_series),
-                DataColumn::Array(p_series),
-            ) => {
-                let ss_array = ss_series.string()?;
-                let s_array = s_series.string()?;
-                let p_array = p_series.u64()?;
+        let ss_column = Vu8::try_create_viewer(ss_column)?;
+        let s_column = Vu8::try_create_viewer(s_column)?;
+        let p_column = u64::try_create_viewer(&p_column)?;
 
-                DFUInt64Array::new_from_iter_validity(
-                    izip!(
-                        ss_array.into_no_null_iter(),
-                        s_array.into_no_null_iter(),
-                        p_array.into_no_null_iter(),
-                    )
-                    .map(|(ss, s, p)| find_at(s, ss, p)),
-                    combine_validities(
-                        combine_validities(
-                            ss_array.inner().validity(),
-                            ss_array.inner().validity(),
-                        )
-                        .as_ref(),
-                        p_array.inner().validity(),
-                    ),
-                )
-                .into()
-            }
-            _ => DataColumn::Constant(DataValue::Null, input_rows),
-        };
-        Ok(r_column)
+        let iter = ss_column
+            .iter()
+            .zip(s_column.iter())
+            .zip(p_column.iter())
+            .map(|((ss, s), p)| find_at(s, ss, p));
+        Ok(UInt64Column::from_owned_iterator(iter).arc())
     }
 }
 
@@ -245,8 +106,8 @@ impl<const T: u8> fmt::Display for LocatingFunction<T> {
 }
 
 #[inline]
-fn find_at(str: &[u8], substr: &[u8], pos: &u64) -> u64 {
-    let pos = (*pos) as usize;
+fn find_at(str: &[u8], substr: &[u8], pos: u64) -> u64 {
+    let pos = pos as usize;
     if pos == 0 {
         return 0_u64;
     }
