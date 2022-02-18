@@ -16,7 +16,6 @@ use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use anyerror::AnyError;
 use common_base::tokio;
 use common_base::tokio::sync::watch;
 use common_base::tokio::sync::Mutex;
@@ -131,6 +130,7 @@ impl MetaNodeBuilder {
         } else {
             sto.get_node_addr(&node_id).await?
         };
+
         tracing::info!("about to start raft grpc on {}", addr);
 
         MetaNode::start_grpc(mn.clone(), &addr).await?;
@@ -265,33 +265,22 @@ impl MetaNode {
         let sto = Arc::new(sto);
 
         let mut builder = MetaNode::builder(&config).sto(sto.clone());
+        // config.id only used for the first time
+        let self_node_id = if is_open { sto.id } else { config.id };
 
-        if is_open {
-            // read id from sto, read listening addr from sto
-            builder = builder.node_id(sto.id);
-        } else {
-            // read id from config, read listening addr from config.
-            builder = builder.node_id(config.id).addr(
-                config
-                    .raft_api_addr()
-                    .await
-                    .map_err(|e| MetaError::Fatal(AnyError::new(&e)))?,
-            );
-        }
-
+        // use ip:port to start grpc listening
+        builder = builder
+            .node_id(self_node_id)
+            .addr(config.raft_api_listen_host_string());
         let mn = builder.build().await?;
 
         tracing::info!("MetaNode started: {:?}", config);
 
+        // init_cluster with advertise_host other than listen_host
         if !is_open {
             if let Some(_addrs) = init_cluster {
-                mn.init_cluster(
-                    config
-                        .raft_api_addr()
-                        .await
-                        .map_err(|e| MetaError::Fatal(AnyError::new(&e)))?,
-                )
-                .await?;
+                mn.init_cluster(config.raft_api_advertise_host_string())
+                    .await?;
             }
         }
         Ok(mn)

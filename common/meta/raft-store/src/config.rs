@@ -176,7 +176,7 @@ impl RaftConfig {
         <Self as Parser>::parse_from(&Vec::<&'static str>::new())
     }
 
-    fn raft_api_listen_host_string(&self) -> String {
+    pub fn raft_api_listen_host_string(&self) -> String {
         format!("{}:{}", self.raft_listen_host, self.raft_api_port)
     }
 
