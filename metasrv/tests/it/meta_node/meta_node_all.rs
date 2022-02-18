@@ -58,7 +58,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = MetaSrvTestContext::new(0);
-    let addr = tc.config.raft_config.raft_api_addr().await?;
+    let addr = tc.config.raft_config.raft_api_advertise_host_string();
 
     let mn = MetaNode::boot(&tc.config.raft_config).await?;
 
@@ -653,7 +653,10 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     tracing::info!("--- check state machine: nodes");
     {
         let node = leader.sto.get_node(&0).await?.unwrap();
-        assert_eq!(tc.config.raft_config.raft_api_addr().await?, node.address);
+        assert_eq!(
+            tc.config.raft_config.raft_api_advertise_host_string(),
+            node.address
+        );
     }
 
     Ok(())
@@ -751,7 +754,7 @@ pub(crate) async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvT
 
     let nid = 0;
     let mut tc = MetaSrvTestContext::new(nid);
-    let addr = tc.config.raft_config.raft_api_addr().await?;
+    let addr = tc.config.raft_config.raft_api_advertise_host_string();
 
     // boot up a single-node cluster
     let mn = MetaNode::boot(&tc.config.raft_config).await?;

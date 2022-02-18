@@ -110,9 +110,10 @@ impl MetaSrvTestContext {
 
         config.raft_config.raft_api_port = config_id;
 
-        // when running unit tests, both raft_{listen|advertise}_host is "127.0.0.1"
+        // when running unit tests, set raft_listen_host to "127.0.0.1" and raft_advertise_host to localhost,
+        // so if something wrong in raft meta nodes communication we will catch bug in unit tests.
         config.raft_config.raft_listen_host = "127.0.0.1".to_string();
-        config.raft_config.raft_advertise_host = "127.0.0.1".to_string();
+        config.raft_config.raft_advertise_host = "localhost".to_string();
 
         let host = "127.0.0.1";
 

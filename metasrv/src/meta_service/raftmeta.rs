@@ -14,6 +14,7 @@
 
 use std::collections::BTreeSet;
 use std::fmt::Debug;
+use std::net::Ipv4Addr;
 use std::sync::Arc;
 
 use common_base::tokio;
@@ -21,6 +22,7 @@ use common_base::tokio::sync::watch;
 use common_base::tokio::sync::Mutex;
 use common_base::tokio::sync::RwLockReadGuard;
 use common_base::tokio::task::JoinHandle;
+use common_grpc::DNSResolver;
 use common_meta_api::MetaApi;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::StateMachine;
@@ -202,6 +204,29 @@ impl MetaNode {
 
         let meta_srv_impl = RaftServiceImpl::create(mn.clone());
         let meta_srv = RaftServiceServer::new(meta_srv_impl);
+
+        let host_port: Vec<&str> = addr.split(":").collect();
+        let host = host_port[0];
+        let port = host_port[1];
+        let ipv4_addr = host.parse::<Ipv4Addr>();
+        let addr = match ipv4_addr {
+            Ok(addr) => format!("{}:{}", addr, port),
+            Err(_) => {
+                let resolver = DNSResolver::instance().map_err(|e| {
+                    MetaNetworkError::DnsParseError(format!(
+                        "get dns resolver instance error: {}",
+                        e
+                    ))
+                })?;
+                let ip_addrs = resolver.resolve(host.clone()).await.map_err(|e| {
+                    MetaNetworkError::GetNodeAddrError(format!(
+                        "resolve addr {} error: {}",
+                        host, e
+                    ))
+                })?;
+                format!("{}:{}", ip_addrs[0], port)
+            }
+        };
 
         let addr_str = addr.to_string();
         let ret = addr.parse::<std::net::SocketAddr>();
