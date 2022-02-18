@@ -31,7 +31,7 @@ fn test_abs_function() -> Result<()> {
         ScalarFunctionTest {
             name: "abs(-10086)",
             columns: vec![Series::from_data([-10086])],
-            expect: Series::from_data(vec![10086_i32]),
+            expect: Series::from_data(vec![10086_u32]),
             error: "",
         },
         ScalarFunctionTest {
