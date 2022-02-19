@@ -65,7 +65,7 @@ pub async fn start_metasrv_cluster(node_ids: &[NodeId]) -> anyhow::Result<Vec<Me
     for node_id in node_ids.iter().skip(1) {
         let mut tc = MetaSrvTestContext::new(*node_id);
         tc.config.raft_config.single = false;
-        tc.config.raft_config.join = vec![leader_addr.clone()];
+        tc.config.raft_config.join = vec![leader_addr.to_string()];
         start_metasrv_with_context(&mut tc).await?;
 
         res.push(tc);

@@ -34,6 +34,7 @@ use common_meta_types::protobuf::raft_service_server::RaftServiceServer;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::ConnectionError;
+use common_meta_types::Endpoint;
 use common_meta_types::ForwardRequest;
 use common_meta_types::ForwardResponse;
 use common_meta_types::ForwardToLeader;
@@ -88,7 +89,7 @@ pub struct MetaNodeBuilder {
     raft_config: Option<Config>,
     sto: Option<Arc<MetaRaftStore>>,
     monitor_metrics: bool,
-    addr: Option<String>,
+    endpoint: Option<Endpoint>,
 }
 
 impl MetaNodeBuilder {
@@ -127,15 +128,15 @@ impl MetaNodeBuilder {
             MetaNode::subscribe_metrics(mn.clone(), metrics_rx).await;
         }
 
-        let addr = if let Some(a) = self.addr.take() {
+        let endpoint = if let Some(a) = self.endpoint.take() {
             a
         } else {
-            sto.get_node_addr(&node_id).await?
+            sto.get_node_endpoint(&node_id).await?
         };
 
-        tracing::info!("about to start raft grpc on host {}", addr);
+        tracing::info!("about to start raft grpc on endpoint {}", endpoint);
 
-        MetaNode::start_grpc(mn.clone(), &addr).await?;
+        MetaNode::start_grpc(mn.clone(), &endpoint.addr, endpoint.port).await?;
 
         Ok(mn)
     }
@@ -153,8 +154,8 @@ impl MetaNodeBuilder {
     }
 
     #[must_use]
-    pub fn addr(mut self, a: String) -> Self {
-        self.addr = Some(a);
+    pub fn endpoint(mut self, a: Endpoint) -> Self {
+        self.endpoint = Some(a);
         self
     }
 
@@ -174,7 +175,7 @@ impl MetaNode {
             raft_config: Some(raft_config),
             sto: None,
             monitor_metrics: true,
-            addr: None,
+            endpoint: None,
         }
     }
 
@@ -199,15 +200,12 @@ impl MetaNode {
 
     /// Start the grpc service for raft communication and meta operation API.
     #[tracing::instrument(level = "info", skip(mn))]
-    pub async fn start_grpc(mn: Arc<MetaNode>, addr: &str) -> MetaNetworkResult<()> {
+    pub async fn start_grpc(mn: Arc<MetaNode>, host: &str, port: u32) -> MetaNetworkResult<()> {
         let mut rx = mn.running_rx.clone();
 
         let meta_srv_impl = RaftServiceImpl::create(mn.clone());
         let meta_srv = RaftServiceServer::new(meta_srv_impl);
 
-        let host_port: Vec<&str> = addr.split(':').collect();
-        let host = host_port[0];
-        let port = host_port[1];
         let ipv4_addr = host.parse::<Ipv4Addr>();
         let addr = match ipv4_addr {
             Ok(addr) => format!("{}:{}", addr, port),
@@ -298,7 +296,7 @@ impl MetaNode {
         // use ip:port to start grpc listening
         builder = builder
             .node_id(self_node_id)
-            .addr(config.raft_api_listen_host_string());
+            .endpoint(config.raft_api_listen_host_endpoint());
         let mn = builder.build().await?;
 
         tracing::info!("MetaNode started: {:?}", config);
@@ -306,7 +304,7 @@ impl MetaNode {
         // init_cluster with advertise_host other than listen_host
         if !is_open {
             if let Some(_addrs) = init_cluster {
-                mn.init_cluster(config.raft_api_advertise_host_string())
+                mn.init_cluster(config.raft_api_advertise_host_endpoint())
                     .await?;
             }
         }
@@ -433,7 +431,7 @@ impl MetaNode {
 
             let addrs = &conf.join;
             // Join cluster use advertise host instead of listen host
-            let raft_advertise_host = conf.raft_api_advertise_host_string();
+            let raft_api_advertise_host_endpoint = conf.raft_api_advertise_host_endpoint();
             #[allow(clippy::never_loop)]
             for addr in addrs {
                 let mut client = RaftServiceClient::connect(format!("http://{}", addr))
@@ -449,7 +447,7 @@ impl MetaNode {
                     forward_to_leader: 1,
                     body: ForwardRequestBody::Join(JoinRequest {
                         node_id: conf.id,
-                        address: raft_advertise_host,
+                        endpoint: raft_api_advertise_host_endpoint,
                     }),
                 };
 
@@ -483,7 +481,7 @@ impl MetaNode {
     // - Initializing raft membership.
     // - Adding current node into the meta data.
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn init_cluster(&self, addr: String) -> MetaResult<()> {
+    pub async fn init_cluster(&self, endpoint: Endpoint) -> MetaResult<()> {
         let node_id = self.sto.id;
 
         let mut cluster_node_ids = BTreeSet::new();
@@ -497,7 +495,7 @@ impl MetaNode {
 
         tracing::info!("initialized cluster, rst: {:?}", rst);
 
-        self.add_node(node_id, addr).await?;
+        self.add_node(node_id, endpoint).await?;
 
         Ok(())
     }
@@ -635,7 +633,11 @@ impl MetaNode {
     /// Add a new node into this cluster.
     /// The node info is committed with raft, thus it must be called on an initialized node.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn add_node(&self, node_id: NodeId, addr: String) -> Result<AppliedState, MetaError> {
+    pub async fn add_node(
+        &self,
+        node_id: NodeId,
+        endpoint: Endpoint,
+    ) -> Result<AppliedState, MetaError> {
         // TODO: use txid?
         let resp = self
             .write(LogEntry {
@@ -644,7 +646,7 @@ impl MetaNode {
                     node_id,
                     node: Node {
                         name: "".to_string(),
-                        address: addr,
+                        endpoint,
                     },
                 },
             })
@@ -747,18 +749,18 @@ impl MetaNode {
         node_id: &NodeId,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, MetaError> {
-        let addr = self
+        let endpoint = self
             .sto
-            .get_node_addr(node_id)
+            .get_node_endpoint(node_id)
             .await
             .map_err(|e| MetaNetworkError::GetNodeAddrError(e.to_string()))?;
 
-        let mut client = RaftServiceClient::connect(format!("http://{}", addr))
+        let mut client = RaftServiceClient::connect(format!("http://{}", endpoint))
             .await
             .map_err(|e| {
                 MetaNetworkError::ConnectionError(ConnectionError::new(
                     e,
-                    format!("address: {}", addr),
+                    format!("address: {}", endpoint),
                 ))
             })?;
 
