@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::scalars::Function2Factory;
+use crate::scalars::FunctionFactory;
 use crate::scalars::IsNotNullFunction;
 use crate::scalars::IsNullFunction;
 
@@ -20,7 +20,7 @@ use crate::scalars::IsNullFunction;
 pub struct NullableFunction;
 
 impl NullableFunction {
-    pub fn register(factory: &mut Function2Factory) {
+    pub fn register(factory: &mut FunctionFactory) {
         factory.register("isnull", IsNullFunction::desc());
         factory.register("isnotnull", IsNotNullFunction::desc());
     }

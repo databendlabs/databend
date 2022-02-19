@@ -12,27 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use lexical_core::FromLexical;
 
 use crate::prelude::*;
 
-pub struct NumberDeserializer<T: DFPrimitiveType> {
-    pub builder: PrimitiveArrayBuilder<T>,
+pub struct NumberDeserializer<T: PrimitiveType> {
+    pub builder: MutablePrimitiveColumn<T>,
 }
 
 impl<T> TypeDeserializer for NumberDeserializer<T>
 where
-    T: DFPrimitiveType,
+    T: PrimitiveType,
     T: Unmarshal<T> + StatBuffer + FromLexical,
-    DFPrimitiveArray<T>: IntoSeries,
 {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;
         self.builder.append_value(value);
         Ok(())
+    }
+
+    fn de_default(&mut self) {
+        self.builder.append_value(T::default());
     }
 
     fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
@@ -44,30 +46,19 @@ where
         Ok(())
     }
 
-    // TODO introduce strick mod
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        if reader.eq_ignore_ascii_case(b"null") || reader.is_empty() {
-            self.builder.append_null();
-            return Ok(());
-        }
-
-        match lexical_core::parse_partial::<T>(reader) {
-            Ok((v, _)) => {
-                self.builder.append_value(v);
-                Ok(())
-            }
-            Err(e) => Err(ErrorCode::BadBytes(format!(
-                "Incorrect number value: {}",
-                e
-            ))),
-        }
+        let value = lexical_core::parse_partial::<T>(reader)
+            .unwrap_or((T::default(), 0))
+            .0;
+        self.builder.append_value(value);
+        Ok(())
     }
 
-    fn de_null(&mut self) {
-        self.builder.append_null()
+    fn de_null(&mut self) -> bool {
+        false
     }
 
-    fn finish_to_series(&mut self) -> Series {
-        self.builder.finish().into_series()
+    fn finish_to_column(&mut self) -> ColumnRef {
+        self.builder.to_column()
     }
 }

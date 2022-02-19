@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-use common_datavalues2::DataSchemaRef;
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::Extras;
 use common_tracing::tracing;

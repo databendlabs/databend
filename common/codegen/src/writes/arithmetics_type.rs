@@ -16,16 +16,16 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::type_coercion::numerical_arithmetic_coercion;
-use common_datavalues2::type_coercion::numerical_coercion;
-use common_datavalues2::type_coercion::numerical_unary_arithmetic_coercion;
+use common_datavalues::prelude::*;
+use common_datavalues::type_coercion::numerical_arithmetic_coercion;
+use common_datavalues::type_coercion::numerical_coercion;
+use common_datavalues::type_coercion::numerical_unary_arithmetic_coercion;
 
 pub fn codegen_arithmetic_type() {
     use DataValueBinaryOperator::*;
     use DataValueUnaryOperator::*;
 
-    let dest = Path::new("common/datavalues2/src/types");
+    let dest = Path::new("common/datavalues/src/types");
     let path = dest.join("arithmetics_type.rs");
 
     let mut file = File::create(&path).expect("open");

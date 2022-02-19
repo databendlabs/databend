@@ -22,7 +22,7 @@ use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::schema::FileMetaData;
 use common_arrow::parquet::read::get_page_stream;
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;

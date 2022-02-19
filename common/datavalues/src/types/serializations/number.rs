@@ -14,15 +14,21 @@
 
 use std::marker::PhantomData;
 
+use common_clickhouse_srv::types::column::ArcColumnWrapper;
+use common_clickhouse_srv::types::column::ColumnFrom;
+use common_clickhouse_srv::types::HasSqlType;
 use common_exception::Result;
+use common_io::prelude::Marshal;
+use common_io::prelude::Unmarshal;
+use serde_json::Value;
 
 use crate::prelude::*;
 
-pub struct NumberSerializer<T: DFPrimitiveType> {
+pub struct NumberSerializer<T: PrimitiveType> {
     t: PhantomData<T>,
 }
 
-impl<T: DFPrimitiveType> Default for NumberSerializer<T> {
+impl<T: PrimitiveType> Default for NumberSerializer<T> {
     fn default() -> Self {
         Self {
             t: Default::default(),
@@ -30,22 +36,40 @@ impl<T: DFPrimitiveType> Default for NumberSerializer<T> {
     }
 }
 
-impl<T: DFPrimitiveType> TypeSerializer for NumberSerializer<T> {
+impl<T> TypeSerializer for NumberSerializer<T>
+where T: PrimitiveType
+        + common_clickhouse_srv::types::StatBuffer
+        + Marshal
+        + Unmarshal<T>
+        + HasSqlType
+        + std::convert::Into<common_clickhouse_srv::types::Value>
+        + std::convert::From<common_clickhouse_srv::types::Value>
+{
     fn serialize_value(&self, value: &DataValue) -> Result<String> {
         Ok(format!("{:?}", value))
     }
 
-    fn serialize_column(&self, column: &DataColumn) -> Result<Vec<String>> {
-        let array = column.to_array()?;
-        let array: &DFPrimitiveArray<T> = array.static_cast();
+    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
+        let column: &PrimitiveColumn<T> = Series::check_get(column)?;
+        let result: Vec<String> = column.iter().map(|x| format!("{}", x)).collect();
+        Ok(result)
+    }
 
-        let result: Vec<String> = array
+    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+        let column: &PrimitiveColumn<T> = Series::check_get(column)?;
+        let result: Vec<Value> = column
             .iter()
-            .map(|x| {
-                x.map(|v| format!("{}", v))
-                    .unwrap_or_else(|| "NULL".to_owned())
-            })
+            .map(|x| serde_json::to_value(x).unwrap())
             .collect();
         Ok(result)
+    }
+
+    fn serialize_clickhouse_format(
+        &self,
+        column: &ColumnRef,
+    ) -> Result<common_clickhouse_srv::types::column::ArcColumnData> {
+        let col: &PrimitiveColumn<T> = Series::check_get(column)?;
+        let values: Vec<T> = col.iter().map(|c| c.to_owned()).collect();
+        Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 }

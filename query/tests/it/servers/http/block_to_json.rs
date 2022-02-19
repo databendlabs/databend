@@ -14,7 +14,7 @@
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use databend_query::servers::http::v1::block_to_json::block_to_json;
 use pretty_assertions::assert_eq;

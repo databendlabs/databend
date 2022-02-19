@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_datavalues2::prelude::ToDataType;
-use common_datavalues2::DataValue;
+use common_datavalues::prelude::ToDataType;
+use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;

@@ -15,7 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datavalues2::DataSchema;
+use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::DataBlockStream;

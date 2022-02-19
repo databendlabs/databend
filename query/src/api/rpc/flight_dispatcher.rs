@@ -21,7 +21,7 @@ use common_base::tokio::sync::mpsc::Sender;
 use common_base::tokio::sync::*;
 use common_base::TrySpawn;
 use common_datablocks::DataBlock;
-use common_datavalues2::DataSchemaRef;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;

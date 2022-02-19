@@ -19,7 +19,7 @@ use std::usize;
 
 use common_datablocks::DataBlock;
 use common_datablocks::SortColumnDescription;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use futures::stream::Stream;
 

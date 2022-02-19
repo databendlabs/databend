@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues2::DataSchema;
-use common_datavalues2::DataSchemaRef;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DatabaseMeta;
 

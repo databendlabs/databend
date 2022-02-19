@@ -16,8 +16,8 @@
 use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
-use common_datavalues2::DataSchema;
+use common_datavalues::prelude::*;
+use common_datavalues::DataSchema;
 use common_functions::aggregates::eval_aggr;
 
 use crate::storages::fuse::meta::BlockLocation;

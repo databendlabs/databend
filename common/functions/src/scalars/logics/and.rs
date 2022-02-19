@@ -17,20 +17,20 @@ use common_exception::Result;
 use super::logic::LogicOperator;
 use super::LogicFunction;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
 pub struct LogicAndFunction;
 
 impl LogicAndFunction {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
         LogicFunction::try_create(LogicOperator::And)
     }
 
-    pub fn desc() -> Function2Description {
+    pub fn desc() -> FunctionDescription {
         let mut features = FunctionFeatures::default().num_arguments(2);
         features = features.deterministic();
-        Function2Description::creator(Box::new(Self::try_create)).features(features)
+        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }

@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::chrono;
-use common_datavalues2::prelude::*;
+use common_datavalues::chrono;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use super::scalar_function2_test::test_scalar_functions2;
-use super::scalar_function2_test::ScalarFunction2Test;
+use super::scalar_function2_test::test_scalar_functions;
+use super::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_arithmetic_function() -> Result<()> {
     let tests = vec![
         (
             ArithmeticPlusFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "add-int64-passed",
                 columns: vec![
                     Series::from_data(vec![4i64, 3, 2, 1]),
@@ -37,7 +37,7 @@ fn test_arithmetic_function() -> Result<()> {
         ),
         (
             ArithmeticPlusFunction::try_create_func("", &[&Int16Type::arc(), &Int64Type::arc()])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "add-diff-passed",
                 columns: vec![
                     Series::from_data(vec![1i16, 2, 3, 4]),
@@ -49,7 +49,7 @@ fn test_arithmetic_function() -> Result<()> {
         ),
         (
             ArithmeticMinusFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "sub-int64-passed",
                 columns: vec![
                     Series::from_data(vec![4i64, 3, 2]),
@@ -61,7 +61,7 @@ fn test_arithmetic_function() -> Result<()> {
         ),
         (
             ArithmeticMulFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "mul-int64-passed",
                 columns: vec![
                     Series::from_data(vec![4i64, 3, 2]),
@@ -73,7 +73,7 @@ fn test_arithmetic_function() -> Result<()> {
         ),
         (
             ArithmeticDivFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "div-int64-passed",
                 columns: vec![
                     Series::from_data(vec![4i64, 3, 2]),
@@ -85,7 +85,7 @@ fn test_arithmetic_function() -> Result<()> {
         ),
         (
             ArithmeticIntDivFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "intdiv-int64-passed",
                 columns: vec![
                     Series::from_data(vec![4i64, 3, 2]),
@@ -97,7 +97,7 @@ fn test_arithmetic_function() -> Result<()> {
         ),
         (
             ArithmeticModuloFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "mod-int64-passed",
                 columns: vec![
                     Series::from_data(vec![4i64, 3, 2]),
@@ -110,7 +110,7 @@ fn test_arithmetic_function() -> Result<()> {
     ];
 
     for (test_function, test) in tests {
-        test_scalar_functions2(test_function, &[test])?
+        test_scalar_functions(test_function, &[test])?
     }
 
     Ok(())
@@ -146,7 +146,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 &Date16Type::arc(),
                 &IntervalType::arc(IntervalKind::Year),
             ])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "date16-add-years-passed",
                 columns: vec![
                     Series::from_data(vec![
@@ -167,7 +167,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 &Date32Type::arc(),
                 &IntervalType::arc(IntervalKind::Year),
             ])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "date32-sub-years-passed",
                 columns: vec![
                     Series::from_data(vec![
@@ -188,7 +188,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 &DateTime32Type::arc(None),
                 &IntervalType::arc(IntervalKind::Year),
             ])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "datetime32-add-years-passed",
                 columns: vec![
                     Series::from_data(vec![
@@ -209,7 +209,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 &DateTime64Type::arc(3, None),
                 &IntervalType::arc(IntervalKind::Year),
             ])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "datetime64-sub-years-passed",
                 columns: vec![
                     Series::from_data(vec![
@@ -230,7 +230,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 &Date16Type::arc(),
                 &IntervalType::arc(IntervalKind::Month),
             ])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "date16-add-months-passed",
                 columns: vec![
                     Series::from_data(vec![
@@ -251,7 +251,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 &DateTime32Type::arc(None),
                 &IntervalType::arc(IntervalKind::Month),
             ])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "datetime32-add-months-passed",
                 columns: vec![
                     Series::from_data(vec![
@@ -272,7 +272,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 &Date32Type::arc(),
                 &IntervalType::arc(IntervalKind::Day),
             ])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "date32-sub-days-passed",
                 columns: vec![
                     Series::from_data(vec![
@@ -293,7 +293,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 &DateTime64Type::arc(3, None),
                 &IntervalType::arc(IntervalKind::Day),
             ])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "datetime64-add-days-passed",
                 columns: vec![
                     Series::from_data(vec![
@@ -314,7 +314,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 &Date16Type::arc(),
                 &IntervalType::arc(IntervalKind::Hour),
             ])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "date16-add-hours-passed",
                 columns: vec![
                     Series::from_data(vec![
@@ -335,7 +335,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 &Date32Type::arc(),
                 &IntervalType::arc(IntervalKind::Minute),
             ])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "date32-sub-minutes-passed",
                 columns: vec![
                     Series::from_data(vec![
@@ -356,7 +356,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 &DateTime32Type::arc(None),
                 &IntervalType::arc(IntervalKind::Second),
             ])?,
-            ScalarFunction2Test {
+            ScalarFunctionTest {
                 name: "datetime32-sub-seconds-passed",
                 columns: vec![
                     Series::from_data(vec![
@@ -375,7 +375,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
     ];
 
     for (test_function, test) in tests {
-        test_scalar_functions2(test_function, &[test])?
+        test_scalar_functions(test_function, &[test])?
     }
 
     Ok(())

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::Column;
-use common_datavalues2::StringColumn;
+use common_datavalues::Column;
+use common_datavalues::StringColumn;
 use common_exception::Result;
 
 use crate::scalars::strings::String2StringFunction;

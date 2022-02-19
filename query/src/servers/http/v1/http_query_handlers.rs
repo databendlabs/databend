@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_base::ProgressValues;
-use common_datavalues2::DataSchemaRef;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_meta_types::UserInfo;
 use common_tracing::tracing;

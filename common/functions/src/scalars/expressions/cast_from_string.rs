@@ -14,10 +14,10 @@
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
-use common_datavalues2::chrono::Datelike;
-use common_datavalues2::chrono::NaiveDate;
-use common_datavalues2::chrono::NaiveDateTime;
-use common_datavalues2::prelude::*;
+use common_datavalues::chrono::Datelike;
+use common_datavalues::chrono::NaiveDate;
+use common_datavalues::chrono::NaiveDateTime;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use super::cast_with_type::arrow_cast_compute;

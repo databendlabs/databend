@@ -17,9 +17,9 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::DataField;
-use common_datavalues2::DataSchema;
-use common_datavalues2::DataSchemaRef;
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
