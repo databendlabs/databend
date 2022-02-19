@@ -19,7 +19,7 @@ runs:
         sudo apt-get update
         sudo apt-get install -y clang clang-tools libclang-dev llvm
 
-    - uses: Warchant/setup-mold@v1
+    - uses: Warchant/setup-mold@c301b9255e7860fef789d6830d562dd99497b437
       if: ${{matrix.config.os == 'ubuntu-latest'}}
       with:
         version: "v1.0.3"
