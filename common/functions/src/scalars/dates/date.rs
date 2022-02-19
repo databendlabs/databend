@@ -62,7 +62,7 @@ impl DateFunction {
         )
     }
 
-    pub fn register2(factory: &mut FunctionFactory) {
+    pub fn register(factory: &mut FunctionFactory) {
         factory.register("today", TodayFunction::desc());
         factory.register("yesterday", YesterdayFunction::desc());
         factory.register("tomorrow", TomorrowFunction::desc());

@@ -21,7 +21,7 @@ use crate::scalars::FunctionFactory;
 pub struct UUIDFunction;
 
 impl UUIDFunction {
-    pub fn register2(factory: &mut FunctionFactory) {
+    pub fn register(factory: &mut FunctionFactory) {
         factory.register("generateUUIDv4", UUIDv4Function::desc());
         factory.register("zeroUUID", UUIDZeroFunction::desc());
         factory.register("isemptyUUID", UUIDIsEmptyFunction::desc());

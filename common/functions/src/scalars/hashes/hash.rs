@@ -33,7 +33,7 @@ pub type XxHash64Function = BaseHashFunction<XxHash64, u64>;
 pub type SipHash64Function = BaseHashFunction<DefaultHasher, u64>;
 
 impl HashesFunction {
-    pub fn register2(factory: &mut FunctionFactory) {
+    pub fn register(factory: &mut FunctionFactory) {
         factory.register("md5", Md5HashFunction::desc());
         factory.register("sha", Sha1HashFunction::desc());
         factory.register("sha1", Sha1HashFunction::desc());
