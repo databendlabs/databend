@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues2::remove_nullable;
 use common_exception::Result;
 
 use crate::kernels::HashMethodKeysU16;
@@ -31,10 +32,14 @@ impl DataBlock {
         let mut group_key_len = 0;
         for col in column_names {
             let column = block.try_column_by_name(col)?;
-            let typ = column.data_type();
-            if typ.data_type_id().is_integer() {
-                group_key_len += typ.data_type_id().numeric_byte_size()?;
+            let _typ = if column.is_nullable() {
+                remove_nullable(&column.data_type())
+            } else {
+                column.data_type()
+            };
+            if _typ.data_type_id().is_integer() {
                 // If column is nullable, we will add one byte to identify `null` value for every row.
+                group_key_len += _typ.data_type_id().numeric_byte_size()?;
                 if column.is_nullable() {
                     group_key_len += 1;
                 }

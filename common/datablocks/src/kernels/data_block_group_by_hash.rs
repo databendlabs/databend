@@ -230,6 +230,7 @@ where T: PrimitiveType
     pub fn get_key(&self, column: &PrimitiveColumn<T>, row: usize) -> T {
         unsafe { column.value_unchecked(row) }
     }
+    // todo() de_group_columns supports nullable().
     pub fn de_group_columns(
         &self,
         keys: Vec<T>,
@@ -256,7 +257,13 @@ where T: PrimitiveType
             deserializer.de_batch(&reader[offsize..], step, rows)?;
             res.push(deserializer.finish_to_column());
 
-            offsize += data_type.data_type_id().numeric_byte_size()?;
+            if data_type.is_nullable() {
+                offsize += remove_nullable(&data_type)
+                    .data_type_id()
+                    .numeric_byte_size()?;
+            } else {
+                offsize += data_type.data_type_id().numeric_byte_size()?;
+            }
         }
         Ok(res)
     }
@@ -294,7 +301,6 @@ where
         if group_columns_has_nullable_one {
             let mut null_part_offset = 0;
             init_nullable_offset(&mut null_part_offset, group_columns)?;
-            let mut nullable_column_index = 0;
             while size > 0 {
                 build_keys_with_nullable_column(
                     size,
@@ -302,8 +308,7 @@ where
                     group_columns,
                     ptr,
                     step,
-                    &mut nullable_column_index,
-                    null_part_offset,
+                    &mut null_part_offset,
                 )?;
                 size /= 2;
             }
@@ -376,7 +381,9 @@ where
 #[inline]
 fn init_nullable_offset(null_part_offset: &mut usize, group_keys: &[&ColumnRef]) -> Result<()> {
     for group_key_column in group_keys {
-        *null_part_offset += group_key_column.data_type_id().numeric_byte_size()?;
+        *null_part_offset += remove_nullable(&group_key_column.data_type())
+            .data_type_id()
+            .numeric_byte_size()?;
     }
     Ok(())
 }
@@ -409,20 +416,19 @@ fn build_keys_with_nullable_column(
     group_columns: &[&ColumnRef],
     writer: *mut u8,
     step: usize,
-    index: &mut usize,
-    null_offset: usize,
+    null_offset: &mut usize,
 ) -> Result<()> {
     for col in group_columns.iter() {
         let data_type = col.data_type();
-        let type_id = data_type.data_type_id();
+        let type_id = remove_nullable(&data_type).data_type_id();
         let size = type_id.numeric_byte_size()?;
 
         if size == mem_size {
-            if col.is_null() {
+            if col.is_nullable() {
                 let writer = unsafe { writer.add(*offsize) };
-                Series::fixed_hash_with_nullable(col, writer, step, index.to_owned(), null_offset)?;
+                Series::fixed_hash_with_nullable(col, writer, step, *null_offset)?;
                 *offsize += size;
-                *index += 1;
+                *null_offset += 1;
             } else {
                 let writer = unsafe { writer.add(*offsize) };
                 Series::fixed_hash(col, writer, step)?;

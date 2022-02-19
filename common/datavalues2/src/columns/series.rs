@@ -111,6 +111,22 @@ impl Series {
         }
     }
 
+    pub fn restore_nullable_if_nullable(column: &ColumnRef) -> ColumnRef {
+        if column.is_nullable() {
+            //constant nullable ?
+            if column.is_const() {
+                let col: &ConstColumn = unsafe { Self::static_cast(column) };
+                let inner = Self::restore_nullable_if_nullable(col.inner());
+                ConstColumn::new(inner, col.len()).arc()
+            } else {
+                let col = unsafe { Self::static_cast::<NullableColumn>(column) };
+                col.arc()
+            }
+        } else {
+            column.clone()
+        }
+    }
+
     pub fn concat(columns: &[ColumnRef]) -> Result<ColumnRef> {
         debug_assert!(!columns.is_empty());
         let is_nullable = columns[0].is_nullable();

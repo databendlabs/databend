@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use std::fmt::Debug;
+use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -20,12 +22,31 @@ use common_io::prelude::*;
 use crate::prelude::*;
 
 impl Series {
+    /// Hash function for nullable column, which directly operate on data to avoid invocation of virtual function.
+    pub fn do_hash_for_nullable_column(
+        ptr: *mut u8,
+        column: &Arc<dyn Column>,
+        bitmap: &Bitmap,
+        step: usize,
+        null_offset: usize,
+    ) -> Result<()> {
+        Series::fixed_hash(column, ptr, step)?;
+        let mut row = 0;
+        for _valid_row in bitmap.iter() {
+            if !_valid_row {
+                unsafe {
+                    ptr.add(row * step + null_offset).write(0x01);
+                }
+            }
+            row += 1;
+        }
+        Ok(())
+    }
+
     pub fn fixed_hash(column: &ColumnRef, ptr: *mut u8, step: usize) -> Result<()> {
         let column = column.convert_full_column();
         // TODO support nullable
-        let column = Series::remove_nullable(&column);
         let type_id = column.data_type_id().to_physical_type();
-
         with_match_scalar_type!(type_id, |$T| {
             let col: &<$T as Scalar>::ColumnType = Series::check_get(&column)?;
             GroupHash::fixed_hash(col, ptr, step)
@@ -40,16 +61,16 @@ impl Series {
         column: &ColumnRef,
         ptr: *mut u8,
         step: usize,
-        i: usize,
         null_offset: usize,
     ) -> Result<()> {
         let column = column.convert_full_column();
         // TODO support nullable
-        let column = Series::remove_nullable(&column);
-        let type_id = column.data_type_id().to_physical_type();
-        with_match_scalar_type!(type_id, |$T| {
-            let col: &<$T as Scalar>::ColumnType = Series::check_get(&column)?;
-            GroupHash::fixed_hash_with_nullable(col, ptr, step, i, null_offset)
+        // let column = Series::restore_nullable_if_nullable(&column);
+        let type_id = (remove_nullable(&column.data_type()).data_type_id()).to_physical_type();
+        with_match_scalar_type!(type_id, |$T|
+        {
+            let col: &NullableColumn = Series::check_get(&column)?;
+            GroupHash::fixed_hash_with_nullable(col, ptr, step, null_offset)
         }, {
             Err(ErrorCode::BadDataValueType(
                 format!("Unsupported apply fn fixed_hash operation for column: {:?}", column.data_type()),
@@ -89,19 +110,14 @@ pub trait GroupHash: Debug {
             self,
         )))
     }
-
-    /// IMO: To Support hash nullable column, this method should be added with some
-    /// variable about ith column in this run to do hash, Then we can fill the bits  into the right
-    /// position.
     fn fixed_hash_with_nullable(
         &self,
         _ptr: *mut u8,
         _step: usize,
-        _i: usize,
         _null_offset: usize,
     ) -> Result<()> {
         Err(ErrorCode::BadDataValueType(format!(
-            "Unsupported apply fn fixed_hash_with_nullable operation for {:?}",
+            "Unsupported apply fn nullable_hash operation for {:?}",
             self,
         )))
     }
@@ -135,31 +151,6 @@ where
         Ok(())
     }
 
-    /// Argument i is the index of the nullable column, start from 0, like array index.
-    fn fixed_hash_with_nullable(
-        &self,
-        ptr: *mut u8,
-        step: usize,
-        i: usize,
-        null_offset: usize,
-    ) -> Result<()> {
-        let mut ptr = ptr;
-
-        for value in self.values().iter() {
-            unsafe {
-                std::ptr::copy_nonoverlapping(
-                    value as *const T as *const u8,
-                    ptr,
-                    std::mem::size_of::<T>(),
-                );
-                // Write the nullable to the proper position
-                std::ptr::write(ptr.add(null_offset + i), 1);
-                ptr = ptr.add(step);
-            }
-        }
-        Ok(())
-    }
-
     fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
         assert_eq!(vec.len(), self.len());
         for (value, vec) in self.iter().zip(vec.iter_mut()) {
@@ -182,28 +173,6 @@ impl GroupHash for BooleanColumn {
         Ok(())
     }
 
-    /// i is the index of the nullable column, start from 0, like array index.
-    fn fixed_hash_with_nullable(
-        &self,
-        ptr: *mut u8,
-        step: usize,
-        i: usize,
-        null_offset: usize,
-    ) -> Result<()> {
-        let mut ptr = ptr;
-
-        for value in self.values().iter() {
-            unsafe {
-                std::ptr::copy_nonoverlapping(&(value as u8) as *const u8, ptr, 1);
-                ptr = ptr.add(step);
-                // Write the nullable to the proper position
-                std::ptr::write(ptr.add(null_offset + i), 1);
-                ptr = ptr.add(step);
-            }
-        }
-        Ok(())
-    }
-
     fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
         assert_eq!(vec.len(), self.len());
         for (value, vec) in self.iter().zip(vec.iter_mut()) {
@@ -220,5 +189,34 @@ impl GroupHash for StringColumn {
             BinaryWrite::write_binary(vec, value)?;
         }
         Ok(())
+    }
+}
+
+impl GroupHash for NullableColumn {
+    fn fixed_hash_with_nullable(
+        &self,
+        ptr: *mut u8,
+        step: usize,
+        null_offset: usize,
+    ) -> Result<()> {
+        let bitmap = self.ensure_validity();
+        let inner_column = self.inner();
+        Series::do_hash_for_nullable_column(ptr, inner_column, bitmap, step, null_offset)?;
+        Ok(())
+    }
+
+    fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
+        assert_eq!(vec.len(), self.inner().len());
+        // for (value, vec) in self.iter().zip(vec.iter_mut()) {
+        //     BinaryWrite::write_scalar(vec, &value)?;
+        // }
+        Ok(())
+    }
+
+    fn fixed_hash(&self, _ptr: *mut u8, _step: usize) -> Result<()> {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Unsupported apply fn fixed_hash operation for {:?}",
+            self,
+        )))
     }
 }
