@@ -32,11 +32,7 @@ impl Default for EvalContext {
 }
 
 impl EvalContext {
-    pub fn new(
-        factor: i64,
-        precision: usize,
-        error: Option<ErrorCode>,
-    ) -> Self {
+    pub fn new(factor: i64, precision: usize, error: Option<ErrorCode>) -> Self {
         Self {
             factor,
             precision,
