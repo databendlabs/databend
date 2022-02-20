@@ -82,7 +82,7 @@ impl CopyInterpreter {
             .stat(&file_location)
             .run()
             .await
-            .map_err(|_e| ErrorCode::DalStatError("dal stat error"))?;
+            .map_err(|e| ErrorCode::DalStatError(format!("dal stat error:{:?}", e)))?;
         let reader = SeekableReader::new(dal_operator, &file_location, object.size);
         let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
 
