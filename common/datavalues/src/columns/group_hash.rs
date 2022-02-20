@@ -35,10 +35,9 @@ impl Series {
             if !valid_row {
                 unsafe {
                     let _offset = row * step + null_offset;
-                    let mut _ptr1 = unsafe { ptr.add(_offset) };
-                    unsafe {
-                        _ptr1.write(0x01);
-                    }
+                    let mut _ptr1 = ptr.add(_offset);
+
+                    _ptr1.write(0x01);
                 }
             }
         }
