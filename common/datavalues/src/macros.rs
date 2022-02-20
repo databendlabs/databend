@@ -135,30 +135,30 @@ macro_rules! with_match_scalar_type {
     (
     $key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt
 ) => {{
-            macro_rules! __with_ty__ {
-                ( $_ $T:ident ) => {
-                    $body
-                };
-            }
-            type C = Vec<u8>;
-            match $key_type {
-                PhysicalTypeID::Boolean => __with_ty__! { bool },
-                PhysicalTypeID::String => __with_ty__! { C },
-    
-                PhysicalTypeID::Int8 => __with_ty__! { i8 },
-                PhysicalTypeID::Int16 => __with_ty__! { i16 },
-                PhysicalTypeID::Int32 => __with_ty__! { i32 },
-                PhysicalTypeID::Int64 => __with_ty__! { i64 },
-                PhysicalTypeID::UInt8 => __with_ty__! { u8 },
-                PhysicalTypeID::UInt16 => __with_ty__! { u16 },
-                PhysicalTypeID::UInt32 => __with_ty__! { u32 },
-                PhysicalTypeID::UInt64 => __with_ty__! { u64 },
-                PhysicalTypeID::Float32 => __with_ty__! { f32 },
-                PhysicalTypeID::Float64 => __with_ty__! { f64 },
-    
-                _ => $nbody,
-            }
-        }};
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident ) => {
+                $body
+            };
+        }
+        type C = Vec<u8>;
+        match $key_type {
+            PhysicalTypeID::Boolean => __with_ty__! { bool },
+            PhysicalTypeID::String => __with_ty__! { C },
+
+            PhysicalTypeID::Int8 => __with_ty__! { i8 },
+            PhysicalTypeID::Int16 => __with_ty__! { i16 },
+            PhysicalTypeID::Int32 => __with_ty__! { i32 },
+            PhysicalTypeID::Int64 => __with_ty__! { i64 },
+            PhysicalTypeID::UInt8 => __with_ty__! { u8 },
+            PhysicalTypeID::UInt16 => __with_ty__! { u16 },
+            PhysicalTypeID::UInt32 => __with_ty__! { u32 },
+            PhysicalTypeID::UInt64 => __with_ty__! { u64 },
+            PhysicalTypeID::Float32 => __with_ty__! { f32 },
+            PhysicalTypeID::Float64 => __with_ty__! { f64 },
+
+            _ => $nbody,
+        }
+    }};
 }
 
 #[macro_export]
