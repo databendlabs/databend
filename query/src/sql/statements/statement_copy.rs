@@ -134,15 +134,20 @@ impl DfCopy {
         let file_format = Self::to_file_format(format)?;
 
         // Parse uri.
-        let uri = uriparse::URIReference::try_from(self.location.as_str())
+        let uri = self
+            .location
+            .as_str()
+            .parse::<http::Uri>()
             .map_err(|_e| ErrorCode::SyntaxException("File location uri must be specified"))?;
+        let bucket = uri.host().unwrap_or("").to_string();
+        let location_key = uri.path().unwrap_or("").to_string();
 
         // File storage plan.
-        let stage_storage = match uri.scheme() {
+        let stage_storage = match uri.scheme_str() {
             None => Err(ErrorCode::SyntaxException(
                 "File location scheme must be specified",
             )),
-            Some(v) => match v.as_str() {
+            Some(v) => match v {
                 // AWS s3 plan.
                 "s3" => {
                     let credentials_aws_key_id = self
@@ -162,6 +167,8 @@ impl DfCopy {
                         .clone();
 
                     Ok(StageStorage::S3(StageS3Storage {
+                        bucket,
+                        location_key,
                         credentials_aws_key_id,
                         credentials_aws_secret_key,
                         encryption_master_key,

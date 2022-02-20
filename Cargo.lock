@@ -2407,6 +2407,7 @@ dependencies = [
  "dyn-clone",
  "futures",
  "headers",
+ "http",
  "httpmock",
  "hyper",
  "jwt-simple",

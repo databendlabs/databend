@@ -89,6 +89,8 @@ impl Default for FileFormatOptions {
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct StageS3Storage {
+    pub bucket: String,
+    pub location_key: String,
     pub credentials_aws_key_id: String,
     pub credentials_aws_secret_key: String,
     pub encryption_master_key: String,
