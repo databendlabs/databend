@@ -25,6 +25,7 @@ mod number;
 mod string;
 
 pub use boolean::*;
+use common_exception::ErrorCode;
 pub use date::*;
 pub use date_time::*;
 pub use null::*;
@@ -36,6 +37,17 @@ pub trait TypeDeserializer: Send + Sync {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()>;
     fn de_default(&mut self);
     fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()>;
+    fn de_batch_with_nullable(
+        &mut self,
+        _reader: &[u8],
+        _step: usize,
+        _rows: usize,
+        _null_offset: usize,
+    ) -> Result<()> {
+        Err(ErrorCode::BadDataValueType(format!(
+            "de_batch_with_nullable operation only for nullable",
+        )))
+    }
     /// If error occurrs, append a null by default
     fn de_text(&mut self, reader: &[u8]) -> Result<()>;
 

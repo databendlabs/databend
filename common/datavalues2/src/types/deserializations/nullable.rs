@@ -36,12 +36,35 @@ impl TypeDeserializer for NullableDeserializer {
         self.inner.de_default();
         self.bitmap.push(false);
     }
-
+    /// Need the inner row.
+    /// Use inner.de method to deserialize, if has value, the bitmap push(true).
     fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             self.inner.de(&mut reader)?;
             self.bitmap.push(true);
+        }
+        Ok(())
+    }
+
+    fn de_batch_with_nullable(
+        &mut self,
+        reader: &[u8],
+        step: usize,
+        rows: usize,
+        null_offset: usize,
+    ) -> Result<()> {
+        for row in 0..rows {
+            let mut reader = &reader[step * row..];
+            self.inner.de(&mut reader)?;
+            // null_offset -= self.inner().to_physical_type;
+            // todo, We should get the length of missed bytes which caused
+            // by self.inner.de method.
+            if reader[null_offset - 1] & 1 == 1 {
+                self.bitmap.push(false);
+            } else {
+                self.bitmap.push(true);
+            }
         }
         Ok(())
     }

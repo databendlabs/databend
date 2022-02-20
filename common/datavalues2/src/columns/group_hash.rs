@@ -207,9 +207,7 @@ impl GroupHash for NullableColumn {
 
     fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
         assert_eq!(vec.len(), self.inner().len());
-        // for (value, vec) in self.iter().zip(vec.iter_mut()) {
-        //     BinaryWrite::write_scalar(vec, &value)?;
-        // }
+        Series::serialize(self.inner(), vec)?;
         Ok(())
     }
 

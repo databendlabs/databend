@@ -213,7 +213,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
         for mut builder in state_builders {
             columns.push(builder.to_column());
         }
-
         columns.push(group_key_builder.finish());
         let block = DataBlock::create(schema.clone(), columns);
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))

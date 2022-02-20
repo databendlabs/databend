@@ -242,6 +242,7 @@ where T: PrimitiveType
         let length = rows * step;
         let capacity = keys.capacity() * step;
         let mutptr = keys.as_mut_ptr() as *mut u8;
+
         let vec8 = unsafe {
             std::mem::forget(keys);
             // construct new vec
@@ -250,13 +251,26 @@ where T: PrimitiveType
 
         let mut res = Vec::with_capacity(group_fields.len());
         let mut offsize = 0;
+        let mut null_part_offset = 0;
+
+        init_nullable_offset_via_fields(&mut null_part_offset, group_fields)?;
         for f in group_fields.iter() {
             let data_type = f.data_type();
             let mut deserializer = data_type.create_deserializer(rows);
             let reader = vec8.as_slice();
-            deserializer.de_batch(&reader[offsize..], step, rows)?;
-            res.push(deserializer.finish_to_column());
-
+            if !data_type.is_nullable() {
+                deserializer.de_batch(&reader[offsize..], step, rows)?;
+                res.push(deserializer.finish_to_column());
+            } else {
+                deserializer.de_batch_with_nullable(
+                    &reader[offsize..],
+                    step,
+                    rows,
+                    null_part_offset,
+                )?;
+                res.push(deserializer.finish_to_column());
+                null_part_offset += 1;
+            }
             if data_type.is_nullable() {
                 offsize += remove_nullable(&data_type)
                     .data_type_id()
@@ -280,22 +294,13 @@ where
         format!("FixedKeys{}", std::mem::size_of::<Self::HashKey>())
     }
 
-    ///Build hash keys in the way that all the values of one row in these group columns coined
-    /// into one hash key, as a result the binary representation of these combined value is a hashkey
-    /// for this row. In normal situation, All columns are not nullable, then we just move these value
-    /// to another position row by row, that's trivial. When some columns are nullable, then we will
-    /// make the value of this value (null) represented by 0, and set `1`in the proper byte to identify
-    /// this `null` value.
-    /// Example: the column1 and column3 are nullable type.
-    /// The memory layout is split into [[value_part][null_part]]:
-    /// [[column1_value, column2_value, ..., nullable_byte_for_column1, nullable_byte_for_column3], [...]]
     fn build_keys(&self, group_columns: &[&ColumnRef], rows: usize) -> Result<Vec<Self::HashKey>> {
         let step = std::mem::size_of::<T>();
+        // Use group_keys to store group keys.
         let mut group_keys: Vec<T> = vec![T::default(); rows];
         let ptr = group_keys.as_mut_ptr() as *mut u8;
         let mut offsize = 0;
         let mut size = step;
-        // If any of these columns is nullable.
 
         let group_columns_has_nullable_one = check_group_columns_has_nullable(group_columns);
         if group_columns_has_nullable_one {
@@ -384,6 +389,23 @@ fn init_nullable_offset(null_part_offset: &mut usize, group_keys: &[&ColumnRef])
         *null_part_offset += remove_nullable(&group_key_column.data_type())
             .data_type_id()
             .numeric_byte_size()?;
+    }
+    Ok(())
+}
+
+/// Init the nullable part's offset in bytes. It follows the values part.
+#[inline]
+fn init_nullable_offset_via_fields(
+    null_part_offset: &mut usize,
+    group_fields: &[DataField],
+) -> Result<()> {
+    for f in group_fields {
+        let f_typ = f.data_type();
+        if f_typ.is_nullable() {
+            *null_part_offset += remove_nullable(&f_typ).data_type_id().numeric_byte_size()?;
+        } else {
+            *null_part_offset += f_typ.data_type_id().numeric_byte_size()?;
+        }
     }
     Ok(())
 }
