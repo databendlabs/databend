@@ -141,7 +141,7 @@ macro_rules! with_match_scalar_type {
             };
         }
 
-        // type C = Vec<u8>;
+        type C = Vec<u8>;
 
         match $key_type {
             PhysicalTypeID::Boolean => __with_ty__! { bool },
