@@ -353,7 +353,7 @@ where
                             group_values.push(col.get(row));
                         }
                         group_indices
-                            .insert((*group_key).clone(), (vec![row as u32], group_values));
+                            .insert((*group_key), (vec![row as u32], group_values));
                     }
                     Some((v, _)) => {
                         v.push(row as u32);
