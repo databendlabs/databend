@@ -44,9 +44,8 @@ pub trait TypeDeserializer: Send + Sync {
         _rows: usize,
         _null_offset: usize,
     ) -> Result<()> {
-        Err(ErrorCode::BadDataValueType(format!(
-            "de_batch_with_nullable operation only for nullable",
-        )))
+        Err(ErrorCode::BadDataValueType(
+            "de_batch_with_nullable operation only for nullable"))
     }
     /// If error occurrs, append a null by default
     fn de_text(&mut self, reader: &[u8]) -> Result<()>;
