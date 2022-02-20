@@ -158,16 +158,16 @@ static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     ToCastFunction::register(&mut function_factory);
     TupleClassFunction::register(&mut function_factory);
     ComparisonFunction::register(&mut function_factory);
-    UdfFunction::register2(&mut function_factory);
-    StringFunction::register2(&mut function_factory);
-    HashesFunction::register2(&mut function_factory);
+    UdfFunction::register(&mut function_factory);
+    StringFunction::register(&mut function_factory);
+    HashesFunction::register(&mut function_factory);
     ConditionalFunction::register(&mut function_factory);
     LogicFunction::register(&mut function_factory);
     NullableFunction::register(&mut function_factory);
-    DateFunction::register2(&mut function_factory);
+    DateFunction::register(&mut function_factory);
     OtherFunction::register(&mut function_factory);
-    UUIDFunction::register2(&mut function_factory);
-    MathsFunction::register2(&mut function_factory);
+    UUIDFunction::register(&mut function_factory);
+    MathsFunction::register(&mut function_factory);
 
     Arc::new(function_factory)
 });

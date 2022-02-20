@@ -60,7 +60,7 @@ use crate::scalars::UpperFunction;
 pub struct StringFunction;
 
 impl StringFunction {
-    pub fn register2(factory: &mut FunctionFactory) {
+    pub fn register(factory: &mut FunctionFactory) {
         factory.register("to_base64", Base64EncodeFunction::desc());
         factory.register("from_base64", Base64DecodeFunction::desc());
         factory.register("rtrim", RTrimFunction::desc());

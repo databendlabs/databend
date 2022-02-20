@@ -47,7 +47,7 @@ pub type CRC32Function = BaseHashFunction<CRC32, u32>;
 pub struct MathsFunction;
 
 impl MathsFunction {
-    pub fn register2(factory: &mut FunctionFactory) {
+    pub fn register(factory: &mut FunctionFactory) {
         factory.register("abs", AbsFunction::desc());
         factory.register("sign", SignFunction::desc());
         factory.register("pi", PiFunction::desc());
