@@ -192,6 +192,8 @@ build_exceptions! {
     DalTransportError(3003),
     DalPathNotFound(3004),
     SerdeError(3005),
+    DalS3Error(3006),
+    DalStatError(3007),
 }
 
 // Cache errors [4001, 5000].
