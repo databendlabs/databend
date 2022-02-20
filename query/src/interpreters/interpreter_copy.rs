@@ -14,22 +14,23 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::StageFileFormatType;
 use common_meta_types::StageStorage;
+use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_planners::CopyPlan;
+use common_streams::CsvSource;
 use common_streams::DataBlockStream;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
-use common_streams::SourceFactory;
-use common_streams::SourceParams;
 use common_streams::SourceStream;
 use futures::io::BufReader;
 use futures::TryStreamExt;
 use opendal::credential::Credential;
 use opendal::readers::SeekableReader;
 
-use crate::common::HashMap;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -79,34 +80,59 @@ impl Interpreter for CopyInterpreter {
         &self,
         mut _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let dal = self
-            .get_dal(self.plan.stage_plan.stage_info.clone())
-            .await?;
-
         let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-        let path = self
-            .plan
-            .stage_plan
-            .stage_info
-            .stage_params
-            .location
-            .clone()
-            .as_str();
-        let o = dal.stat(path).run().await.unwrap();
-        let reader = SeekableReader::new(dal, path, o.size);
         let read_buffer_size = self.ctx.get_settings().get_storage_read_buffer_size()?;
-        let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
+        let schema = self.plan.schema.clone();
 
-        let source_params = SourceParams {
-            reader,
-            path,
-            format: "csv",
-            schema: self.plan.schema.clone(),
-            max_block_size,
-            projection: (0..self.plan.schema().fields().len()).collect(),
-            options: &HashMap::create(),
-        };
-        let source_stream = SourceStream::new(SourceFactory::try_get(source_params)?);
+        let stage_info = self.plan.stage_plan.stage_info.clone();
+
+        let source_stream = match stage_info.stage_type {
+            StageType::Internal => Err(ErrorCode::LogicalError(
+                "Unsupported copy from internal stage",
+            )),
+            StageType::External => {
+                let file_location = stage_info.stage_name.clone();
+                let dal = self.get_dal(stage_info.clone()).await?;
+                let object = dal.stat(&file_location).run().await.unwrap();
+                let reader = SeekableReader::new(dal, &file_location, object.size);
+                let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
+
+                match stage_info.file_format_option.format {
+                    // CSV.
+                    StageFileFormatType::Csv => {
+                        // Field delimiter.
+                        let field_delimiter_str = stage_info.file_format_option.field_delimiter;
+                        let field_delimiter = match field_delimiter_str.len() {
+                            n if n >= 1 => field_delimiter_str.as_bytes()[0],
+                            _ => b',',
+                        };
+
+                        // Record delimiter.
+                        let record_delimiter_str = stage_info.file_format_option.record_delimiter;
+                        let record_delimiter = match record_delimiter_str.len() {
+                            n if n >= 1 => record_delimiter_str.as_bytes()[0],
+                            _ => b'\n',
+                        };
+
+                        let csv = CsvSource::try_create(
+                            reader,
+                            schema,
+                            true,
+                            field_delimiter,
+                            record_delimiter,
+                            max_block_size,
+                        )?;
+                        Ok(SourceStream::new(Box::new(csv)))
+                    }
+                    // Unsupported.
+                    format => Err(ErrorCode::LogicalError(format!(
+                        "Unsupported file format: {:?}",
+                        format
+                    ))),
+                }
+            }
+        }?;
+
         let input_stream = source_stream.execute().await?;
         let progress_stream = Box::pin(ProgressStream::try_create(
             input_stream,

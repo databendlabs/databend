@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageParams;
 use common_meta_types::StageS3Storage;
@@ -133,6 +134,35 @@ impl DfCopy {
             .ok_or_else(|| ErrorCode::SyntaxException("File format type must be specified"))?;
         let file_format = Self::to_file_format(format)?;
 
+        // Skip header.
+        let skip_header = self
+            .file_format_options
+            .get("SKIP_HEADER")
+            .unwrap_or(&"0".to_string())
+            .parse::<i32>()?;
+
+        // Field delimiter.
+        let field_delimiter = self
+            .file_format_options
+            .get("FIELD_DELIMITER")
+            .unwrap_or(&"".to_string())
+            .clone();
+
+        // Record delimiter.
+        let record_delimiter = self
+            .file_format_options
+            .get("RECORD_DELIMITER")
+            .unwrap_or(&"".to_string())
+            .clone();
+
+        let file_format_option = FileFormatOptions {
+            format: file_format,
+            skip_header,
+            field_delimiter,
+            record_delimiter,
+            compression: Default::default(),
+        };
+
         // Parse uri.
         let uri = self
             .location
@@ -184,15 +214,15 @@ impl DfCopy {
 
         // Stage params.
         let stage_params = StageParams {
-            location: self.location.clone(),
             storage: stage_storage,
         };
 
         // Stage info.
         Ok(UserStageInfo {
+            stage_name: self.location.clone(),
             stage_type: StageType::External,
             stage_params,
-            file_format,
+            file_format_option,
             ..Default::default()
         })
     }
