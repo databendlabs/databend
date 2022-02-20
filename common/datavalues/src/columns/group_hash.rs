@@ -31,13 +31,14 @@ impl Series {
         null_offset: usize,
     ) -> Result<()> {
         Series::fixed_hash(column, ptr, step)?;
+        let mut ptr = ptr;
+
         for (row, valid_row) in bitmap.iter().enumerate() {
             if !valid_row {
                 unsafe {
                     let _offset = row * step + null_offset;
-                    let mut _ptr1 = ptr.add(_offset);
-
-                    _ptr1.write(0x01);
+                    ptr = ptr.add(_offset);
+                    ptr.write(0x01);
                 }
             }
         }
