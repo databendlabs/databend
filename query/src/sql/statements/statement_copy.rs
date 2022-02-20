@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRefExt;
@@ -96,20 +97,6 @@ impl AnalyzableStatement for DfCopy {
 }
 
 impl DfCopy {
-    fn to_file_format(typ: &str) -> Result<StageFileFormatType> {
-        match typ.to_uppercase().as_str() {
-            "CSV" => Ok(StageFileFormatType::Csv),
-            "JSON" => Ok(StageFileFormatType::Json),
-            "AVRO" => Ok(StageFileFormatType::Avro),
-            "ORC" => Ok(StageFileFormatType::Orc),
-            "PARQUET" => Ok(StageFileFormatType::Parquet),
-            "XML" => Ok(StageFileFormatType::Xml),
-            _ => Err(ErrorCode::SyntaxException(
-                "Unknown file format type, must one of  { CSV | JSON | AVRO | ORC | PARQUET | XML }",
-            )),
-        }
-    }
-
     // Internal stage(start with `@`):
     // copy into mytable from @my_ext_stage
     // file_format = (type = csv);
@@ -132,7 +119,8 @@ impl DfCopy {
             .file_format_options
             .get("TYPE")
             .ok_or_else(|| ErrorCode::SyntaxException("File format type must be specified"))?;
-        let file_format = Self::to_file_format(format)?;
+        let file_format = StageFileFormatType::from_str(format)
+            .map_err(|e| ErrorCode::SyntaxException(format!("File format type error:{:?}", e)))?;
 
         // Skip header.
         let skip_header = self
@@ -170,7 +158,7 @@ impl DfCopy {
             .parse::<http::Uri>()
             .map_err(|_e| ErrorCode::SyntaxException("File location uri must be specified"))?;
         let bucket = uri.host().unwrap_or("").to_string();
-        let location_key = uri.path().to_string();
+        let path = uri.path().to_string();
 
         // File storage plan.
         let stage_storage = match uri.scheme_str() {
@@ -196,9 +184,12 @@ impl DfCopy {
                         .unwrap_or(&"".to_string())
                         .clone();
 
+                    let endpoint = "https://s3.amazonaws.com".to_string();
+
                     Ok(StageStorage::S3(StageS3Storage {
                         bucket,
-                        location_key,
+                        path,
+                        endpoint,
                         credentials_aws_key_id,
                         credentials_aws_secret_key,
                         encryption_master_key,

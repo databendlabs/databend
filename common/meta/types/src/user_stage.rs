@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -63,6 +65,24 @@ impl Default for StageFileFormatType {
     }
 }
 
+impl FromStr for StageFileFormatType {
+    type Err = String;
+    fn from_str(s: &str) -> std::result::Result<Self, String> {
+        match s.to_uppercase().as_str() {
+            "CSV" => Ok(StageFileFormatType::Csv),
+            "JSON" => Ok(StageFileFormatType::Json),
+            "AVRO" => Ok(StageFileFormatType::Avro),
+            "ORC" => Ok(StageFileFormatType::Orc),
+            "PARQUET" => Ok(StageFileFormatType::Parquet),
+            "XML" => Ok(StageFileFormatType::Xml),
+            _ => Err(
+                "Unknown file format type, must one of { CSV | JSON | AVRO | ORC | PARQUET | XML }"
+                    .to_string(),
+            ),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct FileFormatOptions {
@@ -89,8 +109,11 @@ impl Default for FileFormatOptions {
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct StageS3Storage {
+    // `example-bucket` in `s3://example-bucket/path/to/object`
     pub bucket: String,
-    pub location_key: String,
+    // `path/to/object` in `s3://example-bucket/path/to/object`
+    pub path: String,
+    pub endpoint: String,
     pub credentials_aws_key_id: String,
     pub credentials_aws_secret_key: String,
     pub encryption_master_key: String,

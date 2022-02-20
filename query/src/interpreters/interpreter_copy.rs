@@ -26,6 +26,7 @@ use common_streams::DataBlockStream;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use common_streams::SourceStream;
+use common_tracing::tracing;
 use futures::io::BufReader;
 use futures::TryStreamExt;
 use opendal::credential::Credential;
@@ -46,25 +47,37 @@ impl CopyInterpreter {
         Ok(Arc::new(CopyInterpreter { ctx, plan }))
     }
 
-    async fn get_dal_operator(&self, stage_info: &UserStageInfo) -> Result<opendal::Operator> {
+    async fn get_dal_operator(
+        &self,
+        stage_info: &UserStageInfo,
+    ) -> Result<(opendal::Operator, String)> {
         match &stage_info.stage_params.storage {
             StageStorage::S3(s3) => {
                 let key_id = &s3.credentials_aws_key_id;
                 let secret_key = &s3.credentials_aws_secret_key;
                 let credential = Credential::hmac(key_id, secret_key);
+                let endpoint = &s3.endpoint;
                 let bucket = &s3.bucket;
+                let path = &s3.path;
+                let location = format!("{}/{}/{}", endpoint, bucket, path);
+
+                tracing::info!("Get the s3 dal {:?}", location);
 
                 let mut builder = opendal::services::s3::Backend::build();
-                Ok(opendal::Operator::new(
-                    builder
-                        .region("us-east-2")
-                        .bucket(bucket)
-                        .credential(credential)
-                        .finish()
-                        .await
-                        .map_err(|e| {
-                            ErrorCode::DalS3Error(format!("s3 dal build error:{:?}", e))
-                        })?,
+                Ok((
+                    opendal::Operator::new(
+                        builder
+                            .endpoint(endpoint)
+                            .region("us-east-2")
+                            .bucket(bucket)
+                            .credential(credential)
+                            .finish()
+                            .await
+                            .map_err(|e| {
+                                ErrorCode::DalS3Error(format!("s3 dal build error:{:?}", e))
+                            })?,
+                    ),
+                    location,
                 ))
             }
         }
@@ -75,15 +88,11 @@ impl CopyInterpreter {
         let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let read_buffer_size = self.ctx.get_settings().get_storage_read_buffer_size()?;
 
-        // External stage, stage_name is the file location.
-        let file_location = stage_info.stage_name.clone();
-        let dal_operator = self.get_dal_operator(stage_info).await?;
-        let object = dal_operator
-            .stat(&file_location)
-            .run()
-            .await
-            .map_err(|e| ErrorCode::DalStatError(format!("dal stat error:{:?}", e)))?;
-        let reader = SeekableReader::new(dal_operator, &file_location, object.size);
+        let (dal_operator, location) = self.get_dal_operator(stage_info).await?;
+        let object = dal_operator.stat(&location).run().await.map_err(|e| {
+            ErrorCode::DalStatError(format!("dal stat {:} error:{:?}", location, e))
+        })?;
+        let reader = SeekableReader::new(dal_operator, &location, object.size);
         let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
 
         // Skip header.
