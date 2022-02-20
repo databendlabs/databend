@@ -10,6 +10,8 @@ grpc_api_address   = "0.0.0.0:28202"
 id            = 2
 raft_dir      = "./_meta2"
 raft_api_port = 28203
+raft_listen_host = "127.0.0.1"
+raft_advertise_host = "127.0.0.1"
 
 # Start up mode: join a cluster
 join          = ["127.0.0.1:28103"]

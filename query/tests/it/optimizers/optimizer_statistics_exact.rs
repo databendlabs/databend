@@ -14,7 +14,7 @@
 
 use std::mem::size_of;
 
-use common_datavalues2::*;
+use common_datavalues::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::*;

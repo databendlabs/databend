@@ -7,9 +7,10 @@ SELECT '===abs===';
 
 SELECT abs(-1);
 SELECT abs(-10086);
-SELECT abs('-233.0');
-SELECT abs('blah') = 0;
+SELECT abs('-233.0'); -- {ErrorCode 1007}
+SELECT abs('blah'); -- {ErrorCode 1007}
 SELECT abs(TRUE); -- {ErrorCode 1007}
+select abs(-9223372036854775808); -- {ErrorCode 1049}
 SELECT abs(NULL);
 SELECT abs(value) FROM math_sample_numbers;
 SELECT abs(value) + abs(-1) FROM math_sample_numbers;
@@ -22,9 +23,9 @@ SELECT log(NULL);
 SELECT log(NULL, NULL);
 SELECT log(1, NULL);
 SELECT log(NULL, 1);
-SELECT log('10', 100);
+SELECT log(10, 100);
 SELECT ln(NULL);
-SELECT ln(1, 2); -- {ErrorCode 1028}
+SELECT ln(1, 2);
 SELECT log10(NULL);
 SELECT log10(100);
 SELECT log2(2);
@@ -83,7 +84,7 @@ SELECT pow(NULL, 2);
 SELECT pow(2, NULL);
 SELECT pow(NULL, number) from numbers(2);
 SELECT pow(number, NULL) from numbers(2);
-SELECT pow('a', 2);
-SELECT pow(2, 'a');
+SELECT pow('a', 2); -- {ErrorCode 1007}
+SELECT pow(2, 'a'); -- {ErrorCode 1007}
 
 DROP TABLE math_sample_numbers;

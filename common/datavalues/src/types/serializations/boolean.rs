@@ -12,34 +12,63 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_clickhouse_srv::types::column::ArcColumnWrapper;
+use common_clickhouse_srv::types::column::ColumnFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use serde_json::Value;
 
 use crate::prelude::*;
 
 pub struct BooleanSerializer {}
 
+const TRUE_STR: &str = "1";
+const FALSE_STR: &str = "0";
+
 impl TypeSerializer for BooleanSerializer {
     fn serialize_value(&self, value: &DataValue) -> Result<String> {
         if let DataValue::Boolean(x) = value {
-            Ok(x.map(|v| if v { "1".to_owned() } else { "0".to_owned() })
-                .unwrap_or_else(|| "NULL".to_owned()))
+            if *x {
+                Ok(TRUE_STR.to_owned())
+            } else {
+                Ok(FALSE_STR.to_owned())
+            }
         } else {
             Err(ErrorCode::BadBytes("Incorrect boolean value"))
         }
     }
 
-    fn serialize_column(&self, column: &DataColumn) -> Result<Vec<String>> {
-        let array = column.to_array()?;
-        let array: &DFBooleanArray = array.static_cast();
+    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
+        let array: &BooleanColumn = Series::check_get(column)?;
 
         let result: Vec<String> = array
-            .into_iter()
-            .map(|x| {
-                x.map(|v| if v { "1".to_owned() } else { "0".to_owned() })
-                    .unwrap_or_else(|| "NULL".to_owned())
+            .iter()
+            .map(|v| {
+                if v {
+                    TRUE_STR.to_owned()
+                } else {
+                    FALSE_STR.to_owned()
+                }
             })
             .collect();
         Ok(result)
+    }
+
+    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+        let array: &BooleanColumn = Series::check_get(column)?;
+        let result: Vec<Value> = array
+            .iter()
+            .map(|v| serde_json::to_value(v).unwrap())
+            .collect();
+        Ok(result)
+    }
+
+    fn serialize_clickhouse_format(
+        &self,
+        column: &ColumnRef,
+    ) -> Result<common_clickhouse_srv::types::column::ArcColumnData> {
+        let col: &BooleanColumn = Series::check_get(column)?;
+        let values: Vec<u8> = col.iter().map(|c| c as u8).collect();
+        Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 }

@@ -12,29 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions2;
-use crate::scalars::scalar_function2_test::ScalarFunction2Test;
+use crate::scalars::scalar_function2_test::test_scalar_functions;
+use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_sqrt_function() -> Result<()> {
     let tests = vec![
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "sqrt-with-literal",
             columns: vec![Series::from_data(vec![4])],
             expect: Series::from_data(vec![2_f64]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "sqrt-with-series",
             columns: vec![Series::from_data(vec![4, 16, 0])],
             expect: Series::from_data(vec![2_f64, 4.0, 0.0]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "sqrt-with-null",
             columns: vec![Series::from_data(vec![Some(4), None])],
             expect: Series::from_data(vec![Some(2_f64), None]),
@@ -42,5 +42,5 @@ fn test_sqrt_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions2(SqrtFunction::try_create("sqrt")?, &tests)
+    test_scalar_functions(SqrtFunction::try_create("sqrt")?, &tests)
 }

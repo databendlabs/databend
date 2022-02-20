@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues2::DataSchemaRefExt;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::StageFileFormatType;
@@ -140,7 +140,7 @@ impl DfCopy {
             .parse::<http::Uri>()
             .map_err(|_e| ErrorCode::SyntaxException("File location uri must be specified"))?;
         let bucket = uri.host().unwrap_or("").to_string();
-        let location_key = uri.path().unwrap_or("").to_string();
+        let location_key = uri.path().to_string();
 
         // File storage plan.
         let stage_storage = match uri.scheme_str() {

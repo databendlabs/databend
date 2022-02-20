@@ -15,14 +15,16 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::function::Function;
+use crate::scalars::function_common::assert_numeric;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::EvalContext;
 use crate::scalars::Monotonicity;
+use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
 pub struct AbsFunction {
@@ -47,20 +49,21 @@ impl AbsFunction {
 }
 
 macro_rules! impl_abs_function {
-    ($column:expr, $type:ident, $cast_type:expr) => {{
-        let mut series = $column.column().to_minimal_array()?;
-
-        // coerce String to Float
-        if *$column.data_type() == DataType::String {
-            series = series.cast_with_type(&DataType::Float64)?;
-        }
-
-        let primitive_array = series.$type()?;
-        let column: DataColumn = primitive_array
-            .apply_cast_numeric(|v| v.abs())
-            .cast_with_type(&$cast_type)?
-            .into();
-        Ok(column.resize_constant($column.column().len()))
+    ($column:expr, $type:ident, $super:ident, $target:ident) => {{
+        let unary =
+            ScalarUnaryExpression::<$type, $target, _>::new(|v: $type, ctx: &mut EvalContext| {
+                let s = v as $super;
+                if s == $super::MIN {
+                    ctx.set_error(ErrorCode::Overflow(format!(
+                        "Overflow on abs signed number {}",
+                        v
+                    )));
+                    return $target::default();
+                }
+                $super::abs(s) as $target
+            });
+        let col = unary.eval($column.column(), &mut EvalContext::default())?;
+        Ok(col.arc())
     }};
 }
 
@@ -69,41 +72,33 @@ impl Function for AbsFunction {
         "abs"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
-            Ok(match args[0].data_type() {
-                DataType::Int8 => DataType::UInt8,
-                DataType::Int16 => DataType::UInt16,
-                DataType::Int32 => DataType::UInt32,
-                DataType::Int64 => DataType::UInt64,
-                DataType::String => DataType::Float64,
-                dt => dt.clone(),
-            })
-        } else {
-            Err(ErrorCode::IllegalDataType(format!(
-                "Expected numeric types, but got {}",
-                args[0]
-            )))
-        }?;
-
-        Ok(DataTypeAndNullable::create(&data_type, nullable))
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        assert_numeric(args[0])?;
+        let data_type = match args[0].data_type_id() {
+            TypeID::Int8 => u8::to_data_type(),
+            TypeID::Int16 => u16::to_data_type(),
+            TypeID::Int32 => u32::to_data_type(),
+            TypeID::Int64 => u64::to_data_type(),
+            TypeID::UInt8 => u8::to_data_type(),
+            TypeID::UInt16 => u16::to_data_type(),
+            TypeID::UInt32 => u32::to_data_type(),
+            TypeID::UInt64 => u64::to_data_type(),
+            TypeID::Float32 => f32::to_data_type(),
+            TypeID::Float64 => f64::to_data_type(),
+            _ => unreachable!(),
+        };
+        Ok(data_type)
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        match columns[0].data_type() {
-            DataType::Int8 => impl_abs_function!(columns[0], i8, DataType::UInt8),
-            DataType::Int16 => impl_abs_function!(columns[0], i16, DataType::UInt16),
-            DataType::Int32 => impl_abs_function!(columns[0], i32, DataType::UInt32),
-            DataType::Int64 => impl_abs_function!(columns[0], i64, DataType::UInt16),
-            DataType::Float32 => impl_abs_function!(columns[0], f32, DataType::Float32),
-            DataType::Float64 => impl_abs_function!(columns[0], f64, DataType::Float64),
-            DataType::String => impl_abs_function!(columns[0], f64, DataType::Float64),
-            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
-                Ok(columns[0].column().clone())
-            }
-            DataType::Null => Ok(columns[0].column().clone()),
-            _ => unreachable!(),
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        match columns[0].data_type().data_type_id() {
+            TypeID::Int8 => impl_abs_function!(columns[0], i8, i64, u8),
+            TypeID::Int16 => impl_abs_function!(columns[0], i16, i64, u16),
+            TypeID::Int32 => impl_abs_function!(columns[0], i32, i64, u32),
+            TypeID::Int64 => impl_abs_function!(columns[0], i64, i64, u64),
+            TypeID::Float32 => impl_abs_function!(columns[0], f32, f64, f32),
+            TypeID::Float64 => impl_abs_function!(columns[0], f64, f64, f64),
+            _ => Ok(columns[0].column().clone()),
         }
     }
 

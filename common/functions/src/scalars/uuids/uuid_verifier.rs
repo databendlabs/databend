@@ -17,20 +17,20 @@ use std::marker::PhantomData;
 use std::str;
 use std::sync::Arc;
 
-use common_datavalues2::BooleanColumn;
-use common_datavalues2::BooleanType;
-use common_datavalues2::Scalar;
-use common_datavalues2::ScalarColumn;
-use common_datavalues2::ScalarViewer;
-use common_datavalues2::TypeID;
-use common_datavalues2::Vu8;
+use common_datavalues::BooleanColumn;
+use common_datavalues::BooleanType;
+use common_datavalues::Scalar;
+use common_datavalues::ScalarColumn;
+use common_datavalues::ScalarViewer;
+use common_datavalues::TypeID;
+use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use uuid::Uuid;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 pub type UUIDIsEmptyFunction = UUIDVerifierFunction<UUIDIsEmpty>;
 pub type UUIDIsNotEmptyFunction = UUIDVerifierFunction<UUIDIsNotEmpty>;
@@ -44,15 +44,15 @@ pub struct UUIDVerifierFunction<T> {
 impl<T> UUIDVerifierFunction<T>
 where T: UUIDVerifier + Clone + Sync + Send + 'static
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(UUIDVerifierFunction::<T> {
             display_name: display_name.to_string(),
             t: PhantomData,
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().num_arguments(1))
     }
 }
@@ -95,7 +95,7 @@ impl UUIDVerifier for UUIDIsNotEmpty {
     }
 }
 
-impl<T> Function2 for UUIDVerifierFunction<T>
+impl<T> Function for UUIDVerifierFunction<T>
 where T: UUIDVerifier + Clone + Sync + Send + 'static
 {
     fn name(&self) -> &str {
@@ -104,8 +104,8 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
 
     fn return_type(
         &self,
-        args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         if args[0].data_type_id() != TypeID::String && args[0].data_type_id() != TypeID::Null {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {:?}",
@@ -122,9 +122,9 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
 
     fn eval(
         &self,
-        columns: &common_datavalues2::ColumnsWithField,
+        columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         let result_column = if columns[0].data_type().data_type_id() == TypeID::String {
             let viewer = Vu8::try_create_viewer(columns[0].column())?;
             BooleanColumn::from_iterator(viewer.iter().map(|uuid_bytes| {

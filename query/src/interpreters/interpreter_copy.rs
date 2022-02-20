@@ -18,7 +18,9 @@ use common_exception::Result;
 use common_meta_types::StageStorage;
 use common_meta_types::UserStageInfo;
 use common_planners::CopyPlan;
-use common_streams::{DataBlockStream, SendableDataBlockStream};
+use common_streams::DataBlockStream;
+use common_streams::ProgressStream;
+use common_streams::SendableDataBlockStream;
 use common_streams::SourceFactory;
 use common_streams::SourceParams;
 use common_streams::SourceStream;
@@ -27,6 +29,7 @@ use futures::TryStreamExt;
 use opendal::credential::Credential;
 use opendal::readers::SeekableReader;
 
+use crate::common::HashMap;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -97,11 +100,11 @@ impl Interpreter for CopyInterpreter {
         let source_params = SourceParams {
             reader,
             path,
-            format: self.plan.format.as_str(),
+            format: "csv",
             schema: self.plan.schema.clone(),
             max_block_size,
             projection: (0..self.plan.schema().fields().len()).collect(),
-            options: &self.plan.options,
+            options: &HashMap::create(),
         };
         let source_stream = SourceStream::new(SourceFactory::try_get(source_params)?);
         let input_stream = source_stream.execute().await?;

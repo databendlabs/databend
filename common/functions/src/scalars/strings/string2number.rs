@@ -15,13 +15,13 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 pub trait NumberOperator<R>: Send + Sync + Clone + Default + 'static {
     const IS_DETERMINISTIC: bool;
@@ -42,7 +42,7 @@ where
     T: NumberOperator<R>,
     R: PrimitiveType + Clone + ToDataType,
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
             t: PhantomData,
@@ -50,7 +50,7 @@ where
         }))
     }
 
-    pub fn desc() -> Function2Description {
+    pub fn desc() -> FunctionDescription {
         let mut features = FunctionFeatures::default().num_arguments(1);
 
         if T::IS_DETERMINISTIC {
@@ -61,13 +61,13 @@ where
             features = features.monotonicity();
         }
 
-        Function2Description::creator(Box::new(Self::try_create)).features(features)
+        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }
 
 /// A common function template that transform string column into number column
 /// Eg: length
-impl<T, R> Function2 for String2NumberFunction<T, R>
+impl<T, R> Function for String2NumberFunction<T, R>
 where
     T: NumberOperator<R> + Clone,
     R: PrimitiveType + Clone + ToDataType,
@@ -78,8 +78,8 @@ where
 
     fn return_type(
         &self,
-        args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         // We allow string AND null as input
         if args[0].data_type_id().is_string() {
             Ok(R::to_data_type())
@@ -93,9 +93,9 @@ where
 
     fn eval(
         &self,
-        columns: &common_datavalues2::ColumnsWithField,
+        columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         let mut op = T::default();
         let column: &StringColumn = Series::check_get(columns[0].column())?;
         let mut array = Vec::with_capacity(input_rows);

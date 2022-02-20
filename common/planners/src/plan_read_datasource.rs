@@ -15,8 +15,8 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_datavalues2::DataField;
-use common_datavalues2::DataSchemaRef;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
 use common_meta_types::TableInfo;
 
 use crate::Expression;

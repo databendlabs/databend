@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::udfs::exists::ExistsFunction;
 use crate::scalars::udfs::in_basic::InFunction;
 use crate::scalars::CurrentUserFunction;
 use crate::scalars::DatabaseFunction;
-use crate::scalars::Function2Factory;
+use crate::scalars::FunctionFactory;
 use crate::scalars::SleepFunction;
 use crate::scalars::ToTypeNameFunction;
 use crate::scalars::UdfExampleFunction;
@@ -30,9 +29,6 @@ impl UdfFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("in", InFunction::<false>::desc());
         factory.register("not_in", InFunction::<true>::desc());
-    }
-
-    pub fn register2(factory: &mut Function2Factory) {
         factory.register("example", UdfExampleFunction::desc());
         factory.register("exists", ExistsFunction::desc());
         factory.register("totypename", ToTypeNameFunction::desc());

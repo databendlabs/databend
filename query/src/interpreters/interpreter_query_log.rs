@@ -17,8 +17,8 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::Series;
-use common_datavalues2::prelude::SeriesFrom;
+use common_datavalues::prelude::Series;
+use common_datavalues::prelude::SeriesFrom;
 use common_exception::Result;
 use common_planners::PlanNode;
 

@@ -18,7 +18,7 @@ use common_arrow::arrow::io::flight::deserialize_batch;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_base::tokio::sync::mpsc::Receiver;
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::Stream;

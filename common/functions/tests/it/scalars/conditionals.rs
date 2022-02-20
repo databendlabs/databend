@@ -13,17 +13,17 @@
 // limitations under the License.
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::IfFunction;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions2;
-use crate::scalars::scalar_function2_test::ScalarFunction2Test;
+use crate::scalars::scalar_function2_test::test_scalar_functions;
+use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_if_function() -> Result<()> {
     let tests = vec![
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "if-primitive",
             columns: vec![
                 Series::from_data([true, false, false, true]),
@@ -33,7 +33,7 @@ fn test_if_function() -> Result<()> {
             expect: Series::from_data(vec![1u8, 3, 2, 4]), // non-nullable
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "if-string",
             columns: vec![
                 Series::from_data([true, false, false, true]),
@@ -43,7 +43,7 @@ fn test_if_function() -> Result<()> {
             expect: Series::from_data(vec!["1_aa", "2_bb", "2_cc", "1_dd"]), // non-nullable
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "if-bool",
             columns: vec![
                 Series::from_data([true, false, false, true]),
@@ -53,7 +53,7 @@ fn test_if_function() -> Result<()> {
             expect: Series::from_data(vec![true, false, false, true]), // non-nullable
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "if-null-in-predicate",
             columns: vec![
                 Series::from_data([Some(true), None, Some(false), Some(true)]),
@@ -63,7 +63,7 @@ fn test_if_function() -> Result<()> {
             expect: Series::from_data(vec![Some(1i32), Some(3i32), Some(2i32), None]), // nullable becase predicate is nullable
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "if-nullable-and-nonnullable",
             columns: vec![
                 Series::from_data([Some(1u8), None, None, Some(2)]),
@@ -73,7 +73,7 @@ fn test_if_function() -> Result<()> {
             expect: Series::from_data(vec![Some(2i32), Some(3i32), None, Some(2i32)]), // nullable becase predicate and rhs are nullable
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "if-all-nullable",
             columns: vec![
                 Series::from_data([Some(true), None, Some(false), Some(false)]),
@@ -83,7 +83,7 @@ fn test_if_function() -> Result<()> {
             expect: Series::from_data(vec![Some(1i32), Some(3i32), None, Some(2i32)]), // nullable becase all column are nullable
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "if-null",
             columns: vec![
                 Series::from_data([true, false, false, true]),
@@ -93,7 +93,7 @@ fn test_if_function() -> Result<()> {
             expect: Series::from_data(vec![Some(1u8), None, None, Some(4)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "if-null",
             columns: vec![
                 Arc::new(NullColumn::new(4)),
@@ -105,5 +105,5 @@ fn test_if_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions2(IfFunction::try_create("if")?, &tests)
+    test_scalar_functions(IfFunction::try_create("if")?, &tests)
 }

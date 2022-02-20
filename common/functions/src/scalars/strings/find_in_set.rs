@@ -14,14 +14,14 @@
 
 use std::fmt;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::EvalContext;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::ScalarBinaryExpression;
 
 #[derive(Clone)]
@@ -30,19 +30,19 @@ pub struct FindInSetFunction {
 }
 
 impl FindInSetFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }
 
-impl Function2 for FindInSetFunction {
+impl Function for FindInSetFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }

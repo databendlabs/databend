@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::DataType as SQLDataType;
@@ -54,8 +54,7 @@ impl SQLCommon {
                 }
             }
             _ => Result::Err(ErrorCode::IllegalDataType(format!(
-                "The SQL data type {:?} is not implemented",
-                sql_type
+                "The SQL data type {sql_type:?} is not implemented",
             ))),
         }
     }

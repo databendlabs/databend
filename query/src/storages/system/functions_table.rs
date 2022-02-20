@@ -16,10 +16,10 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::scalars::Function2Factory;
+use common_functions::scalars::FunctionFactory;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -81,7 +81,7 @@ impl Table for FunctionsTable {
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let function_factory = Function2Factory::instance();
+        let function_factory = FunctionFactory::instance();
         let aggregate_function_factory = AggregateFunctionFactory::instance();
         let func_names = function_factory.registered_names();
         let aggr_func_names = aggregate_function_factory.registered_names();

@@ -14,139 +14,183 @@
 
 use std::cmp::Ordering;
 use std::fmt;
+use std::sync::Arc;
 
-use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues::with_match_primitive_type_id;
 use common_exception::Result;
+use num_traits::AsPrimitive;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
+use crate::scalars::ScalarBinaryExpression;
+use crate::scalars::ScalarUnaryExpression;
 
-#[derive(Clone)]
-struct RoundingFunction {
-    display_name: String,
-    rounding_func: fn(f64) -> f64,
+fn round<S>(value: S, _ctx: &mut EvalContext) -> f64
+where S: AsPrimitive<f64> {
+    value.as_().round()
 }
 
-impl RoundingFunction {
-    pub fn try_create(display_name: &str, f: fn(f64) -> f64) -> Result<Box<dyn Function>> {
-        Ok(Box::new(Self {
-            display_name: display_name.to_string(),
-            rounding_func: f,
-        }))
+fn trunc<S>(value: S, _ctx: &mut EvalContext) -> f64
+where S: AsPrimitive<f64> {
+    value.as_().trunc()
+}
+
+fn round_to<S, T>(value: S, to: T, _ctx: &mut EvalContext) -> f64
+where
+    S: AsPrimitive<f64>,
+    T: AsPrimitive<i64>,
+{
+    let value = value.as_();
+    let to = to.as_();
+    match to.cmp(&0) {
+        Ordering::Greater => {
+            let z = 10_f64.powi(if to > 30 { 30 } else { to as i32 });
+            (value * z).round() / z
+        }
+        Ordering::Less => {
+            let z = 10_f64.powi(if to < -30 { 30 } else { -to as i32 });
+            (value / z).round() * z
+        }
+        Ordering::Equal => value.round(),
     }
 }
 
-impl Function for RoundingFunction {
+fn trunc_to<S, T>(value: S, to: T, _ctx: &mut EvalContext) -> f64
+where
+    S: AsPrimitive<f64>,
+    T: AsPrimitive<i64>,
+{
+    let value = value.as_();
+    let to = to.as_();
+    match to.cmp(&0) {
+        Ordering::Greater => {
+            let z = 10_f64.powi(if to > 30 { 30 } else { to as i32 });
+            (value * z).trunc() / z
+        }
+        Ordering::Less => {
+            let z = 10_f64.powi(if to < -30 { 30 } else { -to as i32 });
+            (value / z).trunc() * z
+        }
+        Ordering::Equal => value.trunc(),
+    }
+}
+
+impl<const IS_TRUNC: bool> Function for RoundingFunction<IS_TRUNC> {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::Float64;
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
+        Ok(f64::to_data_type())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let round = |x: f64, d: i64| match d.cmp(&0) {
-            Ordering::Greater => {
-                let z = 10_f64.powi(if d > 30 { 30 } else { d as i32 });
-                (self.rounding_func)(x * z) / z
-            }
-            Ordering::Less => {
-                let z = 10_f64.powi(if d < -30 { 30 } else { -d as i32 });
-                (self.rounding_func)(x / z) * z
-            }
-            Ordering::Equal => (self.rounding_func)(x),
-        };
-
-        let x_column: &DataColumn = &columns[0].column().cast_with_type(&DataType::Float64)?;
-
-        let r_column: DataColumn = if columns.len() == 1 {
-            x_column
-                .to_minimal_array()?
-                .f64()?
-                .apply(|x| (self.rounding_func)(x))
-        } else {
-            let d_column: &DataColumn = &columns[1].column().cast_with_type(&DataType::Int64)?;
-
-            match (x_column, d_column) {
-                (DataColumn::Array(x_series), DataColumn::Constant(d, _)) => {
-                    if d.is_null() {
-                        DFFloat64Array::full_null(input_rows)
-                    } else {
-                        let x_arr = x_series.f64()?;
-                        let v: i64 = DFTryFrom::try_from(d.clone())?;
-                        match v.cmp(&0) {
-                            Ordering::Greater => {
-                                let z = 10_f64.powi(if v > 30 { 30 } else { v as i32 });
-                                x_arr.apply(|x| (self.rounding_func)(x * z) / z)
-                            }
-                            Ordering::Less => {
-                                let z = 10_f64.powi(if v < -30 { 30 } else { -v as i32 });
-                                x_arr.apply(|x| (self.rounding_func)(x / z) * z)
-                            }
-                            Ordering::Equal => x_arr.apply(|x| (self.rounding_func)(x)),
-                        }
-                    }
-                }
-                (DataColumn::Constant(x, _), DataColumn::Array(d_series)) => {
-                    if x.is_null() {
-                        DFFloat64Array::full_null(input_rows)
-                    } else {
-                        let x: f64 = DFTryFrom::try_from(x.clone())?;
-                        d_series.i64()?.apply_cast_numeric(|d| round(x, d))
-                    }
-                }
-                _ => {
-                    let x_series = x_column.to_minimal_array()?;
-                    let d_series = d_column.to_minimal_array()?;
-                    binary(x_series.f64()?, d_series.i64()?, round)
-                }
-            }
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        match IS_TRUNC {
+            false => eval_round(columns),
+            true => eval_trunc(columns),
         }
-        .into();
-        Ok(r_column.resize_constant(columns[0].column().len()))
     }
 }
 
-impl fmt::Display for RoundingFunction {
+fn eval_round(columns: &ColumnsWithField) -> Result<ColumnRef> {
+    let mut ctx = EvalContext::default();
+    match columns.len() {
+        1 => {
+            with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
+                let unary = ScalarUnaryExpression::<$S, f64, _>::new(round);
+                let col = unary.eval(columns[0].column(), &mut ctx)?;
+                Ok(Arc::new(col))
+            },{
+                unreachable!()
+            })
+        }
+
+        _ => {
+            with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
+                with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
+                    let binary = ScalarBinaryExpression::<$S, $T, f64, _>::new(round_to);
+                    let col = binary.eval(
+                        columns[0].column(),
+                        columns[1].column(),
+                        &mut ctx
+                    )?;
+                    Ok(Arc::new(col))
+                },{
+                    unreachable!()
+                })
+            },{
+                unreachable!()
+            })
+        }
+    }
+}
+
+fn eval_trunc(columns: &ColumnsWithField) -> Result<ColumnRef> {
+    let mut ctx = EvalContext::default();
+    match columns.len() {
+        1 => {
+            with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
+                let unary = ScalarUnaryExpression::<$S, f64, _>::new(trunc);
+                let col = unary.eval(columns[0].column(), &mut ctx)?;
+                Ok(Arc::new(col))
+            },{
+                unreachable!()
+            })
+        }
+
+        _ => {
+            with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
+                with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
+                    let binary = ScalarBinaryExpression::<$S, $T, f64, _>::new(trunc_to);
+                    let col = binary.eval(
+                        columns[0].column(),
+                        columns[1].column(),
+                        &mut ctx,
+                    )?;
+                    Ok(Arc::new(col))
+                },{
+                    unreachable!()
+                })
+            },{
+                unreachable!()
+            })
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct RoundingFunction<const IS_TRUNC: bool> {
+    display_name: String,
+}
+
+impl<const IS_TRUNC: bool> RoundingFunction<IS_TRUNC> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+        Ok(Box::new(Self {
+            display_name: display_name.to_string(),
+        }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(1, 2),
+        )
+    }
+}
+
+impl<const IS_TRUNC: bool> fmt::Display for RoundingFunction<IS_TRUNC> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
 
-pub struct RoundNumberFunction {}
-
-impl RoundNumberFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        RoundingFunction::try_create(display_name, f64::round)
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .variadic_arguments(1, 2),
-        )
-    }
-}
-
-pub struct TruncNumberFunction {}
-
-impl TruncNumberFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        RoundingFunction::try_create(display_name, f64::trunc)
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .variadic_arguments(1, 2),
-        )
-    }
-}
+pub type RoundNumberFunction = RoundingFunction<false>;
+pub type TruncNumberFunction = RoundingFunction<true>;

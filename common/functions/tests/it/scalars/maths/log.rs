@@ -18,74 +18,72 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions;
+use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_log_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionTest {
             name: "log-with-literal",
-            nullable: false,
-            columns: vec![Series::new([10]).into(), Series::new(["100"]).into()],
-            expect: DataColumn::Constant(2_f64.into(), 1),
+            columns: vec![Series::from_data([10]), Series::from_data([100])],
+            expect: Series::from_data(vec![2f64]),
             error: "",
         },
         ScalarFunctionTest {
             name: "log-with-series",
-            nullable: false,
             columns: vec![
-                Series::new([10, 10, 10]).into(),
-                Series::new(["100", "1000", "10000"]).into(),
+                Series::from_data([10, 10, 10]),
+                Series::from_data([100, 1000, 10000]),
             ],
-            expect: Series::new([2_f64, 2.9999999999999996, 4_f64]).into(),
+            expect: Series::from_data([2_f64, 2.9999999999999996, 4_f64]),
             error: "",
         },
         ScalarFunctionTest {
             name: "log-with-one-arg",
-            nullable: false,
-            columns: vec![Series::new([E, E, E]).into()],
-            expect: Series::new([1_f64, 1_f64, 1_f64]).into(),
+            columns: vec![Series::from_data([E, E, E])],
+            expect: Series::from_data([1_f64, 1_f64, 1_f64]),
             error: "",
         },
         ScalarFunctionTest {
             name: "log-with-null",
-            nullable: true,
             columns: vec![
-                Series::new([None, Some(10_f64), Some(10_f64)]).into(),
-                Series::new([Some(10_f64), None, Some(10_f64)]).into(),
+                Series::from_data([None, Some(10_f64), Some(10_f64)]),
+                Series::from_data([Some(10_f64), None, Some(10_f64)]),
             ],
-            expect: Series::new([None, None, Some(1_f64)]).into(),
+            expect: Series::from_data([None, None, Some(1_f64)]),
             error: "",
         },
         ScalarFunctionTest {
             name: "log-with-null2",
-            nullable: true,
             columns: vec![
-                DataColumn::Constant(DataValue::Float64(None), 3),
-                Series::new([Some(10_f64), None, Some(10_f64)]).into(),
+                Series::from_data(vec![
+                    Option::<f64>::None,
+                    Option::<f64>::None,
+                    Option::<f64>::None,
+                ]),
+                Series::from_data([Some(10_f64), None, Some(10_f64)]),
             ],
-            expect: DFFloat64Array::new_from_opt_slice(&[None, None, None]).into(),
+            expect: Series::from_data(vec![
+                Option::<f64>::None,
+                Option::<f64>::None,
+                Option::<f64>::None,
+            ]),
             error: "",
         },
         ScalarFunctionTest {
             name: "log-with-base-constant",
-            nullable: false,
             columns: vec![
-                DataColumn::Constant(2.into(), 2),
-                Series::new([1, 2, 4]).into(),
+                Series::from_data(vec![2, 2, 2]),
+                Series::from_data([1, 2, 4]),
             ],
-            expect: Series::new([0_f64, 1_f64, 2.0]).into(),
+            expect: Series::from_data([0_f64, 1_f64, 2.0]),
             error: "",
         },
         ScalarFunctionTest {
             name: "log-with-num-constant",
-            nullable: false,
-            columns: vec![
-                Series::new([2, 4]).into(),
-                DataColumn::Constant(2.into(), 2),
-            ],
-            expect: Series::new([1_f64, 0.5]).into(),
+            columns: vec![Series::from_data([2, 4]), Series::from_data(vec![2, 2])],
+            expect: Series::from_data([1_f64, 0.5]),
             error: "",
         },
     ];
@@ -98,16 +96,14 @@ fn test_ln_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionTest {
             name: "ln on series",
-            nullable: true,
-            columns: vec![Series::new([Some(E), None]).into()],
-            expect: Series::new([Some(1_f64), None]).into(),
+            columns: vec![Series::from_data([Some(E), None])],
+            expect: Series::from_data([Some(1_f64), None]),
             error: "",
         },
         ScalarFunctionTest {
             name: "ln on literal",
-            nullable: false,
-            columns: vec![Series::new([E]).into()],
-            expect: DataColumn::Constant(1_f64.into(), 1),
+            columns: vec![Series::from_data([E])],
+            expect: Series::from_data(vec![1f64]),
             error: "",
         },
     ];
@@ -119,9 +115,8 @@ fn test_ln_function() -> Result<()> {
 fn test_log2_function() -> Result<()> {
     let tests = vec![ScalarFunctionTest {
         name: "log2 on literal",
-        nullable: false,
-        columns: vec![Series::new([2_f64]).into()],
-        expect: DataColumn::Constant(1_f64.into(), 1),
+        columns: vec![Series::from_data([2_f64])],
+        expect: Series::from_data(vec![1f64]),
         error: "",
     }];
 
@@ -132,9 +127,8 @@ fn test_log2_function() -> Result<()> {
 fn test_log10_function() -> Result<()> {
     let tests = vec![ScalarFunctionTest {
         name: "log10 on literal",
-        nullable: false,
-        columns: vec![Series::new([10_f64]).into()],
-        expect: DataColumn::Constant(1_f64.into(), 1),
+        columns: vec![Series::from_data([10_f64])],
+        expect: Series::from_data(vec![1f64]),
         error: "",
     }];
 

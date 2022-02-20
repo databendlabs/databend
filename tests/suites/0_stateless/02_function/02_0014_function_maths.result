@@ -2,8 +2,6 @@
 ===abs===
 1
 10086
-233
-1
 NULL
 1
 2
@@ -18,6 +16,7 @@ NULL
 NULL
 2
 NULL
+inf
 NULL
 2
 1
@@ -68,5 +67,3 @@ NULL
 NULL
 NULL
 NULL
-0
-1

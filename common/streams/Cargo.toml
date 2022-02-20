@@ -15,7 +15,7 @@ test = false
 common-arrow = { path = "../arrow" }
 common-base = { path = "../base" }
 common-datablocks = { path = "../datablocks" }
-common-datavalues2 = { path = "../datavalues2" }
+common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
 common-functions = { path = "../functions" }
 common-io = { path = "../io" }
@@ -34,4 +34,4 @@ tempfile = "3.3.0"
 tokio-stream = { version = "0.1.8", features = ["net"] }
 
 [dev-dependencies]
-opendal = "0.0.2"
+opendal = "0.0.3"

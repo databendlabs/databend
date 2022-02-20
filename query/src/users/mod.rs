@@ -20,8 +20,10 @@ mod user_stage;
 mod user_udf;
 
 pub mod auth;
+pub mod role_cache_mgr;
 mod user_setting;
 
+pub use role_cache_mgr::RoleCacheMgr;
 pub use user::CertifiedInfo;
 pub use user::User;
 pub use user_api::UserApiProvider;

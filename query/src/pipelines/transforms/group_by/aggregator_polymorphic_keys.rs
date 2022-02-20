@@ -19,7 +19,7 @@ use common_datablocks::HashMethodKeysU32;
 use common_datablocks::HashMethodKeysU64;
 use common_datablocks::HashMethodKeysU8;
 use common_datablocks::HashMethodSerializer;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::common::HashTable;
@@ -51,7 +51,7 @@ use crate::pipelines::transforms::group_by::AggregatorState;
 // use bumpalo::Bump;
 // use databend_query::common::HashTable;
 // use common_datablocks::HashMethodSerializer;
-// use common_datavalues2::prelude::*;
+// use common_datavalues::prelude::*;
 // use databend_query::pipelines::transforms::group_by::PolymorphicKeysHelper;
 // use databend_query::pipelines::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
 // use databend_query::pipelines::transforms::group_by::aggregator_keys_builder::SerializedKeysColumnBuilder;

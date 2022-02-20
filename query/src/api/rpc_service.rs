@@ -83,15 +83,11 @@ impl RpcService {
             builder
                 .tls_config(Self::server_tls_config(conf).await.map_err(|e| {
                     ErrorCode::TLSConfigurationFailure(format!(
-                        "failed to load server tls config: {}",
-                        e
+                        "failed to load server tls config: {e}",
                     ))
                 })?)
                 .map_err(|e| {
-                    ErrorCode::TLSConfigurationFailure(format!(
-                        "failed to invoke tls_config: {}",
-                        e
-                    ))
+                    ErrorCode::TLSConfigurationFailure(format!("failed to invoke tls_config: {e}",))
                 })?
         } else {
             builder

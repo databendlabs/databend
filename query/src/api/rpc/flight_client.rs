@@ -19,7 +19,7 @@ use common_arrow::arrow_format::flight::data::FlightData;
 use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::tokio::time::Duration;
-use common_datavalues2::DataSchemaRef;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
@@ -83,8 +83,7 @@ impl FlightClient {
         match response.into_inner().message().await? {
             Some(response) => Ok(response.body),
             None => Result::Err(ErrorCode::EmptyDataFromServer(format!(
-                "Can not receive data from flight server, action: {:?}",
-                action_type
+                "Can not receive data from flight server, action: {action_type:?}",
             ))),
         }
     }

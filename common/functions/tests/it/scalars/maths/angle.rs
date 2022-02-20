@@ -18,16 +18,15 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions;
+use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_degress_function() -> Result<()> {
     let tests = vec![ScalarFunctionTest {
         name: "degress-passed",
-        nullable: true,
-        columns: vec![Series::new([Some(PI), Some(PI / 2.0), None]).into()],
-        expect: Series::new([Some(180_f64), Some(90.0), None]).into(),
+        columns: vec![Series::from_data([Some(PI), Some(PI / 2.0), None])],
+        expect: Series::from_data([Some(180_f64), Some(90.0), None]),
         error: "",
     }];
 
@@ -38,9 +37,8 @@ fn test_degress_function() -> Result<()> {
 fn test_radians_function() -> Result<()> {
     let tests = vec![ScalarFunctionTest {
         name: "radians-passed",
-        nullable: true,
-        columns: vec![Series::new([Some(180), None]).into()],
-        expect: Series::new([Some(PI), None]).into(),
+        columns: vec![Series::from_data([Some(180), None])],
+        expect: Series::from_data([Some(PI), None]),
         error: "",
     }];
 

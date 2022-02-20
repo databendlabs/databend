@@ -19,9 +19,9 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use common_datavalues2::chrono::DateTime;
-use common_datavalues2::chrono::Utc;
-use common_datavalues2::prelude::*;
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Utc;
+use common_datavalues::prelude::*;
 use maplit::hashmap;
 
 use crate::database::DatabaseNameIdent;

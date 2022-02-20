@@ -14,14 +14,14 @@
 
 use std::fmt;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::default_column_cast;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
 pub struct CharFunction {
@@ -29,14 +29,14 @@ pub struct CharFunction {
 }
 
 impl CharFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(CharFunction {
             _display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(1, 1024),
@@ -44,7 +44,7 @@ impl CharFunction {
     }
 }
 
-impl Function2 for CharFunction {
+impl Function for CharFunction {
     fn name(&self) -> &str {
         "char"
     }
@@ -58,7 +58,7 @@ impl Function2 for CharFunction {
 
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
         let column_count = columns.len();
-        let mut values: Vec<u8> = Vec::with_capacity(input_rows * column_count);
+        let mut values: Vec<u8> = vec![0; input_rows * column_count];
         let values_ptr = values.as_mut_ptr();
 
         let mut offsets: Vec<i64> = Vec::with_capacity(input_rows + 1);
@@ -88,11 +88,6 @@ impl Function2 for CharFunction {
         }
         for i in 1..input_rows + 1 {
             offsets.push(i as i64 * column_count as i64);
-        }
-
-        unsafe {
-            offsets.set_len(input_rows + 1);
-            values.set_len(input_rows * column_count);
         }
         let mut builder = MutableStringColumn::from_data(values, offsets);
         Ok(builder.to_column())
