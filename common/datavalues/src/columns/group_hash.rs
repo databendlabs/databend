@@ -69,7 +69,7 @@ impl Series {
         // TODO support nullable
         // let column = Series::restore_nullable_if_nullable(&column);
         let type_id = (remove_nullable(&column.data_type()).data_type_id()).to_physical_type();
-        with_match_scalar_type!(type_id, |$T|
+        with_match_scalar_type_for_nullable!(type_id, |$T|
         {
             let col: &NullableColumn = Series::check_get(&column)?;
             GroupHash::fixed_hash_with_nullable(col, ptr, step, null_offset)
