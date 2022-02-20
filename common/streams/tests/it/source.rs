@@ -62,8 +62,8 @@ async fn test_parse_values() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_parse_csvs() {
-    for field_delimitor in [b',', b'\t', b'#'] {
-        for record_delimitor in [b'\n', b'\r', b'~'] {
+    for field_delimiter in [b',', b'\t', b'#'] {
+        for record_delimiter in [b'\n', b'\r', b'~'] {
             let dir = tempfile::tempdir().unwrap();
             let name = "my-temporary-note.txt";
             let file_path = dir.path().join(name);
@@ -72,15 +72,15 @@ async fn test_parse_csvs() {
             write!(
                 file,
                 "1{}\"1\"{}1.11{}2{}\"2\"{}2{}3{}\"3-'3'-3\"{}3\"{}",
-                field_delimitor as char,
-                field_delimitor as char,
-                record_delimitor as char,
-                field_delimitor as char,
-                field_delimitor as char,
-                record_delimitor as char,
-                field_delimitor as char,
-                field_delimitor as char,
-                record_delimitor as char,
+                field_delimiter as char,
+                field_delimiter as char,
+                record_delimiter as char,
+                field_delimiter as char,
+                field_delimiter as char,
+                record_delimiter as char,
+                field_delimiter as char,
+                field_delimiter as char,
+                record_delimiter as char,
             )
             .unwrap();
 
@@ -99,7 +99,7 @@ async fn test_parse_csvs() {
             );
             let stream = local.read(name).run().await.unwrap();
             let mut csv_source =
-                CsvSource::try_create(stream, schema, false, field_delimitor, record_delimitor, 10)
+                CsvSource::try_create(stream, schema, false, field_delimiter, record_delimiter, 10)
                     .unwrap();
             let block = csv_source.read().await.unwrap().unwrap();
             assert_blocks_eq(

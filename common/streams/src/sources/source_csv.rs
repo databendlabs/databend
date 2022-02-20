@@ -40,20 +40,20 @@ where R: AsyncRead + Unpin + Send
         reader: R,
         schema: DataSchemaRef,
         header: bool,
-        field_delimitor: u8,
-        record_delimitor: u8,
+        field_delimiter: u8,
+        record_delimiter: u8,
         block_size: usize,
     ) -> Result<Self> {
-        let record_delimitor = if record_delimitor == b'\n' || record_delimitor == b'\r' {
+        let record_delimiter = if record_delimiter == b'\n' || record_delimiter == b'\r' {
             Terminator::CRLF
         } else {
-            Terminator::Any(record_delimitor)
+            Terminator::Any(record_delimiter)
         };
 
         let reader = AsyncReaderBuilder::new()
             .has_headers(header)
-            .delimiter(field_delimitor)
-            .terminator(record_delimitor)
+            .delimiter(field_delimiter)
+            .terminator(record_delimiter)
             .create_reader(reader);
 
         Ok(Self {

@@ -50,18 +50,18 @@ impl SourceFactory {
                     .cloned()
                     .unwrap_or_else(|| "0".to_string());
 
-                let field_delimitor = params
+                let field_delimiter = params
                     .options
-                    .get("field_delimitor")
+                    .get("field_delimiter")
                     .map(|v| match v.len() {
                         n if n >= 1 => v.as_bytes()[0],
                         _ => b',',
                     })
                     .unwrap_or(b',');
 
-                let record_delimitor = params
+                let record_delimiter = params
                     .options
-                    .get("record_delimitor")
+                    .get("record_delimiter")
                     .map(|v| match v.len() {
                         n if n >= 1 => v.as_bytes()[0],
                         _ => b'\n',
@@ -72,8 +72,8 @@ impl SourceFactory {
                     params.reader,
                     params.schema,
                     has_header.eq_ignore_ascii_case("1"),
-                    field_delimitor,
-                    record_delimitor,
+                    field_delimiter,
+                    record_delimiter,
                     params.max_block_size,
                 )?))
             }

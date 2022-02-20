@@ -79,9 +79,9 @@ pub async fn streaming_load(
         .unwrap_or("0")
         .eq_ignore_ascii_case("1");
 
-    let field_delimitor = req
+    let field_delimiter = req
         .headers()
-        .get("field_delimitor")
+        .get("field_delimiter")
         .and_then(|v| v.to_str().ok())
         .map(|v| match v.len() {
             n if n >= 1 => {
@@ -95,9 +95,9 @@ pub async fn streaming_load(
         })
         .unwrap_or(b',');
 
-    let record_delimitor = req
+    let record_delimiter = req
         .headers()
-        .get("record_delimitor")
+        .get("record_delimiter")
         .and_then(|v| v.to_str().ok())
         .map(|v| match v.len() {
             n if n >= 1 => {
@@ -161,7 +161,7 @@ pub async fn streaming_load(
     let stream = stream! {
         while let Ok(Some(field)) = multipart.next_field().await {
             let reader = field.into_async_read();
-            let mut source = CsvSource::try_create(reader.compat(), plan.schema(), csv_header, field_delimitor, record_delimitor, max_block_size)?;
+            let mut source = CsvSource::try_create(reader.compat(), plan.schema(), csv_header, field_delimiter, record_delimiter, max_block_size)?;
 
             loop {
                 let block = source.read().await;

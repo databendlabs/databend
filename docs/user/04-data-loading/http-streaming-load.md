@@ -13,7 +13,7 @@ curl -u user:passwd -H <options>  -F  "upload=@<files_location>"  -XPUT http://l
 ```
 ### Parameters
 
-  * `options`: key value options, supported options: `insert_sql`, `field_delimitor`, `record_delimitor`, `csv_header`
+  * `options`: key value options, supported options: `insert_sql`, `field_delimiter`, `record_delimiter`, `csv_header`
   * `insert_sql`: must be specified in options, eg: `insert into table_name (a,b,c) format CSV`
   * `files_location`: local file path, eg: `/tmp/data.csv`
 
