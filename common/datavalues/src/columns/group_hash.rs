@@ -33,9 +33,9 @@ impl Series {
         Series::fixed_hash(column, ptr, step)?;
         for (row, valid_row) in bitmap.iter().enumerate() {
             if !valid_row {
+                let _offset = row * step + null_offset;
+                let mut _ptr1 = unsafe { ptr.add(_offset) };
                 unsafe {
-                    let _offset = row * step + null_offset;
-                    let _ptr1 = ptr.add(_offset);
                     _ptr1.write(0x01);
                 }
             }
