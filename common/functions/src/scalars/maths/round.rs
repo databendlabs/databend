@@ -16,25 +16,25 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_type_id;
 use common_exception::Result;
 use num_traits::AsPrimitive;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::EvalContext;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::ScalarBinaryExpression;
 use crate::scalars::ScalarUnaryExpression;
 
-fn round<S>(value: S) -> f64
+fn round<S>(value: S, _ctx: &mut EvalContext) -> f64
 where S: AsPrimitive<f64> {
     value.as_().round()
 }
 
-fn trunc<S>(value: S) -> f64
+fn trunc<S>(value: S, _ctx: &mut EvalContext) -> f64
 where S: AsPrimitive<f64> {
     value.as_().trunc()
 }
@@ -79,7 +79,7 @@ where
     }
 }
 
-impl<const IS_TRUNC: bool> Function2 for RoundingFunction<IS_TRUNC> {
+impl<const IS_TRUNC: bool> Function for RoundingFunction<IS_TRUNC> {
     fn name(&self) -> &str {
         &*self.display_name
     }
@@ -100,11 +100,12 @@ impl<const IS_TRUNC: bool> Function2 for RoundingFunction<IS_TRUNC> {
 }
 
 fn eval_round(columns: &ColumnsWithField) -> Result<ColumnRef> {
+    let mut ctx = EvalContext::default();
     match columns.len() {
         1 => {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
                 let unary = ScalarUnaryExpression::<$S, f64, _>::new(round);
-                let col = unary.eval(columns[0].column())?;
+                let col = unary.eval(columns[0].column(), &mut ctx)?;
                 Ok(Arc::new(col))
             },{
                 unreachable!()
@@ -118,7 +119,7 @@ fn eval_round(columns: &ColumnsWithField) -> Result<ColumnRef> {
                     let col = binary.eval(
                         columns[0].column(),
                         columns[1].column(),
-                        &mut EvalContext::default(),
+                        &mut ctx
                     )?;
                     Ok(Arc::new(col))
                 },{
@@ -132,11 +133,12 @@ fn eval_round(columns: &ColumnsWithField) -> Result<ColumnRef> {
 }
 
 fn eval_trunc(columns: &ColumnsWithField) -> Result<ColumnRef> {
+    let mut ctx = EvalContext::default();
     match columns.len() {
         1 => {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
                 let unary = ScalarUnaryExpression::<$S, f64, _>::new(trunc);
-                let col = unary.eval(columns[0].column())?;
+                let col = unary.eval(columns[0].column(), &mut ctx)?;
                 Ok(Arc::new(col))
             },{
                 unreachable!()
@@ -150,7 +152,7 @@ fn eval_trunc(columns: &ColumnsWithField) -> Result<ColumnRef> {
                     let col = binary.eval(
                         columns[0].column(),
                         columns[1].column(),
-                        &mut EvalContext::default(),
+                        &mut ctx,
                     )?;
                     Ok(Arc::new(col))
                 },{
@@ -169,14 +171,14 @@ pub struct RoundingFunction<const IS_TRUNC: bool> {
 }
 
 impl<const IS_TRUNC: bool> RoundingFunction<IS_TRUNC> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(1, 2),

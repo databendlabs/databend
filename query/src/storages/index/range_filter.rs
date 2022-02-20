@@ -18,11 +18,11 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::check_pattern_type;
-use common_functions::scalars::Function2Factory;
+use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::PatternType;
 use common_planners::lit;
 use common_planners::Expression;
@@ -600,7 +600,7 @@ pub fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
 }
 
 fn get_maybe_monotonic(op: &str, args: Expressions) -> Result<bool> {
-    let factory = Function2Factory::instance();
+    let factory = FunctionFactory::instance();
     let function_features = factory.get_features(op)?;
     if !function_features.maybe_monotonic {
         return Ok(false);

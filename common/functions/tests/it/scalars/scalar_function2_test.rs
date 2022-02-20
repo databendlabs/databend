@@ -12,29 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::Function2;
-use common_functions::scalars::Function2Adapter;
+use common_functions::scalars::Function;
+use common_functions::scalars::FunctionAdapter;
 use pretty_assertions::assert_eq;
 
-pub struct ScalarFunction2Test {
+pub struct ScalarFunctionTest {
     pub name: &'static str,
     pub columns: Vec<ColumnRef>,
     pub expect: ColumnRef,
     pub error: &'static str,
 }
 
-pub struct ScalarFunction2WithFieldTest {
+pub struct ScalarFunctionWithFieldTest {
     pub name: &'static str,
     pub columns: Vec<ColumnWithField>,
     pub expect: ColumnRef,
     pub error: &'static str,
 }
 
-pub fn test_scalar_functions2(
-    test_function: Box<dyn Function2>,
-    tests: &[ScalarFunction2Test],
+pub fn test_scalar_functions(
+    test_function: Box<dyn Function>,
+    tests: &[ScalarFunctionTest],
 ) -> Result<()> {
     let mut tests_with_type = Vec::with_capacity(tests.len());
     for test in tests {
@@ -49,7 +49,7 @@ pub fn test_scalar_functions2(
             arguments.push(f);
         }
 
-        tests_with_type.push(ScalarFunction2WithFieldTest {
+        tests_with_type.push(ScalarFunctionWithFieldTest {
             name: test.name,
             columns: arguments,
             expect: test.expect.clone(),
@@ -57,12 +57,12 @@ pub fn test_scalar_functions2(
         })
     }
 
-    test_scalar_functions2_with_type(test_function, &tests_with_type)
+    test_scalar_functions_with_type(test_function, &tests_with_type)
 }
 
-pub fn test_scalar_functions2_with_type(
-    test_function: Box<dyn Function2>,
-    tests: &[ScalarFunction2WithFieldTest],
+pub fn test_scalar_functions_with_type(
+    test_function: Box<dyn Function>,
+    tests: &[ScalarFunctionWithFieldTest],
 ) -> Result<()> {
     for test in tests {
         let mut rows_size = 0;
@@ -89,7 +89,7 @@ pub fn test_scalar_functions2_with_type(
 }
 
 #[allow(clippy::borrowed_box)]
-pub fn test_eval(test_function: &Box<dyn Function2>, columns: &[ColumnRef]) -> Result<ColumnRef> {
+pub fn test_eval(test_function: &Box<dyn Function>, columns: &[ColumnRef]) -> Result<ColumnRef> {
     let mut rows_size = 0;
     let mut arguments = Vec::with_capacity(columns.len());
     let mut arguments_type = Vec::with_capacity(columns.len());
@@ -116,12 +116,12 @@ pub fn test_eval(test_function: &Box<dyn Function2>, columns: &[ColumnRef]) -> R
 
 #[allow(clippy::borrowed_box)]
 pub fn test_eval_with_type(
-    test_function: &Box<dyn Function2>,
+    test_function: &Box<dyn Function>,
     rows_size: usize,
     arguments: &[ColumnWithField],
     arguments_type: &[&DataTypePtr],
 ) -> Result<ColumnRef> {
-    let adaptor = Function2Adapter::create(test_function.clone());
+    let adaptor = FunctionAdapter::create(test_function.clone());
     adaptor.return_type(arguments_type)?;
     adaptor.eval(arguments, rows_size)
 }

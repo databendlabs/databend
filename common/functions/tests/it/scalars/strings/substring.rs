@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::SubstringFunction;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions2;
-use crate::scalars::scalar_function2_test::ScalarFunction2Test;
+use crate::scalars::scalar_function2_test::test_scalar_functions;
+use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_substring_function() -> Result<()> {
     let tests = vec![
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "substring-abcde-passed",
             columns: vec![
                 Series::from_data(vec!["abcde"]),
@@ -32,7 +32,7 @@ fn test_substring_function() -> Result<()> {
             expect: Series::from_data(vec!["bcd"]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "substring-abcde-passed",
             columns: vec![
                 Series::from_data(vec!["abcde"]),
@@ -42,7 +42,7 @@ fn test_substring_function() -> Result<()> {
             expect: Series::from_data(vec!["abc"]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "substring-abcde-passed",
             columns: vec![
                 Series::from_data(vec!["abcde"]),
@@ -51,7 +51,7 @@ fn test_substring_function() -> Result<()> {
             expect: Series::from_data(vec!["bcde"]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "substring-1234567890-passed",
             columns: vec![
                 Series::from_data(vec!["1234567890"]),
@@ -63,12 +63,12 @@ fn test_substring_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions2(SubstringFunction::try_create("substring")?, &tests)
+    test_scalar_functions(SubstringFunction::try_create("substring")?, &tests)
 }
 
 #[test]
 fn test_substring_nullable() -> Result<()> {
-    let tests = vec![ScalarFunction2Test {
+    let tests = vec![ScalarFunctionTest {
         name: "substring-nullabe-passed",
         columns: vec![
             Series::from_data(vec!["abcde"]),
@@ -79,5 +79,5 @@ fn test_substring_nullable() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions2(SubstringFunction::try_create("substring")?, &tests)
+    test_scalar_functions(SubstringFunction::try_create("substring")?, &tests)
 }

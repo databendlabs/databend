@@ -15,7 +15,7 @@
 use std::alloc::Layout;
 use std::sync::Arc;
 
-use common_datavalues2::DataSchemaRef;
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;

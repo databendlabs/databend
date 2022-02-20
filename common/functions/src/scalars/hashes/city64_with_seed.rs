@@ -16,9 +16,9 @@ use std::fmt;
 use std::hash::Hasher;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_scalar_types_error;
-use common_datavalues2::TypeID;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_scalar_types_error;
+use common_datavalues::TypeID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use naive_cityhash::cityhash64_with_seed;
@@ -26,8 +26,8 @@ use naive_cityhash::cityhash64_with_seed;
 use super::hash_base::DFHash;
 use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 // This is not a correct implementation of stateful hasher. But just a thin wrapper of stateless hash for leveraging DFHash trait.
 // It is good enough for column hashing because we don't really need stream hashing.
@@ -60,34 +60,34 @@ pub struct City64WithSeedFunction {
 
 // CityHash64WithSeed(value, seed)
 impl City64WithSeedFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(City64WithSeedFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }
 
-impl Function2 for City64WithSeedFunction {
+impl Function for City64WithSeedFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
     fn get_monotonicity(
         &self,
-        _args: &[crate::scalars::Monotonicity2],
-    ) -> Result<crate::scalars::Monotonicity2> {
-        Ok(crate::scalars::Monotonicity2::default())
+        _args: &[crate::scalars::Monotonicity],
+    ) -> Result<crate::scalars::Monotonicity> {
+        Ok(crate::scalars::Monotonicity::default())
     }
 
     fn return_type(
         &self,
-        args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         if !matches!(
             args[0].data_type_id(),
             TypeID::UInt8
@@ -124,9 +124,9 @@ impl Function2 for City64WithSeedFunction {
 
     fn eval(
         &self,
-        columns: &common_datavalues2::ColumnsWithField,
+        columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         let column = columns[0].column();
         let physical_data_type = columns[0].data_type().data_type_id().to_physical_type();
 

@@ -15,16 +15,17 @@
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_type_id;
 use common_exception::Result;
 use num_traits::AsPrimitive;
 use rand::prelude::*;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::EvalContext;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
@@ -33,19 +34,19 @@ pub struct RandomFunction {
 }
 
 impl RandomFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(RandomFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().variadic_arguments(0, 1))
     }
 }
 
-impl Function2 for RandomFunction {
+impl Function for RandomFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
@@ -67,9 +68,10 @@ impl Function2 for RandomFunction {
                 .arc())
             }
             _ => {
+                let mut ctx = EvalContext::default();
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
                       let unary = ScalarUnaryExpression::<$T, f64, _>::new(rand_seed);
-                    let col = unary.eval(columns[0].column())?;
+                    let col = unary.eval(columns[0].column(), &mut ctx)?;
                     Ok(Arc::new(col))
                 },{
                     unreachable!()
@@ -79,7 +81,7 @@ impl Function2 for RandomFunction {
     }
 }
 
-fn rand_seed<T: AsPrimitive<u64>>(seed: T) -> f64 {
+fn rand_seed<T: AsPrimitive<u64>>(seed: T, _ctx: &mut EvalContext) -> f64 {
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed.as_());
     rng.gen::<f64>()
 }

@@ -15,14 +15,14 @@
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues2::chrono::DateTime;
-use common_datavalues2::chrono::Utc;
-use common_datavalues2::prelude::*;
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Utc;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
-use crate::scalars::function2_factory::Function2Description;
+use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
+use crate::scalars::Function;
 
 // TODO: try move it to simple function?
 #[derive(Clone)]
@@ -31,34 +31,34 @@ pub struct NowFunction {
 }
 
 impl NowFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(NowFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default())
     }
 }
-impl Function2 for NowFunction {
+impl Function for NowFunction {
     fn name(&self) -> &str {
         self.display_name.as_str()
     }
 
     fn return_type(
         &self,
-        _args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        _args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         Ok(DateTime32Type::arc(None))
     }
 
     fn eval(
         &self,
-        _columns: &common_datavalues2::ColumnsWithField,
+        _columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         let utc: DateTime<Utc> = Utc::now();
         let value = (utc.timestamp_millis() / 1000) as u32;
         let column = Series::from_data(&[value as u32]);

@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_datavalues2::chrono::DateTime;
-use common_datavalues2::chrono::TimeZone;
-use common_datavalues2::chrono::Utc;
-use common_datavalues2::prelude::*;
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::TimeZone;
+use common_datavalues::chrono::Utc;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use super::cast_with_type::arrow_cast_compute;

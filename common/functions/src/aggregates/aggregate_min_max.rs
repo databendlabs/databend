@@ -19,10 +19,10 @@ use std::sync::Arc;
 
 use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_scalar_types_error;
-use common_datavalues2::MutableColumn;
-use common_datavalues2::Scalar;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_scalar_types_error;
+use common_datavalues::MutableColumn;
+use common_datavalues::Scalar;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::de::DeserializeOwned;
@@ -73,7 +73,7 @@ where
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[common_datavalues2::ColumnRef],
+        columns: &[common_datavalues::ColumnRef],
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
@@ -85,7 +85,7 @@ where
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[common_datavalues2::ColumnRef],
+        columns: &[common_datavalues::ColumnRef],
         _input_rows: usize,
     ) -> Result<()> {
         let col: &<S as Scalar>::ColumnType = unsafe { Series::static_cast(&columns[0]) };

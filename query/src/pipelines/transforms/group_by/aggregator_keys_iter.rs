@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::PrimitiveColumn;
-use common_datavalues2::PrimitiveType;
-use common_datavalues2::StringColumn;
+use common_datavalues::PrimitiveColumn;
+use common_datavalues::PrimitiveType;
+use common_datavalues::StringColumn;
 use common_exception::Result;
 
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;

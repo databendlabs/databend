@@ -10,7 +10,6 @@ members = [
     "common/dal-context",
     "common/datablocks",
     "common/datavalues",
-    "common/datavalues2",
     "common/exception",
     "common/grpc",
     "common/functions",

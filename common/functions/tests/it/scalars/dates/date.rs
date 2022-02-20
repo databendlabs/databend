@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::ColumnWithField;
+use common_datavalues::prelude::*;
+use common_datavalues::ColumnWithField;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions2_with_type;
-use crate::scalars::scalar_function2_test::ScalarFunction2WithFieldTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions_with_type;
+use crate::scalars::scalar_function2_test::ScalarFunctionWithFieldTest;
 
 #[test]
 fn test_round_function() -> Result<()> {
@@ -27,7 +27,7 @@ fn test_round_function() -> Result<()> {
     for r in &[1, 60, 60 * 10, 60 * 15, 60 * 30, 60 * 60, 60 * 60 * 24] {
         tests.push((
             RoundFunction::try_create("toStartOfCustom", *r)?,
-            ScalarFunction2WithFieldTest {
+            ScalarFunctionWithFieldTest {
                 name: "test-timeSlot-now",
                 columns: vec![ColumnWithField::new(
                     Series::from_data(vec![1630812366u32, 1630839682u32]),
@@ -40,7 +40,7 @@ fn test_round_function() -> Result<()> {
     }
 
     for (test_function, test) in tests {
-        test_scalar_functions2_with_type(test_function, &[test])?;
+        test_scalar_functions_with_type(test_function, &[test])?;
     }
 
     Ok(())
@@ -48,7 +48,7 @@ fn test_round_function() -> Result<()> {
 
 #[test]
 fn test_to_start_of_function() -> Result<()> {
-    let test = vec![ScalarFunction2WithFieldTest {
+    let test = vec![ScalarFunctionWithFieldTest {
         name: "test-timeSlot-now",
         columns: vec![ColumnWithField::new(
             Series::from_data(vec![1631705259u32]),
@@ -58,7 +58,7 @@ fn test_to_start_of_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions2_with_type(
+    test_scalar_functions_with_type(
         ToStartOfQuarterFunction::try_create("toStartOfWeek")?,
         &test,
     )

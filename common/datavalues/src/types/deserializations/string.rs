@@ -21,20 +21,20 @@ use crate::prelude::*;
 
 pub struct StringDeserializer {
     pub buffer: Vec<u8>,
-    pub builder: StringArrayBuilder,
+    pub builder: MutableStringColumn,
 }
 
 impl StringDeserializer {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             buffer: Vec::new(),
-            builder: StringArrayBuilder::with_capacity(capacity),
+            builder: MutableStringColumn::with_capacity(capacity),
         }
     }
 }
 
 impl TypeDeserializer for StringDeserializer {
-    // See GroupHash.rs for DFStringArray
+    // See GroupHash.rs for StringColumn
     #[allow(clippy::uninit_vec)]
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
         let offset: u64 = reader.read_uvarint()?;
@@ -50,6 +50,10 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
+    fn de_default(&mut self) {
+        self.builder.append_value("");
+    }
+
     fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
         for row in 0..rows {
             let reader = &reader[step * row..];
@@ -63,11 +67,7 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
-    fn de_null(&mut self) {
-        self.builder.append_null()
-    }
-
-    fn finish_to_series(&mut self) -> Series {
-        self.builder.finish().into_series()
+    fn finish_to_column(&mut self) -> ColumnRef {
+        self.builder.to_column()
     }
 }

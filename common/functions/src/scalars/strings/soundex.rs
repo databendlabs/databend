@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use bytes::BufMut;
-use common_datavalues2::Column;
-use common_datavalues2::StringColumn;
+use common_datavalues::Column;
+use common_datavalues::StringColumn;
 use common_exception::Result;
 
 use super::String2StringFunction;

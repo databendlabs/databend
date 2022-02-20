@@ -15,10 +15,10 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::Function2Factory;
+use common_functions::scalars::FunctionFactory;
 
 use crate::Expression;
 use crate::ExpressionVisitor;
@@ -410,7 +410,7 @@ impl ExpressionDataTypeVisitor {
 
         let arguments: Vec<&DataTypePtr> = arguments.iter().collect();
 
-        let function = Function2Factory::instance().get(op, &arguments)?;
+        let function = FunctionFactory::instance().get(op, &arguments)?;
         let return_type = function.return_type(&arguments)?;
         self.stack.push(return_type);
         Ok(self)

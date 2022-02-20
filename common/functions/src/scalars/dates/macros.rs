@@ -122,9 +122,7 @@ macro_rules! define_datetime32_add_year_months {
 macro_rules! define_datetime64_add_year_months {
     ($l: ident, $r: ident, $ctx: ident, $op: expr) => {{
         let factor = $ctx.factor;
-        let precision = $ctx
-            .get_meta_value("precision".to_string())
-            .map_or(0, |v| v.parse::<u32>().unwrap());
+        let precision = $ctx.precision as u32;
         let base = 10_i64.pow(9 - precision);
         let nano = $l * base;
         let naive =

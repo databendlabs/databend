@@ -18,15 +18,16 @@ use std::hash::Hasher;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_datavalues2::for_all_integer_types;
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_scalar_types_error;
+use common_datavalues::for_all_integer_types;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_scalar_types_error;
 use common_exception::Result;
 use num::FromPrimitive;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::EvalContext;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::ScalarUnaryExpression;
 
 /// H ---> Hasher
@@ -38,7 +39,7 @@ pub struct BaseHashFunction<H, R> {
     r: PhantomData<R>,
 }
 
-fn hash_func<H, S, O>(l: S::RefType<'_>) -> O
+fn hash_func<H, S, O>(l: S::RefType<'_>, _ctx: &mut EvalContext) -> O
 where
     S: Scalar,
     O: Scalar + FromPrimitive,
@@ -55,7 +56,7 @@ where
     H: Hasher + Default + Clone + Sync + Send + 'static,
     R: Scalar + Clone + FromPrimitive + ToDataType + Sync + Send,
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(BaseHashFunction::<H, R> {
             display_name: display_name.to_string(),
             h: PhantomData,
@@ -63,14 +64,14 @@ where
         }))
     }
 
-    pub fn desc() -> Function2Description {
+    pub fn desc() -> FunctionDescription {
         let mut features = FunctionFeatures::default().num_arguments(1);
         features = features.deterministic();
-        Function2Description::creator(Box::new(Self::try_create)).features(features)
+        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }
 
-impl<H, R> Function2 for BaseHashFunction<H, R>
+impl<H, R> Function for BaseHashFunction<H, R>
 where
     H: Hasher + Default + Clone + Sync + Send + 'static,
     R: Scalar + Clone + FromPrimitive + ToDataType + Sync + Send,
@@ -81,19 +82,19 @@ where
 
     fn return_type(
         &self,
-        _args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        _args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         Ok(R::to_data_type())
     }
 
     fn eval(
         &self,
-        columns: &common_datavalues2::ColumnsWithField,
+        columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         with_match_scalar_types_error!(columns[0].data_type().data_type_id().to_physical_type(), |$S| {
             let unary = ScalarUnaryExpression::<$S, R, _>::new(hash_func::<H, $S, R>);
-            let col = unary.eval(columns[0].column())?;
+            let col = unary.eval(columns[0].column(), &mut EvalContext::default())?;
             Ok(Arc::new(col))
         })
     }

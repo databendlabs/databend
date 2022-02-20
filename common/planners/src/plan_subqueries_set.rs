@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_datavalues2::DataField;
-use common_datavalues2::DataSchema;
-use common_datavalues2::DataSchemaRef;
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 
 use crate::Expression;
 use crate::PlanNode;

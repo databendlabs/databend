@@ -16,16 +16,17 @@ use std::fmt;
 use std::str;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
-use common_datavalues2::ColumnWithField;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_type_id;
+use common_datavalues::ColumnWithField;
 use common_exception::Result;
 
 use crate::scalars::function_common::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
-use crate::scalars::Monotonicity2;
+use crate::scalars::EvalContext;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
+use crate::scalars::Monotonicity;
 use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
@@ -34,14 +35,14 @@ pub struct SignFunction {
 }
 
 impl SignFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(SignFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()
@@ -50,7 +51,7 @@ impl SignFunction {
     }
 }
 
-fn sign<S>(value: S) -> i8
+fn sign<S>(value: S, _ctx: &mut EvalContext) -> i8
 where S: Scalar + Default + PartialOrd {
     match value.partial_cmp(&S::default()) {
         Some(std::cmp::Ordering::Greater) => 1,
@@ -59,7 +60,7 @@ where S: Scalar + Default + PartialOrd {
     }
 }
 
-impl Function2 for SignFunction {
+impl Function for SignFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
@@ -70,19 +71,20 @@ impl Function2 for SignFunction {
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
             let unary = ScalarUnaryExpression::<$S, i8, _>::new(sign::<$S>);
-            let col = unary.eval(columns[0].column())?;
+            let col = unary.eval(columns[0].column(), &mut ctx)?;
             Ok(Arc::new(col))
         },{
             unreachable!()
         })
     }
 
-    fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         let mono = args[0].clone();
         if mono.is_constant {
-            return Ok(Monotonicity2::create_constant());
+            return Ok(Monotonicity::create_constant());
         }
 
         // check whether the left/right boundary is numeric or not.
@@ -98,10 +100,10 @@ impl Function2 for SignFunction {
         // For example, query like "SELECT sign('-1'), sign('+1'), '-1' >= '+1';" returns -1, 1, 1(true),
         // which is not monotonically increasing.
         if is_boundary_numeric(mono.left) || is_boundary_numeric(mono.right) {
-            return Ok(Monotonicity2::clone_without_range(&args[0]));
+            return Ok(Monotonicity::clone_without_range(&args[0]));
         }
 
-        Ok(Monotonicity2::default())
+        Ok(Monotonicity::default())
     }
 }
 

@@ -14,13 +14,13 @@
 
 use std::fmt;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
 pub struct FieldFunction {
@@ -28,14 +28,14 @@ pub struct FieldFunction {
 }
 
 impl FieldFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(FieldFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(2, usize::MAX - 1),
@@ -43,7 +43,7 @@ impl FieldFunction {
     }
 }
 
-impl Function2 for FieldFunction {
+impl Function for FieldFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }

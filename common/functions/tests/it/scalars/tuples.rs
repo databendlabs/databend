@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
 use super::scalar_function2_test::test_eval;
-use super::scalar_function2_test::ScalarFunction2Test;
+use super::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_tuple_function() -> Result<()> {
     let tests = vec![
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "one element to tuple",
             columns: vec![Series::from_data([0_u8])],
             expect: Series::from_data([0_u8]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "more element to tuple",
             columns: vec![Series::from_data([0_u8]), Series::from_data([0_u8])],
             expect: Series::from_data([0_u8]),

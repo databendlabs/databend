@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
-use common_datavalues2::chrono::DateTime;
-use common_datavalues2::prelude::*;
+use common_datavalues::chrono::DateTime;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::AddMonthsFunction;
 use common_functions::scalars::AddTimesFunction;
