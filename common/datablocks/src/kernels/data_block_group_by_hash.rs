@@ -272,7 +272,7 @@ where T: PrimitiveType
                 null_part_offset += 1;
             }
             if data_type.is_nullable() {
-                offsize += remove_nullable(&data_type)
+                offsize += remove_nullable(data_type)
                     .data_type_id()
                     .numeric_byte_size()?;
             } else {
@@ -352,7 +352,7 @@ where
                         for col in &group_columns {
                             group_values.push(col.get(row));
                         }
-                        group_indices.insert(group_key.clone(), (vec![row as u32], group_values));
+                        group_indices.insert(*group_key.clone(), (vec![row as u32], group_values));
                     }
                     Some((v, _)) => {
                         v.push(row as u32);
@@ -402,7 +402,7 @@ fn init_nullable_offset_via_fields(
     for f in group_fields {
         let f_typ = f.data_type();
         if f_typ.is_nullable() {
-            *null_part_offset += remove_nullable(&f_typ).data_type_id().numeric_byte_size()?;
+            *null_part_offset += remove_nullable(f_typ).data_type_id().numeric_byte_size()?;
         } else {
             *null_part_offset += f_typ.data_type_id().numeric_byte_size()?;
         }
