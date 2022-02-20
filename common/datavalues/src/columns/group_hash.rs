@@ -34,7 +34,8 @@ impl Series {
         for (row, valid_row) in bitmap.iter().enumerate() {
             if !valid_row {
                 unsafe {
-                    ptr.add(row * step + null_offset).write(0x01);
+                    let ptr1 = ptr.add(row * step + null_offset);
+                    ptr1.write(0x01);
                 }
             }
         }
