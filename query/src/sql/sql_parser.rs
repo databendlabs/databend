@@ -350,6 +350,19 @@ impl<'a> DfParser<'a> {
         Ok(options)
     }
 
+    pub(crate) fn parse_list(&mut self, token: &Token) -> Result<Vec<String>, ParserError> {
+        let mut list: Vec<String> = vec![];
+        loop {
+            let value = self.parse_value_or_ident()?;
+            list.push(value);
+
+            if !self.parser.consume_token(token) {
+                break;
+            }
+        }
+        Ok(list)
+    }
+
     pub(crate) fn consume_token(&mut self, expected: &str) -> bool {
         if self.parser.peek_token().to_string().to_uppercase() == *expected.to_uppercase() {
             self.parser.next_token();

@@ -20,6 +20,7 @@ use std::collections::HashMap;
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::IsOptional;
 use sqlparser::parser::ParserError;
+use sqlparser::tokenizer::Token;
 
 use crate::sql::statements::DfCopy;
 use crate::sql::DfParser;
@@ -65,6 +66,22 @@ impl<'a> DfParser<'a> {
             self.expect_token(")")?;
         }
 
+        // FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] )
+        let mut files: Vec<String> = vec![];
+        if self.consume_token("FILES") {
+            self.expect_token("=")?;
+            self.expect_token("(")?;
+            files = self.parse_list(&Token::Comma)?;
+            self.expect_token(")")?;
+        }
+
+        // VALIDATION_MODE = RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS
+        let mut validation_mode = "".to_string();
+        if self.consume_token("VALIDATION_MODE") {
+            self.expect_token("=")?;
+            validation_mode = self.parser.parse_literal_string()?;
+        }
+
         Ok(DfStatement::Copy(DfCopy {
             name,
             columns,
@@ -72,6 +89,8 @@ impl<'a> DfParser<'a> {
             credential_options,
             encryption_options,
             file_format_options,
+            files,
+            validation_mode,
         }))
     }
 }

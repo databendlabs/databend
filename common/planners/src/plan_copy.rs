@@ -12,10 +12,43 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
+
 use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 
 use crate::UserStagePlan;
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+pub enum ValidationMode {
+    None,
+    ReturnNRows(u64),
+    ReturnErrors,
+    ReturnAllErrors,
+}
+
+impl FromStr for ValidationMode {
+    type Err = String;
+    fn from_str(s: &str) -> std::result::Result<Self, String> {
+        match s.to_uppercase().as_str() {
+            "" => Ok(ValidationMode::None),
+            "RETURN_ERRORS" => Ok(ValidationMode::ReturnErrors),
+            "RETURN_ALL_ERRORS" => Ok(ValidationMode::ReturnAllErrors),
+            v => {
+                let rows_str = v.replace("RETURN_", "").replace("_ROWS", "");
+                let rows = rows_str.parse::<u64>();
+                match rows {
+                    Ok(v) => { Ok(ValidationMode::ReturnNRows(v)) }
+                    Err(_) => {
+                        Err(
+                            format!("Unknown validation mode:{:?}, must one of {{ RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS}}", v)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct CopyPlan {
@@ -24,6 +57,8 @@ pub struct CopyPlan {
     pub tbl_id: MetaId,
     pub schema: DataSchemaRef,
     pub stage_plan: UserStagePlan,
+    pub validation_mode: ValidationMode,
+    pub files: Vec<String>,
 }
 
 impl CopyPlan {

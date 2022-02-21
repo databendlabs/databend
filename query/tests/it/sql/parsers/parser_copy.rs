@@ -53,6 +53,8 @@ fn copy_from_external_test() -> Result<()> {
                    "field_delimiter".into() => "|".into(),
                    "skip_header".into() => "1".into(),
             },
+            files: vec![],
+            validation_mode: "".to_string(),
         }),
     }];
 

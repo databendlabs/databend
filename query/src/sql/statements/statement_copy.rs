@@ -29,6 +29,7 @@ use common_meta_types::UserStageInfo;
 use common_planners::CopyPlan;
 use common_planners::PlanNode;
 use common_planners::UserStagePlan;
+use common_planners::ValidationMode;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 
@@ -44,6 +45,8 @@ pub struct DfCopy {
     pub credential_options: HashMap<String, String>,
     pub encryption_options: HashMap<String, String>,
     pub file_format_options: HashMap<String, String>,
+    pub files: Vec<String>,
+    pub validation_mode: String,
 }
 
 #[async_trait::async_trait]
@@ -78,6 +81,10 @@ impl AnalyzableStatement for DfCopy {
             self.analyze_external().await?
         };
 
+        // Validation mode.
+        let validation_mode = ValidationMode::from_str(self.validation_mode.as_str())
+            .map_err(|e| ErrorCode::SyntaxException(e))?;
+
         // Stage plan.
         let stage_plan = UserStagePlan { stage_info };
 
@@ -88,6 +95,8 @@ impl AnalyzableStatement for DfCopy {
             tbl_id,
             schema,
             stage_plan,
+            validation_mode,
+            files: self.files.clone(),
         };
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Copy(
