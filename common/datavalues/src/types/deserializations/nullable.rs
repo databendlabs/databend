@@ -52,20 +52,15 @@ impl TypeDeserializer for NullableDeserializer {
         reader: &[u8],
         step: usize,
         rows: usize,
-        null_offset: usize,
+        null_offset: &mut usize,
+        type_size: usize,
     ) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             self.inner.de(&mut reader)?;
-            // null_offset -= self.inner().to_physical_type;
-            // todo, We should get the length of missed bytes which caused
-            // by self.inner.de method.
-            if reader[null_offset - 1] & 1 == 1 {
-                self.bitmap.push(false);
-            } else {
-                self.bitmap.push(true);
-            }
+            self.bitmap.push(reader[*null_offset - type_size] & 1 != 1);
         }
+        *null_offset -= type_size;
         Ok(())
     }
 

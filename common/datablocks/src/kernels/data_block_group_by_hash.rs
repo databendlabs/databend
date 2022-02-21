@@ -251,9 +251,8 @@ where T: PrimitiveType
 
         let mut res = Vec::with_capacity(group_fields.len());
         let mut offsize = 0;
-        let mut null_part_offset = 0;
 
-        init_nullable_offset_via_fields(&mut null_part_offset, group_fields)?;
+        let mut null_part_offset = init_nullable_offset_via_fields(group_fields)?;
         for f in group_fields.iter() {
             let data_type = f.data_type();
             let mut deserializer = data_type.create_deserializer(rows);
@@ -261,22 +260,22 @@ where T: PrimitiveType
             if !data_type.is_nullable() {
                 deserializer.de_batch(&reader[offsize..], step, rows)?;
                 res.push(deserializer.finish_to_column());
+                offsize += data_type.data_type_id().numeric_byte_size()?;
             } else {
+                let nullable_type_size = remove_nullable(data_type)
+                    .data_type_id()
+                    .numeric_byte_size()?;
                 deserializer.de_batch_with_nullable(
                     &reader[offsize..],
                     step,
                     rows,
-                    null_part_offset,
+                    &mut null_part_offset,
+                    nullable_type_size,
                 )?;
                 res.push(deserializer.finish_to_column());
                 null_part_offset += 1;
-            }
-            if data_type.is_nullable() {
-                offsize += remove_nullable(data_type)
-                    .data_type_id()
-                    .numeric_byte_size()?;
-            } else {
-                offsize += data_type.data_type_id().numeric_byte_size()?;
+
+                offsize += nullable_type_size;
             }
         }
         Ok(res)
@@ -304,8 +303,7 @@ where
 
         let group_columns_has_nullable_one = check_group_columns_has_nullable(group_columns);
         if group_columns_has_nullable_one {
-            let mut null_part_offset = 0;
-            init_nullable_offset(&mut null_part_offset, group_columns)?;
+            let mut null_part_offset = init_nullable_offset(group_columns)?;
             while size > 0 {
                 build_keys_with_nullable_column(
                     size,
@@ -384,30 +382,29 @@ where
 
 /// Init the nullable part's offset in bytes. It follows the values part.
 #[inline]
-fn init_nullable_offset(null_part_offset: &mut usize, group_keys: &[&ColumnRef]) -> Result<()> {
+fn init_nullable_offset(group_keys: &[&ColumnRef]) -> Result<usize> {
+    let mut _null_part_offset = 0;
     for group_key_column in group_keys {
-        *null_part_offset += remove_nullable(&group_key_column.data_type())
+        _null_part_offset += remove_nullable(&group_key_column.data_type())
             .data_type_id()
             .numeric_byte_size()?;
     }
-    Ok(())
+    Ok(_null_part_offset)
 }
 
 /// Init the nullable part's offset in bytes. It follows the values part.
 #[inline]
-fn init_nullable_offset_via_fields(
-    null_part_offset: &mut usize,
-    group_fields: &[DataField],
-) -> Result<()> {
+fn init_nullable_offset_via_fields(group_fields: &[DataField]) -> Result<usize> {
+    let mut null_part_offset = 0;
     for f in group_fields {
         let f_typ = f.data_type();
         if f_typ.is_nullable() {
-            *null_part_offset += remove_nullable(f_typ).data_type_id().numeric_byte_size()?;
+            null_part_offset += remove_nullable(f_typ).data_type_id().numeric_byte_size()?;
         } else {
-            *null_part_offset += f_typ.data_type_id().numeric_byte_size()?;
+            null_part_offset += f_typ.data_type_id().numeric_byte_size()?;
         }
     }
-    Ok(())
+    Ok(null_part_offset)
 }
 
 #[inline]

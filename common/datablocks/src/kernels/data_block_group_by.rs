@@ -32,14 +32,14 @@ impl DataBlock {
         let mut group_key_len = 0;
         for col in column_names {
             let column = block.try_column_by_name(col)?;
-            let _typ = if column.is_nullable() {
+            let typ = if column.is_nullable() {
                 remove_nullable(&column.data_type())
             } else {
                 column.data_type()
             };
-            if _typ.data_type_id().is_integer() {
+            if typ.data_type_id().is_integer() {
                 // If column is nullable, we will add one byte to identify `null` value for every row.
-                group_key_len += _typ.data_type_id().numeric_byte_size()?;
+                group_key_len += typ.data_type_id().numeric_byte_size()?;
                 if column.is_nullable() {
                     group_key_len += 1;
                 }

@@ -42,7 +42,8 @@ pub trait TypeDeserializer: Send + Sync {
         _reader: &[u8],
         _step: usize,
         _rows: usize,
-        _null_offset: usize,
+        _null_offset: &mut usize,
+        _type_size: usize,
     ) -> Result<()> {
         Err(ErrorCode::BadDataValueType(
             "de_batch_with_nullable operation only for nullable",
