@@ -19,15 +19,12 @@ runs:
         sudo apt-get update
         sudo apt-get install -y clang clang-tools libclang-dev llvm
 
-    - uses: Warchant/setup-mold@c301b9255e7860fef789d6830d562dd99497b437
-      if: ${{matrix.config.os == 'ubuntu-latest'}}
-      with:
-        version: "v1.0.3"
-        default: false
-
-    - name: Ubuntu Copy Mold to /usr/bin
+    - name: Set up mold v1.1
       if: ${{matrix.config.os == 'ubuntu-latest'}}
       shell: bash
       run: |
-        MOLD_PATH=$(whereis mold | awk '{print $2}')
-        sudo cp $MOLD_PATH /usr/bin/
+        MOLD_LINK="https://github.com/rui314/mold/releases/download/v1.1/mold-1.1-x86_64-linux.tar.gz"
+        wget -O mold.tar.gz $MOLD_LINK
+        tar xvzf mold.tar.gz
+        sudo mv mold-1.1-x86_64-linux/* /usr/
+        cd
