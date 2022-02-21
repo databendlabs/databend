@@ -38,7 +38,7 @@ async fn test_statement_copy() -> Result<()> {
         credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
         encryption=(master_key = 'my_master_key')
         file_format = (type = csv field_delimiter = '|' skip_header = 1)",
-            expect: r#"Copy into system.configs ,stage_plan:UserStagePlan { stage_info: UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", endpoint: "https://s3.amazonaws.com", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_key_id", encryption_master_key: "my_master_key" }) }, file_format_option: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_option: CopyOptions, comment: "" } }"#,
+            expect: r#"Copy into system.configs ,stage_plan:UserStagePlan { stage_info: UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions, comment: "" } }"#,
             err: "",
         },
         TestCase {
@@ -76,7 +76,7 @@ async fn test_statement_copy() -> Result<()> {
             query: "copy into system.configs
         from '@mystage'
         file_format = (type = csv field_delimiter = '|' skip_header = 1)",
-            expect: r#"Copy into system.configs ,stage_plan:UserStagePlan { stage_info: UserStageInfo { stage_name: "", stage_type: Internal, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "", path: "", endpoint: "", credentials_aws_key_id: "", credentials_aws_secret_key: "", encryption_master_key: "" }) }, file_format_option: FileFormatOptions { format: Csv, skip_header: 0, field_delimiter: ",", record_delimiter: "\n", compression: None }, copy_option: CopyOptions, comment: "" } }"#,
+            expect: r#"Copy into system.configs ,stage_plan:UserStagePlan { stage_info: UserStageInfo { stage_name: "", stage_type: Internal, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "", path: "", credentials_aws_key_id: "", credentials_aws_secret_key: "", encryption_master_key: "" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 0, field_delimiter: ",", record_delimiter: "\n", compression: None }, copy_options: CopyOptions, comment: "" } }"#,
             err: "",
         },
     ];
