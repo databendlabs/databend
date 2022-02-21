@@ -26,40 +26,77 @@ use futures::AsyncRead;
 
 use crate::Source;
 
-pub struct CsvSource<R> {
-    reader: AsyncReader<R>,
+#[derive(Debug, Clone)]
+pub struct CsvSourceBuilder {
     schema: DataSchemaRef,
+    skip_header: i32,
     block_size: usize,
+    field_delimiter: u8,
+    record_delimiter: Terminator,
+}
+
+impl CsvSourceBuilder {
+    pub fn create(schema: DataSchemaRef) -> Self {
+        CsvSourceBuilder {
+            schema,
+            skip_header: 0,
+            field_delimiter: b',',
+            record_delimiter: Terminator::CRLF,
+            block_size: 10000,
+        }
+    }
+
+    pub fn block_size(&mut self, block_size: usize) -> &mut Self {
+        self.block_size = block_size;
+        self
+    }
+
+    // Number of lines at the start of the file to skip.
+    pub fn skip_header(&mut self, skip_header: i32) -> &mut Self {
+        self.skip_header = skip_header;
+        self
+    }
+
+    pub fn field_delimiter(&mut self, field_delimiter: u8) -> &mut Self {
+        self.field_delimiter = field_delimiter;
+        self
+    }
+
+    pub fn record_delimiter(&mut self, record_delimiter: u8) -> &mut Self {
+        let record_delimiter = if record_delimiter == b'\n' || record_delimiter == b'\r' {
+            Terminator::CRLF
+        } else {
+            Terminator::Any(record_delimiter)
+        };
+        self.record_delimiter = record_delimiter;
+        self
+    }
+
+    pub fn build<R>(&self, reader: R) -> Result<CsvSource<R>>
+    where R: AsyncRead + Unpin + Send {
+        CsvSource::try_create(self.clone(), reader)
+    }
+}
+
+pub struct CsvSource<R> {
+    builder: CsvSourceBuilder,
+    reader: AsyncReader<R>,
     rows: usize,
 }
 
 impl<R> CsvSource<R>
 where R: AsyncRead + Unpin + Send
 {
-    pub fn try_create(
-        reader: R,
-        schema: DataSchemaRef,
-        header: bool,
-        field_delimiter: u8,
-        record_delimiter: u8,
-        block_size: usize,
-    ) -> Result<Self> {
-        let record_delimiter = if record_delimiter == b'\n' || record_delimiter == b'\r' {
-            Terminator::CRLF
-        } else {
-            Terminator::Any(record_delimiter)
-        };
-
+    fn try_create(builder: CsvSourceBuilder, reader: R) -> Result<Self> {
         let reader = AsyncReaderBuilder::new()
-            .has_headers(header)
-            .delimiter(field_delimiter)
-            .terminator(record_delimiter)
+            .has_headers(builder.skip_header > 0)
+            .delimiter(builder.field_delimiter)
+            .terminator(builder.record_delimiter)
             .create_reader(reader);
 
         Ok(Self {
+            builder,
             reader,
-            block_size,
-            schema,
             rows: 0,
         })
     }
@@ -71,10 +108,11 @@ where R: AsyncRead + Unpin + Send
 {
     async fn read(&mut self) -> Result<Option<DataBlock>> {
         let mut desers = self
+            .builder
             .schema
             .fields()
             .iter()
-            .map(|f| f.data_type().create_deserializer(self.block_size))
+            .map(|f| f.data_type().create_deserializer(self.builder.block_size))
             .collect::<Vec<_>>();
 
         let mut rows = 0;
@@ -97,7 +135,7 @@ where R: AsyncRead + Unpin + Send
             rows += 1;
             self.rows += 1;
 
-            if rows >= self.block_size {
+            if rows >= self.builder.block_size {
                 break;
             }
         }
@@ -111,6 +149,6 @@ where R: AsyncRead + Unpin + Send
             .map(|deser| deser.finish_to_column())
             .collect::<Vec<_>>();
 
-        Ok(Some(DataBlock::create(self.schema.clone(), series)))
+        Ok(Some(DataBlock::create(self.builder.schema.clone(), series)))
     }
 }

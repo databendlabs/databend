@@ -146,8 +146,8 @@ pub struct UserStageInfo {
     pub stage_name: String,
     pub stage_type: StageType,
     pub stage_params: StageParams,
-    pub file_format_option: FileFormatOptions,
-    pub copy_option: CopyOptions,
+    pub file_format_options: FileFormatOptions,
+    pub copy_options: CopyOptions,
     pub comment: String,
 }
 

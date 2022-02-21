@@ -60,8 +60,8 @@ struct FileFormat {
     pub record_delimiter: String,
     #[serde(default = "default_field_delimiter")]
     pub field_delimiter: String,
-    #[serde(default = "default_csv_header")]
-    pub csv_header: bool,
+    #[serde(default = "default_skip_header")]
+    pub skip_header: i32,
     #[serde(default = "default_compression")]
     pub compression: Compression,
 }
@@ -74,8 +74,8 @@ fn default_field_delimiter() -> String {
     ",".to_string()
 }
 
-fn default_csv_header() -> bool {
-    false
+fn default_skip_header() -> i32 {
+    0
 }
 
 fn default_compression() -> Compression {
@@ -87,7 +87,7 @@ fn test_options_de() {
     let mut values = HashMap::new();
     values.insert("Format".to_string(), "Csv".to_string());
     values.insert("Field_delimiter".to_string(), "/".to_string());
-    values.insert("csv_header".to_string(), "1".to_string());
+    values.insert("skip_header".to_string(), "1".to_string());
     values.insert("compression".to_string(), "GZIP".to_string());
 
     let fmt = FileFormat::deserialize(OptionsDeserializer::new(&values)).unwrap();
@@ -95,7 +95,7 @@ fn test_options_de() {
         format: Format::Csv,
         record_delimiter: "\n".to_string(),
         field_delimiter: "/".to_string(),
-        csv_header: true,
+        skip_header: 1,
         compression: Compression::Gzip
     });
 
@@ -104,7 +104,7 @@ fn test_options_de() {
         format: Format::Csv,
         record_delimiter: "\n".to_string(),
         field_delimiter: ",".to_string(),
-        csv_header: false,
+        skip_header: 0,
         compression: Compression::None
     });
 

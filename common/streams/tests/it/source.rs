@@ -21,7 +21,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_streams::CsvSource;
+use common_streams::CsvSourceBuilder;
 use common_streams::ParquetSource;
 use common_streams::Source;
 use common_streams::ValueSource;
@@ -98,9 +98,14 @@ async fn test_parse_csvs() {
                     .unwrap(),
             );
             let stream = local.read(name).run().await.unwrap();
-            let mut csv_source =
-                CsvSource::try_create(stream, schema, false, field_delimiter, record_delimiter, 10)
-                    .unwrap();
+
+            let mut builder = CsvSourceBuilder::create(schema);
+            builder.skip_header(0);
+            builder.field_delimiter(field_delimiter);
+            builder.record_delimiter(record_delimiter);
+            builder.block_size(10);
+
+            let mut csv_source = builder.build(stream).unwrap();
             let block = csv_source.read().await.unwrap().unwrap();
             assert_blocks_eq(
                 vec![
@@ -155,8 +160,15 @@ async fn test_parse_csv2() {
             .await
             .unwrap(),
     );
+
     let stream = local.read(name).run().await.unwrap();
-    let mut csv_source = CsvSource::try_create(stream, schema, false, b',', b'\n', 10).unwrap();
+    let mut builder = CsvSourceBuilder::create(schema);
+    builder.skip_header(0);
+    builder.field_delimiter(b',');
+    builder.record_delimiter(b'\n');
+    builder.block_size(10);
+    let mut csv_source = builder.build(stream).unwrap();
+
     let block = csv_source.read().await.unwrap().unwrap();
     assert_blocks_eq(
         vec![

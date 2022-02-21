@@ -24,7 +24,7 @@ COPY INTO [<db>.]<table_name> [ <schema> ]
   * `schema`: optional schema fields, eg:  `(a,b,c)`
   * `stage_location`: stage location, eg:  `@s3_stage/tests/data/sample.csv`
   * `format_name`: format name, supported format:  `CSV`, `Parquet`
-  * `options`: other options, supported options:  `field_delimiter`, `record_delimiter`, `csv_header`
+  * `options`: other options, supported options:  `field_delimiter`, `record_delimiter`, `skip_header`
 
 
 ### Examples

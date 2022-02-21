@@ -4,5 +4,5 @@ credentials	secret_access_key	String	4x5y6z		1
 file_format	format	String	Csv	Csv	0
 file_format	record_delimiter	String	,	\n	1
 file_format	field_delimiter	String	,	,	0
-file_format	csv_header	Boolean	false	false	0
+file_format	skip_header	Boolean	false	false	0
 file_format	compression	String	Gzip	None	1

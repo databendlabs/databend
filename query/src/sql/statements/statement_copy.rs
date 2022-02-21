@@ -143,7 +143,7 @@ impl DfCopy {
             .unwrap_or(&"".to_string())
             .clone();
 
-        let file_format_option = FileFormatOptions {
+        let file_format_options = FileFormatOptions {
             format: file_format,
             skip_header,
             field_delimiter,
@@ -175,7 +175,7 @@ impl DfCopy {
                         .clone();
                     let credentials_aws_secret_key = self
                         .credential_options
-                        .get("AWS_KEY_ID")
+                        .get("AWS_SECRET_KEY")
                         .unwrap_or(&"".to_string())
                         .clone();
                     let encryption_master_key = self
@@ -210,7 +210,7 @@ impl DfCopy {
             stage_name: self.location.clone(),
             stage_type: StageType::External,
             stage_params,
-            file_format_option,
+            file_format_options,
             ..Default::default()
         })
     }

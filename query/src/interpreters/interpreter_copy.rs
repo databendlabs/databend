@@ -21,7 +21,7 @@ use common_meta_types::StageStorage;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_planners::CopyPlan;
-use common_streams::CsvSource;
+use common_streams::CsvSourceBuilder;
 use common_streams::DataBlockStream;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
@@ -58,69 +58,79 @@ impl CopyInterpreter {
                 let credential = Credential::hmac(key_id, secret_key);
                 let bucket = &s3.bucket;
                 let path = &s3.path;
-                let endpoint = format!("https://{:}.s3.amazonaws.com", bucket);
-                let location = format!("{}{}", endpoint, path);
+                let region = "us-east-2";
 
-                tracing::info!("Get the s3 dal {:?}", location);
+                tracing::info!(
+                    "Get the dal, region:{}, bucket:{} path:{}",
+                    region,
+                    bucket,
+                    path
+                );
 
-                let mut builder = opendal::services::s3::Backend::build();
-                Ok((
-                    opendal::Operator::new(
-                        builder
-                            .endpoint(&endpoint)
-                            .region("us-east-2")
-                            .bucket(bucket)
-                            .credential(credential)
-                            .finish()
-                            .await
-                            .map_err(|e| {
-                                ErrorCode::DalS3Error(format!("s3 dal build error:{:?}", e))
-                            })?,
-                    ),
-                    location,
-                ))
+                let operator = opendal::services::s3::Backend::build()
+                    .bucket(bucket)
+                    .region(region)
+                    .bucket(bucket)
+                    .credential(credential)
+                    .finish()
+                    .await
+                    .map_err(|e| ErrorCode::DalS3Error(format!("s3 dal build error:{:?}", e)))?;
+
+                Ok((opendal::Operator::new(operator), path.to_string()))
             }
         }
     }
 
     async fn get_csv_stream(&self, stage_info: &UserStageInfo) -> Result<SourceStream> {
         let schema = self.plan.schema.clone();
-        let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-        let read_buffer_size = self.ctx.get_settings().get_storage_read_buffer_size()?;
+        let mut builder = CsvSourceBuilder::create(schema);
 
-        let (dal_operator, location) = self.get_dal_operator(stage_info).await?;
-
-        let object = dal_operator.stat(&location).run().await.map_err(|e| {
-            ErrorCode::DalStatError(format!("dal stat {:} error:{:?}", location, e))
-        })?;
-        let reader = SeekableReader::new(dal_operator, &location, object.size);
-        let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
+        // Block size.
+        {
+            let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+            builder.block_size(max_block_size);
+        }
 
         // Skip header.
-        let header = stage_info.file_format_option.skip_header > 0;
+        {
+            builder.skip_header(stage_info.file_format_options.skip_header);
+        }
 
         // Field delimiter, default ','.
-        let field_delimiter_str = &stage_info.file_format_option.field_delimiter;
-        let field_delimiter = match field_delimiter_str.len() {
-            n if n >= 1 => field_delimiter_str.as_bytes()[0],
-            _ => b',',
-        };
+        {
+            let field_delimiter_str = &stage_info.file_format_options.field_delimiter;
+            let field_delimiter = match field_delimiter_str.len() {
+                n if n >= 1 => field_delimiter_str.as_bytes()[0],
+                _ => b',',
+            };
+            builder.field_delimiter(field_delimiter);
+        }
 
         // Record delimiter, default '\n'.
-        let record_delimiter_str = &stage_info.file_format_option.record_delimiter;
-        let record_delimiter = match record_delimiter_str.len() {
-            n if n >= 1 => record_delimiter_str.as_bytes()[0],
-            _ => b'\n',
-        };
+        {
+            let record_delimiter_str = &stage_info.file_format_options.record_delimiter;
+            let record_delimiter = match record_delimiter_str.len() {
+                n if n >= 1 => record_delimiter_str.as_bytes()[0],
+                _ => b'\n',
+            };
+            builder.record_delimiter(record_delimiter);
+        }
 
-        Ok(SourceStream::new(Box::new(CsvSource::try_create(
-            reader,
-            schema,
-            header,
-            field_delimiter,
-            record_delimiter,
-            max_block_size,
-        )?)))
+        let read_buffer_size = self.ctx.get_settings().get_storage_read_buffer_size()?;
+        let (dal_operator, path) = self.get_dal_operator(stage_info).await?;
+        let size = dal_operator
+            .stat(&path)
+            .run()
+            .await
+            .map_err(|e| ErrorCode::DalStatError(format!("dal stat {:} error:{:?}", path, e)))?
+            .size;
+        tracing::info!("Get {} object size:{}", path, size);
+
+        let reader = SeekableReader::new(dal_operator, &path, size);
+        let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
+        let source = builder.build(reader)?;
+
+        Ok(SourceStream::new(Box::new(source)))
     }
 }
 
@@ -137,7 +147,7 @@ impl Interpreter for CopyInterpreter {
         let stage_info = self.plan.stage_plan.stage_info.clone();
         let source_stream = match stage_info.stage_type {
             StageType::External => {
-                match stage_info.file_format_option.format {
+                match stage_info.file_format_options.format {
                     // CSV.
                     StageFileFormatType::Csv => self.get_csv_stream(&stage_info).await,
                     // Unsupported.
