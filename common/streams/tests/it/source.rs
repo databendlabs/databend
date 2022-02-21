@@ -22,7 +22,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::CsvSourceBuilder;
-use common_streams::ParquetSource;
+use common_streams::ParquetSourceBuilder;
 use common_streams::Source;
 use futures::io::BufReader;
 use opendal::readers::SeekableReader;
@@ -227,8 +227,11 @@ async fn test_source_parquet() -> Result<()> {
         .into_iter()
         .collect::<Vec<usize>>();
 
+    let mut builder = ParquetSourceBuilder::create(schema);
+    builder.projection(default_proj);
+
     let mut page_nums = 0;
-    let mut parquet_source = ParquetSource::new(stream, schema, default_proj);
+    let mut parquet_source = builder.build(stream).unwrap();
     // expects `page_nums_expects` blocks, and
     while let Some(block) = parquet_source.read().await? {
         page_nums += 1;
