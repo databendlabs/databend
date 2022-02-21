@@ -26,5 +26,6 @@ runs:
         MOLD_LINK="https://github.com/rui314/mold/releases/download/v1.1/mold-1.1-x86_64-linux.tar.gz"
         wget -O mold.tar.gz $MOLD_LINK
         tar xvzf mold.tar.gz
-        sudo mv mold-1.1-x86_64-linux/* /usr/
+        sudo mv mold-1.1-x86_64-linux/bin/* /usr/bin
+        sudo mv mold-1.1-x86_64-linux/lib/* /usr/lib
         cd
