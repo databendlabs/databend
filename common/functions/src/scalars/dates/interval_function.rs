@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -63,33 +62,31 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
                     T::Date16Result::to_date_type(),
                     T::eval_date16::<$R>,
                     factor,
-                    None,
+                    0,
                 ),
                 TypeID::Date32 => IntervalFunction::<i32, $R, T::Date32Result, _>::try_create_func(
                     display_name,
                     T::Date32Result::to_date_type(),
                     T::eval_date32::<$R>,
                     factor,
-                    None,
+                    0,
                 ),
                 TypeID::DateTime32 => IntervalFunction::<u32, $R, u32, _>::try_create_func(
                     display_name,
                     left_arg,
                     T::eval_datetime32::<$R>,
                     factor,
-                    None,
+                    0,
                 ),
                 TypeID::DateTime64 => {
-                    let mut mp = BTreeMap::new();
                     let datetime = left_arg.as_any().downcast_ref::<DateTime64Type>().unwrap();
-                    let precision = datetime.precision().to_string();
-                    mp.insert("precision".to_string(), precision);
+                    let precision = datetime.precision();
                     IntervalFunction::<i64, $R, i64, _>::try_create_func(
                         display_name,
                         left_arg,
                         T::eval_datetime64::<$R>,
                         factor,
-                        Some(mp),
+                        precision,
                     )
                 },
                 _=> Err(ErrorCode::BadDataValueType(format!(
@@ -115,7 +112,7 @@ pub struct IntervalFunction<L: DateType, R: PrimitiveType, O: DateType, F> {
     result_type: DataTypePtr,
     binary: ScalarBinaryExpression<L, R, O, F>,
     factor: i64,
-    metadata: Option<BTreeMap<String, String>>,
+    precision: usize,
 }
 
 impl<L, R, O, F> IntervalFunction<L, R, O, F>
@@ -130,7 +127,7 @@ where
         result_type: DataTypePtr,
         func: F,
         factor: i64,
-        metadata: Option<BTreeMap<String, String>>,
+        precision: usize,
     ) -> Result<Box<dyn Function>> {
         let binary = ScalarBinaryExpression::<L, R, O, _>::new(func);
         Ok(Box::new(Self {
@@ -138,7 +135,7 @@ where
             result_type,
             binary,
             factor,
-            metadata,
+            precision,
         }))
     }
 }
@@ -160,7 +157,7 @@ where
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
         // Todo(zhyass): define the ctx out of the eval.
-        let mut ctx = EvalContext::new(self.factor, None, self.metadata.clone());
+        let mut ctx = EvalContext::new(self.factor, self.precision, None);
         let col = self
             .binary
             .eval(columns[0].column(), columns[1].column(), &mut ctx)?;
@@ -249,10 +246,7 @@ impl IntervalArithmeticImpl for AddDaysImpl {
         r: R::RefType<'_>,
         ctx: &mut EvalContext,
     ) -> i64 {
-        let precision = ctx
-            .get_meta_value("precision".to_string())
-            .map_or(0, |v| v.parse::<u32>().unwrap());
-        let base = 10_i64.pow(precision);
+        let base = 10_i64.pow(ctx.precision as u32);
         let factor = ctx.factor * 24 * 3600 * base;
         l as i64 + r.to_owned_scalar().as_() * factor
     }
@@ -294,10 +288,7 @@ impl IntervalArithmeticImpl for AddTimesImpl {
         r: R::RefType<'_>,
         ctx: &mut EvalContext,
     ) -> i64 {
-        let precision = ctx
-            .get_meta_value("precision".to_string())
-            .map_or(0, |v| v.parse::<u32>().unwrap());
-        let base = 10_i64.pow(precision);
+        let base = 10_i64.pow(ctx.precision as u32);
         let factor = ctx.factor * base;
         l as i64 + r.to_owned_scalar().as_() * factor
     }
