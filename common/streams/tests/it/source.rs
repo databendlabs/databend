@@ -24,41 +24,10 @@ use common_exception::Result;
 use common_streams::CsvSourceBuilder;
 use common_streams::ParquetSource;
 use common_streams::Source;
-use common_streams::ValueSource;
 use futures::io::BufReader;
 use opendal::readers::SeekableReader;
 use opendal::services::fs;
 use opendal::Operator;
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_parse_values() {
-    let buffer =
-        "(1,  'str',   1) , (-1, ' str ' ,  1.1) , ( 2,  'aa aa', 2.2),  (3, \"33'33\", 3.3)   ";
-
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", i8::to_data_type()),
-        DataField::new("b", Vu8::to_data_type()),
-        DataField::new("c", f64::to_data_type()),
-    ]);
-    let mut values_source = ValueSource::new(buffer.as_bytes(), schema, 10);
-    let block = values_source.read().await.unwrap().unwrap();
-    assert_blocks_eq(
-        vec![
-            "+----+-------+-----+",
-            "| a  | b     | c   |",
-            "+----+-------+-----+",
-            "| 1  | str   | 1   |",
-            "| -1 |  str  | 1.1 |",
-            "| 2  | aa aa | 2.2 |",
-            "| 3  | 33'33 | 3.3 |",
-            "+----+-------+-----+",
-        ],
-        &[block],
-    );
-
-    let block = values_source.read().await.unwrap();
-    assert!(block.is_none());
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_parse_csvs() {
