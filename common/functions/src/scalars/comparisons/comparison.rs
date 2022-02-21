@@ -18,13 +18,13 @@ use std::sync::Arc;
 use common_arrow::arrow::compute::comparison;
 use common_datavalues::prelude::*;
 use common_datavalues::type_coercion::compare_coercion;
-use common_datavalues::BooleanType;
 use common_datavalues::DataValueComparisonOperator;
 use common_datavalues::TypeID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::cast_column_field;
+use crate::scalars::default_column_cast;
 use crate::scalars::ComparisonEqFunction;
 use crate::scalars::ComparisonGtEqFunction;
 use crate::scalars::ComparisonGtFunction;
@@ -85,7 +85,7 @@ impl Function for ComparisonFunction {
             )));
         }
 
-        Ok(BooleanType::arc())
+        Ok(UInt8Type::arc())
     }
 
     fn eval(
@@ -126,8 +126,10 @@ impl Function for ComparisonFunction {
         };
 
         let result = f(array0.as_ref(), array1.as_ref());
-        let result = BooleanColumn::new(result);
-        Ok(Arc::new(result))
+        let u8_type = u8::to_data_type();
+        let result: ColumnRef = Arc::new(BooleanColumn::new(result));
+        let result = default_column_cast(&result, &u8_type)?;
+        Ok(result)
     }
 }
 

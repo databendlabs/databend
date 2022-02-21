@@ -50,7 +50,6 @@ impl ComparisonRegexpFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("not regexp")
-                .bool_function()
                 .num_arguments(2),
         )
     }
@@ -60,7 +59,6 @@ impl ComparisonRegexpFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("regexp")
-                .bool_function()
                 .num_arguments(2),
         )
     }
@@ -84,7 +82,7 @@ impl Function for ComparisonRegexpFunction {
                 self.name()
             )));
         }
-        Ok(BooleanType::arc())
+        Ok(UInt8Type::arc())
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
@@ -127,11 +125,11 @@ impl fmt::Display for ComparisonRegexpFunction {
 }
 
 #[inline]
-fn a_regexp_binary<F>(lhs: &ColumnRef, rhs: &ColumnRef, op: F) -> Result<BooleanColumn>
+fn a_regexp_binary<F>(lhs: &ColumnRef, rhs: &ColumnRef, op: F) -> Result<UInt8Column>
 where F: Fn(bool) -> bool {
     let mut map = HashMap::new();
 
-    let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
+    let mut builder: ColumnBuilder<u8> = ColumnBuilder::with_capacity(lhs.len());
 
     let lhs = Vu8::try_create_viewer(lhs)?;
     let rhs = Vu8::try_create_viewer(rhs)?;
@@ -145,18 +143,18 @@ where F: Fn(bool) -> bool {
             map.get(rhs_value).unwrap()
         };
 
-        builder.append(op(pattern.is_match(lhs_value)));
+        builder.append(u8::from(op(pattern.is_match(lhs_value))));
     }
     Ok(builder.build_column())
 }
 
 #[inline]
-fn a_regexp_binary_scalar<F>(lhs: &ColumnRef, rhs: &[u8], op: F) -> Result<BooleanColumn>
+fn a_regexp_binary_scalar<F>(lhs: &ColumnRef, rhs: &[u8], op: F) -> Result<UInt8Column>
 where F: Fn(bool) -> bool {
     let re = build_regexp_from_pattern(rhs)?;
     let viewer = Vu8::try_create_viewer(lhs)?;
-    Ok(BooleanColumn::from_iterator(
-        viewer.iter().map(|x| op(re.is_match(x))),
+    Ok(UInt8Column::from_iterator(
+        viewer.iter().map(|x| u8::from(op(re.is_match(x)))),
     ))
 }
 

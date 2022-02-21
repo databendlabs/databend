@@ -193,6 +193,7 @@ impl DataValue {
     pub fn as_bool(&self) -> Result<bool> {
         match self {
             DataValue::Boolean(v) => Ok(*v),
+            DataValue::UInt64(v) => Ok(*v == 1),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unexpected type:{:?} to get boolean",
                 other.value_type()

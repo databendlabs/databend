@@ -388,9 +388,9 @@ pub fn try_create_aggregate_window_funnel_function(
     assert_variadic_arguments(display_name, arguments.len(), (1, 32))?;
 
     for (idx, arg) in arguments[1..].iter().enumerate() {
-        if arg.data_type().data_type_id() != TypeID::Boolean {
+        if arg.data_type().data_type_id() != TypeID::UInt8 {
             return Err(ErrorCode::BadDataValueType(format!(
-                "Illegal type of the argument {:?} in AggregateWindowFunnelFunction, must be boolean, got: {:?}",
+                "Illegal type of the argument {:?} in AggregateWindowFunnelFunction, must be u8, got: {:?}",
                  idx + 1, arg.data_type()
             )));
         }

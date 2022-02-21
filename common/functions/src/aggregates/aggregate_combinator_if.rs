@@ -55,10 +55,10 @@ impl AggregateIfCombinator {
         }
 
         match arguments[argument_len - 1].data_type().data_type_id() {
-            TypeID::Boolean => {}
+            TypeID::UInt8 => {}
             other => {
                 return Err(ErrorCode::BadArguments(format!(
-                    "The type of the last argument for {} must be boolean type, but got {:?}",
+                    "The type of the last argument for {} must be u8 type, but got {:?}",
                     name, other
                 )));
             }

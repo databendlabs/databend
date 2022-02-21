@@ -49,7 +49,6 @@ impl ComparisonLikeFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("not like")
-                .bool_function()
                 .num_arguments(2),
         )
     }
@@ -59,7 +58,6 @@ impl ComparisonLikeFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("like")
-                .bool_function()
                 .num_arguments(2),
         )
     }
@@ -87,7 +85,7 @@ impl Function for ComparisonLikeFunction {
                 self.name()
             )));
         }
-        Ok(BooleanType::arc())
+        Ok(UInt8Type::arc())
     }
 
     fn eval(
@@ -135,11 +133,11 @@ impl fmt::Display for ComparisonLikeFunction {
 
 /// QUOTE: (From arrow2::arrow::compute::like::a_like_binary)
 #[inline]
-pub fn a_like_binary<F>(lhs: &ColumnRef, rhs: &ColumnRef, op: F) -> Result<BooleanColumn>
+pub fn a_like_binary<F>(lhs: &ColumnRef, rhs: &ColumnRef, op: F) -> Result<UInt8Column>
 where F: Fn(bool) -> bool {
     let mut map = HashMap::new();
 
-    let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
+    let mut builder: ColumnBuilder<u8> = ColumnBuilder::with_capacity(lhs.len());
 
     let lhs = Vu8::try_create_viewer(lhs)?;
     let rhs = Vu8::try_create_viewer(rhs)?;
@@ -162,27 +160,33 @@ where F: Fn(bool) -> bool {
             map.get(rhs_value).unwrap()
         };
 
-        builder.append(op(pattern.is_match(lhs_value)));
+        builder.append(u8::from(op(pattern.is_match(lhs_value))));
     }
     Ok(builder.build_column())
 }
 
 /// QUOTE: (From arrow2::arrow::compute::like::a_like_binary_scalar)
 #[inline]
-pub fn a_like_binary_scalar<F>(lhs: &ColumnRef, rhs: &[u8], op: F) -> Result<BooleanColumn>
+pub fn a_like_binary_scalar<F>(lhs: &ColumnRef, rhs: &[u8], op: F) -> Result<UInt8Column>
 where F: Fn(bool) -> bool {
     let viewer = Vu8::try_create_viewer(lhs)?;
     let column = match check_pattern_type(rhs, false) {
-        PatternType::OrdinalStr => BooleanColumn::from_iterator(viewer.iter().map(|x| x == rhs)),
+        PatternType::OrdinalStr => {
+            UInt8Column::from_iterator(viewer.iter().map(|x| u8::from(x == rhs)))
+        }
         PatternType::EndOfPercent => {
             // fast path, can use starts_with
             let starts_with = &rhs[..rhs.len() - 1];
-            BooleanColumn::from_iterator(viewer.iter().map(|x| op(x.starts_with(starts_with))))
+            UInt8Column::from_iterator(
+                viewer
+                    .iter()
+                    .map(|x| u8::from(op(x.starts_with(starts_with)))),
+            )
         }
         PatternType::StartOfPercent => {
             // fast path, can use ends_with
             let ends_with = &rhs[1..];
-            BooleanColumn::from_iterator(viewer.iter().map(|x| op(x.ends_with(ends_with))))
+            UInt8Column::from_iterator(viewer.iter().map(|x| u8::from(op(x.ends_with(ends_with)))))
         }
         PatternType::PatternStr => {
             let pattern = simdutf8::basic::from_utf8(rhs).map_err(|e| {
@@ -195,7 +199,7 @@ where F: Fn(bool) -> bool {
             let re = BytesRegex::new(&re_pattern).map_err(|e| {
                 ErrorCode::BadArguments(format!("Unable to build regex from LIKE pattern: {}", e))
             })?;
-            BooleanColumn::from_iterator(viewer.iter().map(|x| op(re.is_match(x))))
+            UInt8Column::from_iterator(viewer.iter().map(|x| u8::from(op(re.is_match(x)))))
         }
     };
     Ok(column)
