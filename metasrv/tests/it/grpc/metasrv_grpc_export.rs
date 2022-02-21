@@ -71,11 +71,11 @@ async fn test_export() -> anyhow::Result<()> {
             r#"["state",4,"sledks::RaftStateKV","HardState",{"HardState":{"current_term":1,"voted_for":0}}]"#, //
             r#"["log",1,"sledks::Logs",0,{"log_id":{"term":0,"index":0},"payload":{"Membership":{"configs":[[0]],"all_nodes":[0]}}}]"#, //
             r#"["log",1,"sledks::Logs",1,{"log_id":{"term":1,"index":1},"payload":"Blank"}]"#, //
-            r#"["log",1,"sledks::Logs",2,{"log_id":{"term":1,"index":2},"payload":{"Normal":{"txid":null,"cmd":{"AddNode":{"node_id":0,"node":{"name":"","address":"127.0.0.1:29000"}}}}}}]"#, //
+            r#"["log",1,"sledks::Logs",2,{"log_id":{"term":1,"index":2},"payload":{"Normal":{"txid":null,"cmd":{"AddNode":{"node_id":0,"node":{"name":"","endpoint":{"addr":"localhost","port":29000}}}}}}}]"#, //
             r#"["log",1,"sledks::Logs",3,{"log_id":{"term":1,"index":3},"payload":{"Normal":{"txid":null,"cmd":{"UpsertKV":{"key":"foo","seq":"Any","value":{"Update":[102,111,111]},"value_meta":null}}}}}]"#, //
             r#"["log",1,"sledks::Logs",4,{"log_id":{"term":1,"index":4},"payload":{"Normal":{"txid":null,"cmd":{"UpsertKV":{"key":"bar","seq":"Any","value":{"Update":[98,97,114]},"value_meta":null}}}}}]"#, //
             r#"["log",1,"sledks::Logs",5,{"log_id":{"term":1,"index":5},"payload":{"Normal":{"txid":null,"cmd":{"UpsertKV":{"key":"wow","seq":"Any","value":{"Update":[119,111,119]},"value_meta":null}}}}}]"#, //
-            r#"["sm",2,"sledks::Nodes",0,{"name":"","address":"127.0.0.1:29000"}]"#, //
+            r#"["sm",2,"sledks::Nodes",0,{"name":"","endpoint":{"addr":"localhost","port":29000}}]"#, //
             r#"["sm",3,"sledks::StateMachineMeta","LastApplied",{"LogId":{"term":1,"index":5}}]"#, //
             r#"["sm",3,"sledks::StateMachineMeta","Initialized",{"Bool":true}]"#, //
             r#"["sm",3,"sledks::StateMachineMeta","LastMembership",{"Membership":{"log_id":{"term":0,"index":0},"membership":{"configs":[[0]],"all_nodes":[0]}}}]"#, //
@@ -90,9 +90,9 @@ async fn test_export() -> anyhow::Result<()> {
         let lines = lines
             .iter()
             .map(|x| {
-                Regex::new(r"127.0.0.1:29\d\d\d")
+                Regex::new(r"29\d\d\d")
                     .unwrap()
-                    .replace(x, "127.0.0.1:29000")
+                    .replace(x, "29000")
                     .to_string()
             })
             .collect::<Vec<_>>();

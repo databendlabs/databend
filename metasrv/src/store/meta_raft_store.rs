@@ -36,6 +36,7 @@ use common_meta_sled_store::openraft::ErrorVerb;
 use common_meta_sled_store::openraft::StateMachineChanges;
 use common_meta_types::error_context::WithContext;
 use common_meta_types::AppliedState;
+use common_meta_types::Endpoint;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaResult;
@@ -536,14 +537,14 @@ impl MetaRaftStore {
         }
     }
 
-    pub async fn get_node_addr(&self, node_id: &NodeId) -> MetaResult<String> {
-        let addr = self
+    pub async fn get_node_endpoint(&self, node_id: &NodeId) -> MetaResult<Endpoint> {
+        let endpoint = self
             .get_node(node_id)
             .await?
-            .map(|n| n.address)
+            .map(|n| n.endpoint)
             .ok_or_else(|| MetaNetworkError::GetNodeAddrError(format!("node id: {}", node_id)))?;
 
-        Ok(addr)
+        Ok(endpoint)
     }
 
     /// A non-voter is a node stored in raft store, but is not configured as a voter in the raft group.
