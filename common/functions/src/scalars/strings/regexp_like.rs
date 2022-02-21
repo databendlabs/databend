@@ -17,8 +17,8 @@ use std::fmt;
 use std::sync::Arc;
 
 use bstr::ByteSlice;
-use common_datavalues2::prelude::*;
-use common_datavalues2::TypeID;
+use common_datavalues::prelude::*;
+use common_datavalues::TypeID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::izip;
@@ -26,8 +26,8 @@ use regex::bytes::Regex as BytesRegex;
 use regex::bytes::RegexBuilder as BytesRegexBuilder;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
 pub struct RegexpLikeFunction {
@@ -35,14 +35,14 @@ pub struct RegexpLikeFunction {
 }
 
 impl RegexpLikeFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(2, 3),
@@ -50,7 +50,7 @@ impl RegexpLikeFunction {
     }
 }
 
-impl Function2 for RegexpLikeFunction {
+impl Function for RegexpLikeFunction {
     fn name(&self) -> &str {
         &self.display_name
     }
@@ -170,6 +170,10 @@ fn build_regexp_from_pattern(pat: &[u8], mt: Option<&[u8]>) -> Result<BytesRegex
             'i' => Ok(builder.case_insensitive(true)),
             'm' => Ok(builder.multi_line(true)),
             'n' => Ok(builder.dot_matches_new_line(true)),
+            // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
+            // Notes: https://docs.rs/regex/1.5.4/regex/bytes/struct.RegexBuilder.html
+            // Notes: https://github.com/rust-lang/regex/issues/244
+            // It seems that the regexp crate doesn't support the 'u' match type.
             'u' => Err(ErrorCode::BadArguments(format!(
                 "Unsupported arguments to REGEXP_LIKE match type: {}",
                 c,

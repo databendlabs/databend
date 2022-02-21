@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::RegexpLikeFunction;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions2;
-use crate::scalars::scalar_function2_test::ScalarFunction2Test;
+use crate::scalars::scalar_function2_test::test_scalar_functions;
+use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_regexp_like_function() -> Result<()> {
     let tests = vec![
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "regexp-like-two-column-passed",
             columns: vec![
                 Series::from_data(vec!["abc", "abd", "Abe", "new*\n*line", "fo\nfo", ""]),
@@ -31,7 +31,7 @@ fn test_regexp_like_function() -> Result<()> {
             expect: Series::from_data(vec![1i8, 1, 1, 0, 0, 1]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "regexp-like-three-column-passed",
             columns: vec![
                 Series::from_data(vec!["abc", "abd", "Abe", "new*\n*line", "fo\nfo", ""]),
@@ -41,7 +41,7 @@ fn test_regexp_like_function() -> Result<()> {
             expect: Series::from_data(vec![1i8, 0, 1, 1, 1, 1]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "regexp-like-type-error",
             columns: vec![
                 Series::from_data(vec!["abc", "abd"]),
@@ -50,7 +50,7 @@ fn test_regexp_like_function() -> Result<()> {
             expect: Series::from_data(vec![1i8, 0]),
             error: "Expected string arg, but got [String, Int32]",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "regexp-like-match-type-error",
             columns: vec![
                 Series::from_data(vec!["abc"]),
@@ -60,7 +60,7 @@ fn test_regexp_like_function() -> Result<()> {
             expect: Series::from_data(vec![1i8]),
             error: "Incorrect arguments to REGEXP_LIKE match type: x",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "regexp-like-match-type-error2",
             columns: vec![
                 Series::from_data(vec!["abc"]),
@@ -70,7 +70,7 @@ fn test_regexp_like_function() -> Result<()> {
             expect: Series::from_data(vec![1i8]),
             error: "Unsupported arguments to REGEXP_LIKE match type: u",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "regexp-like-nullable-passed",
             columns: vec![
                 Series::from_data(vec![Some("abc"), Some("abc"), None, Some("abc")]),
@@ -82,5 +82,5 @@ fn test_regexp_like_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions2(RegexpLikeFunction::try_create("regexp_like")?, &tests)
+    test_scalar_functions(RegexpLikeFunction::try_create("regexp_like")?, &tests)
 }
