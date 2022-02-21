@@ -56,10 +56,10 @@ impl CopyInterpreter {
                 let key_id = &s3.credentials_aws_key_id;
                 let secret_key = &s3.credentials_aws_secret_key;
                 let credential = Credential::hmac(key_id, secret_key);
-                let endpoint = &s3.endpoint;
                 let bucket = &s3.bucket;
                 let path = &s3.path;
-                let location = format!("{}/{}/{}", endpoint, bucket, path);
+                let endpoint = format!("https://{:}.s3.amazonaws.com", bucket);
+                let location = format!("{}{}", endpoint, path);
 
                 tracing::info!("Get the s3 dal {:?}", location);
 
@@ -67,7 +67,7 @@ impl CopyInterpreter {
                 Ok((
                     opendal::Operator::new(
                         builder
-                            .endpoint(endpoint)
+                            .endpoint(&endpoint)
                             .region("us-east-2")
                             .bucket(bucket)
                             .credential(credential)
@@ -89,6 +89,7 @@ impl CopyInterpreter {
         let read_buffer_size = self.ctx.get_settings().get_storage_read_buffer_size()?;
 
         let (dal_operator, location) = self.get_dal_operator(stage_info).await?;
+
         let object = dal_operator.stat(&location).run().await.map_err(|e| {
             ErrorCode::DalStatError(format!("dal stat {:} error:{:?}", location, e))
         })?;

@@ -184,12 +184,9 @@ impl DfCopy {
                         .unwrap_or(&"".to_string())
                         .clone();
 
-                    let endpoint = "https://s3.amazonaws.com".to_string();
-
                     Ok(StageStorage::S3(StageS3Storage {
                         bucket,
                         path,
-                        endpoint,
                         credentials_aws_key_id,
                         credentials_aws_secret_key,
                         encryption_master_key,

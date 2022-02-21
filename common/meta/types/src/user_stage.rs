@@ -113,7 +113,6 @@ pub struct StageS3Storage {
     pub bucket: String,
     // `path/to/object` in `s3://example-bucket/path/to/object`
     pub path: String,
-    pub endpoint: String,
     pub credentials_aws_key_id: String,
     pub credentials_aws_secret_key: String,
     pub encryption_master_key: String,
