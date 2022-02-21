@@ -203,8 +203,8 @@ async fn test_source_parquet() -> Result<()> {
     let col_b = Series::from_data(vec!["1", "1", "2", "1", "2", "3"]);
     let sample_block = DataBlock::create(schema.clone(), vec![col_a, col_b]);
 
-    use common_arrow::arrow::record_batch::RecordBatch;
-    let batch = RecordBatch::try_from(sample_block)?;
+    use common_arrow::arrow::chunk::Chunk;
+    let batch = Chunk::try_from(sample_block)?;
     use common_arrow::parquet::encoding::Encoding;
     let encodings = std::iter::repeat(Encoding::Plain)
         .take(arrow_schema.fields.len())

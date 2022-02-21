@@ -94,7 +94,7 @@ where R: AsyncRead + AsyncSeek + Unpin + Send
             return Ok(None);
         }
 
-        let fields = self.arrow_table_schema.fields();
+        let fields = &self.arrow_table_schema.fields;
         let row_grp = &metadata.row_groups[self.current_row_group];
         let cols = self
             .projection
@@ -114,7 +114,7 @@ where R: AsyncRead + AsyncSeek + Unpin + Send
                 .await?;
             let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
 
-            let column = match fields[idx].nullable {
+            let column = match fields[idx].is_nullable {
                 false => array.into_column(),
                 true => array.into_nullable_column(),
             };

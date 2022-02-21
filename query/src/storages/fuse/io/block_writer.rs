@@ -13,11 +13,11 @@
 //  limitations under the License.
 //
 
+use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::io::parquet::write::*;
-use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::parquet::encoding::Encoding;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -36,9 +36,9 @@ pub async fn write_block(
         compression: Compression::Lz4, // let's begin with lz4
         version: Version::V2,
     };
-    let batch = RecordBatch::try_from(block)?;
+    let batch = Chunk::try_from(block)?;
     let encodings: Vec<_> = arrow_schema
-        .fields()
+        .fields
         .iter()
         .map(|f| col_encoding(&f.data_type))
         .collect();

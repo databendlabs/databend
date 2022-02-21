@@ -19,6 +19,7 @@ mod data_block_debug;
 mod kernels;
 mod memory;
 
+pub use data_block::box_chunk_to_arc_chunk;
 pub use data_block::DataBlock;
 pub use data_block_debug::*;
 pub use kernels::*;

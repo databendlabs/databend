@@ -161,6 +161,7 @@ impl IntoColumn for &ArrayRef {
     }
 }
 
+//impl<A: AsRef<dyn Array>> IntoColumn for A {
 impl IntoColumn for ArrayRef {
     fn into_column(self) -> ColumnRef {
         use TypeID::*;

@@ -96,7 +96,7 @@ impl BlockReader {
             .map(|idx| (row_group.column(idx).clone(), idx));
 
         let fields = self.table_schema.fields();
-        let arrow_fields = self.arrow_table_schema.fields();
+        let arrow_fields = &self.arrow_table_schema.fields;
         let stream_len = self.file_len;
         let read_buffer_size = self.read_buffer_size;
 
