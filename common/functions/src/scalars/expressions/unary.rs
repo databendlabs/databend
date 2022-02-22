@@ -14,19 +14,21 @@
 
 use std::marker::PhantomData;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
+use super::EvalContext;
+
 pub trait ScalarUnaryFunction<L: Scalar, O: Scalar> {
-    fn eval(&self, l: L::RefType<'_>) -> O;
+    fn eval(&self, l: L::RefType<'_>, _ctx: &mut EvalContext) -> O;
 }
 
 /// Blanket implementation for all binary expression functions
 impl<L: Scalar, O: Scalar, F> ScalarUnaryFunction<L, O> for F
-where F: Fn(L::RefType<'_>) -> O
+where F: Fn(L::RefType<'_>, &mut EvalContext) -> O
 {
-    fn eval(&self, i1: L::RefType<'_>) -> O {
-        self(i1)
+    fn eval(&self, i1: L::RefType<'_>, ctx: &mut EvalContext) -> O {
+        self(i1, ctx)
     }
 }
 
@@ -49,9 +51,18 @@ where F: ScalarUnaryFunction<L, O>
     }
 
     /// Evaluate the expression with the given array.
-    pub fn eval(&self, l: &'a ColumnRef) -> Result<<O as Scalar>::ColumnType> {
+    pub fn eval(
+        &self,
+        l: &'a ColumnRef,
+        ctx: &mut EvalContext,
+    ) -> Result<<O as Scalar>::ColumnType> {
         let left = Series::check_get_scalar::<L>(l)?;
-        let it = left.scalar_iter().map(|a| (self.f).eval(a));
-        Ok(<O as Scalar>::ColumnType::from_owned_iterator(it))
+        let it = left.scalar_iter().map(|a| (self.f).eval(a, ctx));
+        let result = <O as Scalar>::ColumnType::from_owned_iterator(it);
+
+        if let Some(error) = ctx.error.take() {
+            return Err(error);
+        }
+        Ok(result)
     }
 }

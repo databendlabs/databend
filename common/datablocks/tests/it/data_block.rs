@@ -14,7 +14,7 @@
 
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 

@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::scalars::function2_factory::Function2Factory;
+use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::TupleFunction;
 
 #[derive(Clone)]
 pub struct TupleClassFunction;
 
 impl TupleClassFunction {
-    pub fn register(factory: &mut Function2Factory) {
+    pub fn register(factory: &mut FunctionFactory) {
         factory.register("tuple", TupleFunction::desc());
     }
 }

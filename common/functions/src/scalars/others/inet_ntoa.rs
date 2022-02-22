@@ -17,7 +17,7 @@ use std::net::Ipv4Addr;
 use std::str;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -25,8 +25,8 @@ use crate::scalars::cast_with_type;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::CastOptions;
 use crate::scalars::ExceptionMode;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::ParsingMode;
 
 #[doc(alias = "TryNumToIPv4StringFunction")]
@@ -41,19 +41,19 @@ pub struct InetNtoaFunctionImpl<const SUPPRESS_CAST_ERROR: bool> {
 }
 
 impl<const SUPPRESS_CAST_ERROR: bool> InetNtoaFunctionImpl<SUPPRESS_CAST_ERROR> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(InetNtoaFunctionImpl::<SUPPRESS_CAST_ERROR> {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
-impl<const SUPPRESS_CAST_ERROR: bool> Function2 for InetNtoaFunctionImpl<SUPPRESS_CAST_ERROR> {
+impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS_CAST_ERROR> {
     fn name(&self) -> &str {
         &*self.display_name
     }

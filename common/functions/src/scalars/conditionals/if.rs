@@ -14,16 +14,16 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
-use common_datavalues2::remove_nullable;
-use common_datavalues2::type_coercion::aggregate_types;
-use common_datavalues2::with_match_scalar_type;
+use common_datavalues::prelude::*;
+use common_datavalues::remove_nullable;
+use common_datavalues::type_coercion::aggregate_types;
+use common_datavalues::with_match_scalar_type;
 use common_exception::Result;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone, Debug)]
 pub struct IfFunction {
@@ -31,16 +31,16 @@ pub struct IfFunction {
 }
 
 impl IfFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(IfFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
+    pub fn desc() -> FunctionDescription {
         let mut features = FunctionFeatures::default().num_arguments(3);
         features = features.deterministic();
-        Function2Description::creator(Box::new(Self::try_create)).features(features)
+        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 
     // handle cond is const or nullable or null column
@@ -247,7 +247,7 @@ impl IfFunction {
     }
 }
 
-impl Function2 for IfFunction {
+impl Function for IfFunction {
     fn name(&self) -> &str {
         "IfFunction"
     }
@@ -276,7 +276,8 @@ impl Function2 for IfFunction {
         }
 
         // 3. handle nullable column
-        if columns[1].column().is_nullable() || columns[2].column().is_nullable() {
+        let whether_nullable = |col: &ColumnRef| col.is_nullable() || col.data_type().is_null();
+        if whether_nullable(columns[1].column()) || whether_nullable(columns[2].column()) {
             return self.eval_nullable(cond_col, &columns[1..], input_rows);
         }
 

@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::Function2Factory;
+use common_functions::scalars::FunctionFactory;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
@@ -47,7 +47,7 @@ impl ConstantFoldingImpl {
 
     fn rewrite_function<F>(op: &str, args: Expressions, name: String, f: F) -> Result<Expression>
     where F: Fn(&str, Expressions) -> Expression {
-        let factory = Function2Factory::instance();
+        let factory = FunctionFactory::instance();
         let function_features = factory.get_features(op)?;
 
         if function_features.is_deterministic && Self::constants_arguments(&args) {

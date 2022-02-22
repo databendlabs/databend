@@ -15,16 +15,17 @@
 use std::fmt;
 use std::str;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_type_id;
 use common_exception::Result;
 use num::cast::AsPrimitive;
 
-use crate::scalars::function2_factory::Function2Description;
 use crate::scalars::function_common::assert_numeric;
+use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Monotonicity2;
+use crate::scalars::EvalContext;
+use crate::scalars::Function;
+use crate::scalars::Monotonicity;
 use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
@@ -33,14 +34,14 @@ pub struct FloorFunction {
 }
 
 impl FloorFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(FloorFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()
@@ -49,12 +50,12 @@ impl FloorFunction {
     }
 }
 
-fn floor<S>(value: S) -> f64
+fn floor<S>(value: S, _ctx: &mut EvalContext) -> f64
 where S: AsPrimitive<f64> {
     value.as_().floor()
 }
 
-impl Function2 for FloorFunction {
+impl Function for FloorFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
@@ -65,19 +66,20 @@ impl Function2 for FloorFunction {
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
              let unary = ScalarUnaryExpression::<$S, f64, _>::new(floor::<$S>);
-             let col = unary.eval(columns[0].column())?;
+             let col = unary.eval(columns[0].column(), &mut ctx)?;
              Ok(col.arc())
         },{
             unreachable!()
         })
     }
 
-    fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         // Floor function should be monotonically positive. For val_1 > val2, we should have floor(val_1) >= floor(val_2), and vise versa.
         // So we return the monotonicity same as the input.
-        Ok(Monotonicity2::clone_without_range(&args[0]))
+        Ok(Monotonicity::clone_without_range(&args[0]))
     }
 }
 

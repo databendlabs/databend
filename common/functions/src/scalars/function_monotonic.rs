@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::DataColumnWithField;
-use common_datavalues::DataType;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+
+use super::cast_column_field;
 
 #[derive(Clone)]
 pub struct Monotonicity {
@@ -30,16 +31,16 @@ pub struct Monotonicity {
     // when is_monotonic is false, just ignore the is_positive information.
     pub is_positive: bool,
 
-    // Is the monotonicity from constant value
+    // Is the Monotonicity from constant value
     pub is_constant: bool,
 
-    pub left: Option<DataColumnWithField>,
+    pub left: Option<ColumnWithField>,
 
-    pub right: Option<DataColumnWithField>,
+    pub right: Option<ColumnWithField>,
 }
 
 impl Monotonicity {
-    /// Create a default monotonicity for non-monotonic and non-constant expression/function.
+    /// Create a default Monotonicity for non-monotonic and non-constant expression/function.
     /// The fields 'is_monotonic' and 'is_constant' are both false.
     /// The fields 'left' and 'right' boundaries are both None.
     pub fn default() -> Self {
@@ -52,7 +53,7 @@ impl Monotonicity {
         }
     }
 
-    /// Create a monotonicity, with input parameter field. The left and right field are None.
+    /// Create a Monotonicity, with input parameter field. The left and right field are None.
     pub fn create(is_monotonic: bool, is_positive: bool, is_constant: bool) -> Self {
         Monotonicity {
             is_monotonic,
@@ -63,7 +64,7 @@ impl Monotonicity {
         }
     }
 
-    /// Create a monotonicity for constant expression, with 'is_constant' is true.
+    /// Create a Monotonicity for constant expression, with 'is_constant' is true.
     pub fn create_constant() -> Self {
         Monotonicity {
             is_monotonic: true,
@@ -74,7 +75,7 @@ impl Monotonicity {
         }
     }
 
-    /// Clone from a monotonicity, but with left/right field None.
+    /// Clone from a Monotonicity, but with left/right field None.
     pub fn clone_without_range(mono: &Monotonicity) -> Self {
         Monotonicity {
             is_monotonic: mono.is_monotonic,
@@ -91,7 +92,7 @@ impl Monotonicity {
     /// 0 means the range interval [left, right] covering 0.
     pub fn compare_with_zero(&self) -> Result<i8> {
         if !self.is_monotonic {
-            return Err(ErrorCode::UnknownException("Request monotonicity function"));
+            return Err(ErrorCode::UnknownException("Request Monotonicity function"));
         }
 
         let (min, max) = if self.is_positive {
@@ -101,11 +102,9 @@ impl Monotonicity {
         };
 
         if let (Some(max), Some(min)) = (max, min) {
-            let min_val = min
-                .column()
-                .cast_with_type(&DataType::Float64)?
-                .try_get(0)?
-                .as_f64()?;
+            let col = cast_column_field(&min, &f64::to_data_type())?;
+            let min_val = col.get_f64(0)?;
+
             if min_val >= 0.0 {
                 return Ok(1);
             }
@@ -114,11 +113,9 @@ impl Monotonicity {
                 return Ok(-1);
             }
 
-            let max_val = max
-                .column()
-                .cast_with_type(&DataType::Float64)?
-                .try_get(0)?
-                .as_f64()?;
+            let col = cast_column_field(&max, &f64::to_data_type())?;
+            let max_val = col.get_f64(0)?;
+
             if max_val <= 0.0 {
                 return Ok(-1);
             }

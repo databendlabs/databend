@@ -14,9 +14,9 @@
 
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
-use common_datavalues2::ColumnRef;
-use common_datavalues2::DataField;
-use common_datavalues2::PrimitiveType;
+use common_datavalues::ColumnRef;
+use common_datavalues::DataField;
+use common_datavalues::PrimitiveType;
 use common_exception::Result;
 
 use crate::pipelines::new::processors::AggregatorParams;

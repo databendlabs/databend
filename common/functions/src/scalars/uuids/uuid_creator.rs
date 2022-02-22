@@ -15,17 +15,17 @@
 use std::fmt;
 use std::marker::PhantomData;
 
-use common_datavalues2::Column;
-use common_datavalues2::ConstColumn;
-use common_datavalues2::NewColumn;
-use common_datavalues2::StringColumn;
-use common_datavalues2::StringType;
+use common_datavalues::Column;
+use common_datavalues::ConstColumn;
+use common_datavalues::NewColumn;
+use common_datavalues::StringColumn;
+use common_datavalues::StringType;
 use common_exception::Result;
 use uuid::Uuid;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 pub type UUIDv4Function = UUIDCreatorFunction<UUIDv4>;
 pub type UUIDZeroFunction = UUIDCreatorFunction<UUIDZero>;
@@ -39,15 +39,15 @@ pub struct UUIDCreatorFunction<T> {
 impl<T> UUIDCreatorFunction<T>
 where T: UUIDCreator + Clone + Sync + Send + 'static
 {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(UUIDCreatorFunction::<T> {
             display_name: display_name.to_string(),
             t: PhantomData,
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default())
     }
 }
@@ -80,7 +80,7 @@ impl UUIDCreator for UUIDZero {
     }
 }
 
-impl<T> Function2 for UUIDCreatorFunction<T>
+impl<T> Function for UUIDCreatorFunction<T>
 where T: UUIDCreator + Clone + Sync + Send + 'static
 {
     fn name(&self) -> &str {
@@ -89,16 +89,16 @@ where T: UUIDCreator + Clone + Sync + Send + 'static
 
     fn return_type(
         &self,
-        _args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        _args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         Ok(StringType::arc())
     }
 
     fn eval(
         &self,
-        _columns: &common_datavalues2::ColumnsWithField,
+        _columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         let uuid = T::create();
         let col = StringColumn::new_from_slice(vec![uuid.to_string()]);
 

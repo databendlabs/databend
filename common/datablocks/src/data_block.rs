@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow;
 use common_arrow::arrow::record_batch::RecordBatch;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 

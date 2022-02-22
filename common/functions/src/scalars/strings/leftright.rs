@@ -15,8 +15,8 @@
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_type_id;
 use common_exception::Result;
 use num_traits::AsPrimitive;
 
@@ -24,8 +24,8 @@ use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::EvalContext;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::ScalarBinaryExpression;
 
 pub type LeftFunction = LeftRightFunction<true>;
@@ -57,19 +57,19 @@ pub struct LeftRightFunction<const IS_LEFT: bool> {
 }
 
 impl<const IS_LEFT: bool> LeftRightFunction<IS_LEFT> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }
 
-impl<const IS_LEFT: bool> Function2 for LeftRightFunction<IS_LEFT> {
+impl<const IS_LEFT: bool> Function for LeftRightFunction<IS_LEFT> {
     fn name(&self) -> &str {
         &*self.display_name
     }

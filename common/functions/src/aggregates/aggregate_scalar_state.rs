@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 
 use bytes::BytesMut;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_io::prelude::*;
 use serde::de::DeserializeOwned;

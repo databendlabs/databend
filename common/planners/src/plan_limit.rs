@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues2::DataSchemaRef;
+use common_datavalues::DataSchemaRef;
 
 use crate::PlanNode;
 

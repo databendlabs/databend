@@ -15,15 +15,16 @@
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_type_id;
 use common_exception::Result;
 use num_traits::AsPrimitive;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::EvalContext;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::ScalarUnaryExpression;
 
 // Returns a string consisting of N space characters.
@@ -33,19 +34,19 @@ pub struct SpaceFunction {
 }
 
 impl SpaceFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
-impl Function2 for SpaceFunction {
+impl Function for SpaceFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
@@ -56,9 +57,10 @@ impl Function2 for SpaceFunction {
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
-            let unary = ScalarUnaryExpression::<$S, Vu8, _>::new(|n: $S| -> Vu8 { vec![32u8; n.as_()] });
-            let col = unary.eval(columns[0].column())?;
+            let unary = ScalarUnaryExpression::<$S, Vu8, _>::new(|n: $S, _ctx: &mut EvalContext| -> Vu8 { vec![32u8; n.as_()] });
+            let col = unary.eval(columns[0].column(), &mut ctx)?;
             Ok(Arc::new(col))
         },{
             unreachable!()

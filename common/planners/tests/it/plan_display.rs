@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableMeta;
 use common_planners::*;

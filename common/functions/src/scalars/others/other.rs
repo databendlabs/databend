@@ -18,13 +18,13 @@ use super::inet_ntoa::InetNtoaFunction;
 use super::inet_ntoa::TryInetNtoaFunction;
 use super::running_difference_function::RunningDifferenceFunction;
 use super::IgnoreFunction;
-use crate::scalars::Function2Factory;
+use crate::scalars::FunctionFactory;
 
 #[derive(Clone)]
 pub struct OtherFunction {}
 
 impl OtherFunction {
-    pub fn register(factory: &mut Function2Factory) {
+    pub fn register(factory: &mut FunctionFactory) {
         factory.register("runningDifference", RunningDifferenceFunction::desc());
         factory.register("ignore", IgnoreFunction::desc());
 

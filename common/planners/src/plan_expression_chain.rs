@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::DataSchemaRef;
-use common_datavalues2::DataTypePtr;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataTypePtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
-use common_functions::scalars::Function2Factory;
+use common_functions::scalars::FunctionFactory;
 
 use crate::ActionAlias;
 use crate::ActionConstant;
@@ -126,7 +126,7 @@ impl ExpressionChain {
             } => {
                 let arg_types = vec![nested_expr.to_data_type(&self.schema)?];
                 let arg_types2: Vec<&DataTypePtr> = arg_types.iter().collect();
-                let func = Function2Factory::instance().get(op, &arg_types2)?;
+                let func = FunctionFactory::instance().get(op, &arg_types2)?;
                 let return_type = func.return_type(&arg_types2)?;
 
                 let function = ActionFunction {
@@ -148,7 +148,7 @@ impl ExpressionChain {
                 ];
 
                 let arg_types2: Vec<&DataTypePtr> = arg_types.iter().collect();
-                let func = Function2Factory::instance().get(op, &arg_types2)?;
+                let func = FunctionFactory::instance().get(op, &arg_types2)?;
                 let return_type = func.return_type(&arg_types2)?;
 
                 let function = ActionFunction {
@@ -171,7 +171,7 @@ impl ExpressionChain {
 
                 let arg_types2: Vec<&DataTypePtr> = arg_types.iter().collect();
 
-                let func = Function2Factory::instance().get(op, &arg_types2)?;
+                let func = FunctionFactory::instance().get(op, &arg_types2)?;
                 let return_type = func.return_type(&arg_types2)?;
 
                 let function = ActionFunction {
