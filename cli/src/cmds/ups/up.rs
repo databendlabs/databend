@@ -17,10 +17,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use clap::App;
-use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
+use clap::Command as App;
 use serde_json::json;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
@@ -490,7 +489,7 @@ impl Command for UpCommand {
 
     fn clap(&self) -> App<'static> {
         App::new("up")
-            .setting(AppSettings::DisableVersionFlag)
+            .disable_version_flag(true)
             .about("Set up a cluster and load prepared dataset for demo")
             .arg(
                 Arg::new("profile")
