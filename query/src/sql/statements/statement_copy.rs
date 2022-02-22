@@ -149,7 +149,7 @@ impl DfCopy {
         // File format type.
         let format = self
             .file_format_options
-            .get("TYPE")
+            .get("type")
             .ok_or_else(|| ErrorCode::SyntaxException("File format type must be specified"))?;
         let file_format = StageFileFormatType::from_str(format)
             .map_err(|e| ErrorCode::SyntaxException(format!("File format type error:{:?}", e)))?;
@@ -157,21 +157,21 @@ impl DfCopy {
         // Skip header.
         let skip_header = self
             .file_format_options
-            .get("SKIP_HEADER")
+            .get("skip_header")
             .unwrap_or(&"0".to_string())
             .parse::<i32>()?;
 
         // Field delimiter.
         let field_delimiter = self
             .file_format_options
-            .get("FIELD_DELIMITER")
+            .get("field_delimiter")
             .unwrap_or(&"".to_string())
             .clone();
 
         // Record delimiter.
         let record_delimiter = self
             .file_format_options
-            .get("RECORD_DELIMITER")
+            .get("record_delimiter")
             .unwrap_or(&"".to_string())
             .clone();
 
@@ -202,17 +202,17 @@ impl DfCopy {
                 "s3" => {
                     let credentials_aws_key_id = self
                         .credential_options
-                        .get("AWS_KEY_ID")
+                        .get("aws_key_id")
                         .unwrap_or(&"".to_string())
                         .clone();
                     let credentials_aws_secret_key = self
                         .credential_options
-                        .get("AWS_SECRET_KEY")
+                        .get("aws_secret_key")
                         .unwrap_or(&"".to_string())
                         .clone();
                     let encryption_master_key = self
                         .encryption_options
-                        .get("MASTER_KEY")
+                        .get("master_key")
                         .unwrap_or(&"".to_string())
                         .clone();
 
