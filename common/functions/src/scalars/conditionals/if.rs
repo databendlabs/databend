@@ -276,7 +276,8 @@ impl Function for IfFunction {
         }
 
         // 3. handle nullable column
-        if columns[1].column().is_nullable() || columns[2].column().is_nullable() {
+        let whether_nullable = |col: &ColumnRef| col.is_nullable() || col.data_type().is_null();
+        if whether_nullable(columns[1].column()) || whether_nullable(columns[2].column()) {
             return self.eval_nullable(cond_col, &columns[1..], input_rows);
         }
 

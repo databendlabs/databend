@@ -12,23 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::fmt;
 
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_meta_types::GrantObject;
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserPrivilegeSet;
+use serde::Deserialize;
+use serde::Serialize;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct RevokePrivilegePlan {
-    pub principal: PrincipalIdentity,
-    pub priv_types: UserPrivilegeSet,
-    pub on: GrantObject,
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
+pub struct Endpoint {
+    pub addr: String,
+    pub port: u32,
 }
 
-impl RevokePrivilegePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+impl fmt::Display for Endpoint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.addr, self.port)
+    }
+}
+
+impl From<Endpoint> for String {
+    fn from(endpoint: Endpoint) -> Self {
+        format!("{}:{}", endpoint.addr, endpoint.port)
     }
 }
