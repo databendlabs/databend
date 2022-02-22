@@ -23,6 +23,8 @@ use common_meta_types::SeqNum;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
 use openraft::raft::Entry;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::state::RaftStateKey;
 use crate::state::RaftStateValue;
@@ -122,7 +124,6 @@ impl SledKeySpace for DatabaseLookup {
 }
 
 pub struct Tables {}
-
 impl SledKeySpace for Tables {
     const PREFIX: u8 = 9;
     const NAME: &'static str = "tables";
@@ -139,10 +140,62 @@ impl SledKeySpace for ClientLastResps {
 }
 
 pub struct TableLookup {}
-
 impl SledKeySpace for TableLookup {
     const PREFIX: u8 = 11;
     const NAME: &'static str = "table-lookup";
     type K = TableLookupKey;
     type V = SeqV<TableLookupValue>;
+}
+
+/// Enum of key-value pair types of all key spaces.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum KeySpaceKV {
+    Logs {
+        key: <Logs as SledKeySpace>::K,
+        value: <Logs as SledKeySpace>::V,
+    },
+    Nodes {
+        key: <Nodes as SledKeySpace>::K,
+        value: <Nodes as SledKeySpace>::V,
+    },
+    StateMachineMeta {
+        key: <StateMachineMeta as SledKeySpace>::K,
+        value: <StateMachineMeta as SledKeySpace>::V,
+    },
+    RaftStateKV {
+        key: <RaftStateKV as SledKeySpace>::K,
+        value: <RaftStateKV as SledKeySpace>::V,
+    },
+    GenericKV {
+        key: <GenericKV as SledKeySpace>::K,
+        value: <GenericKV as SledKeySpace>::V,
+    },
+    Sequences {
+        key: <Sequences as SledKeySpace>::K,
+        value: <Sequences as SledKeySpace>::V,
+    },
+    Databases {
+        key: <Databases as SledKeySpace>::K,
+        value: <Databases as SledKeySpace>::V,
+    },
+    Tables {
+        key: <Tables as SledKeySpace>::K,
+        value: <Tables as SledKeySpace>::V,
+    },
+    ClientLastResps {
+        key: <ClientLastResps as SledKeySpace>::K,
+        value: <ClientLastResps as SledKeySpace>::V,
+    },
+    TableLookup {
+        key: <TableLookup as SledKeySpace>::K,
+        value: <TableLookup as SledKeySpace>::V,
+    },
+    DatabaseLookup {
+        key: <DatabaseLookup as SledKeySpace>::K,
+        value: <DatabaseLookup as SledKeySpace>::V,
+    },
+    LogMeta {
+        key: <LogMeta as SledKeySpace>::K,
+        value: <LogMeta as SledKeySpace>::V,
+    },
 }

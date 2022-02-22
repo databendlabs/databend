@@ -16,10 +16,10 @@
 use std::convert::TryFrom;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::Series;
-use common_datavalues2::prelude::SeriesFrom;
-use common_datavalues2::DataSchemaRef;
-use common_datavalues2::DataValue;
+use common_datavalues::prelude::Series;
+use common_datavalues::prelude::SeriesFrom;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 
 use crate::storages::fuse::meta::SegmentInfo;

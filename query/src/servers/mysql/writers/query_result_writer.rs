@@ -14,14 +14,14 @@
 
 use chrono_tz::Tz;
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::TypeID;
-use common_datavalues2::remove_nullable;
-use common_datavalues2::DataField;
-use common_datavalues2::DataSchemaRef;
-use common_datavalues2::DataValue;
-use common_datavalues2::DateConverter;
-use common_datavalues2::DateTime32Type;
-use common_datavalues2::DateTime64Type;
+use common_datavalues::prelude::TypeID;
+use common_datavalues::remove_nullable;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataValue;
+use common_datavalues::DateConverter;
+use common_datavalues::DateTime32Type;
+use common_datavalues::DateTime64Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ABORT_QUERY;
@@ -142,19 +142,17 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     let tz: Tz = tz.parse().unwrap();
                                     row_writer.write_col(v.to_date_time(&tz).naive_local())?
                                 }
-                                (TypeID::DateTime64, DataValue::UInt64(v)) => {
+                                (TypeID::DateTime64, DataValue::Int64(v)) => {
                                     let data_type: &DateTime64Type =
                                         data_type.as_any().downcast_ref().unwrap();
                                     let tz = data_type.tz();
                                     let tz = tz.cloned().unwrap_or_else(|| "UTC".to_string());
                                     let tz: Tz = tz.parse().unwrap();
-                                    let fmt =
-                                        format!("%Y-%m-%d %H:%M:%S%.{}f", data_type.precision());
 
                                     row_writer.write_col(
                                         v.to_date_time64(data_type.precision(), &tz)
                                             .naive_local()
-                                            .format(fmt.as_str())
+                                            .format(data_type.format_string().as_str())
                                             .to_string(),
                                     )?
                                 }

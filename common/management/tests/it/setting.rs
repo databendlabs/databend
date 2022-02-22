@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_base::tokio;
-use common_datavalues2::DataValue;
+use common_datavalues::DataValue;
 use common_exception::Result;
 use common_management::*;
 use common_meta_api::KVApi;

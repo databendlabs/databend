@@ -14,7 +14,7 @@
 
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;

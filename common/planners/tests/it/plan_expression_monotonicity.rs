@@ -14,9 +14,9 @@
 
 use std::collections::HashMap;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::Monotonicity2;
+use common_functions::scalars::Monotonicity;
 use common_planners::*;
 
 struct Test {
@@ -25,7 +25,7 @@ struct Test {
     column: &'static str,
     left: Option<ColumnWithField>,
     right: Option<ColumnWithField>,
-    expect_mono: Monotonicity2,
+    expect_mono: Monotonicity,
 }
 
 fn create_f64(d: f64) -> Option<ColumnWithField> {
@@ -133,7 +133,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
             column: "x",
             left: None,
             right: None,
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: true,
                 is_constant: false,
@@ -147,7 +147,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
             column: "x",
             left: None,
             right: None,
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: false,
                 is_constant: false,
@@ -162,7 +162,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
             column: "x",
             left: None,
             right: None,
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: false,
                 is_positive: true,
                 is_constant: false,
@@ -179,7 +179,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
             column: "x",
             left: None,
             right: None,
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: false,
                 is_constant: false,
@@ -194,7 +194,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
             column: "x",
             left: None,
             right: None,
-            expect_mono: Monotonicity2::default(),
+            expect_mono: Monotonicity::default(),
         },
     ];
 
@@ -213,7 +213,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             column: "x",
             left: None,
             right: None,
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: false,
                 is_constant: false,
@@ -227,7 +227,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             column: "x",
             left: create_f64(5.0),
             right: create_f64(10.0),
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: true,
                 is_constant: false,
@@ -241,7 +241,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             column: "x",
             left: None,
             right: None,
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: true,
                 is_constant: false,
@@ -259,7 +259,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             column: "x",
             left: create_f64(10.0),
             right: create_f64(1000.0),
-            expect_mono: Monotonicity2::default(),
+            expect_mono: Monotonicity::default(),
         },
         Test {
             name: "f(x) = x * (x-12) where x in [12, 100]",
@@ -270,7 +270,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             column: "x",
             left: create_f64(12.0),
             right: create_f64(100.0),
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: true,
                 is_constant: false,
@@ -287,7 +287,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             column: "x",
             left: create_f64(1.0),
             right: create_f64(2.0),
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: true,
                 is_constant: false,
@@ -308,7 +308,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             column: "x",
             left: create_f64(0.0),
             right: create_f64(10.0),
-            expect_mono: Monotonicity2::default(),
+            expect_mono: Monotonicity::default(),
         },
         Test {
             name: "f(x) = -x/(2/(x-2)) where  x in [4-10]",
@@ -322,7 +322,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
             column: "x",
             left: create_f64(4.0),
             right: create_f64(10.0),
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: false,
                 is_constant: false,
@@ -348,7 +348,7 @@ fn test_abs_function() -> Result<()> {
             column: "x",
             left: None,
             right: None,
-            expect_mono: Monotonicity2::default(),
+            expect_mono: Monotonicity::default(),
         },
         Test {
             name: "f(x) = abs(x) where  0 <= x <= 10",
@@ -356,7 +356,7 @@ fn test_abs_function() -> Result<()> {
             column: "x",
             left: create_f64(0.0),
             right: create_f64(10.0),
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: true,
                 is_constant: false,
@@ -370,7 +370,7 @@ fn test_abs_function() -> Result<()> {
             column: "x",
             left: create_f64(-10.0),
             right: create_f64(-2.0),
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: false,
                 is_constant: false,
@@ -385,7 +385,7 @@ fn test_abs_function() -> Result<()> {
             column: "x",
             left: create_f64(-5.0),
             right: create_f64(5.0),
-            expect_mono: Monotonicity2::default(),
+            expect_mono: Monotonicity::default(),
         },
         Test {
             name: "f(x) = abs(x + 12) where -12 <= x <= 1000",
@@ -393,7 +393,7 @@ fn test_abs_function() -> Result<()> {
             column: "x",
             left: create_f64(-12.0),
             right: create_f64(1000.0),
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: true,
                 is_constant: false,
@@ -408,7 +408,7 @@ fn test_abs_function() -> Result<()> {
             column: "x",
             left: create_f64(-14.0),
             right: create_f64(20.0),
-            expect_mono: Monotonicity2::default(),
+            expect_mono: Monotonicity::default(),
         },
         Test {
             name: "f(x) = abs( (x - 7) + (x - 3) ) where 5 <= x <= 100",
@@ -419,7 +419,7 @@ fn test_abs_function() -> Result<()> {
             column: "x",
             left: create_f64(5.0),
             right: create_f64(100.0),
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: true,
                 is_constant: false,
@@ -436,7 +436,7 @@ fn test_abs_function() -> Result<()> {
             column: "x",
             left: create_f64(-100.0),
             right: create_f64(4.0),
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: false,
                 is_constant: false,
@@ -456,15 +456,15 @@ fn test_abs_function() -> Result<()> {
 fn test_dates_function() -> Result<()> {
     let test_suite = vec![
         Test {
-            name: "f(x) = toStartOfWeek(x+12)",
+            name: "f(x) = toStartOfWeek(z+12)",
             expr: Expression::create_scalar_function("toStartOfWeek", vec![add(
-                col("x"),
+                col("z"),
                 lit(12i32),
             )]),
-            column: "x",
+            column: "z",
             left: None,
             right: None,
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: true,
                 is_constant: false,
@@ -478,7 +478,7 @@ fn test_dates_function() -> Result<()> {
             column: "x",
             left: None,
             right: None,
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: true,
                 is_constant: false,
@@ -493,7 +493,7 @@ fn test_dates_function() -> Result<()> {
             column: "x",
             left: None,
             right: None,
-            expect_mono: Monotonicity2::default(),
+            expect_mono: Monotonicity::default(),
         },
         Test {
             name: "f(z) = toSecond(z)",
@@ -501,7 +501,7 @@ fn test_dates_function() -> Result<()> {
             column: "z",
             left: create_datetime(1638288000),
             right: create_datetime(1638288059),
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: true,
                 is_constant: false,
@@ -516,7 +516,7 @@ fn test_dates_function() -> Result<()> {
             column: "z",
             left: create_datetime(1606752119),
             right: create_datetime(1638288059),
-            expect_mono: Monotonicity2::default(),
+            expect_mono: Monotonicity::default(),
         },
         Test {
             name: "f(z) = toStartOfHour(z)",
@@ -524,7 +524,7 @@ fn test_dates_function() -> Result<()> {
             column: "z",
             left: None,
             right: None,
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: true,
                 is_constant: false,
@@ -550,7 +550,7 @@ fn test_single_point() -> Result<()> {
             column: "x",
             left: create_f64(1.0),
             right: create_f64(1.0),
-            expect_mono: Monotonicity2::default(),
+            expect_mono: Monotonicity::default(),
         },
         Test {
             name: "f(x) = x * (12 - x)",
@@ -561,7 +561,7 @@ fn test_single_point() -> Result<()> {
             column: "x",
             left: create_f64(1.0),
             right: create_f64(1.0),
-            expect_mono: Monotonicity2 {
+            expect_mono: Monotonicity {
                 is_monotonic: true,
                 is_positive: true,
                 is_constant: true,

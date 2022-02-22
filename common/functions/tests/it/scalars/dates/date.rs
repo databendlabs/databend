@@ -13,11 +13,12 @@
 // limitations under the License.
 
 use common_datavalues::prelude::*;
+use common_datavalues::ColumnWithField;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function_test::test_scalar_functions_with_type;
-use crate::scalars::scalar_function_test::ScalarFunctionTestWithType;
+use crate::scalars::scalar_function2_test::test_scalar_functions_with_type;
+use crate::scalars::scalar_function2_test::ScalarFunctionWithFieldTest;
 
 #[test]
 fn test_round_function() -> Result<()> {
@@ -26,14 +27,13 @@ fn test_round_function() -> Result<()> {
     for r in &[1, 60, 60 * 10, 60 * 15, 60 * 30, 60 * 60, 60 * 60 * 24] {
         tests.push((
             RoundFunction::try_create("toStartOfCustom", *r)?,
-            ScalarFunctionTestWithType {
+            ScalarFunctionWithFieldTest {
                 name: "test-timeSlot-now",
-                nullable: false,
-                columns: vec![DataColumnWithField::new(
-                    Series::new(vec![1630812366u32, 1630839682u32]).into(),
-                    DataField::new("dummy_1", DataType::DateTime32(None), false),
+                columns: vec![ColumnWithField::new(
+                    Series::from_data(vec![1630812366u32, 1630839682u32]),
+                    DataField::new("dummy_1", DateTime32Type::arc(None)),
                 )],
-                expect: Series::new(vec![1630812366u32 / r * r, 1630839682u32 / r * r]).into(),
+                expect: Series::from_data(vec![1630812366u32 / r * r, 1630839682u32 / r * r]),
                 error: "",
             },
         ));
@@ -48,14 +48,13 @@ fn test_round_function() -> Result<()> {
 
 #[test]
 fn test_to_start_of_function() -> Result<()> {
-    let test = vec![ScalarFunctionTestWithType {
+    let test = vec![ScalarFunctionWithFieldTest {
         name: "test-timeSlot-now",
-        nullable: false,
-        columns: vec![DataColumnWithField::new(
-            Series::new(vec![1631705259u32]).into(),
-            DataField::new("dummy_1", DataType::DateTime32(None), false),
+        columns: vec![ColumnWithField::new(
+            Series::from_data(vec![1631705259u32]),
+            DataField::new("dummy_1", DateTime32Type::arc(None)),
         )],
-        expect: Series::new(vec![18809u16]).into(),
+        expect: Series::from_data(vec![18809u16]),
         error: "",
     }];
 

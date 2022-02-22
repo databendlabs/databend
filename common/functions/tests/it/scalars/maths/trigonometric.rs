@@ -20,45 +20,40 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions;
+use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_trigonometric_sin_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionTest {
             name: "sin-u8-passed",
-            nullable: false,
-            columns: vec![Series::new(vec![0_u8, 1, 3]).into()],
-            expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
+            columns: vec![Series::from_data(vec![0_u8, 1, 3])],
+            expect: Series::from_data(vec![0f64, 0.8414709848078965, 0.1411200080598672]),
             error: "",
         },
         ScalarFunctionTest {
             name: "sin-u16-passed",
-            nullable: false,
-            columns: vec![Series::new(vec![0_u16, 1, 3]).into()],
-            expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
+            columns: vec![Series::from_data(vec![0_u16, 1, 3])],
+            expect: Series::from_data(vec![0f64, 0.8414709848078965, 0.1411200080598672]),
             error: "",
         },
         ScalarFunctionTest {
             name: "sin-u32-passed",
-            nullable: false,
-            columns: vec![Series::new(vec![0_u32, 1, 3]).into()],
-            expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
+            columns: vec![Series::from_data(vec![0_u32, 1, 3])],
+            expect: Series::from_data(vec![0f64, 0.8414709848078965, 0.1411200080598672]),
             error: "",
         },
         ScalarFunctionTest {
             name: "sin-u64-passed",
-            nullable: false,
-            columns: vec![Series::new(vec![0_u64, 1, 3]).into()],
-            expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
+            columns: vec![Series::from_data(vec![0_u64, 1, 3])],
+            expect: Series::from_data(vec![0f64, 0.8414709848078965, 0.1411200080598672]),
             error: "",
         },
         ScalarFunctionTest {
             name: "sin-f64-passed",
-            nullable: false,
-            columns: vec![Series::new(vec![0_f64, 1.0, 3.0]).into()],
-            expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
+            columns: vec![Series::from_data(vec![0_f64, 1.0, 3.0])],
+            expect: Series::from_data(vec![0f64, 0.8414709848078965, 0.1411200080598672]),
             error: "",
         },
     ];
@@ -70,9 +65,8 @@ fn test_trigonometric_sin_function() -> Result<()> {
 fn test_trigonometric_cos_function() -> Result<()> {
     let tests = vec![ScalarFunctionTest {
         name: "cos-f64-passed",
-        nullable: false,
-        columns: vec![Series::new(vec![0_f64, 1.0, 3.0]).into()],
-        expect: Series::new(vec![1f64, 0.5403023058681398, -0.9899924966004454]).into(),
+        columns: vec![Series::from_data(vec![0_f64, 1.0, 3.0])],
+        expect: Series::from_data(vec![1f64, 0.5403023058681398, -0.9899924966004454]),
         error: "",
     }];
 
@@ -83,9 +77,8 @@ fn test_trigonometric_cos_function() -> Result<()> {
 fn test_trigonometric_tan_function() -> Result<()> {
     let tests = vec![ScalarFunctionTest {
         name: "tan-pi4-passed",
-        nullable: false,
-        columns: vec![Series::new(vec![0_f64, PI / 4.0]).into()],
-        expect: Series::new(vec![0f64, 0.9999999999999999]).into(),
+        columns: vec![Series::from_data(vec![0_f64, PI / 4.0])],
+        expect: Series::from_data(vec![0f64, 0.9999999999999999]),
         error: "",
     }];
 
@@ -97,16 +90,14 @@ fn test_trigonometric_cot_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionTest {
             name: "cot-pi4-passed",
-            nullable: false,
-            columns: vec![Series::new(vec![PI / 4.0]).into()],
-            expect: Series::new(vec![1.0000000000000002]).into(),
+            columns: vec![Series::from_data(vec![PI / 4.0])],
+            expect: Series::from_data(vec![1.0000000000000002]),
             error: "",
         },
         ScalarFunctionTest {
             name: "cot-0-passed",
-            nullable: false,
-            columns: vec![Series::new(vec![0_f64]).into()],
-            expect: Series::new(vec![f64::INFINITY]).into(),
+            columns: vec![Series::from_data(vec![0_f64])],
+            expect: Series::from_data(vec![f64::INFINITY]),
             error: "",
         },
     ];
@@ -118,9 +109,8 @@ fn test_trigonometric_cot_function() -> Result<()> {
 fn test_trigonometric_asin_function() -> Result<()> {
     let tests = vec![ScalarFunctionTest {
         name: "asin-passed",
-        nullable: false,
-        columns: vec![Series::new(vec![0.2_f64]).into()],
-        expect: DataColumn::Constant(0.2013579207903308_f64.into(), 1),
+        columns: vec![Series::from_data(vec![0.2_f64])],
+        expect: ConstColumn::new(Series::from_data(vec![0.2013579207903308_f64]), 1).arc(),
         error: "",
     }];
 
@@ -131,9 +121,8 @@ fn test_trigonometric_asin_function() -> Result<()> {
 fn test_trigonometric_acos_function() -> Result<()> {
     let tests = vec![ScalarFunctionTest {
         name: "acos-passed",
-        nullable: false,
-        columns: vec![Series::new(vec![1]).into()],
-        expect: DataColumn::Constant(0_f64.into(), 1),
+        columns: vec![Series::from_data(vec![1])],
+        expect: ConstColumn::new(Series::from_data(vec![0f64]), 1).arc(),
         error: "",
     }];
 
@@ -145,19 +134,17 @@ fn test_trigonometric_atan_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionTest {
             name: "atan-passed",
-            nullable: false,
-            columns: vec![Series::new(vec![1, -1]).into()],
-            expect: Series::new(vec![FRAC_PI_4, -FRAC_PI_4]).into(),
+            columns: vec![Series::from_data(vec![1, -1])],
+            expect: Series::from_data(vec![FRAC_PI_4, -FRAC_PI_4]),
             error: "",
         },
         ScalarFunctionTest {
             name: "atan-passed",
-            nullable: false,
             columns: vec![
-                Series::new(vec![-2_f64, PI]).into(),
-                Series::new(vec![2, 0]).into(),
+                Series::from_data(vec![-2_f64, PI]),
+                Series::from_data(vec![2, 0]),
             ],
-            expect: Series::new(vec![-FRAC_PI_4, FRAC_PI_2]).into(),
+            expect: Series::from_data(vec![-FRAC_PI_4, FRAC_PI_2]),
             error: "",
         },
     ];
@@ -170,32 +157,29 @@ fn test_trigonometric_atan2_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionTest {
             name: "atan2-passed",
-            nullable: false,
             columns: vec![
-                Series::new(vec![-2_f64, PI]).into(),
-                Series::new(vec![2, 0]).into(),
+                Series::from_data(vec![-2_f64, PI]),
+                Series::from_data(vec![2, 0]),
             ],
-            expect: Series::new(vec![-FRAC_PI_4, FRAC_PI_2]).into(),
+            expect: Series::from_data(vec![-FRAC_PI_4, FRAC_PI_2]),
             error: "",
         },
         ScalarFunctionTest {
             name: "atan2-y-constant-passed",
-            nullable: false,
             columns: vec![
-                DataColumn::Constant(2.into(), 2),
-                Series::new(vec![0_f64, 2.0]).into(),
+                ConstColumn::new(Series::from_data(vec![2]), 2).arc(),
+                Series::from_data(vec![0_f64, 2.0]),
             ],
-            expect: Series::new(vec![FRAC_PI_2, FRAC_PI_4]).into(),
+            expect: Series::from_data(vec![FRAC_PI_2, FRAC_PI_4]),
             error: "",
         },
         ScalarFunctionTest {
             name: "atan2-x-constant-passed",
-            nullable: false,
             columns: vec![
-                Series::new(vec![-2_f64, 2.0]).into(),
-                DataColumn::Constant(2.into(), 2),
+                Series::from_data(vec![-2_f64, 2.0]),
+                ConstColumn::new(Series::from_data(vec![2]), 2).arc(),
             ],
-            expect: Series::new(vec![-FRAC_PI_4, FRAC_PI_4]).into(),
+            expect: Series::from_data(vec![-FRAC_PI_4, FRAC_PI_4]),
             error: "",
         },
     ];

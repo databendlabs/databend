@@ -13,9 +13,9 @@
 // limitations under the License.
 use common_exception::Result;
 
-use crate::scalars::function2_factory::Factory2Creator;
-use crate::scalars::function2_factory::Function2Description;
-use crate::scalars::function2_factory::Function2Factory;
+use crate::scalars::function_factory::Factory2Creator;
+use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::CastFunction;
 
@@ -23,23 +23,24 @@ use crate::scalars::CastFunction;
 pub struct ToCastFunction;
 
 impl ToCastFunction {
-    fn cast_function_creator(type_name: &'static str) -> Result<Function2Description> {
-        let mut features = FunctionFeatures::default()
-            .deterministic()
-            .monotonicity()
-            .num_arguments(1);
+    fn cast_function_creator(type_name: &'static str) -> Result<FunctionDescription> {
+        let mut features = FunctionFeatures::default().deterministic().monotonicity();
 
-        if type_name.eq_ignore_ascii_case("Boolean") {
-            features = features.bool_function();
-        }
+        // TODO(zhyass): complete DateTime, e.g. toDateTime64(1640019661000, 3, 'UTC').
+        features = match type_name {
+            "Boolean" => features.num_arguments(1).bool_function(),
+            "DateTime" | "DateTime32" => features.variadic_arguments(1, 2),
+            "DateTime64" => features.variadic_arguments(1, 3),
+            _ => features.num_arguments(1),
+        };
 
         let function_creator: Factory2Creator =
             Box::new(move |display_name| CastFunction::create(display_name, type_name));
 
-        Ok(Function2Description::creator(function_creator).features(features))
+        Ok(FunctionDescription::creator(function_creator).features(features))
     }
 
-    pub fn register(factory: &mut Function2Factory) {
+    pub fn register(factory: &mut FunctionFactory) {
         let names = vec![
             "Null",
             "Boolean",

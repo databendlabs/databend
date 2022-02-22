@@ -14,14 +14,14 @@
 
 use std::collections::HashMap;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::DataField;
-use common_datavalues2::DataSchemaRef;
+use common_datavalues::prelude::*;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::Function2;
-use common_functions::scalars::Function2Factory;
-use common_functions::scalars::Monotonicity2;
+use common_functions::scalars::Function;
+use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::Monotonicity;
 
 use crate::col;
 use crate::Expression;
@@ -35,7 +35,7 @@ use crate::Recursion;
 //                      (mono: is_positive=true, Range{105, MAX})
 //                         /                          \
 //                        /                            \
-//      MonotonicityNode::Function -- f(x)=-x         Monotonicity2::Constant -- 5
+//      MonotonicityNode::Function -- f(x)=-x         Monotonicity::Constant -- 5
 //    (mono: is_positive=true, range{100, MAX})
 //                     /
 //                    /
@@ -55,7 +55,7 @@ pub struct ExpressionMonotonicityVisitor {
     // variable_right: the variable range right.
     variables: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
 
-    stack: Vec<(DataTypePtr, Monotonicity2)>,
+    stack: Vec<(DataTypePtr, Monotonicity)>,
 
     single_point: bool,
 }
@@ -74,7 +74,7 @@ impl ExpressionMonotonicityVisitor {
         }
     }
 
-    pub fn finalize(mut self) -> Result<Monotonicity2> {
+    pub fn finalize(mut self) -> Result<Monotonicity> {
         match self.stack.len() {
             1 => {
                 let (_, monotonic) = self.stack.remove(0);
@@ -87,7 +87,7 @@ impl ExpressionMonotonicityVisitor {
     }
 
     fn try_calculate_boundary(
-        func: &dyn Function2,
+        func: &dyn Function,
         result_type: &DataTypePtr,
         args: Vec<Option<ColumnWithField>>,
     ) -> Result<Option<ColumnWithField>> {
@@ -129,7 +129,7 @@ impl ExpressionMonotonicityVisitor {
             }
         }
 
-        let instance = Function2Factory::instance();
+        let instance = FunctionFactory::instance();
 
         let arg_types: Vec<&DataTypePtr> = arg_types.iter().collect();
         let func = instance.get(op, &arg_types)?;
@@ -140,9 +140,9 @@ impl ExpressionMonotonicityVisitor {
             true => {
                 let features = instance.get_features(op)?;
                 if features.is_deterministic {
-                    Monotonicity2::create_constant()
+                    Monotonicity::create_constant()
                 } else {
-                    Monotonicity2::default()
+                    Monotonicity::default()
                 }
             }
         };
@@ -169,10 +169,10 @@ impl ExpressionMonotonicityVisitor {
         expr: &Expression,
         variables: HashMap<String, (Option<ColumnWithField>, Option<ColumnWithField>)>,
         single_point: bool,
-    ) -> Monotonicity2 {
+    ) -> Monotonicity {
         let visitor = Self::create(schema, variables, single_point);
-        visitor.visit(expr).map_or(Monotonicity2::default(), |v| {
-            v.finalize().unwrap_or_else(|_| Monotonicity2::default())
+        visitor.visit(expr).map_or(Monotonicity::default(), |v| {
+            v.finalize().unwrap_or_else(|_| Monotonicity::default())
         })
     }
 
@@ -231,7 +231,7 @@ impl ExpressionVisitor for ExpressionMonotonicityVisitor {
                 let field = self.input_schema.field_with_name(s)?;
                 let return_type = field.data_type();
 
-                let monotonic = Monotonicity2 {
+                let monotonic = Monotonicity {
                     is_monotonic: true,
                     is_positive: true,
                     is_constant: false,
@@ -251,7 +251,7 @@ impl ExpressionVisitor for ExpressionMonotonicityVisitor {
                 let data_field = DataField::new(&name, data_type.clone());
                 let col = data_type.create_constant_column(value, 1)?;
                 let data_column_field = ColumnWithField::new(col, data_field);
-                let monotonic = Monotonicity2 {
+                let monotonic = Monotonicity {
                     is_monotonic: true,
                     is_positive: true,
                     is_constant: true,

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::traits::AsPrimitive;
@@ -22,10 +22,11 @@ use super::arithmetic_mul::arithmetic_mul_div_monotonicity;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
-use crate::scalars::Function2;
-use crate::scalars::Monotonicity2;
+use crate::scalars::EvalContext;
+use crate::scalars::Function;
+use crate::scalars::Monotonicity;
 
-fn div_scalar<L, R>(l: L::RefType<'_>, r: R::RefType<'_>) -> f64
+fn div_scalar<L, R>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> f64
 where
     L: PrimitiveType + AsPrimitive<f64>,
     R: PrimitiveType + AsPrimitive<f64>,
@@ -39,30 +40,19 @@ impl ArithmeticDivFunction {
     pub fn try_create_func(
         _display_name: &str,
         args: &[&DataTypePtr],
-    ) -> Result<Box<dyn Function2>> {
+    ) -> Result<Box<dyn Function>> {
         let op = DataValueBinaryOperator::Div;
         let left_type = remove_nullable(args[0]).data_type_id();
         let right_type = remove_nullable(args[1]).data_type_id();
 
-        let error_fn = || -> Result<Box<dyn Function2>> {
-            Err(ErrorCode::BadDataValueType(format!(
-                "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
-                left_type, op, right_type
-            )))
-        };
-
-        with_match_primitive_type_id!(left_type, |$T| {
-            with_match_primitive_type_id!(right_type, |$D| {
+        with_match_primitive_types_error!(left_type, |$T| {
+            with_match_primitive_types_error!(right_type, |$D| {
                 BinaryArithmeticFunction::<$T, $D, f64, _>::try_create_func(
                     op,
                     Float64Type::arc(),
                     div_scalar::<$T, $D>
                 )
-            }, {
-                error_fn()
             })
-        }, {
-            error_fn()
         })
     }
 
@@ -75,7 +65,7 @@ impl ArithmeticDivFunction {
         )
     }
 
-    pub fn get_monotonicity(args: &[Monotonicity2]) -> Result<Monotonicity2> {
+    pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
         arithmetic_mul_div_monotonicity(args, DataValueBinaryOperator::Div)
     }
 }

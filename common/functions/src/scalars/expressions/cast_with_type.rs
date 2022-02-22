@@ -19,7 +19,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::compute::cast;
 use common_arrow::arrow::compute::cast::CastOptions as ArrowOption;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -128,7 +128,9 @@ pub fn cast_with_type(
         TypeID::Date16 => cast_from_date16(column, &nonull_data_type, cast_options),
         TypeID::Date32 => cast_from_date32(column, &nonull_data_type, cast_options),
         TypeID::DateTime32 => cast_from_datetime32(column, &nonull_data_type, cast_options),
-        TypeID::DateTime64 => cast_from_datetime64(column, &nonull_data_type, cast_options),
+        TypeID::DateTime64 => {
+            cast_from_datetime64(column, &nonull_from_type, &nonull_data_type, cast_options)
+        }
         // TypeID::Interval => arrow_cast_compute(column, &nonull_data_type, cast_options),
         _ => arrow_cast_compute(column, &nonull_data_type, cast_options),
     }?;

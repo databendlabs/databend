@@ -15,23 +15,24 @@
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_type_id;
 use common_exception::Result;
 use num_traits::AsPrimitive;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::EvalContext;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::ScalarBinaryExpression;
 
 pub type LeftFunction = LeftRightFunction<true>;
 pub type RightFunction = LeftRightFunction<false>;
 
 #[inline]
-fn left<S>(str: &[u8], index: S) -> &[u8]
+fn left<'a, S>(str: &'a [u8], index: S, _ctx: &mut EvalContext) -> &'a [u8]
 where S: AsPrimitive<usize> {
     let index = index.as_();
     if index < str.len() {
@@ -41,7 +42,7 @@ where S: AsPrimitive<usize> {
 }
 
 #[inline]
-fn right<S>(str: &[u8], index: S) -> &[u8]
+fn right<'a, S>(str: &'a [u8], index: S, _ctx: &mut EvalContext) -> &'a [u8]
 where S: AsPrimitive<usize> {
     let index = index.as_();
     if index < str.len() {
@@ -56,19 +57,19 @@ pub struct LeftRightFunction<const IS_LEFT: bool> {
 }
 
 impl<const IS_LEFT: bool> LeftRightFunction<IS_LEFT> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }
 
-impl<const IS_LEFT: bool> Function2 for LeftRightFunction<IS_LEFT> {
+impl<const IS_LEFT: bool> Function for LeftRightFunction<IS_LEFT> {
     fn name(&self) -> &str {
         &*self.display_name
     }
@@ -84,7 +85,7 @@ impl<const IS_LEFT: bool> Function2 for LeftRightFunction<IS_LEFT> {
             true => {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$S| {
                     let binary = ScalarBinaryExpression::<Vu8, $S, Vu8, _>::new_ref(left);
-                    let col = binary.eval_ref(columns[0].column(), columns[1].column())?;
+                    let col = binary.eval_ref(columns[0].column(), columns[1].column(), &mut EvalContext::default())?;
                     Ok(Arc::new(col))
                 },{
                     unreachable!()
@@ -93,7 +94,7 @@ impl<const IS_LEFT: bool> Function2 for LeftRightFunction<IS_LEFT> {
             false => {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$S| {
                     let binary = ScalarBinaryExpression::<Vu8, $S, Vu8, _>::new_ref(right);
-                    let col = binary.eval_ref(columns[0].column(), columns[1].column())?;
+                    let col = binary.eval_ref(columns[0].column(), columns[1].column(), &mut EvalContext::default())?;
                     Ok(Arc::new(col))
                 },{
                     unreachable!()

@@ -114,7 +114,7 @@ impl<'a> MetaLeader<'a> {
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn join(&self, req: JoinRequest) -> Result<(), MetaError> {
         let node_id = req.node_id;
-        let addr = req.address;
+        let endpoint = req.endpoint;
         let metrics = self.meta_node.raft.metrics().borrow().clone();
         let membership = metrics.membership_config.membership.clone();
 
@@ -136,7 +136,7 @@ impl<'a> MetaLeader<'a> {
                 node_id,
                 node: Node {
                     name: "".to_string(),
-                    address: addr,
+                    endpoint,
                 },
             },
         };
@@ -190,7 +190,14 @@ impl<'a> MetaLeader<'a> {
         tracing::debug!("raft.client_write rst: {:?}", write_rst);
 
         match write_rst {
-            Ok(resp) => Ok(resp.data),
+            Ok(resp) => {
+                let data = resp.data;
+                match data {
+                    AppliedState::AppError(ae) => Err(MetaError::from(ae)),
+                    _ => Ok(data),
+                }
+            }
+
             Err(cli_write_err) => match cli_write_err {
                 // fatal error
                 ClientWriteError::Fatal(fatal) => Err(MetaRaftError::RaftFatal(fatal).into()),

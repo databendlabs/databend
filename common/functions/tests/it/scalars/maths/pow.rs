@@ -16,54 +16,49 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function_test::test_scalar_functions;
-use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions;
+use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_pow_function() -> Result<()> {
     let tests = vec![
         ScalarFunctionTest {
             name: "pow-with-literal",
-            nullable: false,
-            columns: vec![Series::new([2]).into(), Series::new([2]).into()],
-            expect: DataColumn::Constant(4_f64.into(), 1),
+            columns: vec![Series::from_data([2]), Series::from_data([2])],
+            expect: Series::from_data(vec![4_f64]),
             error: "",
         },
         ScalarFunctionTest {
             name: "pow-with-series",
-            nullable: false,
-            columns: vec![Series::new([2, 2]).into(), Series::new([2, -2]).into()],
-            expect: Series::new([4_f64, 0.25]).into(),
+            columns: vec![Series::from_data([2, 2]), Series::from_data([2, -2])],
+            expect: Series::from_data([4_f64, 0.25]),
             error: "",
         },
         ScalarFunctionTest {
             name: "pow-with-null",
-            nullable: true,
             columns: vec![
-                Series::new([Some(2), None, None]).into(),
-                Series::new([Some(2), Some(-2), None]).into(),
+                Series::from_data([Some(2), None, None]),
+                Series::from_data([Some(2), Some(-2), None]),
             ],
-            expect: Series::new([Some(4_f64), None, None]).into(),
+            expect: Series::from_data([Some(4_f64), None, None]),
             error: "",
         },
         ScalarFunctionTest {
             name: "pow-x-constant",
-            nullable: true,
             columns: vec![
-                DataColumn::Constant(2.into(), 2),
-                Series::new([Some(2), Some(-2), None]).into(),
+                ConstColumn::new(Series::from_data(vec![2]), 3).arc(),
+                Series::from_data([Some(2), Some(-2), None]),
             ],
-            expect: Series::new([Some(4_f64), Some(0.25), None]).into(),
+            expect: Series::from_data([Some(4_f64), Some(0.25), None]),
             error: "",
         },
         ScalarFunctionTest {
             name: "pow-y-constant",
-            nullable: true,
             columns: vec![
-                Series::new([Some(2), Some(-2), None]).into(),
-                DataColumn::Constant(2.into(), 2),
+                Series::from_data([Some(2), Some(-2), None]),
+                ConstColumn::new(Series::from_data(vec![2]), 3).arc(),
             ],
-            expect: Series::new([Some(4_f64), Some(4.0), None]).into(),
+            expect: Series::from_data([Some(4_f64), Some(4.0), None]),
             error: "",
         },
     ];

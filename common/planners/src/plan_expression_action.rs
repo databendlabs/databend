@@ -14,8 +14,8 @@
 
 use std::fmt;
 
-use common_datavalues2::prelude::*;
-use common_functions::scalars::Function2;
+use common_datavalues::prelude::*;
+use common_functions::scalars::Function;
 
 #[derive(Debug, Clone)]
 pub enum ExpressionAction {
@@ -52,7 +52,7 @@ pub struct ActionFunction {
     pub name: String,
     pub func_name: String,
     pub return_type: DataTypePtr,
-    pub func: Box<dyn Function2>,
+    pub func: Box<dyn Function>,
 
     // for functions
     pub arg_names: Vec<String>,

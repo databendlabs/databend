@@ -12,29 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::LowerFunction;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions2;
-use crate::scalars::scalar_function2_test::ScalarFunction2Test;
+use crate::scalars::scalar_function2_test::test_scalar_functions;
+use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_lower_function() -> Result<()> {
     let tests = vec![
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "lower-abc-passed",
             columns: vec![Series::from_data(vec!["Abc"])],
             expect: Series::from_data(vec!["abc"]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "lower-utf8-passed",
             columns: vec![Series::from_data(vec!["Dobrý den"])],
             expect: Series::from_data(vec!["dobrý den"]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "lcase-utf8-passed",
             columns: vec![Series::from_data(vec!["Dobrý den"])],
             expect: Series::from_data(vec!["dobrý den"]),
@@ -42,17 +42,17 @@ fn test_lower_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions2(LowerFunction::try_create("lower")?, &tests)
+    test_scalar_functions(LowerFunction::try_create("lower")?, &tests)
 }
 
 #[test]
 fn test_lower_nullable() -> Result<()> {
-    let tests = vec![ScalarFunction2Test {
+    let tests = vec![ScalarFunctionTest {
         name: "lcase-null-passed",
         columns: vec![Series::from_data(vec![Option::<Vec<u8>>::None])],
         expect: Series::from_data(vec![Option::<Vec<u8>>::None]),
         error: "",
     }];
 
-    test_scalar_functions2(LowerFunction::try_create("lcase")?, &tests)
+    test_scalar_functions(LowerFunction::try_create("lcase")?, &tests)
 }

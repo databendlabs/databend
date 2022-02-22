@@ -17,13 +17,13 @@ use std::ops::Sub;
 use std::str;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
 pub struct RunningDifferenceFunction {
@@ -31,19 +31,19 @@ pub struct RunningDifferenceFunction {
 }
 
 impl RunningDifferenceFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(RunningDifferenceFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().num_arguments(1))
     }
 }
 
-impl Function2 for RunningDifferenceFunction {
+impl Function for RunningDifferenceFunction {
     fn name(&self) -> &str {
         self.display_name.as_str()
     }
@@ -86,8 +86,8 @@ impl Function2 for RunningDifferenceFunction {
             TypeID::UInt16 | TypeID::Date16 => compute_u16(col, input_rows),
             TypeID::Int32 | TypeID::Date32 => compute_i32(col, input_rows),
             TypeID::UInt32 | TypeID::DateTime32 => compute_u32(col, input_rows),
-            TypeID::Int64 | TypeID::Interval => compute_i64(col, input_rows),
-            TypeID::UInt64 | TypeID::DateTime64 => compute_u64(col, input_rows),
+            TypeID::Int64 | TypeID::Interval | TypeID::DateTime64 => compute_i64(col, input_rows),
+            TypeID::UInt64 => compute_u64(col, input_rows),
             TypeID::Float32 => compute_f32(col, input_rows),
             TypeID::Float64 => compute_f64(col, input_rows),
 

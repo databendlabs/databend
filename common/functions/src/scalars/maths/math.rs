@@ -14,14 +14,15 @@
 
 use crc32fast::Hasher as CRC32;
 
-use crate::scalars::function_factory::FunctionFactory;
+use super::round::RoundNumberFunction;
+use super::round::TruncNumberFunction;
 use crate::scalars::AbsFunction;
 use crate::scalars::BaseHashFunction;
 use crate::scalars::CeilFunction;
 use crate::scalars::DegressFunction;
 use crate::scalars::ExpFunction;
 use crate::scalars::FloorFunction;
-use crate::scalars::Function2Factory;
+use crate::scalars::FunctionFactory;
 use crate::scalars::LnFunction;
 use crate::scalars::Log10Function;
 use crate::scalars::Log2Function;
@@ -30,7 +31,6 @@ use crate::scalars::PiFunction;
 use crate::scalars::PowFunction;
 use crate::scalars::RadiansFunction;
 use crate::scalars::RandomFunction;
-use crate::scalars::RoundNumberFunction;
 use crate::scalars::SignFunction;
 use crate::scalars::SqrtFunction;
 use crate::scalars::TrigonometricAcosFunction;
@@ -41,14 +41,14 @@ use crate::scalars::TrigonometricCosFunction;
 use crate::scalars::TrigonometricCotFunction;
 use crate::scalars::TrigonometricSinFunction;
 use crate::scalars::TrigonometricTanFunction;
-use crate::scalars::TruncNumberFunction;
 
 pub type CRC32Function = BaseHashFunction<CRC32, u32>;
 
 pub struct MathsFunction;
 
 impl MathsFunction {
-    pub fn register2(factory: &mut Function2Factory) {
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("abs", AbsFunction::desc());
         factory.register("sign", SignFunction::desc());
         factory.register("pi", PiFunction::desc());
         factory.register("crc32", CRC32Function::desc());
@@ -57,28 +57,27 @@ impl MathsFunction {
         factory.register("ceil", CeilFunction::desc());
         factory.register("ceiling", CeilFunction::desc());
         factory.register("floor", FloorFunction::desc());
-    }
 
-    pub fn register(factory: &mut FunctionFactory) {
-        factory.register("abs", AbsFunction::desc());
-        factory.register("sin", TrigonometricSinFunction::desc());
-        factory.register("cos", TrigonometricCosFunction::desc());
-        factory.register("tan", TrigonometricTanFunction::desc());
-        factory.register("cot", TrigonometricCotFunction::desc());
-        factory.register("degrees", DegressFunction::desc());
-        factory.register("radians", RadiansFunction::desc());
         factory.register("log", LogFunction::desc());
         factory.register("log10", Log10Function::desc());
         factory.register("log2", Log2Function::desc());
         factory.register("ln", LnFunction::desc());
-        factory.register("asin", TrigonometricAsinFunction::desc());
-        factory.register("acos", TrigonometricAcosFunction::desc());
-        factory.register("atan", TrigonometricAtanFunction::desc());
-        factory.register("atan2", TrigonometricAtan2Function::desc());
         factory.register("pow", PowFunction::desc());
         factory.register("power", PowFunction::desc());
         factory.register("rand", RandomFunction::desc());
         factory.register("round", RoundNumberFunction::desc());
         factory.register("truncate", TruncNumberFunction::desc());
+
+        factory.register("sin", TrigonometricSinFunction::desc());
+        factory.register("cos", TrigonometricCosFunction::desc());
+        factory.register("tan", TrigonometricTanFunction::desc());
+        factory.register("cot", TrigonometricCotFunction::desc());
+        factory.register("asin", TrigonometricAsinFunction::desc());
+        factory.register("acos", TrigonometricAcosFunction::desc());
+        factory.register("atan", TrigonometricAtanFunction::desc());
+        factory.register("atan2", TrigonometricAtan2Function::desc());
+
+        factory.register("degrees", DegressFunction::desc());
+        factory.register("radians", RadiansFunction::desc());
     }
 }

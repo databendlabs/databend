@@ -17,13 +17,13 @@ use std::net::Ipv4Addr;
 use std::str;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[doc(alias = "TryIPv4StringToNumFunction")]
 pub type TryInetAtonFunction = InetAtonFunctionImpl<true>;
@@ -37,19 +37,19 @@ pub struct InetAtonFunctionImpl<const SUPPRESS_PARSE_ERROR: bool> {
 }
 
 impl<const SUPPRESS_PARSE_ERROR: bool> InetAtonFunctionImpl<SUPPRESS_PARSE_ERROR> {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(InetAtonFunctionImpl::<SUPPRESS_PARSE_ERROR> {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
-impl<const SUPPRESS_PARSE_ERROR: bool> Function2 for InetAtonFunctionImpl<SUPPRESS_PARSE_ERROR> {
+impl<const SUPPRESS_PARSE_ERROR: bool> Function for InetAtonFunctionImpl<SUPPRESS_PARSE_ERROR> {
     fn name(&self) -> &str {
         &*self.display_name
     }

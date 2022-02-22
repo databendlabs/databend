@@ -15,12 +15,12 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
 pub struct ConcatFunction {
@@ -41,81 +41,6 @@ impl ConcatFunction {
                 .variadic_arguments(1, 1024),
         )
     }
-
-    fn concat_column(lhs: DataColumn, columns: &DataColumnsWithField) -> Result<DataColumn> {
-        if lhs.data_type().is_null() {
-            return Ok(lhs);
-        }
-        let lhs = lhs.cast_with_type(&DataType::String)?;
-        if columns.is_empty() {
-            return Ok(lhs);
-        }
-        let rhs = columns[0].column();
-        if rhs.data_type().is_null() {
-            return Ok(rhs.clone());
-        }
-        let rhs = rhs.cast_with_type(&DataType::String)?;
-        let column = match (lhs, rhs) {
-            (DataColumn::Array(lhs), DataColumn::Array(rhs)) => {
-                let l_array = lhs.string()?;
-                let r_array = rhs.string()?;
-                let array = DFStringArray::new_from_iter_validity(
-                    l_array
-                        .into_no_null_iter()
-                        .zip(r_array.into_no_null_iter())
-                        .map(|(l, r)| [l, r].concat()),
-                    combine_validities(l_array.inner().validity(), r_array.inner().validity()),
-                );
-                DataColumn::Array(array.into_series())
-            }
-            (DataColumn::Array(lhs), DataColumn::Constant(rhs, len)) => match rhs {
-                DataValue::String(Some(r_value)) => {
-                    let l_array = lhs.string()?;
-                    let mut builder = StringArrayBuilder::with_capacity(len);
-                    let iter = l_array.into_iter();
-                    for val in iter {
-                        if let Some(val) = val {
-                            builder.append_value([val, r_value.as_slice()].concat());
-                        } else {
-                            builder.append_null();
-                        }
-                    }
-                    let array = builder.finish();
-                    DataColumn::Array(array.into_series())
-                }
-                _ => DataColumn::Array(DFStringArray::full_null(len).into_series()),
-            },
-            (DataColumn::Constant(lhs, len), DataColumn::Array(rhs)) => match lhs {
-                DataValue::String(Some(l_value)) => {
-                    let r_array = rhs.string()?;
-                    let mut builder = StringArrayBuilder::with_capacity(len);
-                    let iter = r_array.into_iter();
-                    for val in iter {
-                        if let Some(val) = val {
-                            builder.append_value([val, l_value.as_slice()].concat());
-                        } else {
-                            builder.append_null();
-                        }
-                    }
-                    let array = builder.finish();
-                    DataColumn::Array(array.into_series())
-                }
-                _ => DataColumn::Array(DFStringArray::full_null(len).into_series()),
-            },
-            (DataColumn::Constant(lhs, len), DataColumn::Constant(rhs, _)) => match lhs {
-                DataValue::String(Some(l_val)) => match rhs {
-                    DataValue::String(Some(r_val)) => DataColumn::Constant(
-                        DataValue::String(Some([l_val.as_slice(), r_val.as_slice()].concat())),
-                        len,
-                    ),
-                    _ => DataColumn::Constant(DataValue::Null, len),
-                },
-                _ => DataColumn::Constant(DataValue::Null, len),
-            },
-        };
-        let result = Self::concat_column(column, &columns[1..])?;
-        Ok(result)
-    }
 }
 
 impl Function for ConcatFunction {
@@ -123,15 +48,32 @@ impl Function for ConcatFunction {
         "concat"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
-        Ok(DataTypeAndNullable::create(&dt, nullable))
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        for arg in args {
+            assert_string(*arg)?;
+        }
+        Ok(Vu8::to_data_type())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let result = Self::concat_column(columns[0].column().clone(), &columns[1..])?;
-        Ok(result)
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        let viewers = columns
+            .iter()
+            .map(|c| Vu8::try_create_viewer(c.column()))
+            .collect::<Result<Vec<_>>>()?;
+
+        let mut values: Vec<u8> = Vec::with_capacity(input_rows * columns.len());
+        let mut offsets: Vec<i64> = Vec::with_capacity(input_rows + 1);
+        offsets.push(0);
+
+        for row in 0..input_rows {
+            for viewer in viewers.iter() {
+                values.extend_from_slice(viewer.value_at(row));
+            }
+            offsets.push(values.len() as i64);
+        }
+
+        let mut builder = MutableStringColumn::from_data(values, offsets);
+        Ok(builder.to_column())
     }
 }
 

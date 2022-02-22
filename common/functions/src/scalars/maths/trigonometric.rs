@@ -13,15 +13,20 @@
 // limitations under the License.
 
 use std::fmt;
+use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataTypeAndNullable;
-use common_exception::ErrorCode;
+use common_datavalues::with_match_primitive_type_id;
 use common_exception::Result;
+use num_traits::AsPrimitive;
 
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
+use crate::scalars::ScalarBinaryExpression;
+use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
 pub struct TrigonometricFunction {
@@ -67,69 +72,86 @@ impl Function for TrigonometricFunction {
         "TrigonometricFunction"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let data_type = if args[0].is_numeric() || args[0].is_null() {
-            Ok(DataType::Float64)
-        } else {
-            Err(ErrorCode::IllegalDataType(format!(
-                "Expected numeric, but got {}",
-                args[0]
-            )))
-        }?;
-        Ok(DataTypeAndNullable::create(&data_type, false))
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        for arg in args {
+            assert_numeric(*arg)?;
+        }
+        Ok(f64::to_data_type())
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let result = if columns.len() == 1 {
-            let opt_iter = columns[0]
-                .column()
-                .to_minimal_array()?
-                .cast_with_type(&DataType::Float64)?;
-            let opt_iter = opt_iter.f64()?.into_iter().map(|v| {
-                v.and_then(|&v| match self.t {
-                    Trigonometric::COS => Some(v.cos()),
-                    Trigonometric::SIN => Some(v.sin()),
-                    Trigonometric::COT => Some(1.0 / v.tan()),
-                    Trigonometric::TAN => Some(v.tan()),
-                    // the range [0, pi] or NaN if the number is outside the range
-                    Trigonometric::ACOS => Some(v.acos()),
-                    Trigonometric::ASIN => Some(v.asin()),
-                    Trigonometric::ATAN => Some(v.atan()),
-                    _ => unreachable!(),
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        let mut ctx = EvalContext::default();
+        match columns.len() {
+            1 => {
+                with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
+                   match self.t {
+                        Trigonometric::COS => {
+                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext|  AsPrimitive::<f64>::as_(v).cos());
+                           let col = unary.eval(columns[0].column(), &mut ctx)?;
+                           Ok(Arc::new(col))
+                        },
+                        Trigonometric::SIN => {
+                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext|  AsPrimitive::<f64>::as_(v).sin());
+                           let col = unary.eval(columns[0].column(), &mut ctx)?;
+                           Ok(Arc::new(col))
+                        },
+                        Trigonometric::COT => {
+                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext| 1.0 /  AsPrimitive::<f64>::as_(v).tan());
+                           let col = unary.eval(columns[0].column(), &mut ctx)?;
+                           Ok(Arc::new(col))
+                        },
+                        Trigonometric::TAN => {
+                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).tan());
+                           let col = unary.eval(columns[0].column(), &mut ctx)?;
+                           Ok(Arc::new(col))
+                        },
+                        // the range [0, pi] or NaN if the number is outside the range
+                        Trigonometric::ACOS => {
+                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).acos());
+                           let col = unary.eval(columns[0].column(), &mut ctx)?;
+                           Ok(Arc::new(col))
+                        },
+                        Trigonometric::ASIN => {
+                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).asin());
+                           let col = unary.eval(columns[0].column(), &mut ctx)?;
+                           Ok(Arc::new(col))
+                        },
+                        Trigonometric::ATAN => {
+                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).atan());
+                           let col = unary.eval(columns[0].column(), &mut ctx)?;
+                           Ok(Arc::new(col))
+                        },
+                        _ => unreachable!(),
+                    }
+                },
+                {
+                    unreachable!()
                 })
-            });
-            DFFloat64Array::new_from_opt_iter(opt_iter)
-        } else {
-            let y_column: &DataColumn = &columns[0].column().cast_with_type(&DataType::Float64)?;
-            let x_column: &DataColumn = &columns[1].column().cast_with_type(&DataType::Float64)?;
-
-            match (y_column, x_column) {
-                (DataColumn::Array(y_series), DataColumn::Constant(x, _)) => {
-                    if x.is_null() {
-                        DFFloat64Array::full_null(input_rows)
-                    } else {
-                        let x = DFTryFrom::try_from(x.clone())?;
-                        y_series.f64()?.apply_cast_numeric(|y| y.atan2(x))
-                    }
-                }
-                (DataColumn::Constant(y, _), DataColumn::Array(x_series)) => {
-                    if y.is_null() {
-                        DFFloat64Array::full_null(input_rows)
-                    } else {
-                        let y: f64 = DFTryFrom::try_from(y.clone())?;
-                        x_series.f64()?.apply_cast_numeric(|x| y.atan2(x))
-                    }
-                }
-                _ => {
-                    let y_series = y_column.to_minimal_array()?;
-                    let x_series = x_column.to_minimal_array()?;
-                    binary(y_series.f64()?, x_series.f64()?, |y, x| y.atan2(x))
-                }
             }
-        };
-        let column: DataColumn = result.into();
-        Ok(column.resize_constant(columns[0].column().len()))
+
+            _ => {
+                with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
+                    with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
+                        let binary = ScalarBinaryExpression::<$S, $T, f64, _>::new(scalar_atan2);
+                        let col = binary.eval(columns[0].column(), columns[1].column(), &mut EvalContext::default())?;
+                        Ok(Arc::new(col))
+                    }, {
+                        unreachable!()
+                    })
+                }, {
+                    unreachable!()
+                })
+            }
+        }
     }
+}
+
+fn scalar_atan2<S: AsPrimitive<f64>, T: AsPrimitive<f64>>(
+    s: S,
+    t: T,
+    _ctx: &mut EvalContext,
+) -> f64 {
+    s.as_().atan2(t.as_())
 }
 
 impl fmt::Display for TrigonometricFunction {

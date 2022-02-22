@@ -15,8 +15,8 @@
 use std::fmt;
 use std::ops::AddAssign;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_type_id;
 use common_exception::Result;
 use num_format::Locale;
 use num_format::ToFormattedString;
@@ -25,8 +25,9 @@ use num_traits::AsPrimitive;
 use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::EvalContext;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 use crate::scalars::ScalarBinaryExpression;
 
 const FORMAT_MAX_DECIMALS: i64 = 30;
@@ -40,14 +41,14 @@ pub struct FormatFunction {
 // Formats the number X to a format like '#,###,###.##', rounded to D decimal places, and returns the result as a string.
 // If D is 0, the result has no decimal point or fractional part.
 impl FormatFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(FormatFunction {
             _display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(2, 3),
@@ -55,7 +56,7 @@ impl FormatFunction {
     }
 }
 
-impl Function2 for FormatFunction {
+impl Function for FormatFunction {
     fn name(&self) -> &str {
         "format"
     }
@@ -73,7 +74,7 @@ impl Function2 for FormatFunction {
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$F| {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$N| {
                     let binary = ScalarBinaryExpression::<$F, $N, Vu8, _>::new(format_en_us);
-                    let col = binary.eval(columns[0].column(), columns[1].column())?;
+                    let col = binary.eval(columns[0].column(), columns[1].column(), &mut EvalContext::default())?;
                     Ok(col.arc())
                 },{
                     unreachable!()
@@ -85,7 +86,7 @@ impl Function2 for FormatFunction {
     }
 }
 
-fn format_en_us<L, R>(number: L, precision: R) -> Vec<u8>
+fn format_en_us<L, R>(number: L, precision: R, _ctx: &mut EvalContext) -> Vec<u8>
 where
     L: AsPrimitive<f64> + AsPrimitive<i64>,
     R: AsPrimitive<i64>,

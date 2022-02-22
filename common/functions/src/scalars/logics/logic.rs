@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -23,8 +23,8 @@ use super::LogicAndFunction;
 use super::LogicNotFunction;
 use super::LogicOrFunction;
 use crate::scalars::cast_column_field;
-use crate::scalars::Function2;
-use crate::scalars::Function2Factory;
+use crate::scalars::Function;
+use crate::scalars::FunctionFactory;
 
 #[derive(Clone)]
 pub struct LogicFunction {
@@ -40,11 +40,11 @@ pub enum LogicOperator {
 }
 
 impl LogicFunction {
-    pub fn try_create(op: LogicOperator) -> Result<Box<dyn Function2>> {
+    pub fn try_create(op: LogicOperator) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self { op }))
     }
 
-    pub fn register(factory: &mut Function2Factory) {
+    pub fn register(factory: &mut FunctionFactory) {
         factory.register("and", LogicAndFunction::desc());
         factory.register("or", LogicOrFunction::desc());
         factory.register("not", LogicNotFunction::desc());
@@ -195,7 +195,7 @@ impl LogicFunction {
     }
 }
 
-impl Function2 for LogicFunction {
+impl Function for LogicFunction {
     fn name(&self) -> &str {
         "LogicFunction"
     }

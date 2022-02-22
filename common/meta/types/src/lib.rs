@@ -20,6 +20,7 @@ mod cluster;
 mod cmd;
 pub mod config;
 mod database;
+mod endpoint;
 mod errors;
 mod kv_message;
 mod log_entry;
@@ -49,6 +50,7 @@ mod user_setting;
 mod user_stage;
 
 pub mod error_context;
+mod role_identity;
 
 // reexport
 
@@ -76,6 +78,7 @@ pub use database::DropDatabaseReply;
 pub use database::DropDatabaseReq;
 pub use database::GetDatabaseReq;
 pub use database::ListDatabaseReq;
+pub use endpoint::Endpoint;
 pub use errors::ConflictSeq;
 pub use kv_message::GetKVActionReply;
 pub use kv_message::GetKVReq;
@@ -121,6 +124,7 @@ pub use raft_types::LogId;
 pub use raft_types::LogIndex;
 pub use raft_types::NodeId;
 pub use raft_types::Term;
+pub use role_identity::RoleIdentity;
 pub use role_info::RoleInfo;
 pub use seq_num::SeqNum;
 pub use seq_value::IntoSeqV;

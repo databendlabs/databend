@@ -90,8 +90,7 @@ async fn check_health(
     if resp.is_err() || !resp.unwrap().status().is_success() {
         async_std::task::sleep(duration).await;
         return Err(CliError::Unknown(format!(
-            "cannot connect to healthiness probe: {}",
-            url
+            "cannot connect to healthiness probe: {url}",
         )));
     } else {
         Ok(())
@@ -205,12 +204,12 @@ impl LocalRuntime for LocalDashboardConfig {
 
         if !Path::new(log_dir.as_str()).exists() {
             std::fs::create_dir(Path::new(log_dir.as_str()))
-                .unwrap_or_else(|_| panic!("cannot create directory {}", log_dir));
+                .unwrap_or_else(|_| panic!("cannot create directory {log_dir}"));
         }
 
-        let out_file = File::create(format!("{}/std_out.log", log_dir).as_str())
+        let out_file = File::create(format!("{log_dir}/std_out.log").as_str())
             .expect("couldn't create stdout file");
-        let err_file = File::create(format!("{}/std_err.log", log_dir).as_str())
+        let err_file = File::create(format!("{log_dir}/std_err.log").as_str())
             .expect("couldn't create stderr file");
         // configure runtime by process local env settings
         command
@@ -344,8 +343,12 @@ impl LocalRuntime for LocalMetaConfig {
                 conf.raft_config.raft_api_port.to_string(),
             )
             .env(
-                common_meta_raft_store::config::KVSRV_API_HOST,
-                conf.raft_config.raft_api_host,
+                common_meta_raft_store::config::KVSRV_LISTEN_HOST,
+                conf.raft_config.raft_listen_host,
+            )
+            .env(
+                common_meta_raft_store::config::KVSRV_ADVERTISE_HOST,
+                conf.raft_config.raft_advertise_host,
             )
             .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
             .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });
@@ -859,7 +862,7 @@ impl Status {
 
     pub fn find_unused_local_port() -> String {
         format!(
-            "0.0.0.0:{}",
+            "127.0.0.1:{}",
             portpicker::pick_unused_port().expect("cannot find a non-occupied port")
         )
     }

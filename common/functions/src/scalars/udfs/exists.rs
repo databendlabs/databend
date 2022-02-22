@@ -14,45 +14,45 @@
 
 use std::fmt;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
 pub struct ExistsFunction;
 
 impl ExistsFunction {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(ExistsFunction {}))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().bool_function().num_arguments(1))
     }
 }
 
-impl Function2 for ExistsFunction {
+impl Function for ExistsFunction {
     fn name(&self) -> &str {
         "ExistsFunction"
     }
 
     fn return_type(
         &self,
-        _args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        _args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         Ok(bool::to_data_type())
     }
 
     fn eval(
         &self,
-        columns: &common_datavalues2::ColumnsWithField,
+        columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         if columns[0].column().is_const() || columns[0].column().len() == 1 {
             let value = columns[0].column().get(0);
             match value {

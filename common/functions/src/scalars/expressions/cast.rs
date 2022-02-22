@@ -15,11 +15,11 @@
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use super::cast_with_type::cast_column_field;
-use crate::scalars::function2::Function2;
+use crate::scalars::function::Function;
 
 #[derive(Clone)]
 pub struct CastFunction {
@@ -29,7 +29,7 @@ pub struct CastFunction {
 }
 
 impl CastFunction {
-    pub fn create(display_name: &str, type_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn create(display_name: &str, type_name: &str) -> Result<Box<dyn Function>> {
         let factory = TypeFactory::instance();
         let data_type = factory.get(type_name)?;
 
@@ -39,7 +39,7 @@ impl CastFunction {
         }))
     }
 
-    pub fn create_try(display_name: &str, type_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn create_try(display_name: &str, type_name: &str) -> Result<Box<dyn Function>> {
         let factory = TypeFactory::instance();
         let data_type = factory.get(type_name)?;
 
@@ -58,7 +58,7 @@ impl CastFunction {
     }
 }
 
-impl Function2 for CastFunction {
+impl Function for CastFunction {
     fn name(&self) -> &str {
         "CastFunction"
     }

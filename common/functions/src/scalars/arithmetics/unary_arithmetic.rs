@@ -15,13 +15,14 @@
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::ArithmeticNegateFunction;
-use crate::scalars::Function2;
-use crate::scalars::Monotonicity2;
+use crate::scalars::EvalContext;
+use crate::scalars::Function;
+use crate::scalars::Monotonicity;
 use crate::scalars::ScalarUnaryExpression;
 use crate::scalars::ScalarUnaryFunction;
 
@@ -42,7 +43,7 @@ where
         op: DataValueUnaryOperator,
         result_type: DataTypePtr,
         func: F,
-    ) -> Result<Box<dyn Function2>> {
+    ) -> Result<Box<dyn Function>> {
         let unary = ScalarUnaryExpression::<L, O, _>::new(func);
         Ok(Box::new(Self {
             op,
@@ -52,7 +53,7 @@ where
     }
 }
 
-impl<L, O, F> Function2 for UnaryArithmeticFunction<L, O, F>
+impl<L, O, F> Function for UnaryArithmeticFunction<L, O, F>
 where
     L: Scalar + Send + Sync + Clone,
     O: Scalar + Send + Sync + Clone,
@@ -67,11 +68,13 @@ where
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        let col = self.unary.eval(columns[0].column())?;
+        let col = self
+            .unary
+            .eval(columns[0].column(), &mut EvalContext::default())?;
         Ok(Arc::new(col))
     }
 
-    fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         if args.len() != 1 {
             return Err(ErrorCode::BadArguments(format!(
                 "Invalid argument lengths {} for get_monotonicity",

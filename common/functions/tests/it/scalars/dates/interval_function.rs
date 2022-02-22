@@ -13,23 +13,11 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::DataColumnWithField;
-use common_datavalues::DataType;
-use common_datavalues::DataValueBinaryOperator;
-use common_datavalues2::chrono::DateTime;
-use common_datavalues2::column_convert::convert2_old_column_with_field;
-use common_datavalues2::prelude::ToDataType;
-use common_datavalues2::ColumnWithField;
-use common_datavalues2::DataField;
-use common_datavalues2::DataSchemaRefExt;
-use common_datavalues2::Date16Type;
-use common_datavalues2::Date32Type;
-use common_datavalues2::DateTime32Type;
-use common_datavalues2::Series;
-use common_datavalues2::SeriesFrom;
+use common_datavalues::chrono::DateTime;
+use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::MonthsArithmeticFunction;
-use common_functions::scalars::SecondsArithmeticFunction;
+use common_functions::scalars::AddMonthsFunction;
+use common_functions::scalars::AddTimesFunction;
 
 #[test]
 fn test_add_months() -> Result<()> {
@@ -51,6 +39,8 @@ fn test_add_months() -> Result<()> {
         DataField::new("i16", i16::to_data_type()),
         DataField::new("i32", i32::to_data_type()),
         DataField::new("i64", i64::to_data_type()),
+        DataField::new("f32", f32::to_data_type()),
+        DataField::new("f64", f64::to_data_type()),
     ]);
 
     let blocks = DataBlock::create(schema.clone(), vec![
@@ -65,29 +55,43 @@ fn test_add_months() -> Result<()> {
         Series::from_data(vec![-13_i16]),
         Series::from_data(vec![-13_i32]),
         Series::from_data(vec![-13i64]),
+        Series::from_data(vec![1.2_f32]),
+        Series::from_data(vec![-1.2_f64]),
     ]);
 
-    let column = |col_name: &str| -> DataColumnWithField {
-        let c = ColumnWithField::new(
+    let column = |col_name: &str| -> ColumnWithField {
+        ColumnWithField::new(
             blocks.try_column_by_name(col_name).unwrap().clone(),
             schema.field_with_name(col_name).unwrap().clone(),
-        );
-
-        convert2_old_column_with_field(&c)
+        )
     };
 
-    let add_months =
-        MonthsArithmeticFunction::try_create("addYear", DataValueBinaryOperator::Plus, 1)?;
+    let fields = [
+        "u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "f32", "f64",
+    ];
+    let args = [
+        &UInt8Type::arc(),
+        &UInt16Type::arc(),
+        &UInt32Type::arc(),
+        &UInt64Type::arc(),
+        &Int8Type::arc(),
+        &Int16Type::arc(),
+        &Int32Type::arc(),
+        &Int64Type::arc(),
+        &Float32Type::arc(),
+        &Float64Type::arc(),
+    ];
 
     {
         let mut expects: Vec<u16> = Vec::new();
-        expects.reserve(8);
-        for c in ["u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64"] {
-            let col = add_months.eval(&[column("date16"), column(c)], 1)?;
-            let raw = col.to_array()?.u16()?.inner().values().as_slice().to_vec();
-            assert_eq!(raw.len(), 1);
-            assert_eq!(col.data_type(), DataType::UInt16);
-            expects.push(raw[0]);
+        expects.reserve(10);
+        for (field, arg) in fields.iter().zip(args.iter()) {
+            let add_months =
+                AddMonthsFunction::try_create_func("addMonths", 1, &[&Date16Type::arc(), arg])?;
+            let col = add_months.eval(&[column("date16"), column(field)], 1)?;
+            assert_eq!(col.len(), 1);
+            assert_eq!(col.data_type().data_type_id(), TypeID::UInt16);
+            expects.push(col.get_u64(0)? as u16);
         }
         assert_eq!(expects, vec![
             dt_to_days("2021-02-28T10:00:00Z") as u16,
@@ -98,18 +102,21 @@ fn test_add_months() -> Result<()> {
             dt_to_days("2019-01-29T10:00:00Z") as u16,
             dt_to_days("2019-01-29T10:00:00Z") as u16,
             dt_to_days("2019-01-29T10:00:00Z") as u16,
+            dt_to_days("2020-03-29T10:00:00Z") as u16,
+            dt_to_days("2020-01-29T10:00:00Z") as u16,
         ]);
     }
 
     {
         let mut expects: Vec<i32> = Vec::new();
-        expects.reserve(8);
-        for c in ["u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64"] {
-            let col = add_months.eval(&[column("date32"), column(c)], 1)?;
-            let raw = col.to_array()?.i32()?.inner().values().as_slice().to_vec();
-            assert_eq!(raw.len(), 1);
-            assert_eq!(col.data_type(), DataType::Int32);
-            expects.push(raw[0]);
+        expects.reserve(10);
+        for (field, arg) in fields.iter().zip(args.iter()) {
+            let add_months =
+                AddMonthsFunction::try_create_func("addMonths", 1, &[&Date32Type::arc(), arg])?;
+            let col = add_months.eval(&[column("date32"), column(field)], 1)?;
+            assert_eq!(col.len(), 1);
+            assert_eq!(col.data_type().data_type_id(), TypeID::Int32);
+            expects.push(col.get_i64(0)? as i32);
         }
         assert_eq!(expects, vec![
             dt_to_days("2021-02-28T10:00:00Z") as i32,
@@ -120,18 +127,23 @@ fn test_add_months() -> Result<()> {
             dt_to_days("2019-01-29T10:00:00Z") as i32,
             dt_to_days("2019-01-29T10:00:00Z") as i32,
             dt_to_days("2019-01-29T10:00:00Z") as i32,
+            dt_to_days("2020-03-29T10:00:00Z") as i32,
+            dt_to_days("2020-01-29T10:00:00Z") as i32,
         ]);
     }
 
     {
         let mut expects: Vec<u32> = Vec::new();
-        expects.reserve(8);
-        for c in ["u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64"] {
-            let col = add_months.eval(&[column("datetime32"), column(c)], 1)?;
-            let raw = col.to_array()?.u32()?.inner().values().as_slice().to_vec();
-            assert_eq!(raw.len(), 1);
-            assert_eq!(col.data_type(), DataType::UInt32);
-            expects.push(raw[0]);
+        expects.reserve(10);
+        for (field, arg) in fields.iter().zip(args.iter()) {
+            let add_months = AddMonthsFunction::try_create_func("addMonths", 1, &[
+                &DateTime32Type::arc(None),
+                arg,
+            ])?;
+            let col = add_months.eval(&[column("datetime32"), column(field)], 1)?;
+            assert_eq!(col.len(), 1);
+            assert_eq!(col.data_type().data_type_id(), TypeID::UInt32);
+            expects.push(col.get_u64(0)? as u32);
         }
         assert_eq!(expects, vec![
             dt_to_seconds("2021-02-28T01:02:03Z") as u32,
@@ -142,6 +154,8 @@ fn test_add_months() -> Result<()> {
             dt_to_seconds("2019-01-29T01:02:03Z") as u32,
             dt_to_seconds("2019-01-29T01:02:03Z") as u32,
             dt_to_seconds("2019-01-29T01:02:03Z") as u32,
+            dt_to_seconds("2020-03-29T01:02:03Z") as u32,
+            dt_to_seconds("2020-01-29T01:02:03Z") as u32,
         ]);
     }
 
@@ -162,6 +176,8 @@ fn test_add_subtract_seconds() -> Result<()> {
         DataField::new("i16", i16::to_data_type()),
         DataField::new("i32", i32::to_data_type()),
         DataField::new("i64", i64::to_data_type()),
+        DataField::new("f32", f32::to_data_type()),
+        DataField::new("f64", f64::to_data_type()),
     ]);
 
     let blocks = DataBlock::create(schema.clone(), vec![
@@ -174,28 +190,45 @@ fn test_add_subtract_seconds() -> Result<()> {
         Series::from_data(vec![-1_i16]),
         Series::from_data(vec![-1_i32]),
         Series::from_data(vec![-1_i64]),
+        Series::from_data(vec![1.2_f32]),
+        Series::from_data(vec![-1.2_f64]),
     ]);
 
-    let column = |col_name: &str| -> DataColumnWithField {
-        let c = ColumnWithField::new(
+    let column = |col_name: &str| -> ColumnWithField {
+        ColumnWithField::new(
             blocks.try_column_by_name(col_name).unwrap().clone(),
             schema.field_with_name(col_name).unwrap().clone(),
-        );
-
-        convert2_old_column_with_field(&c)
+        )
     };
 
-    let add_seconds =
-        SecondsArithmeticFunction::try_create("addSeconds", DataValueBinaryOperator::Plus, 1)?;
+    let fields = [
+        "u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "f32", "f64",
+    ];
+    let args = [
+        &UInt8Type::arc(),
+        &UInt16Type::arc(),
+        &UInt32Type::arc(),
+        &UInt64Type::arc(),
+        &Int8Type::arc(),
+        &Int16Type::arc(),
+        &Int32Type::arc(),
+        &Int64Type::arc(),
+        &Float32Type::arc(),
+        &Float64Type::arc(),
+    ];
+
     {
         let mut expects: Vec<u32> = Vec::new();
-        expects.reserve(8);
-        for c in ["u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64"] {
-            let col = add_seconds.eval(&[column(c), column("datetime32")], 1)?;
-            let raw = col.to_array()?.u32()?.inner().values().as_slice().to_vec();
-            assert_eq!(raw.len(), 1);
-            assert_eq!(col.data_type(), DataType::UInt32);
-            expects.push(raw[0]);
+        expects.reserve(10);
+        for (field, arg) in fields.iter().zip(args.iter()) {
+            let add_seconds = AddTimesFunction::try_create_func("addSeconds", 1, &[
+                &DateTime32Type::arc(None),
+                arg,
+            ])?;
+            let col = add_seconds.eval(&[column("datetime32"), column(field)], 1)?;
+            assert_eq!(col.len(), 1);
+            assert_eq!(col.data_type().data_type_id(), TypeID::UInt32);
+            expects.push(col.get_u64(0)? as u32);
         }
         assert_eq!(expects, vec![
             dt_to_seconds("2020-03-01T00:00:00Z") as u32,
@@ -205,23 +238,24 @@ fn test_add_subtract_seconds() -> Result<()> {
             dt_to_seconds("2020-02-29T23:59:58Z") as u32,
             dt_to_seconds("2020-02-29T23:59:58Z") as u32,
             dt_to_seconds("2020-02-29T23:59:58Z") as u32,
+            dt_to_seconds("2020-02-29T23:59:58Z") as u32,
+            dt_to_seconds("2020-03-01T00:00:00Z") as u32,
             dt_to_seconds("2020-02-29T23:59:58Z") as u32,
         ]);
     }
-    let sub_seconds = SecondsArithmeticFunction::try_create(
-        "subtractSeconds",
-        DataValueBinaryOperator::Minus,
-        1,
-    )?;
+
     {
         let mut expects: Vec<u32> = Vec::new();
-        expects.reserve(8);
-        for c in ["u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64"] {
-            let col = sub_seconds.eval(&[column(c), column("datetime32")], 1)?;
-            let raw = col.to_array()?.u32()?.inner().values().as_slice().to_vec();
-            assert_eq!(raw.len(), 1);
-            assert_eq!(col.data_type(), DataType::UInt32);
-            expects.push(raw[0]);
+        expects.reserve(10);
+        for (field, arg) in fields.iter().zip(args.iter()) {
+            let add_seconds = AddTimesFunction::try_create_func("subtractSeconds", -1, &[
+                &DateTime32Type::arc(None),
+                arg,
+            ])?;
+            let col = add_seconds.eval(&[column("datetime32"), column(field)], 1)?;
+            assert_eq!(col.len(), 1);
+            assert_eq!(col.data_type().data_type_id(), TypeID::UInt32);
+            expects.push(col.get_u64(0)? as u32);
         }
         assert_eq!(expects, vec![
             dt_to_seconds("2020-02-29T23:59:58Z") as u32,
@@ -231,6 +265,8 @@ fn test_add_subtract_seconds() -> Result<()> {
             dt_to_seconds("2020-03-01T00:00:00Z") as u32,
             dt_to_seconds("2020-03-01T00:00:00Z") as u32,
             dt_to_seconds("2020-03-01T00:00:00Z") as u32,
+            dt_to_seconds("2020-03-01T00:00:00Z") as u32,
+            dt_to_seconds("2020-02-29T23:59:58Z") as u32,
             dt_to_seconds("2020-03-01T00:00:00Z") as u32,
         ]);
     }

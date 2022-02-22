@@ -14,10 +14,10 @@
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
-use common_datavalues2::chrono::Datelike;
-use common_datavalues2::chrono::NaiveDate;
-use common_datavalues2::chrono::NaiveDateTime;
-use common_datavalues2::prelude::*;
+use common_datavalues::chrono::Datelike;
+use common_datavalues::chrono::NaiveDate;
+use common_datavalues::chrono::NaiveDateTime;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use super::cast_with_type::arrow_cast_compute;
@@ -77,11 +77,11 @@ pub fn cast_from_string(
             Ok((builder.build(size), Some(bitmap.into())))
         }
         TypeID::DateTime64 => {
-            let mut builder = ColumnBuilder::<u64>::with_capacity(size);
+            let mut builder = ColumnBuilder::<i64>::with_capacity(size);
             for (row, v) in str_column.iter().enumerate() {
                 match string_to_datetime64(v) {
                     Some(d) => {
-                        builder.append(d.timestamp_nanos() as u64);
+                        builder.append(d.timestamp_nanos());
                     }
                     None => bitmap.set(row, false),
                 }

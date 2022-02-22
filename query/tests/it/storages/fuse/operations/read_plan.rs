@@ -15,7 +15,7 @@
 
 use std::collections::HashMap;
 
-use common_datavalues2::DataValue;
+use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Extras;
 use databend_query::storages::fuse::meta::BlockLocation;
