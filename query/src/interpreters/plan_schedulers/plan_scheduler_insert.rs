@@ -82,7 +82,7 @@ impl<'a> InsertWithPlan<'a> {
 
         // rewrite the optimized the plan
         let rewritten_plan = match optimized_plan {
-            // if it is a StagePlan Node, we insert the a SinkPlan in between the Stage and Stage.input
+            // if it is a StagePlan Node, we insert a SinkPlan in between the Stage and Stage.input
             // i.e.
             //    StagePlan <~ PlanNodeA  => StagePlan <~ Sink <~ PlanNodeA
             PlanNode::Stage(r) => {

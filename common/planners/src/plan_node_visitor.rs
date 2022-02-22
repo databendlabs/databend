@@ -27,6 +27,7 @@ use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::CreateUserUDFPlan;
+use crate::DeletePlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
@@ -132,6 +133,8 @@ pub trait PlanVisitor {
 
             // Insert.
             PlanNode::Insert(plan) => self.visit_insert_into(plan),
+
+            PlanNode::Delete(plan) => self.visit_delete_node(plan),
 
             // Copy.
             PlanNode::Copy(plan) => self.visit_copy(plan),
@@ -348,6 +351,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_insert_into(&mut self, _: &InsertPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_delete_node(&mut self, _: &DeletePlan) -> Result<()> {
         Ok(())
     }
 

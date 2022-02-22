@@ -31,6 +31,7 @@ use crate::sql::DfStatement;
 pub enum AnalyzedResult {
     SimpleQuery(Box<PlanNode>),
     SelectQuery(Box<QueryAnalyzeState>),
+    DeleteStatement(Box<QueryAnalyzeState>),
     ExplainQuery((ExplainType, Box<QueryAnalyzeState>)),
 }
 
@@ -183,6 +184,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::DropUDF(v) => v.analyze(ctx).await,
             DfStatement::AlterUDF(v) => v.analyze(ctx).await,
             DfStatement::ShowEngines(v) => v.analyze(ctx).await,
+            DfStatement::Delete(v) => v.analyze(ctx).await,
         }
     }
 }

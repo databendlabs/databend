@@ -29,6 +29,7 @@ use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::CreateUserInterpreter;
 use crate::interpreters::CreateUserStageInterpreter;
 use crate::interpreters::CreateUserUDFInterpreter;
+use crate::interpreters::DeleteInterpreter;
 use crate::interpreters::DescribeTableInterpreter;
 use crate::interpreters::DropDatabaseInterpreter;
 use crate::interpreters::DropTableInterpreter;
@@ -74,6 +75,9 @@ impl InterpreterFactory {
 
             // Insert.
             PlanNode::Insert(v) => InsertInterpreter::try_create(ctx_clone, v),
+
+            // Delete.
+            PlanNode::Delete(v) => DeleteInterpreter::try_create(ctx_clone, v),
 
             // Copy.
             PlanNode::Copy(v) => CopyInterpreter::try_create(ctx_clone, v),

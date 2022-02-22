@@ -15,6 +15,7 @@
 mod parser_admin;
 mod parser_copy;
 mod parser_database;
+mod parser_delete;
 mod parser_optimize;
 mod parser_show;
 mod parser_stage;

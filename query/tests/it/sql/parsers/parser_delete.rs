@@ -12,19 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod parser_admin;
-mod parser_copy;
-mod parser_database;
-mod parser_delete;
-mod parser_explain;
-mod parser_insert;
-mod parser_kill;
-mod parser_optimize;
-mod parser_query;
-mod parser_set;
-mod parser_show;
-mod parser_stage;
-mod parser_table;
-mod parser_udf;
-mod parser_use;
-mod parser_user;
+use common_exception::Result;
+use common_planners::Optimization;
+use databend_query::sql::statements::DfOptimizeTable;
+use databend_query::sql::*;
+use sqlparser::ast::*;
+
+use crate::sql::sql_parser::*;
+
+#[test]
+fn delete_from() -> Result<()> {
+    {
+        let sql = "delete from t1";
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::PURGE,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    Ok(())
+}

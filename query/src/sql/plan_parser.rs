@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::DeletePlan;
 use common_planners::ExplainPlan;
 use common_planners::Expression;
 use common_planners::PlanBuilder;
@@ -60,6 +61,7 @@ impl PlanParser {
         match statements[0].analyze(ctx.clone()).await? {
             AnalyzedResult::SimpleQuery(plan) => Ok(*plan),
             AnalyzedResult::SelectQuery(data) => Self::build_query_plan(&data),
+            AnalyzedResult::DeleteStatement(data) => Self::build_delete_stmt_plan(&data),
             AnalyzedResult::ExplainQuery((typ, data)) => {
                 let res = Self::build_query_plan(&data)?;
                 Ok(PlanNode::Explain(ExplainPlan {
@@ -68,6 +70,14 @@ impl PlanParser {
                 }))
             }
         }
+    }
+
+    pub fn build_delete_stmt_plan(data: &QueryAnalyzeState) -> Result<PlanNode> {
+        let from = Self::build_from_plan(data)?;
+        let filter = Self::build_filter_plan(from, data)?;
+        Ok(PlanNode::Delete(DeletePlan {
+            input: Arc::new(filter),
+        }))
     }
 
     pub fn build_query_plan(data: &QueryAnalyzeState) -> Result<PlanNode> {

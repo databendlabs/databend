@@ -28,6 +28,7 @@ use crate::sql::statements::DfCreateStage;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUDF;
 use crate::sql::statements::DfCreateUser;
+use crate::sql::statements::DfDeleteStatement;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropStage;
@@ -63,6 +64,7 @@ pub enum DfStatement {
     // ANSI SQL AST node
     Query(Box<DfQueryStatement>),
     Explain(DfExplain),
+    Delete(Box<DfDeleteStatement>),
 
     // Databases.
     ShowDatabases(DfShowDatabases),

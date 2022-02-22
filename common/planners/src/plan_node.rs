@@ -28,6 +28,7 @@ use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::CreateUserUDFPlan;
+use crate::DeletePlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
@@ -91,6 +92,9 @@ pub enum PlanNode {
 
     // Insert.
     Insert(InsertPlan),
+
+    // Delete.
+    Delete(DeletePlan),
 
     // Copy.
     Copy(CopyPlan),
@@ -172,6 +176,9 @@ impl PlanNode {
             // Insert.
             PlanNode::Insert(v) => v.schema(),
 
+            // Insert.
+            PlanNode::Delete(v) => v.schema(),
+
             // Copy.
             PlanNode::Copy(v) => v.schema(),
 
@@ -250,6 +257,9 @@ impl PlanNode {
 
             // Insert.
             PlanNode::Insert(_) => "InsertPlan",
+
+            // Delete.
+            PlanNode::Delete(_) => "DeletePlan",
 
             // Copy.
             PlanNode::Copy(_) => "CopyPlan",
