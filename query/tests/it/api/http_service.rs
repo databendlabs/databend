@@ -14,9 +14,6 @@
 
 use std::fs::File;
 use std::io::Read;
-use std::net::Ipv4Addr;
-use std::net::SocketAddrV4;
-use std::net::TcpListener;
 
 use common_base::get_free_tcp_port;
 use common_base::tokio;
