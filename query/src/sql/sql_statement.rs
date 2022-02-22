@@ -24,6 +24,7 @@ use super::statements::DfDescribeStage;
 use crate::sql::statements::DfAlterUDF;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCreateDatabase;
+use crate::sql::statements::DfCreateRole;
 use crate::sql::statements::DfCreateStage;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUDF;
@@ -31,12 +32,13 @@ use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDeleteStatement;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
+use crate::sql::statements::DfDropRole;
 use crate::sql::statements::DfDropStage;
 use crate::sql::statements::DfDropTable;
 use crate::sql::statements::DfDropUDF;
 use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfExplain;
-use crate::sql::statements::DfGrantStatement;
+use crate::sql::statements::DfGrantPrivilegeStatement;
 use crate::sql::statements::DfInsertStatement;
 use crate::sql::statements::DfKillStatement;
 use crate::sql::statements::DfOptimizeTable;
@@ -111,11 +113,15 @@ pub enum DfStatement {
     ShowUsers(DfShowUsers),
     DropUser(DfDropUser),
 
+    // Role
+    CreateRole(DfCreateRole),
+    DropRole(DfDropRole),
+
     // Copy
     Copy(DfCopy),
 
     // Grant
-    GrantPrivilege(DfGrantStatement),
+    GrantPrivilege(DfGrantPrivilegeStatement),
     RevokePrivilege(DfRevokeStatement),
     ShowGrants(DfShowGrants),
 

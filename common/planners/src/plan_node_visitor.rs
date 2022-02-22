@@ -23,6 +23,7 @@ use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
+use crate::CreateRolePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
@@ -31,6 +32,7 @@ use crate::DeletePlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
+use crate::DropRolePlan;
 use crate::DropTablePlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
@@ -161,6 +163,10 @@ pub trait PlanVisitor {
             PlanNode::DropUser(plan) => self.visit_drop_user(plan),
             PlanNode::GrantPrivilege(plan) => self.visit_grant_privilege(plan),
             PlanNode::RevokePrivilege(plan) => self.visit_revoke_privilege(plan),
+
+            // Role.
+            PlanNode::CreateRole(plan) => self.visit_create_role(plan),
+            PlanNode::DropRole(plan) => self.visit_drop_role(plan),
 
             // Stage.
             PlanNode::CreateUserStage(plan) => self.visit_create_user_stage(plan),
@@ -319,6 +325,14 @@ pub trait PlanVisitor {
     }
 
     fn visit_revoke_privilege(&mut self, _: &RevokePrivilegePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_create_role(&mut self, _: &CreateRolePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_drop_role(&mut self, _: &DropRolePlan) -> Result<()> {
         Ok(())
     }
 

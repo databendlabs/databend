@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
@@ -21,7 +22,7 @@ use databend_query::sql::statements::DfAuthOption;
 use databend_query::sql::statements::DfCreateUser;
 use databend_query::sql::statements::DfDropUser;
 use databend_query::sql::statements::DfGrantObject;
-use databend_query::sql::statements::DfGrantStatement;
+use databend_query::sql::statements::DfGrantPrivilegeStatement;
 use databend_query::sql::statements::DfRevokeStatement;
 use databend_query::sql::statements::DfShowGrants;
 use databend_query::sql::*;
@@ -274,9 +275,8 @@ fn show_grants_test() -> Result<()> {
 fn grant_privilege_test() -> Result<()> {
     expect_parse_ok(
         "GRANT ALL ON * TO 'test'@'localhost'",
-        DfStatement::GrantPrivilege(DfGrantStatement {
-            name: String::from("test"),
-            hostname: String::from("localhost"),
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
+            principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
             on: DfGrantObject::Database(None),
             priv_types: UserPrivilegeSet::all_privileges(),
         }),
@@ -284,9 +284,8 @@ fn grant_privilege_test() -> Result<()> {
 
     expect_parse_ok(
         "GRANT ALL PRIVILEGES ON * TO 'test'@'localhost'",
-        DfStatement::GrantPrivilege(DfGrantStatement {
-            name: String::from("test"),
-            hostname: String::from("localhost"),
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
+            principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
             on: DfGrantObject::Database(None),
             priv_types: UserPrivilegeSet::all_privileges(),
         }),
@@ -294,9 +293,8 @@ fn grant_privilege_test() -> Result<()> {
 
     expect_parse_ok(
         "GRANT INSERT ON `db1`.`tb1` TO 'test'@'localhost'",
-        DfStatement::GrantPrivilege(DfGrantStatement {
-            name: String::from("test"),
-            hostname: String::from("localhost"),
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
+            principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
             on: DfGrantObject::Table(Some("db1".into()), "tb1".into()),
             priv_types: {
                 let mut privileges = UserPrivilegeSet::empty();
@@ -308,9 +306,8 @@ fn grant_privilege_test() -> Result<()> {
 
     expect_parse_ok(
         "GRANT INSERT ON `tb1` TO 'test'@'localhost'",
-        DfStatement::GrantPrivilege(DfGrantStatement {
-            name: String::from("test"),
-            hostname: String::from("localhost"),
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
+            principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
             on: DfGrantObject::Table(None, "tb1".into()),
             priv_types: {
                 let mut privileges = UserPrivilegeSet::empty();
@@ -322,9 +319,8 @@ fn grant_privilege_test() -> Result<()> {
 
     expect_parse_ok(
         "GRANT INSERT ON `db1`.'*' TO 'test'@'localhost'",
-        DfStatement::GrantPrivilege(DfGrantStatement {
-            name: String::from("test"),
-            hostname: String::from("localhost"),
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
+            principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
             on: DfGrantObject::Database(Some("db1".into())),
             priv_types: {
                 let mut privileges = UserPrivilegeSet::empty();
@@ -335,10 +331,23 @@ fn grant_privilege_test() -> Result<()> {
     )?;
 
     expect_parse_ok(
+        "GRANT CREATE, SELECT ON * TO USER 'test'@'localhost'",
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
+            principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
+            on: DfGrantObject::Database(None),
+            priv_types: {
+                let mut privileges = UserPrivilegeSet::empty();
+                privileges.set_privilege(UserPrivilegeType::Select);
+                privileges.set_privilege(UserPrivilegeType::Create);
+                privileges
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
         "GRANT CREATE, SELECT ON * TO 'test'@'localhost'",
-        DfStatement::GrantPrivilege(DfGrantStatement {
-            name: String::from("test"),
-            hostname: String::from("localhost"),
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
+            principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
             on: DfGrantObject::Database(None),
             priv_types: {
                 let mut privileges = UserPrivilegeSet::empty();
@@ -351,9 +360,8 @@ fn grant_privilege_test() -> Result<()> {
 
     expect_parse_ok(
         "GRANT CREATE USER, CREATE ROLE, CREATE, SELECT ON * TO 'test'@'localhost'",
-        DfStatement::GrantPrivilege(DfGrantStatement {
-            name: String::from("test"),
-            hostname: String::from("localhost"),
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
+            principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
             on: DfGrantObject::Database(None),
             priv_types: {
                 let mut privileges = UserPrivilegeSet::empty();
@@ -361,6 +369,33 @@ fn grant_privilege_test() -> Result<()> {
                 privileges.set_privilege(UserPrivilegeType::CreateUser);
                 privileges.set_privilege(UserPrivilegeType::CreateRole);
                 privileges.set_privilege(UserPrivilegeType::Select);
+                privileges
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
+        "GRANT CREATE USER, CREATE ROLE ON * TO ROLE 'myrole'@'%'",
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
+            principal: PrincipalIdentity::role("myrole".to_string(), "%".to_string()),
+            on: DfGrantObject::Database(None),
+            priv_types: {
+                let mut privileges = UserPrivilegeSet::empty();
+                privileges.set_privilege(UserPrivilegeType::CreateUser);
+                privileges.set_privilege(UserPrivilegeType::CreateRole);
+                privileges
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
+        "GRANT CREATE USER ON * TO ROLE 'myrole'",
+        DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
+            principal: PrincipalIdentity::role("myrole".to_string(), "%".to_string()),
+            on: DfGrantObject::Database(None),
+            priv_types: {
+                let mut privileges = UserPrivilegeSet::empty();
+                privileges.set_privilege(UserPrivilegeType::CreateUser);
                 privileges
             },
         }),
@@ -399,8 +434,7 @@ fn revoke_privilege_test() -> Result<()> {
     expect_parse_ok(
         "REVOKE ALL ON * FROM 'test'@'localhost'",
         DfStatement::RevokePrivilege(DfRevokeStatement {
-            username: String::from("test"),
-            hostname: String::from("localhost"),
+            principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
             on: DfGrantObject::Database(None),
             priv_types: UserPrivilegeSet::all_privileges(),
         }),
