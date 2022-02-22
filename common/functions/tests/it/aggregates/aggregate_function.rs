@@ -42,9 +42,9 @@ fn test_aggregate_function() -> Result<()> {
         Series::from_data(vec![1i64, 2, 3, 4]),
         // arrays for window funnel function
         Series::from_data(vec![1, 0u32, 2, 3]),
-        Series::from_data(vec![true, false, false, false]),
-        Series::from_data(vec![false, false, false, false]),
-        Series::from_data(vec![false, false, false, false]),
+        Series::from_data(vec![1u8, 0, 0, 0]),
+        Series::from_data(vec![0u8, 0, 0, 0]),
+        Series::from_data(vec![0u8, 0, 0, 0]),
     ];
 
     let args = vec![
@@ -52,9 +52,9 @@ fn test_aggregate_function() -> Result<()> {
         DataField::new("b", i64::to_data_type()),
         // args for window funnel function
         DataField::new("dt", DateTime32Type::arc(None)),
-        DataField::new("event = 1001", bool::to_data_type()),
-        DataField::new("event = 1002", bool::to_data_type()),
-        DataField::new("event = 1003", bool::to_data_type()),
+        DataField::new("event = 1001", u8::to_data_type()),
+        DataField::new("event = 1002", u8::to_data_type()),
+        DataField::new("event = 1003", u8::to_data_type()),
     ];
 
     let tests = vec![
@@ -375,9 +375,9 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
         Series::from_data(vec!["a", "b", "c", "d"]),
         // arrays for window funnel function
         Series::from_data(vec![0u32, 2, 1, 3]),
-        Series::from_data(vec![true, false, false, false]),
-        Series::from_data(vec![false, false, false, false]),
-        Series::from_data(vec![false, false, false, false]),
+        Series::from_data(vec![1u8, 0, 0, 0]),
+        Series::from_data(vec![0u8, 0, 0, 0]),
+        Series::from_data(vec![0u8, 0, 0, 0]),
     ];
 
     let args = vec![
@@ -386,8 +386,8 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
         DataField::new("c", Vu8::to_data_type()),
         // args for window funnel function
         DataField::new("dt", DateTime32Type::arc(None)),
-        DataField::new("event = 1001", bool::to_data_type()),
-        DataField::new("event = 1002", bool::to_data_type()),
+        DataField::new("event = 1001", u8::to_data_type()),
+        DataField::new("event = 1002", u8::to_data_type()),
     ];
 
     let tests = vec![
@@ -709,7 +709,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
 
     let arrays: Vec<ColumnRef> = vec![
         Int64Column::from_slice(&[]).arc(),
-        BooleanColumn::from_slice(&[]).arc(),
+        UInt8Column::from_slice(&[]).arc(),
     ];
 
     let args = vec![

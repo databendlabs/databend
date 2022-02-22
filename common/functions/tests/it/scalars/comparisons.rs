@@ -27,7 +27,7 @@ fn test_eq_comparison_function() -> Result<()> {
             Series::from_data(vec![4i64, 3, 2, 4]),
             Series::from_data(vec![1i64, 2, 3, 4]),
         ],
-        expect: Series::from_data(vec![false, false, false, true]),
+        expect: Series::from_data(vec![0u8, 0, 0, 1]),
         error: "",
     }];
 
@@ -42,7 +42,7 @@ fn test_gt_comparison_function() -> Result<()> {
             Series::from_data(vec![4i64, 3, 2, 4]),
             Series::from_data(vec![1i64, 2, 3, 4]),
         ],
-        expect: Series::from_data(vec![true, true, false, false]),
+        expect: Series::from_data(vec![1u8, 1, 0, 0]),
         error: "",
     }];
 
@@ -57,7 +57,7 @@ fn test_gt_eq_comparison_function() -> Result<()> {
             Series::from_data(vec![4i64, 3, 2, 4]),
             Series::from_data(vec![1i64, 2, 3, 4]),
         ],
-        expect: Series::from_data(vec![true, true, false, true]),
+        expect: Series::from_data(vec![1u8, 1, 0, 1]),
         error: "",
     }];
 
@@ -72,7 +72,7 @@ fn test_lt_comparison_function() -> Result<()> {
             Series::from_data(vec![4i64, 3, 2, 4]),
             Series::from_data(vec![1i64, 2, 3, 4]),
         ],
-        expect: Series::from_data(vec![false, false, true, false]),
+        expect: Series::from_data(vec![0u8, 0, 1, 0]),
         error: "",
     }];
 
@@ -87,7 +87,7 @@ fn test_lt_eq_comparison_function() -> Result<()> {
             Series::from_data(vec![4i64, 3, 2, 4]),
             Series::from_data(vec![1i64, 2, 3, 4]),
         ],
-        expect: Series::from_data(vec![false, false, true, true]),
+        expect: Series::from_data(vec![0u8, 0, 1, 1]),
         error: "",
     }];
 
@@ -102,7 +102,7 @@ fn test_not_eq_comparison_function() -> Result<()> {
             Series::from_data(vec![4i64, 3, 2, 4]),
             Series::from_data(vec![1i64, 2, 3, 4]),
         ],
-        expect: Series::from_data(vec![true, true, true, false]),
+        expect: Series::from_data(vec![1u8, 1, 1, 0]),
         error: "",
     }];
 
@@ -117,7 +117,7 @@ fn test_like_comparison_function() -> Result<()> {
             Series::from_data(vec!["abc", "abd", "abe", "abf"]),
             Series::from_data(vec!["a%", "_b_", "abe", "a"]),
         ],
-        expect: Series::from_data(vec![true, true, true, false]),
+        expect: Series::from_data(vec![1u8, 1, 1, 0]),
         error: "",
     }];
 
@@ -132,7 +132,7 @@ fn test_not_like_comparison_function() -> Result<()> {
             Series::from_data(vec!["abc", "abd", "abe", "abf"]),
             Series::from_data(vec!["a%", "_b_", "abe", "a"]),
         ],
-        expect: Series::from_data(vec![false, false, false, true]),
+        expect: Series::from_data(vec![0u8, 0, 0, 1]),
         error: "",
     }];
 
@@ -147,7 +147,7 @@ fn test_regexp_comparison_function() -> Result<()> {
             Series::from_data(vec!["abc", "abd", "abe", "abf", "abc", ""]),
             Series::from_data(vec!["^a", "^b", "abe", "a", "", ""]),
         ],
-        expect: Series::from_data(vec![true, false, true, true, false, true]),
+        expect: Series::from_data(vec![1u8, 0, 1, 1, 0, 1]),
         error: "",
     }];
 
@@ -162,7 +162,7 @@ fn test_not_regexp_comparison_function() -> Result<()> {
             Series::from_data(vec!["abc", "abd", "abe", "abf", "abc", ""]),
             Series::from_data(vec!["^a", "^b", "abe", "a", "", ""]),
         ],
-        expect: Series::from_data(vec![false, true, false, false, true, false]),
+        expect: Series::from_data(vec![0u8, 1, 0, 0, 1, 0]),
         error: "",
     }];
 

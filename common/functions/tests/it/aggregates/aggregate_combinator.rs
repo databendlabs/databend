@@ -37,12 +37,12 @@ fn test_aggregate_combinator_function() -> Result<()> {
 
     let arrays: Vec<ColumnRef> = vec![
         Series::from_data(vec![4_i64, 3, 2, 1, 3, 4]),
-        Series::from_data(vec![true, true, false, true, true, true]),
+        Series::from_data(vec![1u8, 1, 0, 1, 1, 1]),
     ];
 
     let args = vec![
         DataField::new("a", i64::to_data_type()),
-        DataField::new("b", bool::to_data_type()),
+        DataField::new("b", u8::to_data_type()),
     ];
 
     let tests = vec![
@@ -214,12 +214,12 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
 
     let arrays: Vec<ColumnRef> = vec![
         Int64Column::from_slice(&[]).arc(),
-        BooleanColumn::from_slice(&[]).arc(),
+        UInt8Column::from_slice(&[]).arc(),
     ];
 
     let args = vec![
         DataField::new("a", i64::to_data_type()),
-        DataField::new("b", bool::to_data_type()),
+        DataField::new("b", u8::to_data_type()),
     ];
 
     let tests = vec![
