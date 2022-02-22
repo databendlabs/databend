@@ -21,6 +21,7 @@ use common_exception::Result;
 use once_cell::sync::Lazy;
 
 use super::function::Function;
+use super::ArithmeticAdapter;
 use super::ArithmeticFunction;
 use super::ComparisonFunction;
 use super::ConditionalFunction;
@@ -198,19 +199,20 @@ impl FunctionFactory {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
 
-        let inner = match self.case_insensitive_desc.get(&lowercase_name) {
+        match self.case_insensitive_desc.get(&lowercase_name) {
             // TODO(Winter): we should write similar function names into error message if function name is not found.
             None => match self.case_insensitive_arithmetic_desc.get(&lowercase_name) {
                 None => Err(ErrorCode::UnknownFunction(format!(
                     "Unsupported Function: {}",
                     origin_name
                 ))),
-                Some(desc) => (desc.arithmetic_creator)(origin_name, args),
+                Some(desc) => ArithmeticAdapter::try_create(desc, origin_name, args),
             },
-            Some(desc) => (desc.function_creator)(origin_name),
-        }?;
-
-        Ok(FunctionAdapter::create(inner))
+            Some(desc) => {
+                let inner = (desc.function_creator)(origin_name)?;
+                Ok(FunctionAdapter::create(inner))
+            }
+        }
     }
 
     pub fn get_features(&self, name: impl AsRef<str>) -> Result<FunctionFeatures> {
