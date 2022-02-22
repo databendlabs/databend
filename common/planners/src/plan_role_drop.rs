@@ -16,18 +16,15 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_meta_types::GrantObject;
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserPrivilegeSet;
+use common_meta_types::RoleIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct RevokePrivilegePlan {
-    pub principal: PrincipalIdentity,
-    pub priv_types: UserPrivilegeSet,
-    pub on: GrantObject,
+pub struct DropRolePlan {
+    pub if_exists: bool,
+    pub role_identity: RoleIdentity,
 }
 
-impl RevokePrivilegePlan {
+impl DropRolePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

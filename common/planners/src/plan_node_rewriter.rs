@@ -30,6 +30,7 @@ use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
+use crate::CreateRolePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
@@ -37,6 +38,7 @@ use crate::CreateUserUDFPlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
+use crate::DropRolePlan;
 use crate::DropTablePlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
@@ -146,6 +148,10 @@ pub trait PlanRewriter: Sized {
             PlanNode::DropUser(plan) => self.drop_user(plan),
             PlanNode::GrantPrivilege(plan) => self.grant_privilege(plan),
             PlanNode::RevokePrivilege(plan) => self.revoke_privilege(plan),
+
+            // Role.
+            PlanNode::CreateRole(plan) => self.rewrite_create_role(plan),
+            PlanNode::DropRole(plan) => self.rewrite_drop_role(plan),
 
             // Stage.
             PlanNode::CreateUserStage(plan) => self.rewrite_create_user_stage(plan),
@@ -392,6 +398,14 @@ pub trait PlanRewriter: Sized {
 
     fn drop_user(&mut self, plan: &DropUserPlan) -> Result<PlanNode> {
         Ok(PlanNode::DropUser(plan.clone()))
+    }
+
+    fn rewrite_create_role(&mut self, plan: &CreateRolePlan) -> Result<PlanNode> {
+        Ok(PlanNode::CreateRole(plan.clone()))
+    }
+
+    fn rewrite_drop_role(&mut self, plan: &DropRolePlan) -> Result<PlanNode> {
+        Ok(PlanNode::DropRole(plan.clone()))
     }
 
     fn grant_privilege(&mut self, plan: &GrantPrivilegePlan) -> Result<PlanNode> {
