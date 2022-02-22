@@ -70,7 +70,7 @@ cargo-license = "0.4.2"
 cargo_metadata = "0.14.1"
 chrono = "0.4.19"
 chrono-tz = "0.6.1"
-clap = { version = "3.0.14", features = ["derive", "env"] }
+clap = { version = "3.1.1", features = ["derive", "env"] }
 dyn-clone = "1.0.4"
 futures = "0.3.21"
 headers = "0.3.6"
