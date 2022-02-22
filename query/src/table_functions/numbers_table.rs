@@ -139,7 +139,7 @@ impl Table for NumbersTable {
 
                 // No order by case
                 match sort_descriptions_result {
-                    Ok(v) if v.len() == 0 => {
+                    Ok(v) if v.is_empty() => {
                         limit = extras.limit;
                     }
                     _ => {}
