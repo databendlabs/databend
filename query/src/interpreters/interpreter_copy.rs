@@ -36,7 +36,6 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
-#[allow(dead_code)]
 pub struct CopyInterpreter {
     ctx: Arc<QueryContext>,
     plan: CopyPlan,
