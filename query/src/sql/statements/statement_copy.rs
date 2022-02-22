@@ -20,6 +20,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::FileFormatOptions;
+use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageParams;
 use common_meta_types::StageS3Storage;
@@ -46,6 +47,8 @@ pub struct DfCopy {
     pub encryption_options: HashMap<String, String>,
     pub file_format_options: HashMap<String, String>,
     pub files: Vec<String>,
+    pub on_error: String,
+    pub size_limit: String,
     pub validation_mode: String,
 }
 
@@ -75,15 +78,35 @@ impl AnalyzableStatement for DfCopy {
         }
 
         // Stage info.
-        let stage_info = if self.location.starts_with('@') {
+        let mut stage_info = if self.location.starts_with('@') {
             self.analyze_internal().await?
         } else {
             self.analyze_external().await?
         };
 
+        // Copy options.
+        {
+            // on_error.
+            if !self.on_error.is_empty() {
+                stage_info.copy_options.on_error =
+                    OnErrorMode::from_str(&self.on_error).map_err(ErrorCode::SyntaxException)?;
+            }
+
+            // size_limit.
+            if !self.size_limit.is_empty() {
+                let size_limit = self.size_limit.parse::<u64>().map_err(|_e| {
+                    ErrorCode::SyntaxException(format!(
+                        "size_limit must be number, got: {}",
+                        self.size_limit
+                    ))
+                })?;
+                stage_info.copy_options.size_limit = size_limit;
+            }
+        }
+
         // Validation mode.
         let validation_mode = ValidationMode::from_str(self.validation_mode.as_str())
-            .map_err(|e| ErrorCode::SyntaxException(e))?;
+            .map_err(ErrorCode::SyntaxException)?;
 
         // Stage plan.
         let stage_plan = UserStagePlan { stage_info };

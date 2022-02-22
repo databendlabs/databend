@@ -17,6 +17,35 @@ use std::str::FromStr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+/*
+-- Internal stage
+CREATE [ OR REPLACE ] [ TEMPORARY ] STAGE [ IF NOT EXISTS ] <internal_stage_name>
+    internalStageParams
+    directoryTableParams
+  [ FILE_FORMAT = ( { FORMAT_NAME = '<file_format_name>' | TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] ) } ]
+  [ COPY_OPTIONS = ( copyOptions ) ]
+  [ COMMENT = '<string_literal>' ]
+
+-- External stage
+CREATE [ OR REPLACE ] [ TEMPORARY ] STAGE [ IF NOT EXISTS ] <external_stage_name>
+    externalStageParams
+    directoryTableParams
+  [ FILE_FORMAT = ( { FORMAT_NAME = '<file_format_name>' | TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] ) } ]
+  [ COPY_OPTIONS = ( copyOptions ) ]
+  [ COMMENT = '<string_literal>' ]
+
+
+WHERE
+
+externalStageParams (for Amazon S3) ::=
+  URL = 's3://<bucket>[/<path>/]'
+  [ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' [ AWS_TOKEN = '<string>' ] } | AWS_ROLE = '<string>'  } ) ) } ]
+
+copyOptions ::=
+     ON_ERROR = { CONTINUE | SKIP_FILE | SKIP_FILE_<num> | SKIP_FILE_<num>% | ABORT_STATEMENT }
+     SIZE_LIMIT = <num>
+ */
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageType {
     Internal,
@@ -136,9 +165,50 @@ pub struct StageParams {
     pub storage: StageStorage,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum OnErrorMode {
+    None,
+    Continue,
+    SkipFile,
+    SkipFileNum(u64),
+    AbortStatement,
+}
+
+impl Default for OnErrorMode {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+impl FromStr for OnErrorMode {
+    type Err = String;
+    fn from_str(s: &str) -> std::result::Result<Self, String> {
+        match s.to_uppercase().as_str() {
+            "" => Ok(OnErrorMode::None),
+            "CONTINUE" => Ok(OnErrorMode::Continue),
+            "SKIP_FILE" => Ok(OnErrorMode::SkipFile),
+            v => {
+                let num_str = v.replace("SKIP_FILE_", "");
+                let nums = num_str.parse::<u64>();
+                match nums{
+                    Ok(v) => { Ok(OnErrorMode::SkipFileNum(v)) }
+                    Err(_) => {
+                        Err(
+                            format!("Unknown OnError mode:{:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT_STATEMENT }}", v)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]
-pub struct CopyOptions {}
+pub struct CopyOptions {
+    pub on_error: OnErrorMode,
+    pub size_limit: u64,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]

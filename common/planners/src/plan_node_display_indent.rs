@@ -283,6 +283,10 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
 
     fn format_copy(f: &mut Formatter, plan: &CopyPlan) -> fmt::Result {
         write!(f, "Copy into {:}.{:}", plan.db_name, plan.tbl_name)?;
-        write!(f, " ,stage_plan:{:?}", plan.stage_plan)
+        write!(f, " ,stage_plan:{:?}", plan.stage_plan)?;
+        if !plan.files.is_empty() {
+            write!(f, " ,files:{:?}", plan.files)?;
+        }
+        write!(f, " ,validation_mode:{:?}", plan.validation_mode)
     }
 }

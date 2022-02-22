@@ -68,7 +68,6 @@ impl CopyInterpreter {
                 );
 
                 let operator = opendal::services::s3::Backend::build()
-                    .bucket(bucket)
                     .region(region)
                     .bucket(bucket)
                     .credential(credential)

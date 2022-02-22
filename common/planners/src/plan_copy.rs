@@ -19,7 +19,7 @@ use common_meta_types::MetaId;
 
 use crate::UserStagePlan;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
 pub enum ValidationMode {
     None,
     ReturnNRows(u64),

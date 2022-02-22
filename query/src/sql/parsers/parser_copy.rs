@@ -57,6 +57,15 @@ impl<'a> DfParser<'a> {
             self.expect_token(")")?;
         }
 
+        // FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] )
+        let mut files: Vec<String> = vec![];
+        if self.consume_token("FILES") {
+            self.expect_token("=")?;
+            self.expect_token("(")?;
+            files = self.parse_list(&Token::Comma)?;
+            self.expect_token(")")?;
+        }
+
         // file_format = (type = csv field_delimiter = '|' skip_header = 1)
         let mut file_format_options = HashMap::default();
         if self.consume_token("FILE_FORMAT") {
@@ -66,13 +75,21 @@ impl<'a> DfParser<'a> {
             self.expect_token(")")?;
         }
 
-        // FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] )
-        let mut files: Vec<String> = vec![];
-        if self.consume_token("FILES") {
+        /*
+         copyOptions ::=
+         ON_ERROR = { CONTINUE | SKIP_FILE | SKIP_FILE_<num> | SKIP_FILE_<num>% | ABORT_STATEMENT }
+         SIZE_LIMIT = <num>
+        */
+        let mut on_error = "".to_string();
+        if self.consume_token("ON_ERROR") {
             self.expect_token("=")?;
-            self.expect_token("(")?;
-            files = self.parse_list(&Token::Comma)?;
-            self.expect_token(")")?;
+            on_error = self.parser.parse_literal_string()?;
+        }
+
+        let mut size_limit = "".to_string();
+        if self.consume_token("SIZE_LIMIT") {
+            self.expect_token("=")?;
+            size_limit = self.parser.parse_number_value()?.to_string();
         }
 
         // VALIDATION_MODE = RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS
@@ -90,6 +107,8 @@ impl<'a> DfParser<'a> {
             encryption_options,
             file_format_options,
             files,
+            on_error,
+            size_limit,
             validation_mode,
         }))
     }

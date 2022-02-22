@@ -54,6 +54,8 @@ fn copy_from_external_test() -> Result<()> {
                    "skip_header".into() => "1".into(),
             },
             files: vec![],
+            on_error: "".to_string(),
+            size_limit: "".to_string(),
             validation_mode: "".to_string(),
         }),
     }];
