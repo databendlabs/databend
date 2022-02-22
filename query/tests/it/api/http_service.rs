@@ -14,6 +14,9 @@
 
 use std::fs::File;
 use std::io::Read;
+use std::net::Ipv4Addr;
+use std::net::SocketAddrV4;
+use std::net::TcpListener;
 
 use common_base::tokio;
 use common_exception::Result;
@@ -91,7 +94,7 @@ async fn test_http_service_tls_server_failed_case_1() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
-    let addr_str = "127.0.0.1:30011";
+    let addr_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpService::create(
         SessionManagerBuilder::create()
             .api_tls_server_key(TEST_TLS_SERVER_KEY)
@@ -128,7 +131,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
 // cannot connect with server unless it have CA signed identity
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
-    let addr_str = "127.0.0.1:30012";
+    let addr_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpService::create(
         SessionManagerBuilder::create()
             .api_tls_server_key(TEST_TLS_SERVER_KEY)
@@ -151,4 +154,12 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
     let resp = client.get(url).send().await;
     assert!(resp.is_err());
     Ok(())
+}
+
+fn get_free_tcp_port() -> u16 {
+    // Assigning port 0 requests the OS to assign a free port
+    let loopback = Ipv4Addr::new(127, 0, 0, 1);
+    let socket = SocketAddrV4::new(loopback, 0);
+    let listener = TcpListener::bind(socket).unwrap();
+    listener.local_addr().unwrap().port()
 }
