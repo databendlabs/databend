@@ -12,30 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io;
+use std::net::Ipv4Addr;
+use std::net::SocketAddrV4;
+use std::net::TcpListener;
+use std::net::UdpSocket;
 
-pub type Result<T> = std::result::Result<T, CliError>;
+pub fn get_free_tcp_port() -> u16 {
+    // Assigning port 0 requests the OS to assign a free port
+    let loopback = Ipv4Addr::new(127, 0, 0, 1);
+    let socket = SocketAddrV4::new(loopback, 0);
+    let listener = TcpListener::bind(socket).unwrap();
+    listener.local_addr().unwrap().port()
+}
 
-#[derive(thiserror::Error, Debug)]
-pub enum CliError {
-    #[error("Unknown error: {0}")]
-    Unknown(String),
-
-    #[error("IO error: {0}")]
-    Io(#[from] io::Error),
-
-    #[error("Script error: {0}")]
-    Script(#[from] run_script::ScriptError),
-
-    #[error("Http error: {0}")]
-    Http(#[from] ureq::Error),
-
-    #[error("Serde error: {0}")]
-    Serde(#[from] serde_json::Error),
-
-    #[error("Nix error: {0}")]
-    Nix(#[from] nix::Error),
-
-    #[error("Exited")]
-    Exited,
+pub fn get_free_udp_port() -> u16 {
+    let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+    socket.local_addr().unwrap().port()
 }

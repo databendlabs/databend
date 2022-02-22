@@ -19,10 +19,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use clap::App;
-use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
+use clap::Command as App;
 use comfy_table::Cell;
 use comfy_table::Color;
 use comfy_table::Table;
@@ -358,7 +357,7 @@ impl Command for QueryCommand {
 
     fn clap(&self) -> App<'static> {
         App::new("query")
-            .setting(AppSettings::DisableVersionFlag)
+            .disable_version_flag(true)
             .about("Query on databend cluster")
             .arg(
                 Arg::new("profile")

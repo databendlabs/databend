@@ -17,8 +17,8 @@ use std::fmt::Formatter;
 use std::thread::sleep;
 use std::time::Duration;
 
-use clap::App;
 use clap::ArgMatches;
+use clap::Command as App;
 use colored::Colorize;
 use serde::Deserialize;
 use serde::Serialize;
