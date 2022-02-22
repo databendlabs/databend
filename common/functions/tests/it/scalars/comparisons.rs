@@ -128,7 +128,7 @@ fn test_like_comparison_function() -> Result<()> {
                 Series::from_data(vec![1, 2]),
             ],
             expect: Series::from_data(vec![true, true]),
-            error: "Illegal types [String, Int32] of argument of function like, must be strings",
+            error: "Expected a string type, but got Int32",
         },
     ];
 
@@ -169,7 +169,7 @@ fn test_regexp_comparison_function() -> Result<()> {
                 Series::from_data(vec![1, 2]),
             ],
             expect: Series::from_data(vec![true, false]),
-            error: "Illegal types [String, Int32] of argument of function regexp, must be strings",
+            error: "Expected a string type, but got Int32",
         },
     ];
 

@@ -48,7 +48,7 @@ fn test_regexp_like_function() -> Result<()> {
                 Series::from_data(vec![2, 3]),
             ],
             expect: Series::from_data(vec![1i8, 0]),
-            error: "Expected string arg, but got [String, Int32]",
+            error: "Expected a string type, but got Int32",
         },
         ScalarFunctionTest {
             name: "regexp-like-match-type-error",

@@ -18,13 +18,13 @@ use std::sync::Arc;
 
 use bstr::ByteSlice;
 use common_datavalues::prelude::*;
-use common_datavalues::TypeID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::izip;
 use regex::bytes::Regex as BytesRegex;
 use regex::bytes::RegexBuilder as BytesRegexBuilder;
 
+use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
@@ -56,13 +56,10 @@ impl Function for RegexpLikeFunction {
     }
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        let not_string = args.iter().any(|arg| arg.data_type_id() != TypeID::String);
-        if not_string {
-            return Err(ErrorCode::BadArguments(format!(
-                "Expected string arg, but got {:?}",
-                args,
-            )));
+        for arg in args {
+            assert_string(*arg)?;
         }
+
         Ok(Int8Type::arc())
     }
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
