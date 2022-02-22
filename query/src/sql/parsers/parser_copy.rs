@@ -83,20 +83,20 @@ impl<'a> DfParser<'a> {
         let mut on_error = "".to_string();
         if self.consume_token("ON_ERROR") {
             self.expect_token("=")?;
-            on_error = self.parser.parse_literal_string()?;
+            on_error = self.parse_value_or_ident()?;
         }
 
         let mut size_limit = "".to_string();
         if self.consume_token("SIZE_LIMIT") {
             self.expect_token("=")?;
-            size_limit = self.parser.parse_number_value()?.to_string();
+            size_limit = self.parse_value_or_ident()?;
         }
 
         // VALIDATION_MODE = RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS
         let mut validation_mode = "".to_string();
         if self.consume_token("VALIDATION_MODE") {
             self.expect_token("=")?;
-            validation_mode = self.parser.parse_literal_string()?;
+            validation_mode = self.parse_value_or_ident()?;
         }
 
         Ok(DfStatement::Copy(DfCopy {

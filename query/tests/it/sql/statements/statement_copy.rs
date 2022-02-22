@@ -32,17 +32,18 @@ async fn test_statement_copy() -> Result<()> {
 
     let tests = vec![
         TestCase {
-            name: "copy-external-passed",
+            name: "copy-external-ok",
             query: "copy into system.configs
         from 's3://mybucket/data/files'
         credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
         encryption=(master_key = 'my_master_key')
         file_format = (type = csv field_delimiter = '|' skip_header = 1)",
-            expect: r#"Copy into system.configs ,stage_plan:UserStagePlan { stage_info: UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions, comment: "" } } ,files:[] ,validation_mode:None"#,
+            expect: r#"Copy into system.configs ,stage_plan:UserStagePlan { stage_info: UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "" } } ,validation_mode:None"#,
             err: "",
         },
+
         TestCase {
-            name: "copy-external-validation-mode-passed",
+            name: "copy-external-validation-mode-ok",
             query: "copy into system.configs
         from 's3://mybucket/data/files'
         credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
@@ -50,11 +51,12 @@ async fn test_statement_copy() -> Result<()> {
         file_format = (type = csv field_delimiter = '|' skip_header = 1)
         VALIDATION_MODE = RETURN_13_ROWS
         ",
-            expect: r#"Copy into system.configs ,stage_plan:UserStagePlan { stage_info: UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions, comment: "" } } ,files:[] ,validation_mode:ReturnNRows(13)"#,
+            expect: r#"Copy into system.configs ,stage_plan:UserStagePlan { stage_info: UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "" } } ,validation_mode:ReturnNRows(13)"#,
             err: "",
         },
+
         TestCase {
-            name: "copy-external-files-and-validation-mode-passed",
+            name: "copy-external-files-and-validation-mode-ok",
             query: "copy into system.configs
         from 's3://mybucket/data/files'
         credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
@@ -63,11 +65,57 @@ async fn test_statement_copy() -> Result<()> {
         file_format = (type = csv field_delimiter = '|' skip_header = 1)
         VALIDATION_MODE = RETURN_13_ROWS
         ",
-            expect: r#"Copy into system.configs ,stage_plan:UserStagePlan { stage_info: UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions, comment: "" } } ,files:["'file1.csv'", "'file2.csv'"] ,validation_mode:ReturnNRows(13)"#,
+            expect: r#"Copy into system.configs ,stage_plan:UserStagePlan { stage_info: UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "" } } ,files:["'file1.csv'", "'file2.csv'"] ,validation_mode:ReturnNRows(13)"#,
             err: "",
         },
+
         TestCase {
-            name: "copy-external-table-not-found-failed",
+            name: "copy-external-copy-options-ok",
+            query: "copy into system.configs
+        from 's3://mybucket/data/files'
+        credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
+        encryption=(master_key = 'my_master_key')
+        files = ('file1.csv', 'file2.csv')
+        file_format = (type = csv field_delimiter = '|' skip_header = 1)
+        on_error = CONTINUE size_limit = 10
+        VALIDATION_MODE = RETURN_13_ROWS
+        ",
+            expect: r#"Copy into system.configs ,stage_plan:UserStagePlan { stage_info: UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: Continue, size_limit: 10 }, comment: "" } } ,files:["'file1.csv'", "'file2.csv'"] ,validation_mode:ReturnNRows(13)"#,
+            err: "",
+        },
+
+        TestCase {
+            name: "copy-external-size-limit-error",
+            query: "copy into system.configs
+        from 's3://mybucket/data/files'
+        credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
+        encryption=(master_key = 'my_master_key')
+        files = ('file1.csv', 'file2.csv')
+        file_format = (type = csv field_delimiter = '|' skip_header = 1)
+        on_error = CONTINUE size_limit = x0
+        VALIDATION_MODE = RETURN_13_ROWS
+        ",
+            expect: "",
+            err: "Code: 1005, displayText = size_limit must be number, got: x0.",
+        },
+
+        TestCase {
+            name: "copy-external-validation-mode-error",
+            query: "copy into system.configs
+        from 's3://mybucket/data/files'
+        credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
+        encryption=(master_key = 'my_master_key')
+        files = ('file1.csv', 'file2.csv')
+        file_format = (type = csv field_delimiter = '|' skip_header = 1)
+        on_error = CONTINUE size_limit = 10
+        VALIDATION_MODE = RETURN_1x_ROWS
+        ",
+            expect: "",
+            err: r#"Code: 1005, displayText = Unknown validation mode:"RETURN_1X_ROWS", must one of { RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS}."#,
+        },
+
+        TestCase {
+            name: "copy-external-table-not-found-error",
             query: "copy into mytable
         from 's3://mybucket/data/files'
         credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
@@ -77,7 +125,7 @@ async fn test_statement_copy() -> Result<()> {
             err: "Code: 1025, displayText = Unknown table: 'mytable'.",
         },
         TestCase {
-            name: "copy-external-uri-not-found-failed",
+            name: "copy-external-uri-not-found-error",
             query: "copy into system.configs
         from '//mybucket/data/files'
         credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
@@ -87,7 +135,7 @@ async fn test_statement_copy() -> Result<()> {
             err: "Code: 1005, displayText = File location scheme must be specified.",
         },
         TestCase {
-            name: "copy-external-location-unsupported-failed",
+            name: "copy-external-location-unsupported-error",
             query: "copy into system.configs
         from 's4://mybucket/data/files'
         credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
@@ -97,11 +145,11 @@ async fn test_statement_copy() -> Result<()> {
             err: "Code: 1005, displayText = File location uri unsupported, must be one of [s3, @stage].",
         },
         TestCase {
-            name: "copy-internal-passed",
+            name: "copy-internal-ok",
             query: "copy into system.configs
         from '@mystage'
         file_format = (type = csv field_delimiter = '|' skip_header = 1)",
-            expect: r#"Copy into system.configs ,stage_plan:UserStagePlan { stage_info: UserStageInfo { stage_name: "", stage_type: Internal, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "", path: "", credentials_aws_key_id: "", credentials_aws_secret_key: "", encryption_master_key: "" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 0, field_delimiter: ",", record_delimiter: "\n", compression: None }, copy_options: CopyOptions, comment: "" } }"#,
+            expect: r#"Copy into system.configs ,stage_plan:UserStagePlan { stage_info: UserStageInfo { stage_name: "", stage_type: Internal, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "", path: "", credentials_aws_key_id: "", credentials_aws_secret_key: "", encryption_master_key: "" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 0, field_delimiter: ",", record_delimiter: "\n", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "" } } ,validation_mode:None"#,
             err: "",
         },
     ];

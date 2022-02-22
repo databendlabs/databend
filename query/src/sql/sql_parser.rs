@@ -259,7 +259,7 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_value_or_ident(&mut self) -> Result<String, ParserError> {
+    pub(crate) fn parse_value_or_ident(&mut self) -> Result<String, ParserError> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::TRUE => Ok("true".to_string()),
