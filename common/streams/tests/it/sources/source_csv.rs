@@ -18,13 +18,14 @@ use std::io::Write;
 use common_base::tokio;
 use common_datablocks::assert_blocks_eq;
 use common_datavalues::prelude::*;
+use common_exception::Result;
 use common_streams::CsvSourceBuilder;
 use common_streams::Source;
 use opendal::services::fs;
 use opendal::Operator;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_parse_csvs() {
+async fn test_parse_csv_delimiter() -> Result<()> {
     for field_delimiter in [",", "\t", "#"] {
         for record_delimiter in ["\n", "\r", "~"] {
             let dir = tempfile::tempdir().unwrap();
@@ -68,8 +69,8 @@ async fn test_parse_csvs() {
             builder.record_delimiter(record_delimiter);
             builder.block_size(10);
 
-            let mut csv_source = builder.build(stream).unwrap();
-            let block = csv_source.read().await.unwrap().unwrap();
+            let mut csv_source = builder.build(stream)?;
+            let block = csv_source.read().await?.unwrap();
             assert_blocks_eq(
                 vec![
                     "+---+---------+------+",
@@ -83,17 +84,19 @@ async fn test_parse_csvs() {
                 &[block],
             );
 
-            let block = csv_source.read().await.unwrap();
+            let block = csv_source.read().await?;
             assert!(block.is_none());
 
             drop(file);
             dir.close().unwrap();
         }
     }
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_parse_csv2() {
+async fn test_parse_csv_text() -> Result<()> {
     let dir = tempfile::tempdir().unwrap();
     let name = "my-temporary-note.txt";
     let file_path = dir.path().join(name);
@@ -130,9 +133,9 @@ async fn test_parse_csv2() {
     builder.field_delimiter(",");
     builder.record_delimiter("\n");
     builder.block_size(10);
-    let mut csv_source = builder.build(stream).unwrap();
+    let mut csv_source = builder.build(stream)?;
 
-    let block = csv_source.read().await.unwrap().unwrap();
+    let block = csv_source.read().await?.unwrap();
     assert_blocks_eq(
         vec![
             "+---+-------------+-----+",
@@ -149,9 +152,11 @@ async fn test_parse_csv2() {
         &[block],
     );
 
-    let block = csv_source.read().await.unwrap();
+    let block = csv_source.read().await?;
     assert!(block.is_none());
 
     drop(file);
     dir.close().unwrap();
+
+    Ok(())
 }
