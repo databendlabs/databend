@@ -412,6 +412,47 @@ impl MetaNode {
         Ok(mn)
     }
 
+    pub async fn join_cluster(&self, conf: &RaftConfig) -> MetaResult<()> {
+        if conf.join.is_empty() {
+            return Ok(());
+        }
+
+        // Try to join a cluster only when this node is just created.
+        // Joining a node with log has risk messing up the data in this node and in the target cluster.
+        if self.is_opened() {
+            return Ok(());
+        }
+
+        let addrs = &conf.join;
+        // Join cluster use advertise host instead of listen host
+        let raft_api_advertise_host_endpoint = conf.raft_api_advertise_host_endpoint();
+        #[allow(clippy::never_loop)]
+        for addr in addrs {
+            let mut client = RaftServiceClient::connect(format!("http://{}", addr))
+                .await
+                .map_err(|e| {
+                    MetaNetworkError::ConnectionError(ConnectionError::new(
+                        e,
+                        format!("while connect to {}", addr),
+                    ))
+                })?;
+
+            let admin_req = ForwardRequest {
+                forward_to_leader: 1,
+                body: ForwardRequestBody::Join(JoinRequest {
+                    node_id: conf.id,
+                    endpoint: raft_api_advertise_host_endpoint,
+                }),
+            };
+
+            let _res = client.forward(admin_req.clone()).await?;
+            // TODO: retry
+            break;
+        }
+
+        Ok(())
+    }
+
     async fn do_start(conf: &RaftConfig) -> Result<Arc<MetaNode>, MetaError> {
         if conf.single {
             let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), Some(vec![])).await?;
@@ -425,40 +466,8 @@ impl MetaNode {
             if mn.is_opened() {
                 return Ok(mn);
             }
-
-            // Try to join a cluster only when this node is just created.
-            // Joining a node with log has risk messing up the data in this node and in the target cluster.
-
-            let addrs = &conf.join;
-            // Join cluster use advertise host instead of listen host
-            let raft_api_advertise_host_endpoint = conf.raft_api_advertise_host_endpoint();
-            #[allow(clippy::never_loop)]
-            for addr in addrs {
-                let mut client = RaftServiceClient::connect(format!("http://{}", addr))
-                    .await
-                    .map_err(|e| {
-                        MetaNetworkError::ConnectionError(ConnectionError::new(
-                            e,
-                            format!("while connect to {}", addr),
-                        ))
-                    })?;
-
-                let admin_req = ForwardRequest {
-                    forward_to_leader: 1,
-                    body: ForwardRequestBody::Join(JoinRequest {
-                        node_id: conf.id,
-                        endpoint: raft_api_advertise_host_endpoint,
-                    }),
-                };
-
-                let _res = client.forward(admin_req.clone()).await?;
-                // TODO: retry
-                break;
-            }
-
             return Ok(mn);
         }
-
         // open mode
         let mn = MetaNode::open_create_boot(conf, Some(()), None, None).await?;
         Ok(mn)
@@ -645,7 +654,7 @@ impl MetaNode {
                 cmd: Cmd::AddNode {
                     node_id,
                     node: Node {
-                        name: "".to_string(),
+                        name: node_id.to_string(),
                         endpoint,
                     },
                 },
