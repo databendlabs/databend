@@ -192,7 +192,7 @@ where
     ) -> Result<()> {
         let mut dcolumns = Vec::with_capacity(self.event_size);
         for i in 0..self.event_size {
-            let dcolumn: &BooleanColumn = unsafe { Series::static_cast(&columns[i + 1]) };
+            let dcolumn: &UInt8Column = unsafe { Series::static_cast(&columns[i + 1]) };
             dcolumns.push(dcolumn.values());
         }
 
@@ -204,7 +204,7 @@ where
                 for ((row, timestamp), valid) in tcolumn.iter().enumerate().zip(bitmap.iter()) {
                     if valid {
                         for (i, filter) in dcolumns.iter().enumerate() {
-                            if filter.get_bit(row) {
+                            if filter[row] != 0 {
                                 state.add(*timestamp, (i + 1) as u8);
                             }
                         }
@@ -214,7 +214,7 @@ where
             None => {
                 for (row, timestamp) in tcolumn.iter().enumerate() {
                     for (i, filter) in dcolumns.iter().enumerate() {
-                        if filter.get_bit(row) {
+                        if filter[row] != 0 {
                             state.add(*timestamp, (i + 1) as u8);
                         }
                     }
@@ -234,7 +234,7 @@ where
     ) -> Result<()> {
         let mut dcolumns = Vec::with_capacity(self.event_size);
         for i in 0..self.event_size {
-            let dcolumn: &BooleanColumn = unsafe { Series::static_cast(&columns[i + 1]) };
+            let dcolumn: &UInt8Column = unsafe { Series::static_cast(&columns[i + 1]) };
             dcolumns.push(dcolumn.values());
         }
 
@@ -243,7 +243,7 @@ where
         for ((row, timestamp), place) in tcolumn.iter().enumerate().zip(places.iter()) {
             let state = (place.next(offset)).get::<AggregateWindowFunnelState<T>>();
             for (i, filter) in dcolumns.iter().enumerate() {
-                if filter.get_bit(row) {
+                if filter[row] != 0 {
                     state.add(*timestamp, (i + 1) as u8);
                 }
             }
@@ -257,8 +257,8 @@ where
 
         let state = place.get::<AggregateWindowFunnelState<T>>();
         for i in 0..self.event_size {
-            let dcolumn: &BooleanColumn = unsafe { Series::static_cast(&columns[i + 1]) };
-            if dcolumn.values().get_bit(row) {
+            let dcolumn: &UInt8Column = unsafe { Series::static_cast(&columns[i + 1]) };
+            if dcolumn.values()[row] != 0 {
                 state.add(timestamp, (i + 1) as u8);
             }
         }

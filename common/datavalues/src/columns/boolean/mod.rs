@@ -59,6 +59,10 @@ impl BooleanColumn {
         Self::from_arrow_array(&BooleanArray::from_data(ArrowType::Boolean, values, None))
     }
 
+    pub fn from_u8_column(column: &UInt8Column) -> Self {
+        Self::from_iterator(column.iter().map(|v| *v != 0))
+    }
+
     pub fn values(&self) -> &Bitmap {
         &self.values
     }

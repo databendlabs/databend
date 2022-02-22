@@ -107,8 +107,9 @@ impl AggregateFunction for AggregateIfCombinator {
         if columns.is_empty() {
             return Ok(());
         };
+        let _predicate: &UInt8Column = Series::check_get(&columns[self.argument_len - 1])?;
+        let predicate = BooleanColumn::from_u8_column(_predicate);
 
-        let predicate: &BooleanColumn = Series::check_get(&columns[self.argument_len - 1])?;
         let bitmap = combine_validities(validity, Some(predicate.values()));
         self.nested.accumulate(
             place,
@@ -125,10 +126,12 @@ impl AggregateFunction for AggregateIfCombinator {
         columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<()> {
-        let predicate: &BooleanColumn = Series::check_get(&columns[self.argument_len - 1])?;
+        let _predicate: &UInt8Column = Series::check_get(&columns[self.argument_len - 1])?;
+        let predicate = BooleanColumn::from_u8_column(_predicate);
 
-        let (columns, row_size) = self.filter_column(&columns[0..self.argument_len - 1], predicate);
-        let new_places = Self::filter_place(places, predicate);
+        let (columns, row_size) =
+            self.filter_column(&columns[0..self.argument_len - 1], &predicate);
+        let new_places = Self::filter_place(places, &predicate);
 
         let new_places_slice = new_places.as_slice();
         self.nested
@@ -136,7 +139,9 @@ impl AggregateFunction for AggregateIfCombinator {
     }
 
     fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
-        let predicate: &BooleanColumn = Series::check_get(&columns[self.argument_len - 1])?;
+        let _predicate: &UInt8Column = Series::check_get(&columns[self.argument_len - 1])?;
+        let predicate = BooleanColumn::from_u8_column(_predicate);
+
         if predicate.values().get_bit(row) {
             self.nested
                 .accumulate_row(place, &columns[0..self.argument_len - 1], row)?;
