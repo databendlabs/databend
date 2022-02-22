@@ -65,7 +65,10 @@ impl QueryCollectPushDowns {
 
             let mut limit = None;
             let mut order_by = vec![];
-            if schema.get_tables_desc().len() == 1 {
+            if schema.get_tables_desc().len() == 1
+                && ir.group_by_expressions.is_empty()
+                && ir.aggregate_expressions.is_empty()
+            {
                 limit = ir.limit;
                 order_by = ir.order_by_expressions.clone();
             }
