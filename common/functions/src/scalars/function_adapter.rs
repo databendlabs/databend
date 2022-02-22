@@ -198,7 +198,7 @@ pub struct ArithmeticAdapter {
 }
 
 impl ArithmeticAdapter {
-    pub fn new(inner: Option<Box<dyn Function>>) -> Box<dyn Function> {
+    pub fn create(inner: Option<Box<dyn Function>>) -> Box<dyn Function> {
         Box::new(Self { inner })
     }
 
@@ -209,12 +209,12 @@ impl ArithmeticAdapter {
     ) -> Result<Box<dyn Function>> {
         // one is null, result is null
         if args.iter().any(|v| v.data_type_id() == TypeID::Null) {
-            return Ok(Self::new(None));
+            return Ok(Self::create(None));
         }
         let types = args.iter().map(|v| remove_nullable(v)).collect::<Vec<_>>();
         let types = types.iter().collect::<Vec<_>>();
         let inner = (desc.arithmetic_creator)(name, &types)?;
-        Ok(Self::new(Some(inner)))
+        Ok(Self::create(Some(inner)))
     }
 }
 

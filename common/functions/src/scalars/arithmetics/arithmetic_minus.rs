@@ -59,26 +59,24 @@ impl ArithmeticMinusFunction {
         args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function>> {
         let op = DataValueBinaryOperator::Minus;
-        let left_arg = remove_nullable(args[0]);
-        let right_arg = remove_nullable(args[1]);
-        let left_type = left_arg.data_type_id();
-        let right_type = right_arg.data_type_id();
+        let left_type = args[0].data_type_id();
+        let right_type = args[1].data_type_id();
 
         if left_type.is_date_or_date_time() {
             return with_match_date_type_error!(left_type, |$T| {
                 with_match_primitive_type_id!(right_type, |$D| {
                     BinaryArithmeticFunction::<$T, $D, $T, _>::try_create_func(
                         op,
-                        left_arg,
+                        args[0].clone(),
                         sub_scalar::<$T,$D, _>
                     )
                 },{
                     // Argument of type Interval cannot be first.
                     if right_type.is_interval() {
-                        let interval = right_arg.as_any().downcast_ref::<IntervalType>().unwrap();
+                        let interval = args[1].as_any().downcast_ref::<IntervalType>().unwrap();
                         let kind = interval.kind();
                         let function_name = format!("subtract{}s", kind);
-                        return FunctionFactory::instance().get(function_name, &[&left_arg, &Int64Type::arc()]);
+                        return FunctionFactory::instance().get(function_name, &[args[0], &Int64Type::arc()]);
                     }
                     with_match_date_type_error!(right_type, |$D| {
                         BinaryArithmeticFunction::<$T, $D, i32, _>::try_create_func(
@@ -96,7 +94,7 @@ impl ArithmeticMinusFunction {
                 with_match_date_type_error!(right_type, |$D| {
                     BinaryArithmeticFunction::<$T, $D, $D, _>::try_create_func(
                         op,
-                        right_arg,
+                        args[1].clone(),
                         sub_scalar::<$T, $D, _>
                     )
                 })
