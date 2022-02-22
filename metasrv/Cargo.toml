@@ -18,7 +18,7 @@ doctest = false
 test = false
 
 [[bin]]
-name = "metactl"
+name = "databend-metactl"
 path = "src/bin/metactl.rs"
 doctest = false
 test = false
