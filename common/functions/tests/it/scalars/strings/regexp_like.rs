@@ -84,3 +84,31 @@ fn test_regexp_like_function() -> Result<()> {
 
     test_scalar_functions(RegexpLikeFunction::try_create("regexp_like")?, &tests)
 }
+
+#[test]
+fn test_regexp_like_match_type_joiner() -> Result<()> {
+    let tests = vec![
+        ScalarFunctionTest {
+            name: "regexp-like-match-type-joiner-error-1",
+            columns: vec![
+                Series::from_data(vec!["Abc-", "Abc-"]),
+                Series::from_data(vec!["abc-", "abc"]),
+                Series::from_data(vec!["i", "-i"]),
+            ],
+            expect: Series::from_data(vec![1i8, 1]),
+            error: "Incorrect arguments to REGEXP_LIKE match type: -i",
+        },
+        ScalarFunctionTest {
+            name: "regexp-like-match-type-joiner-error-2",
+            columns: vec![
+                Series::from_data(vec!["Abc--", "Abc--"]),
+                Series::from_data(vec!["abc--", "abc-"]),
+                Series::from_data(vec!["", "-"]),
+            ],
+            expect: Series::from_data(vec![1i8, 1]),
+            error: "Incorrect arguments to REGEXP_LIKE match type: -",
+        },
+    ];
+
+    test_scalar_functions(RegexpLikeFunction::try_create("regexp_like")?, &tests)
+}

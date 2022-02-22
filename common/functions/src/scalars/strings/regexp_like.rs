@@ -65,10 +65,24 @@ impl Function for RegexpLikeFunction {
         }
         Ok(Int8Type::arc())
     }
-
+    // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        let mut mt: Option<&ColumnRef> = None;
+        let col1: Result<&ConstColumn> = Series::check_get(columns[1].column());
+        if let Ok(col1) = col1 {
+            let lhs = columns[0].column();
+            let rhs = col1.get_string(0)?;
 
+            if columns.len() == 3 {
+                if columns[2].column().is_const() {
+                    let mt = columns[2].column().get_string(0)?;
+                    return Ok(Arc::new(a_regexp_binary_scalar(lhs, &rhs, Some(&mt))?));
+                }
+            } else {
+                return Ok(Arc::new(a_regexp_binary_scalar(lhs, &rhs, None)?));
+            }
+        }
+
+        let mut mt: Option<&ColumnRef> = None;
         if columns.len() == 3 {
             mt = Some(columns[2].column())
         }
@@ -87,30 +101,52 @@ impl fmt::Display for RegexpLikeFunction {
 }
 
 #[inline]
-fn a_regexp_binary(lhs: &ColumnRef, rhs: &ColumnRef, mt: Option<&ColumnRef>) -> Result<Int8Column> {
-    let mut map = HashMap::new();
-
+fn a_regexp_binary_scalar(lhs: &ColumnRef, rhs: &[u8], mt: Option<&[u8]>) -> Result<Int8Column> {
     let mut builder: ColumnBuilder<i8> = ColumnBuilder::with_capacity(lhs.len());
+
+    let re = build_regexp_from_pattern(rhs, mt)?;
+
+    let lhs = Vu8::try_create_viewer(lhs)?;
+    for lhs_value in lhs.iter() {
+        builder.append(match re.is_match(lhs_value) {
+            true => 1,
+            false => 0,
+        });
+    }
+
+    Ok(builder.build_column())
+}
+
+#[inline]
+fn a_regexp_binary(lhs: &ColumnRef, rhs: &ColumnRef, mt: Option<&ColumnRef>) -> Result<Int8Column> {
+    let mut builder: ColumnBuilder<i8> = ColumnBuilder::with_capacity(lhs.len());
+
+    let mut map = HashMap::new();
+    let mut key: Vec<u8> = Vec::new();
 
     let lhs = Vu8::try_create_viewer(lhs)?;
     let rhs = Vu8::try_create_viewer(rhs)?;
 
     if let Some(mt) = mt {
-        let mut key: Vec<u8> = Vec::new();
-
         let mt = Vu8::try_create_viewer(mt)?;
         let iter = izip!(lhs, rhs, mt);
         for (lhs_value, rhs_value, mt_value) in iter {
+            if mt_value.starts_with_str("-") {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Incorrect arguments to REGEXP_LIKE match type: {}",
+                    mt_value.to_str_lossy(),
+                )));
+            }
             key.extend_from_slice(rhs_value);
             key.extend_from_slice("-".as_bytes());
             key.extend_from_slice(mt_value);
 
-            let pattern = if let Some(pattern) = map.get(key.as_slice()) {
+            let pattern = if let Some(pattern) = map.get(&key) {
                 pattern
             } else {
                 let re = build_regexp_from_pattern(rhs_value, Some(mt_value))?;
-                map.insert(rhs_value, re);
-                map.get(rhs_value).unwrap()
+                map.insert(key.clone(), re);
+                map.get(&key).unwrap()
             };
             key.clear();
 
@@ -121,13 +157,15 @@ fn a_regexp_binary(lhs: &ColumnRef, rhs: &ColumnRef, mt: Option<&ColumnRef>) -> 
         }
     } else {
         for (lhs_value, rhs_value) in lhs.zip(rhs) {
-            let pattern = if let Some(pattern) = map.get(rhs_value) {
+            key.extend_from_slice(rhs_value);
+            let pattern = if let Some(pattern) = map.get(&key) {
                 pattern
             } else {
                 let re = build_regexp_from_pattern(rhs_value, None)?;
-                map.insert(rhs_value, re);
-                map.get(rhs_value).unwrap()
+                map.insert(key.clone(), re);
+                map.get(&key).unwrap()
             };
+            key.clear();
 
             builder.append(match pattern.is_match(lhs_value) {
                 true => 1,
@@ -150,7 +188,7 @@ fn build_regexp_from_pattern(pat: &[u8], mt: Option<&[u8]>) -> Result<BytesRegex
             ))
         })?,
     };
-
+    // the default match type value is 'i', if it is empty
     let mt = match mt {
         Some(mt) => {
             if mt.is_empty() {
