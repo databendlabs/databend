@@ -17,12 +17,12 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::GrantObject;
+use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserPrivilegeSet;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct GrantPrivilegePlan {
-    pub name: String,
-    pub hostname: String,
+    pub principal: PrincipalIdentity,
     pub priv_types: UserPrivilegeSet,
     pub on: GrantObject,
 }

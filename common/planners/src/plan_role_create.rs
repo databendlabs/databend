@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,18 +16,15 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_meta_types::GrantObject;
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserPrivilegeSet;
+use common_meta_types::RoleIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct RevokePrivilegePlan {
-    pub principal: PrincipalIdentity,
-    pub priv_types: UserPrivilegeSet,
-    pub on: GrantObject,
+pub struct CreateRolePlan {
+    pub if_not_exists: bool,
+    pub role_identity: RoleIdentity,
 }
 
-impl RevokePrivilegePlan {
+impl CreateRolePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

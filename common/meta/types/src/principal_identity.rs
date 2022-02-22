@@ -14,23 +14,30 @@
 
 use std::fmt;
 
+use crate::RoleIdentity;
+use crate::UserIdentity;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct UserIdentity {
-    pub username: String,
-    pub hostname: String,
+pub enum PrincipalIdentity {
+    User(UserIdentity),
+    Role(RoleIdentity),
 }
 
-impl UserIdentity {
-    pub fn new(name: String, host: String) -> Self {
-        Self {
-            username: name,
-            hostname: host,
-        }
+impl PrincipalIdentity {
+    pub fn user(name: String, host: String) -> Self {
+        PrincipalIdentity::User(UserIdentity::new(name, host))
+    }
+
+    pub fn role(name: String, host: String) -> Self {
+        PrincipalIdentity::Role(RoleIdentity::new(name, host))
     }
 }
 
-impl fmt::Display for UserIdentity {
+impl fmt::Display for PrincipalIdentity {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
-        write!(f, "'{}'@'{}'", self.username, self.hostname)
+        match self {
+            PrincipalIdentity::User(u) => write!(f, "{}", u),
+            PrincipalIdentity::Role(r) => write!(f, "{}", r),
+        }
     }
 }

@@ -25,12 +25,14 @@ use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::AlterUserUDFInterpreter;
 use crate::interpreters::CopyInterpreter;
 use crate::interpreters::CreateDatabaseInterpreter;
+use crate::interpreters::CreateRoleInterpreter;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::CreateUserInterpreter;
 use crate::interpreters::CreateUserStageInterpreter;
 use crate::interpreters::CreateUserUDFInterpreter;
 use crate::interpreters::DescribeTableInterpreter;
 use crate::interpreters::DropDatabaseInterpreter;
+use crate::interpreters::DropRoleInterpreter;
 use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::DropUserStageInterpreter;
@@ -128,6 +130,10 @@ impl InterpreterFactory {
             PlanNode::DropUser(v) => DropUserInterpreter::try_create(ctx_clone, v),
             PlanNode::GrantPrivilege(v) => GrantPrivilegeInterpreter::try_create(ctx_clone, v),
             PlanNode::RevokePrivilege(v) => RevokePrivilegeInterpreter::try_create(ctx_clone, v),
+
+            // Role
+            PlanNode::CreateRole(v) => CreateRoleInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropRole(v) => DropRoleInterpreter::try_create(ctx_clone, v),
 
             // Stage.
             PlanNode::CreateUserStage(v) => CreateUserStageInterpreter::try_create(ctx_clone, v),
