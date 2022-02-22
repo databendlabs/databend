@@ -18,7 +18,7 @@ use common_meta_raft_store::config::RaftConfig;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;
 use common_tracing::init_global_tracing;
-use databend_meta::export::exported_line_to_json;
+use databend_meta::export::deserialize_to_kv_variant;
 
 /// Usage:
 /// - To dump a sled db: `$0 --raft-dir ./_your_meta_dir/`:
@@ -60,7 +60,11 @@ async fn print_meta() -> anyhow::Result<()> {
             let kv = x?;
             let kv = vec![kv.0.to_vec(), kv.1.to_vec()];
 
-            let line = exported_line_to_json(&name, &kv)?;
+            let kv_variant = deserialize_to_kv_variant(&kv)?;
+            let tree_kv = (name.clone(), kv_variant);
+
+            let line = serde_json::to_string(&tree_kv)?;
+
             println!("{}", line);
         }
     }
