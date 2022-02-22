@@ -106,14 +106,14 @@ pub async fn streaming_load(
             .map(|v| match v.len() {
                 n if n >= 1 => {
                     if v.as_bytes()[0] == b'\\' {
-                        b'\t'
+                        "\t"
                     } else {
-                        v.as_bytes()[0]
+                        v
                     }
                 }
-                _ => b',',
+                _ => ",",
             })
-            .unwrap_or(b',');
+            .unwrap_or(",");
 
         builder.field_delimiter(field_delimiter);
     }
@@ -127,14 +127,14 @@ pub async fn streaming_load(
             .map(|v| match v.len() {
                 n if n >= 1 => {
                     if v.as_bytes()[0] == b'\\' {
-                        b'\n'
+                        "\n"
                     } else {
-                        v.as_bytes()[0]
+                        v
                     }
                 }
-                _ => b'\n',
+                _ => "\n",
             })
-            .unwrap_or(b'\n');
+            .unwrap_or("\n");
 
         builder.record_delimiter(record_delimiter);
     }

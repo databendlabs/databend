@@ -16,7 +16,6 @@ mod source;
 mod source_csv;
 mod source_parquet;
 
-pub use source::FormatSettings;
 pub use source::Source;
 pub use source_csv::CsvSourceBuilder;
 pub use source_parquet::ParquetSourceBuilder;

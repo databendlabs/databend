@@ -83,6 +83,14 @@ impl CopyInterpreter {
     async fn get_csv_stream(&self, stage_info: &UserStageInfo) -> Result<SourceStream> {
         let schema = self.plan.schema.clone();
         let mut builder = CsvSourceBuilder::create(schema);
+        let size_limit = stage_info.copy_options.size_limit;
+
+        // Size limit.
+        {
+            if size_limit > 0 {
+                builder.size_limit(size_limit);
+            }
+        }
 
         // Block size.
         {
@@ -97,21 +105,13 @@ impl CopyInterpreter {
 
         // Field delimiter, default ','.
         {
-            let field_delimiter_str = &stage_info.file_format_options.field_delimiter;
-            let field_delimiter = match field_delimiter_str.len() {
-                n if n >= 1 => field_delimiter_str.as_bytes()[0],
-                _ => b',',
-            };
+            let field_delimiter = &stage_info.file_format_options.field_delimiter;
             builder.field_delimiter(field_delimiter);
         }
 
         // Record delimiter, default '\n'.
         {
-            let record_delimiter_str = &stage_info.file_format_options.record_delimiter;
-            let record_delimiter = match record_delimiter_str.len() {
-                n if n >= 1 => record_delimiter_str.as_bytes()[0],
-                _ => b'\n',
-            };
+            let record_delimiter = &stage_info.file_format_options.record_delimiter;
             builder.record_delimiter(record_delimiter);
         }
 
@@ -143,6 +143,8 @@ impl Interpreter for CopyInterpreter {
         &self,
         mut _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        tracing::info!("Plan:{:?}", self.plan);
+
         let stage_info = self.plan.stage_plan.stage_info.clone();
         let source_stream = match stage_info.stage_type {
             StageType::External => {

@@ -94,7 +94,7 @@ impl AnalyzableStatement for DfCopy {
 
             // size_limit.
             if !self.size_limit.is_empty() {
-                let size_limit = self.size_limit.parse::<u64>().map_err(|_e| {
+                let size_limit = self.size_limit.parse::<usize>().map_err(|_e| {
                     ErrorCode::SyntaxException(format!(
                         "size_limit must be number, got: {}",
                         self.size_limit

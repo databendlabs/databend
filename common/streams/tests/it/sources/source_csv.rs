@@ -25,8 +25,8 @@ use opendal::Operator;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_parse_csvs() {
-    for field_delimiter in [b',', b'\t', b'#'] {
-        for record_delimiter in [b'\n', b'\r', b'~'] {
+    for field_delimiter in [",", "\t", "#"] {
+        for record_delimiter in ["\n", "\r", "~"] {
             let dir = tempfile::tempdir().unwrap();
             let name = "my-temporary-note.txt";
             let file_path = dir.path().join(name);
@@ -35,15 +35,15 @@ async fn test_parse_csvs() {
             write!(
                 file,
                 "1{}\"1\"{}1.11{}2{}\"2\"{}2{}3{}\"3-'3'-3\"{}3\"{}",
-                field_delimiter as char,
-                field_delimiter as char,
-                record_delimiter as char,
-                field_delimiter as char,
-                field_delimiter as char,
-                record_delimiter as char,
-                field_delimiter as char,
-                field_delimiter as char,
-                record_delimiter as char,
+                field_delimiter,
+                field_delimiter,
+                record_delimiter,
+                field_delimiter,
+                field_delimiter,
+                record_delimiter,
+                field_delimiter,
+                field_delimiter,
+                record_delimiter,
             )
             .unwrap();
 
@@ -127,8 +127,8 @@ async fn test_parse_csv2() {
     let stream = local.read(name).run().await.unwrap();
     let mut builder = CsvSourceBuilder::create(schema);
     builder.skip_header(0);
-    builder.field_delimiter(b',');
-    builder.record_delimiter(b'\n');
+    builder.field_delimiter(",");
+    builder.record_delimiter("\n");
     builder.block_size(10);
     let mut csv_source = builder.build(stream).unwrap();
 

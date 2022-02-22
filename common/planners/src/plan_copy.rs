@@ -50,7 +50,7 @@ impl FromStr for ValidationMode {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
 pub struct CopyPlan {
     pub db_name: String,
     pub tbl_name: String,

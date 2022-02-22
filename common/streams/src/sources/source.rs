@@ -20,9 +20,3 @@ use common_exception::Result;
 pub trait Source: Send {
     async fn read(&mut self) -> Result<Option<DataBlock>>;
 }
-
-#[allow(dead_code)]
-pub struct FormatSettings {
-    delimiter: u8,
-    quote: u8,
-}
