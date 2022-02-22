@@ -20,6 +20,7 @@ mod cluster;
 mod cmd;
 pub mod config;
 mod database;
+mod endpoint;
 mod errors;
 mod kv_message;
 mod log_entry;
@@ -49,6 +50,7 @@ mod user_setting;
 mod user_stage;
 
 pub mod error_context;
+mod principal_identity;
 mod role_identity;
 
 // reexport
@@ -77,6 +79,7 @@ pub use database::DropDatabaseReply;
 pub use database::DropDatabaseReq;
 pub use database::GetDatabaseReq;
 pub use database::ListDatabaseReq;
+pub use endpoint::Endpoint;
 pub use errors::ConflictSeq;
 pub use kv_message::GetKVActionReply;
 pub use kv_message::GetKVReq;
@@ -117,6 +120,7 @@ pub use meta_storage_errors::UnknownTableId;
 pub use operation::MetaId;
 pub use operation::MetaVersion;
 pub use operation::Operation;
+pub use principal_identity::PrincipalIdentity;
 pub use raft_txid::RaftTxId;
 pub use raft_types::LogId;
 pub use raft_types::LogIndex;
