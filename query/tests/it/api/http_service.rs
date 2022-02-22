@@ -18,6 +18,7 @@ use std::net::Ipv4Addr;
 use std::net::SocketAddrV4;
 use std::net::TcpListener;
 
+use common_base::get_free_tcp_port;
 use common_base::tokio;
 use common_exception::Result;
 use databend_query::api::HttpService;
@@ -37,7 +38,7 @@ use crate::tests::SessionManagerBuilder;
 // need to support local_addr, but axum_server do not have local_addr callback
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_service_tls_server() -> Result<()> {
-    let address_str = "127.0.0.1:30001";
+    let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpService::create(
         SessionManagerBuilder::create()
             .api_tls_server_key(TEST_SERVER_KEY)
@@ -73,14 +74,14 @@ async fn test_http_service_tls_server() -> Result<()> {
 // client cannot communicate with server without ca certificate
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_service_tls_server_failed_case_1() -> Result<()> {
-    let address = "127.0.0.1:30010";
+    let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut http_service = HttpService::create(
         SessionManagerBuilder::create()
             .api_tls_server_key(TEST_SERVER_KEY)
             .api_tls_server_cert(TEST_SERVER_CERT)
             .build()?,
     );
-    let listening = http_service.start(address.parse()?).await?;
+    let listening = http_service.start(address_str.parse()?).await?;
 
     // test cert is issued for "localhost"
     let url = format!("https://{}:{}/v1/health", TEST_CN_NAME, listening.port());
@@ -131,7 +132,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
 // cannot connect with server unless it have CA signed identity
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
-    let addr_str = format!("127.0.0.1:{}", get_free_tcp_port());
+    let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpService::create(
         SessionManagerBuilder::create()
             .api_tls_server_key(TEST_TLS_SERVER_KEY)
@@ -139,7 +140,7 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
             .api_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
             .build()?,
     );
-    let listening = srv.start(addr_str.parse()?).await?;
+    let listening = srv.start(address_str.parse()?).await?;
 
     // test cert is issued for "localhost"
     let url = format!("https://{}:{}/v1/health", TEST_CN_NAME, listening.port());
@@ -154,12 +155,4 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
     let resp = client.get(url).send().await;
     assert!(resp.is_err());
     Ok(())
-}
-
-fn get_free_tcp_port() -> u16 {
-    // Assigning port 0 requests the OS to assign a free port
-    let loopback = Ipv4Addr::new(127, 0, 0, 1);
-    let socket = SocketAddrV4::new(loopback, 0);
-    let listener = TcpListener::bind(socket).unwrap();
-    listener.local_addr().unwrap().port()
 }
