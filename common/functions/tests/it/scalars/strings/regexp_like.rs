@@ -28,7 +28,7 @@ fn test_regexp_like_function() -> Result<()> {
                 Series::from_data(vec!["abc", "abd", "Abe", "new*\n*line", "fo\nfo", ""]),
                 Series::from_data(vec!["^a", "Ab", "abe", "new\\*.\\*line", "^fo$", ""]),
             ],
-            expect: Series::from_data(vec![1i8, 1, 1, 0, 0, 1]),
+            expect: Series::from_data(vec![true, true, true, false, false, true]),
             error: "",
         },
         ScalarFunctionTest {
@@ -38,7 +38,7 @@ fn test_regexp_like_function() -> Result<()> {
                 Series::from_data(vec!["^a", "Ab", "abe", "new\\*.\\*line", "^fo$", ""]),
                 Series::from_data(vec!["", "c", "i", "n", "m", "c"]),
             ],
-            expect: Series::from_data(vec![1i8, 0, 1, 1, 1, 1]),
+            expect: Series::from_data(vec![true, false, true, true, true, true]),
             error: "",
         },
         ScalarFunctionTest {
@@ -47,7 +47,7 @@ fn test_regexp_like_function() -> Result<()> {
                 Series::from_data(vec!["abc", "abd"]),
                 Series::from_data(vec![2, 3]),
             ],
-            expect: Series::from_data(vec![1i8, 0]),
+            expect: Series::from_data(Vec::<bool>::new()),
             error: "Expected a string type, but got Int32",
         },
         ScalarFunctionTest {
@@ -57,7 +57,7 @@ fn test_regexp_like_function() -> Result<()> {
                 Series::from_data(vec!["abc"]),
                 Series::from_data(vec!["x"]),
             ],
-            expect: Series::from_data(vec![1i8]),
+            expect: Series::from_data(Vec::<bool>::new()),
             error: "Incorrect arguments to REGEXP_LIKE match type: x",
         },
         ScalarFunctionTest {
@@ -67,7 +67,7 @@ fn test_regexp_like_function() -> Result<()> {
                 Series::from_data(vec!["abc"]),
                 Series::from_data(vec!["u"]),
             ],
-            expect: Series::from_data(vec![1i8]),
+            expect: Series::from_data(Vec::<bool>::new()),
             error: "Unsupported arguments to REGEXP_LIKE match type: u",
         },
         ScalarFunctionTest {
@@ -77,7 +77,7 @@ fn test_regexp_like_function() -> Result<()> {
                 Series::from_data(vec![Some("abc"), None, None, Some("abc")]),
                 Series::from_data(vec![Some(""), Some("i"), Some("i"), None]),
             ],
-            expect: Series::from_data(vec![Some(1i8), None, None, None]),
+            expect: Series::from_data(vec![Some(true), None, None, None]),
             error: "",
         },
     ];
@@ -95,7 +95,7 @@ fn test_regexp_like_match_type_joiner() -> Result<()> {
                 Series::from_data(vec!["abc-", "abc"]),
                 Series::from_data(vec!["i", "-i"]),
             ],
-            expect: Series::from_data(vec![1i8, 1]),
+            expect: Series::from_data(Vec::<bool>::new()),
             error: "Incorrect arguments to REGEXP_LIKE match type: -i",
         },
         ScalarFunctionTest {
@@ -105,7 +105,7 @@ fn test_regexp_like_match_type_joiner() -> Result<()> {
                 Series::from_data(vec!["abc--", "abc-"]),
                 Series::from_data(vec!["", "-"]),
             ],
-            expect: Series::from_data(vec![1i8, 1]),
+            expect: Series::from_data(Vec::<bool>::new()),
             error: "Incorrect arguments to REGEXP_LIKE match type: -",
         },
     ];

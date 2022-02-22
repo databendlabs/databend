@@ -45,6 +45,7 @@ impl RegexpLikeFunction {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
+                .bool_function()
                 .variadic_arguments(2, 3),
         )
     }
@@ -60,7 +61,7 @@ impl Function for RegexpLikeFunction {
             assert_string(*arg)?;
         }
 
-        Ok(Int8Type::arc())
+        Ok(BooleanType::arc())
     }
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
@@ -98,25 +99,26 @@ impl fmt::Display for RegexpLikeFunction {
 }
 
 #[inline]
-fn a_regexp_binary_scalar(lhs: &ColumnRef, rhs: &[u8], mt: Option<&[u8]>) -> Result<Int8Column> {
-    let mut builder: ColumnBuilder<i8> = ColumnBuilder::with_capacity(lhs.len());
+fn a_regexp_binary_scalar(lhs: &ColumnRef, rhs: &[u8], mt: Option<&[u8]>) -> Result<BooleanColumn> {
+    let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
 
     let re = build_regexp_from_pattern(rhs, mt)?;
 
     let lhs = Vu8::try_create_viewer(lhs)?;
     for lhs_value in lhs.iter() {
-        builder.append(match re.is_match(lhs_value) {
-            true => 1,
-            false => 0,
-        });
+        builder.append(re.is_match(lhs_value));
     }
 
     Ok(builder.build_column())
 }
 
 #[inline]
-fn a_regexp_binary(lhs: &ColumnRef, rhs: &ColumnRef, mt: Option<&ColumnRef>) -> Result<Int8Column> {
-    let mut builder: ColumnBuilder<i8> = ColumnBuilder::with_capacity(lhs.len());
+fn a_regexp_binary(
+    lhs: &ColumnRef,
+    rhs: &ColumnRef,
+    mt: Option<&ColumnRef>,
+) -> Result<BooleanColumn> {
+    let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
 
     let mut map = HashMap::new();
     let mut key: Vec<u8> = Vec::new();
@@ -147,10 +149,7 @@ fn a_regexp_binary(lhs: &ColumnRef, rhs: &ColumnRef, mt: Option<&ColumnRef>) -> 
             };
             key.clear();
 
-            builder.append(match pattern.is_match(lhs_value) {
-                true => 1,
-                false => 0,
-            });
+            builder.append(pattern.is_match(lhs_value));
         }
     } else {
         for (lhs_value, rhs_value) in lhs.zip(rhs) {
@@ -164,10 +163,7 @@ fn a_regexp_binary(lhs: &ColumnRef, rhs: &ColumnRef, mt: Option<&ColumnRef>) -> 
             };
             key.clear();
 
-            builder.append(match pattern.is_match(lhs_value) {
-                true => 1,
-                false => 0,
-            });
+            builder.append(pattern.is_match(lhs_value));
         }
     }
 
