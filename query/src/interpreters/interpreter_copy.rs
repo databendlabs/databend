@@ -53,29 +53,30 @@ impl CopyInterpreter {
     ) -> Result<(opendal::Operator, String)> {
         match &stage_info.stage_params.storage {
             StageStorage::S3(s3) => {
-                let key_id = &s3.credentials_aws_key_id;
-                let secret_key = &s3.credentials_aws_secret_key;
-                let credential = Credential::hmac(key_id, secret_key);
-                let bucket = &s3.bucket;
-                let path = &s3.path;
-                let region = "us-east-2";
+                let mut builder = opendal::services::s3::Backend::build();
 
-                tracing::info!(
-                    "Get the dal, region:{}, bucket:{} path:{}",
-                    region,
-                    bucket,
-                    path
-                );
+                // Region.
+                {
+                    // TODO(bohu): opendal to check the region.
+                    let region = "us-east-2";
+                    let bucket = &s3.bucket;
+                    builder.region(region).bucket(bucket);
+                }
 
-                let operator = opendal::services::s3::Backend::build()
-                    .region(region)
-                    .bucket(bucket)
-                    .credential(credential)
+                // Credentials.
+                if !s3.credentials_aws_key_id.is_empty() {
+                    let key_id = &s3.credentials_aws_key_id;
+                    let secret_key = &s3.credentials_aws_secret_key;
+                    let credential = Credential::hmac(key_id, secret_key);
+                    builder.credential(credential);
+                }
+
+                let operator = builder
                     .finish()
                     .await
                     .map_err(|e| ErrorCode::DalS3Error(format!("s3 dal build error:{:?}", e)))?;
 
-                Ok((opendal::Operator::new(operator), path.to_string()))
+                Ok((opendal::Operator::new(operator), s3.path.to_string()))
             }
         }
     }
