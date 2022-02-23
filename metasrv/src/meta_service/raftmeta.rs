@@ -460,17 +460,24 @@ impl MetaNode {
                     }
                 };
 
-            let reply = result?;
-            if !reply.data.is_empty() {
-                tracing::info!("join cluster accross {} success: {:?}", addr, reply.data);
-                return Ok(());
+            match result {
+                Ok(reply) => {
+                    if !reply.data.is_empty() {
+                        tracing::info!("join cluster accross {} success: {:?}", addr, reply.data);
+                        return Ok(());
+                    } else {
+                        tracing::error!("join cluster accross {} fail: {:?}", addr, reply.error);
+                    }
+                }
+                Err(s) => {
+                    tracing::error!("join cluster accross {} fail: {:?}", addr, s);
+                }
             }
-            tracing::error!("join cluster accross {} fail: {:?}", addr, reply.error);
         }
-        Err(MetaError::JoinClusterFail(format!(
-            "join cluster accross addrs {:?} fail",
-            addrs
-        )))
+        Err(
+            MetaRaftError::JoinClusterFail(format!("join cluster accross addrs {:?} fail", addrs))
+                .into(),
+        )
     }
 
     async fn do_start(conf: &RaftConfig) -> Result<Arc<MetaNode>, MetaError> {

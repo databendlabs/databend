@@ -41,9 +41,6 @@ pub enum MetaError {
     #[error("{0}")]
     InvalidConfig(String),
 
-    #[error("{0}")]
-    JoinClusterFail(String),
-
     #[error("raft state present id={0}, can not create")]
     MetaStoreAlreadyExists(u64),
 
