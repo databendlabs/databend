@@ -118,7 +118,12 @@ pub struct RaftConfig {
     /// Bring up a metasrv node and join a cluster.
     ///
     /// The value is one or more addresses of a node in the cluster, to which this node sends a `join` request.
-    #[clap(long, env = "METASRV_JOIN")]
+    #[clap(
+        long,
+        env = "METASRV_JOIN",
+        multiple_occurrences = true,
+        multiple_values = true
+    )]
     pub join: Vec<String>,
 
     /// The node id. Only used when this server is not initialized,
