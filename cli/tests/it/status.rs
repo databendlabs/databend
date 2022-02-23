@@ -28,9 +28,12 @@ use bendctl::error::Result;
 use common_base::tokio;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
-use httpmock::Method::GET;
-use httpmock::MockServer;
 use tempfile::tempdir;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
 
 #[test]
 fn test_status() -> Result<()> {
@@ -185,15 +188,17 @@ async fn test_verify() -> Result<()> {
     conf.databend_dir = t.path().to_str().unwrap().to_string();
     // Start a lightweight mock server.
     // Arrange
-    let server1 = MockServer::start();
-    let server2 = MockServer::start();
+    let server1 = MockServer::start().await;
+    let server2 = MockServer::start().await;
 
-    let _ = server1.mock(|when, then| {
-        when.method(GET).path("/v1/health");
-        then.status(200)
-            .header("content-type", "text/html")
-            .body("health");
-    });
+    // Create a mock on the server.
+    let template = ResponseTemplate::new(200).set_body_raw("health", "text/html");
+    Mock::given(method("GET"))
+        .and(path("/v1/health"))
+        .respond_with(template)
+        // Mounting the mock on the mock server - it's now effective!
+        .mount(&server1)
+        .await;
 
     let mut meta_config = LocalMetaConfig {
         config: MetaConfig::default(),
@@ -201,14 +206,14 @@ async fn test_verify() -> Result<()> {
         path: Some("./".to_string()),
         log_dir: Some("./".to_string()),
     };
-    meta_config.config.admin_api_address = format!("127.0.0.1:{}", server1.port());
+    meta_config.config.admin_api_address = server1.address().to_string();
     let mut query_config = LocalQueryConfig {
         config: QueryConfig::default(),
         pid: Some(123),
         path: Some("./".to_string()),
         log_dir: Some("./".to_string()),
     };
-    query_config.config.query.http_api_address = format!("127.0.0.1:{}", server2.port());
+    query_config.config.query.http_api_address = server2.address().to_string();
 
     let mut query_config2 = LocalQueryConfig {
         config: QueryConfig::default(),
@@ -216,7 +221,7 @@ async fn test_verify() -> Result<()> {
         path: Some("./".to_string()),
         log_dir: Some("./".to_string()),
     };
-    query_config2.config.query.http_api_address = format!("127.0.0.1:{}", server2.port());
+    query_config2.config.query.http_api_address = server2.address().to_string();
     // successful case should return immediately
     let t1 = meta_config.verify(Some(10), Some(Duration::from_millis(100)));
     // failed case should return after 2 times retry
