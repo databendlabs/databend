@@ -176,7 +176,10 @@ impl DataBlock {
         Ok(Self { columns, schema })
     }
 
-    pub fn from_chunk(schema: &DataSchemaRef, chuck: &Chunk<ArrayRef>) -> Result<DataBlock> {
+    pub fn from_chunk<A: AsRef<dyn Array>>(
+        schema: &DataSchemaRef,
+        chuck: &Chunk<A>,
+    ) -> Result<DataBlock> {
         let columns = chuck
             .columns()
             .iter()
@@ -189,10 +192,6 @@ impl DataBlock {
 
         Ok(DataBlock::create(schema.clone(), columns))
     }
-}
-
-pub fn box_chunk_to_arc_chunk(c: Chunk<Box<dyn Array>>) -> Chunk<ArrayRef> {
-    Chunk::<ArrayRef>::new(c.into_arrays().into_iter().map(Arc::from).collect())
 }
 
 impl TryFrom<DataBlock> for Chunk<ArrayRef> {

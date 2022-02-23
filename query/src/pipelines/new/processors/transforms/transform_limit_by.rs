@@ -19,7 +19,6 @@ use common_arrow::arrow;
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_datablocks::box_chunk_to_arc_chunk;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodSerializer;
@@ -83,7 +82,6 @@ impl Transform for TransformLimitBy {
         let schema = block.schema().clone();
         let chunk = block.try_into()?;
         let chunk = arrow::compute::filter::filter_chunk(&chunk, &array)?;
-        let chunk = box_chunk_to_arc_chunk(chunk);
         DataBlock::from_chunk(&schema, &chunk)
     }
 }
