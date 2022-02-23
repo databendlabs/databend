@@ -39,7 +39,7 @@ impl NowFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().disable_passthrough_null())
+            .features(FunctionFeatures::default())
     }
 }
 impl Function for NowFunction {

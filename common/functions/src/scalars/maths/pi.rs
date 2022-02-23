@@ -35,11 +35,8 @@ impl PiFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .disable_passthrough_null(),
-        )
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic())
     }
 }
 

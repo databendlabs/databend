@@ -211,7 +211,7 @@ impl ArithmeticAdapter {
         name: &str,
         args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function>> {
-        let passthrough_null = !desc.features.disable_passthrough_null;
+        let passthrough_null = desc.features.passthrough_null;
 
         let inner = if passthrough_null {
             // one is null, result is null
