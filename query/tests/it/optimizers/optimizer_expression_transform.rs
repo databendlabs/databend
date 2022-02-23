@@ -113,7 +113,7 @@ async fn test_expression_transform_optimizer() -> Result<()> {
                 Limit: 0\
                 \n  Projection: number:UInt64\
                 \n    Filter: true\
-                \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [true]]",
+                \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [true], limit: 0]",
             },
             Test {
                 name: "Filter true and cond",

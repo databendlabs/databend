@@ -55,19 +55,29 @@ impl QueryCollectPushDowns {
             require_filters: vec![],
         };
         QueryCollectPushDowns::visit(ir, &mut push_downs_data)?;
-        push_downs_data.collect_push_downs(schema)
+        push_downs_data.collect_push_downs(ir, schema)
     }
 
-    fn collect_push_downs(mut self, schema: &mut JoinedSchema) -> Result<()> {
+    fn collect_push_downs(mut self, ir: &QueryASTIR, schema: &mut JoinedSchema) -> Result<()> {
         for index in 0..schema.get_tables_desc().len() {
             let table_desc = &schema.get_tables_desc()[index];
             let projection = self.collect_table_require_columns(table_desc);
 
+            let mut limit = None;
+            let mut order_by = vec![];
+            if schema.get_tables_desc().len() == 1
+                && ir.group_by_expressions.is_empty()
+                && ir.aggregate_expressions.is_empty()
+            {
+                limit = ir.limit.map(|c| c + ir.offset.unwrap_or(0));
+                order_by = ir.order_by_expressions.clone();
+            }
+
             schema.set_table_push_downs(index, Extras {
                 projection: Some(projection),
                 filters: self.require_filters.clone(),
-                limit: None,
-                order_by: vec![],
+                limit,
+                order_by,
             });
         }
 
