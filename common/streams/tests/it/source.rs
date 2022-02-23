@@ -26,7 +26,6 @@ use common_streams::ParquetSource;
 use common_streams::Source;
 use common_streams::ValueSource;
 use futures::io::BufReader;
-use opendal::readers::SeekableReader;
 use opendal::services::fs;
 use opendal::Operator;
 
@@ -97,9 +96,10 @@ async fn test_parse_csvs() {
                     .await
                     .unwrap(),
             );
-            let stream = local.read(name).run().await.unwrap();
+            let o = local.object(name);
+            let reader = o.reader();
             let mut csv_source =
-                CsvSource::try_create(stream, schema, false, field_delimitor, record_delimitor, 10)
+                CsvSource::try_create(reader, schema, false, field_delimitor, record_delimitor, 10)
                     .unwrap();
             let block = csv_source.read().await.unwrap().unwrap();
             assert_blocks_eq(
@@ -155,8 +155,9 @@ async fn test_parse_csv2() {
             .await
             .unwrap(),
     );
-    let stream = local.read(name).run().await.unwrap();
-    let mut csv_source = CsvSource::try_create(stream, schema, false, b',', b'\n', 10).unwrap();
+    let o = local.object(name);
+    let reader = o.reader();
+    let mut csv_source = CsvSource::try_create(reader, schema, false, b',', b'\n', 10).unwrap();
     let block = csv_source.read().await.unwrap().unwrap();
     assert_blocks_eq(
         vec![
@@ -239,7 +240,7 @@ async fn test_source_parquet() -> Result<()> {
             .await
             .unwrap(),
     );
-    let stream = SeekableReader::new(local, name, len);
+    let stream = local.object(name).reader().total_size(len);
     let stream = BufReader::with_capacity(4 * 1024 * 1024, stream);
 
     let default_proj = (0..schema.fields().len())

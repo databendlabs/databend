@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
 use futures::io::BufReader;
-use opendal::readers::SeekableReader;
+use opendal::Reader;
 use serde::de::DeserializeOwned;
 
 use crate::sessions::QueryContext;
@@ -41,7 +41,7 @@ use crate::storages::fuse::meta::TableSnapshot;
 /// of an [BufReader] can be deferred or avoided (e.g. if hits cache).
 #[async_trait::async_trait]
 pub trait BufReaderProvider {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<SeekableReader>>;
+    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<Reader>>;
 }
 
 /// A Newtype for [FileMetaData].
@@ -162,19 +162,11 @@ where T: BufReaderProvider + Sync
 
 #[async_trait::async_trait]
 impl BufReaderProvider for &QueryContext {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<SeekableReader>> {
+    async fn buf_reader(&self, path: &str, _len: Option<u64>) -> Result<BufReader<Reader>> {
         let operator = self.get_storage_operator().await?;
-        let len = match len {
-            Some(l) => l,
-            None => {
-                let object = operator.stat(path).run().await.map_err(|e| match e {
-                    opendal::error::Error::ObjectNotExist(msg) => ErrorCode::DalPathNotFound(msg),
-                    _ => ErrorCode::DalTransportError(e.to_string()),
-                })?;
-                object.size
-            }
-        };
-        let reader = SeekableReader::new(operator, path, len);
+        let object = operator.object(path);
+
+        let reader = object.reader();
         let read_buffer_size = self.get_settings().get_storage_read_buffer_size()?;
         Ok(BufReader::with_capacity(read_buffer_size as usize, reader))
     }
@@ -182,7 +174,7 @@ impl BufReaderProvider for &QueryContext {
 
 #[async_trait::async_trait]
 impl BufReaderProvider for Arc<QueryContext> {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<SeekableReader>> {
+    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<Reader>> {
         self.as_ref().buf_reader(path, len).await
     }
 }

@@ -22,7 +22,6 @@ use common_arrow::parquet::encoding::Encoding;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use futures::io::Cursor;
 use opendal::Operator;
 
 pub async fn write_block(
@@ -66,11 +65,11 @@ pub async fn write_block(
     .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
 
     let parquet = writer.into_inner();
-    let stream_len = parquet.len();
 
     data_accessor
-        .write(location, stream_len as u64)
-        .run(Box::new(Cursor::new(parquet)))
+        .object(location)
+        .writer()
+        .write_bytes(parquet)
         .await
         .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 

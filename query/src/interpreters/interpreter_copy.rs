@@ -29,7 +29,6 @@ use nom::bytes::complete::tag;
 use nom::bytes::complete::take_until;
 use nom::IResult;
 use opendal::credential::Credential;
-use opendal::readers::SeekableReader;
 use opendal::services::s3;
 use opendal::Operator as DalOperator;
 
@@ -74,8 +73,7 @@ impl Interpreter for CopyInterpreter {
 
         let acc = get_dal_by_stage(self.ctx.clone(), stage).await?;
         let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-        let o = acc.stat(path).run().await.unwrap();
-        let reader = SeekableReader::new(acc, path, o.size);
+        let reader = acc.object(path).reader();
         let read_buffer_size = self.ctx.get_settings().get_storage_read_buffer_size()?;
         let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
         let source_params = SourceParams {

@@ -19,7 +19,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UpsertTableOptionReq;
 use common_planners::TruncateTablePlan;
-use futures::io::Cursor;
 use uuid::Uuid;
 
 use crate::catalogs::Catalog;
@@ -46,8 +45,9 @@ impl FuseTable {
             let operator = ctx.get_storage_operator().await?;
             let bytes = serde_json::to_vec(&new_snapshot)?;
             operator
-                .write(&new_snapshot_loc, bytes.len() as u64)
-                .run(Box::new(Cursor::new(bytes)))
+                .object(&new_snapshot_loc)
+                .writer()
+                .write_bytes(bytes)
                 .await
                 .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 
