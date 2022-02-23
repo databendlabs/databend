@@ -12,12 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+use std::fmt::Formatter;
+
 use common_datavalues::DataSchemaRef;
 use common_meta_types::UserStageInfo;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct UserStagePlan {
-    #[serde(skip_serializing)]
     pub schema: DataSchemaRef,
     pub stage_info: UserStageInfo,
+}
+
+impl Debug for UserStagePlan {
+    // Ignore the schema.
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.stage_info)
+    }
 }

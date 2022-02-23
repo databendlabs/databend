@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::str::FromStr;
 
 use common_datavalues::DataSchemaRef;
@@ -50,7 +52,7 @@ impl FromStr for ValidationMode {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct CopyPlan {
     pub db_name: String,
     pub tbl_name: String,
@@ -64,5 +66,17 @@ pub struct CopyPlan {
 impl CopyPlan {
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
+    }
+}
+
+impl Debug for CopyPlan {
+    // Ignore the schema.
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Copy into {:}.{:}", self.db_name, self.tbl_name)?;
+        write!(f, " ,{:?}", self.stage_plan)?;
+        if !self.files.is_empty() {
+            write!(f, " ,files:{:?}", self.files)?;
+        }
+        write!(f, " ,validation_mode:{:?}", self.validation_mode)
     }
 }
