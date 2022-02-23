@@ -109,7 +109,10 @@ impl AnalyzableStatement for DfCopy {
             .map_err(ErrorCode::SyntaxException)?;
 
         // Stage plan.
-        let stage_plan = UserStagePlan { stage_info };
+        let stage_plan = UserStagePlan {
+            schema: schema.clone(),
+            stage_info,
+        };
 
         // Copy plan.
         let plan_node = CopyPlan {
