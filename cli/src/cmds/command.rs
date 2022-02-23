@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use clap::ArgMatches;
+use clap::Command as App;
 use dyn_clone::DynClone;
 
 use crate::cmds::Writer;
@@ -26,7 +27,7 @@ use crate::error::Result;
 pub trait Command: DynClone + Send + Sync {
     fn name(&self) -> &str;
 
-    fn clap(&self) -> clap::App<'static>;
+    fn clap(&self) -> App<'static>;
 
     fn about(&self) -> &'static str;
 
