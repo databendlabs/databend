@@ -241,7 +241,13 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
                     }
 
                     write!(f, "limit: {:?}", p.limit.unwrap())?;
-                    write!(f, ", order_by: {:?}", p.order_by)?;
+                }
+
+                if !p.order_by.is_empty() {
+                    if comma {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "order_by: {:?}", p.order_by)?;
                 }
 
                 write!(f, "]")?;
