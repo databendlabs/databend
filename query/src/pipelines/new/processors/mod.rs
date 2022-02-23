@@ -31,6 +31,8 @@ pub use resize_processor::ResizeProcessor;
 pub use sinks::Sink;
 pub use sinks::Sinker;
 pub use sinks::SyncSenderSink;
+pub use sinks::AsyncSink;
+pub use sinks::AsyncSinker;
 pub use sources::SyncReceiverSource;
 pub use sources::SyncSource;
 pub use sources::SyncSourcer;

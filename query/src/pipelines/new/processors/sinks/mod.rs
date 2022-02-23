@@ -14,7 +14,10 @@
 
 mod sync_sink;
 mod sync_sink_sender;
+mod async_sink;
 
 pub use sync_sink::Sink;
 pub use sync_sink::Sinker;
+pub use async_sink::AsyncSink;
+pub use async_sink::AsyncSinker;
 pub use sync_sink_sender::SyncSenderSink;
