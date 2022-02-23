@@ -110,9 +110,9 @@ impl FlightService for DatabendQueryFlightService {
             FlightTicket::StreamTicket(steam_ticket) => {
                 let (receiver, data_schema) = self.dispatcher.get_stream(&steam_ticket)?;
                 let arrow_schema = data_schema.to_arrow();
-                let ipc_fields = default_ipc_fields(arrow_schema.fields());
+                let ipc_fields = default_ipc_fields(&arrow_schema.fields);
 
-                serialize_schema(&arrow_schema, &ipc_fields);
+                serialize_schema(&arrow_schema, Some(&ipc_fields));
 
                 Ok(RawResponse::new(
                     Box::pin(FlightDataStream::create(receiver, ipc_fields))

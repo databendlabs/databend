@@ -14,10 +14,10 @@
 
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::task::Context;
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::task::Poll;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
 use common_meta_grpc::MetaGrpcReadReq;

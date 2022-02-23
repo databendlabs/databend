@@ -104,7 +104,7 @@ impl From<&ArrowField> for DataField {
     fn from(f: &ArrowField) -> Self {
         let dt: DataTypePtr = from_arrow_field(f);
 
-        DataField::new(f.name(), dt)
+        DataField::new(&f.name, dt)
     }
 }
 
