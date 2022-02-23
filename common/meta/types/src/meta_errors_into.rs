@@ -36,6 +36,7 @@ impl From<MetaError> for ErrorCode {
             MetaError::MetaStorageError(e) => ErrorCode::MetaServiceError(e.to_string()),
             MetaError::MetaResultError(e) => ErrorCode::MetaServiceError(e.to_string()),
             MetaError::InvalidConfig(e) => ErrorCode::MetaServiceError(e),
+            MetaError::JoinClusterFail(e) => ErrorCode::MetaServiceError(e),
             MetaError::MetaStoreAlreadyExists(e) => {
                 ErrorCode::MetaServiceError(format!("meta store already exists: {}", e))
             }
