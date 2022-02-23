@@ -96,8 +96,7 @@ async fn test_parse_csvs() {
                     .await
                     .unwrap(),
             );
-            let o = local.object(name);
-            let reader = o.reader();
+            let reader = local.object(name).reader();
             let mut csv_source =
                 CsvSource::try_create(reader, schema, false, field_delimitor, record_delimitor, 10)
                     .unwrap();
@@ -155,8 +154,7 @@ async fn test_parse_csv2() {
             .await
             .unwrap(),
     );
-    let o = local.object(name);
-    let reader = o.reader();
+    let reader = local.object(name).reader();
     let mut csv_source = CsvSource::try_create(reader, schema, false, b',', b'\n', 10).unwrap();
     let block = csv_source.read().await.unwrap().unwrap();
     assert_blocks_eq(
