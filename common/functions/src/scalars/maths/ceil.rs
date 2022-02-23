@@ -45,7 +45,6 @@ impl CeilFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()
-                .passthrough_null()
                 .num_arguments(1),
         )
     }

@@ -46,6 +46,7 @@ impl IgnoreFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .bool_function()
+                .disable_passthrough_null()
                 .variadic_arguments(0, usize::MAX),
         )
     }

@@ -45,9 +45,7 @@ impl<const T: u8> LocatingFunction<T> {
     }
 
     pub fn desc() -> FunctionDescription {
-        let mut feature = FunctionFeatures::default()
-            .deterministic()
-            .passthrough_null();
+        let mut feature = FunctionFeatures::default().deterministic();
         feature = if T == FUNC_LOCATE {
             feature.variadic_arguments(2, 3)
         } else {

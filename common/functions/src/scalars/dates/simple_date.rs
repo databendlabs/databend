@@ -88,7 +88,7 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default())
+            .features(FunctionFeatures::default().disable_passthrough_null())
     }
 }
 

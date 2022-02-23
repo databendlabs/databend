@@ -37,11 +37,8 @@ impl SleepFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
-            FunctionFeatures::default()
-                .passthrough_null()
-                .num_arguments(1),
-        )
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().num_arguments(1))
     }
 }
 

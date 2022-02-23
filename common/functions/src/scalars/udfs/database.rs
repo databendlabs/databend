@@ -34,7 +34,6 @@ impl DatabaseFunction {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .context_function()
-                .passthrough_null()
                 .num_arguments(1),
         )
     }

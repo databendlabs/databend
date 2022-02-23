@@ -39,6 +39,7 @@ impl IsNullFunction {
                 .deterministic()
                 .negative_function("isnotnull")
                 .bool_function()
+                .disable_passthrough_null()
                 .num_arguments(1),
         )
     }

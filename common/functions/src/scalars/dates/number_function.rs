@@ -310,10 +310,7 @@ where
     }
 
     pub fn desc() -> FunctionDescription {
-        let mut features = FunctionFeatures::default()
-            .monotonicity()
-            .passthrough_null()
-            .num_arguments(1);
+        let mut features = FunctionFeatures::default().monotonicity().num_arguments(1);
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();

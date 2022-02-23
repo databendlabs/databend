@@ -168,12 +168,8 @@ impl TrigonometricSinFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .passthrough_null()
-                .num_arguments(1),
-        )
+        FunctionDescription::creator(Box::new(Self::try_create_func))
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -185,12 +181,8 @@ impl TrigonometricCosFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .passthrough_null()
-                .num_arguments(1),
-        )
+        FunctionDescription::creator(Box::new(Self::try_create_func))
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -202,12 +194,8 @@ impl TrigonometricTanFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .passthrough_null()
-                .num_arguments(1),
-        )
+        FunctionDescription::creator(Box::new(Self::try_create_func))
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -219,12 +207,8 @@ impl TrigonometricCotFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .passthrough_null()
-                .num_arguments(1),
-        )
+        FunctionDescription::creator(Box::new(Self::try_create_func))
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -236,12 +220,8 @@ impl TrigonometricAsinFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .passthrough_null()
-                .num_arguments(1),
-        )
+        FunctionDescription::creator(Box::new(Self::try_create_func))
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -253,12 +233,8 @@ impl TrigonometricAcosFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .passthrough_null()
-                .num_arguments(1),
-        )
+        FunctionDescription::creator(Box::new(Self::try_create_func))
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -273,7 +249,6 @@ impl TrigonometricAtanFunction {
         FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
-                .passthrough_null()
                 .variadic_arguments(1, 2),
         )
     }
@@ -287,11 +262,7 @@ impl TrigonometricAtan2Function {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .passthrough_null()
-                .num_arguments(2),
-        )
+        FunctionDescription::creator(Box::new(Self::try_create_func))
+            .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }

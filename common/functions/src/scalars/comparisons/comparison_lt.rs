@@ -33,7 +33,6 @@ impl ComparisonLtFunction {
                 .deterministic()
                 .negative_function(">=")
                 .bool_function()
-                .passthrough_null()
                 .num_arguments(2),
         )
     }

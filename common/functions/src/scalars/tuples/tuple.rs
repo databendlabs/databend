@@ -39,6 +39,7 @@ impl TupleFunction {
         FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
+                .disable_passthrough_null()
                 .variadic_arguments(1, usize::MAX),
         )
     }

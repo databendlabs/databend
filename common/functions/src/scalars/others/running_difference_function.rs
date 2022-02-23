@@ -42,8 +42,11 @@ impl RunningDifferenceFunction {
     // Considering tht we actually need two masks(one for value[index], the other value[index-1]) for validity,
     // we choose to handler the nullable ourselves.
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().num_arguments(1))
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .disable_passthrough_null()
+                .num_arguments(1),
+        )
     }
 }
 

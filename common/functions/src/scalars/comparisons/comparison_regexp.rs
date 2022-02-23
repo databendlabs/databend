@@ -52,7 +52,6 @@ impl ComparisonRegexpFunction {
                 .deterministic()
                 .negative_function("not regexp")
                 .bool_function()
-                .passthrough_null()
                 .num_arguments(2),
         )
     }
@@ -63,7 +62,6 @@ impl ComparisonRegexpFunction {
                 .deterministic()
                 .negative_function("regexp")
                 .bool_function()
-                .passthrough_null()
                 .num_arguments(2),
         )
     }

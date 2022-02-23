@@ -53,14 +53,14 @@ pub struct FunctionFeatures {
     pub maybe_monotonic: bool,
 
     /// Whether the function passes through null input.
-    /// True if the function just return null with any given null input.
-    /// False if the function may return non-null with null input.
+    /// False if the function just return null with any given null input.
+    /// True if the function may return non-null with null input.
     ///
     /// For example, arithmetic plus('+') will output null for any null input, like '12 + null = null'.
     /// It has no idea of how to handle null, but just pass through.
     ///
     /// While ISNULL function  treats null input as a valid one. For example ISNULL(NULL, 'test') will return 'test'.
-    pub passthrough_null: bool,
+    pub disable_passthrough_null: bool,
 
     // The number of arguments the function accepts.
     pub num_arguments: usize,
@@ -77,7 +77,7 @@ impl FunctionFeatures {
             is_bool_func: false,
             is_context_func: false,
             maybe_monotonic: false,
-            passthrough_null: false,
+            disable_passthrough_null: false,
             num_arguments: 0,
             variadic_arguments: None,
         }
@@ -108,8 +108,8 @@ impl FunctionFeatures {
         self
     }
 
-    pub fn passthrough_null(mut self) -> FunctionFeatures {
-        self.passthrough_null = true;
+    pub fn disable_passthrough_null(mut self) -> FunctionFeatures {
+        self.disable_passthrough_null = true;
         self
     }
 
@@ -229,7 +229,7 @@ impl FunctionFactory {
                 let inner = (desc.function_creator)(origin_name)?;
                 Ok(FunctionAdapter::create(
                     inner,
-                    desc.features.passthrough_null,
+                    !desc.features.disable_passthrough_null,
                 ))
             }
         }

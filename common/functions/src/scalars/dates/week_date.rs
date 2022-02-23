@@ -90,7 +90,6 @@ where
     pub fn desc() -> FunctionDescription {
         let mut features = FunctionFeatures::default()
             .monotonicity()
-            .passthrough_null()
             .variadic_arguments(1, 2);
 
         if T::IS_DETERMINISTIC {

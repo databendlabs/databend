@@ -46,7 +46,6 @@ impl RegexpLikeFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .bool_function()
-                .passthrough_null()
                 .variadic_arguments(2, 3),
         )
     }

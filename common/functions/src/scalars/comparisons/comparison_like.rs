@@ -51,7 +51,6 @@ impl ComparisonLikeFunction {
                 .deterministic()
                 .negative_function("not like")
                 .bool_function()
-                .passthrough_null()
                 .num_arguments(2),
         )
     }
@@ -62,7 +61,6 @@ impl ComparisonLikeFunction {
                 .deterministic()
                 .negative_function("like")
                 .bool_function()
-                .passthrough_null()
                 .num_arguments(2),
         )
     }
