@@ -19,10 +19,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use clap::App;
-use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
+use clap::Command as App;
 use clap::ValueHint;
 use common_meta_raft_store::config::get_default_raft_advertise_host;
 use common_meta_raft_store::config::get_default_raft_listen_host;
@@ -728,7 +727,7 @@ impl Command for CreateCommand {
 
     fn clap(&self) -> App<'static> {
         App::new("create")
-            .setting(AppSettings::DisableVersionFlag)
+            .disable_version_flag(true)
             .about(self.about())
             .arg(
                 Arg::new("profile")

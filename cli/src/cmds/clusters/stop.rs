@@ -15,10 +15,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use clap::App;
-use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
+use clap::Command as App;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::clusters::utils;
@@ -136,7 +135,7 @@ impl Command for StopCommand {
 
     fn clap(&self) -> App<'static> {
         App::new("stop")
-            .setting(AppSettings::DisableVersionFlag)
+            .disable_version_flag(true)
             .about(self.about())
             .arg(
                 Arg::new("profile")

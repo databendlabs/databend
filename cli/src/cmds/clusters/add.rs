@@ -15,10 +15,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use clap::App;
-use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
+use clap::Command as App;
 use clap::ValueHint;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
@@ -130,7 +129,7 @@ impl Command for AddCommand {
 
     fn clap(&self) -> App<'static> {
         App::new("add")
-            .setting(AppSettings::DisableVersionFlag)
+            .disable_version_flag(true)
             .about(self.about())
             .arg(
                 Arg::new("profile")

@@ -59,6 +59,17 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           codecov_token: ${{ secrets.CODECOV_TOKEN }}
 
+  test_metactl:
+    runs-on: ${{ matrix.config.os }}
+    needs: build
+    strategy:
+      matrix:
+        config:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/test_metactl
+
   test_stateless_standalone:
     runs-on: ${{ matrix.config.os }}
     needs: build
