@@ -218,18 +218,11 @@ async fn test_source_parquet() -> Result<()> {
     let len = {
         let rg_iter = std::iter::repeat(batch).map(Ok).take(page_nums_expects);
         let row_groups = RowGroupIterator::try_new(rg_iter, &arrow_schema, options, encodings)?;
-        let parquet_schema = row_groups.parquet_schema().clone();
         let path = dir.path().join(name);
         let mut writer = File::create(path).unwrap();
-        common_arrow::parquet::write::write_file(
-            &mut writer,
-            row_groups,
-            parquet_schema,
-            options,
-            None,
-            None,
-        )
-        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?
+
+        common_arrow::write_parquet_file(&mut writer, row_groups, arrow_schema, options)
+            .map_err(|e| ErrorCode::ParquetError(e.to_string()))?
     };
 
     let local = Operator::new(

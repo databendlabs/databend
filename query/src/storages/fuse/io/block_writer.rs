@@ -45,32 +45,20 @@ pub async fn write_block(
 
     let iter = vec![Ok(batch)];
     let row_groups = RowGroupIterator::try_new(iter.into_iter(), arrow_schema, options, encodings)?;
-    let parquet_schema = row_groups.parquet_schema().clone();
 
     // PutObject in S3 need to know the content-length in advance
     // multipart upload may intimidate this, but let's fit things together first
     // see issue #xxx
 
-    use bytes::BufMut;
     // we need a configuration of block size threshold here
-    let mut writer = Vec::with_capacity(100 * 1024 * 1024).writer();
+    let mut buf = Vec::with_capacity(100 * 1024 * 1024);
 
-    let len = common_arrow::parquet::write::write_file(
-        &mut writer,
-        row_groups,
-        parquet_schema,
-        options,
-        None,
-        None,
-    )
-    .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-
-    let parquet = writer.into_inner();
-    let stream_len = parquet.len();
+    let len = common_arrow::write_parquet_file(&mut buf, row_groups, arrow_schema.clone(), options)
+        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
 
     data_accessor
-        .write(location, stream_len as u64)
-        .run(Box::new(Cursor::new(parquet)))
+        .write(location, len)
+        .run(Box::new(Cursor::new(buf)))
         .await
         .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 

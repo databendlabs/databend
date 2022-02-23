@@ -118,8 +118,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aea88c49c98db9de8c72ccaa0470182857e70faa635f32fc4aa3c9e1a1dfefea"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=9e6924b#9e6924b2429a747fc4a0af6d963082d2b34f3287"
 dependencies = [
  "ahash",
  "arrow-format",
@@ -127,6 +126,7 @@ dependencies = [
  "bytemuck",
  "chrono",
  "csv",
+ "either",
  "fallible-streaming-iterator",
  "futures",
  "hash_hasher",
@@ -1381,6 +1381,7 @@ version = "0.1.0"
 dependencies = [
  "arrow-format",
  "arrow2",
+ "futures",
  "parquet2",
 ]
 
@@ -4983,9 +4984,9 @@ dependencies = [
 
 [[package]]
 name = "parquet2"
-version = "0.9.2"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45476d276db539ec4076f6abe62392619460fb70a1a8edebcc06e11cd93c0ec3"
+checksum = "fe2f206abf5ff36f501e6b6acb646de1d236ca4ecb35dc6a58cbedbf7cab748a"
 dependencies = [
  "async-stream",
  "bitpacking",
