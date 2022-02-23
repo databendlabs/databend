@@ -26,7 +26,6 @@ use common_tracing::tracing;
 use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
 use futures::future::BoxFuture;
-use futures::io::BufReader;
 use opendal::Operator;
 
 use crate::storages::fuse::io::meta_readers::BlockMetaReader;
@@ -38,7 +37,6 @@ pub struct BlockReader {
     arrow_table_schema: ArrowSchema,
     projection: Vec<usize>,
     file_len: u64,
-    read_buffer_size: u64,
     metadata_reader: BlockMetaReader,
 }
 
@@ -49,7 +47,6 @@ impl BlockReader {
         table_schema: DataSchemaRef,
         projection: Vec<usize>,
         file_len: u64,
-        read_buffer_size: u64,
         reader: BlockMetaReader,
     ) -> Self {
         let block_schema = Arc::new(table_schema.project(projection.clone()));
@@ -61,7 +58,6 @@ impl BlockReader {
             arrow_table_schema,
             projection,
             file_len,
-            read_buffer_size,
             metadata_reader: reader,
         }
     }
@@ -84,7 +80,6 @@ impl BlockReader {
 
         let arrow_fields = &self.arrow_table_schema.fields;
         let stream_len = self.file_len;
-        let read_buffer_size = self.read_buffer_size;
         let parquet_fields = metadata.schema().fields();
 
         // read_columns_many_async use field name to filter columns
@@ -105,12 +100,10 @@ impl BlockReader {
             let data_accessor = self.data_accessor.clone();
             let path = self.path.clone();
             Box::pin(async move {
-                let reader = data_accessor
+                Ok(data_accessor
                     .object(path.as_str())
                     .reader()
-                    .total_size(stream_len);
-                let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
-                Ok(reader)
+                    .total_size(stream_len))
             }) as BoxFuture<_>
         };
 
