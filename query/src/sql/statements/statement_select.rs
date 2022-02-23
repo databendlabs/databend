@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::DataSchemaRefExt;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::expand_aggregate_arg_exprs;
@@ -66,9 +66,7 @@ impl AnalyzableStatement for DfQueryStatement {
         let mut ir = QueryNormalizer::normalize(ctx.clone(), self).await?;
 
         QualifiedRewriter::rewrite(&joined_schema, ctx.clone(), &mut ir)?;
-
         QueryCollectPushDowns::collect_extras(&mut ir, &mut joined_schema)?;
-
         let analyze_state = self.analyze_query(ir).await?;
         self.check_and_finalize(joined_schema, analyze_state, ctx)
             .await

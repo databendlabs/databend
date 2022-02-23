@@ -14,10 +14,10 @@
 
 use std::ops::Sub;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_date_type_error;
-use common_datavalues2::with_match_primitive_type_id;
-use common_datavalues2::with_match_primitive_types_error;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_date_type_error;
+use common_datavalues::with_match_primitive_type_id;
+use common_datavalues::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::traits::AsPrimitive;
@@ -27,9 +27,9 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::EvalContext;
-use crate::scalars::Function2;
-use crate::scalars::Function2Factory;
-use crate::scalars::Monotonicity2;
+use crate::scalars::Function;
+use crate::scalars::FunctionFactory;
+use crate::scalars::Monotonicity;
 
 fn sub_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
 where
@@ -57,28 +57,26 @@ impl ArithmeticMinusFunction {
     pub fn try_create_func(
         _display_name: &str,
         args: &[&DataTypePtr],
-    ) -> Result<Box<dyn Function2>> {
+    ) -> Result<Box<dyn Function>> {
         let op = DataValueBinaryOperator::Minus;
-        let left_arg = remove_nullable(args[0]);
-        let right_arg = remove_nullable(args[1]);
-        let left_type = left_arg.data_type_id();
-        let right_type = right_arg.data_type_id();
+        let left_type = args[0].data_type_id();
+        let right_type = args[1].data_type_id();
 
         if left_type.is_date_or_date_time() {
             return with_match_date_type_error!(left_type, |$T| {
                 with_match_primitive_type_id!(right_type, |$D| {
                     BinaryArithmeticFunction::<$T, $D, $T, _>::try_create_func(
                         op,
-                        left_arg,
+                        args[0].clone(),
                         sub_scalar::<$T,$D, _>
                     )
                 },{
                     // Argument of type Interval cannot be first.
                     if right_type.is_interval() {
-                        let interval = right_arg.as_any().downcast_ref::<IntervalType>().unwrap();
+                        let interval = args[1].as_any().downcast_ref::<IntervalType>().unwrap();
                         let kind = interval.kind();
                         let function_name = format!("subtract{}s", kind);
-                        return Function2Factory::instance().get(function_name, &[&left_arg, &Int64Type::arc()]);
+                        return FunctionFactory::instance().get(function_name, &[args[0], &Int64Type::arc()]);
                     }
                     with_match_date_type_error!(right_type, |$D| {
                         BinaryArithmeticFunction::<$T, $D, i32, _>::try_create_func(
@@ -96,7 +94,7 @@ impl ArithmeticMinusFunction {
                 with_match_date_type_error!(right_type, |$D| {
                     BinaryArithmeticFunction::<$T, $D, $D, _>::try_create_func(
                         op,
-                        right_arg,
+                        args[1].clone(),
                         sub_scalar::<$T, $D, _>
                     )
                 })
@@ -131,7 +129,7 @@ impl ArithmeticMinusFunction {
         )
     }
 
-    pub fn get_monotonicity(args: &[Monotonicity2]) -> Result<Monotonicity2> {
+    pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
         // For expression f(x) - g(x), only when both f(x) and g(x) are monotonic and have
         // opposite 'is_positive' can we get a monotonic expression.
         let f_x = &args[0];
@@ -139,7 +137,7 @@ impl ArithmeticMinusFunction {
 
         // case of 12 - g(x)
         if f_x.is_constant {
-            return Ok(Monotonicity2::create(
+            return Ok(Monotonicity::create(
                 g_x.is_monotonic || g_x.is_constant,
                 !g_x.is_positive,
                 g_x.is_constant,
@@ -148,7 +146,7 @@ impl ArithmeticMinusFunction {
 
         // case of f(x) - 12
         if g_x.is_constant {
-            return Ok(Monotonicity2::create(
+            return Ok(Monotonicity::create(
                 f_x.is_monotonic,
                 f_x.is_positive,
                 f_x.is_constant,
@@ -157,14 +155,14 @@ impl ArithmeticMinusFunction {
 
         // if either one is non-monotonic, return non-monotonic
         if !f_x.is_monotonic || !g_x.is_monotonic {
-            return Ok(Monotonicity2::default());
+            return Ok(Monotonicity::default());
         }
 
         // when both are monotonic, and have same 'is_positive', we can't determine the monotonicity
         if f_x.is_positive == g_x.is_positive {
-            return Ok(Monotonicity2::default());
+            return Ok(Monotonicity::default());
         }
 
-        Ok(Monotonicity2::create(true, f_x.is_positive, false))
+        Ok(Monotonicity::create(true, f_x.is_positive, false))
     }
 }

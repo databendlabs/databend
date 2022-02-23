@@ -18,7 +18,7 @@ doctest = false
 test = false
 
 [[bin]]
-name = "metactl"
+name = "databend-metactl"
 path = "src/bin/metactl.rs"
 doctest = false
 test = false
@@ -53,7 +53,7 @@ anyhow = "1.0.53"
 async-trait = "0.1.52"
 backtrace = "0.3.64"
 byteorder = "1.4.3"
-clap = { version = "3.0.14", features = ["derive", "env"] }
+clap = { version = "3.1.1", features = ["derive", "env"] }
 derive_more = "0.99.17"
 futures = "0.3.21"
 metrics = "0.18.0"

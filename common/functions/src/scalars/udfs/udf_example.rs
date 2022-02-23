@@ -14,13 +14,13 @@
 
 use std::fmt;
 
-use common_datavalues2::BooleanType;
-use common_datavalues2::DataValue;
+use common_datavalues::BooleanType;
+use common_datavalues::DataValue;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
 pub struct UdfExampleFunction {
@@ -28,35 +28,35 @@ pub struct UdfExampleFunction {
 }
 
 impl UdfExampleFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(UdfExampleFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().bool_function())
     }
 }
 
-impl Function2 for UdfExampleFunction {
+impl Function for UdfExampleFunction {
     fn name(&self) -> &str {
         "UdfExampleFunction"
     }
 
     fn return_type(
         &self,
-        _args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        _args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         Ok(BooleanType::arc())
     }
 
     fn eval(
         &self,
-        _columns: &common_datavalues2::ColumnsWithField,
+        _columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         let value = DataValue::Boolean(true);
         let data_type = BooleanType::arc();
         value.as_const_column(&data_type, input_rows)

@@ -18,7 +18,7 @@ use std::io::Write;
 use common_base::tokio;
 use common_datablocks::assert_blocks_eq;
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::CsvSource;
@@ -184,7 +184,7 @@ async fn test_parse_csv2() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_source_parquet() -> Result<()> {
-    use common_datavalues2::prelude::*;
+    use common_datavalues::prelude::*;
 
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", i8::to_data_type()),

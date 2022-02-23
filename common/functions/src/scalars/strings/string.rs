@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::AsciiFunction;
 use crate::scalars::Base64DecodeFunction;
 use crate::scalars::Base64EncodeFunction;
@@ -27,7 +26,7 @@ use crate::scalars::ExportSetFunction;
 use crate::scalars::FieldFunction;
 use crate::scalars::FindInSetFunction;
 use crate::scalars::FormatFunction;
-use crate::scalars::Function2Factory;
+use crate::scalars::FunctionFactory;
 use crate::scalars::HexFunction;
 use crate::scalars::InsertFunction;
 use crate::scalars::InstrFunction;
@@ -43,6 +42,7 @@ use crate::scalars::OrdFunction;
 use crate::scalars::PositionFunction;
 use crate::scalars::QuoteFunction;
 use crate::scalars::RTrimFunction;
+use crate::scalars::RegexpLikeFunction;
 use crate::scalars::RepeatFunction;
 use crate::scalars::ReplaceFunction;
 use crate::scalars::ReverseFunction;
@@ -61,7 +61,7 @@ use crate::scalars::UpperFunction;
 pub struct StringFunction;
 
 impl StringFunction {
-    pub fn register2(factory: &mut Function2Factory) {
+    pub fn register(factory: &mut FunctionFactory) {
         factory.register("to_base64", Base64EncodeFunction::desc());
         factory.register("from_base64", Base64DecodeFunction::desc());
         factory.register("rtrim", RTrimFunction::desc());
@@ -81,6 +81,7 @@ impl StringFunction {
         factory.register("character_length", CharLengthFunction::desc());
         factory.register("ord", OrdFunction::desc());
         factory.register("length", LengthFunction::desc());
+        factory.register("regexp_like", RegexpLikeFunction::desc());
         factory.register("bin", BinFunction::desc());
         factory.register("oct", OctFunction::desc());
         factory.register("hex", HexFunction::desc());
@@ -106,9 +107,6 @@ impl StringFunction {
         factory.register("concat", ConcatFunction::desc());
         factory.register("replace", ReplaceFunction::desc());
         factory.register("strcmp", StrcmpFunction::desc());
-    }
-
-    pub fn register(factory: &mut FunctionFactory) {
         factory.register("locate", LocateFunction::desc());
         factory.register("position", PositionFunction::desc());
         factory.register("instr", InstrFunction::desc());

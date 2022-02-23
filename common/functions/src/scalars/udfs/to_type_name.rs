@@ -14,13 +14,13 @@
 
 use std::fmt;
 
-use common_datavalues2::DataValue;
-use common_datavalues2::StringType;
+use common_datavalues::DataValue;
+use common_datavalues::StringType;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
 pub struct ToTypeNameFunction {
@@ -28,35 +28,35 @@ pub struct ToTypeNameFunction {
 }
 
 impl ToTypeNameFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(ToTypeNameFunction {
             _display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
-impl Function2 for ToTypeNameFunction {
+impl Function for ToTypeNameFunction {
     fn name(&self) -> &str {
         "ToTypeNameFunction"
     }
 
     fn return_type(
         &self,
-        _args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        _args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         Ok(StringType::arc())
     }
 
     fn eval(
         &self,
-        columns: &common_datavalues2::ColumnsWithField,
+        columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         let type_name = format!("{:?}", columns[0].data_type());
         let value = DataValue::String(type_name.as_bytes().to_vec());
         let data_type = StringType::arc();

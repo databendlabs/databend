@@ -15,14 +15,14 @@
 use std::fmt;
 use std::time::Duration;
 
-use common_datavalues2::DataValue;
-use common_datavalues2::Int8Type;
+use common_datavalues::DataValue;
+use common_datavalues::Int8Type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
 pub struct SleepFunction {
@@ -30,27 +30,27 @@ pub struct SleepFunction {
 }
 
 impl SleepFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(SleepFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create))
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().num_arguments(1))
     }
 }
 
-impl Function2 for SleepFunction {
+impl Function for SleepFunction {
     fn name(&self) -> &str {
         "SleepFunction"
     }
 
     fn return_type(
         &self,
-        args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         if !args[0].data_type_id().is_numeric() {
             return Err(ErrorCode::BadArguments(format!(
                 "Illegal type {} of argument of function {}, expected numeric",
@@ -63,9 +63,9 @@ impl Function2 for SleepFunction {
 
     fn eval(
         &self,
-        columns: &common_datavalues2::ColumnsWithField,
+        columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         let c = columns[0].column();
         if c.len() != 1 {
             return Err(ErrorCode::BadArguments(format!(

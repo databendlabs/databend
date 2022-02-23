@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use bitflags::bitflags;
-use common_datavalues2::DataSchema;
-use common_datavalues2::DataSchemaRef;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 
 bitflags! {
     #[derive(serde::Serialize, serde::Deserialize)]

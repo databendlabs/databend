@@ -67,22 +67,22 @@ async fn test_export() -> anyhow::Result<()> {
         }
 
         let want = vec![
-            r#"["state",4,"sledks::RaftStateKV","Id",{"NodeId":0}]"#, //
-            r#"["state",4,"sledks::RaftStateKV","HardState",{"HardState":{"current_term":1,"voted_for":0}}]"#, //
-            r#"["log",1,"sledks::Logs",0,{"log_id":{"term":0,"index":0},"payload":{"Membership":{"configs":[[0]],"all_nodes":[0]}}}]"#, //
-            r#"["log",1,"sledks::Logs",1,{"log_id":{"term":1,"index":1},"payload":"Blank"}]"#, //
-            r#"["log",1,"sledks::Logs",2,{"log_id":{"term":1,"index":2},"payload":{"Normal":{"txid":null,"cmd":{"AddNode":{"node_id":0,"node":{"name":"","address":"127.0.0.1:29000"}}}}}}]"#, //
-            r#"["log",1,"sledks::Logs",3,{"log_id":{"term":1,"index":3},"payload":{"Normal":{"txid":null,"cmd":{"UpsertKV":{"key":"foo","seq":"Any","value":{"Update":[102,111,111]},"value_meta":null}}}}}]"#, //
-            r#"["log",1,"sledks::Logs",4,{"log_id":{"term":1,"index":4},"payload":{"Normal":{"txid":null,"cmd":{"UpsertKV":{"key":"bar","seq":"Any","value":{"Update":[98,97,114]},"value_meta":null}}}}}]"#, //
-            r#"["log",1,"sledks::Logs",5,{"log_id":{"term":1,"index":5},"payload":{"Normal":{"txid":null,"cmd":{"UpsertKV":{"key":"wow","seq":"Any","value":{"Update":[119,111,119]},"value_meta":null}}}}}]"#, //
-            r#"["sm",2,"sledks::Nodes",0,{"name":"","address":"127.0.0.1:29000"}]"#, //
-            r#"["sm",3,"sledks::StateMachineMeta","LastApplied",{"LogId":{"term":1,"index":5}}]"#, //
-            r#"["sm",3,"sledks::StateMachineMeta","Initialized",{"Bool":true}]"#, //
-            r#"["sm",3,"sledks::StateMachineMeta","LastMembership",{"Membership":{"log_id":{"term":0,"index":0},"membership":{"configs":[[0]],"all_nodes":[0]}}}]"#, //
-            r#"["sm",6,"sledks::GenericKV","bar",{"seq":2,"meta":null,"data":[98,97,114]}]"#, //
-            r#"["sm",6,"sledks::GenericKV","foo",{"seq":1,"meta":null,"data":[102,111,111]}]"#, //
-            r#"["sm",6,"sledks::GenericKV","wow",{"seq":3,"meta":null,"data":[119,111,119]}]"#, //
-            r#"["sm",7,"sledks::Sequences","generic-kv",3]"#,                                 //
+            r#"["test-29000-raft_state",{"RaftStateKV":{"key":"Id","value":{"NodeId":0}}}]"#, //
+            r#"["test-29000-raft_state",{"RaftStateKV":{"key":"HardState","value":{"HardState":{"current_term":1,"voted_for":0}}}}]"#, //
+            r#"["test-29000-raft_log",{"Logs":{"key":0,"value":{"log_id":{"term":0,"index":0},"payload":{"Membership":{"configs":[[0]],"all_nodes":[0]}}}}}]"#, //
+            r#"["test-29000-raft_log",{"Logs":{"key":1,"value":{"log_id":{"term":1,"index":1},"payload":"Blank"}}}]"#, //
+            r#"["test-29000-raft_log",{"Logs":{"key":2,"value":{"log_id":{"term":1,"index":2},"payload":{"Normal":{"txid":null,"cmd":{"AddNode":{"node_id":0,"node":{"name":"0","endpoint":{"addr":"localhost","port":29000}}}}}}}}}]"#, //
+            r#"["test-29000-raft_log",{"Logs":{"key":3,"value":{"log_id":{"term":1,"index":3},"payload":{"Normal":{"txid":null,"cmd":{"UpsertKV":{"key":"foo","seq":"Any","value":{"Update":[102,111,111]},"value_meta":null}}}}}}}]"#, //
+            r#"["test-29000-raft_log",{"Logs":{"key":4,"value":{"log_id":{"term":1,"index":4},"payload":{"Normal":{"txid":null,"cmd":{"UpsertKV":{"key":"bar","seq":"Any","value":{"Update":[98,97,114]},"value_meta":null}}}}}}}]"#, //
+            r#"["test-29000-raft_log",{"Logs":{"key":5,"value":{"log_id":{"term":1,"index":5},"payload":{"Normal":{"txid":null,"cmd":{"UpsertKV":{"key":"wow","seq":"Any","value":{"Update":[119,111,119]},"value_meta":null}}}}}}}]"#, //
+            r#"["test-29000-state_machine/0",{"Nodes":{"key":0,"value":{"name":"0","endpoint":{"addr":"localhost","port":29000}}}}]"#, //
+            r#"["test-29000-state_machine/0",{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"term":1,"index":5}}}}]"#, //
+            r#"["test-29000-state_machine/0",{"StateMachineMeta":{"key":"Initialized","value":{"Bool":true}}}]"#, //
+            r#"["test-29000-state_machine/0",{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":{"term":0,"index":0},"membership":{"configs":[[0]],"all_nodes":[0]}}}}}]"#, //
+            r#"["test-29000-state_machine/0",{"GenericKV":{"key":"bar","value":{"seq":2,"meta":null,"data":[98,97,114]}}}]"#, //
+            r#"["test-29000-state_machine/0",{"GenericKV":{"key":"foo","value":{"seq":1,"meta":null,"data":[102,111,111]}}}]"#, //
+            r#"["test-29000-state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}]"#, //
+            r#"["test-29000-state_machine/0",{"Sequences":{"key":"generic-kv","value":3}}]"#, //
         ];
 
         // The addresses are built from random number.
@@ -90,9 +90,15 @@ async fn test_export() -> anyhow::Result<()> {
         let lines = lines
             .iter()
             .map(|x| {
-                Regex::new(r"127.0.0.1:29\d\d\d")
+                Regex::new(r"29\d\d\d")
                     .unwrap()
-                    .replace(x, "127.0.0.1:29000")
+                    .replace_all(x, "29000")
+                    .to_string()
+            })
+            .map(|x| {
+                Regex::new(r"test-29\d\d\d")
+                    .unwrap()
+                    .replace_all(&x, "test-29000")
                     .to_string()
             })
             .collect::<Vec<_>>();

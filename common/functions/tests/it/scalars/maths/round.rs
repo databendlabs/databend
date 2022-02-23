@@ -12,29 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::scalar_function2_test::test_scalar_functions2;
-use crate::scalars::scalar_function2_test::ScalarFunction2Test;
+use crate::scalars::scalar_function2_test::test_scalar_functions;
+use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_round_number_function() -> Result<()> {
     let tests = vec![
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "no second arg",
             columns: vec![Series::from_data([12345.6789])],
             expect: Series::from_data([12346.0]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "no second arg with null x",
             columns: vec![Series::from_data([Some(12345.6789), None, Some(77.77)])],
             expect: Series::from_data([Some(12346.0), None, Some(78.0)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "second arg is const with null x",
             columns: vec![
                 Series::from_data([Some(12345.6789), None, Some(77.77)]),
@@ -43,25 +43,25 @@ fn test_round_number_function() -> Result<()> {
             expect: Series::from_data([Some(12346.0), None, Some(78.0)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "second arg is 0",
             columns: vec![Series::from_data([12345.6789]), Series::from_data([0])],
             expect: Series::from_data([12346.0]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "second arg is 2",
             columns: vec![Series::from_data([12345.6789]), Series::from_data([2])],
             expect: Series::from_data([12345.68]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "second arg is -2",
             columns: vec![Series::from_data([12345.6789]), Series::from_data([-2])],
             expect: Series::from_data([12300.0]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "second arg is const 0",
             columns: vec![
                 Series::from_data([12345.6789]),
@@ -70,7 +70,7 @@ fn test_round_number_function() -> Result<()> {
             expect: Series::from_data([12346.0]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "second arg is const 2",
             columns: vec![
                 Series::from_data([12345.6789]),
@@ -79,7 +79,7 @@ fn test_round_number_function() -> Result<()> {
             expect: Series::from_data([12345.68]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "second arg is const -2",
             columns: vec![
                 Series::from_data([12345.6789]),
@@ -88,7 +88,7 @@ fn test_round_number_function() -> Result<()> {
             expect: Series::from_data([12300.0]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "second arg is 35",
             columns: vec![
                 Series::from_data([
@@ -103,7 +103,7 @@ fn test_round_number_function() -> Result<()> {
             ]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "second arg is const 35",
             columns: vec![
                 Series::from_data([
@@ -118,7 +118,7 @@ fn test_round_number_function() -> Result<()> {
             ]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "second arg is -35",
             columns: vec![
                 Series::from_data([
@@ -130,7 +130,7 @@ fn test_round_number_function() -> Result<()> {
             expect: Series::from_data([0.0, 8888888889000000000000000000000000000000.0_f64]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "second arg is const -35",
             columns: vec![
                 Series::from_data([
@@ -145,7 +145,7 @@ fn test_round_number_function() -> Result<()> {
             ]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "second arg is NULL",
             columns: vec![
                 Series::from_data([12345.6789, 12345.6789]),
@@ -156,13 +156,13 @@ fn test_round_number_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions2(RoundNumberFunction::try_create("round")?, &tests)
+    test_scalar_functions(RoundNumberFunction::try_create("round")?, &tests)
 }
 
 #[test]
 fn test_trunc_number_function() -> Result<()> {
     let tests = vec![
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "first arg is series, second arg is NULL",
             columns: vec![
                 Series::from_data([Some(11.11), None, Some(33.33)]),
@@ -175,7 +175,7 @@ fn test_trunc_number_function() -> Result<()> {
             expect: Series::from_data([None::<f64>, None, None]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "first arg is series, second arg is 0 const",
             columns: vec![
                 Series::from_data([Some(11.11), None, Some(33.33)]),
@@ -184,7 +184,7 @@ fn test_trunc_number_function() -> Result<()> {
             expect: Series::from_data([None, None, Some(33.0)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "first arg is series, second arg is positive const",
             columns: vec![
                 Series::from_data([Some(11.11), None, Some(33.33)]),
@@ -193,7 +193,7 @@ fn test_trunc_number_function() -> Result<()> {
             expect: Series::from_data([Some(11.1), None, Some(33.3)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "first arg is series, second arg is negative const",
             columns: vec![
                 Series::from_data([Some(11.11), None, Some(33.33)]),
@@ -202,7 +202,7 @@ fn test_trunc_number_function() -> Result<()> {
             expect: Series::from_data([Some(10.0), None, Some(30.0)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "first arg is const, second is series",
             columns: vec![
                 ConstColumn::new(Series::from_data(vec![11.11f64]), 4).arc(),
@@ -211,7 +211,7 @@ fn test_trunc_number_function() -> Result<()> {
             expect: Series::from_data([None, Some(10.0), Some(11.0), Some(11.1)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "both arg are series",
             columns: vec![
                 Series::from_data([
@@ -229,5 +229,5 @@ fn test_trunc_number_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions2(TruncNumberFunction::try_create("trunc")?, &tests)
+    test_scalar_functions(TruncNumberFunction::try_create("trunc")?, &tests)
 }

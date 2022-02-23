@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Borrow from apache/arrow/rust/datafusion/src/functions.rs
+// See notice.md
+
 use std::convert::From;
 use std::convert::TryFrom;
 
@@ -27,16 +30,8 @@ use crate::DataValue;
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 pub enum DataGroupValue {
     #[serde(with = "OrderedFloatDef")]
-    Float32(OrderedFloat<f32>),
-    #[serde(with = "OrderedFloatDef")]
     Float64(OrderedFloat<f64>),
-    UInt8(u8),
-    UInt16(u16),
-    UInt32(u32),
     UInt64(u64),
-    Int8(i8),
-    Int16(i16),
-    Int32(i32),
     Int64(i64),
     String(Vec<u8>),
     Boolean(bool),
@@ -47,40 +42,15 @@ impl TryFrom<&DataValue> for DataGroupValue {
 
     fn try_from(value: &DataValue) -> Result<Self> {
         Ok(match value {
-            DataValue::Float32(Some(v)) => DataGroupValue::Float32(OrderedFloat::from(*v)),
-            DataValue::Float64(Some(v)) => DataGroupValue::Float64(OrderedFloat::from(*v)),
-            DataValue::Boolean(Some(v)) => DataGroupValue::Boolean(*v),
-            DataValue::Int8(Some(v)) => DataGroupValue::Int8(*v),
-            DataValue::Int16(Some(v)) => DataGroupValue::Int16(*v),
-            DataValue::Int32(Some(v)) => DataGroupValue::Int32(*v),
-            DataValue::Int64(Some(v)) => DataGroupValue::Int64(*v),
-            DataValue::UInt8(Some(v)) => DataGroupValue::UInt8(*v),
-            DataValue::UInt16(Some(v)) => DataGroupValue::UInt16(*v),
-            DataValue::UInt32(Some(v)) => DataGroupValue::UInt32(*v),
-            DataValue::UInt64(Some(v)) => DataGroupValue::UInt64(*v),
-            DataValue::String(Some(v)) => DataGroupValue::String(v.clone()),
-
-            DataValue::Float32(None)
-            | DataValue::Float64(None)
-            | DataValue::Boolean(None)
-            | DataValue::Int8(None)
-            | DataValue::Int16(None)
-            | DataValue::Int32(None)
-            | DataValue::Int64(None)
-            | DataValue::UInt8(None)
-            | DataValue::UInt16(None)
-            | DataValue::UInt32(None)
-            | DataValue::UInt64(None)
-            | DataValue::String(None) => {
-                return Err(ErrorCode::BadDataValueType(format!(
-                    "Cannot convert a DataValue holding NULL ({:?})",
-                    value
-                )));
-            }
+            DataValue::Float64(v) => DataGroupValue::Float64(OrderedFloat::from(*v)),
+            DataValue::Boolean(v) => DataGroupValue::Boolean(*v),
+            DataValue::Int64(v) => DataGroupValue::Int64(*v),
+            DataValue::UInt64(v) => DataGroupValue::UInt64(*v),
+            DataValue::String(v) => DataGroupValue::String(v.clone()),
 
             v => {
                 return Err(ErrorCode::BadDataValueType(format!(
-                    "Cannot convert a DataValue  with associated DataType ({:?})",
+                    "Cannot convert a DataValue ({:?}) into DataGroupValue",
                     v.data_type()
                 )));
             }
@@ -91,18 +61,11 @@ impl TryFrom<&DataValue> for DataGroupValue {
 impl From<&DataGroupValue> for DataValue {
     fn from(group_by_scalar: &DataGroupValue) -> Self {
         match group_by_scalar {
-            DataGroupValue::Float32(v) => DataValue::Float32(Some((*v).into())),
-            DataGroupValue::Float64(v) => DataValue::Float64(Some((*v).into())),
-            DataGroupValue::Boolean(v) => DataValue::Boolean(Some(*v)),
-            DataGroupValue::Int8(v) => DataValue::Int8(Some(*v)),
-            DataGroupValue::Int16(v) => DataValue::Int16(Some(*v)),
-            DataGroupValue::Int32(v) => DataValue::Int32(Some(*v)),
-            DataGroupValue::Int64(v) => DataValue::Int64(Some(*v)),
-            DataGroupValue::UInt8(v) => DataValue::UInt8(Some(*v)),
-            DataGroupValue::UInt16(v) => DataValue::UInt16(Some(*v)),
-            DataGroupValue::UInt32(v) => DataValue::UInt32(Some(*v)),
-            DataGroupValue::UInt64(v) => DataValue::UInt64(Some(*v)),
-            DataGroupValue::String(v) => DataValue::String(Some(v.to_vec())),
+            DataGroupValue::Float64(v) => DataValue::Float64((*v).into()),
+            DataGroupValue::Boolean(v) => DataValue::Boolean(*v),
+            DataGroupValue::Int64(v) => DataValue::Int64(*v),
+            DataGroupValue::UInt64(v) => DataValue::UInt64(*v),
+            DataGroupValue::String(v) => DataValue::String(v.to_vec()),
         }
     }
 }
@@ -110,12 +73,6 @@ impl From<&DataGroupValue> for DataValue {
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "OrderedFloat")]
 struct OrderedFloatDef<T>(pub T);
-
-impl From<OrderedFloatDef<f32>> for OrderedFloat<f32> {
-    fn from(def: OrderedFloatDef<f32>) -> Self {
-        OrderedFloat::from(def.0)
-    }
-}
 
 impl From<OrderedFloatDef<f64>> for OrderedFloat<f64> {
     fn from(def: OrderedFloatDef<f64>) -> Self {

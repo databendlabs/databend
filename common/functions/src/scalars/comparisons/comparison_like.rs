@@ -16,15 +16,16 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::DataValueComparisonOperator;
+use common_datavalues::prelude::*;
+use common_datavalues::DataValueComparisonOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use regex::bytes::Regex as BytesRegex;
 
-use crate::scalars::function2_factory::Function2Description;
+use crate::scalars::assert_string;
+use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
+use crate::scalars::Function;
 
 #[derive(Clone)]
 pub struct ComparisonLikeFunction {
@@ -32,20 +33,20 @@ pub struct ComparisonLikeFunction {
 }
 
 impl ComparisonLikeFunction {
-    pub fn try_create_like(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create_like(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(ComparisonLikeFunction {
             op: DataValueComparisonOperator::Like,
         }))
     }
 
-    pub fn try_create_nlike(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create_nlike(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(ComparisonLikeFunction {
             op: DataValueComparisonOperator::NotLike,
         }))
     }
 
-    pub fn desc_like() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create_like)).features(
+    pub fn desc_like() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_like)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("not like")
@@ -54,8 +55,8 @@ impl ComparisonLikeFunction {
         )
     }
 
-    pub fn desc_unlike() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create_nlike)).features(
+    pub fn desc_unlike() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_nlike)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("like")
@@ -65,7 +66,7 @@ impl ComparisonLikeFunction {
     }
 }
 
-impl Function2 for ComparisonLikeFunction {
+impl Function for ComparisonLikeFunction {
     fn name(&self) -> &str {
         match self.op {
             DataValueComparisonOperator::Like => "like",
@@ -76,25 +77,20 @@ impl Function2 for ComparisonLikeFunction {
 
     fn return_type(
         &self,
-        args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
-        // expect array & struct
-        let not_string = args.iter().all(|arg| arg.data_type_id() != TypeID::String);
-        if not_string {
-            return Err(ErrorCode::BadArguments(format!(
-                "Illegal types {:?} of argument of function {}, must be strings",
-                args,
-                self.name()
-            )));
+        args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
+        for arg in args {
+            assert_string(*arg)?;
         }
+
         Ok(BooleanType::arc())
     }
 
     fn eval(
         &self,
-        columns: &common_datavalues2::ColumnsWithField,
+        columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
+    ) -> Result<common_datavalues::ColumnRef> {
         let col1: Result<&ConstColumn> = Series::check_get(columns[1].column());
 
         if let Ok(col1) = col1 {
@@ -117,7 +113,7 @@ impl Function2 for ComparisonLikeFunction {
 }
 
 impl ComparisonLikeFunction {
-    fn eval_constant(&self, lhs: &ColumnRef, rhs: &[u8]) -> Result<common_datavalues2::ColumnRef> {
+    fn eval_constant(&self, lhs: &ColumnRef, rhs: &[u8]) -> Result<common_datavalues::ColumnRef> {
         let result = match self.op {
             DataValueComparisonOperator::Like => a_like_binary_scalar(lhs, rhs, |x| x),
             DataValueComparisonOperator::NotLike => a_like_binary_scalar(lhs, rhs, |x| !x),

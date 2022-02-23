@@ -21,17 +21,17 @@ use common_functions::scalars::RunningDifferenceFunction;
 use common_functions::scalars::TryInetAtonFunction;
 use common_functions::scalars::TryInetNtoaFunction;
 
-use super::scalar_function2_test::test_scalar_functions2;
-use super::scalar_function2_test::ScalarFunction2Test;
-use crate::scalars::scalar_function2_test::test_scalar_functions2_with_type;
-use crate::scalars::scalar_function2_test::ScalarFunction2WithFieldTest;
+use super::scalar_function2_test::test_scalar_functions;
+use super::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions_with_type;
+use crate::scalars::scalar_function2_test::ScalarFunctionWithFieldTest;
 
 #[test]
 fn test_running_difference_first_null() -> Result<()> {
-    use common_datavalues2::prelude::*;
+    use common_datavalues::prelude::*;
 
     let tests = vec![
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "i8_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -43,7 +43,7 @@ fn test_running_difference_first_null() -> Result<()> {
             expect: Series::from_data([None, None, None, None, Some(4_i16)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "u8_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -55,7 +55,7 @@ fn test_running_difference_first_null() -> Result<()> {
             expect: Series::from_data([None, None, None, None, Some(4_i16)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "i16_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -67,7 +67,7 @@ fn test_running_difference_first_null() -> Result<()> {
             expect: Series::from_data([None, None, None, None, Some(4_i32)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "u16_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -79,7 +79,7 @@ fn test_running_difference_first_null() -> Result<()> {
             expect: Series::from_data([None, None, None, None, Some(4_i32)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "i32_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -91,7 +91,7 @@ fn test_running_difference_first_null() -> Result<()> {
             expect: Series::from_data([None, None, None, None, Some(4_i64)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "u32_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -103,7 +103,7 @@ fn test_running_difference_first_null() -> Result<()> {
             expect: Series::from_data([None, None, None, None, Some(4_i64)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "i64_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -115,7 +115,7 @@ fn test_running_difference_first_null() -> Result<()> {
             expect: Series::from_data([None, None, None, None, Some(4_i64)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "u64_first_null",
             columns: vec![Series::from_data([
                 None,
@@ -127,7 +127,7 @@ fn test_running_difference_first_null() -> Result<()> {
             expect: Series::from_data([None, None, None, None, Some(4_i64)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "i8_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_i8),
@@ -139,7 +139,7 @@ fn test_running_difference_first_null() -> Result<()> {
             expect: Series::from_data([Some(0_i16), Some(1), None, None, Some(6)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "u8_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_u8),
@@ -151,7 +151,7 @@ fn test_running_difference_first_null() -> Result<()> {
             expect: Series::from_data([Some(0_i16), Some(1), None, None, Some(6)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "i16_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_i16),
@@ -163,7 +163,7 @@ fn test_running_difference_first_null() -> Result<()> {
             expect: Series::from_data([Some(0_i32), Some(1), None, None, Some(6)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "u16_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_u16),
@@ -175,7 +175,7 @@ fn test_running_difference_first_null() -> Result<()> {
             expect: Series::from_data([Some(0_i32), Some(1), None, None, Some(6)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "i32_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_i32),
@@ -187,7 +187,7 @@ fn test_running_difference_first_null() -> Result<()> {
             expect: Series::from_data([Some(0_i64), Some(1), None, None, Some(6)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "u32_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_u32),
@@ -199,7 +199,7 @@ fn test_running_difference_first_null() -> Result<()> {
             expect: Series::from_data([Some(0_i64), Some(1), None, None, Some(6)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "i64_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_i64),
@@ -211,7 +211,7 @@ fn test_running_difference_first_null() -> Result<()> {
             expect: Series::from_data([Some(0_i64), Some(1), None, None, Some(6)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "u64_first_not_null",
             columns: vec![Series::from_data([
                 Some(2_u64),
@@ -225,16 +225,16 @@ fn test_running_difference_first_null() -> Result<()> {
         },
     ];
 
-    test_scalar_functions2(RunningDifferenceFunction::try_create("a")?, &tests)
+    test_scalar_functions(RunningDifferenceFunction::try_create("a")?, &tests)
 }
 
 #[test]
 fn test_running_difference_datetime32_first_null() -> Result<()> {
-    use common_datavalues2::prelude::*;
-    use common_datavalues2::type_datetime32::DateTime32Type;
+    use common_datavalues::prelude::*;
+    use common_datavalues::type_datetime32::DateTime32Type;
 
     let tests = vec![
-        ScalarFunction2WithFieldTest {
+        ScalarFunctionWithFieldTest {
             name: "datetime32_first_null",
             columns: vec![ColumnWithField::new(
                 Series::from_data([None, Some(3_u32), None, Some(4), Some(10)]),
@@ -246,7 +246,7 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
             expect: Series::from_data([None, None, None, None, Some(6_i64)]),
             error: "",
         },
-        ScalarFunction2WithFieldTest {
+        ScalarFunctionWithFieldTest {
             name: "datetime32_first_not_null",
             columns: vec![ColumnWithField::new(
                 Series::from_data([Some(2_u32), Some(3), None, Some(4), Some(10)]),
@@ -260,27 +260,27 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
         },
     ];
 
-    test_scalar_functions2_with_type(RunningDifferenceFunction::try_create("a")?, &tests)
+    test_scalar_functions_with_type(RunningDifferenceFunction::try_create("a")?, &tests)
 }
 
 #[test]
 fn test_try_inet_aton_function() -> Result<()> {
-    use common_datavalues2::prelude::*;
+    use common_datavalues::prelude::*;
 
     let tests = vec![
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "valid input",
             columns: vec![Series::from_data(vec!["127.0.0.1"])],
             expect: Series::from_data(vec![Option::<u32>::Some(2130706433_u32)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "invalid input",
             columns: vec![Series::from_data(vec![Some("invalid")])],
             expect: Series::from_data(vec![Option::<u32>::None]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "null input",
             columns: vec![Series::from_data(vec![Option::<Vec<u8>>::None])],
             expect: Series::from_data(vec![Option::<u32>::None]),
@@ -289,33 +289,33 @@ fn test_try_inet_aton_function() -> Result<()> {
     ];
 
     let test_func = TryInetAtonFunction::try_create("try_inet_aton")?;
-    test_scalar_functions2(test_func, &tests)
+    test_scalar_functions(test_func, &tests)
 }
 
 #[test]
 fn test_inet_aton_function() -> Result<()> {
-    use common_datavalues2::prelude::*;
+    use common_datavalues::prelude::*;
 
     let tests = vec![
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "valid input",
             columns: vec![Series::from_data([Some("127.0.0.1")])],
             expect: Series::from_data(vec![Option::<u32>::Some(2130706433_u32)]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "null input",
             columns: vec![Series::from_data([Option::<Vec<u8>>::None])],
             expect: Series::from_data([Option::<u32>::None]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "invalid input",
             columns: vec![Series::from_data([Some("1.1.1.1"), Some("batman")])],
             expect: Series::from_data(vec![Option::<u32>::None]),
             error: "Failed to parse 'batman' into a IPV4 address, invalid IP address syntax",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "empty string",
             columns: vec![Series::from_data([Some("1.1.1.1"), Some("")])],
             expect: Series::from_data(vec![Option::<u32>::None]),
@@ -324,48 +324,48 @@ fn test_inet_aton_function() -> Result<()> {
     ];
 
     let test_func = InetAtonFunction::try_create("inet_aton")?;
-    test_scalar_functions2(test_func, &tests)
+    test_scalar_functions(test_func, &tests)
 }
 
 #[test]
 fn test_try_inet_ntoa_function() -> Result<()> {
-    use common_datavalues2::prelude::*;
+    use common_datavalues::prelude::*;
 
     let tests = vec![
         // integer input test cases
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "integer_input_i32_positive",
             columns: vec![Series::from_data(vec![2130706433_i32])],
             expect: Series::from_data(vec![Some("127.0.0.1")]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "integer_input_i32_negative",
             columns: vec![Series::from_data(vec![-1])],
             expect: Series::from_data(vec![Some("255.255.255.255")]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "integer_input_u8",
             columns: vec![Series::from_data(vec![Some(0_u8)])],
             expect: Series::from_data(vec![Some("0.0.0.0")]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "integer_input_u32",
             columns: vec![Series::from_data(vec![Some(3232235777_u32)])],
             expect: Series::from_data(vec![Some("192.168.1.1")]),
             error: "",
         },
         // float input test cases
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "float_input_f64",
             columns: vec![Series::from_data(vec![2130706433.3917_f64])],
             expect: Series::from_data(vec![Some("127.0.0.1")]),
             error: "",
         },
         // string input test cases
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "string_input_u32",
             columns: vec![Series::from_data(vec!["3232235777"])],
             expect: Series::from_data(vec![Some("192.168.1.1")]),
@@ -374,48 +374,48 @@ fn test_try_inet_ntoa_function() -> Result<()> {
     ];
 
     let test_func = TryInetNtoaFunction::try_create("try_inet_ntoa")?;
-    test_scalar_functions2(test_func, &tests)
+    test_scalar_functions(test_func, &tests)
 }
 
 #[test]
 fn test_inet_ntoa_function() -> Result<()> {
-    use common_datavalues2::prelude::*;
+    use common_datavalues::prelude::*;
 
     let tests = vec![
         // integer input test cases
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "integer_input_i32_positive",
             columns: vec![Series::from_data([2130706433_i32])],
             expect: Series::from_data(["127.0.0.1"]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "integer_input_i32_negative",
             columns: vec![Series::from_data([-1])],
             expect: Series::from_data(["255.255.255.255"]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "integer_input_u8",
             columns: vec![Series::from_data([Some(0_u8)])],
             expect: Series::from_data([Some("0.0.0.0")]),
             error: "",
         },
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "integer_input_u32",
             columns: vec![Series::from_data([Some(3232235777_u32)])],
             expect: Series::from_data([Some("192.168.1.1")]),
             error: "",
         },
         // float input test cases
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "float_input_f64",
             columns: vec![Series::from_data([2130706433.3917_f64])],
             expect: Series::from_data(["127.0.0.1"]),
             error: "",
         },
         // string input test cases
-        ScalarFunction2Test {
+        ScalarFunctionTest {
             name: "string_input_empty",
             columns: vec![Series::from_data([""])],
             expect: Series::from_data([""]),
@@ -424,5 +424,5 @@ fn test_inet_ntoa_function() -> Result<()> {
     ];
 
     let test_func = InetNtoaFunction::try_create("inet_ntoa")?;
-    test_scalar_functions2(test_func, &tests)
+    test_scalar_functions(test_func, &tests)
 }

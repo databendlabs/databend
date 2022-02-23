@@ -17,8 +17,8 @@ use std::marker::PhantomData;
 use std::ops::Rem;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_types_error;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num_traits::AsPrimitive;
@@ -26,7 +26,7 @@ use num_traits::AsPrimitive;
 use super::utils::rem_scalar;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
-use crate::scalars::Function2;
+use crate::scalars::Function;
 
 pub struct ArithmeticModuloFunction;
 
@@ -34,12 +34,9 @@ impl ArithmeticModuloFunction {
     pub fn try_create_func(
         _display_name: &str,
         args: &[&DataTypePtr],
-    ) -> Result<Box<dyn Function2>> {
-        let left_type = remove_nullable(args[0]).data_type_id();
-        let right_type = remove_nullable(args[1]).data_type_id();
-
-        with_match_primitive_types_error!(left_type, |$T| {
-            with_match_primitive_types_error!(right_type, |$D| {
+    ) -> Result<Box<dyn Function>> {
+        with_match_primitive_types_error!(args[0].data_type_id(), |$T| {
+            with_match_primitive_types_error!(args[1].data_type_id(), |$D| {
                 Ok(Box::new(
                         ModuloFunctionImpl::<$T, $D, <($T, $D) as ResultTypeOfBinary>::LeastSuper, <($T, $D) as ResultTypeOfBinary>::Modulo>::default()
                 ))
@@ -61,7 +58,7 @@ pub struct ModuloFunctionImpl<L, R, M, O> {
     o: PhantomData<O>,
 }
 
-impl<L, R, M, O> Function2 for ModuloFunctionImpl<L, R, M, O>
+impl<L, R, M, O> Function for ModuloFunctionImpl<L, R, M, O>
 where
     L: PrimitiveType + AsPrimitive<M>,
     R: PrimitiveType + AsPrimitive<M>,

@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::DataSchemaRef;
-use common_datavalues2::DataSchemaRefExt;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use common_planners::Expression;
 
@@ -31,7 +31,7 @@ pub type TransformHaving = TransformFilterImpl<true>;
 pub type TransformFilter = TransformFilterImpl<false>;
 
 pub struct TransformFilterImpl<const HAVING: bool> {
-    executor: Arc<ExpressionExecutor>,
+    executor: ExpressionExecutor,
 }
 
 impl<const HAVING: bool> TransformFilterImpl<HAVING>
@@ -43,10 +43,10 @@ where Self: Transform
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
-        let predicate_executor = Self::expr_executor(&schema, &predicate)?;
-        predicate_executor.validate()?;
+        let executor = Self::expr_executor(&schema, &predicate)?;
+        executor.validate()?;
         Ok(Transformer::create(input, output, TransformFilterImpl {
-            executor: Arc::new(predicate_executor),
+            executor,
         }))
     }
 

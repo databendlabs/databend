@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_datavalues2::chrono::Datelike;
-use common_datavalues2::chrono::Duration;
-use common_datavalues2::chrono::NaiveDate;
-use common_datavalues2::chrono::NaiveDateTime;
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_types_error;
+use common_datavalues::chrono::Datelike;
+use common_datavalues::chrono::Duration;
+use common_datavalues::chrono::NaiveDate;
+use common_datavalues::chrono::NaiveDateTime;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num_traits::AsPrimitive;
@@ -35,7 +34,7 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticCreator;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::EvalContext;
-use crate::scalars::Function2;
+use crate::scalars::Function;
 use crate::scalars::ScalarBinaryExpression;
 use crate::scalars::ScalarBinaryFunction;
 
@@ -50,11 +49,9 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
         display_name: &str,
         factor: i64,
         args: &[&DataTypePtr],
-    ) -> Result<Box<dyn Function2>> {
-        let left_arg = remove_nullable(args[0]);
-        let right_arg = remove_nullable(args[1]);
-        let left_type = left_arg.data_type_id();
-        let right_type = right_arg.data_type_id();
+    ) -> Result<Box<dyn Function>> {
+        let left_type = args[0].data_type_id();
+        let right_type = args[1].data_type_id();
 
         with_match_primitive_types_error!(right_type, |$R| {
             match left_type {
@@ -63,33 +60,31 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
                     T::Date16Result::to_date_type(),
                     T::eval_date16::<$R>,
                     factor,
-                    None,
+                    0,
                 ),
                 TypeID::Date32 => IntervalFunction::<i32, $R, T::Date32Result, _>::try_create_func(
                     display_name,
                     T::Date32Result::to_date_type(),
                     T::eval_date32::<$R>,
                     factor,
-                    None,
+                    0,
                 ),
                 TypeID::DateTime32 => IntervalFunction::<u32, $R, u32, _>::try_create_func(
                     display_name,
-                    left_arg,
+                    args[0].clone(),
                     T::eval_datetime32::<$R>,
                     factor,
-                    None,
+                    0,
                 ),
                 TypeID::DateTime64 => {
-                    let mut mp = BTreeMap::new();
-                    let datetime = left_arg.as_any().downcast_ref::<DateTime64Type>().unwrap();
-                    let precision = datetime.precision().to_string();
-                    mp.insert("precision".to_string(), precision);
+                    let datetime = args[0].as_any().downcast_ref::<DateTime64Type>().unwrap();
+                    let precision = datetime.precision();
                     IntervalFunction::<i64, $R, i64, _>::try_create_func(
                         display_name,
-                        left_arg,
+                        args[0].clone(),
                         T::eval_datetime64::<$R>,
                         factor,
-                        Some(mp),
+                        precision,
                     )
                 },
                 _=> Err(ErrorCode::BadDataValueType(format!(
@@ -115,7 +110,7 @@ pub struct IntervalFunction<L: DateType, R: PrimitiveType, O: DateType, F> {
     result_type: DataTypePtr,
     binary: ScalarBinaryExpression<L, R, O, F>,
     factor: i64,
-    metadata: Option<BTreeMap<String, String>>,
+    precision: usize,
 }
 
 impl<L, R, O, F> IntervalFunction<L, R, O, F>
@@ -130,20 +125,20 @@ where
         result_type: DataTypePtr,
         func: F,
         factor: i64,
-        metadata: Option<BTreeMap<String, String>>,
-    ) -> Result<Box<dyn Function2>> {
+        precision: usize,
+    ) -> Result<Box<dyn Function>> {
         let binary = ScalarBinaryExpression::<L, R, O, _>::new(func);
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
             result_type,
             binary,
             factor,
-            metadata,
+            precision,
         }))
     }
 }
 
-impl<L, R, O, F> Function2 for IntervalFunction<L, R, O, F>
+impl<L, R, O, F> Function for IntervalFunction<L, R, O, F>
 where
     L: DateType + Send + Sync + Clone,
     R: PrimitiveType + Send + Sync + Clone,
@@ -160,7 +155,7 @@ where
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
         // Todo(zhyass): define the ctx out of the eval.
-        let mut ctx = EvalContext::new(self.factor, None, self.metadata.clone());
+        let mut ctx = EvalContext::new(self.factor, self.precision, None);
         let col = self
             .binary
             .eval(columns[0].column(), columns[1].column(), &mut ctx)?;
@@ -249,10 +244,7 @@ impl IntervalArithmeticImpl for AddDaysImpl {
         r: R::RefType<'_>,
         ctx: &mut EvalContext,
     ) -> i64 {
-        let precision = ctx
-            .get_meta_value("precision".to_string())
-            .map_or(0, |v| v.parse::<u32>().unwrap());
-        let base = 10_i64.pow(precision);
+        let base = 10_i64.pow(ctx.precision as u32);
         let factor = ctx.factor * 24 * 3600 * base;
         l as i64 + r.to_owned_scalar().as_() * factor
     }
@@ -294,10 +286,7 @@ impl IntervalArithmeticImpl for AddTimesImpl {
         r: R::RefType<'_>,
         ctx: &mut EvalContext,
     ) -> i64 {
-        let precision = ctx
-            .get_meta_value("precision".to_string())
-            .map_or(0, |v| v.parse::<u32>().unwrap());
-        let base = 10_i64.pow(precision);
+        let base = 10_i64.pow(ctx.precision as u32);
         let factor = ctx.factor * base;
         l as i64 + r.to_owned_scalar().as_() * factor
     }

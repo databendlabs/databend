@@ -13,54 +13,81 @@
 // limitations under the License.
 
 use std::marker::PhantomData;
-use std::ops::AddAssign;
 
-use chrono::Duration;
-use chrono::NaiveDateTime;
+use chrono::DateTime;
+use chrono_tz::Tz;
+use common_clickhouse_srv::types::column::ArcColumnWrapper;
+use common_clickhouse_srv::types::column::ColumnFrom;
 use common_exception::*;
+use serde_json::Value;
 
 use crate::prelude::*;
 
-pub struct DateTimeSerializer<T: DFPrimitiveType> {
-    t: PhantomData<T>,
+pub struct DateTimeSerializer<T: PrimitiveType> {
+    _marker: PhantomData<T>,
+    precision: u32,
+    tz: Tz,
 }
 
-impl<T: DFPrimitiveType> Default for DateTimeSerializer<T> {
-    fn default() -> Self {
+impl<T: PrimitiveType> DateTimeSerializer<T> {
+    pub fn create(tz: Tz, precision: u32) -> Self {
         Self {
-            t: Default::default(),
+            _marker: PhantomData,
+            precision,
+            tz,
+        }
+    }
+
+    pub fn to_date_time(&self, value: &T) -> DateTime<Tz> {
+        let value = value.to_i64().unwrap();
+
+        match T::SIZE {
+            4 => value.to_date_time(&self.tz),
+            8 => value.to_date_time64(self.precision as usize, &self.tz),
+            _ => unreachable!(),
         }
     }
 }
 
-impl<T: DFPrimitiveType> TypeSerializer for DateTimeSerializer<T> {
-    fn serialize_value(&self, value: &DataValue) -> Result<String> {
-        if value.is_null() {
-            return Ok("NULL".to_owned());
-        }
+const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
-        let mut dt = NaiveDateTime::from_timestamp(0, 0);
-        let d = Duration::seconds(value.as_i64()?);
-        dt.add_assign(d);
-        Ok(dt.format("%Y-%m-%d %H:%M:%S").to_string())
+impl<T: PrimitiveType> TypeSerializer for DateTimeSerializer<T> {
+    fn serialize_value(&self, value: &DataValue) -> Result<String> {
+        let value = DFTryFrom::try_from(value.clone())?;
+        let dt = self.to_date_time(&value);
+        Ok(dt.format(TIME_FMT).to_string())
     }
 
-    fn serialize_column(&self, column: &DataColumn) -> Result<Vec<String>> {
-        let array = column.to_array()?;
-        let array: &DFPrimitiveArray<T> = array.static_cast();
-
-        let result: Vec<String> = array
+    fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
+        let column: &PrimitiveColumn<T> = Series::check_get(column)?;
+        let result: Vec<String> = column
             .iter()
-            .map(|x| {
-                x.map(|v| {
-                    let mut dt = NaiveDateTime::from_timestamp(0, 0);
-                    let d = Duration::seconds(v.to_i64().unwrap());
-                    dt.add_assign(d);
-                    dt.format("%Y-%m-%d %H:%M:%S").to_string()
-                })
-                .unwrap_or_else(|| "NULL".to_owned())
+            .map(|v| {
+                let dt = self.to_date_time(v);
+                dt.format(TIME_FMT).to_string()
             })
             .collect();
         Ok(result)
+    }
+
+    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
+        let array: &PrimitiveColumn<T> = Series::check_get(column)?;
+        let result: Vec<Value> = array
+            .iter()
+            .map(|v| {
+                let dt = self.to_date_time(v);
+                serde_json::to_value(dt.format(TIME_FMT).to_string()).unwrap()
+            })
+            .collect();
+        Ok(result)
+    }
+
+    fn serialize_clickhouse_format(
+        &self,
+        column: &ColumnRef,
+    ) -> Result<common_clickhouse_srv::types::column::ArcColumnData> {
+        let array: &PrimitiveColumn<T> = Series::check_get(column)?;
+        let values: Vec<DateTime<Tz>> = array.iter().map(|v| self.to_date_time(v)).collect();
+        Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
 }

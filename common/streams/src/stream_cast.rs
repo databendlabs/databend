@@ -16,9 +16,9 @@ use std::task::Context;
 use std::task::Poll;
 
 use common_datablocks::DataBlock;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_functions::scalars::Function2;
+use common_functions::scalars::Function;
 use futures::Stream;
 use futures::StreamExt;
 
@@ -27,14 +27,14 @@ use crate::SendableDataBlockStream;
 pub struct CastStream {
     input: SendableDataBlockStream,
     output_schema: DataSchemaRef,
-    functions: Vec<Box<dyn Function2>>,
+    functions: Vec<Box<dyn Function>>,
 }
 
 impl CastStream {
     pub fn try_create(
         input: SendableDataBlockStream,
         output_schema: DataSchemaRef,
-        functions: Vec<Box<dyn Function2>>,
+        functions: Vec<Box<dyn Function>>,
     ) -> Result<Self> {
         Ok(CastStream {
             input,

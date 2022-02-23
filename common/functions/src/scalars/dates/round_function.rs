@@ -14,12 +14,13 @@
 
 use std::fmt;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::Function2;
-use crate::scalars::Monotonicity2;
+use crate::scalars::EvalContext;
+use crate::scalars::Function;
+use crate::scalars::Monotonicity;
 use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
@@ -29,7 +30,7 @@ pub struct RoundFunction {
 }
 
 impl RoundFunction {
-    pub fn try_create(display_name: &str, round: u32) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str, round: u32) -> Result<Box<dyn Function>> {
         let s = Self {
             display_name: display_name.to_owned(),
             round,
@@ -47,15 +48,15 @@ impl RoundFunction {
     }
 }
 
-impl Function2 for RoundFunction {
+impl Function for RoundFunction {
     fn name(&self) -> &str {
         self.display_name.as_str()
     }
 
     fn return_type(
         &self,
-        args: &[&common_datavalues2::DataTypePtr],
-    ) -> Result<common_datavalues2::DataTypePtr> {
+        args: &[&common_datavalues::DataTypePtr],
+    ) -> Result<common_datavalues::DataTypePtr> {
         if args[0].data_type_id() == TypeID::DateTime32 {
             return Ok(DateTime32Type::arc(None));
         } else {
@@ -69,16 +70,18 @@ impl Function2 for RoundFunction {
 
     fn eval(
         &self,
-        columns: &common_datavalues2::ColumnsWithField,
+        columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
-    ) -> Result<common_datavalues2::ColumnRef> {
-        let unary = ScalarUnaryExpression::<u32, _, _>::new(|val| self.execute(val));
-        let col = unary.eval(columns[0].column())?;
+    ) -> Result<common_datavalues::ColumnRef> {
+        let unary = ScalarUnaryExpression::<u32, _, _>::new(|val: u32, _ctx: &mut EvalContext| {
+            self.execute(val)
+        });
+        let col = unary.eval(columns[0].column(), &mut EvalContext::default())?;
         Ok(col.arc())
     }
 
-    fn get_monotonicity(&self, args: &[Monotonicity2]) -> Result<Monotonicity2> {
-        Ok(Monotonicity2::clone_without_range(&args[0]))
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+        Ok(Monotonicity::clone_without_range(&args[0]))
     }
 }
 

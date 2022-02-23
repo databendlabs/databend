@@ -14,7 +14,7 @@
 
 use common_base::tokio;
 use common_datablocks::*;
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_functions::scalars::CastFunction;
 use common_streams::*;
 use futures::stream::StreamExt;

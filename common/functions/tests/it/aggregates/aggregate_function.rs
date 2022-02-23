@@ -15,8 +15,8 @@
 use std::borrow::BorrowMut;
 
 use bumpalo::Bump;
-use common_datavalues2::prelude::*;
-use common_datavalues2::with_match_primitive_type_id;
+use common_datavalues::prelude::*;
+use common_datavalues::with_match_primitive_type_id;
 use common_exception::Result;
 use common_functions::aggregates::*;
 use float_cmp::approx_eq;

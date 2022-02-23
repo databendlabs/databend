@@ -16,16 +16,17 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues2::prelude::*;
-use common_datavalues2::DataValueComparisonOperator;
+use common_datavalues::prelude::*;
+use common_datavalues::DataValueComparisonOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use regex::bytes::Regex as BytesRegex;
 use regex::bytes::RegexBuilder as BytesRegexBuilder;
 
+use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
 pub struct ComparisonRegexpFunction {
@@ -33,20 +34,20 @@ pub struct ComparisonRegexpFunction {
 }
 
 impl ComparisonRegexpFunction {
-    pub fn try_create_regexp(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create_regexp(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(ComparisonRegexpFunction {
             op: DataValueComparisonOperator::Regexp,
         }))
     }
 
-    pub fn try_create_nregexp(_display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create_nregexp(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(ComparisonRegexpFunction {
             op: DataValueComparisonOperator::NotRegexp,
         }))
     }
 
-    pub fn desc_regexp() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create_regexp)).features(
+    pub fn desc_regexp() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_regexp)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("not regexp")
@@ -55,8 +56,8 @@ impl ComparisonRegexpFunction {
         )
     }
 
-    pub fn desc_unregexp() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create_nregexp)).features(
+    pub fn desc_unregexp() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create_nregexp)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("regexp")
@@ -66,7 +67,7 @@ impl ComparisonRegexpFunction {
     }
 }
 
-impl Function2 for ComparisonRegexpFunction {
+impl Function for ComparisonRegexpFunction {
     fn name(&self) -> &str {
         match self.op {
             DataValueComparisonOperator::Regexp => "regexp",
@@ -76,14 +77,10 @@ impl Function2 for ComparisonRegexpFunction {
     }
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        let not_string = args.iter().all(|arg| arg.data_type_id() != TypeID::String);
-        if not_string {
-            return Err(ErrorCode::BadArguments(format!(
-                "Illegal types {:?} of argument of function {}, must be strings",
-                args,
-                self.name()
-            )));
+        for arg in args {
+            assert_string(*arg)?;
         }
+
         Ok(BooleanType::arc())
     }
 
@@ -110,7 +107,7 @@ impl Function2 for ComparisonRegexpFunction {
 }
 
 impl ComparisonRegexpFunction {
-    fn eval_constant(&self, lhs: &ColumnRef, rhs: &[u8]) -> Result<common_datavalues2::ColumnRef> {
+    fn eval_constant(&self, lhs: &ColumnRef, rhs: &[u8]) -> Result<common_datavalues::ColumnRef> {
         let result = match self.op {
             DataValueComparisonOperator::Regexp => a_regexp_binary_scalar(lhs, rhs, |x| x),
             DataValueComparisonOperator::NotRegexp => a_regexp_binary_scalar(lhs, rhs, |x| !x),

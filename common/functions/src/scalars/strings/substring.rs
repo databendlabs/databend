@@ -14,15 +14,15 @@
 
 use std::fmt;
 
-use common_datavalues2::prelude::*;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::izip;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function2;
-use crate::scalars::Function2Description;
+use crate::scalars::Function;
+use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
 pub struct SubstringFunction {
@@ -30,14 +30,14 @@ pub struct SubstringFunction {
 }
 
 impl SubstringFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function2>> {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(SubstringFunction {
             display_name: display_name.to_string(),
         }))
     }
 
-    pub fn desc() -> Function2Description {
-        Function2Description::creator(Box::new(Self::try_create)).features(
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .variadic_arguments(2, 3),
@@ -45,7 +45,7 @@ impl SubstringFunction {
     }
 }
 
-impl Function2 for SubstringFunction {
+impl Function for SubstringFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
@@ -58,7 +58,10 @@ impl Function2 for SubstringFunction {
             )));
         }
 
-        if !args[1].data_type_id().is_integer() && !args[1].data_type_id().is_null() {
+        if !args[1].data_type_id().is_integer()
+            && !args[1].data_type_id().is_string()
+            && !args[1].data_type_id().is_null()
+        {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[1].data_type_id()
@@ -67,6 +70,7 @@ impl Function2 for SubstringFunction {
 
         if args.len() > 2
             && !args[2].data_type_id().is_integer()
+            && !args[2].data_type_id().is_string()
             && !args[2].data_type_id().is_null()
         {
             return Err(ErrorCode::IllegalDataType(format!(

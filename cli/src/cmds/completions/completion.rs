@@ -16,10 +16,9 @@ use std::io;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use clap::App;
-use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
+use clap::Command as App;
 use clap_complete::generate;
 use clap_complete::shells::Bash;
 use clap_complete::shells::Zsh;
@@ -54,7 +53,7 @@ impl Command for CompletionCommand {
 
     fn clap(&self) -> App<'static> {
         App::new("completion")
-            .setting(AppSettings::DisableVersionFlag)
+            .disable_version_flag(true)
             .about("Generate auto completion scripts for bash or zsh terminal")
             .arg(
                 Arg::new("completion")

@@ -23,7 +23,7 @@ test = false
 # Workspace dependencies
 databend-query = { path = "../query" }
 common-base = { path = "../common/base" }
-common-datavalues2 = { path = "../common/datavalues2" }
+common-datavalues = { path = "../common/datavalues" }
 common-tracing = { path = "../common/tracing" }
 
 itertools = "0.10.3"
@@ -32,8 +32,8 @@ common-meta-raft-store = { path = "../common/meta/raft-store" }
 colored = "2.0.0"
 comfy-table = "5.0.0"
 dirs = "4.0.0"
-clap = { version = "3.0.14", features = ["derive", "env"] }
-clap_complete = "3.0.6"
+clap = { version = "3.1.1", features = ["derive", "env"] }
+clap_complete = "3.1.0"
 dyn-clone = "1.0.4"
 flate2 = "1.0.22"
 handlebars = "4.2.1"

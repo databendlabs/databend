@@ -15,9 +15,9 @@
 use std::fmt::Display;
 
 use bumpalo::Bump;
-use common_datavalues2::ColumnRef;
-use common_datavalues2::ColumnWithField;
-use common_datavalues2::DataValue;
+use common_datavalues::ColumnRef;
+use common_datavalues::ColumnWithField;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 

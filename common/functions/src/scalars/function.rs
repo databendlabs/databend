@@ -14,13 +14,13 @@
 
 use std::fmt;
 
-use common_datavalues::columns::DataColumn;
-use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataTypeAndNullable;
+use common_datavalues::ColumnRef;
+use common_datavalues::ColumnsWithField;
+use common_datavalues::DataTypePtr;
 use common_exception::Result;
 use dyn_clone::DynClone;
 
-use crate::scalars::Monotonicity;
+use super::Monotonicity;
 
 pub trait Function: fmt::Display + Sync + Send + DynClone {
     /// Returns the name of the function, should be unique.
@@ -37,10 +37,10 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     }
 
     /// The method returns the return_type of this function.
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable>;
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr>;
 
     /// Evaluate the function, e.g. run/execute the function.
-    fn eval(&self, _columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn>;
+    fn eval(&self, _columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef>;
 
     /// Whether the function passes through null input.
     /// Return true if the function just return null with any given null input.
@@ -54,8 +54,10 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
         true
     }
 
+    /// If all args are constant column, then we just return the constant result
+    /// TODO, we should cache the constant result inside the context for better performance
     fn passthrough_constant(&self) -> bool {
-        false
+        true
     }
 }
 

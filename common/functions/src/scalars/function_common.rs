@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues2::DataTypePtr;
+use common_datavalues::DataTypePtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -30,6 +30,16 @@ pub fn assert_numeric(data_type: &DataTypePtr) -> Result<()> {
     if !data_type.data_type_id().is_numeric() {
         return Err(ErrorCode::IllegalDataType(format!(
             "Expected a numeric type, but got {:?}",
+            data_type
+        )));
+    }
+    Ok(())
+}
+
+pub fn assert_date_or_datetime(data_type: &DataTypePtr) -> Result<()> {
+    if !data_type.data_type_id().is_date_or_date_time() {
+        return Err(ErrorCode::IllegalDataType(format!(
+            "Expected a data or datetime type, but got {:?}",
             data_type
         )));
     }

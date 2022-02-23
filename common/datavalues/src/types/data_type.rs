@@ -12,328 +12,211 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::fmt;
+use std::any::Any;
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_exception::ErrorCode;
+use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_exception::Result;
-use common_macros::MallocSizeOf;
+use dyn_clone::DynClone;
 
-use crate::DataField;
-use crate::PhysicalDataType;
+use super::type_array::ArrayType;
+use super::type_boolean::BooleanType;
+use super::type_date16::Date16Type;
+use super::type_date32::Date32Type;
+use super::type_datetime32::DateTime32Type;
+use super::type_datetime64::DateTime64Type;
+use super::type_id::TypeID;
+use super::type_nullable::NullableType;
+use super::type_primitive::Float32Type;
+use super::type_primitive::Float64Type;
+use super::type_primitive::Int16Type;
+use super::type_primitive::Int32Type;
+use super::type_primitive::Int64Type;
+use super::type_primitive::Int8Type;
+use super::type_primitive::UInt16Type;
+use super::type_primitive::UInt32Type;
+use super::type_primitive::UInt64Type;
+use super::type_primitive::UInt8Type;
+use super::type_string::StringType;
+use super::type_struct::StructType;
+use crate::prelude::*;
+use crate::TypeDeserializer;
+use crate::TypeSerializer;
 
-#[derive(
-    serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, MallocSizeOf,
-)]
-pub enum DataType {
-    Null,
-    Boolean,
-    UInt8,
-    UInt16,
-    UInt32,
-    UInt64,
-    Int8,
-    Int16,
-    Int32,
-    Int64,
-    Float32,
-    Float64,
-    /// A 32-bit date representing the elapsed time since UNIX epoch (1970-01-01)
-    /// in days (16 bits), it's physical type is UInt16
-    Date16,
-    /// A 32-bit date representing the elapsed time since UNIX epoch (1970-01-01)
-    /// in days (32 bits), it's physical type is Int32
-    Date32,
+pub const ARROW_EXTENSION_NAME: &str = "ARROW:extension:databend_name";
+pub const ARROW_EXTENSION_META: &str = "ARROW:extension:databend_metadata";
 
-    /// A 32-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
-    /// in seconds, it's physical type is UInt32
-    /// Option<String> indicates the timezone, if it's None, it's UTC
-    DateTime32(Option<String>),
+pub type DataTypePtr = Arc<dyn DataType>;
 
-    /// A 64-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
-    /// in nanoseconds, it's physical type is Int64
-    /// The time resolution is determined by the precision parameter, range from 0 to 9
-    /// Typically are used - 3 (milliseconds), 6 (microseconds), 9 (nanoseconds)
-    /// Option<String> indicates the timezone, if it's None, it's UTC
-    DateTime64(u32, Option<String>),
+#[typetag::serde(tag = "type")]
+pub trait DataType: std::fmt::Debug + Sync + Send + DynClone {
+    fn data_type_id(&self) -> TypeID;
 
-    /// Interval represents the time interval, e.g. the elapsed time between two date or datetime.
-    /// Interval(YearMonth) represents the elapsed number of months.
-    /// Interval(DayTime) represents the elapsed number of microseconds.
-    ///
-    /// Underneath Interval is stored as int64, so it supports negative values.
-    Interval(IntervalUnit),
-
-    List(Box<DataField>),
-    Struct(Vec<DataField>),
-    String,
-}
-
-#[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    MallocSizeOf,
-)]
-pub enum IntervalUnit {
-    YearMonth,
-    DayTime,
-}
-
-impl fmt::Display for IntervalUnit {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let str = match self {
-            IntervalUnit::YearMonth => "YearMonth",
-            IntervalUnit::DayTime => "DayTime",
-        };
-        write!(f, "{}", str)
-    }
-}
-
-impl DataType {
-    pub fn to_physical_type(&self) -> PhysicalDataType {
-        self.clone().into()
+    fn is_nullable(&self) -> bool {
+        false
     }
 
-    #[inline]
-    pub fn is_null(&self) -> bool {
-        matches!(self, DataType::Null)
+    fn is_null(&self) -> bool {
+        self.data_type_id() == TypeID::Null
     }
 
-    #[inline]
-    pub fn is_string(&self) -> bool {
-        matches!(self, DataType::String)
+    fn name(&self) -> &str;
+
+    fn aliases(&self) -> &[&str] {
+        &[]
     }
 
-    #[inline]
-    pub fn is_integer(&self) -> bool {
-        matches!(
-            self,
-            DataType::Int8
-                | DataType::Int16
-                | DataType::Int32
-                | DataType::Int64
-                | DataType::UInt8
-                | DataType::UInt16
-                | DataType::UInt32
-                | DataType::UInt64
-        )
+    fn as_any(&self) -> &dyn Any;
+
+    fn default_value(&self) -> DataValue;
+
+    fn can_inside_nullable(&self) -> bool {
+        true
     }
 
-    #[inline]
-    pub fn is_signed_integer(&self) -> bool {
-        matches!(
-            self,
-            DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64
-        )
+    fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef>;
+
+    fn create_column(&self, data: &[DataValue]) -> Result<ColumnRef>;
+
+    /// arrow_type did not have nullable sign, it's nullable sign is in the field
+    fn arrow_type(&self) -> ArrowType;
+
+    fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
+        None
     }
 
-    #[inline]
-    pub fn is_unsigned_integer(&self) -> bool {
-        matches!(
-            self,
-            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64
-        )
-    }
-
-    #[inline]
-    pub fn is_floating(&self) -> bool {
-        matches!(self, DataType::Float32 | DataType::Float64)
-    }
-
-    #[inline]
-    pub fn is_date_or_date_time(&self) -> bool {
-        matches!(
-            self,
-            DataType::Date16
-                | DataType::Date32
-                | DataType::DateTime32(_)
-                | DataType::DateTime64(_, _),
-        )
-    }
-
-    /// Determine if a DataType is signed numeric or not
-    #[inline]
-    pub fn is_signed_numeric(&self) -> bool {
-        matches!(
-            self,
-            DataType::Int8
-                | DataType::Int16
-                | DataType::Int32
-                | DataType::Int64
-                | DataType::Float32
-                | DataType::Float64
-        )
-    }
-
-    /// Determine if a DataType is numeric or not
-    #[inline]
-    pub fn is_numeric(&self) -> bool {
-        self.is_signed_numeric()
-            || matches!(
-                self,
-                DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64
-            )
-    }
-
-    #[inline]
-    pub fn is_interval(&self) -> bool {
-        matches!(self, DataType::Interval(_))
-    }
-
-    #[inline]
-    pub fn numeric_byte_size(&self) -> Result<usize> {
-        match self {
-            DataType::Int8 | DataType::UInt8 => Ok(1),
-            DataType::Int16 | DataType::UInt16 => Ok(2),
-            DataType::Int32 | DataType::UInt32 | DataType::Float32 => Ok(4),
-            DataType::Int64 | DataType::UInt64 | DataType::Float64 => Ok(8),
-            _ => Result::Err(ErrorCode::BadArguments(format!(
-                "Function number_byte_size argument must be numeric types, but got {:?}",
-                self
-            ))),
+    fn to_arrow_field(&self, name: &str) -> ArrowField {
+        let ret = ArrowField::new(name, self.arrow_type(), self.is_nullable());
+        if let Some(meta) = self.custom_arrow_meta() {
+            ret.with_metadata(meta)
+        } else {
+            ret
         }
     }
 
-    pub fn to_arrow(&self) -> ArrowDataType {
-        use DataType::*;
-        match self {
-            Null => ArrowDataType::Null,
-            Boolean => ArrowDataType::Boolean,
-            UInt8 => ArrowDataType::UInt8,
-            UInt16 => ArrowDataType::UInt16,
-            UInt32 => ArrowDataType::UInt32,
-            UInt64 => ArrowDataType::UInt64,
-            Int8 => ArrowDataType::Int8,
-            Int16 => ArrowDataType::Int16,
-            Int32 => ArrowDataType::Int32,
-            Int64 => ArrowDataType::Int64,
-            Float32 => ArrowDataType::Float32,
-            Float64 => ArrowDataType::Float64,
-            Date16 => ArrowDataType::UInt16,
-            Date32 => ArrowDataType::Int32,
-            // we don't use DataType::Extension because extension types are not supported in parquet
-            DateTime32(_) => ArrowDataType::UInt32,
-            DateTime64(_, _) => ArrowDataType::Int64,
-            List(dt) => ArrowDataType::LargeList(Box::new(dt.to_arrow())),
-            Struct(fs) => {
-                let arrows_fields = fs.iter().map(|f| f.to_arrow()).collect();
-                ArrowDataType::Struct(arrows_fields)
-            }
-            String => ArrowDataType::LargeBinary,
-            Interval(_) => ArrowDataType::Int64,
+    fn create_mutable(&self, capacity: usize) -> Box<dyn MutableColumn>;
+    fn create_serializer(&self) -> Box<dyn TypeSerializer>;
+    fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer>;
+}
+
+pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
+    match dt {
+        ArrowType::Null => Arc::new(NullType {}),
+        ArrowType::UInt8 => Arc::new(UInt8Type::default()),
+        ArrowType::UInt16 => Arc::new(UInt16Type::default()),
+        ArrowType::UInt32 => Arc::new(UInt32Type::default()),
+        ArrowType::UInt64 => Arc::new(UInt64Type::default()),
+        ArrowType::Int8 => Arc::new(Int8Type::default()),
+        ArrowType::Int16 => Arc::new(Int16Type::default()),
+        ArrowType::Int32 => Arc::new(Int32Type::default()),
+        ArrowType::Int64 => Arc::new(Int64Type::default()),
+        ArrowType::Boolean => Arc::new(BooleanType::default()),
+        ArrowType::Float32 => Arc::new(Float32Type::default()),
+        ArrowType::Float64 => Arc::new(Float64Type::default()),
+
+        // TODO support other list
+        ArrowType::LargeList(f) => {
+            let inner = from_arrow_field(f);
+            Arc::new(ArrayType::create(inner))
+        }
+
+        ArrowType::Binary | ArrowType::LargeBinary | ArrowType::Utf8 | ArrowType::LargeUtf8 => {
+            Arc::new(StringType::default())
+        }
+
+        ArrowType::Timestamp(_, tz) => Arc::new(DateTime32Type::create(tz.clone())),
+        ArrowType::Date32 => Arc::new(Date16Type::default()),
+        ArrowType::Date64 => Arc::new(Date32Type::default()),
+
+        ArrowType::Struct(fields) => {
+            let names = fields.iter().map(|f| f.name().to_string()).collect();
+            let types = fields.iter().map(from_arrow_field).collect();
+
+            Arc::new(StructType::create(names, types))
+        }
+
+        // this is safe, because we define the datatype firstly
+        _ => {
+            unimplemented!("data_type: {:?}", dt)
         }
     }
 }
 
-impl PartialEq<ArrowDataType> for DataType {
-    fn eq(&self, other: &ArrowDataType) -> bool {
-        let arrow_type = self.to_arrow();
-        &arrow_type == other
-    }
-}
-
-impl From<&ArrowDataType> for DataType {
-    fn from(dt: &ArrowDataType) -> DataType {
-        match dt {
-            ArrowDataType::Null => DataType::Null,
-            ArrowDataType::UInt8 => DataType::UInt8,
-            ArrowDataType::UInt16 => DataType::UInt16,
-            ArrowDataType::UInt32 => DataType::UInt32,
-            ArrowDataType::UInt64 => DataType::UInt64,
-            ArrowDataType::Int8 => DataType::Int8,
-            ArrowDataType::Int16 => DataType::Int16,
-            ArrowDataType::Int32 => DataType::Int32,
-            ArrowDataType::Int64 => DataType::Int64,
-            ArrowDataType::Boolean => DataType::Boolean,
-            ArrowDataType::Float32 => DataType::Float32,
-            ArrowDataType::Float64 => DataType::Float64,
-            ArrowDataType::List(f) | ArrowDataType::LargeList(f) => {
-                let f: DataField = (f.as_ref()).into();
-                DataType::List(Box::new(f))
-            }
-            ArrowDataType::Binary | ArrowDataType::LargeBinary => DataType::String,
-            ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 => DataType::String,
-
-            ArrowDataType::Timestamp(_, tz) => DataType::DateTime32(tz.clone()),
-            ArrowDataType::Date32 => DataType::Date16,
-            ArrowDataType::Date64 => DataType::Date32,
-
-            ArrowDataType::Extension(name, _arrow_type, extra) => match name.as_str() {
-                "Date16" => DataType::Date16,
-                "Date32" => DataType::Date32,
-                "DateTime32" => DataType::DateTime32(extra.clone()),
-                "DateTime64" => DataType::DateTime64(3, extra.clone()),
-                _ => unimplemented!("data_type: {:?}", dt),
-            },
-
-            ArrowDataType::Struct(fields) => {
-                let fields: Vec<DataField> = fields.iter().map(|f| f.into()).collect();
-                DataType::Struct(fields)
-            }
-
-            // this is safe, because we define the datatype firstly
-            _ => {
-                unimplemented!("data_type: {:?}", dt)
+pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
+    if let Some(m) = f.metadata() {
+        if let Some(custom_name) = m.get(ARROW_EXTENSION_NAME) {
+            let metadata = m.get(ARROW_EXTENSION_META).cloned();
+            match custom_name.as_str() {
+                "Date" | "Date16" => return Date16Type::arc(),
+                "Date32" => return Date32Type::arc(),
+                "DateTime" | "DateTime32" => return DateTime32Type::arc(metadata),
+                "DateTime64" => match metadata {
+                    Some(meta) => {
+                        let mut chars = meta.chars();
+                        let precision = chars.next().unwrap().to_digit(10).unwrap();
+                        let tz = chars.collect::<String>();
+                        return DateTime64Type::arc(precision as usize, Some(tz));
+                    }
+                    None => return DateTime64Type::arc(3, None),
+                },
+                "Interval" => return IntervalType::arc(metadata.unwrap().into()),
+                _ => {}
             }
         }
     }
-}
 
-pub fn get_physical_arrow_type(data_type: &ArrowDataType) -> &ArrowDataType {
-    if let ArrowDataType::Extension(_name, arrow_type, _extra) = data_type {
-        return get_physical_arrow_type(arrow_type.as_ref());
+    let dt = f.data_type();
+    let ty = from_arrow_type(dt);
+
+    let is_nullable = f.is_nullable();
+    if is_nullable && ty.can_inside_nullable() {
+        Arc::new(NullableType::create(ty))
+    } else {
+        ty
     }
-
-    data_type
 }
 
-impl fmt::Debug for DataType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Null => write!(f, "Null"),
-            Self::Boolean => write!(f, "Boolean"),
-            Self::UInt8 => write!(f, "UInt8"),
-            Self::UInt16 => write!(f, "UInt16"),
-            Self::UInt32 => write!(f, "UInt32"),
-            Self::UInt64 => write!(f, "UInt64"),
-            Self::Int8 => write!(f, "Int8"),
-            Self::Int16 => write!(f, "Int16"),
-            Self::Int32 => write!(f, "Int32"),
-            Self::Int64 => write!(f, "Int64"),
-            Self::Float32 => write!(f, "Float32"),
-            Self::Float64 => write!(f, "Float64"),
-            Self::Date16 => write!(f, "Date16"),
-            Self::Date32 => write!(f, "Date32"),
-            Self::DateTime32(arg0) => {
-                if let Some(tz) = arg0 {
-                    write!(f, "DateTime32({:?})", tz)
-                } else {
-                    write!(f, "DateTime32")
+pub trait ToDataType {
+    fn to_data_type() -> DataTypePtr;
+}
+
+macro_rules! impl_to_data_type {
+    ([], $( { $S: ident, $TY: ident} ),*) => {
+        $(
+            paste::paste!{
+                impl ToDataType for $S {
+                    fn to_data_type() -> DataTypePtr {
+                        [<$TY Type>]::arc()
+                    }
                 }
             }
-            Self::DateTime64(arg0, arg1) => {
-                if let Some(tz) = arg1 {
-                    write!(f, "DateTime64({:?}, {:?})", arg0, tz)
-                } else {
-                    write!(f, "DateTime64({:?})", arg0)
-                }
-            }
-            Self::List(arg0) => f.debug_tuple("List").field(arg0).finish(),
-            Self::Struct(arg0) => f.debug_tuple("Struct").field(arg0).finish(),
-            Self::String => write!(f, "String"),
-            Self::Interval(unit) => write!(f, "Interval({})", unit),
-        }
+        )*
     }
 }
-impl fmt::Display for DataType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+
+for_all_scalar_varints! { impl_to_data_type }
+
+pub fn wrap_nullable(data_type: &DataTypePtr) -> DataTypePtr {
+    if !data_type.can_inside_nullable() {
+        return data_type.clone();
+    }
+    Arc::new(NullableType::create(data_type.clone()))
+}
+
+pub fn remove_nullable(data_type: &DataTypePtr) -> DataTypePtr {
+    if matches!(data_type.data_type_id(), TypeID::Nullable) {
+        let nullable = data_type.as_any().downcast_ref::<NullableType>().unwrap();
+        return nullable.inner_type().clone();
+    }
+    data_type.clone()
+}
+
+pub fn format_data_type_sql(data_type: &DataTypePtr) -> String {
+    let notnull_type = remove_nullable(data_type);
+    match data_type.is_nullable() {
+        true => format!("{:?}", notnull_type),
+        false => format!("{:?} NOT NULL", notnull_type),
     }
 }

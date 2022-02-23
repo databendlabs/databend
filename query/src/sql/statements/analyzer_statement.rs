@@ -16,8 +16,8 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
-use common_datavalues2::DataSchema;
-use common_datavalues2::DataSchemaRef;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::ExplainType;
 use common_planners::Expression;
@@ -182,6 +182,8 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::CreateUDF(v) => v.analyze(ctx).await,
             DfStatement::DropUDF(v) => v.analyze(ctx).await,
             DfStatement::AlterUDF(v) => v.analyze(ctx).await,
+            DfStatement::CreateRole(v) => v.analyze(ctx).await,
+            DfStatement::DropRole(v) => v.analyze(ctx).await,
             DfStatement::ShowEngines(v) => v.analyze(ctx).await,
         }
     }
