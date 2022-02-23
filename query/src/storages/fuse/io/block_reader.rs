@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read::read_columns_many_async;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
@@ -85,12 +86,20 @@ impl BlockReader {
         let arrow_fields = &self.arrow_table_schema.fields;
         let stream_len = self.file_len;
         let read_buffer_size = self.read_buffer_size;
+        let parquet_fields = metadata.schema().fields();
 
+        // read_columns_many_async use field name to filter columns
         let fields_to_read = self
             .projection
             .clone()
             .into_iter()
-            .map(|idx| arrow_fields[idx].clone())
+            .map(|idx| {
+                let origin = arrow_fields[idx].clone();
+                Field {
+                    name: parquet_fields[idx].name().to_string(),
+                    ..origin
+                }
+            })
             .collect();
 
         let factory = || {
