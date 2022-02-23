@@ -49,29 +49,6 @@ impl<T: 'static + AsyncSource> AsyncSourcer<T> {
             generated_data: None,
         })))
     }
-
-    #[inline(always)]
-    fn push_data(&mut self) -> Event {
-        if let Some(generated_data) = self.generated_data.take() {
-            self.generated_data = None;
-            self.output.push_data(Ok(generated_data));
-        }
-
-        Event::NeedConsume
-    }
-
-    #[inline(always)]
-    fn close_output(&mut self) -> Event {
-        if !self.is_finish {
-            self.is_finish = true;
-        }
-
-        if !self.output.is_finished() {
-            self.output.finish();
-        }
-
-        Event::Finished
-    }
 }
 
 #[async_trait::async_trait]

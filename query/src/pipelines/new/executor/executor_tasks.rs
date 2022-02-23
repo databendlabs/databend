@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_infallible::Mutex;
-use futures::future::BoxFuture;
 use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::new::executor::executor_worker_context::ExecutorTask;
@@ -108,13 +107,11 @@ impl ExecutorTasksQueue {
     }
 
     pub fn completed_async_task(&self, task: CompletedAsyncTask) {
-        unsafe {
-            let mut workers_tasks = self.workers_tasks.lock();
+        let mut workers_tasks = self.workers_tasks.lock();
 
-            let worker_id = task.worker_id;
-            workers_tasks.tasks_size += 1;
-            workers_tasks.workers_completed_async_tasks[worker_id].push_back(task);
-        }
+        let worker_id = task.worker_id;
+        workers_tasks.tasks_size += 1;
+        workers_tasks.workers_completed_async_tasks[worker_id].push_back(task);
     }
 }
 

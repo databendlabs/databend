@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_base::tokio;
 use common_datablocks::pretty_format_blocks;
 use common_exception::Result;
 use common_metrics::init_default_metrics_recorder;
 use databend_query::storages::system::MetricsTable;
-use databend_query::storages::Table;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
 
@@ -27,7 +24,7 @@ use futures::TryStreamExt;
 async fn test_metrics_table() -> Result<()> {
     init_default_metrics_recorder();
     let ctx = crate::tests::create_query_context()?;
-    let table: Arc<dyn Table> = Arc::new(MetricsTable::create(1));
+    let table = MetricsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     metrics::counter!("test.test_metrics_table_count", 1);

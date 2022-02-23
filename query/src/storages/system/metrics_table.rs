@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -24,20 +23,52 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_metrics::MetricValue;
-use common_planners::ReadDataSourcePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 use serde_json;
 
 use crate::sessions::QueryContext;
+use crate::storages::system::table::SyncOneBlockSystemTable;
+use crate::storages::system::table::SyncSystemTable;
 use crate::storages::Table;
 
 pub struct MetricsTable {
     table_info: TableInfo,
 }
 
+impl SyncSystemTable for MetricsTable {
+    const NAME: &'static str = "system.metrics";
+
+    fn get_table_info(&self) -> &TableInfo {
+        &self.table_info
+    }
+
+    fn get_full_data(&self, _: Arc<QueryContext>) -> Result<DataBlock> {
+        let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
+            ErrorCode::InitPrometheusFailure("Prometheus recorder is not initialized yet.")
+        })?;
+
+        let samples = common_metrics::dump_metric_samples(prometheus_handle)?;
+        let mut metrics: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
+        let mut labels: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
+        let mut kinds: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
+        let mut values: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
+        for sample in samples.into_iter() {
+            metrics.push(sample.name.clone().into_bytes());
+            kinds.push(sample.kind.clone().into_bytes());
+            labels.push(self.display_sample_labels(&sample.labels)?.into_bytes());
+            values.push(self.display_sample_value(&sample.value)?.into_bytes());
+        }
+
+        Ok(DataBlock::create(self.table_info.schema(), vec![
+            Series::from_data(metrics),
+            Series::from_data(kinds),
+            Series::from_data(labels),
+            Series::from_data(values),
+        ]))
+    }
+}
+
 impl MetricsTable {
-    pub fn create(table_id: u64) -> Self {
+    pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("metric", Vu8::to_data_type()),
             DataField::new("kind", Vu8::to_data_type()),
@@ -56,7 +87,7 @@ impl MetricsTable {
             },
         };
 
-        MetricsTable { table_info }
+        SyncOneBlockSystemTable::create(MetricsTable { table_info })
     }
 
     fn display_sample_labels(&self, labels: &HashMap<String, String>) -> Result<String> {
@@ -82,50 +113,5 @@ impl MetricsTable {
                 err
             ))
         })
-    }
-}
-
-#[async_trait::async_trait]
-impl Table for MetricsTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn get_table_info(&self) -> &TableInfo {
-        &self.table_info
-    }
-
-    async fn read(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
-            ErrorCode::InitPrometheusFailure("Prometheus recorder is not initialized yet.")
-        })?;
-
-        let samples = common_metrics::dump_metric_samples(prometheus_handle)?;
-        let mut metrics: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
-        let mut labels: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
-        let mut kinds: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
-        let mut values: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
-        for sample in samples.into_iter() {
-            metrics.push(sample.name.clone().into_bytes());
-            kinds.push(sample.kind.clone().into_bytes());
-            labels.push(self.display_sample_labels(&sample.labels)?.into_bytes());
-            values.push(self.display_sample_value(&sample.value)?.into_bytes());
-        }
-
-        let block = DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(metrics),
-            Series::from_data(kinds),
-            Series::from_data(labels),
-            Series::from_data(values),
-        ]);
-        Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema(),
-            None,
-            vec![block],
-        )))
     }
 }

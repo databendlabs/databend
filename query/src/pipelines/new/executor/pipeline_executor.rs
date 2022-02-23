@@ -14,14 +14,14 @@
 
 use std::collections::VecDeque;
 use std::sync::Arc;
-use common_base::{Runtime, TrySpawn};
 
-use common_exception::{ErrorCode, Result};
+use common_base::Runtime;
+use common_exception::Result;
 
 use crate::pipelines::new::executor::executor_graph::RunningGraph;
 use crate::pipelines::new::executor::executor_notify::WorkersNotify;
 use crate::pipelines::new::executor::executor_tasks::ExecutorTasksQueue;
-use crate::pipelines::new::executor::executor_worker_context::{ExecutorTask, ExecutorWorkerContext};
+use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::new::pipeline::NewPipeline;
 
 pub struct PipelineExecutor {
@@ -76,7 +76,7 @@ impl PipelineExecutor {
             }
 
             while context.has_task() {
-                if let Some(executed_pid) = context.execute_task(&self)? {
+                if let Some(executed_pid) = context.execute_task(self)? {
                     // We immediately schedule the processor again.
                     let schedule_queue = self.graph.schedule_queue(executed_pid)?;
                     schedule_queue.schedule(&self.global_tasks_queue, &mut context);

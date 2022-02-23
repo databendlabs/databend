@@ -13,22 +13,16 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 
 use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
+use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use futures::task::ArcWake;
 use petgraph::prelude::NodeIndex;
-use common_base::TrySpawn;
 
 use crate::pipelines::new::executor::executor_notify::WorkersNotify;
 use crate::pipelines::new::executor::executor_tasks::CompletedAsyncTask;
-use crate::pipelines::new::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::new::executor::PipelineExecutor;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 
@@ -67,7 +61,6 @@ impl ExecutorWorkerContext {
         self.task = task
     }
 
-
     pub fn take_task(&mut self) -> ExecutorTask {
         std::mem::replace(&mut self.task, ExecutorTask::None)
     }
@@ -86,7 +79,11 @@ impl ExecutorWorkerContext {
         Ok(Some(processor.id()))
     }
 
-    unsafe fn execute_async_task(&mut self, processor: ProcessorPtr, executor: &PipelineExecutor) -> Result<Option<NodeIndex>> {
+    unsafe fn execute_async_task(
+        &mut self,
+        processor: ProcessorPtr,
+        executor: &PipelineExecutor,
+    ) -> Result<Option<NodeIndex>> {
         let worker_id = self.worker_num;
         let tasks_queue = executor.global_tasks_queue.clone();
         executor.async_runtime.spawn(async move {
@@ -100,37 +97,6 @@ impl ExecutorWorkerContext {
 
     pub fn get_workers_notify(&self) -> &Arc<WorkersNotify> {
         &self.workers_notify
-    }
-}
-
-struct ExecutingAsyncTaskWaker(usize, Arc<AtomicBool>, Arc<WorkersNotify>);
-
-impl ExecutingAsyncTaskWaker {
-    pub fn create(
-        flag: &Arc<AtomicBool>,
-        worker_id: usize,
-        workers_notify: Arc<WorkersNotify>,
-    ) -> Arc<ExecutingAsyncTaskWaker> {
-        println!("create");
-        Arc::new(ExecutingAsyncTaskWaker(
-            worker_id,
-            flag.clone(),
-            workers_notify,
-        ))
-    }
-}
-
-impl Drop for ExecutingAsyncTaskWaker {
-    fn drop(&mut self) {
-        println!("drop ExecutingAsyncTaskWaker");
-    }
-}
-
-impl ArcWake for ExecutingAsyncTaskWaker {
-    fn wake_by_ref(arc_self: &Arc<Self>) {
-        println!("wakeup future");
-        arc_self.1.store(true, Ordering::Release);
-        arc_self.2.wakeup(arc_self.0);
     }
 }
 
@@ -151,7 +117,7 @@ impl Debug for ExecutorTask {
                     p.id().index(),
                     p.name()
                 ),
-                ExecutorTask::AsyncCompleted(_) => write!(f, "ExecutorTask::CompletedAsync")
+                ExecutorTask::AsyncCompleted(_) => write!(f, "ExecutorTask::CompletedAsync"),
             }
         }
     }

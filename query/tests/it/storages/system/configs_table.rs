@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_base::tokio;
 use common_exception::Result;
 use databend_query::storages::system::ConfigsTable;
-use databend_query::storages::Table;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
@@ -28,7 +25,7 @@ async fn test_configs_table() -> Result<()> {
     let ctx = crate::tests::create_query_context_with_config(conf)?;
     ctx.get_settings().set_max_threads(8)?;
 
-    let table: Arc<dyn Table> = Arc::new(ConfigsTable::create(1));
+    let table = ConfigsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     let stream = table.read(ctx, &source_plan).await?;

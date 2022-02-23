@@ -1,72 +1,224 @@
-use std::collections::HashMap;
+use std::any::Any;
 use std::sync::Arc;
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::any::Any;
+
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
-use common_meta_types::{MetaId, TableInfo};
-use common_planners::{Expression, Extras, Partitions, ReadDataSourcePlan, Statistics, TruncateTablePlan};
-use common_streams::{DataBlockStream, SendableDataBlockStream};
+use common_exception::Result;
+use common_meta_types::TableInfo;
+use common_planners::ReadDataSourcePlan;
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
+
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::AsyncSource;
+use crate::pipelines::new::processors::AsyncSourcer;
+use crate::pipelines::new::processors::SyncSource;
+use crate::pipelines::new::processors::SyncSourcer;
+use crate::pipelines::new::NewPipe;
+use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
-use common_exception::Result;
-use crate::pipelines::new::NewPipeline;
-use crate::pipelines::new::processors::SyncSource;
 
-trait SyncSystemTable: Send + Sync {
+pub trait SyncSystemTable: Send + Sync {
     const NAME: &'static str;
 
     fn get_table_info(&self) -> &TableInfo;
     fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock>;
 }
 
+pub struct SyncOneBlockSystemTable<TTable: SyncSystemTable> {
+    inner_table: Arc<TTable>,
+}
+
+impl<TTable: 'static + SyncSystemTable> SyncOneBlockSystemTable<TTable>
+where Self: Table
+{
+    pub fn create(inner: TTable) -> Arc<dyn Table> {
+        Arc::new(SyncOneBlockSystemTable::<TTable> {
+            inner_table: Arc::new(inner),
+        })
+    }
+}
+
 #[async_trait::async_trait]
-trait ASyncSystemTable: Send + Sync {
+impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn get_table_info(&self) -> &TableInfo {
+        self.inner_table.get_table_info()
+    }
+
+    async fn read(
+        &self,
+        ctx: Arc<QueryContext>,
+        _: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
+        let block = self.inner_table.get_full_data(ctx)?;
+        Ok(Box::pin(DataBlockStream::create(
+            block.schema().clone(),
+            None,
+            vec![block],
+        )))
+    }
+
+    fn read2(
+        &self,
+        ctx: Arc<QueryContext>,
+        _: &ReadDataSourcePlan,
+        pipeline: &mut NewPipeline,
+    ) -> Result<()> {
+        let output = OutputPort::create();
+        let inner_table = self.inner_table.clone();
+        pipeline.add_pipe(NewPipe::SimplePipe {
+            processors: vec![SystemTableSyncSource::create(
+                output.clone(),
+                inner_table,
+                ctx,
+            )?],
+            inputs_port: vec![],
+            outputs_port: vec![output],
+        });
+
+        Ok(())
+    }
+}
+
+struct SystemTableSyncSource<TTable: 'static + SyncSystemTable> {
+    finished: bool,
+    inner: Arc<TTable>,
+    context: Arc<QueryContext>,
+}
+
+impl<TTable: 'static + SyncSystemTable> SystemTableSyncSource<TTable>
+where Self: SyncSource
+{
+    pub fn create(
+        output: Arc<OutputPort>,
+        inner: Arc<TTable>,
+        context: Arc<QueryContext>,
+    ) -> Result<ProcessorPtr> {
+        SyncSourcer::create(output, SystemTableSyncSource::<TTable> {
+            inner,
+            context,
+            finished: false,
+        })
+    }
+}
+
+impl<TTable: 'static + SyncSystemTable> SyncSource for SystemTableSyncSource<TTable> {
+    const NAME: &'static str = TTable::NAME;
+
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
+        if self.finished {
+            return Ok(None);
+        }
+
+        self.finished = true;
+        Ok(Some(self.inner.get_full_data(self.context.clone())?))
+    }
+}
+
+#[async_trait::async_trait]
+pub trait AsyncSystemTable: Send + Sync {
     const NAME: &'static str;
 
     fn get_table_info(&self) -> &TableInfo;
     async fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock>;
 }
 
-struct SyncOneBlockSystemTable<TTable: SyncSystemTable> {
+pub struct AsyncOneBlockSystemTable<TTable: AsyncSystemTable> {
     inner_table: Arc<TTable>,
 }
 
+impl<TTable: 'static + AsyncSystemTable> AsyncOneBlockSystemTable<TTable>
+where Self: Table
+{
+    pub fn create(inner: TTable) -> Arc<dyn Table> {
+        Arc::new(AsyncOneBlockSystemTable::<TTable> {
+            inner_table: Arc::new(inner),
+        })
+    }
+}
+
 #[async_trait::async_trait]
-impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable> {
-    fn as_any(&self) -> &dyn Any { self }
+impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTable> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 
     fn get_table_info(&self) -> &TableInfo {
         self.inner_table.get_table_info()
     }
 
-    async fn read(&self, ctx: Arc<QueryContext>, _: &ReadDataSourcePlan) -> Result<SendableDataBlockStream> {
-        let block = self.inner_table.get_full_data(ctx)?;
-        Ok(Box::pin(DataBlockStream::create(block.schema().clone(), None, vec![block])))
+    async fn read(
+        &self,
+        ctx: Arc<QueryContext>,
+        _: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
+        let block = self.inner_table.get_full_data(ctx).await?;
+        Ok(Box::pin(DataBlockStream::create(
+            block.schema().clone(),
+            None,
+            vec![block],
+        )))
     }
 
-    fn read2(&self, ctx: Arc<QueryContext>, _: &ReadDataSourcePlan, pipeline: &mut NewPipeline) -> Result<()> {
-        // let schema = self.table_info.schema();
-        // let output = OutputPort::create();
-        // pipeline.add_pipe(NewPipe::SimplePipe {
-        //     processors: vec![OneSource::create(output.clone(), schema)?],
-        //     inputs_port: vec![],
-        //     outputs_port: vec![output],
-        // });
+    fn read2(
+        &self,
+        ctx: Arc<QueryContext>,
+        _: &ReadDataSourcePlan,
+        pipeline: &mut NewPipeline,
+    ) -> Result<()> {
+        let output = OutputPort::create();
+        let inner_table = self.inner_table.clone();
+        pipeline.add_pipe(NewPipe::SimplePipe {
+            processors: vec![SystemTableAsyncSource::create(
+                output.clone(),
+                inner_table,
+                ctx,
+            )?],
+            inputs_port: vec![],
+            outputs_port: vec![output],
+        });
 
         Ok(())
     }
 }
 
-struct SystemTableSyncSource<TTable: SyncSystemTable> {
-    inner: TTable,
+struct SystemTableAsyncSource<TTable: 'static + AsyncSystemTable> {
+    finished: bool,
+    inner: Arc<TTable>,
     context: Arc<QueryContext>,
 }
 
-impl<TTable: SyncSystemTable> SyncSource for SystemTableSyncSource<TTable> {
-    const NAME: &'static str = TTable::NAME;
-
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
-        Ok(Some(self.inner.get_full_data(self.context.clone())?))
+impl<TTable: 'static + AsyncSystemTable> SystemTableAsyncSource<TTable>
+where Self: AsyncSource
+{
+    pub fn create(
+        output: Arc<OutputPort>,
+        inner: Arc<TTable>,
+        context: Arc<QueryContext>,
+    ) -> Result<ProcessorPtr> {
+        AsyncSourcer::create(output, SystemTableAsyncSource::<TTable> {
+            inner,
+            context,
+            finished: false,
+        })
     }
 }
 
+#[async_trait::async_trait]
+impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<TTable> {
+    const NAME: &'static str = TTable::NAME;
+
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        if self.finished {
+            return Ok(None);
+        }
+
+        self.finished = true;
+        Ok(Some(self.inner.get_full_data(self.context.clone()).await?))
+    }
+}

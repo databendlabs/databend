@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::future::Future;
 use std::sync::Arc;
-use std::task::{Context, Poll};
-use common_base::tokio::sync::mpsc::{Receiver, Sender};
+use std::task::Context;
+use std::task::Poll;
 
+use common_base::tokio::sync::mpsc::Receiver;
+use common_base::tokio::sync::mpsc::Sender;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
-use crate::pipelines::new::executor::pipeline_runtime_executor::PipelineRuntimeExecutor;
 
-use crate::pipelines::new::executor::pipeline_threads_executor::PipelineThreadsExecutor;
+use crate::pipelines::new::executor::pipeline_runtime_executor::PipelineRuntimeExecutor;
 use crate::pipelines::new::pipe::SinkPipeBuilder;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::{AsyncSink, AsyncSinker, Sink};
-use crate::pipelines::new::processors::Sinker;
+use crate::pipelines::new::processors::AsyncSink;
+use crate::pipelines::new::processors::AsyncSinker;
 use crate::pipelines::new::NewPipeline;
 
 enum Executor {
@@ -158,12 +158,10 @@ impl AsyncSink for AsyncPullingSink {
     async fn consume(&mut self, data_block: DataBlock) -> Result<()> {
         match self {
             AsyncPullingSink::Finished => Ok(()),
-            AsyncPullingSink::Running(tx) => {
-                match tx.send(data_block).await {
-                    Ok(_) => Ok(()),
-                    Err(cause) => Err(ErrorCode::LogicalError(format!("{:?}", cause))),
-                }
-            }
+            AsyncPullingSink::Running(tx) => match tx.send(data_block).await {
+                Ok(_) => Ok(()),
+                Err(cause) => Err(ErrorCode::LogicalError(format!("{:?}", cause))),
+            },
         }
     }
 }

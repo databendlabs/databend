@@ -25,11 +25,11 @@ mod one_table;
 mod processes_table;
 mod query_log_table;
 mod settings_table;
+mod table;
 mod tables_table;
 mod tracing_table;
 mod tracing_table_stream;
 mod users_table;
-mod table;
 
 pub use clusters_table::ClustersTable;
 pub use columns_table::ColumnsTable;
