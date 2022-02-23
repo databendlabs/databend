@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use sqlparser::ast::Statement;
 use sqlparser::parser::ParserError;
 
 use crate::sql::statements::DfDeleteStatement;
@@ -22,8 +23,22 @@ impl<'a> DfParser<'a> {
     pub(crate) fn parse_delete(&mut self) -> Result<DfStatement, ParserError> {
         self.parser.next_token();
         let native_query = self.parser.parse_delete()?;
-        Ok(DfStatement::Delete(Box::new(DfDeleteStatement::try_from(
-            native_query,
-        )?)))
+
+        if let Statement::Delete {
+            table_name,
+            selection,
+        } = native_query
+        {
+            let stmt = DfDeleteStatement {
+                from: table_name,
+                selection,
+            };
+            Ok(DfStatement::Delete(Box::new(stmt)))
+        } else {
+            Err(ParserError::ParserError(format!(
+                "expecting delete stmt, but got {}",
+                native_query
+            )))
+        }
     }
 }

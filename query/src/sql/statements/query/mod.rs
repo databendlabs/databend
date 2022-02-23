@@ -12,20 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod delete_normalizer;
 mod query_ast_ir;
 mod query_collect_push_downs;
-mod query_delete_analyzer;
 mod query_normalizer;
 mod query_qualified_rewriter;
 mod query_schema_joined;
 mod query_schema_joined_analyzer;
 
-pub use delete_normalizer::DeleteNormalizer;
 pub use query_ast_ir::QueryASTIR;
 pub use query_ast_ir::QueryASTIRVisitor;
 pub use query_collect_push_downs::QueryCollectPushDowns;
-pub use query_delete_analyzer::DeleteSchemaAnalyzer;
 pub use query_normalizer::QueryNormalizer;
 pub use query_qualified_rewriter::QualifiedRewriter;
 pub use query_schema_joined::JoinedColumnDesc;

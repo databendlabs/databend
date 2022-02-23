@@ -26,8 +26,8 @@ use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_statement::QueryAnalyzeState;
-use crate::sql::statements::query::DeleteNormalizer;
-use crate::sql::statements::query::DeleteSchemaAnalyzer;
+use crate::sql::statements::delete::DeleteNormalizer;
+use crate::sql::statements::delete::DeleteSchemaAnalyzer;
 use crate::sql::statements::query::JoinedSchema;
 use crate::sql::statements::query::JoinedTableDesc;
 use crate::sql::statements::query::QualifiedRewriter;
@@ -126,7 +126,7 @@ impl DfDeleteStatement {
     }
 
     fn verify_with_dry_run(schema: &JoinedSchema, state: &QueryAnalyzeState) -> Result<DataBlock> {
-        let mut data_block = DataBlock::empty_with_schema(schema.to_data_schema());
+        let data_block = DataBlock::empty_with_schema(schema.to_data_schema());
 
         if let Some(predicate) = &state.filter {
             if let Err(cause) = Self::dry_run_expr(predicate, &data_block) {

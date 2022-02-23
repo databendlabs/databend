@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_planners::Optimization;
-use databend_query::sql::statements::DfOptimizeTable;
+use databend_query::sql::statements::DfDeleteStatement;
 use databend_query::sql::*;
+use sqlparser::ast::Expr::BinaryOp;
+use sqlparser::ast::Value as AstValue;
 use sqlparser::ast::*;
 
 use crate::sql::sql_parser::*;
@@ -24,10 +25,28 @@ use crate::sql::sql_parser::*;
 fn delete_from() -> Result<()> {
     {
         let sql = "delete from t1";
-        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
-            name: ObjectName(vec![Ident::new("t1")]),
-            operation: Optimization::PURGE,
-        });
+        let expected = DfStatement::Delete(Box::new(DfDeleteStatement {
+            from: ObjectName(vec![Ident::new("t1")]),
+            selection: None,
+        }));
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "delete from t1 where col = 1";
+        let expected = DfStatement::Delete(Box::new(DfDeleteStatement {
+            from: ObjectName(vec![Ident::new("t1")]),
+            selection: Some(BinaryOp {
+                left: Box::new(Expr::Identifier {
+                    0: Ident {
+                        value: "col".to_owned(),
+                        quote_style: None,
+                    },
+                }),
+                op: BinaryOperator::Eq,
+                right: Box::new(Expr::Value(AstValue::Number("1".to_owned(), false))),
+            }),
+        }));
         expect_parse_ok(sql, expected)?;
     }
 

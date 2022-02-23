@@ -1,16 +1,16 @@
-// Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
 
 use std::sync::Arc;
 
@@ -19,7 +19,7 @@ use common_exception::Result;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
-use crate::sql::statements::query::query_schema_joined::JoinedSchema;
+use crate::sql::statements::query::JoinedSchema;
 use crate::sql::statements::statement_delete::DfDeleteStatement;
 
 pub struct DeleteSchemaAnalyzer {
@@ -32,12 +32,7 @@ impl DeleteSchemaAnalyzer {
     }
 
     pub async fn analyze(&self, query: &DfDeleteStatement) -> Result<JoinedSchema> {
-        self.table_new(&query.from).await
-    }
-
-    async fn table_new(&self, obj_name: &ObjectName) -> Result<JoinedSchema> {
-        // TODO(Winter): await query_context.get_table
-        let (database, table) = self.resolve_table(obj_name)?;
+        let (database, table) = self.resolve_table(&query.from)?;
         let read_table = self.ctx.get_table(&database, &table).await?;
         let name_prefix = vec![database, table];
         JoinedSchema::from_table(read_table, name_prefix)

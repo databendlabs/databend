@@ -12,23 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_meta_types::GrantObject;
+use common_meta_types::UserPrivilegeType;
 use common_planners::DeletePlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::optimizers::Optimizers;
-use crate::pipelines::new::executor::PipelinePullingExecutor;
-use crate::pipelines::new::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 
 pub struct DeleteInterpreter {
@@ -57,6 +52,19 @@ impl Interpreter for DeleteInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        let db = self.delete.database_name.as_str();
+        let tbl = self.delete.table_name.as_str();
+        self.ctx
+            .get_current_session()
+            .validate_privilege(
+                &GrantObject::Table(db.to_owned(), tbl.to_owned()),
+                UserPrivilegeType::Delete,
+            )
+            .await?;
+
+        let table = self.ctx.get_table(db, tbl).await?;
+
+        let operation_log = table.delete_from(&self.delete.selection);
         todo!()
     }
 }

@@ -77,6 +77,9 @@ impl PlanParser {
         let filter = Self::build_filter_plan(from, data)?;
         Ok(PlanNode::Delete(DeletePlan {
             input: Arc::new(filter),
+            table_name: "".to_string(),
+            database_name: "".to_string(),
+            selection: None,
         }))
     }
 
