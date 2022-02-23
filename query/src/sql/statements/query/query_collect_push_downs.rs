@@ -69,7 +69,7 @@ impl QueryCollectPushDowns {
                 && ir.group_by_expressions.is_empty()
                 && ir.aggregate_expressions.is_empty()
             {
-                limit = ir.limit;
+                limit = ir.limit.map(|c| c + ir.offset.unwrap_or(0));
                 order_by = ir.order_by_expressions.clone();
             }
 
