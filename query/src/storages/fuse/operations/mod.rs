@@ -14,6 +14,7 @@
 
 mod append;
 mod commit;
+mod delete_from;
 mod operation_log;
 mod optimize;
 mod part_info;

@@ -38,7 +38,7 @@ pub type AppendOperationLogEntryStream =
 
 impl FuseTable {
     #[inline]
-    pub async fn append_trunks(
+    pub async fn append_chunks(
         &self,
         ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,

@@ -21,6 +21,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_planners::DeletePlan;
 use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
@@ -92,13 +93,18 @@ impl Table for FuseTable {
         self.do_read(ctx, &plan.push_downs).await
     }
 
+    #[tracing::instrument(level = "debug", name = "fuse_table_delete_from", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    async fn delete_from(&self, ctx: Arc<QueryContext>, truncate_plan: DeletePlan) -> Result<()> {
+        self.do_delete_from(ctx, truncate_plan).await
+    }
+
     #[tracing::instrument(level = "debug", name = "fuse_table_append_data", skip(self, ctx, stream), fields(ctx.id = ctx.get_id().as_str()))]
     async fn append_data(
         &self,
         ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
-        let log_entry_stream = self.append_trunks(ctx, stream).await?;
+        let log_entry_stream = self.append_chunks(ctx, stream).await?;
         let data_block_stream =
             log_entry_stream.map(|append_log_entry_res| match append_log_entry_res {
                 Ok(log_entry) => DataBlock::try_from(log_entry),

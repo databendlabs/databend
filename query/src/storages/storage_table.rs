@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::MetaId;
 use common_meta_types::TableInfo;
+use common_planners::DeletePlan;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Part;
@@ -88,7 +89,7 @@ pub trait Table: Sync + Send {
     // Read block data from the underling.
     async fn read(
         &self,
-        _ctx: Arc<QueryContext>,
+        ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream>;
 
@@ -128,7 +129,14 @@ pub trait Table: Sync + Send {
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
-            "truncate for table {} is not implemented",
+            "TRUNCATE operation of table {} is not implemented",
+            self.name()
+        )))
+    }
+
+    async fn delete_from(&self, _ctx: Arc<QueryContext>, _truncate_plan: DeletePlan) -> Result<()> {
+        Err(ErrorCode::UnImplement(format!(
+            "DELETE operation of table {} is not implemented",
             self.name()
         )))
     }

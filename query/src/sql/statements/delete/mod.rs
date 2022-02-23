@@ -12,6 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+// TODO
+// simplify those mods
+// Simple delete statement only
+// - no USING
+// - no sub-queries in selection
+
 mod delete_normalizer;
 mod query_delete_analyzer;
 

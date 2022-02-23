@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UpsertTableOptionReq;
 use common_planners::TruncateTablePlan;
+use common_tracing::tracing;
 use futures::io::Cursor;
 use uuid::Uuid;
 
@@ -30,7 +31,7 @@ use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 
 impl FuseTable {
-    #[inline]
+    #[tracing::instrument(level = "debug", name = "fuse_table_truncate", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn do_truncate(&self, ctx: Arc<QueryContext>, plan: TruncateTablePlan) -> Result<()> {
         if let Some(prev_snapshot) = self.read_table_snapshot(ctx.as_ref()).await? {
             let prev_id = prev_snapshot.snapshot_id;

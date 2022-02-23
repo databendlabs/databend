@@ -82,8 +82,7 @@ impl BlockPruner {
         Ok(res.collect())
     }
 
-    #[inline]
-    fn filter_segment(segment_info: &SegmentInfo, pred: &Pred) -> Result<Vec<BlockMeta>> {
+    pub fn filter_segment(segment_info: &SegmentInfo, pred: &Pred) -> Result<Vec<BlockMeta>> {
         if pred(&segment_info.summary.col_stats)? {
             let block_num = segment_info.blocks.len();
             segment_info.blocks.iter().try_fold(

@@ -29,7 +29,6 @@ use crate::storages::fuse::pruning::BlockPruner;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
-    #[inline]
     pub async fn do_read_partitions(
         &self,
         ctx: Arc<QueryContext>,
