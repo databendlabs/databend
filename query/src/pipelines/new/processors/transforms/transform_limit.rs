@@ -61,9 +61,7 @@ struct TransformLimitImpl<const MODE: usize> {
     output_data_block: Option<DataBlock>,
 }
 
-impl<const MODE: usize> TransformLimitImpl<MODE>
-where Self: Processor
-{
+impl<const MODE: usize> TransformLimitImpl<MODE> {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,

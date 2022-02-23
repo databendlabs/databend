@@ -86,9 +86,7 @@ async fn test_skip_read_data_source() -> Result<()> {
                 query: "select * from numbers_mt(10) where true limit 0",
                 expect: "\
                 Limit: 0\
-                \n  Projection: number:UInt64\
-                \n    Filter: true\
-                \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [true]]",
+                \n  Projection: number:UInt64\n    Filter: true\n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [true], limit: 0]",
             },
             Test {
                 name: "Having with 'having 1+1=3' should skip the scan",

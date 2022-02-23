@@ -62,10 +62,9 @@ impl ArithmeticNegateFunction {
         _display_name: &str,
         args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function>> {
-        let arg_type = remove_nullable(args[0]).data_type_id();
         let op = DataValueUnaryOperator::Negate;
 
-        with_match_primitive_types_error!(arg_type, |$T| {
+        with_match_primitive_types_error!(args[0].data_type_id(), |$T| {
             let result_type = <$T as ResultTypeOfUnary>::Negate::to_data_type();
             match result_type.data_type_id() {
                 TypeID::Int64 => UnaryArithmeticFunction::<$T, i64, _>::try_create_func(

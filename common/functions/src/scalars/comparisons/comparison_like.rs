@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use regex::bytes::Regex as BytesRegex;
 
+use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
@@ -78,15 +79,10 @@ impl Function for ComparisonLikeFunction {
         &self,
         args: &[&common_datavalues::DataTypePtr],
     ) -> Result<common_datavalues::DataTypePtr> {
-        // expect array & struct
-        let not_string = args.iter().all(|arg| arg.data_type_id() != TypeID::String);
-        if not_string {
-            return Err(ErrorCode::BadArguments(format!(
-                "Illegal types {:?} of argument of function {}, must be strings",
-                args,
-                self.name()
-            )));
+        for arg in args {
+            assert_string(*arg)?;
         }
+
         Ok(BooleanType::arc())
     }
 
