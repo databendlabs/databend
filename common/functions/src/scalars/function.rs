@@ -42,18 +42,6 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     /// Evaluate the function, e.g. run/execute the function.
     fn eval(&self, _columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef>;
 
-    /// Whether the function passes through null input.
-    /// Return true if the function just return null with any given null input.
-    /// Return false if the function may return non-null with null input.
-    ///
-    /// For example, arithmetic plus('+') will output null for any null input, like '12 + null = null'.
-    /// It has no idea of how to handle null, but just pass through.
-    ///
-    /// While ISNULL function  treats null input as a valid one. For example ISNULL(NULL, 'test') will return 'test'.
-    fn passthrough_null(&self) -> bool {
-        true
-    }
-
     /// If all args are constant column, then we just return the constant result
     /// TODO, we should cache the constant result inside the context for better performance
     fn passthrough_constant(&self) -> bool {

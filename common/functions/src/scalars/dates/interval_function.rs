@@ -99,8 +99,12 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
         let function_creator: ArithmeticCreator =
             Box::new(move |display_name, args| Self::try_create_func(display_name, factor, args));
 
-        ArithmeticDescription::creator(function_creator)
-            .features(FunctionFeatures::default().deterministic().num_arguments(2))
+        ArithmeticDescription::creator(function_creator).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .passthrough_null()
+                .num_arguments(2),
+        )
     }
 }
 

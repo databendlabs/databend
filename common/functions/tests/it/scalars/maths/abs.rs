@@ -48,5 +48,5 @@ fn test_abs_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(AbsFunction::try_create("abs(false)")?, &tests)
+    test_scalar_functions(AbsFunction::try_create("abs(false)")?, &tests, true)
 }

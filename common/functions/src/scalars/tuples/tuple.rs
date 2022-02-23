@@ -83,10 +83,6 @@ impl Function for TupleFunction {
         let arr: StructColumn = StructColumn::from_data(cols, t);
         Ok(Arc::new(arr))
     }
-
-    fn passthrough_null(&self) -> bool {
-        false
-    }
 }
 
 impl std::fmt::Display for TupleFunction {

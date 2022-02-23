@@ -80,6 +80,7 @@ impl<T: Base> GenericLogFunction<T> {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
+                .passthrough_null()
                 .variadic_arguments(1, 2),
         )
     }

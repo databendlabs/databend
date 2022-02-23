@@ -310,7 +310,10 @@ where
     }
 
     pub fn desc() -> FunctionDescription {
-        let mut features = FunctionFeatures::default().monotonicity().num_arguments(1);
+        let mut features = FunctionFeatures::default()
+            .monotonicity()
+            .passthrough_null()
+            .num_arguments(1);
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();
@@ -388,7 +391,7 @@ where
             None => return Ok(Monotonicity::clone_without_range(&args[0])),
         };
 
-        let func = FunctionAdapter::create(func);
+        let func = FunctionAdapter::create(func, true);
 
         if args[0].left.is_none() || args[0].right.is_none() {
             return Ok(Monotonicity::default());

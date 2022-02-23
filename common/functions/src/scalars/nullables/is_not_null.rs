@@ -71,10 +71,6 @@ impl Function for IsNotNullFunction {
             None => Ok(ConstColumn::new(Series::from_data(vec![true]), input_rows).arc()),
         }
     }
-
-    fn passthrough_null(&self) -> bool {
-        false
-    }
 }
 
 impl std::fmt::Display for IsNotNullFunction {

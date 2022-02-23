@@ -82,7 +82,7 @@ fn test_regexp_like_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(RegexpLikeFunction::try_create("regexp_like")?, &tests)
+    test_scalar_functions(RegexpLikeFunction::try_create("regexp_like")?, &tests, true)
 }
 
 #[test]
@@ -110,5 +110,5 @@ fn test_regexp_like_match_type_joiner() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(RegexpLikeFunction::try_create("regexp_like")?, &tests)
+    test_scalar_functions(RegexpLikeFunction::try_create("regexp_like")?, &tests, true)
 }

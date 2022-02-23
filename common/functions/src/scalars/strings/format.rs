@@ -51,6 +51,7 @@ impl FormatFunction {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
+                .passthrough_null()
                 .variadic_arguments(2, 3),
         )
     }

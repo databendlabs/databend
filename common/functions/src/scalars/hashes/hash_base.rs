@@ -65,9 +65,12 @@ where
     }
 
     pub fn desc() -> FunctionDescription {
-        let mut features = FunctionFeatures::default().num_arguments(1);
-        features = features.deterministic();
-        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .passthrough_null()
+                .num_arguments(1),
+        )
     }
 }
 

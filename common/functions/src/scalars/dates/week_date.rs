@@ -90,6 +90,7 @@ where
     pub fn desc() -> FunctionDescription {
         let mut features = FunctionFeatures::default()
             .monotonicity()
+            .passthrough_null()
             .variadic_arguments(1, 2);
 
         if T::IS_DETERMINISTIC {
@@ -192,7 +193,7 @@ where
             return Ok(Monotonicity::default());
         }
 
-        let func = FunctionAdapter::create(func);
+        let func = FunctionAdapter::create(func, true);
         let left_val = func.eval(&[args[0].left.clone().unwrap()], 1)?.get(0);
         let right_val = func.eval(&[args[0].right.clone().unwrap()], 1)?.get(0);
         // The function is monotonous, if the factor eval returns the same values for them.

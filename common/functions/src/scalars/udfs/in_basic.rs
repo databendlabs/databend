@@ -184,10 +184,6 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
             }
         }
     }
-
-    fn passthrough_null(&self) -> bool {
-        false
-    }
 }
 
 impl<const NEGATED: bool> fmt::Display for InFunction<NEGATED> {

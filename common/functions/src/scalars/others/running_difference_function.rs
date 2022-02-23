@@ -37,6 +37,10 @@ impl RunningDifferenceFunction {
         }))
     }
 
+    // The function runningDifference compares the value[index] and value[index-1].
+    // If we set passthrough_null to be true, the input will be optimized with non-null + masking.
+    // Considering tht we actually need two masks(one for value[index], the other value[index-1]) for validity,
+    // we choose to handler the nullable ourselves.
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().num_arguments(1))
@@ -97,14 +101,6 @@ impl Function for RunningDifferenceFunction {
                     columns[0].field().name(),
                 )))
         }
-    }
-
-    // The function runningDifference compares the value[index] and value[index-1].
-    // If we set passthrough_null to be true, the input will be optimized with non-null + masking.
-    // Considering tht we actually need two masks(one for value[index], the other value[index-1]) for validity,
-    // we choose to handler the nullable ourselves.
-    fn passthrough_null(&self) -> bool {
-        false
     }
 }
 

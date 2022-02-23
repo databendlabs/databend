@@ -192,10 +192,6 @@ impl Function for ConcatWsFunction {
             true => Self::concat_column_null(&columns[0], &cols, input_rows),
         }
     }
-
-    fn passthrough_null(&self) -> bool {
-        false
-    }
 }
 
 impl fmt::Display for ConcatWsFunction {

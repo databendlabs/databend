@@ -45,8 +45,12 @@ impl ArithmeticModuloFunction {
     }
 
     pub fn desc() -> ArithmeticDescription {
-        ArithmeticDescription::creator(Box::new(Self::try_create_func))
-            .features(FunctionFeatures::default().deterministic().num_arguments(2))
+        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .passthrough_null()
+                .num_arguments(2),
+        )
     }
 }
 

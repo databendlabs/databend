@@ -181,6 +181,7 @@ impl<const IS_TRUNC: bool> RoundingFunction<IS_TRUNC> {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
+                .passthrough_null()
                 .variadic_arguments(1, 2),
         )
     }

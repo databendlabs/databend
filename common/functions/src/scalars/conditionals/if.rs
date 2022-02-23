@@ -284,10 +284,6 @@ impl Function for IfFunction {
         // 4. all normal type and are not nullable/const
         self.eval_generic(cond_col, &columns[1..])
     }
-
-    fn passthrough_null(&self) -> bool {
-        false
-    }
 }
 
 impl std::fmt::Display for IfFunction {

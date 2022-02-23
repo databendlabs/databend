@@ -132,6 +132,7 @@ impl ArithmeticPlusFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()
+                .passthrough_null()
                 .num_arguments(2),
         )
     }

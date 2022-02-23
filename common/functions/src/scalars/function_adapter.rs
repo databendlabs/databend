@@ -41,11 +41,15 @@ use super::Monotonicity;
 #[derive(Clone)]
 pub struct FunctionAdapter {
     inner: Box<dyn Function>,
+    passthrough_null: bool,
 }
 
 impl FunctionAdapter {
-    pub fn create(inner: Box<dyn Function>) -> Box<dyn Function> {
-        Box::new(Self { inner })
+    pub fn create(inner: Box<dyn Function>, passthrough_null: bool) -> Box<dyn Function> {
+        Box::new(Self {
+            inner,
+            passthrough_null,
+        })
     }
 }
 impl Function for FunctionAdapter {
@@ -54,7 +58,7 @@ impl Function for FunctionAdapter {
     }
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if self.passthrough_null() {
+        if self.passthrough_null {
             // one is null, result is null
             if args.iter().any(|v| v.data_type_id() == TypeID::Null) {
                 return Ok(NullType::arc());
@@ -80,7 +84,7 @@ impl Function for FunctionAdapter {
         }
 
         // unwrap nullable
-        if self.passthrough_null() {
+        if self.passthrough_null {
             // one is null, result is null
             if columns
                 .iter()
@@ -175,10 +179,6 @@ impl Function for FunctionAdapter {
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         self.inner.get_monotonicity(args)
-    }
-
-    fn passthrough_null(&self) -> bool {
-        self.inner.passthrough_null()
     }
 
     fn passthrough_constant(&self) -> bool {

@@ -71,8 +71,4 @@ impl Function for IgnoreFunction {
         let return_value = DataValue::try_from(false)?;
         return_type.create_constant_column(&return_value, input_rows)
     }
-
-    fn passthrough_null(&self) -> bool {
-        false
-    }
 }

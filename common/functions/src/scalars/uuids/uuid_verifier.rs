@@ -116,10 +116,6 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
         Ok(BooleanType::arc())
     }
 
-    fn passthrough_null(&self) -> bool {
-        false
-    }
-
     fn eval(
         &self,
         columns: &common_datavalues::ColumnsWithField,

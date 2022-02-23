@@ -39,6 +39,7 @@ impl CharFunction {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
+                .passthrough_null()
                 .variadic_arguments(1, 1024),
         )
     }

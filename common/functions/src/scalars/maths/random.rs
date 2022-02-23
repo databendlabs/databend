@@ -41,8 +41,11 @@ impl RandomFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().variadic_arguments(0, 1))
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .passthrough_null()
+                .variadic_arguments(0, 1),
+        )
     }
 }
 
@@ -69,7 +72,7 @@ impl Function for RandomFunction {
             }
             _ => {
                 let mut ctx = EvalContext::default();
-                with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
+                with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$T| {
                       let unary = ScalarUnaryExpression::<$T, f64, _>::new(rand_seed);
                     let col = unary.eval(columns[0].column(), &mut ctx)?;
                     Ok(Arc::new(col))

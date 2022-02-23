@@ -88,10 +88,6 @@ impl Function for EltFunction {
             unreachable!()
         })
     }
-
-    fn passthrough_null(&self) -> bool {
-        false
-    }
 }
 
 fn check_range(index: usize, cols: usize) -> Result<()> {
