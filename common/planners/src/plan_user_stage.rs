@@ -17,6 +17,7 @@ use common_meta_types::UserStageInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct UserStagePlan {
+    #[serde(skip_serializing)]
     pub schema: DataSchemaRef,
     pub stage_info: UserStageInfo,
 }

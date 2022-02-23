@@ -78,7 +78,7 @@ impl CsvSourceTransform {
         }
 
         let read_buffer_size = self.ctx.get_settings().get_storage_read_buffer_size()?;
-        let (dal_operator, path) = DataAccessor::get_dal_operator(stage_info).await?;
+        let (dal_operator, path) = DataAccessor::get_dal_operator(&self.ctx, stage_info).await?;
         let size = dal_operator
             .stat(&path)
             .run()

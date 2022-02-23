@@ -12,21 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::StageStorage;
 use common_meta_types::UserStageInfo;
 use opendal::credential::Credential;
 
+use crate::sessions::QueryContext;
+
 pub struct DataAccessor {}
 
 impl DataAccessor {
     pub async fn get_dal_operator(
+        ctx: &Arc<QueryContext>,
         stage_info: &UserStageInfo,
     ) -> Result<(opendal::Operator, String)> {
         match &stage_info.stage_params.storage {
             StageStorage::S3(s3) => {
                 let mut builder = opendal::services::s3::Backend::build();
+
+                // Endpoint url.
+                {
+                    let endpoint = ctx.get_config().storage.s3.endpoint_url;
+                    builder.endpoint(&endpoint);
+                }
 
                 // Region.
                 {
