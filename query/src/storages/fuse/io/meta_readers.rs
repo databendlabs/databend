@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
 use futures::io::BufReader;
+use opendal::error::Kind as DalErrorKind;
 use opendal::Reader;
 use serde::de::DeserializeOwned;
 
@@ -162,11 +163,23 @@ where T: BufReaderProvider + Sync
 
 #[async_trait::async_trait]
 impl BufReaderProvider for &QueryContext {
-    async fn buf_reader(&self, path: &str, _len: Option<u64>) -> Result<BufReader<Reader>> {
+    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<Reader>> {
         let operator = self.get_storage_operator().await?;
         let object = operator.object(path);
 
-        let reader = object.reader();
+        let len = match len {
+            Some(l) => l,
+            None => {
+                let meta = object.metadata().await.map_err(|e| match e.kind() {
+                    DalErrorKind::ObjectNotExist => ErrorCode::DalPathNotFound(e.to_string()),
+                    _ => ErrorCode::DalTransportError(e.to_string()),
+                })?;
+
+                meta.content_length()
+            }
+        };
+
+        let reader = object.reader().total_size(len);
         let read_buffer_size = self.get_settings().get_storage_read_buffer_size()?;
         Ok(BufReader::with_capacity(read_buffer_size as usize, reader))
     }
