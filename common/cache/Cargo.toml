@@ -16,15 +16,15 @@ amortized = ["ritelinked/ahash-amortized", "ritelinked/inline-more-amortized"]
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-tracing = { path = "../tracing" }
 common-exception = { path = "../exception" }
+common-tracing = { path = "../tracing" }
 
 # Github dependencies
 
 # Crates.io dependencies
 async-trait = "0.1.52"
 filetime = "0.2.15"
-ritelinked  = { version = "0.3.2", default-features = false, features = ["ahash", "inline-more"] }
+ritelinked = { version = "0.3.2", default-features = false, features = ["ahash", "inline-more"] }
 walkdir = "2.3.2"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]

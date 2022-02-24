@@ -13,12 +13,15 @@ doctest = false
 test = false
 
 [dependencies]
-common-exception= {path = "../exception"}
-bytes = "1.1.0"
-serde = { version = "1.0.136", features = ["derive"] }
+# Workspace dependencies
+common-exception = { path = "../exception" }
 
 # Github dependencies
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
+
+# Crates.io dependencies
+bytes = "1.1.0"
+serde = { version = "1.0.136", features = ["derive"] }
 
 [dev-dependencies]
 rand = "0.8.4"
