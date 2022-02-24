@@ -29,13 +29,19 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::SyncSource;
+use crate::pipelines::new::processors::SyncSourcer;
+use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 
 pub struct QueryLogTable {
     table_info: TableInfo,
     max_rows: i32,
-    data: RwLock<VecDeque<DataBlock>>,
+    data: Arc<RwLock<VecDeque<DataBlock>>>,
 }
 
 impl QueryLogTable {
@@ -99,10 +105,11 @@ impl QueryLogTable {
                 ..Default::default()
             },
         };
+
         QueryLogTable {
             table_info,
             max_rows: 200000,
-            data: RwLock::new(VecDeque::new()),
+            data: Arc::new(RwLock::new(VecDeque::new())),
         }
     }
 
@@ -139,6 +146,25 @@ impl Table for QueryLogTable {
         )))
     }
 
+    fn read2(
+        &self,
+        _: Arc<QueryContext>,
+        _: &ReadDataSourcePlan,
+        pipeline: &mut NewPipeline,
+    ) -> Result<()> {
+        // TODO: split data for multiple threads
+        let output = OutputPort::create();
+        let mut source_builder = SourcePipeBuilder::create();
+
+        source_builder.add_source(
+            output.clone(),
+            QueryLogSource::create(output, &self.data.read())?,
+        );
+
+        pipeline.add_pipe(source_builder.finalize());
+        Ok(())
+    }
+
     async fn append_data(
         &self,
         _ctx: Arc<QueryContext>,
@@ -172,5 +198,23 @@ impl Table for QueryLogTable {
         let mut data = self.data.write();
         *data = VecDeque::new();
         Ok(())
+    }
+}
+
+struct QueryLogSource {
+    data: VecDeque<DataBlock>,
+}
+
+impl QueryLogSource {
+    pub fn create(output: Arc<OutputPort>, data: &VecDeque<DataBlock>) -> Result<ProcessorPtr> {
+        SyncSourcer::create(output, QueryLogSource { data: data.clone() })
+    }
+}
+
+impl SyncSource for QueryLogSource {
+    const NAME: &'static str = "system.query_log";
+
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
+        Ok(self.data.pop_front())
     }
 }
