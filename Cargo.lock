@@ -2226,6 +2226,7 @@ dependencies = [
  "dyn-clone",
  "futures",
  "headers",
+ "http",
  "hyper",
  "jwt-simple",
  "maplit",

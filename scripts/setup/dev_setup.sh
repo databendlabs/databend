@@ -61,6 +61,15 @@ function install_rustup {
 	fi
 }
 
+function install_cargo_binary {
+  BIN_NAME=$1
+	if cargo install --list | grep "${BIN_NAME}" &>/dev/null; then
+		echo "${BIN_NAME} is already installed"
+	else
+		cargo install $BIN_NAME
+	fi
+}
+
 function install_pkg {
 	package=$1
 	PACKAGE_MANAGER=$2
@@ -344,6 +353,8 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_rustup "$BATCH_MODE"
 
 	install_toolchain "$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)"
+
+	install_cargo_binary "taplo-cli"
 
 	install_pkg lcov "$PACKAGE_MANAGER"
 fi

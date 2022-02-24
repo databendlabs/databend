@@ -13,12 +13,24 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRefExt;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::FileFormatOptions;
+use common_meta_types::OnErrorMode;
+use common_meta_types::StageFileFormatType;
+use common_meta_types::StageParams;
+use common_meta_types::StageS3Storage;
+use common_meta_types::StageStorage;
+use common_meta_types::StageType;
+use common_meta_types::UserStageInfo;
 use common_planners::CopyPlan;
 use common_planners::PlanNode;
+use common_planners::UserStagePlan;
+use common_planners::ValidationMode;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 
@@ -31,8 +43,13 @@ pub struct DfCopy {
     pub name: ObjectName,
     pub columns: Vec<Ident>,
     pub location: String,
-    pub format: String,
-    pub options: HashMap<String, String>,
+    pub credential_options: HashMap<String, String>,
+    pub encryption_options: HashMap<String, String>,
+    pub file_format_options: HashMap<String, String>,
+    pub files: Vec<String>,
+    pub on_error: String,
+    pub size_limit: String,
+    pub validation_mode: String,
 }
 
 #[async_trait::async_trait]
@@ -60,18 +77,176 @@ impl AnalyzableStatement for DfCopy {
             schema = DataSchemaRefExt::create(fields);
         }
 
+        // Stage info.
+        let mut stage_info = if self.location.starts_with('@') {
+            self.analyze_internal().await?
+        } else {
+            self.analyze_external().await?
+        };
+
+        // Copy options.
+        {
+            // on_error.
+            if !self.on_error.is_empty() {
+                stage_info.copy_options.on_error =
+                    OnErrorMode::from_str(&self.on_error).map_err(ErrorCode::SyntaxException)?;
+            }
+
+            // size_limit.
+            if !self.size_limit.is_empty() {
+                let size_limit = self.size_limit.parse::<usize>().map_err(|_e| {
+                    ErrorCode::SyntaxException(format!(
+                        "size_limit must be number, got: {}",
+                        self.size_limit
+                    ))
+                })?;
+                stage_info.copy_options.size_limit = size_limit;
+            }
+        }
+
+        // Validation mode.
+        let validation_mode = ValidationMode::from_str(self.validation_mode.as_str())
+            .map_err(ErrorCode::SyntaxException)?;
+
+        // Stage plan.
+        let stage_plan = UserStagePlan {
+            schema: schema.clone(),
+            stage_info,
+        };
+
+        // Copy plan.
         let plan_node = CopyPlan {
             db_name,
             tbl_name,
             tbl_id,
             schema,
-            location: self.location.clone(),
-            format: self.format.clone(),
-            options: self.options.clone(),
+            stage_plan,
+            validation_mode,
+            files: self.files.clone(),
         };
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Copy(
             plan_node,
         ))))
+    }
+}
+
+impl DfCopy {
+    // Internal stage(start with `@`):
+    // copy into mytable from @my_ext_stage
+    // file_format = (type = csv);
+    async fn analyze_internal(&self) -> Result<UserStageInfo> {
+        // TODO(bohu): get stage info from metasrv by stage name.
+        Ok(UserStageInfo {
+            stage_type: StageType::Internal,
+            ..Default::default()
+        })
+    }
+
+    // External stage(location starts without `@`):
+    // copy into table from 's3://mybucket/data/files'
+    // credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
+    // encryption=(master_key = 'my_master_key')
+    // file_format = (type = csv field_delimiter = '|' skip_header = 1)"
+    async fn analyze_external(&self) -> Result<UserStageInfo> {
+        // File format type.
+        let format = self
+            .file_format_options
+            .get("type")
+            .ok_or_else(|| ErrorCode::SyntaxException("File format type must be specified"))?;
+        let file_format = StageFileFormatType::from_str(format)
+            .map_err(|e| ErrorCode::SyntaxException(format!("File format type error:{:?}", e)))?;
+
+        // Skip header.
+        let skip_header = self
+            .file_format_options
+            .get("skip_header")
+            .unwrap_or(&"0".to_string())
+            .parse::<i32>()?;
+
+        // Field delimiter.
+        let field_delimiter = self
+            .file_format_options
+            .get("field_delimiter")
+            .unwrap_or(&"".to_string())
+            .clone();
+
+        // Record delimiter.
+        let record_delimiter = self
+            .file_format_options
+            .get("record_delimiter")
+            .unwrap_or(&"".to_string())
+            .clone();
+
+        let file_format_options = FileFormatOptions {
+            format: file_format,
+            skip_header,
+            field_delimiter,
+            record_delimiter,
+            compression: Default::default(),
+        };
+
+        // Parse uri.
+        let uri = self
+            .location
+            .as_str()
+            .parse::<http::Uri>()
+            .map_err(|_e| ErrorCode::SyntaxException("File location uri must be specified"))?;
+        let bucket = uri.host().unwrap_or("").to_string();
+        let path = uri.path().to_string();
+
+        // File storage plan.
+        let stage_storage = match uri.scheme_str() {
+            None => Err(ErrorCode::SyntaxException(
+                "File location scheme must be specified",
+            )),
+            Some(v) => match v {
+                // AWS s3 plan.
+                "s3" => {
+                    let credentials_aws_key_id = self
+                        .credential_options
+                        .get("aws_key_id")
+                        .unwrap_or(&"".to_string())
+                        .clone();
+                    let credentials_aws_secret_key = self
+                        .credential_options
+                        .get("aws_secret_key")
+                        .unwrap_or(&"".to_string())
+                        .clone();
+                    let encryption_master_key = self
+                        .encryption_options
+                        .get("master_key")
+                        .unwrap_or(&"".to_string())
+                        .clone();
+
+                    Ok(StageStorage::S3(StageS3Storage {
+                        bucket,
+                        path,
+                        credentials_aws_key_id,
+                        credentials_aws_secret_key,
+                        encryption_master_key,
+                    }))
+                }
+
+                // Others.
+                _ => Err(ErrorCode::SyntaxException(
+                    "File location uri unsupported, must be one of [s3, @stage]",
+                )),
+            },
+        }?;
+
+        // Stage params.
+        let stage_params = StageParams {
+            storage: stage_storage,
+        };
+
+        // Stage info.
+        Ok(UserStageInfo {
+            stage_name: self.location.clone(),
+            stage_type: StageType::External,
+            stage_params,
+            file_format_options,
+            ..Default::default()
+        })
     }
 }

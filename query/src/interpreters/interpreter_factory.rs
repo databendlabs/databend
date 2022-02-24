@@ -19,7 +19,6 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::ShowPlan;
 
-use super::DescribeUserStageInterpreter;
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::AlterUserUDFInterpreter;
@@ -28,14 +27,12 @@ use crate::interpreters::CreateDatabaseInterpreter;
 use crate::interpreters::CreateRoleInterpreter;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::CreateUserInterpreter;
-use crate::interpreters::CreateUserStageInterpreter;
 use crate::interpreters::CreateUserUDFInterpreter;
 use crate::interpreters::DescribeTableInterpreter;
 use crate::interpreters::DropDatabaseInterpreter;
 use crate::interpreters::DropRoleInterpreter;
 use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::DropUserInterpreter;
-use crate::interpreters::DropUserStageInterpreter;
 use crate::interpreters::DropUserUDFInterpreter;
 use crate::interpreters::ExplainInterpreter;
 use crate::interpreters::GrantPrivilegeInterpreter;
@@ -134,13 +131,6 @@ impl InterpreterFactory {
             // Role
             PlanNode::CreateRole(v) => CreateRoleInterpreter::try_create(ctx_clone, v),
             PlanNode::DropRole(v) => DropRoleInterpreter::try_create(ctx_clone, v),
-
-            // Stage.
-            PlanNode::CreateUserStage(v) => CreateUserStageInterpreter::try_create(ctx_clone, v),
-            PlanNode::DropUserStage(v) => DropUserStageInterpreter::try_create(ctx_clone, v),
-            PlanNode::DescribeUserStage(v) => {
-                DescribeUserStageInterpreter::try_create(ctx_clone, v)
-            }
 
             // UDF.
             PlanNode::CreateUserUDF(v) => CreateUserUDFInterpreter::try_create(ctx_clone, v),

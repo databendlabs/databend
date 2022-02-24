@@ -13,32 +13,15 @@
 // limitations under the License.
 
 use common_exception::exception::Result;
-use common_meta_types::Compression;
-use common_meta_types::Credentials;
-use common_meta_types::FileFormat;
-use common_meta_types::Format;
-use common_meta_types::StageParams;
 use common_meta_types::UserStageInfo;
 
 #[test]
 fn test_user_stage() -> Result<()> {
-    let stage = UserStageInfo::new(
-        "databend",
-        "this is a comment",
-        StageParams::new("test", Credentials {
-            access_key_id: "test".to_string(),
-            secret_access_key: "test".to_string(),
-        }),
-        FileFormat {
-            compression: Compression::None,
-            format: Format::Parquet,
-            ..Default::default()
-        },
-    );
-    let ser = serde_json::to_string(&stage)?;
+    let actual = UserStageInfo::default();
+    let ser = serde_json::to_string(&actual)?;
 
-    let de = UserStageInfo::try_from(ser.into_bytes())?;
-    assert_eq!(stage, de);
+    let expect = UserStageInfo::try_from(ser.into_bytes())?;
+    assert_eq!(actual, expect);
 
     Ok(())
 }
