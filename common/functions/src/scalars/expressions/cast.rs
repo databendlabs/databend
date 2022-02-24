@@ -70,10 +70,6 @@ impl Function for CastFunction {
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
         cast_column_field(&columns[0], &self.cast_type)
     }
-
-    fn passthrough_null(&self) -> bool {
-        false
-    }
 }
 
 impl fmt::Display for CastFunction {

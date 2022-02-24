@@ -78,6 +78,7 @@ impl Interpreter for CopyInterpreter {
         }?;
 
         let ctx = self.ctx.clone();
+
         let progress_stream = Box::pin(ProgressStream::try_create(
             source_stream,
             ctx.get_scan_progress(),

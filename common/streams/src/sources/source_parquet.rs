@@ -15,12 +15,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::parquet::read::decompress;
-use common_arrow::arrow::io::parquet::read::page_stream_to_array;
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::schema::FileMetaData;
-use common_arrow::parquet::read::get_page_stream;
+use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
+use common_arrow::read_columns_many_async;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -30,7 +30,6 @@ use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
 use futures::AsyncRead;
 use futures::AsyncSeek;
-use futures::StreamExt;
 
 use crate::Source;
 
@@ -115,35 +114,33 @@ where R: AsyncRead + AsyncSeek + Unpin + Send
             return Ok(None);
         }
 
-        let fields = self.arrow_table_schema.fields();
-        let row_grp = &metadata.row_groups[self.current_row_group];
-        let cols = self
+        let fields = &self.arrow_table_schema.fields;
+
+        let row_group = &metadata.row_groups[self.current_row_group];
+        let fields_to_read: Vec<&Field> = self
             .builder
             .projection
             .clone()
             .into_iter()
-            .map(|idx| (row_grp.column(idx).clone(), idx));
-        let mut data_cols = Vec::with_capacity(cols.len());
-        for (col_meta, idx) in cols {
-            let col_pages =
-                get_page_stream(&col_meta, &mut self.reader, vec![], Arc::new(|_, _| true))
-                    .instrument(debug_span!("parquet_source_get_column_page"))
-                    .await
-                    .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-            let pages = col_pages.map(|compressed_page| decompress(compressed_page?, &mut vec![]));
-            let array = page_stream_to_array(pages, &col_meta, fields[idx].data_type.clone())
-                .instrument(debug_span!("parquet_source_page_stream_to_array"))
-                .await?;
-            let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
+            .map(|idx| &fields[idx])
+            .collect();
 
-            let column = match fields[idx].nullable {
-                false => array.into_column(),
-                true => array.into_nullable_column(),
-            };
-            data_cols.push(column);
-        }
+        let column_chunks =
+            read_columns_many_async(&mut self.reader, row_group, fields_to_read, None)
+                .await
+                .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
+
+        let mut chunks =
+            RowGroupDeserializer::new(column_chunks, row_group.num_rows() as usize, None);
+
+        // expect exact one chunk
+        let chunk = match chunks.next() {
+            None => return Err(ErrorCode::ParquetError("fail to get a chunk")),
+            Some(chunk) => chunk.map_err(|e| ErrorCode::ParquetError(e.to_string()))?,
+        };
+
+        let block = DataBlock::from_chunk(&self.builder.schema, &chunk)?;
         self.current_row_group += 1;
-        let block = DataBlock::create(self.builder.schema.clone(), data_cols);
         Ok(Some(block))
     }
 }

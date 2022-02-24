@@ -14,7 +14,6 @@
 
 use core::fmt;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
@@ -28,25 +27,25 @@ use crate::DataField;
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct DataSchema {
     pub(crate) fields: Vec<DataField>,
-    pub(crate) metadata: HashMap<String, String>,
+    pub(crate) metadata: BTreeMap<String, String>,
 }
 
 impl DataSchema {
     pub fn empty() -> Self {
         Self {
             fields: vec![],
-            metadata: HashMap::new(),
+            metadata: BTreeMap::new(),
         }
     }
 
     pub fn new(fields: Vec<DataField>) -> Self {
         Self {
             fields,
-            metadata: HashMap::new(),
+            metadata: BTreeMap::new(),
         }
     }
 
-    pub fn new_from(fields: Vec<DataField>, metadata: HashMap<String, String>) -> Self {
+    pub fn new_from(fields: Vec<DataField>, metadata: BTreeMap<String, String>) -> Self {
         Self { fields, metadata }
     }
 
@@ -84,7 +83,7 @@ impl DataSchema {
 
     /// Returns an immutable reference to field `metadata`.
     #[inline]
-    pub const fn meta(&self) -> &HashMap<String, String> {
+    pub const fn meta(&self) -> &BTreeMap<String, String> {
         &self.metadata
     }
 
@@ -148,7 +147,7 @@ impl DataSchema {
             .map(|f| f.to_arrow())
             .collect::<Vec<_>>();
 
-        ArrowSchema::new_from(fields, self.metadata.clone())
+        ArrowSchema::from(fields).with_metadata(self.metadata.clone())
     }
 }
 
@@ -165,7 +164,7 @@ impl DataSchemaRefExt {
 impl From<&ArrowSchema> for DataSchema {
     fn from(a_schema: &ArrowSchema) -> Self {
         let fields = a_schema
-            .fields()
+            .fields
             .iter()
             .map(|arrow_f| arrow_f.into())
             .collect::<Vec<_>>();

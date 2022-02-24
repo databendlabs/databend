@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::task::ArcWake;

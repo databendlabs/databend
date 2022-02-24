@@ -40,7 +40,7 @@ fn test_round_function() -> Result<()> {
     }
 
     for (test_function, test) in tests {
-        test_scalar_functions_with_type(test_function, &[test])?;
+        test_scalar_functions_with_type(test_function, &[test], true)?;
     }
 
     Ok(())
@@ -61,5 +61,6 @@ fn test_to_start_of_function() -> Result<()> {
     test_scalar_functions_with_type(
         ToStartOfQuarterFunction::try_create("toStartOfWeek")?,
         &test,
+        true,
     )
 }

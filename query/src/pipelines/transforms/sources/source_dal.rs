@@ -19,16 +19,17 @@ use common_exception::Result;
 use common_meta_types::StageStorage;
 use common_meta_types::UserStageInfo;
 use opendal::credential::Credential;
+use opendal::Reader;
 
 use crate::sessions::QueryContext;
 
 pub struct DataAccessor {}
 
 impl DataAccessor {
-    pub async fn get_dal_operator(
+    pub async fn get_source_reader(
         ctx: &Arc<QueryContext>,
         stage_info: &UserStageInfo,
-    ) -> Result<(opendal::Operator, String)> {
+    ) -> Result<Reader> {
         match &stage_info.stage_params.storage {
             StageStorage::S3(s3) => {
                 let mut builder = opendal::services::s3::Backend::build();
@@ -55,12 +56,12 @@ impl DataAccessor {
                     builder.credential(credential);
                 }
 
-                let operator = builder
+                let accessor = builder
                     .finish()
                     .await
                     .map_err(|e| ErrorCode::DalS3Error(format!("s3 dal build error:{:?}", e)))?;
-
-                Ok((opendal::Operator::new(operator), s3.path.to_string()))
+                let operator = opendal::Operator::new(accessor);
+                Ok(operator.object(&s3.path).reader())
             }
         }
     }

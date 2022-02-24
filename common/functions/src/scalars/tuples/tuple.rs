@@ -39,6 +39,7 @@ impl TupleFunction {
         FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
+                .disable_passthrough_null()
                 .variadic_arguments(1, usize::MAX),
         )
     }
@@ -82,10 +83,6 @@ impl Function for TupleFunction {
 
         let arr: StructColumn = StructColumn::from_data(cols, t);
         Ok(Arc::new(arr))
-    }
-
-    fn passthrough_null(&self) -> bool {
-        false
     }
 }
 

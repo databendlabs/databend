@@ -88,7 +88,7 @@ fn test_log_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(LogFunction::try_create("log")?, &tests)
+    test_scalar_functions(LogFunction::try_create("log")?, &tests, true)
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn test_ln_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(LnFunction::try_create("ln")?, &tests)
+    test_scalar_functions(LnFunction::try_create("ln")?, &tests, true)
 }
 
 #[test]
@@ -120,7 +120,7 @@ fn test_log2_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(Log2Function::try_create("log2")?, &tests)
+    test_scalar_functions(Log2Function::try_create("log2")?, &tests, true)
 }
 
 #[test]
@@ -132,5 +132,5 @@ fn test_log10_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(Log10Function::try_create("log10")?, &tests)
+    test_scalar_functions(Log10Function::try_create("log10")?, &tests, true)
 }

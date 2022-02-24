@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod parquet_read;
+mod parquet_write;
+
 pub use arrow;
 pub use arrow_format;
 pub use parquet2 as parquet;
+pub use parquet_read::read_columns_many_async;
+pub use parquet_write::write_parquet_file;

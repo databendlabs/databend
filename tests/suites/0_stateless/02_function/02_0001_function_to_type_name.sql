@@ -1,7 +1,7 @@
 select toTypeName(number) from numbers(100) limit 1;
 select toTypeName(number + 1), toTypeName(number - 1),
        toTypeName(number / 1), toTypeName(number * 1) from numbers(100) limit 1;
-select toTypeName('33'), toTypeName('44');
+select toTypeName('33'), toTypeName('44'), toTypeName(Null);
 
 
 select '=== TEST_numeric_coercion';

@@ -24,8 +24,6 @@ use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use common_streams::SourceStream;
 use common_tracing::tracing;
-use futures::io::BufReader;
-use opendal::readers::SeekableReader;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
@@ -77,18 +75,7 @@ impl CsvSourceTransform {
             builder.record_delimiter(record_delimiter);
         }
 
-        let read_buffer_size = self.ctx.get_settings().get_storage_read_buffer_size()?;
-        let (dal_operator, path) = DataAccessor::get_dal_operator(&self.ctx, stage_info).await?;
-        let size = dal_operator
-            .stat(&path)
-            .run()
-            .await
-            .map_err(|e| ErrorCode::DalStatError(format!("dal stat {:} error:{:?}", path, e)))?
-            .size;
-        tracing::info!("Get {} object size:{}", path, size);
-
-        let reader = SeekableReader::new(dal_operator, &path, size);
-        let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
+        let reader = DataAccessor::get_source_reader(&self.ctx, stage_info).await?;
         let source = builder.build(reader)?;
 
         Ok(SourceStream::new(Box::new(source)))

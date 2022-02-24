@@ -43,6 +43,9 @@ pub enum MetaRaftError {
     NoLeaderError(String),
 
     #[error("{0}")]
+    JoinClusterFail(String),
+
+    #[error("{0}")]
     RequestNotForwardToLeaderError(String),
 }
 

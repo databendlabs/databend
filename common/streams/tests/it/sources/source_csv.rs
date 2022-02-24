@@ -61,7 +61,6 @@ async fn test_parse_csv_delimiter() -> Result<()> {
                     .await
                     .unwrap(),
             );
-            let stream = local.read(name).run().await.unwrap();
 
             let mut builder = CsvSourceBuilder::create(schema);
             builder.skip_header(0);
@@ -69,7 +68,8 @@ async fn test_parse_csv_delimiter() -> Result<()> {
             builder.record_delimiter(record_delimiter);
             builder.block_size(10);
 
-            let mut csv_source = builder.build(stream)?;
+            let reader = local.object(name).reader();
+            let mut csv_source = builder.build(reader)?;
             let block = csv_source.read().await?.unwrap();
             assert_blocks_eq(
                 vec![
@@ -127,13 +127,14 @@ async fn test_parse_csv_text() -> Result<()> {
             .unwrap(),
     );
 
-    let stream = local.read(name).run().await.unwrap();
     let mut builder = CsvSourceBuilder::create(schema);
     builder.skip_header(0);
     builder.field_delimiter(",");
     builder.record_delimiter("\n");
     builder.block_size(10);
-    let mut csv_source = builder.build(stream)?;
+
+    let reader = local.object(name).reader();
+    let mut csv_source = builder.build(reader)?;
 
     let block = csv_source.read().await?.unwrap();
     assert_blocks_eq(

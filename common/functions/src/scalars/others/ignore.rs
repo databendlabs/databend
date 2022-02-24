@@ -46,6 +46,7 @@ impl IgnoreFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .bool_function()
+                .disable_passthrough_null()
                 .variadic_arguments(0, usize::MAX),
         )
     }
@@ -70,9 +71,5 @@ impl Function for IgnoreFunction {
         let return_type = BooleanType::arc();
         let return_value = DataValue::try_from(false)?;
         return_type.create_constant_column(&return_value, input_rows)
-    }
-
-    fn passthrough_null(&self) -> bool {
-        false
     }
 }
