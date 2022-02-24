@@ -42,6 +42,7 @@ pub use packages::fetch::FetchCommand;
 pub use packages::list::ListCommand;
 pub use packages::package::PackageCommand;
 pub use packages::switch::SwitchCommand;
+pub use packages::purge::PurgeCommand;
 pub use processor::Processor;
 pub use queries::query::build_query_endpoint;
 pub use root::RootCommand;
