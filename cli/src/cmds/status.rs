@@ -26,6 +26,7 @@ use std::thread::sleep;
 use std::time;
 
 use async_trait::async_trait;
+use common_base::tokio::time::sleep as asyncsleep;
 use common_base::tokio::time::Duration;
 use common_tracing::tracing;
 use databend_meta::configs::Config as MetaConfig;
@@ -88,7 +89,7 @@ async fn check_health(
 ) -> Result<()> {
     let resp = cli.get(url.as_str()).send().await;
     if resp.is_err() || !resp.unwrap().status().is_success() {
-        async_std::task::sleep(duration).await;
+        asyncsleep(duration).await;
         return Err(CliError::Unknown(format!(
             "cannot connect to healthiness probe: {url}",
         )));
