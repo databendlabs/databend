@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,91 +17,49 @@ use std::str::FromStr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
-pub struct StageParams {
-    pub url: String,
-    pub credentials: Credentials,
-}
+/*
+-- Internal stage
+CREATE [ OR REPLACE ] [ TEMPORARY ] STAGE [ IF NOT EXISTS ] <internal_stage_name>
+    internalStageParams
+    directoryTableParams
+  [ FILE_FORMAT = ( { FORMAT_NAME = '<file_format_name>' | TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] ) } ]
+  [ COPY_OPTIONS = ( copyOptions ) ]
+  [ COMMENT = '<string_literal>' ]
 
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "lowercase")]
-#[serde(default)]
-pub struct Credentials {
-    pub access_key_id: String,
-    pub secret_access_key: String,
-}
+-- External stage
+CREATE [ OR REPLACE ] [ TEMPORARY ] STAGE [ IF NOT EXISTS ] <external_stage_name>
+    externalStageParams
+    directoryTableParams
+  [ FILE_FORMAT = ( { FORMAT_NAME = '<file_format_name>' | TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] ) } ]
+  [ COPY_OPTIONS = ( copyOptions ) ]
+  [ COMMENT = '<string_literal>' ]
+
+
+WHERE
+
+externalStageParams (for Amazon S3) ::=
+  URL = 's3://<bucket>[/<path>/]'
+  [ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' [ AWS_TOKEN = '<string>' ] } | AWS_ROLE = '<string>'  } ) ) } ]
+
+copyOptions ::=
+     ON_ERROR = { CONTINUE | SKIP_FILE | SKIP_FILE_<num> | SKIP_FILE_<num>% | ABORT_STATEMENT }
+     SIZE_LIMIT = <num>
+ */
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-#[serde(deny_unknown_fields)]
-#[serde(default)]
-pub struct FileFormat {
-    pub format: Format,
-    pub record_delimiter: String,
-    pub field_delimiter: String,
-    pub csv_header: bool,
-    pub compression: Compression,
+pub enum StageType {
+    Internal,
+    External,
 }
 
-impl Default for FileFormat {
+impl Default for StageType {
     fn default() -> Self {
-        Self {
-            format: Format::default(),
-            record_delimiter: default_record_delimiter(),
-            field_delimiter: default_field_delimiter(),
-            csv_header: default_csv_header(),
-            compression: Compression::default(),
-        }
-    }
-}
-
-fn default_record_delimiter() -> String {
-    "\n".to_string()
-}
-
-fn default_field_delimiter() -> String {
-    ",".to_string()
-}
-
-fn default_csv_header() -> bool {
-    false
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum Format {
-    Csv,
-    Parquet,
-    Json,
-}
-
-impl Default for Format {
-    fn default() -> Self {
-        Self::Csv
-    }
-}
-
-impl FromStr for Format {
-    type Err = ErrorCode;
-
-    fn from_str(s: &str) -> Result<Format> {
-        let s = s.to_lowercase();
-        match s.as_str() {
-            "csv" => Ok(Format::Csv),
-            "parquet" => Ok(Format::Parquet),
-            "json" => Ok(Format::Json),
-
-            other => Err(ErrorCode::StrParseError(format!(
-                "no match for format: {}",
-                other
-            ))),
-        }
+        Self::External
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum Compression {
+pub enum StageFileCompression {
     Auto,
     Gzip,
     Bz2,
@@ -114,67 +72,153 @@ pub enum Compression {
     None,
 }
 
-impl Default for Compression {
+impl Default for StageFileCompression {
     fn default() -> Self {
         Self::None
     }
 }
 
-impl FromStr for Compression {
-    type Err = ErrorCode;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum StageFileFormatType {
+    Csv,
+    Json,
+    Avro,
+    Orc,
+    Parquet,
+    Xml,
+}
 
-    fn from_str(s: &str) -> Result<Compression> {
-        let s = s.to_lowercase();
-        match s.as_str() {
-            "auto" => Ok(Compression::Auto),
-            "gzip" => Ok(Compression::Gzip),
-            "bz2" => Ok(Compression::Bz2),
-            "brotli" => Ok(Compression::Brotli),
-            "zstd" => Ok(Compression::Zstd),
-            "deflate" => Ok(Compression::Deflate),
-            "raw_deflate" => Ok(Compression::RawDeflate),
-            "none" => Ok(Compression::None),
-            other => Err(ErrorCode::StrParseError(format!(
-                "no match for compression: {}",
-                other
-            ))),
+impl Default for StageFileFormatType {
+    fn default() -> Self {
+        Self::Csv
+    }
+}
+
+impl FromStr for StageFileFormatType {
+    type Err = String;
+    fn from_str(s: &str) -> std::result::Result<Self, String> {
+        match s.to_uppercase().as_str() {
+            "CSV" => Ok(StageFileFormatType::Csv),
+            "JSON" => Ok(StageFileFormatType::Json),
+            "AVRO" => Ok(StageFileFormatType::Avro),
+            "ORC" => Ok(StageFileFormatType::Orc),
+            "PARQUET" => Ok(StageFileFormatType::Parquet),
+            "XML" => Ok(StageFileFormatType::Xml),
+            _ => Err(
+                "Unknown file format type, must one of { CSV | JSON | AVRO | ORC | PARQUET | XML }"
+                    .to_string(),
+            ),
         }
     }
 }
 
-impl StageParams {
-    pub fn new(url: &str, credentials: Credentials) -> Self {
-        StageParams {
-            url: url.to_string(),
-            credentials,
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[serde(default)]
+pub struct FileFormatOptions {
+    pub format: StageFileFormatType,
+    // Number of lines at the start of the file to skip.
+    pub skip_header: i32,
+    pub field_delimiter: String,
+    pub record_delimiter: String,
+    pub compression: StageFileCompression,
+}
+
+impl Default for FileFormatOptions {
+    fn default() -> Self {
+        Self {
+            format: StageFileFormatType::default(),
+            record_delimiter: "\n".to_string(),
+            field_delimiter: ",".to_string(),
+            skip_header: 0,
+            compression: StageFileCompression::default(),
         }
     }
 }
-/// Stage for data stage location.
+
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
+#[serde(default)]
+pub struct StageS3Storage {
+    // `example-bucket` in `s3://example-bucket/path/to/object`
+    pub bucket: String,
+    // `path/to/object` in `s3://example-bucket/path/to/object`
+    pub path: String,
+    pub credentials_aws_key_id: String,
+    pub credentials_aws_secret_key: String,
+    pub encryption_master_key: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum StageStorage {
+    // Location is aws s3.
+    S3(StageS3Storage),
+}
+
+impl Default for StageStorage {
+    fn default() -> Self {
+        Self::S3(StageS3Storage::default())
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
+#[serde(default)]
+pub struct StageParams {
+    pub storage: StageStorage,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum OnErrorMode {
+    None,
+    Continue,
+    SkipFile,
+    SkipFileNum(u64),
+    AbortStatement,
+}
+
+impl Default for OnErrorMode {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+impl FromStr for OnErrorMode {
+    type Err = String;
+    fn from_str(s: &str) -> std::result::Result<Self, String> {
+        match s.to_uppercase().as_str() {
+            "" => Ok(OnErrorMode::None),
+            "CONTINUE" => Ok(OnErrorMode::Continue),
+            "SKIP_FILE" => Ok(OnErrorMode::SkipFile),
+            v => {
+                let num_str = v.replace("SKIP_FILE_", "");
+                let nums = num_str.parse::<u64>();
+                match nums{
+                    Ok(v) => { Ok(OnErrorMode::SkipFileNum(v)) }
+                    Err(_) => {
+                        Err(
+                            format!("Unknown OnError mode:{:?}, must one of {{ CONTINUE | SKIP_FILE | SKIP_FILE_<num> | ABORT_STATEMENT }}", v)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
+#[serde(default)]
+pub struct CopyOptions {
+    pub on_error: OnErrorMode,
+    pub size_limit: usize,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct UserStageInfo {
     pub stage_name: String,
-
+    pub stage_type: StageType,
     pub stage_params: StageParams,
-    pub file_format: FileFormat,
-    pub comments: String,
-}
-
-impl UserStageInfo {
-    pub fn new(
-        stage_name: &str,
-        comments: &str,
-        stage_params: StageParams,
-        file_format: FileFormat,
-    ) -> Self {
-        UserStageInfo {
-            stage_name: stage_name.to_string(),
-            comments: comments.to_string(),
-            stage_params,
-            file_format,
-        }
-    }
+    pub file_format_options: FileFormatOptions,
+    pub copy_options: CopyOptions,
+    pub comment: String,
 }
 
 impl TryFrom<Vec<u8>> for UserStageInfo {
@@ -183,7 +227,7 @@ impl TryFrom<Vec<u8>> for UserStageInfo {
     fn try_from(value: Vec<u8>) -> Result<Self> {
         match serde_json::from_slice(&value) {
             Ok(info) => Ok(info),
-            Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
+            Err(serialize_error) => Err(ErrorCode::IllegalUserStageFormat(format!(
                 "Cannot deserialize stage from bytes. cause {}",
                 serialize_error
             ))),

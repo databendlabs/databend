@@ -1,5 +1,5 @@
 ---
-title: Analyze OnTime datasets with Databend on AWS EC2 and S3
+title: Analyzing OnTime datasets with Databend on AWS EC2 and S3
 draft: true
 ---
 
@@ -80,7 +80,7 @@ wget --no-check-certificate https://repo.databend.rs/t_ontime/t_ontime.csv.zip
 
 unzip t_ontime.csv.zip
 
-ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -H \"csv_header:0\" -H \"field_delimitor:'\t'\"  -F  \"upload=@{}\"  -XPUT http://localhost:8001/v1/streaming_load |bash
+ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -H \"skip_header:0\" -H \"field_delimiter:'\t'\"  -F  \"upload=@{}\"  -XPUT http://localhost:8001/v1/streaming_load |bash
 
 ```
 

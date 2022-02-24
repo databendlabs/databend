@@ -74,7 +74,6 @@ impl LimitByStream {
         let array = BooleanArray::from_data(ArrowType::Boolean, filter.into(), None);
         let chunk = block.clone().try_into()?;
         let chunk = arrow::compute::filter::filter_chunk(&chunk, &array)?;
-        //let chunk = chunk.into();
         Some(DataBlock::from_chunk(block.schema(), &chunk)).transpose()
     }
 }
