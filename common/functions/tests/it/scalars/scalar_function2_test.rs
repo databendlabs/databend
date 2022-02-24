@@ -35,6 +35,7 @@ pub struct ScalarFunctionWithFieldTest {
 pub fn test_scalar_functions(
     test_function: Box<dyn Function>,
     tests: &[ScalarFunctionTest],
+    passthrough_null: bool,
 ) -> Result<()> {
     let mut tests_with_type = Vec::with_capacity(tests.len());
     for test in tests {
@@ -57,12 +58,13 @@ pub fn test_scalar_functions(
         })
     }
 
-    test_scalar_functions_with_type(test_function, &tests_with_type)
+    test_scalar_functions_with_type(test_function, &tests_with_type, passthrough_null)
 }
 
 pub fn test_scalar_functions_with_type(
     test_function: Box<dyn Function>,
     tests: &[ScalarFunctionWithFieldTest],
+    passthrough_null: bool,
 ) -> Result<()> {
     for test in tests {
         let mut rows_size = 0;
@@ -73,7 +75,13 @@ pub fn test_scalar_functions_with_type(
             rows_size = c.column().len();
         }
 
-        match test_eval_with_type(&test_function, rows_size, &test.columns, &arguments_type) {
+        match test_eval_with_type(
+            &test_function,
+            rows_size,
+            &test.columns,
+            &arguments_type,
+            passthrough_null,
+        ) {
             Ok(v) => {
                 let v = v.convert_full_column();
 
@@ -89,7 +97,11 @@ pub fn test_scalar_functions_with_type(
 }
 
 #[allow(clippy::borrowed_box)]
-pub fn test_eval(test_function: &Box<dyn Function>, columns: &[ColumnRef]) -> Result<ColumnRef> {
+pub fn test_eval(
+    test_function: &Box<dyn Function>,
+    columns: &[ColumnRef],
+    passthrough_null: bool,
+) -> Result<ColumnRef> {
     let mut rows_size = 0;
     let mut arguments = Vec::with_capacity(columns.len());
     let mut arguments_type = Vec::with_capacity(columns.len());
@@ -111,7 +123,13 @@ pub fn test_eval(test_function: &Box<dyn Function>, columns: &[ColumnRef]) -> Re
         types.push(t);
     }
 
-    test_eval_with_type(test_function, rows_size, &arguments, &types)
+    test_eval_with_type(
+        test_function,
+        rows_size,
+        &arguments,
+        &types,
+        passthrough_null,
+    )
 }
 
 #[allow(clippy::borrowed_box)]
@@ -120,8 +138,9 @@ pub fn test_eval_with_type(
     rows_size: usize,
     arguments: &[ColumnWithField],
     arguments_type: &[&DataTypePtr],
+    passthrough_null: bool,
 ) -> Result<ColumnRef> {
-    let adaptor = FunctionAdapter::create(test_function.clone());
+    let adaptor = FunctionAdapter::create(test_function.clone(), passthrough_null);
     adaptor.return_type(arguments_type)?;
     adaptor.eval(arguments, rows_size)
 }

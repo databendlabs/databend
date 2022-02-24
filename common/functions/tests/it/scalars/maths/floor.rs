@@ -78,5 +78,5 @@ fn test_floor_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(FloorFunction::try_create("floor")?, &tests)
+    test_scalar_functions(FloorFunction::try_create("floor")?, &tests, true)
 }

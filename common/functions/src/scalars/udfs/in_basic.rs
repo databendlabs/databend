@@ -38,6 +38,7 @@ impl<const NEGATED: bool> InFunction<NEGATED> {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .bool_function()
+                .disable_passthrough_null()
                 .variadic_arguments(2, usize::MAX),
         )
     }
@@ -183,10 +184,6 @@ impl<const NEGATED: bool> Function for InFunction<NEGATED> {
                 unimplemented!()
             }
         }
-    }
-
-    fn passthrough_null(&self) -> bool {
-        false
     }
 }
 

@@ -109,6 +109,6 @@ fn test_sign_function() -> Result<()> {
     ];
 
     let sign_f = SignFunction::try_create("sign")?;
-    let sign_f = FunctionAdapter::create(sign_f);
-    test_scalar_functions(sign_f, &tests)
+    let sign_f = FunctionAdapter::create(sign_f, true);
+    test_scalar_functions(sign_f, &tests, true)
 }

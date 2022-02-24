@@ -24,7 +24,10 @@ pub struct ToCastFunction;
 
 impl ToCastFunction {
     fn cast_function_creator(type_name: &'static str) -> Result<FunctionDescription> {
-        let mut features = FunctionFeatures::default().deterministic().monotonicity();
+        let mut features = FunctionFeatures::default()
+            .deterministic()
+            .monotonicity()
+            .disable_passthrough_null();
 
         // TODO(zhyass): complete DateTime, e.g. toDateTime64(1640019661000, 3, 'UTC').
         features = match type_name {
