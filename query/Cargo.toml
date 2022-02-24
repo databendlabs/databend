@@ -25,31 +25,31 @@ tokio-console = ["common-tracing/console", "common-base/tracing"]
 [dependencies]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
+common-ast = { path = "../common/ast" }
 common-base = { path = "../common/base" }
 common-cache = { path = "../common/cache" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
+common-dal-context = { path = "../common/dal-context" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
-common-grpc = { path = "../common/grpc" }
 common-functions = { path = "../common/functions" }
+common-grpc = { path = "../common/grpc" }
 common-infallible = { path = "../common/infallible" }
 common-io = { path = "../common/io" }
+common-macros = { path = "../common/macros" }
 common-management = { path = "../common/management" }
 common-mem-allocator = { path = "../common/mem-allocator" }
 common-meta-api = { path = "../common/meta/api" }
 common-meta-embedded = { path = "../common/meta/embedded" }
 common-meta-grpc = { path = "../common/meta/grpc" }
-common-meta-sled-store = { path = "../common/meta/sled-store" }
 common-meta-raft-store = { path = "../common/meta/raft-store" }
+common-meta-sled-store = { path = "../common/meta/sled-store" }
 common-meta-types = { path = "../common/meta/types" }
-common-macros = { path = "../common/macros" }
 common-metrics = { path = "../common/metrics" }
 common-planners = { path = "../common/planners" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
-common-ast = { path = "../common/ast" }
-common-dal-context = { path = "../common/dal-context" }
 
 # Github dependencies
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "70aa0b2" }
@@ -58,12 +58,13 @@ sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "47
 # Crates.io dependencies
 ahash = "0.7.6"
 async-compat = "0.2.1"
-async-trait = "0.1.52"
 async-recursion = "1.0.0"
 async-stream = "0.3.2"
-poem = { version = "1.2.53", features = ["rustls", "multipart"] }
-bumpalo = "3.9.1"
+async-trait = "0.1.52"
 backoff = "0.4.0"
+base64 = "0.13.0"
+bincode = "1.3.3"
+bumpalo = "3.9.1"
 byteorder = "1.4.3"
 bytes = "1.1.0"
 cargo-license = "0.4.2"
@@ -76,17 +77,23 @@ futures = "0.3.21"
 headers = "0.3.6"
 http = "0.2.6"
 hyper = "0.14.16"
-once_cell = "1.9.0"
+jwt-simple = "0.10.8"
 metrics = "0.18.0"
 nom = "7.1.0"
 num = "0.4.0"
 num_cpus = "1.13.1"
 octocrab = "0.15.4"
+once_cell = "1.9.0"
 opendal = "0.0.5"
+parquet-format-async-temp = "0.2.0"
 paste = "1.0.6"
+petgraph = "0.6.0"
+poem = { version = "1.2.53", features = ["rustls", "multipart"] }
 prost = "0.9.0"
 rand = "0.8.4"
+regex = "1.5.4"
 reqwest = "0.11.9"
+rsa = "0.5.0"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.78"
 sha1 = "0.10.0"
@@ -98,14 +105,6 @@ toml = "0.5.8"
 tonic = "0.6.2"
 uuid = { version = "1.0.0-alpha.1", features = ["serde", "v4"] }
 walkdir = "2.3.2"
-parquet-format-async-temp = "0.2.0"
-petgraph = "0.6.0"
-regex = "1.5.4"
-bincode = "1.3.3"
-# bit-vec = { version = "0.6.3", features = ["serde_std"] }
-jwt-simple = "0.10.8"
-rsa = "0.5.0"
-base64 = "0.13.0"
 
 [dev-dependencies]
 clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "9d2133f" }
