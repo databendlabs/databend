@@ -35,6 +35,7 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
+use crate::scalars::default_column_cast;
 
 // count = 0 means it's all nullable
 // so we do not need option like sum
@@ -101,9 +102,14 @@ where
         input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateAvgState<SumT>>();
-        let sum = sum_primitive::<T, SumT>(&columns[0], validity)?;
+        let sum = if columns[0].data_type().data_type_id() == TypeID::Boolean {
+            let u8_type = u8::to_data_type();
+            let column = default_column_cast(&columns[0], &u8_type)?;
+            sum_primitive::<T, SumT>(&column, validity)?
+        } else {
+            sum_primitive::<T, SumT>(&columns[0], validity)?
+        };
         let cnt = input_rows - validity.map(|v| v.null_count()).unwrap_or(0);
-
         state.add_assume(sum, cnt as u64);
         Ok(())
     }
@@ -115,13 +121,23 @@ where
         columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<()> {
-        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
-
-        array.iter().zip(places.iter()).for_each(|(v, place)| {
-            let place = place.next(offset);
-            let state = place.get::<AggregateAvgState<SumT>>();
-            state.add_assume(v.as_(), 1);
-        });
+        if columns[0].data_type().data_type_id() == TypeID::Boolean {
+            let u8_type = u8::to_data_type();
+            let column = default_column_cast(&columns[0], &u8_type)?;
+            let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&column) };
+            array.iter().zip(places.iter()).for_each(|(v, place)| {
+                let place = place.next(offset);
+                let state = place.get::<AggregateAvgState<SumT>>();
+                state.add_assume(v.as_(), 1);
+            });
+        } else {
+            let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+            array.iter().zip(places.iter()).for_each(|(v, place)| {
+                let place = place.next(offset);
+                let state = place.get::<AggregateAvgState<SumT>>();
+                state.add_assume(v.as_(), 1);
+            });
+        }
 
         Ok(())
     }
@@ -196,6 +212,9 @@ pub fn try_create_aggregate_avg_function(
     assert_unary_arguments(display_name, arguments.len())?;
 
     let data_type = arguments[0].data_type();
+    if data_type.data_type_id() == TypeID::Boolean {
+        return AggregateAvgFunction::<u8, u64>::try_create(display_name, arguments);
+    }
     with_match_primitive_type_id!(data_type.data_type_id(), |$T| {
         AggregateAvgFunction::<$T, <$T as PrimitiveType>::LargestType>::try_create(
             display_name,
