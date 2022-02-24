@@ -15,4 +15,4 @@ name = "codegen"
 path = "src/bin/codegen.rs"
 
 [dependencies]
-common-datavalues = {path = "../datavalues"}
+common-datavalues = { path = "../datavalues" }

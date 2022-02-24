@@ -15,8 +15,8 @@ tracing = ["tokio/tracing"]
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-tracing = { path = "../tracing" }
 common-exception = { path = "../exception" }
+common-tracing = { path = "../tracing" }
 
 # Github dependencies
 

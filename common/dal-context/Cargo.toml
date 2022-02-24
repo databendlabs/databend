@@ -10,5 +10,6 @@ test = false
 
 [dependencies]
 common-infallible = { path = "../infallible" }
-opendal = "0.0.5"
+
 async-trait = "0.1.52"
+opendal = "0.0.5"
