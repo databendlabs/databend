@@ -18,11 +18,15 @@ use std::collections::HashMap;
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::index::ColumnStatistics;
 
-/// Meta information of a block (currently, the parquet file)
+/// Meta information of a block.
+///
+/// The BlockMeta itself is kept in [SegmentInfo], so that
+/// blocks could be pruned without touching the blocks
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BlockMeta {
     /// Pointer of the data Block
     pub row_count: u64,
+    // TODO rename this, what's the difference with file_size?
     pub block_size: u64,
     pub file_size: u64,
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,

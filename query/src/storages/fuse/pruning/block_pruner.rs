@@ -33,7 +33,7 @@ pub struct BlockPruner {
     table_snapshot_location: String,
 }
 
-type Pred = Box<dyn Fn(&BlockStatistics) -> Result<bool> + Send + Sync + Unpin>;
+pub type Pred = Box<dyn Fn(&BlockStatistics) -> Result<bool> + Send + Sync + Unpin>;
 impl BlockPruner {
     pub fn new(table_snapshot: &TableSnapshot) -> Self {
         Self {

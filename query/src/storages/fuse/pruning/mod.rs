@@ -15,3 +15,4 @@
 mod block_pruner;
 
 pub use block_pruner::BlockPruner;
+pub use block_pruner::Pred;

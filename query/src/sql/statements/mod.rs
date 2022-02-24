@@ -73,7 +73,6 @@ pub use statement_create_udf::DfCreateUDF;
 pub use statement_create_user::DfAuthOption;
 pub use statement_create_user::DfCreateUser;
 pub use statement_delete::DfDeleteStatement;
-pub use statement_describe_stage::DfDescribeStage;
 pub use statement_describe_table::DfDescribeTable;
 pub use statement_drop_database::DfDropDatabase;
 pub use statement_drop_role::DfDropRole;
