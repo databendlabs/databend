@@ -958,3 +958,113 @@ fn test_covariance_with_comparable_data_sets() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_aggregate_function_on_boolean() -> Result<()> {
+    struct Test {
+        name: &'static str,
+        eval_nums: usize,
+        params: Vec<DataValue>,
+        args: Vec<DataField>,
+        display: &'static str,
+        arrays: Vec<ColumnRef>,
+        error: &'static str,
+        func_name: &'static str,
+        input_array: Box<dyn MutableColumn>,
+        expect_array: Box<dyn MutableColumn>,
+    }
+
+    let arrays: Vec<ColumnRef> = vec![Series::from_data(vec![true, false, true, false])];
+
+    let args = vec![DataField::new("a", u8::to_data_type())];
+
+    let tests = vec![
+        Test {
+            name: "avg-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "avg",
+            func_name: "avg",
+            arrays: vec![arrays[0].clone()],
+            error: "",
+            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
+                f64::to_data_type(),
+                Vec::from([0.5f64]),
+            )),
+        },
+        Test {
+            name: "sum-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "sum",
+            func_name: "sum",
+            arrays: vec![arrays[0].clone()],
+            error: "",
+            input_array: Box::new(MutablePrimitiveColumn::<u64>::default()),
+            expect_array: Box::new(MutablePrimitiveColumn::<u64>::from_data(
+                u64::to_data_type(),
+                Vec::from([2u64]),
+            )),
+        },
+    ];
+
+    for mut t in tests {
+        let arena = Bump::new();
+        let rows = t.arrays[0].len();
+
+        let mut func = || -> Result<()> {
+            let factory = AggregateFunctionFactory::instance();
+            let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
+
+            let addr1 = arena.alloc_layout(func.state_layout());
+            func.init_state(addr1.into());
+
+            for _ in 0..t.eval_nums {
+                func.accumulate(addr1.into(), &t.arrays, None, rows)?;
+            }
+
+            let addr2 = arena.alloc_layout(func.state_layout());
+            func.init_state(addr2.into());
+
+            for _ in 1..t.eval_nums {
+                func.accumulate(addr2.into(), &t.arrays, None, rows)?;
+            }
+
+            func.merge(addr1.into(), addr2.into())?;
+            {
+                let array: &mut dyn MutableColumn = t.input_array.borrow_mut();
+                let _ = func.merge_result(addr1.into(), array)?;
+            }
+
+            let datatype = t.expect_array.data_type();
+            with_match_primitive_type_id!(datatype.data_type_id(), |$T| {
+                let array = t
+                        .input_array
+                        .as_mut_any()
+                        .downcast_ref::<MutablePrimitiveColumn<$T>>()
+                        .unwrap();
+                let expect = t
+                        .expect_array
+                        .as_mut_any()
+                        .downcast_ref::<MutablePrimitiveColumn<$T>>()
+                        .unwrap();
+                assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
+                assert_eq!(array.values(), expect.values(), "{}", t.name);
+            },
+            {
+                panic!("shoud never reach this way");
+            });
+
+            assert_eq!(t.display, format!("{:}", func), "{}", t.name);
+            Ok(())
+        };
+
+        if let Err(e) = func() {
+            assert_eq!(t.error, e.to_string());
+        }
+    }
+    Ok(())
+}
