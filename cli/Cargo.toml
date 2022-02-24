@@ -28,7 +28,6 @@ common-tracing = { path = "../common/tracing" }
 databend-meta = { path = "../metasrv" }
 databend-query = { path = "../query" }
 
-async-std = "1.10.0"
 async-trait = "0.1.52"
 byte-unit = "4.0.13"
 clap = { version = "3.1.1", features = ["derive", "env"] }
@@ -51,7 +50,14 @@ libc = "0.2.117"
 nix = "0.23.1"
 num-format = "0.4.0"
 portpicker = "0.1.1"
-reqwest = { version = "0.11.9", features = ["json", "native-tls", "multipart", "blocking", "tokio-rustls", "stream"] }
+reqwest = { version = "0.11.9", features = [
+    "json",
+    "native-tls",
+    "multipart",
+    "blocking",
+    "tokio-rustls",
+    "stream",
+] }
 run_script = "0.9.0"
 rustyline = "9.1.2"
 serde = { version = "1.0.136", features = ["derive"] }
