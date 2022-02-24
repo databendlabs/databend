@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use clap::App;
 use clap::ArgMatches;
+use clap::Command as App;
 use comfy_table::Cell;
 use comfy_table::Row;
 use comfy_table::Table;

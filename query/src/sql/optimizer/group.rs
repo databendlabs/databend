@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::iter::Iterator;
 
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
 use common_exception::Result;
 
 use crate::sql::optimizer::m_expr::MExpr;

@@ -31,5 +31,5 @@ fn test_udf_example_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(UdfExampleFunction::try_create("example")?, &tests)
+    test_scalar_functions(UdfExampleFunction::try_create("example")?, &tests, true)
 }

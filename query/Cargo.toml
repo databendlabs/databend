@@ -70,7 +70,7 @@ cargo-license = "0.4.2"
 cargo_metadata = "0.14.1"
 chrono = "0.4.19"
 chrono-tz = "0.6.1"
-clap = { version = "3.0.14", features = ["derive", "env"] }
+clap = { version = "3.1.1", features = ["derive", "env"] }
 dyn-clone = "1.0.4"
 futures = "0.3.21"
 headers = "0.3.6"
@@ -81,7 +81,7 @@ nom = "7.1.0"
 num = "0.4.0"
 num_cpus = "1.13.1"
 octocrab = "0.15.4"
-opendal = "0.0.3"
+opendal = "0.0.5"
 paste = "1.0.6"
 prost = "0.9.0"
 rand = "0.8.4"
@@ -114,7 +114,7 @@ mysql_async = "0.29.0"
 pretty_assertions = "1.1.0"
 reqwest = { version = "0.11.9", features = ["json", "native-tls"] }
 tempfile = "3.3.0"
-httpmock = "0.6.6"
+wiremock = "0.5.10"
 
 [build-dependencies]
 common-building = { path = "../common/building" }

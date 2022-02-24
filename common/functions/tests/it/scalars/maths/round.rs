@@ -156,7 +156,7 @@ fn test_round_number_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(RoundNumberFunction::try_create("round")?, &tests)
+    test_scalar_functions(RoundNumberFunction::try_create("round")?, &tests, true)
 }
 
 #[test]
@@ -229,5 +229,5 @@ fn test_trunc_number_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(TruncNumberFunction::try_create("trunc")?, &tests)
+    test_scalar_functions(TruncNumberFunction::try_create("trunc")?, &tests, true)
 }

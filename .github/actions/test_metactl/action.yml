@@ -1,0 +1,27 @@
+name: 'Test metactl'
+inputs:
+  profile:
+    description: 'The profile for this test'
+    required: true
+    default: 'debug'
+runs:
+  using: "composite"
+  steps:
+
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
+
+    # If you need to reset the cache version, increment the number after `v`
+    - uses: Swatinem/rust-cache@v1
+      with:
+        sharedKey: unit-v1
+
+    - uses: actions/download-artifact@v2
+      with:
+        name: ${{ inputs.profile }}-${{ github.sha }}-${{ matrix.config.os }}-${{ matrix.config.target }}
+        path: ./target/debug
+
+    - name: Test metactl
+      shell: bash
+      run: |
+        make metactl-test

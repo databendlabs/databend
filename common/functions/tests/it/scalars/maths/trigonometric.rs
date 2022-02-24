@@ -58,7 +58,11 @@ fn test_trigonometric_sin_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(TrigonometricSinFunction::try_create_func("sin")?, &tests)
+    test_scalar_functions(
+        TrigonometricSinFunction::try_create_func("sin")?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -70,7 +74,11 @@ fn test_trigonometric_cos_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(TrigonometricCosFunction::try_create_func("cos")?, &tests)
+    test_scalar_functions(
+        TrigonometricCosFunction::try_create_func("cos")?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -82,7 +90,11 @@ fn test_trigonometric_tan_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(TrigonometricTanFunction::try_create_func("tan")?, &tests)
+    test_scalar_functions(
+        TrigonometricTanFunction::try_create_func("tan")?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -102,7 +114,11 @@ fn test_trigonometric_cot_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(TrigonometricCotFunction::try_create_func("cot")?, &tests)
+    test_scalar_functions(
+        TrigonometricCotFunction::try_create_func("cot")?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -114,7 +130,11 @@ fn test_trigonometric_asin_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(TrigonometricAsinFunction::try_create_func("asin")?, &tests)
+    test_scalar_functions(
+        TrigonometricAsinFunction::try_create_func("asin")?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -126,7 +146,11 @@ fn test_trigonometric_acos_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(TrigonometricAcosFunction::try_create_func("acos")?, &tests)
+    test_scalar_functions(
+        TrigonometricAcosFunction::try_create_func("acos")?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -149,7 +173,11 @@ fn test_trigonometric_atan_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(TrigonometricAtanFunction::try_create_func("atan")?, &tests)
+    test_scalar_functions(
+        TrigonometricAtanFunction::try_create_func("atan")?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -187,5 +215,6 @@ fn test_trigonometric_atan2_function() -> Result<()> {
     test_scalar_functions(
         TrigonometricAtan2Function::try_create_func("atan2")?,
         &tests,
+        true,
     )
 }

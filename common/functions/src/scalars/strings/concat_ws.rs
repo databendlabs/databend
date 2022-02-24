@@ -38,6 +38,7 @@ impl ConcatWsFunction {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
+                .disable_passthrough_null()
                 .variadic_arguments(2, 1024),
         )
     }
@@ -191,10 +192,6 @@ impl Function for ConcatWsFunction {
             false => Self::concat_column_nonull(&columns[0], &cols, input_rows),
             true => Self::concat_column_null(&columns[0], &cols, input_rows),
         }
-    }
-
-    fn passthrough_null(&self) -> bool {
-        false
     }
 }
 

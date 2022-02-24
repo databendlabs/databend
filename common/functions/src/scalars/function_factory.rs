@@ -21,6 +21,7 @@ use common_exception::Result;
 use once_cell::sync::Lazy;
 
 use super::function::Function;
+use super::ArithmeticAdapter;
 use super::ArithmeticFunction;
 use super::ComparisonFunction;
 use super::ConditionalFunction;
@@ -50,6 +51,17 @@ pub struct FunctionFeatures {
     pub is_bool_func: bool,
     pub is_context_func: bool,
     pub maybe_monotonic: bool,
+
+    /// Whether the function passes through null input.
+    /// True if the function just return null with any given null input.
+    /// False if the function may return non-null with null input.
+    ///
+    /// For example, arithmetic plus('+') will output null for any null input, like '12 + null = null'.
+    /// It has no idea of how to handle null, but just pass through.
+    ///
+    /// While ISNULL function  treats null input as a valid one. For example ISNULL(NULL, 'test') will return 'test'.
+    pub passthrough_null: bool,
+
     // The number of arguments the function accepts.
     pub num_arguments: usize,
     // (1, 2) means we only accept [1, 2] arguments
@@ -65,6 +77,7 @@ impl FunctionFeatures {
             is_bool_func: false,
             is_context_func: false,
             maybe_monotonic: false,
+            passthrough_null: true,
             num_arguments: 0,
             variadic_arguments: None,
         }
@@ -92,6 +105,11 @@ impl FunctionFeatures {
 
     pub fn monotonicity(mut self) -> FunctionFeatures {
         self.maybe_monotonic = true;
+        self
+    }
+
+    pub fn disable_passthrough_null(mut self) -> FunctionFeatures {
+        self.passthrough_null = false;
         self
     }
 
@@ -198,19 +216,23 @@ impl FunctionFactory {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
 
-        let inner = match self.case_insensitive_desc.get(&lowercase_name) {
+        match self.case_insensitive_desc.get(&lowercase_name) {
             // TODO(Winter): we should write similar function names into error message if function name is not found.
             None => match self.case_insensitive_arithmetic_desc.get(&lowercase_name) {
                 None => Err(ErrorCode::UnknownFunction(format!(
                     "Unsupported Function: {}",
                     origin_name
                 ))),
-                Some(desc) => (desc.arithmetic_creator)(origin_name, args),
+                Some(desc) => ArithmeticAdapter::try_create(desc, origin_name, args),
             },
-            Some(desc) => (desc.function_creator)(origin_name),
-        }?;
-
-        Ok(FunctionAdapter::create(inner))
+            Some(desc) => {
+                let inner = (desc.function_creator)(origin_name)?;
+                Ok(FunctionAdapter::create(
+                    inner,
+                    desc.features.passthrough_null,
+                ))
+            }
+        }
     }
 
     pub fn get_features(&self, name: impl AsRef<str>) -> Result<FunctionFeatures> {

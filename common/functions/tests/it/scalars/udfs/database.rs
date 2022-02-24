@@ -28,5 +28,5 @@ fn test_database_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(DatabaseFunction::try_create("database")?, &tests)
+    test_scalar_functions(DatabaseFunction::try_create("database")?, &tests, true)
 }

@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::record_batch::RecordBatch;
+use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::chunk::Chunk;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -60,18 +61,15 @@ fn test_data_block_convert() -> Result<()> {
     assert_eq!(3, block.num_rows());
     assert_eq!(4, block.num_columns());
 
-    let record_batch: RecordBatch = block.try_into().unwrap();
+    let chunk: Chunk<ArrayRef> = block.try_into().unwrap();
 
     // first and last test.
-    assert_eq!(3, record_batch.num_rows());
-    assert_eq!(4, record_batch.num_columns());
+    assert_eq!(3, chunk.len());
+    assert_eq!(4, chunk.columns().len());
 
-    let new_block: DataBlock = record_batch.try_into().unwrap();
+    let new_block: DataBlock = DataBlock::from_chunk(&schema, &chunk).unwrap();
     assert_eq!(3, new_block.num_rows());
     assert_eq!(4, new_block.num_columns());
 
-    let new_schema = new_block.schema();
-
-    assert_eq!(new_schema, &schema);
     Ok(())
 }

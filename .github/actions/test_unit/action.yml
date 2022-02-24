@@ -37,24 +37,31 @@ runs:
         RUST_TEST_THREADS: 2
         RUST_LOG: ERROR
         RUST_BACKTRACE: full
-        RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests --cfg tokio_unstable'
-        RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
+        # RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests --cfg tokio_unstable'
+        # RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
 
-    - name: Install grcov
-      uses: actions-rs/cargo@v1
-      with:
-        command: install
-        args: grcov
+    # Temporarily disable test coverage checks to save CI resources.
+    # The main purpose is to avoid OOM due to build for specific target.
+    #
+    # Instructions
+    # - `uncomment/enable`: If we self-host the CI or split the repo (especially, common-functions) to a finer granularity.
+    # - `remove`: If we lack the need for test coverage, or adopt a new solution.
 
-    - name: Run code coverage
-      uses: actions-rs/grcov@v0.1.5
-      id: coverage
+    # - name: Install grcov
+    #   uses: actions-rs/cargo@v1
+    #   with:
+    #     command: install
+    #     args: grcov
 
-    - name: Upload to codecov.io
-      uses: codecov/codecov-action@v1
-      with:
-        token: ${{ inputs.codecov_token }}
-        file: ${{ steps.coverage.outputs.report }}
+    # - name: Run code coverage
+    #   uses: actions-rs/grcov@v0.1.5
+    #   id: coverage
+
+    # - name: Upload to codecov.io
+    #   uses: codecov/codecov-action@v1
+    #   with:
+    #     token: ${{ inputs.codecov_token }}
+    #     file: ${{ steps.coverage.outputs.report }}
 
     - name: Upload artifact
       uses: actions/upload-artifact@v2
