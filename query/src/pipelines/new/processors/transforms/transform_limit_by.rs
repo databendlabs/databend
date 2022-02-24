@@ -79,8 +79,9 @@ impl Transform for TransformLimitBy {
         }
 
         let array = BooleanArray::from_data(ArrowType::Boolean, filter.into(), None);
-        let batch = block.try_into()?;
-        let batch = arrow::compute::filter::filter_record_batch(&batch, &array)?;
-        batch.try_into()
+        let schema = block.schema().clone();
+        let chunk = block.try_into()?;
+        let chunk = arrow::compute::filter::filter_chunk(&chunk, &array)?;
+        DataBlock::from_chunk(&schema, &chunk)
     }
 }

@@ -39,6 +39,7 @@ impl IsNullFunction {
                 .deterministic()
                 .negative_function("isnotnull")
                 .bool_function()
+                .disable_passthrough_null()
                 .num_arguments(1),
         )
     }
@@ -73,10 +74,6 @@ impl Function for IsNullFunction {
             }
             None => Ok(ConstColumn::new(Series::from_data(vec![false]), input_rows).arc()),
         }
-    }
-
-    fn passthrough_null(&self) -> bool {
-        false
     }
 }
 

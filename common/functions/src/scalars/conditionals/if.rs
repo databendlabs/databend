@@ -38,9 +38,12 @@ impl IfFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        let mut features = FunctionFeatures::default().num_arguments(3);
-        features = features.deterministic();
-        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .disable_passthrough_null()
+                .num_arguments(3),
+        )
     }
 
     // handle cond is const or nullable or null column
@@ -283,10 +286,6 @@ impl Function for IfFunction {
 
         // 4. all normal type and are not nullable/const
         self.eval_generic(cond_col, &columns[1..])
-    }
-
-    fn passthrough_null(&self) -> bool {
-        false
     }
 }
 

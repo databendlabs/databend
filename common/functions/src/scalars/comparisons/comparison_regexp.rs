@@ -23,6 +23,7 @@ use common_exception::Result;
 use regex::bytes::Regex as BytesRegex;
 use regex::bytes::RegexBuilder as BytesRegexBuilder;
 
+use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
@@ -76,14 +77,10 @@ impl Function for ComparisonRegexpFunction {
     }
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        let not_string = args.iter().all(|arg| arg.data_type_id() != TypeID::String);
-        if not_string {
-            return Err(ErrorCode::BadArguments(format!(
-                "Illegal types {:?} of argument of function {}, must be strings",
-                args,
-                self.name()
-            )));
+        for arg in args {
+            assert_string(*arg)?;
         }
+
         Ok(BooleanType::arc())
     }
 

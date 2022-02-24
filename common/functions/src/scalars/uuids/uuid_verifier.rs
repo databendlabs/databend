@@ -52,8 +52,11 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().num_arguments(1))
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .disable_passthrough_null()
+                .num_arguments(1),
+        )
     }
 }
 
@@ -114,10 +117,6 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
         }
 
         Ok(BooleanType::arc())
-    }
-
-    fn passthrough_null(&self) -> bool {
-        false
     }
 
     fn eval(

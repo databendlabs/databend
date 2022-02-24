@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
 use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;

@@ -19,10 +19,7 @@ use common_exception::Result;
 use common_management::*;
 use common_meta_api::KVApi;
 use common_meta_embedded::MetaEmbedded;
-use common_meta_types::Credentials;
-use common_meta_types::FileFormat;
 use common_meta_types::SeqV;
-use common_meta_types::StageParams;
 use common_meta_types::UserStageInfo;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -109,12 +106,7 @@ async fn test_unknown_stage_drop_stage() -> Result<()> {
 fn create_test_stage_info() -> UserStageInfo {
     UserStageInfo {
         stage_name: "mystage".to_string(),
-        stage_params: StageParams::new("test", Credentials {
-            access_key_id: String::from("test"),
-            secret_access_key: String::from("test"),
-        }),
-        file_format: FileFormat::default(),
-        comments: "".to_string(),
+        ..Default::default()
     }
 }
 

@@ -44,8 +44,13 @@ impl<const SUPPRESS_PARSE_ERROR: bool> InetAtonFunctionImpl<SUPPRESS_PARSE_ERROR
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().num_arguments(1))
+        let mut features = FunctionFeatures::default().deterministic().num_arguments(1);
+        // Null will cause parse error when SUPPRESS_PARSE_ERROR is false.
+        // In this case we need to check null and skip the parsing, so passthrough_null should be false.
+        if !SUPPRESS_PARSE_ERROR {
+            features = features.disable_passthrough_null()
+        }
+        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
     }
 }
 
@@ -146,12 +151,6 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for InetAtonFunctionImpl<SUPPRES
             }
             Ok(builder.build(input_rows))
         }
-    }
-
-    fn passthrough_null(&self) -> bool {
-        // Null will cause parse error when SUPPRESS_PARSE_ERROR is false.
-        // In this case we need to check null and skip the parsing, so passthrough_null should be false.
-        SUPPRESS_PARSE_ERROR
     }
 }
 

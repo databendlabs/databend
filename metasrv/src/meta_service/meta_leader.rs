@@ -135,7 +135,7 @@ impl<'a> MetaLeader<'a> {
             cmd: Cmd::AddNode {
                 node_id,
                 node: Node {
-                    name: "".to_string(),
+                    name: node_id.to_string(),
                     endpoint,
                 },
             },

@@ -19,10 +19,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use clap::App;
-use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
+use clap::Command as App;
 use common_base::tokio::time;
 use http::HeaderMap;
 // Lets us call into_async_read() to convert a futures::stream::Stream into a
@@ -114,7 +113,7 @@ impl LoadCommand {
 
     pub fn generate() -> App<'static> {
         let app = App::new("load")
-            .setting(AppSettings::DisableVersionFlag)
+            .disable_version_flag(true)
             .about("Query on databend cluster")
             .arg(
                 Arg::new("profile")
@@ -212,7 +211,7 @@ impl LoadCommand {
                 .parse()
                 .unwrap(),
         );
-        headers.insert("csv_header", skip_header.to_string().parse().unwrap());
+        headers.insert("skip_header", skip_header.to_string().parse().unwrap());
         let progress = execute_load(&cli, &url, headers, data).await?;
 
         let elapsed = start.elapsed();
