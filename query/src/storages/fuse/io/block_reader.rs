@@ -27,7 +27,6 @@ use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
 use futures::future::BoxFuture;
 use futures::io::BufReader;
-use opendal::readers::SeekableReader;
 use opendal::Operator;
 
 use crate::storages::fuse::io::meta_readers::BlockMetaReader;
@@ -106,7 +105,10 @@ impl BlockReader {
             let data_accessor = self.data_accessor.clone();
             let path = self.path.clone();
             Box::pin(async move {
-                let reader = SeekableReader::new(data_accessor, path.as_str(), stream_len);
+                let reader = data_accessor
+                    .object(path.as_str())
+                    .reader()
+                    .total_size(stream_len);
                 let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
                 Ok(reader)
             }) as BoxFuture<_>
