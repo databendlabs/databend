@@ -14,30 +14,59 @@
 
 use common_exception::Result;
 use databend_query::sql::statements::DfCopy;
-use databend_query::sql::*;
-use sqlparser::ast::*;
+use databend_query::sql::DfStatement;
+use sqlparser::ast::Ident;
+use sqlparser::ast::ObjectName;
 
-use crate::sql::sql_parser::*;
+use crate::sql::sql_parser::expect_parse_err;
+use crate::sql::sql_parser::expect_parse_ok;
 
 #[test]
-fn copy_test() -> Result<()> {
-    let ident = Ident::new("test_csv");
-    let v = vec![ident];
-    let name = ObjectName(v);
+fn copy_from_external_test() -> Result<()> {
+    struct Test {
+        query: &'static str,
+        err: &'static str,
+        expect: Option<DfCopy>,
+    }
 
-    expect_parse_ok(
-        "copy into test_csv from '@my_ext_stage/tutorials/sample.csv' format csv csv_header = 1 field_delimitor = ',';",
-        DfStatement::Copy(DfCopy {
-            name,
+    let tests = vec![Test {
+        query: "copy into mytable
+        from 's3://mybucket/data/files'
+        credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
+        encryption=(master_key = 'my_master_key')
+        file_format = (type = csv field_delimiter = '|' skip_header = 1);",
+        err: "",
+        expect: Some(DfCopy {
+            name: ObjectName(vec![Ident::new("mytable")]),
             columns: vec![],
-            location: "@my_ext_stage/tutorials/sample.csv".to_string(),
-            format: "csv".to_string(),
-            options: maplit::hashmap! {
-                "csv_header".into() => "1".into(),
-                "field_delimitor".into() => ",".into(),
-         }
+            location: "s3://mybucket/data/files".to_string(),
+            credential_options: maplit::hashmap! {
+                   "aws_key_id".into() => "my_key_id".into(),
+                   "aws_secret_key".into() => "my_secret_key".into(),
+            },
+            encryption_options: maplit::hashmap! {
+                   "master_key".into() => "my_master_key".into(),
+            },
+
+            file_format_options: maplit::hashmap! {
+                   "type".into() => "csv".into(),
+                   "field_delimiter".into() => "|".into(),
+                   "skip_header".into() => "1".into(),
+            },
+            files: vec![],
+            on_error: "".to_string(),
+            size_limit: "".to_string(),
+            validation_mode: "".to_string(),
         }),
-    )?;
+    }];
+
+    for test in tests {
+        if test.err.is_empty() {
+            expect_parse_ok(test.query, DfStatement::Copy(test.expect.unwrap()))?;
+        } else {
+            expect_parse_err(test.query, test.err.to_string())?;
+        }
+    }
 
     Ok(())
 }

@@ -211,7 +211,7 @@ impl LoadCommand {
                 .parse()
                 .unwrap(),
         );
-        headers.insert("csv_header", skip_header.to_string().parse().unwrap());
+        headers.insert("skip_header", skip_header.to_string().parse().unwrap());
         let progress = execute_load(&cli, &url, headers, data).await?;
 
         let elapsed = start.elapsed();

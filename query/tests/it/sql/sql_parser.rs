@@ -15,6 +15,7 @@
 use common_exception::Result;
 use databend_query::sql::statements::DfQueryStatement;
 use databend_query::sql::*;
+use pretty_assertions::assert_eq;
 use sqlparser::ast::*;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;

@@ -26,40 +26,97 @@ use futures::AsyncRead;
 
 use crate::Source;
 
-pub struct CsvSource<R> {
-    reader: AsyncReader<R>,
+#[derive(Debug, Clone)]
+pub struct CsvSourceBuilder {
     schema: DataSchemaRef,
+    skip_header: i32,
     block_size: usize,
+    size_limit: usize,
+    field_delimiter: u8,
+    record_delimiter: Terminator,
+}
+
+impl CsvSourceBuilder {
+    pub fn create(schema: DataSchemaRef) -> Self {
+        CsvSourceBuilder {
+            schema,
+            skip_header: 0,
+            field_delimiter: b',',
+            record_delimiter: Terminator::CRLF,
+            block_size: 10000,
+            size_limit: 0,
+        }
+    }
+
+    pub fn block_size(&mut self, block_size: usize) -> &mut Self {
+        self.block_size = block_size;
+        self
+    }
+
+    pub fn size_limit(&mut self, size_limit: usize) -> &mut Self {
+        self.size_limit = size_limit;
+        self
+    }
+
+    // Number of lines at the start of the file to skip.
+    pub fn skip_header(&mut self, skip_header: i32) -> &mut Self {
+        self.skip_header = skip_header;
+        self
+    }
+
+    pub fn field_delimiter(&mut self, field_delimiter_str: &str) -> &mut Self {
+        if !field_delimiter_str.is_empty() {
+            let field_delimiter = match field_delimiter_str.len() {
+                n if n >= 1 => field_delimiter_str.as_bytes()[0],
+                _ => b',',
+            };
+            self.field_delimiter = field_delimiter;
+        }
+        self
+    }
+
+    pub fn record_delimiter(&mut self, record_delimiter_str: &str) -> &mut Self {
+        if !record_delimiter_str.is_empty() {
+            let record_delimiter = match record_delimiter_str.len() {
+                n if n >= 1 => record_delimiter_str.as_bytes()[0],
+                _ => b'\n',
+            };
+
+            let record_delimiter = if record_delimiter == b'\n' || record_delimiter == b'\r' {
+                Terminator::CRLF
+            } else {
+                Terminator::Any(record_delimiter)
+            };
+            self.record_delimiter = record_delimiter;
+        }
+        self
+    }
+
+    pub fn build<R>(&self, reader: R) -> Result<CsvSource<R>>
+    where R: AsyncRead + Unpin + Send {
+        CsvSource::try_create(self.clone(), reader)
+    }
+}
+
+pub struct CsvSource<R> {
+    builder: CsvSourceBuilder,
+    reader: AsyncReader<R>,
     rows: usize,
 }
 
 impl<R> CsvSource<R>
 where R: AsyncRead + Unpin + Send
 {
-    pub fn try_create(
-        reader: R,
-        schema: DataSchemaRef,
-        header: bool,
-        field_delimitor: u8,
-        record_delimitor: u8,
-        block_size: usize,
-    ) -> Result<Self> {
-        let record_delimitor = if record_delimitor == b'\n' || record_delimitor == b'\r' {
-            Terminator::CRLF
-        } else {
-            Terminator::Any(record_delimitor)
-        };
-
+    fn try_create(builder: CsvSourceBuilder, reader: R) -> Result<Self> {
         let reader = AsyncReaderBuilder::new()
-            .has_headers(header)
-            .delimiter(field_delimitor)
-            .terminator(record_delimitor)
+            .has_headers(builder.skip_header > 0)
+            .delimiter(builder.field_delimiter)
+            .terminator(builder.record_delimiter)
             .create_reader(reader);
 
         Ok(Self {
+            builder,
             reader,
-            block_size,
-            schema,
             rows: 0,
         })
     }
@@ -70,11 +127,17 @@ impl<R> Source for CsvSource<R>
 where R: AsyncRead + Unpin + Send
 {
     async fn read(&mut self) -> Result<Option<DataBlock>> {
-        let mut desers = self
+        // Check size_limit.
+        if self.builder.size_limit > 0 && self.rows >= self.builder.size_limit {
+            return Ok(None);
+        }
+
+        let mut packs = self
+            .builder
             .schema
             .fields()
             .iter()
-            .map(|f| f.data_type().create_deserializer(self.block_size))
+            .map(|f| f.data_type().create_deserializer(self.builder.block_size))
             .collect::<Vec<_>>();
 
         let mut rows = 0;
@@ -88,16 +151,22 @@ where R: AsyncRead + Unpin + Send
             if record.is_empty() {
                 break;
             }
-            for (col, deser) in desers.iter_mut().enumerate() {
+            for (col, pack) in packs.iter_mut().enumerate() {
                 match record.get(col) {
-                    Some(bytes) => deser.de_text(bytes)?,
-                    None => deser.de_default(),
+                    Some(bytes) => pack.de_text(bytes)?,
+                    None => pack.de_default(),
                 }
             }
             rows += 1;
             self.rows += 1;
 
-            if rows >= self.block_size {
+            // Check size_limit.
+            if self.builder.size_limit > 0 && self.rows >= self.builder.size_limit {
+                break;
+            }
+
+            // Check block_size.
+            if rows >= self.builder.block_size {
                 break;
             }
         }
@@ -106,11 +175,11 @@ where R: AsyncRead + Unpin + Send
             return Ok(None);
         }
 
-        let series = desers
+        let series = packs
             .iter_mut()
             .map(|deser| deser.finish_to_column())
             .collect::<Vec<_>>();
 
-        Ok(Some(DataBlock::create(self.schema.clone(), series)))
+        Ok(Some(DataBlock::create(self.builder.schema.clone(), series)))
     }
 }

@@ -15,37 +15,101 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
+use std::collections::HashMap;
+
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::IsOptional;
 use sqlparser::parser::ParserError;
+use sqlparser::tokenizer::Token;
 
 use crate::sql::statements::DfCopy;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
-    // copy into mycsvtable
-    // from @my_ext_stage/tutorials/dataloading/contacts1.csv format CSV [options];
+    // copy into table from [?] ...
     pub(crate) fn parse_copy(&mut self) -> Result<DfStatement, ParserError> {
         self.parser.expect_keyword(Keyword::INTO)?;
         let name = self.parser.parse_object_name()?;
         let columns = self
             .parser
             .parse_parenthesized_column_list(IsOptional::Optional)?;
+
+        // from 's3://mybucket/data/files'
         self.parser.expect_keyword(Keyword::FROM)?;
         let location = self.parser.parse_literal_string()?;
 
-        self.parser.expect_keyword(Keyword::FORMAT)?;
-        let format = self.parser.next_token().to_string();
+        // credentials=(aws_key_id='$AWS_ACCESS_KEY_ID' aws_secret_key='$AWS_SECRET_ACCESS_KEY')
+        let mut credential_options = HashMap::default();
+        if self.consume_token("CREDENTIALS") {
+            self.expect_token("=")?;
+            self.expect_token("(")?;
+            credential_options = self.parse_options()?;
+            self.expect_token(")")?;
+        }
 
-        let options = self.parse_options()?;
+        // encryption=(master_key = '$MASER_KEY')
+        let mut encryption_options = HashMap::default();
+        if self.consume_token("ENCRYPTION") {
+            self.expect_token("=")?;
+            self.expect_token("(")?;
+            encryption_options = self.parse_options()?;
+            self.expect_token(")")?;
+        }
+
+        // FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] )
+        let mut files: Vec<String> = vec![];
+        if self.consume_token("FILES") {
+            self.expect_token("=")?;
+            self.expect_token("(")?;
+            files = self.parse_list(&Token::Comma)?;
+            self.expect_token(")")?;
+        }
+
+        // file_format = (type = csv field_delimiter = '|' skip_header = 1)
+        let mut file_format_options = HashMap::default();
+        if self.consume_token("FILE_FORMAT") {
+            self.expect_token("=")?;
+            self.expect_token("(")?;
+            file_format_options = self.parse_options()?;
+            self.expect_token(")")?;
+        }
+
+        /*
+         copyOptions ::=
+         ON_ERROR = { CONTINUE | SKIP_FILE | SKIP_FILE_<num> | SKIP_FILE_<num>% | ABORT_STATEMENT }
+         SIZE_LIMIT = <num>
+        */
+        let mut on_error = "".to_string();
+        if self.consume_token("ON_ERROR") {
+            self.expect_token("=")?;
+            on_error = self.parse_value_or_ident()?;
+        }
+
+        let mut size_limit = "".to_string();
+        if self.consume_token("SIZE_LIMIT") {
+            self.expect_token("=")?;
+            size_limit = self.parse_value_or_ident()?;
+        }
+
+        // VALIDATION_MODE = RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS
+        let mut validation_mode = "".to_string();
+        if self.consume_token("VALIDATION_MODE") {
+            self.expect_token("=")?;
+            validation_mode = self.parse_value_or_ident()?;
+        }
 
         Ok(DfStatement::Copy(DfCopy {
             name,
             columns,
             location,
-            format,
-            options,
+            credential_options,
+            encryption_options,
+            file_format_options,
+            files,
+            on_error,
+            size_limit,
+            validation_mode,
         }))
     }
 }

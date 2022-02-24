@@ -12,17 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod parser_admin;
-mod parser_copy;
-mod parser_database;
-mod parser_explain;
-mod parser_insert;
-mod parser_kill;
-mod parser_optimize;
-mod parser_query;
-mod parser_set;
-mod parser_show;
-mod parser_table;
-mod parser_udf;
-mod parser_use;
-mod parser_user;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+
+use common_datavalues::DataSchemaRef;
+use common_meta_types::UserStageInfo;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+pub struct UserStagePlan {
+    pub schema: DataSchemaRef,
+    pub stage_info: UserStageInfo,
+}
+
+impl Debug for UserStagePlan {
+    // Ignore the schema.
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.stage_info)
+    }
+}

@@ -13,4 +13,5 @@
 // limitations under the License.
 
 mod query;
+mod statement_copy;
 mod statement_select;
