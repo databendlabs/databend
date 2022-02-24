@@ -290,7 +290,7 @@ impl QueryContext {
     // Get the storage data accessor operator from the session manager.
     pub async fn get_storage_operator(&self) -> Result<Operator> {
         let operator = self.shared.session.get_storage_operator();
-        Ok(operator.layer(self.shared.dal_ctx.clone()))
+        Ok(operator.layer(self.shared.dal_ctx.as_ref().clone()))
     }
 
     pub fn get_dal_context(&self) -> &DalContext {

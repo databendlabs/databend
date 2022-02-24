@@ -274,7 +274,6 @@ impl SessionManager {
             DalSchema::S3 => {
                 let s3_conf = &storage_conf.s3;
                 s3::Backend::build()
-                    .region(&s3_conf.region)
                     .endpoint(&s3_conf.endpoint_url)
                     .bucket(&s3_conf.bucket)
                     .credential(Credential::hmac(

@@ -1430,7 +1430,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-infallible",
- "opendal",
+ "opendal 0.0.5 (git+https://github.com/datafuselabs/opendal?rev=80e8bca)",
 ]
 
 [[package]]
@@ -1797,7 +1797,7 @@ dependencies = [
  "common-tracing",
  "csv-async",
  "futures",
- "opendal",
+ "opendal 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "pin-project-lite",
  "tempfile",
  "tokio-stream",
@@ -2337,7 +2337,7 @@ dependencies = [
  "num_cpus",
  "octocrab",
  "once_cell",
- "opendal",
+ "opendal 0.0.5 (git+https://github.com/datafuselabs/opendal?rev=80e8bca)",
  "parquet-format-async-temp",
  "paste",
  "petgraph",
@@ -4622,6 +4622,29 @@ dependencies = [
  "http",
  "hyper",
  "pin-project",
+ "thiserror",
+]
+
+[[package]]
+name = "opendal"
+version = "0.0.5"
+source = "git+https://github.com/datafuselabs/opendal?rev=80e8bca#80e8bcac933ed0fa98928d0f9f09496c09b5a52c"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "aws-config",
+ "aws-endpoint",
+ "aws-sdk-s3",
+ "aws-smithy-http",
+ "aws-types",
+ "blocking",
+ "bytes",
+ "futures",
+ "http",
+ "hyper",
+ "lazy_static",
+ "pin-project",
+ "reqwest",
  "thiserror",
 ]
 

@@ -40,12 +40,10 @@ impl DataAccessor {
                     builder.endpoint(&endpoint);
                 }
 
-                // Region.
+                // Bucket.
                 {
-                    // TODO(bohu): opendal to check the region.
-                    let region = "us-east-2";
                     let bucket = &s3.bucket;
-                    builder.region(region).bucket(bucket);
+                    builder.bucket(bucket);
                 }
 
                 // Credentials.
