@@ -18,7 +18,11 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_planners::Extras;
+use common_planners::Part;
+use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
+use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -38,6 +42,17 @@ pub trait SyncSystemTable: Send + Sync {
 
     fn get_table_info(&self) -> &TableInfo;
     fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock>;
+
+    fn get_partitions(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _push_downs: Option<Extras>,
+    ) -> Result<(Statistics, Partitions)> {
+        Ok((Statistics::default(), vec![Part {
+            name: "".to_string(),
+            version: 0,
+        }]))
+    }
 }
 
 pub struct SyncOneBlockSystemTable<TTable: SyncSystemTable> {
@@ -62,6 +77,14 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
 
     fn get_table_info(&self) -> &TableInfo {
         self.inner_table.get_table_info()
+    }
+
+    async fn read_partitions(
+        &self,
+        ctx: Arc<QueryContext>,
+        push_downs: Option<Extras>,
+    ) -> Result<(Statistics, Partitions)> {
+        self.inner_table.get_partitions(ctx, push_downs)
     }
 
     async fn read(
@@ -140,6 +163,17 @@ pub trait AsyncSystemTable: Send + Sync {
 
     fn get_table_info(&self) -> &TableInfo;
     async fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock>;
+
+    async fn get_partitions(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _push_downs: Option<Extras>,
+    ) -> Result<(Statistics, Partitions)> {
+        Ok((Statistics::default(), vec![Part {
+            name: "".to_string(),
+            version: 0,
+        }]))
+    }
 }
 
 pub struct AsyncOneBlockSystemTable<TTable: AsyncSystemTable> {
@@ -164,6 +198,14 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
 
     fn get_table_info(&self) -> &TableInfo {
         self.inner_table.get_table_info()
+    }
+
+    async fn read_partitions(
+        &self,
+        ctx: Arc<QueryContext>,
+        push_downs: Option<Extras>,
+    ) -> Result<(Statistics, Partitions)> {
+        self.inner_table.get_partitions(ctx, push_downs).await
     }
 
     async fn read(
