@@ -27,6 +27,9 @@ pub enum MetaNetworkError {
     #[error("{0}")]
     GetNodeAddrError(String),
 
+    #[error("{0}")]
+    DnsParseError(String),
+
     #[error(transparent)]
     TLSConfigError(AnyError),
 
@@ -49,6 +52,7 @@ impl From<MetaNetworkError> for ErrorCode {
             MetaNetworkError::TLSConfigError(any_err) => {
                 ErrorCode::TLSConfigurationFailure(any_err.to_string())
             }
+            MetaNetworkError::DnsParseError(_) => ErrorCode::DnsParseError(net_err.to_string()),
         }
     }
 }

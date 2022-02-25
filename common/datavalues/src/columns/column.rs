@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -151,20 +152,12 @@ pub trait IntoColumn {
     fn into_nullable_column(self) -> ColumnRef;
 }
 
-impl IntoColumn for &ArrayRef {
-    fn into_column(self) -> ColumnRef {
-        IntoColumn::into_column(self.clone())
-    }
-
-    fn into_nullable_column(self) -> ColumnRef {
-        IntoColumn::into_nullable_column(self.clone())
-    }
-}
-
-impl IntoColumn for ArrayRef {
+impl<A> IntoColumn for A
+where A: AsRef<dyn Array>
+{
     fn into_column(self) -> ColumnRef {
         use TypeID::*;
-        let data_type: DataTypePtr = from_arrow_type(self.data_type());
+        let data_type: DataTypePtr = from_arrow_type(self.as_ref().data_type());
         match data_type.data_type_id() {
             // arrow type has no nullable type
             Nullable => unimplemented!(),
@@ -174,15 +167,12 @@ impl IntoColumn for ArrayRef {
             UInt16 | Date16 => Arc::new(UInt16Column::from_arrow_array(self.as_ref())),
             UInt32 | DateTime32 => Arc::new(UInt32Column::from_arrow_array(self.as_ref())),
             UInt64 => Arc::new(UInt64Column::from_arrow_array(self.as_ref())),
-
             Int8 => Arc::new(Int8Column::from_arrow_array(self.as_ref())),
             Int16 => Arc::new(Int16Column::from_arrow_array(self.as_ref())),
             Int32 | Date32 => Arc::new(Int32Column::from_arrow_array(self.as_ref())),
             Int64 | Interval | DateTime64 => Arc::new(Int64Column::from_arrow_array(self.as_ref())),
-
             Float32 => Arc::new(Float32Column::from_arrow_array(self.as_ref())),
             Float64 => Arc::new(Float64Column::from_arrow_array(self.as_ref())),
-
             Array => Arc::new(ArrayColumn::from_arrow_array(self.as_ref())),
             Struct => Arc::new(StructColumn::from_arrow_array(self.as_ref())),
             String => Arc::new(StringColumn::from_arrow_array(self.as_ref())),
@@ -190,9 +180,9 @@ impl IntoColumn for ArrayRef {
     }
 
     fn into_nullable_column(self) -> ColumnRef {
-        let size = self.len();
-        let validity = self.validity().cloned();
-        let column = self.into_column();
+        let size = self.as_ref().len();
+        let validity = self.as_ref().validity().cloned();
+        let column = self.as_ref().into_column();
         Arc::new(NullableColumn::new(
             column,
             validity.unwrap_or_else(|| {

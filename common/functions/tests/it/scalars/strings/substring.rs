@@ -43,6 +43,16 @@ fn test_substring_function() -> Result<()> {
             error: "",
         },
         ScalarFunctionTest {
+            name: "substring-integer-tostring-passed",
+            columns: vec![
+                Series::from_data(vec!["abcde"]),
+                Series::from_data(vec!["1"]),
+                Series::from_data(vec!["3"]),
+            ],
+            expect: Series::from_data(vec!["abc"]),
+            error: "",
+        },
+        ScalarFunctionTest {
             name: "substring-abcde-passed",
             columns: vec![
                 Series::from_data(vec!["abcde"]),
@@ -63,7 +73,7 @@ fn test_substring_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(SubstringFunction::try_create("substring")?, &tests)
+    test_scalar_functions(SubstringFunction::try_create("substring")?, &tests, true)
 }
 
 #[test]
@@ -79,5 +89,5 @@ fn test_substring_nullable() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(SubstringFunction::try_create("substring")?, &tests)
+    test_scalar_functions(SubstringFunction::try_create("substring")?, &tests, true)
 }

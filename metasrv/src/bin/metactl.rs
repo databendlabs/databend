@@ -12,13 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(stdin_forwarders)]
+
+use std::collections::BTreeMap;
+use std::io;
+
 use clap::Parser;
 use common_base::tokio;
 use common_meta_raft_store::config::RaftConfig;
+use common_meta_raft_store::sled_key_spaces::KeySpaceKV;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;
 use common_tracing::init_global_tracing;
-use databend_meta::export::exported_line_to_json;
+use databend_meta::export::deserialize_to_kv_variant;
+use databend_meta::export::serialize_kv_variant;
+use serde::Deserialize;
+use serde::Serialize;
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
+#[clap(about, version, author)]
+struct Config {
+    #[clap(long, default_value = "INFO")]
+    pub log_level: String,
+
+    #[clap(long)]
+    pub import: bool,
+
+    #[clap(long)]
+    pub export: bool,
+
+    #[clap(flatten)]
+    pub raft_config: RaftConfig,
+}
 
 /// Usage:
 /// - To dump a sled db: `$0 --raft-dir ./_your_meta_dir/`:
@@ -31,24 +56,97 @@ use databend_meta::export::exported_line_to_json;
 ///   ```
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let raft_config: RaftConfig = RaftConfig::parse();
+    let config = Config::parse();
+    let raft_config = &config.raft_config;
 
-    let _guards = init_global_tracing("metactl", "./_metactl_log", "debug");
+    let _guards = init_global_tracing("metactl", "./_metactl_log", &config.log_level);
 
-    println!("raft_config: {:?}", raft_config);
+    eprintln!("");
+    eprintln!("███╗   ███╗███████╗████████╗ █████╗        ██████╗████████╗██╗     ");
+    eprintln!("████╗ ████║██╔════╝╚══██╔══╝██╔══██╗      ██╔════╝╚══██╔══╝██║     ");
+    eprintln!("██╔████╔██║█████╗     ██║   ███████║█████╗██║        ██║   ██║     ");
+    eprintln!("██║╚██╔╝██║██╔══╝     ██║   ██╔══██║╚════╝██║        ██║   ██║     ");
+    eprintln!("██║ ╚═╝ ██║███████╗   ██║   ██║  ██║      ╚██████╗   ██║   ███████╗");
+    eprintln!("╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝       ╚═════╝   ╚═╝   ╚══════╝");
+    eprintln!("");
+
+    eprintln!("raft_config: {}", pretty(raft_config)?);
 
     init_sled_db(raft_config.raft_dir.clone());
 
-    print_meta().await
+    if config.export {
+        eprintln!("export meta dir from: {}", raft_config.raft_dir);
+        print_meta()?;
+    } else if config.import {
+        eprintln!("import meta dir into: {}", raft_config.raft_dir);
+        clear()?;
+        import_from_stdin()?;
+    }
+
+    Ok(())
+}
+
+fn pretty<T>(v: &T) -> Result<String, serde_json::Error>
+where T: Serialize {
+    serde_json::to_string_pretty(v)
+}
+
+fn clear() -> anyhow::Result<()> {
+    let db = get_sled_db();
+
+    let tree_names = db.tree_names();
+    for n in tree_names.iter() {
+        let name = String::from_utf8(n.to_vec())?;
+        let tree = db.open_tree(&name)?;
+        tree.clear()?;
+        eprintln!("Clear sled tree {} Done", name);
+    }
+
+    Ok(())
+}
+
+/// Read every line from stdin, deserialize it into tree_name, key and value. Insert them into sled db and flush.
+fn import_from_stdin() -> anyhow::Result<()> {
+    let db = get_sled_db();
+
+    let mut trees = BTreeMap::new();
+
+    let lines = io::stdin().lines();
+    let mut n = 0;
+    for line in lines {
+        let l = line?;
+        let (tree_name, kv_variant): (String, KeySpaceKV) = serde_json::from_str(&l)?;
+        // eprintln!("line: {}", l);
+
+        if !trees.contains_key(&tree_name) {
+            let tree = db.open_tree(&tree_name)?;
+            trees.insert(tree_name.clone(), tree);
+        }
+
+        let tree = trees.get(&tree_name).unwrap();
+
+        let (k, v) = serialize_kv_variant(&kv_variant)?;
+
+        tree.insert(k, v)?;
+        n += 1;
+    }
+
+    for tree in trees.values() {
+        tree.flush()?;
+    }
+
+    eprintln!("Imported {} records", n);
+
+    Ok(())
 }
 
 /// Print the entire sled db.
 ///
 /// The output encodes every key-value into one line:
-/// `[sled_tree_name, subtree_prefix(u8), subtree_prefix(str), key, value]`
+/// `[sled_tree_name, {key_space: {key, value}}]`
 /// E.g.:
-/// `["global-local-kv/state_machine/0",7,"sledks::Sequences","databases",1]`
-async fn print_meta() -> anyhow::Result<()> {
+/// `["test-29000-state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}`
+fn print_meta() -> anyhow::Result<()> {
     let db = get_sled_db();
 
     let tree_names = db.tree_names();
@@ -60,7 +158,11 @@ async fn print_meta() -> anyhow::Result<()> {
             let kv = x?;
             let kv = vec![kv.0.to_vec(), kv.1.to_vec()];
 
-            let line = exported_line_to_json(&name, &kv)?;
+            let kv_variant = deserialize_to_kv_variant(&kv)?;
+            let tree_kv = (name.clone(), kv_variant);
+
+            let line = serde_json::to_string(&tree_kv)?;
+
             println!("{}", line);
         }
     }

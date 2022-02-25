@@ -110,7 +110,7 @@ fn test_arithmetic_function() -> Result<()> {
     ];
 
     for (test_function, test) in tests {
-        test_scalar_functions(test_function, &[test])?
+        test_scalar_functions(test_function, &[test], true)?
     }
 
     Ok(())
@@ -375,7 +375,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
     ];
 
     for (test_function, test) in tests {
-        test_scalar_functions(test_function, &[test])?
+        test_scalar_functions(test_function, &[test], true)?
     }
 
     Ok(())

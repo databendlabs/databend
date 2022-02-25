@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use clap::App;
 use clap::ArgMatches;
+use clap::Command as App;
 use sha2::Digest;
 use sha2::Sha256;
 use sysinfo::SystemExt;

@@ -126,8 +126,8 @@ impl FuseTable {
         location: impl AsRef<str>,
     ) -> Result<()> {
         data_accessor
-            .delete(location.as_ref())
-            .run()
+            .object(location.as_ref())
+            .delete()
             .await
             .map_err(|e| ErrorCode::DalTransportError(e.to_string()))
     }

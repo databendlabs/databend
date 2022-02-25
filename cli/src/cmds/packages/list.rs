@@ -15,8 +15,8 @@
 use std::fs;
 use std::sync::Arc;
 
-use clap::App;
 use clap::ArgMatches;
+use clap::Command as App;
 use comfy_table::Cell;
 use comfy_table::CellAlignment;
 use comfy_table::Color;

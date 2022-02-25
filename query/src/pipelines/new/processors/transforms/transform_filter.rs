@@ -31,7 +31,7 @@ pub type TransformHaving = TransformFilterImpl<true>;
 pub type TransformFilter = TransformFilterImpl<false>;
 
 pub struct TransformFilterImpl<const HAVING: bool> {
-    executor: Arc<ExpressionExecutor>,
+    executor: ExpressionExecutor,
 }
 
 impl<const HAVING: bool> TransformFilterImpl<HAVING>
@@ -43,10 +43,10 @@ where Self: Transform
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
-        let predicate_executor = Self::expr_executor(&schema, &predicate)?;
-        predicate_executor.validate()?;
+        let executor = Self::expr_executor(&schema, &predicate)?;
+        executor.validate()?;
         Ok(Transformer::create(input, output, TransformFilterImpl {
-            executor: Arc::new(predicate_executor),
+            executor,
         }))
     }
 

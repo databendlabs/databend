@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -21,19 +20,36 @@ use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::ReadDataSourcePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::sessions::QueryContext;
+use crate::storages::system::table::SyncOneBlockSystemTable;
+use crate::storages::system::table::SyncSystemTable;
 use crate::storages::Table;
 
 pub struct ContributorsTable {
     table_info: TableInfo,
 }
 
+impl SyncSystemTable for ContributorsTable {
+    const NAME: &'static str = "system.contributors";
+
+    fn get_table_info(&self) -> &TableInfo {
+        &self.table_info
+    }
+
+    fn get_full_data(&self, _: Arc<QueryContext>) -> Result<DataBlock> {
+        let contributors: Vec<&[u8]> = env!("DATABEND_COMMIT_AUTHORS")
+            .split_terminator(',')
+            .map(|x| x.trim().as_bytes())
+            .collect();
+        Ok(DataBlock::create(self.table_info.schema(), vec![
+            Series::from_data(contributors),
+        ]))
+    }
+}
+
 impl ContributorsTable {
-    pub fn create(table_id: u64) -> Self {
+    pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = DataSchemaRefExt::create(vec![DataField::new("name", Vu8::to_data_type())]);
 
         let table_info = TableInfo {
@@ -46,37 +62,7 @@ impl ContributorsTable {
                 ..Default::default()
             },
         };
-        ContributorsTable { table_info }
-    }
-}
 
-#[async_trait::async_trait]
-impl Table for ContributorsTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn get_table_info(&self) -> &TableInfo {
-        &self.table_info
-    }
-
-    async fn read(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let contributors: Vec<&[u8]> = env!("DATABEND_COMMIT_AUTHORS")
-            .split_terminator(',')
-            .map(|x| x.trim().as_bytes())
-            .collect();
-        let block = DataBlock::create(self.table_info.schema(), vec![Series::from_data(
-            contributors,
-        )]);
-
-        Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema(),
-            None,
-            vec![block],
-        )))
+        SyncOneBlockSystemTable::create(ContributorsTable { table_info })
     }
 }

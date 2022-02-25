@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
@@ -154,7 +154,6 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::DropDatabase(v) => v.analyze(ctx).await,
             DfStatement::CreateTable(v) => v.analyze(ctx).await,
             DfStatement::DescribeTable(v) => v.analyze(ctx).await,
-            DfStatement::DescribeStage(v) => v.analyze(ctx).await,
             DfStatement::DropTable(v) => v.analyze(ctx).await,
             DfStatement::TruncateTable(v) => v.analyze(ctx).await,
             DfStatement::OptimizeTable(v) => v.analyze(ctx).await,
@@ -176,12 +175,12 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::RevokePrivilege(v) => v.analyze(ctx).await,
             DfStatement::DropUser(v) => v.analyze(ctx).await,
             DfStatement::Copy(v) => v.analyze(ctx).await,
-            DfStatement::CreateStage(v) => v.analyze(ctx).await,
             DfStatement::ShowFunctions(v) => v.analyze(ctx).await,
-            DfStatement::DropStage(v) => v.analyze(ctx).await,
             DfStatement::CreateUDF(v) => v.analyze(ctx).await,
             DfStatement::DropUDF(v) => v.analyze(ctx).await,
             DfStatement::AlterUDF(v) => v.analyze(ctx).await,
+            DfStatement::CreateRole(v) => v.analyze(ctx).await,
+            DfStatement::DropRole(v) => v.analyze(ctx).await,
             DfStatement::ShowEngines(v) => v.analyze(ctx).await,
         }
     }

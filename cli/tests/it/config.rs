@@ -21,12 +21,16 @@ use bendctl::cmds::config::RepoMirror;
 use bendctl::cmds::Config;
 use bendctl::cmds::Status;
 use bendctl::error::Result;
-use httpmock::Method::GET;
-use httpmock::MockServer;
+use common_base::tokio;
 use tempfile::tempdir;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
 
-#[test]
-fn test_mirror() -> Result<()> {
+#[tokio::test]
+async fn test_mirror() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
         mode: Mode::Sql,
@@ -37,19 +41,20 @@ fn test_mirror() -> Result<()> {
     let t = tempdir()?;
     conf.databend_dir = t.path().to_str().unwrap().to_string();
     // Start a lightweight mock server.
-    let server = MockServer::start();
+    let server = MockServer::start().await;
     // Create a mock on the server.
-    let _ = server.mock(|when, then| {
-        when.method(GET).path("/v1/health");
-        then.status(200)
-            .header("content-type", "text/html")
-            .body("health");
-    });
+    let template = ResponseTemplate::new(200).set_body_raw("health", "text/html");
+    Mock::given(method("GET"))
+        .and(path("/v1/health"))
+        .respond_with(template)
+        // Mounting the mock on the mock server - it's now effective!
+        .mount(&server)
+        .await;
 
     // situation 1: user defined mirror
     {
         let custom = CustomMirror {
-            base_url: server.url("/v1/health"),
+            base_url: format!("{}/v1/health", &server.uri()),
             databend_url: "".to_string(),
             databend_tag_url: "".to_string(),
             playground_url: "".to_string(),
@@ -63,7 +68,7 @@ fn test_mirror() -> Result<()> {
     // situation 2: previous mirror
     {
         let status_mirror = CustomMirror {
-            base_url: server.url("/v1/health"),
+            base_url: format!("{}/v1/health", &server.uri()),
             databend_url: "".to_string(),
             databend_tag_url: "".to_string(),
             playground_url: "".to_string(),

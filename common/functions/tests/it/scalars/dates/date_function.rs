@@ -82,7 +82,7 @@ fn test_toyyyymm_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type(ToYYYYMMFunction::try_create("c")?, &tests)
+    test_scalar_functions_with_type(ToYYYYMMFunction::try_create("c")?, &tests, true)
 }
 
 #[test]
@@ -171,7 +171,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type(ToYYYYMMDDFunction::try_create("c")?, &tests)
+    test_scalar_functions_with_type(ToYYYYMMDDFunction::try_create("c")?, &tests, true)
 }
 
 #[test]
@@ -233,7 +233,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type(ToYYYYMMDDhhmmssFunction::try_create("a")?, &tests)
+    test_scalar_functions_with_type(ToYYYYMMDDhhmmssFunction::try_create("a")?, &tests, true)
 }
 
 #[test]
@@ -295,7 +295,7 @@ fn test_tomonth_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type(ToMonthFunction::try_create("c")?, &tests)
+    test_scalar_functions_with_type(ToMonthFunction::try_create("c")?, &tests, true)
 }
 
 #[test]
@@ -357,7 +357,7 @@ fn test_todayofyear_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type(ToDayOfYearFunction::try_create("a")?, &tests)
+    test_scalar_functions_with_type(ToDayOfYearFunction::try_create("a")?, &tests, true)
 }
 
 #[test]
@@ -419,7 +419,7 @@ fn test_todatofweek_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type(ToDayOfWeekFunction::try_create("a")?, &tests)
+    test_scalar_functions_with_type(ToDayOfWeekFunction::try_create("a")?, &tests, true)
 }
 
 #[test]
@@ -481,7 +481,7 @@ fn test_todayofmonth_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type(ToDayOfMonthFunction::try_create("a")?, &tests)
+    test_scalar_functions_with_type(ToDayOfMonthFunction::try_create("a")?, &tests, true)
 }
 
 #[test]
@@ -543,7 +543,7 @@ fn test_tohour_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type(ToHourFunction::try_create("a")?, &tests)
+    test_scalar_functions_with_type(ToHourFunction::try_create("a")?, &tests, true)
 }
 
 #[test]
@@ -605,7 +605,7 @@ fn test_tominute_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type(ToMinuteFunction::try_create("a")?, &tests)
+    test_scalar_functions_with_type(ToMinuteFunction::try_create("a")?, &tests, true)
 }
 
 #[test]
@@ -667,7 +667,7 @@ fn test_tosecond_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type(ToSecondFunction::try_create("a")?, &tests)
+    test_scalar_functions_with_type(ToSecondFunction::try_create("a")?, &tests, true)
 }
 
 #[test]
@@ -702,5 +702,5 @@ fn test_tomonday_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type(ToMondayFunction::try_create("a")?, &tests)
+    test_scalar_functions_with_type(ToMondayFunction::try_create("a")?, &tests, true)
 }

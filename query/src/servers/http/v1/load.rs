@@ -20,7 +20,7 @@ use common_base::ProgressValues;
 use common_meta_types::UserInfo;
 use common_planners::InsertInputSource;
 use common_planners::PlanNode;
-use common_streams::CsvSource;
+use common_streams::CsvSourceBuilder;
 use common_streams::Source;
 use common_tracing::tracing;
 use futures::StreamExt;
@@ -72,49 +72,81 @@ pub async fn streaming_load(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let csv_header = req
-        .headers()
-        .get("csv_header")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("0")
-        .eq_ignore_ascii_case("1");
-
-    let field_delimitor = req
-        .headers()
-        .get("field_delimitor")
-        .and_then(|v| v.to_str().ok())
-        .map(|v| match v.len() {
-            n if n >= 1 => {
-                if v.as_bytes()[0] == b'\\' {
-                    b'\t'
-                } else {
-                    v.as_bytes()[0]
-                }
-            }
-            _ => b',',
-        })
-        .unwrap_or(b',');
-
-    let record_delimitor = req
-        .headers()
-        .get("record_delimitor")
-        .and_then(|v| v.to_str().ok())
-        .map(|v| match v.len() {
-            n if n >= 1 => {
-                if v.as_bytes()[0] == b'\\' {
-                    b'\n'
-                } else {
-                    v.as_bytes()[0]
-                }
-            }
-            _ => b'\n',
-        })
-        .unwrap_or(b'\n');
-
     let plan = PlanParser::parse(context.clone(), insert_sql)
         .await
         .map_err(InternalServerError)?;
     context.attach_query_str(insert_sql);
+
+    let mut builder = CsvSourceBuilder::create(plan.schema());
+
+    // Skip header.
+    {
+        let skip_header = req
+            .headers()
+            .get("skip_header")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("0")
+            .parse::<i32>()
+            .map_err(|e| {
+                poem::Error::from_string(
+                    format!("Parse csv skip_header error:{:}", e),
+                    StatusCode::BAD_REQUEST,
+                )
+            })?;
+
+        builder.skip_header(skip_header);
+    }
+
+    // Field delimiter.
+    {
+        let field_delimiter = req
+            .headers()
+            .get("field_delimiter")
+            .and_then(|v| v.to_str().ok())
+            .map(|v| match v.len() {
+                n if n >= 1 => {
+                    if v.as_bytes()[0] == b'\\' {
+                        "\t"
+                    } else {
+                        v
+                    }
+                }
+                _ => ",",
+            })
+            .unwrap_or(",");
+
+        builder.field_delimiter(field_delimiter);
+    }
+
+    // Record delimiter.
+    {
+        let record_delimiter = req
+            .headers()
+            .get("record_delimiter")
+            .and_then(|v| v.to_str().ok())
+            .map(|v| match v.len() {
+                n if n >= 1 => {
+                    if v.as_bytes()[0] == b'\\' {
+                        "\n"
+                    } else {
+                        v
+                    }
+                }
+                _ => "\n",
+            })
+            .unwrap_or("\n");
+
+        builder.record_delimiter(record_delimiter);
+    }
+
+    // Block size.
+    {
+        let max_block_size = context
+            .get_settings()
+            .get_max_block_size()
+            .map_err(InternalServerError)? as usize;
+        builder.block_size(max_block_size);
+    }
 
     // validate plan
     match &plan {
@@ -146,12 +178,9 @@ pub async fn streaming_load(
         )),
     }?;
 
-    let max_block_size = context
-        .get_settings()
-        .get_max_block_size()
-        .map_err(InternalServerError)? as usize;
     let interpreter =
         InterpreterFactory::get(context.clone(), plan.clone()).map_err(InternalServerError)?;
+
     // Write Start to query log table.
     let _ = interpreter
         .start()
@@ -161,7 +190,7 @@ pub async fn streaming_load(
     let stream = stream! {
         while let Ok(Some(field)) = multipart.next_field().await {
             let reader = field.into_async_read();
-            let mut source = CsvSource::try_create(reader.compat(), plan.schema(), csv_header, field_delimitor, record_delimitor, max_block_size)?;
+            let mut source = builder.build(reader.compat())?;
 
             loop {
                 let block = source.read().await;

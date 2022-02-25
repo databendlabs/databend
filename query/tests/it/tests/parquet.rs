@@ -14,13 +14,13 @@
 
 use std::fs::File;
 
-use common_arrow::arrow::io::parquet::write::write_file;
+use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::io::parquet::write::Compression;
 use common_arrow::arrow::io::parquet::write::Encoding;
 use common_arrow::arrow::io::parquet::write::RowGroupIterator;
 use common_arrow::arrow::io::parquet::write::Version;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
-use common_arrow::arrow::record_batch::RecordBatch;
+use common_arrow::write_parquet_file;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 
@@ -62,7 +62,7 @@ impl ParquetTestData {
         let mut batches = vec![];
         let mut encodings = vec![];
         for block in blocks {
-            batches.push(Ok(RecordBatch::try_from(block.clone()).unwrap()));
+            batches.push(Ok(Chunk::try_from(block.clone()).unwrap()));
             encodings.push(Encoding::Plain);
         }
 
@@ -70,15 +70,6 @@ impl ParquetTestData {
             RowGroupIterator::try_new(batches.into_iter(), &schema, options, encodings).unwrap();
 
         let mut file = File::create(path).unwrap();
-        let parquet_schema = row_groups.parquet_schema().clone();
-        write_file(
-            &mut file,
-            row_groups,
-            &schema,
-            parquet_schema,
-            options,
-            None,
-        )
-        .unwrap();
+        write_parquet_file(&mut file, row_groups, schema, options).unwrap();
     }
 }

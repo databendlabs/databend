@@ -64,6 +64,10 @@ impl ManagementModeAccess {
                 | PlanNode::GrantPrivilege(_)
                 | PlanNode::RevokePrivilege(_)
 
+                // Role.
+                | PlanNode::CreateRole(_)
+                | PlanNode::DropRole(_)
+
                 // Stage.
                 | PlanNode::CreateUserStage(_)
                 | PlanNode::DropUserStage(_)

@@ -105,5 +105,5 @@ fn test_if_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(IfFunction::try_create("if")?, &tests)
+    test_scalar_functions(IfFunction::try_create("if")?, &tests, false)
 }

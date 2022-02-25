@@ -27,6 +27,8 @@ fmt:
 lint:
 	cargo fmt
 	cargo clippy --tests -- -D warnings
+	# Cargo.toml file formatter(make setup to install)
+	taplo fmt
 	# Python file formatter(make setup to install)
 	yapf -ri tests/
 	# Bash file formatter(make setup to install)
@@ -129,7 +131,10 @@ stateless-cluster-test-tls: build-debug
 	rm -rf ./_meta*/
 	bash ./scripts/ci/ci-run-stateless-tests-cluster-tls.sh
 
-test: unit-test stateless-test
+metactl-test: build-debug
+	bash ./tests/metactl/test-metactl.sh
+
+test: unit-test stateless-test metactl-test
 
 docker:
 	docker build --network host -f docker/Dockerfile -t ${HUB}/databend-query:${TAG} .

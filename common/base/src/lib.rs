@@ -15,6 +15,7 @@
 #![feature(thread_local)]
 
 mod http_shutdown_handlers;
+mod net;
 mod profiling;
 mod progress;
 mod runtime;
@@ -26,6 +27,8 @@ mod thread;
 mod uniq_id;
 
 pub use http_shutdown_handlers::HttpShutdownHandler;
+pub use net::get_free_tcp_port;
+pub use net::get_free_udp_port;
 pub use profiling::Profiling;
 pub use progress::Progress;
 pub use progress::ProgressValues;

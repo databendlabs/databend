@@ -66,9 +66,7 @@ impl AnalyzableStatement for DfQueryStatement {
         let mut ir = QueryNormalizer::normalize(ctx.clone(), self).await?;
 
         QualifiedRewriter::rewrite(&joined_schema, ctx.clone(), &mut ir)?;
-
         QueryCollectPushDowns::collect_extras(&mut ir, &mut joined_schema)?;
-
         let analyze_state = self.analyze_query(ir).await?;
         self.check_and_finalize(joined_schema, analyze_state, ctx)
             .await

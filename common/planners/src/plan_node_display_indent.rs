@@ -18,9 +18,12 @@ use std::fmt::Formatter;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::BroadcastPlan;
+use crate::CopyPlan;
 use crate::CreateDatabasePlan;
+use crate::CreateRolePlan;
 use crate::CreateTablePlan;
 use crate::DropDatabasePlan;
+use crate::DropRolePlan;
 use crate::DropTablePlan;
 use crate::Expression;
 use crate::ExpressionPlan;
@@ -71,6 +74,9 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
             PlanNode::DropDatabase(plan) => Self::format_drop_database(f, plan),
             PlanNode::CreateTable(plan) => Self::format_create_table(f, plan),
             PlanNode::DropTable(plan) => Self::format_drop_table(f, plan),
+            PlanNode::CreateRole(plan) => Self::format_create_role(f, plan),
+            PlanNode::DropRole(plan) => Self::format_drop_role(f, plan),
+            PlanNode::Copy(plan) => Self::format_copy(f, plan),
             _ => {
                 let mut printed = true;
 
@@ -237,7 +243,13 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
                     }
 
                     write!(f, "limit: {:?}", p.limit.unwrap())?;
-                    write!(f, ", order_by: {:?}", p.order_by)?;
+                }
+
+                if !p.order_by.is_empty() {
+                    if comma {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "order_by: {:?}", p.order_by)?;
                 }
 
                 write!(f, "]")?;
@@ -264,6 +276,16 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
         write!(f, " if_exists:{:}", plan.if_exists)
     }
 
+    fn format_create_role(f: &mut Formatter, plan: &CreateRolePlan) -> fmt::Result {
+        write!(f, "Create role {:}", plan.role_identity)?;
+        write!(f, " if_not_exist:{:}", plan.if_not_exists)
+    }
+
+    fn format_drop_role(f: &mut Formatter, plan: &DropRolePlan) -> fmt::Result {
+        write!(f, "Drop role {:}", plan.role_identity)?;
+        write!(f, " if_exists:{:}", plan.if_exists)
+    }
+
     fn format_create_table(f: &mut Formatter, plan: &CreateTablePlan) -> fmt::Result {
         write!(f, "Create table {:}.{:}", plan.db, plan.table)?;
         write!(f, " {:},", plan.schema())?;
@@ -277,5 +299,9 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
     fn format_drop_table(f: &mut Formatter, plan: &DropTablePlan) -> fmt::Result {
         write!(f, "Drop table {:}.{:},", plan.db, plan.table)?;
         write!(f, " if_exists:{:}", plan.if_exists)
+    }
+
+    fn format_copy(f: &mut Formatter, plan: &CopyPlan) -> fmt::Result {
+        write!(f, "{:?}", plan)
     }
 }

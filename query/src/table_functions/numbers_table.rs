@@ -122,18 +122,44 @@ impl Table for NumbersTable {
     async fn read_partitions(
         &self,
         ctx: Arc<QueryContext>,
-        _push_downs: Option<Extras>,
+        push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let max_block_size = ctx.get_settings().get_max_block_size()?;
-        let fake_partitions = (self.total / max_block_size) + 1;
+        let mut limit = None;
+
+        if let Some(extras) = &push_downs {
+            if extras.limit.is_some() {
+                let sort_descriptions_result =
+                    get_sort_descriptions(&self.table_info.schema(), &extras.order_by);
+
+                // It is allowed to have an error when we can't get sort columns from the expression. For
+                // example 'select number from numbers(10) order by number+4 limit 10', the column 'number+4'
+                // doesn't exist in the numbers table.
+                // For case like that, we ignore the error and don't apply any optimization.
+
+                // No order by case
+                match sort_descriptions_result {
+                    Ok(v) if v.is_empty() => {
+                        limit = extras.limit;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let total = match limit {
+            Some(limit) => std::cmp::min(self.total, limit as u64),
+            None => self.total,
+        };
+
+        let fake_partitions = (total / max_block_size) + 1;
         let statistics = Statistics::new_exact(
-            self.total as usize,
-            ((self.total) * size_of::<u64>() as u64) as usize,
+            total as usize,
+            ((total) * size_of::<u64>() as u64) as usize,
             fake_partitions as usize,
             fake_partitions as usize,
         );
-        let parts =
-            generate_block_parts(0, ctx.get_settings().get_max_threads()? as u64, self.total);
+
+        let parts = generate_block_parts(0, ctx.get_settings().get_max_threads()? as u64, total);
 
         Ok((statistics, parts))
     }
@@ -147,36 +173,8 @@ impl Table for NumbersTable {
     async fn read(
         &self,
         ctx: Arc<QueryContext>,
-        plan: &ReadDataSourcePlan,
+        _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        // If we have order-by and limit push-downs, try the best to only generate top n rows.
-        if let Some(extras) = &plan.push_downs {
-            if extras.limit.is_some() {
-                let sort_descriptions_result =
-                    get_sort_descriptions(&self.table_info.schema(), &extras.order_by);
-
-                // It is allowed to have an error when we can't get sort columns from the expression. For
-                // example 'select number from numbers(10) order by number+4 limit 10', the column 'number+4'
-                // doesn't exist in the numbers table.
-                // For case like that, we ignore the error and don't apply any optimization.
-                if sort_descriptions_result.is_err() {
-                    return Ok(Box::pin(NumbersStream::try_create(
-                        ctx,
-                        self.schema(),
-                        vec![],
-                        None,
-                    )?));
-                }
-                let stream = NumbersStream::try_create(
-                    ctx,
-                    self.schema(),
-                    sort_descriptions_result.unwrap(),
-                    extras.limit,
-                )?;
-                return Ok(Box::pin(stream));
-            }
-        }
-
         Ok(Box::pin(NumbersStream::try_create(
             ctx,
             self.schema(),

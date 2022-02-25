@@ -124,7 +124,7 @@ async fn test_monotonic_function() -> Result<()> {
             Projection: (number * number):UInt64\
             \n  Sort: (number + (number + 3)):UInt64\
             \n    Expression: (number * number):UInt64, (number + (number + 3)):UInt64 (Before OrderBy)\
-            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]",
+            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], order_by: [(number + (number + 3))]]",
         },
         // TODO: broken this by select statement analyzer.
         Test {

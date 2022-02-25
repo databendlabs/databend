@@ -20,7 +20,6 @@ use async_stream::stream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
-use futures::io::Cursor;
 use futures::StreamExt;
 
 use crate::sessions::QueryContext;
@@ -65,8 +64,9 @@ impl FuseTable {
                     Ok(seg) => {
                         let seg_loc = io::gen_segment_info_location();
                         let bytes = serde_json::to_vec(&seg)?;
-                        da.write(&seg_loc, bytes.len() as u64)
-                        .run(Box::new(Cursor::new(bytes)))
+                        da.object(&seg_loc)
+                        .writer()
+                        .write_bytes(bytes)
                         .await
                         .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
                         let log_entry = AppendOperationLogEntry::new(seg_loc, seg);

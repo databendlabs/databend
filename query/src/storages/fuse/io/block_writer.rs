@@ -13,16 +13,15 @@
 //  limitations under the License.
 //
 
+use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::io::parquet::write::*;
-use common_arrow::arrow::record_batch::RecordBatch;
 use common_arrow::parquet::encoding::Encoding;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use futures::io::Cursor;
 use opendal::Operator;
 
 pub async fn write_block(
@@ -36,41 +35,30 @@ pub async fn write_block(
         compression: Compression::Lz4, // let's begin with lz4
         version: Version::V2,
     };
-    let batch = RecordBatch::try_from(block)?;
+    let batch = Chunk::try_from(block)?;
     let encodings: Vec<_> = arrow_schema
-        .fields()
+        .fields
         .iter()
         .map(|f| col_encoding(&f.data_type))
         .collect();
 
     let iter = vec![Ok(batch)];
     let row_groups = RowGroupIterator::try_new(iter.into_iter(), arrow_schema, options, encodings)?;
-    let parquet_schema = row_groups.parquet_schema().clone();
 
     // PutObject in S3 need to know the content-length in advance
     // multipart upload may intimidate this, but let's fit things together first
     // see issue #xxx
 
-    use bytes::BufMut;
     // we need a configuration of block size threshold here
-    let mut writer = Vec::with_capacity(100 * 1024 * 1024).writer();
+    let mut buf = Vec::with_capacity(100 * 1024 * 1024);
 
-    let len = common_arrow::parquet::write::write_file(
-        &mut writer,
-        row_groups,
-        parquet_schema,
-        options,
-        None,
-        None,
-    )
-    .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-
-    let parquet = writer.into_inner();
-    let stream_len = parquet.len();
+    let len = common_arrow::write_parquet_file(&mut buf, row_groups, arrow_schema.clone(), options)
+        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
 
     data_accessor
-        .write(location, stream_len as u64)
-        .run(Box::new(Cursor::new(parquet)))
+        .object(location)
+        .writer()
+        .write_bytes(buf)
         .await
         .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 

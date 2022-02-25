@@ -98,7 +98,7 @@ temp_data_path = \"\"
 
 [storage.s3]
 region = \"\"
-endpoint_url = \"\"
+endpoint_url = \"https://s3.amazonaws.com\"
 access_key_id = \"\"
 secret_access_key = \"\"
 enable_pod_iam_policy = false

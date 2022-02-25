@@ -14,12 +14,10 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::parquet::read::decompress;
-use common_arrow::arrow::io::parquet::read::page_stream_to_array;
-use common_arrow::parquet::metadata::ColumnChunkMetaData;
-use common_arrow::parquet::read::get_page_stream;
+use common_arrow::arrow::io::parquet::read::read_columns_many_async;
+use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -27,10 +25,7 @@ use common_exception::Result;
 use common_tracing::tracing;
 use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
-use futures::io::BufReader;
-use futures::StreamExt;
-use futures::TryStreamExt;
-use opendal::readers::SeekableReader;
+use futures::future::BoxFuture;
 use opendal::Operator;
 
 use crate::storages::fuse::io::meta_readers::BlockMetaReader;
@@ -39,11 +34,9 @@ pub struct BlockReader {
     data_accessor: Operator,
     path: String,
     block_schema: DataSchemaRef,
-    table_schema: DataSchemaRef,
     arrow_table_schema: ArrowSchema,
     projection: Vec<usize>,
     file_len: u64,
-    read_buffer_size: u64,
     metadata_reader: BlockMetaReader,
 }
 
@@ -54,7 +47,6 @@ impl BlockReader {
         table_schema: DataSchemaRef,
         projection: Vec<usize>,
         file_len: u64,
-        read_buffer_size: u64,
         reader: BlockMetaReader,
     ) -> Self {
         let block_schema = Arc::new(table_schema.project(projection.clone()));
@@ -63,11 +55,9 @@ impl BlockReader {
             data_accessor,
             path,
             block_schema,
-            table_schema,
             arrow_table_schema,
             projection,
             file_len,
-            read_buffer_size,
             metadata_reader: reader,
         }
     }
@@ -88,67 +78,50 @@ impl BlockReader {
             &metadata.row_groups[0]
         };
 
-        let col_num = self.projection.len();
-        let cols = self
+        let arrow_fields = &self.arrow_table_schema.fields;
+        let stream_len = self.file_len;
+        let parquet_fields = metadata.schema().fields();
+
+        // read_columns_many_async use field name to filter columns
+        let fields_to_read = self
             .projection
             .clone()
             .into_iter()
-            .map(|idx| (row_group.column(idx).clone(), idx));
+            .map(|idx| {
+                let origin = arrow_fields[idx].clone();
+                Field {
+                    name: parquet_fields[idx].name().to_string(),
+                    ..origin
+                }
+            })
+            .collect();
 
-        let fields = self.table_schema.fields();
-        let arrow_fields = self.arrow_table_schema.fields();
-        let stream_len = self.file_len;
-        let read_buffer_size = self.read_buffer_size;
-
-        let stream = futures::stream::iter(cols).map(|(col_meta, idx)| {
+        let factory = || {
             let data_accessor = self.data_accessor.clone();
             let path = self.path.clone();
-            async move {
-                let reader = SeekableReader::new(data_accessor, path.as_str(), stream_len);
-                let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
-                let data_type = fields[idx].data_type();
-                let arrow_type = arrow_fields[idx].data_type();
-                Self::read_column(reader, &col_meta, data_type.clone(), arrow_type.clone()).await
-            }
-            .instrument(debug_span!("block_reader_read_column").or_current())
-        });
+            Box::pin(async move {
+                Ok(data_accessor
+                    .object(path.as_str())
+                    .reader()
+                    .total_size(stream_len))
+            }) as BoxFuture<_>
+        };
 
-        // TODO configuration of the buffer size
-        let buffer_size = 10;
-        let n = std::cmp::min(buffer_size, col_num);
-        let data_cols = stream.buffered(n).try_collect().await?;
+        let column_chunks = read_columns_many_async(factory, row_group, fields_to_read, None)
+            .instrument(debug_span!("block_reader_read_columns").or_current())
+            .await
+            .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
 
-        let block = DataBlock::create(self.block_schema.clone(), data_cols);
+        let mut chunks =
+            RowGroupDeserializer::new(column_chunks, row_group.num_rows() as usize, None);
+
+        // expect exact one chunk
+        let chunk = match chunks.next() {
+            None => return Err(ErrorCode::ParquetError("fail to get a chunk")),
+            Some(chunk) => chunk.map_err(|e| ErrorCode::ParquetError(e.to_string()))?,
+        };
+
+        let block = DataBlock::from_chunk(&self.block_schema, &chunk)?;
         Ok(block)
-    }
-
-    async fn read_column(
-        mut reader: BufReader<SeekableReader>,
-        column_chunk_meta: &ColumnChunkMetaData,
-        data_type: DataTypePtr,
-        arrow_type: ArrowType,
-    ) -> Result<ColumnRef> {
-        let col_pages = get_page_stream(
-            column_chunk_meta,
-            &mut reader,
-            vec![],
-            Arc::new(|_, _| true),
-        )
-        .instrument(debug_span!("block_reader_get_column_page"))
-        .await
-        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-        let pages = col_pages.map(|compressed_page| {
-            debug_span!("block_reader_decompress_page")
-                .in_scope(|| decompress(compressed_page?, &mut vec![]))
-        });
-        let array = page_stream_to_array(pages, column_chunk_meta, arrow_type)
-            .instrument(debug_span!("block_reader_page_stream_to_array"))
-            .await?;
-        let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
-
-        match data_type.is_nullable() {
-            true => Ok(array.into_nullable_column()),
-            false => Ok(array.into_column()),
-        }
     }
 }

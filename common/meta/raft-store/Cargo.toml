@@ -14,18 +14,18 @@ test = false
 [dependencies]
 common-arrow = { path = "../../arrow" }
 common-exception = { path = "../../exception" }
+common-grpc = { path = "../../grpc" }
 common-io = { path = "../../io" }
 common-meta-api = { path = "../api" }
 common-meta-sled-store = { path = "../sled-store" }
 common-meta-types = { path = "../types" }
 common-tracing = { path = "../../tracing" }
-common-grpc = { path = "../../grpc" }
 
 # crates.io deps
 anyhow = "1.0.53"
 async-trait = "0.1.52"
 bytes = "1.1.0"
-clap = { version = "3.0.14", features = ["derive", "env"] }
+clap = { version = "3.1.1", features = ["derive", "env"] }
 derive_more = "0.99.17"
 futures = "0.3.21"
 hostname = "0.3"

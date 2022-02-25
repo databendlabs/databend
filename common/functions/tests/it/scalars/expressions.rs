@@ -101,7 +101,7 @@ fn test_cast_function() -> Result<()> {
     ];
 
     for (test_func, test) in tests {
-        test_scalar_functions(test_func, &[test])?;
+        test_scalar_functions(test_func, &[test], false)?;
     }
 
     Ok(())
@@ -137,7 +137,7 @@ fn test_datetime_cast_function() -> Result<()> {
     ];
 
     for (test_func, test) in tests {
-        test_scalar_functions_with_type(test_func, &[test])?;
+        test_scalar_functions_with_type(test_func, &[test], false)?;
     }
 
     Ok(())

@@ -42,7 +42,7 @@ fn test_lower_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(LowerFunction::try_create("lower")?, &tests)
+    test_scalar_functions(LowerFunction::try_create("lower")?, &tests, true)
 }
 
 #[test]
@@ -54,5 +54,5 @@ fn test_lower_nullable() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(LowerFunction::try_create("lcase")?, &tests)
+    test_scalar_functions(LowerFunction::try_create("lcase")?, &tests, true)
 }

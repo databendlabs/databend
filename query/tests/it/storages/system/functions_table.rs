@@ -12,19 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_base::tokio;
 use common_exception::Result;
 use databend_query::storages::system::FunctionsTable;
-use databend_query::storages::Table;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_functions_table() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
-    let table: Arc<dyn Table> = Arc::new(FunctionsTable::create(1));
+    let table = FunctionsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     let stream = table.read(ctx, &source_plan).await?;

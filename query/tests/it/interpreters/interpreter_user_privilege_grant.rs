@@ -17,6 +17,8 @@ use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::PasswordHashMethod;
+use common_meta_types::PrincipalIdentity;
+use common_meta_types::RoleInfo;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
@@ -39,16 +41,23 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         hash_value: Vec::from(password),
         hash_method: PasswordHashMethod::PlainText,
     };
-    let user_info = UserInfo::new(name.to_string(), hostname.to_string(), auth_info);
-    assert_eq!(user_info.grants, UserGrantSet::empty());
+
     let user_mgr = ctx.get_user_manager();
-    user_mgr.add_user(&tenant, user_info).await?;
+    user_mgr
+        .add_user(
+            &tenant,
+            UserInfo::new(name.to_string(), hostname.to_string(), auth_info),
+        )
+        .await?;
+    user_mgr
+        .add_role(&tenant, RoleInfo::new("role1".to_string(), "%".to_string()))
+        .await?;
 
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
         query: String,
-        user_identity: Option<(&'static str, &'static str)>,
+        principal_identity: Option<PrincipalIdentity>,
         expected_grants: Option<UserGrantSet>,
         expected_err: Option<&'static str>,
     }
@@ -57,7 +66,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         Test {
             name: "grant create user to global",
             query: format!("GRANT CREATE USER ON *.* TO '{}'@'{}'", name, hostname),
-            user_identity: Some((name, hostname)),
+            principal_identity: Some(PrincipalIdentity::user(name.to_string(), hostname.to_string())),
             expected_grants: Some({
                 let mut grants = UserGrantSet::empty();
                 grants.grant_privileges(
@@ -71,16 +80,32 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
             expected_err: None,
         },
         Test {
+            name: "grant create user to global for role",
+            query: "GRANT CREATE USER ON *.* TO ROLE 'role1'".to_string(),
+            principal_identity: Some(PrincipalIdentity::role("role1".to_string(), "%".to_string())),
+            expected_grants: Some({
+                let mut grants = UserGrantSet::empty();
+                grants.grant_privileges(
+                    "role1",
+                    "%",
+                    &GrantObject::Global,
+                    vec![UserPrivilegeType::CreateUser].into(),
+                );
+                grants
+            }),
+            expected_err: None,
+        },
+        Test {
             name: "grant create user to current database and expect err",
             query: format!("GRANT CREATE USER ON * TO '{}'@'{}'", name, hostname),
-            user_identity: None,
+            principal_identity: None,
             expected_grants: None,
             expected_err: Some("Code: 1061, displayText = Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used."),
         },
         Test {
             name: "grant all on global",
             query: format!("GRANT ALL ON *.* TO '{}'@'{}'", name, hostname),
-            user_identity: Some((name, hostname)),
+            principal_identity: Some(PrincipalIdentity::user(name.to_string(), hostname.to_string())),
             expected_grants: Some({
                 let mut grants = UserGrantSet::empty();
                 grants.grant_privileges(
@@ -116,9 +141,14 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         } else {
             assert!(r.is_ok(), "got err on query {}: {:?}", tt.query, r);
         }
-        if let Some((name, hostname)) = tt.user_identity {
-            let new_user = user_mgr.get_user(&tenant, name, hostname).await?;
-            assert_eq!(new_user.grants, tt.expected_grants.unwrap())
+        if let Some(PrincipalIdentity::User(user)) = tt.principal_identity {
+            let user_info = user_mgr
+                .get_user(&tenant, &user.username, &user.hostname)
+                .await?;
+            assert_eq!(user_info.grants, tt.expected_grants.unwrap())
+        } else if let Some(PrincipalIdentity::Role(role)) = tt.principal_identity {
+            let role_info = user_mgr.get_role(&tenant, &role).await?;
+            assert_eq!(role_info.grants, tt.expected_grants.unwrap())
         }
     }
 

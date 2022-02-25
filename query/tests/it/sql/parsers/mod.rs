@@ -17,7 +17,6 @@ mod parser_copy;
 mod parser_database;
 mod parser_optimize;
 mod parser_show;
-mod parser_stage;
 mod parser_table;
 mod parser_udf;
 mod parser_use;

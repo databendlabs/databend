@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::CreateUserStagePlan;
+use common_planners::DropRolePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -25,21 +25,21 @@ use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
-pub struct CreateUserStageInterpreter {
+pub struct DropRoleInterpreter {
     ctx: Arc<QueryContext>,
-    plan: CreateUserStagePlan,
+    plan: DropRolePlan,
 }
 
-impl CreateUserStageInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateUserStagePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(CreateUserStageInterpreter { ctx, plan }))
+impl DropRoleInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropRolePlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(DropRoleInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreateUserStageInterpreter {
+impl Interpreter for DropRoleInterpreter {
     fn name(&self) -> &str {
-        "CreateUserStageInterpreter"
+        "DropRoleInterpreter"
     }
 
     #[tracing::instrument(level = "debug", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
@@ -47,12 +47,12 @@ impl Interpreter for CreateUserStageInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        // TODO: add privilege check about DROP role
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
-        let user_stage = plan.user_stage_info;
-        let _ = user_mgr
-            .add_stage(&tenant, user_stage, plan.if_not_exists)
+        user_mgr
+            .drop_role(&tenant, &plan.role_identity, plan.if_exists)
             .await?;
 
         Ok(Box::pin(DataBlockStream::create(

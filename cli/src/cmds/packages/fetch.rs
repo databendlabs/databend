@@ -19,9 +19,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use clap::App;
 use clap::Arg;
 use clap::ArgMatches;
+use clap::Command as App;
 use flate2::read::GzDecoder;
 use fs_extra::dir;
 use fs_extra::move_items;

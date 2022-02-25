@@ -22,6 +22,7 @@ use openraft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::Endpoint;
 use crate::MetaError;
 use crate::MetaResult;
 
@@ -36,12 +37,12 @@ pub struct Slot {
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Node {
     pub name: String,
-    pub address: String,
+    pub endpoint: Endpoint,
 }
 
 impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}={}", self.name, self.address)
+        write!(f, "{}={}", self.name, self.endpoint)
     }
 }
 

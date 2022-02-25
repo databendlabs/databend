@@ -26,6 +26,7 @@ use crate::protobuf::RaftReply;
 use crate::protobuf::RaftRequest;
 use crate::AppliedState;
 use crate::DatabaseInfo;
+use crate::Endpoint;
 use crate::GetDatabaseReq;
 use crate::GetKVActionReply;
 use crate::GetKVReq;
@@ -51,7 +52,7 @@ pub enum RetryableError {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct JoinRequest {
     pub node_id: NodeId,
-    pub address: String,
+    pub endpoint: Endpoint,
 }
 
 #[derive(

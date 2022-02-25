@@ -14,7 +14,7 @@
 Projection: (number % 3) as c1:UInt8, (number % 2) as c2:UInt8
   Sort: (number % 3):UInt8, number:UInt64
     Expression: (number % 3):UInt8, (number % 2):UInt8, number:UInt64 (Before OrderBy)
-      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0]]
+      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], order_by: [(number % 3), number]]
 0	1
 0	0
 0	1

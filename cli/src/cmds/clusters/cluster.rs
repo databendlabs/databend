@@ -16,9 +16,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use clap::App;
-use clap::AppSettings;
 use clap::ArgMatches;
+use clap::Command as App;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -80,7 +79,7 @@ impl Command for ClusterCommand {
     fn clap(&self) -> App<'static> {
         let subcommands = self.subcommands();
         let app = App::new("cluster")
-            .setting(AppSettings::DisableVersionFlag)
+            .disable_version_flag(true)
             .about(self.about())
             .subcommand(subcommands[0].clap())
             .subcommand(subcommands[1].clap())

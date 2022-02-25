@@ -24,6 +24,7 @@ use crate::AlterUserUDFPlan;
 use crate::BroadcastPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
+use crate::CreateRolePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
@@ -31,6 +32,7 @@ use crate::CreateUserUDFPlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
+use crate::DropRolePlan;
 use crate::DropTablePlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
@@ -118,6 +120,10 @@ pub enum PlanNode {
     GrantPrivilege(GrantPrivilegePlan),
     RevokePrivilege(RevokePrivilegePlan),
 
+    // Role.
+    CreateRole(CreateRolePlan),
+    DropRole(DropRolePlan),
+
     // Stage.
     CreateUserStage(CreateUserStagePlan),
     DropUserStage(DropUserStagePlan),
@@ -198,6 +204,10 @@ impl PlanNode {
             PlanNode::GrantPrivilege(v) => v.schema(),
             PlanNode::RevokePrivilege(v) => v.schema(),
 
+            // Role.
+            PlanNode::CreateRole(v) => v.schema(),
+            PlanNode::DropRole(v) => v.schema(),
+
             // Stage.
             PlanNode::CreateUserStage(v) => v.schema(),
             PlanNode::DropUserStage(v) => v.schema(),
@@ -276,6 +286,10 @@ impl PlanNode {
             PlanNode::DropUser(_) => "DropUser",
             PlanNode::GrantPrivilege(_) => "GrantPrivilegePlan",
             PlanNode::RevokePrivilege(_) => "RevokePrivilegePlan",
+
+            // Role.
+            PlanNode::CreateRole(_) => "CreateRole",
+            PlanNode::DropRole(_) => "DropRole",
 
             // Stage.
             PlanNode::CreateUserStage(_) => "CreateUserStagePlan",

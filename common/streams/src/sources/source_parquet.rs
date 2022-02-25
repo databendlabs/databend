@@ -15,12 +15,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::parquet::read::decompress;
-use common_arrow::arrow::io::parquet::read::page_stream_to_array;
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::schema::FileMetaData;
-use common_arrow::parquet::read::get_page_stream;
+use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
+use common_arrow::read_columns_many_async;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -30,39 +30,59 @@ use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
 use futures::AsyncRead;
 use futures::AsyncSeek;
-use futures::StreamExt;
 
 use crate::Source;
 
-pub struct ParquetSource<R> {
-    reader: R,
-    block_schema: DataSchemaRef,
-    arrow_table_schema: ArrowSchema,
+#[derive(Debug, Clone)]
+pub struct ParquetSourceBuilder {
+    schema: DataSchemaRef,
     projection: Vec<usize>,
     metadata: Option<FileMetaData>,
+}
+
+impl ParquetSourceBuilder {
+    pub fn create(schema: DataSchemaRef) -> Self {
+        ParquetSourceBuilder {
+            schema,
+            projection: vec![],
+            metadata: None,
+        }
+    }
+
+    pub fn projection(&mut self, projection: Vec<usize>) -> &mut Self {
+        self.projection = projection;
+        self
+    }
+
+    pub fn meta_data(&mut self, meta_data: Option<FileMetaData>) -> &mut Self {
+        self.metadata = meta_data;
+        self
+    }
+
+    pub fn build<R>(&self, reader: R) -> Result<ParquetSource<R>>
+    where R: AsyncRead + AsyncSeek + Unpin + Send {
+        Ok(ParquetSource::create(self.clone(), reader))
+    }
+}
+
+pub struct ParquetSource<R> {
+    reader: R,
+    builder: ParquetSourceBuilder,
     current_row_group: usize,
+    arrow_table_schema: ArrowSchema,
 }
 
 impl<R> ParquetSource<R>
 where R: AsyncRead + AsyncSeek + Unpin + Send
 {
-    pub fn new(reader: R, table_schema: DataSchemaRef, projection: Vec<usize>) -> Self {
-        Self::with_meta(reader, table_schema, projection, None)
-    }
+    fn create(builder: ParquetSourceBuilder, reader: R) -> Self {
+        let arrow_table_schema =
+            Arc::new(builder.schema.project(builder.projection.clone())).to_arrow();
 
-    pub fn with_meta(
-        reader: R,
-        table_schema: DataSchemaRef,
-        projection: Vec<usize>,
-        metadata: Option<FileMetaData>,
-    ) -> Self {
-        let block_schema = Arc::new(table_schema.project(projection.clone()));
         ParquetSource {
             reader,
-            block_schema,
-            arrow_table_schema: table_schema.to_arrow(),
-            projection,
-            metadata,
+            builder,
+            arrow_table_schema,
             current_row_group: 0,
         }
     }
@@ -75,15 +95,15 @@ where R: AsyncRead + AsyncSeek + Unpin + Send
     #[tracing::instrument(level = "debug", skip_all)]
     async fn read(&mut self) -> Result<Option<DataBlock>> {
         let fetched_metadata;
-        let metadata = match &self.metadata {
+        let metadata = match &self.builder.metadata {
             Some(m) => m,
             None => {
                 fetched_metadata = read_metadata_async(&mut self.reader)
                     .instrument(debug_span!("parquet_source_read_meta"))
                     .await
                     .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-                self.metadata = Some(fetched_metadata);
-                match self.metadata.as_ref() {
+                self.builder.metadata = Some(fetched_metadata);
+                match self.builder.metadata.as_ref() {
                     Some(m) => m,
                     _ => unreachable!(),
                 }
@@ -94,34 +114,33 @@ where R: AsyncRead + AsyncSeek + Unpin + Send
             return Ok(None);
         }
 
-        let fields = self.arrow_table_schema.fields();
-        let row_grp = &metadata.row_groups[self.current_row_group];
-        let cols = self
+        let fields = &self.arrow_table_schema.fields;
+
+        let row_group = &metadata.row_groups[self.current_row_group];
+        let fields_to_read: Vec<&Field> = self
+            .builder
             .projection
             .clone()
             .into_iter()
-            .map(|idx| (row_grp.column(idx).clone(), idx));
-        let mut data_cols = Vec::with_capacity(cols.len());
-        for (col_meta, idx) in cols {
-            let col_pages =
-                get_page_stream(&col_meta, &mut self.reader, vec![], Arc::new(|_, _| true))
-                    .instrument(debug_span!("parquet_source_get_column_page"))
-                    .await
-                    .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-            let pages = col_pages.map(|compressed_page| decompress(compressed_page?, &mut vec![]));
-            let array = page_stream_to_array(pages, &col_meta, fields[idx].data_type.clone())
-                .instrument(debug_span!("parquet_source_page_stream_to_array"))
-                .await?;
-            let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
+            .map(|idx| &fields[idx])
+            .collect();
 
-            let column = match fields[idx].nullable {
-                false => array.into_column(),
-                true => array.into_nullable_column(),
-            };
-            data_cols.push(column);
-        }
+        let column_chunks =
+            read_columns_many_async(&mut self.reader, row_group, fields_to_read, None)
+                .await
+                .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
+
+        let mut chunks =
+            RowGroupDeserializer::new(column_chunks, row_group.num_rows() as usize, None);
+
+        // expect exact one chunk
+        let chunk = match chunks.next() {
+            None => return Err(ErrorCode::ParquetError("fail to get a chunk")),
+            Some(chunk) => chunk.map_err(|e| ErrorCode::ParquetError(e.to_string()))?,
+        };
+
+        let block = DataBlock::from_chunk(&self.builder.schema, &chunk)?;
         self.current_row_group += 1;
-        let block = DataBlock::create(self.block_schema.clone(), data_cols);
         Ok(Some(block))
     }
 }

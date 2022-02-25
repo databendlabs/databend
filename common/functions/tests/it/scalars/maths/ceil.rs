@@ -78,5 +78,5 @@ fn test_ceil_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(CeilFunction::try_create("ceil")?, &tests)
+    test_scalar_functions(CeilFunction::try_create("ceil")?, &tests, true)
 }

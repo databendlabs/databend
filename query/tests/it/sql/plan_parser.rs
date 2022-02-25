@@ -231,6 +231,18 @@ async fn test_plan_parser() -> Result<()> {
             expect: "",
             error: "",
         },
+        Test {
+            name: "create-role",
+            sql: "CREATE ROLE role1",
+            expect: "Create role 'role1'@'%' if_not_exist:false",
+            error: "",
+        },
+        Test {
+            name: "drop-role",
+            sql: "DROP ROLE role1",
+            expect: "Drop role 'role1'@'%' if_exists:false",
+            error: "",
+        }
     ];
 
     let ctx = crate::tests::create_query_context()?;

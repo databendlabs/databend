@@ -36,6 +36,7 @@ use common_meta_sled_store::openraft::ErrorVerb;
 use common_meta_sled_store::openraft::StateMachineChanges;
 use common_meta_types::error_context::WithContext;
 use common_meta_types::AppliedState;
+use common_meta_types::Endpoint;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaResult;
@@ -51,7 +52,7 @@ use openraft::RaftStorage;
 use openraft::SnapshotMeta;
 use openraft::StorageError;
 
-use crate::export::exported_line_to_json;
+use crate::export::vec_kv_to_json;
 use crate::store::ToStorageError;
 use crate::Opened;
 
@@ -232,22 +233,40 @@ impl MetaRaftStore {
     pub async fn export(&self) -> Result<Vec<String>, std::io::Error> {
         let mut res = vec![];
 
-        let state_kvs = self.raft_state.inner.export()?;
-        let log_kvs = self.log.inner.export()?;
-        let sm_kvs = self.state_machine.write().await.sm_tree.export()?;
+        let state_kvs = self
+            .raft_state
+            .inner
+            .export()
+            .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
 
         for kv in state_kvs.iter() {
-            let line = exported_line_to_json("state", kv)
+            let line = vec_kv_to_json(&self.raft_state.inner.name, kv)
                 .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
             res.push(line);
         }
+
+        let log_kvs = self
+            .log
+            .inner
+            .export()
+            .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
         for kv in log_kvs.iter() {
-            let line = exported_line_to_json("log", kv)
+            let line = vec_kv_to_json(&self.log.inner.name, kv)
                 .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
             res.push(line);
         }
+
+        let name = self.state_machine.write().await.sm_tree.name.clone();
+        let sm_kvs = self
+            .state_machine
+            .write()
+            .await
+            .sm_tree
+            .export()
+            .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
+
         for kv in sm_kvs.iter() {
-            let line = exported_line_to_json("sm", kv)
+            let line = vec_kv_to_json(&name, kv)
                 .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))?;
             res.push(line);
         }
@@ -536,14 +555,14 @@ impl MetaRaftStore {
         }
     }
 
-    pub async fn get_node_addr(&self, node_id: &NodeId) -> MetaResult<String> {
-        let addr = self
+    pub async fn get_node_endpoint(&self, node_id: &NodeId) -> MetaResult<Endpoint> {
+        let endpoint = self
             .get_node(node_id)
             .await?
-            .map(|n| n.address)
+            .map(|n| n.endpoint)
             .ok_or_else(|| MetaNetworkError::GetNodeAddrError(format!("node id: {}", node_id)))?;
 
-        Ok(addr)
+        Ok(endpoint)
     }
 
     /// A non-voter is a node stored in raft store, but is not configured as a voter in the raft group.

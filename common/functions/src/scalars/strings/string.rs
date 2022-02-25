@@ -42,6 +42,7 @@ use crate::scalars::OrdFunction;
 use crate::scalars::PositionFunction;
 use crate::scalars::QuoteFunction;
 use crate::scalars::RTrimFunction;
+use crate::scalars::RegexpLikeFunction;
 use crate::scalars::RepeatFunction;
 use crate::scalars::ReplaceFunction;
 use crate::scalars::ReverseFunction;
@@ -80,6 +81,7 @@ impl StringFunction {
         factory.register("character_length", CharLengthFunction::desc());
         factory.register("ord", OrdFunction::desc());
         factory.register("length", LengthFunction::desc());
+        factory.register("regexp_like", RegexpLikeFunction::desc());
         factory.register("bin", BinFunction::desc());
         factory.register("oct", OctFunction::desc());
         factory.register("hex", HexFunction::desc());

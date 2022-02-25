@@ -56,11 +56,9 @@ impl ArithmeticMulFunction {
         args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function>> {
         let op = DataValueBinaryOperator::Mul;
-        let left_type = remove_nullable(args[0]).data_type_id();
-        let right_type = remove_nullable(args[1]).data_type_id();
 
-        with_match_primitive_types_error!(left_type, |$T| {
-            with_match_primitive_types_error!(right_type, |$D| {
+        with_match_primitive_types_error!(args[0].data_type_id(), |$T| {
+            with_match_primitive_types_error!(args[1].data_type_id(), |$D| {
                 let result_type = <($T, $D) as ResultTypeOfBinary>::AddMul::to_data_type();
                 match result_type.data_type_id() {
                     TypeID::UInt64 => BinaryArithmeticFunction::<$T, $D, u64, _>::try_create_func(

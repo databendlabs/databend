@@ -15,10 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::FileFormat;
-use common_meta_types::StageParams;
-use common_meta_types::UserStageInfo;
-use common_planners::CreateUserStagePlan;
+use common_meta_types::RoleIdentity;
+use common_planners::CreateRolePlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 
@@ -27,28 +25,20 @@ use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfCreateStage {
+pub struct DfCreateRole {
     pub if_not_exists: bool,
-    pub stage_name: String,
-    pub stage_params: StageParams,
-    pub file_format: FileFormat,
-    pub comments: String,
+    pub role_identity: RoleIdentity,
 }
 
 #[async_trait::async_trait]
-impl AnalyzableStatement for DfCreateStage {
+impl AnalyzableStatement for DfCreateRole {
     #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::CreateUserStage(CreateUserStagePlan {
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::CreateRole(
+            CreateRolePlan {
                 if_not_exists: self.if_not_exists,
-                user_stage_info: UserStageInfo::new(
-                    self.stage_name.as_str(),
-                    self.comments.as_str(),
-                    self.stage_params.clone(),
-                    self.file_format.clone(),
-                ),
-            }),
-        )))
+                role_identity: self.role_identity.clone(),
+            },
+        ))))
     }
 }

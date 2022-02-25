@@ -15,7 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::DropUserStagePlan;
+use common_meta_types::RoleIdentity;
+use common_planners::DropRolePlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 
@@ -24,20 +25,20 @@ use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfDropStage {
+pub struct DfDropRole {
     pub if_exists: bool,
-    pub stage_name: String,
+    pub role_identity: RoleIdentity,
 }
 
 #[async_trait::async_trait]
-impl AnalyzableStatement for DfDropStage {
+impl AnalyzableStatement for DfDropRole {
     #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::DropUserStage(DropUserStagePlan {
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::DropRole(
+            DropRolePlan {
                 if_exists: self.if_exists,
-                name: self.stage_name.clone(),
-            }),
-        )))
+                role_identity: self.role_identity.clone(),
+            },
+        ))))
     }
 }

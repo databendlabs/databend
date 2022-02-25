@@ -15,9 +15,9 @@
 use std::fs;
 use std::sync::Arc;
 
-use clap::App;
 use clap::Arg;
 use clap::ArgMatches;
+use clap::Command as App;
 
 use crate::cmds::command::Command;
 use crate::cmds::Config;

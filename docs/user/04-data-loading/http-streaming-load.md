@@ -13,7 +13,7 @@ curl -u user:passwd -H <options>  -F  "upload=@<files_location>"  -XPUT http://l
 ```
 ### Parameters
 
-  * `options`: key value options, supported options: `insert_sql`, `field_delimitor`, `record_delimitor`, `csv_header`
+  * `options`: key value options, supported options: `insert_sql`, `field_delimiter`, `record_delimiter`, `skip_header`
   * `insert_sql`: must be specified in options, eg: `insert into table_name (a,b,c) format CSV`
   * `files_location`: local file path, eg: `/tmp/data.csv`
 
@@ -201,7 +201,7 @@ CREATE TABLE ontime
 
 ### 5. Load raw data into ontime table
 ```
-curl -H "insert_sql:insert into ontime format CSV" -H "csv_header:1" -F  "upload=@/tmp/ontime.csv"  -XPUT http://localhost:8000/v1/streaming_load
+curl -H "insert_sql:insert into ontime format CSV" -H "skip_header:1" -F  "upload=@/tmp/ontime.csv"  -XPUT http://localhost:8000/v1/streaming_load
 ```
 
 ### 6. Queries

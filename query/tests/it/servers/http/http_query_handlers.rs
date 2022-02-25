@@ -18,6 +18,7 @@ use std::time::Duration;
 
 use base64::encode_config;
 use base64::URL_SAFE_NO_PAD;
+use common_base::get_free_tcp_port;
 use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
@@ -32,7 +33,6 @@ use databend_query::servers::http::v1::ExecuteStateName;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
 use headers::Header;
-use httpmock::MockServer;
 use hyper::header;
 use jwt_simple::algorithms::RS256KeyPair;
 use jwt_simple::algorithms::RSAKeyPairLike;
@@ -48,6 +48,11 @@ use poem::Response;
 use poem::Route;
 use pretty_assertions::assert_eq;
 use tokio::time::sleep;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
 
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
@@ -347,15 +352,18 @@ async fn test_auth_jwt() -> Result<()> {
     let j =
         serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
 
-    let server = MockServer::start();
-    let path = "/jwks.json";
-    let mock = server.mock(|when, then| {
-        when.method(httpmock::Method::GET).path(path);
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(j);
-    });
-    let jwks_url = format!("http://{}{}", server.address(), path);
+    let server = MockServer::start().await;
+    let json_path = "/jwks.json";
+    // Create a mock on the server.
+    let template = ResponseTemplate::new(200).set_body_raw(j, "application/json");
+    Mock::given(method("GET"))
+        .and(path(json_path))
+        .respond_with(template)
+        .expect(1..)
+        // Mounting the mock on the mock server - it's now effective!
+        .mount(&server)
+        .await;
+    let jwks_url = format!("http://{}{}", server.address(), json_path);
 
     let session_manager = SessionManagerBuilder::create()
         .jwt_key_file(jwks_url)
@@ -396,7 +404,6 @@ async fn test_auth_jwt() -> Result<()> {
     let token = key_pair.sign(claims)?;
     let bear = headers::Authorization::bearer(&token).unwrap();
     test_auth_post(&ep, user_name, bear).await?;
-    mock.assert();
     Ok(())
 }
 
@@ -436,7 +443,7 @@ async fn test_auth_post(ep: &EndpointType, user_name: &str, header: impl Header)
 // need to support local_addr, but axum_server do not have local_addr callback
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_handler_tls_server() -> Result<()> {
-    let address_str = "127.0.0.1:39000";
+    let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(
         SessionManagerBuilder::create()
             .http_handler_tls_server_key(TEST_SERVER_KEY)
@@ -473,7 +480,7 @@ async fn test_http_handler_tls_server() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
-    let address_str = "127.0.0.1:39001";
+    let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(
         SessionManagerBuilder::create()
             .http_handler_tls_server_key(TEST_SERVER_KEY)
@@ -497,7 +504,7 @@ async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
-    let addr_str = "127.0.0.1:39011";
+    let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(
         SessionManagerBuilder::create()
             .http_handler_tls_server_key(TEST_TLS_SERVER_KEY)
@@ -505,7 +512,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
             .http_handler_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
             .build()?,
     );
-    let listening = srv.start(addr_str.parse()?).await?;
+    let listening = srv.start(address_str.parse()?).await?;
 
     // test cert is issued for "localhost"
     let url = format!("https://{}:{}/v1/query", TEST_CN_NAME, listening.port());
@@ -539,7 +546,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
 // cannot connect with server unless it have CA signed identity
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
-    let addr_str = "127.0.0.1:39012";
+    let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(
         SessionManagerBuilder::create()
             .http_handler_tls_server_key(TEST_TLS_SERVER_KEY)
@@ -547,7 +554,7 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
             .http_handler_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
             .build()?,
     );
-    let listening = srv.start(addr_str.parse()?).await?;
+    let listening = srv.start(address_str.parse()?).await?;
 
     // test cert is issued for "localhost"
     let url = format!("https://{}:{}/v1/query", TEST_CN_NAME, listening.port());

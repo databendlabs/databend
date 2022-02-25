@@ -21,10 +21,10 @@ common-macros = { path = "../../common/macros" }
 common-tracing = { path = "../../common/tracing" }
 
 # Github dependencies
-clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "9d2133f" }
+clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "cf978da" }
 
 # Crates.io dependencies
-clap = { version = "3.0.14", features = ["derive", "env"] }
+clap = { version = "3.1.1", features = ["derive", "env"] }
 crossbeam-queue = "0.3.4"
 ctrlc = { version = "3.2.1", features = ["termination"] }
 futures = "0.3.21"

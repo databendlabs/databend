@@ -20,6 +20,15 @@ pub struct UserIdentity {
     pub hostname: String,
 }
 
+impl UserIdentity {
+    pub fn new(name: String, host: String) -> Self {
+        Self {
+            username: name,
+            hostname: host,
+        }
+    }
+}
+
 impl fmt::Display for UserIdentity {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         write!(f, "'{}'@'{}'", self.username, self.hostname)

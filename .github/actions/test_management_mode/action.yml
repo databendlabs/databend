@@ -43,6 +43,5 @@ runs:
 
     - name: Run Stateless Tests with Management Mode
       shell: bash
-      if: matrix.config.os != 'ubuntu-latest'
       run: |
         bash ./scripts/ci/ci-run-stateless-tests-management-mode.sh

@@ -50,10 +50,8 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
         factor: i64,
         args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function>> {
-        let left_arg = remove_nullable(args[0]);
-        let right_arg = remove_nullable(args[1]);
-        let left_type = left_arg.data_type_id();
-        let right_type = right_arg.data_type_id();
+        let left_type = args[0].data_type_id();
+        let right_type = args[1].data_type_id();
 
         with_match_primitive_types_error!(right_type, |$R| {
             match left_type {
@@ -73,17 +71,17 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
                 ),
                 TypeID::DateTime32 => IntervalFunction::<u32, $R, u32, _>::try_create_func(
                     display_name,
-                    left_arg,
+                    args[0].clone(),
                     T::eval_datetime32::<$R>,
                     factor,
                     0,
                 ),
                 TypeID::DateTime64 => {
-                    let datetime = left_arg.as_any().downcast_ref::<DateTime64Type>().unwrap();
+                    let datetime = args[0].as_any().downcast_ref::<DateTime64Type>().unwrap();
                     let precision = datetime.precision();
                     IntervalFunction::<i64, $R, i64, _>::try_create_func(
                         display_name,
-                        left_arg,
+                        args[0].clone(),
                         T::eval_datetime64::<$R>,
                         factor,
                         precision,

@@ -131,7 +131,7 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
         ArrowType::Date64 => Arc::new(Date32Type::default()),
 
         ArrowType::Struct(fields) => {
-            let names = fields.iter().map(|f| f.name().to_string()).collect();
+            let names = fields.iter().map(|f| f.name.clone()).collect();
             let types = fields.iter().map(from_arrow_field).collect();
 
             Arc::new(StructType::create(names, types))
@@ -145,32 +145,30 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
 }
 
 pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
-    if let Some(m) = f.metadata() {
-        if let Some(custom_name) = m.get(ARROW_EXTENSION_NAME) {
-            let metadata = m.get(ARROW_EXTENSION_META).cloned();
-            match custom_name.as_str() {
-                "Date" | "Date16" => return Date16Type::arc(),
-                "Date32" => return Date32Type::arc(),
-                "DateTime" | "DateTime32" => return DateTime32Type::arc(metadata),
-                "DateTime64" => match metadata {
-                    Some(meta) => {
-                        let mut chars = meta.chars();
-                        let precision = chars.next().unwrap().to_digit(10).unwrap();
-                        let tz = chars.collect::<String>();
-                        return DateTime64Type::arc(precision as usize, Some(tz));
-                    }
-                    None => return DateTime64Type::arc(3, None),
-                },
-                "Interval" => return IntervalType::arc(metadata.unwrap().into()),
-                _ => {}
-            }
+    if let Some(custom_name) = f.metadata.get(ARROW_EXTENSION_NAME) {
+        let metadata = f.metadata.get(ARROW_EXTENSION_META).cloned();
+        match custom_name.as_str() {
+            "Date" | "Date16" => return Date16Type::arc(),
+            "Date32" => return Date32Type::arc(),
+            "DateTime" | "DateTime32" => return DateTime32Type::arc(metadata),
+            "DateTime64" => match metadata {
+                Some(meta) => {
+                    let mut chars = meta.chars();
+                    let precision = chars.next().unwrap().to_digit(10).unwrap();
+                    let tz = chars.collect::<String>();
+                    return DateTime64Type::arc(precision as usize, Some(tz));
+                }
+                None => return DateTime64Type::arc(3, None),
+            },
+            "Interval" => return IntervalType::arc(metadata.unwrap().into()),
+            _ => {}
         }
     }
 
     let dt = f.data_type();
     let ty = from_arrow_type(dt);
 
-    let is_nullable = f.is_nullable();
+    let is_nullable = f.is_nullable;
     if is_nullable && ty.can_inside_nullable() {
         Arc::new(NullableType::create(ty))
     } else {

@@ -16,8 +16,9 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::sync::Arc;
 
-use common_arrow::arrow;
-use common_arrow::arrow::record_batch::RecordBatch;
+use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::chunk::Chunk;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -174,28 +175,12 @@ impl DataBlock {
 
         Ok(Self { columns, schema })
     }
-}
 
-impl TryFrom<DataBlock> for RecordBatch {
-    type Error = ErrorCode;
-
-    fn try_from(v: DataBlock) -> Result<RecordBatch> {
-        let arrays = v
-            .columns()
-            .iter()
-            .map(|c| c.as_arrow_array())
-            .collect::<Vec<_>>();
-
-        Ok(RecordBatch::try_new(Arc::new(v.schema.to_arrow()), arrays)?)
-    }
-}
-
-impl TryFrom<arrow::record_batch::RecordBatch> for DataBlock {
-    type Error = ErrorCode;
-
-    fn try_from(v: arrow::record_batch::RecordBatch) -> Result<DataBlock> {
-        let schema: DataSchemaRef = Arc::new(v.schema().as_ref().into());
-        let columns = v
+    pub fn from_chunk<A: AsRef<dyn Array>>(
+        schema: &DataSchemaRef,
+        chuck: &Chunk<A>,
+    ) -> Result<DataBlock> {
+        let columns = chuck
             .columns()
             .iter()
             .zip(schema.fields().iter())
@@ -205,7 +190,21 @@ impl TryFrom<arrow::record_batch::RecordBatch> for DataBlock {
             })
             .collect();
 
-        Ok(DataBlock::create(schema, columns))
+        Ok(DataBlock::create(schema.clone(), columns))
+    }
+}
+
+impl TryFrom<DataBlock> for Chunk<ArrayRef> {
+    type Error = ErrorCode;
+
+    fn try_from(v: DataBlock) -> Result<Chunk<ArrayRef>> {
+        let arrays = v
+            .columns()
+            .iter()
+            .map(|c| c.as_arrow_array())
+            .collect::<Vec<_>>();
+
+        Ok(Chunk::try_new(arrays)?)
     }
 }
 

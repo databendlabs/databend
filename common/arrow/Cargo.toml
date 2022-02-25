@@ -11,7 +11,15 @@ doctest = false
 test = false
 
 [features]
-arrow-default = ["arrow/compute", "arrow/regex", "arrow/io_csv", "arrow/io_parquet", "arrow/io_json", "arrow/io_flight"]
+arrow-default = [
+    "arrow/compute",
+    "arrow/regex",
+    "arrow/io_csv",
+    "arrow/io_parquet",
+    "arrow/io_json",
+    "arrow/io_flight",
+    "arrow/compute_filter",
+]
 default = ["arrow-default", "parquet-default"]
 parquet-default = ["parquet2/stream", "parquet2/lz4"]
 simd = ["arrow/simd"]
@@ -20,9 +28,11 @@ simd = ["arrow/simd"]
 # Workspace dependencies
 
 # Github dependencies
-arrow = { package = "arrow2", git = "https://github.com/datafuse-extras/arrow2", default-features = false, rev = "d14ae86"}
-arrow-format = { version = "0.3.0", features = ["flight-data", "flight-service"] }
-parquet2 = { version = "0.8.1", default_features = false }
+arrow = { package = "arrow2", git = "https://github.com/datafuse-extras/arrow2", default-features = false, rev = "22bf173" }
+
 # Crates.io dependencies
+arrow-format = { version = "0.4.0", features = ["flight-data", "flight-service", "ipc"] }
+futures = { version = "0.3" }
+parquet2 = { version = "0.10.2", default_features = false }
 
 [dev-dependencies]

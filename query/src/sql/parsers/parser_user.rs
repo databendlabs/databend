@@ -15,6 +15,8 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
+use common_meta_types::PrincipalIdentity;
+use common_meta_types::RoleIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
@@ -26,10 +28,12 @@ use sqlparser::tokenizer::Token;
 use crate::parser_err;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfAuthOption;
+use crate::sql::statements::DfCreateRole;
 use crate::sql::statements::DfCreateUser;
+use crate::sql::statements::DfDropRole;
 use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfGrantObject;
-use crate::sql::statements::DfGrantStatement;
+use crate::sql::statements::DfGrantPrivilegeStatement;
 use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfShowGrants;
 use crate::sql::DfParser;
@@ -40,13 +44,7 @@ impl<'a> DfParser<'a> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let name = self.parser.parse_literal_string()?;
-        let hostname = if self.consume_token("@") {
-            self.parser.parse_literal_string()?
-        } else {
-            String::from("%")
-        };
-
+        let (name, hostname) = self.parse_principal_name_and_host()?;
         let auth_option = self.parse_auth_option()?;
 
         let create = DfCreateUser {
@@ -55,7 +53,6 @@ impl<'a> DfParser<'a> {
             hostname,
             auth_options: auth_option,
         };
-
         Ok(DfStatement::CreateUser(create))
     }
 
@@ -63,19 +60,11 @@ impl<'a> DfParser<'a> {
         let if_current_user = self.consume_token("USER")
             && self.parser.expect_token(&Token::LParen).is_ok()
             && self.parser.expect_token(&Token::RParen).is_ok();
-        let name = if !if_current_user {
-            self.parser.parse_literal_string()?
+
+        let (name, hostname) = if !if_current_user {
+            self.parse_principal_name_and_host()?
         } else {
-            String::from("")
-        };
-        let hostname = if !if_current_user {
-            if self.consume_token("@") {
-                self.parser.parse_literal_string()?
-            } else {
-                String::from("%")
-            }
-        } else {
-            String::from("")
+            ("".to_string(), "".to_string())
         };
 
         let auth_option = self.parse_auth_option()?;
@@ -92,12 +81,7 @@ impl<'a> DfParser<'a> {
 
     pub(crate) fn parse_drop_user(&mut self) -> Result<DfStatement, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let name = self.parser.parse_literal_string()?;
-        let hostname = if self.consume_token("@") {
-            self.parser.parse_literal_string()?
-        } else {
-            String::from("%")
-        };
+        let (name, hostname) = self.parse_principal_name_and_host()?;
         let drop = DfDropUser {
             if_exists,
             name,
@@ -106,8 +90,33 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::DropUser(drop))
     }
 
-    // Grant.
-    pub(crate) fn parse_grant(&mut self) -> Result<DfStatement, ParserError> {
+    // Create role
+    pub(crate) fn parse_create_role(&mut self) -> Result<DfStatement, ParserError> {
+        let if_not_exists =
+            self.parser
+                .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let (name, host) = self.parse_principal_name_and_host()?;
+
+        let create = DfCreateRole {
+            if_not_exists,
+            role_identity: RoleIdentity::new(name, host),
+        };
+        Ok(DfStatement::CreateRole(create))
+    }
+
+    // Drop role
+    pub(crate) fn parse_drop_role(&mut self) -> Result<DfStatement, ParserError> {
+        let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let (name, host) = self.parse_principal_name_and_host()?;
+        let drop = DfDropRole {
+            if_exists,
+            role_identity: RoleIdentity::new(name, host),
+        };
+        Ok(DfStatement::DropRole(drop))
+    }
+
+    /// GRANT privs TO [ROLE|USER] 'name'@'host'
+    pub(crate) fn parse_grant_privilege(&mut self) -> Result<DfStatement, ParserError> {
         let privileges = self.parse_privileges()?;
         if !self.parser.parse_keyword(Keyword::ON) {
             return self.expected("keyword ON", self.parser.peek_token());
@@ -116,10 +125,9 @@ impl<'a> DfParser<'a> {
         if !self.parser.parse_keyword(Keyword::TO) {
             return self.expected("keyword TO", self.parser.peek_token());
         }
-        let (name, hostname) = self.parse_user_identity()?;
-        let grant = DfGrantStatement {
-            name,
-            hostname,
+        let principal = self.parse_principal_identity()?;
+        let grant = DfGrantPrivilegeStatement {
+            principal,
             on,
             priv_types: privileges,
         };
@@ -136,10 +144,9 @@ impl<'a> DfParser<'a> {
         if !self.parser.parse_keyword(Keyword::FROM) {
             return self.expected("keyword FROM", self.parser.peek_token());
         }
-        let (username, hostname) = self.parse_user_identity()?;
+        let principal = self.parse_principal_identity()?;
         let revoke = DfRevokeStatement {
-            username,
-            hostname,
+            principal,
             on,
             priv_types: privileges,
         };
@@ -156,20 +163,33 @@ impl<'a> DfParser<'a> {
         }
 
         // SHOW GRANTS FOR 'u1'@'%'
-        let (username, hostname) = self.parse_user_identity()?;
+        let (username, hostname) = self.parse_principal_name_and_host()?;
         Ok(DfStatement::ShowGrants(DfShowGrants {
             user_identity: Some(UserIdentity { username, hostname }),
         }))
     }
 
-    fn parse_user_identity(&mut self) -> Result<(String, String), ParserError> {
-        let username = self.parser.parse_literal_string()?;
-        let hostname = if self.consume_token("@") {
+    fn parse_principal_identity(&mut self) -> Result<PrincipalIdentity, ParserError> {
+        if self.consume_token("ROLE") {
+            let (name, host) = self.parse_principal_name_and_host()?;
+            return Ok(PrincipalIdentity::role(name, host));
+        }
+        // USER keyword can be omitted
+        self.consume_token("USER");
+        let (name, host) = self.parse_principal_name_and_host()?;
+        Ok(PrincipalIdentity::user(name, host))
+    }
+
+    /// A principal can be an user or an role, the formats are same: 'name'@'host',
+    /// the host part can be omitted, take '%' as default.
+    fn parse_principal_name_and_host(&mut self) -> Result<(String, String), ParserError> {
+        let name = self.parser.parse_literal_string()?;
+        let host = if self.consume_token("@") {
             self.parser.parse_literal_string()?
         } else {
             String::from("%")
         };
-        Ok((username, hostname))
+        Ok((name, host))
     }
 
     /// Parse a possibly qualified, possibly quoted identifier or wild card, e.g.

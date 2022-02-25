@@ -96,6 +96,19 @@ jobs:
         with:
           profile: release
 
+  test_management_mode:
+    runs-on: ${{ matrix.config.os }}
+    needs: build
+    strategy:
+      matrix:
+        config:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/test_management_mode
+        with:
+          profile: release
+
   publish_image:
     runs-on: ${{ matrix.config.os }}
     # Release after all tests have been passed.
@@ -103,7 +116,8 @@ jobs:
       test_unit,
       test_stateless_standalone,
       test_stateless_cluster,
-      test_stateful_standalone
+      test_stateful_standalone,
+      test_management_mode
     ]
     strategy:
       matrix:

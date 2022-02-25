@@ -15,6 +15,7 @@
 use common_base::tokio;
 use common_meta_sled_store::SledTree;
 use common_meta_sled_store::Store;
+use common_meta_types::Endpoint;
 use common_meta_types::Node;
 use common_tracing::tracing;
 
@@ -41,14 +42,20 @@ async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> 
 
         let got = nodes_ks.insert(&101, &Node {
             name: "foo".to_string(),
-            address: "bar".to_string(),
+            endpoint: Endpoint {
+                addr: "".to_string(),
+                port: 100,
+            },
         })?;
 
         assert!(got.is_none());
 
         let got = nodes_ks.insert(&k, &Node {
             name: "n".to_string(),
-            address: "a".to_string(),
+            endpoint: Endpoint {
+                addr: "".to_string(),
+                port: 100,
+            },
         })?;
 
         assert!(got.is_none());
@@ -58,20 +65,29 @@ async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> 
         assert_eq!(
             Some(Node {
                 name: "n".to_string(),
-                address: "a".to_string()
+                endpoint: Endpoint {
+                    addr: "".to_string(),
+                    port: 100,
+                },
             }),
             got
         );
 
         let got = nodes_ks.insert(&k, &Node {
             name: "m".to_string(),
-            address: "c".to_string(),
+            endpoint: Endpoint {
+                addr: "".to_string(),
+                port: 101,
+            },
         })?;
 
         assert_eq!(
             Some(Node {
                 name: "n".to_string(),
-                address: "a".to_string()
+                endpoint: Endpoint {
+                    addr: "".to_string(),
+                    port: 100,
+                },
             }),
             got
         );
@@ -83,7 +99,10 @@ async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> 
     assert_eq!(
         Some(Node {
             name: "m".to_string(),
-            address: "c".to_string()
+            endpoint: Endpoint {
+                addr: "".to_string(),
+                port: 101,
+            },
         }),
         got
     );
@@ -92,7 +111,10 @@ async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> 
     assert_eq!(
         Some(Node {
             name: "foo".to_string(),
-            address: "bar".to_string()
+            endpoint: Endpoint {
+                addr: "".to_string(),
+                port: 100,
+            },
         }),
         got
     );
@@ -119,7 +141,10 @@ async fn test_sled_txn_tree_key_space_remove() -> anyhow::Result<()> {
 
         let _got = nodes_ks.insert(&k, &Node {
             name: "n".to_string(),
-            address: "a".to_string(),
+            endpoint: Endpoint {
+                addr: "".to_string(),
+                port: 100,
+            },
         })?;
 
         let got = nodes_ks.get(&k)?;
@@ -127,7 +152,10 @@ async fn test_sled_txn_tree_key_space_remove() -> anyhow::Result<()> {
         assert_eq!(
             Some(Node {
                 name: "n".to_string(),
-                address: "a".to_string()
+                endpoint: Endpoint {
+                    addr: "".to_string(),
+                    port: 100,
+                },
             }),
             got
         );
@@ -137,7 +165,10 @@ async fn test_sled_txn_tree_key_space_remove() -> anyhow::Result<()> {
         assert_eq!(
             Some(Node {
                 name: "n".to_string(),
-                address: "a".to_string()
+                endpoint: Endpoint {
+                    addr: "".to_string(),
+                    port: 100,
+                },
             }),
             got
         );
@@ -178,7 +209,7 @@ async fn test_sled_txn_tree_key_space_update_and_fetch() -> anyhow::Result<()> {
             nodes_ks.update_and_fetch(&k, |old| match old {
                 Some(v) => Some(Node {
                     name: v.name + "a",
-                    address: v.address,
+                    endpoint: v.endpoint,
                 }),
                 None => Some(Node::default()),
             })?;

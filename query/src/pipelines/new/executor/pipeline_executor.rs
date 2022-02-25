@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_base::Runtime;
 use common_exception::Result;
 
 use crate::pipelines::new::executor::executor_graph::RunningGraph;
@@ -26,7 +27,9 @@ use crate::pipelines::new::pipeline::NewPipeline;
 pub struct PipelineExecutor {
     graph: RunningGraph,
     workers_notify: Arc<WorkersNotify>,
-    global_tasks_queue: ExecutorTasksQueue,
+    pub global_tasks_queue: Arc<ExecutorTasksQueue>,
+    // TODO: shutdown
+    pub async_runtime: Runtime,
 }
 
 impl PipelineExecutor {
@@ -38,7 +41,6 @@ impl PipelineExecutor {
             let graph = RunningGraph::create(pipeline)?;
             let mut init_schedule_queue = graph.init_schedule_queue()?;
 
-            // println!("Init queue: {:?}", init_schedule_queue);
             let mut tasks = VecDeque::new();
             while let Some(task) = init_schedule_queue.pop_task() {
                 tasks.push_back(task);
@@ -49,6 +51,7 @@ impl PipelineExecutor {
                 graph,
                 workers_notify,
                 global_tasks_queue,
+                async_runtime: Runtime::with_worker_threads(workers)?,
             }))
         }
     }
@@ -56,6 +59,7 @@ impl PipelineExecutor {
     pub fn finish(&self) {
         self.global_tasks_queue.finish();
         self.workers_notify.wakeup_all();
+        // TODO: shutdown async runtime.
     }
 
     /// # Safety
@@ -68,17 +72,15 @@ impl PipelineExecutor {
         while !self.global_tasks_queue.is_finished() {
             // When there are not enough tasks, the thread will be blocked, so we need loop check.
             while !self.global_tasks_queue.is_finished() && !context.has_task() {
-                // let (sender, receiver) = std::sync::mpsc::channel();
                 self.global_tasks_queue.steal_task_to_context(&mut context);
             }
 
             while context.has_task() {
-                let executed_pid = context.execute_task(&self.global_tasks_queue)?;
-
-                // We immediately schedule the processor again.
-                let schedule_queue = self.graph.schedule_queue(executed_pid)?;
-                // println!("{} queue: {:?}", std::thread::current().name().unwrap(), schedule_queue);
-                schedule_queue.schedule(&self.global_tasks_queue, &mut context);
+                if let Some(executed_pid) = context.execute_task(self)? {
+                    // We immediately schedule the processor again.
+                    let schedule_queue = self.graph.schedule_queue(executed_pid)?;
+                    schedule_queue.schedule(&self.global_tasks_queue, &mut context);
+                }
             }
         }
 

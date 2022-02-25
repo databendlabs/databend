@@ -17,6 +17,7 @@ use std::net::Ipv4Addr;
 use clap::Parser;
 use common_exception::Result;
 use common_grpc::DNSResolver;
+use common_meta_types::Endpoint;
 use common_meta_types::MetaError;
 use common_meta_types::MetaResult;
 use common_meta_types::NodeId;
@@ -117,7 +118,12 @@ pub struct RaftConfig {
     /// Bring up a metasrv node and join a cluster.
     ///
     /// The value is one or more addresses of a node in the cluster, to which this node sends a `join` request.
-    #[clap(long, env = "METASRV_JOIN")]
+    #[clap(
+        long,
+        env = "METASRV_JOIN",
+        multiple_occurrences = true,
+        multiple_values = true
+    )]
     pub join: Vec<String>,
 
     /// The node id. Only used when this server is not initialized,
@@ -176,24 +182,40 @@ impl RaftConfig {
         <Self as Parser>::parse_from(&Vec::<&'static str>::new())
     }
 
-    fn raft_api_listen_host_string(&self) -> String {
+    pub fn raft_api_listen_host_string(&self) -> String {
         format!("{}:{}", self.raft_listen_host, self.raft_api_port)
     }
 
-    pub fn raft_api_advertise_host_string(&self) -> String {
-        format!("{}:{}", self.raft_advertise_host, self.raft_api_port)
+    pub fn raft_api_listen_host_endpoint(&self) -> Endpoint {
+        Endpoint {
+            addr: self.raft_listen_host.clone(),
+            port: self.raft_api_port,
+        }
+    }
+
+    pub fn raft_api_advertise_host_endpoint(&self) -> Endpoint {
+        Endpoint {
+            addr: self.raft_advertise_host.clone(),
+            port: self.raft_api_port,
+        }
     }
 
     /// Support ip address and hostname
-    pub async fn raft_api_addr(&self) -> Result<String> {
+    pub async fn raft_api_addr(&self) -> Result<Endpoint> {
         let ipv4_addr = self.raft_advertise_host.as_str().parse::<Ipv4Addr>();
         match ipv4_addr {
-            Ok(addr) => Ok(format!("{}:{}", addr, self.raft_api_port)),
+            Ok(addr) => Ok(Endpoint {
+                addr: addr.to_string(),
+                port: self.raft_api_port,
+            }),
             Err(_) => {
                 let _ip_addrs = DNSResolver::instance()?
                     .resolve(self.raft_advertise_host.clone())
                     .await?;
-                Ok(format!("{}:{}", _ip_addrs[0], self.raft_api_port))
+                Ok(Endpoint {
+                    addr: _ip_addrs[0].to_string(),
+                    port: self.raft_api_port,
+                })
             }
         }
     }

@@ -31,7 +31,6 @@ client1.run("select 3")
 
 
 class MyModel(object):
-
     def __init__(self, name, value):
         self.name = name
         self.value = value

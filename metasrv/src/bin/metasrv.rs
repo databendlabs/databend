@@ -81,6 +81,9 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         stop_handler.push(Box::new(srv));
     }
 
+    // join raft cluster after all service started
+    meta_node.join_cluster(&conf.raft_config).await?;
+
     stop_handler.wait_to_terminate(stop_tx).await;
     tracing::info!("Databend-meta is done shutting down");
 

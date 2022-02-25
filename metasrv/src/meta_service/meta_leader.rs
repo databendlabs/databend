@@ -114,7 +114,7 @@ impl<'a> MetaLeader<'a> {
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn join(&self, req: JoinRequest) -> Result<(), MetaError> {
         let node_id = req.node_id;
-        let addr = req.address;
+        let endpoint = req.endpoint;
         let metrics = self.meta_node.raft.metrics().borrow().clone();
         let membership = metrics.membership_config.membership.clone();
 
@@ -135,8 +135,8 @@ impl<'a> MetaLeader<'a> {
             cmd: Cmd::AddNode {
                 node_id,
                 node: Node {
-                    name: "".to_string(),
-                    address: addr,
+                    name: node_id.to_string(),
+                    endpoint,
                 },
             },
         };

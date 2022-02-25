@@ -58,7 +58,10 @@ impl Function for SubstringFunction {
             )));
         }
 
-        if !args[1].data_type_id().is_integer() && !args[1].data_type_id().is_null() {
+        if !args[1].data_type_id().is_integer()
+            && !args[1].data_type_id().is_string()
+            && !args[1].data_type_id().is_null()
+        {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[1].data_type_id()
@@ -67,6 +70,7 @@ impl Function for SubstringFunction {
 
         if args.len() > 2
             && !args[2].data_type_id().is_integer()
+            && !args[2].data_type_id().is_string()
             && !args[2].data_type_id().is_null()
         {
             return Err(ErrorCode::IllegalDataType(format!(

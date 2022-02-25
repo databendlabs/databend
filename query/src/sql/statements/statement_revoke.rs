@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_planners::PlanNode;
 use common_planners::RevokePrivilegePlan;
@@ -27,8 +28,7 @@ use crate::sql::statements::DfGrantObject;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfRevokeStatement {
-    pub username: String,
-    pub hostname: String,
+    pub principal: PrincipalIdentity,
     pub priv_types: UserPrivilegeSet,
     pub on: DfGrantObject,
 }
@@ -47,8 +47,7 @@ impl AnalyzableStatement for DfRevokeStatement {
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::RevokePrivilege(RevokePrivilegePlan {
-                username: self.username.clone(),
-                hostname: self.hostname.clone(),
+                principal: self.principal.clone(),
                 on: grant_object,
                 priv_types,
             }),

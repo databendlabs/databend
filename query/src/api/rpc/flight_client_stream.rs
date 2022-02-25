@@ -48,11 +48,11 @@ impl FlightDataStream {
                     };
                     let batch = deserialize_batch(
                         &flight_data,
-                        arrow_schema,
+                        &arrow_schema.fields,
                         &ipc_schema,
                         &Default::default(),
                     )?;
-                    batch.try_into()
+                    DataBlock::from_chunk(&schema, &batch)
                 }
             }
         })
@@ -78,11 +78,11 @@ impl FlightDataStream {
 
                 let batch = deserialize_batch(
                     &flight_data,
-                    arrow_schema,
+                    &arrow_schema.fields,
                     &ipc_schema,
                     &Default::default(),
                 )?;
-                batch.try_into()
+                DataBlock::from_chunk(&schema, &batch)
             }
         })
     }

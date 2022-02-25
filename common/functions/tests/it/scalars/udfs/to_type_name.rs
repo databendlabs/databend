@@ -28,5 +28,5 @@ fn test_to_type_name_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ToTypeNameFunction::try_create("toTypeName")?, &tests)
+    test_scalar_functions(ToTypeNameFunction::try_create("toTypeName")?, &tests, false)
 }

@@ -48,11 +48,8 @@ impl ArithmeticIntDivFunction {
         _display_name: &str,
         args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function>> {
-        let left_type = remove_nullable(args[0]).data_type_id();
-        let right_type = remove_nullable(args[1]).data_type_id();
-
-        with_match_primitive_types_error!(left_type, |$T| {
-            with_match_primitive_types_error!(right_type, |$D| {
+        with_match_primitive_types_error!(args[0].data_type_id(), |$T| {
+            with_match_primitive_types_error!(args[1].data_type_id(), |$D| {
                 BinaryArithmeticFunction::<$T, $D, <($T, $D) as ResultTypeOfBinary>::IntDiv, _>::try_create_func(
                     DataValueBinaryOperator::IntDiv,
                     <($T, $D) as ResultTypeOfBinary>::IntDiv::to_data_type(),

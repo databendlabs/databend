@@ -19,6 +19,7 @@ use common_base::Stoppable;
 use common_meta_api::KVApi;
 use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::MatchSeq;
+use common_meta_types::MetaRaftError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
@@ -126,6 +127,59 @@ async fn test_restart() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+async fn test_retry_join() -> anyhow::Result<()> {
+    // - Start 2 metasrv.
+    // - Join node-1 to node-0
+    // - Test metasrv retry cluster case
+
+    let (_log_guards, ut_span) = init_meta_ut!();
+    let _ent = ut_span.enter();
+
+    let mut tc0 = MetaSrvTestContext::new(0);
+    start_metasrv_with_context(&mut tc0).await?;
+
+    let bad_addr = "127.0.0.1:1".to_string();
+
+    // first test join has only bad_addr case, MUST return JoinClusterFail
+    {
+        let mut tc1 = MetaSrvTestContext::new(1);
+        tc1.config.raft_config.single = false;
+
+        tc1.config.raft_config.join = vec![bad_addr.clone()];
+        let ret = start_metasrv_with_context(&mut tc1).await;
+        let expect: anyhow::Error = MetaRaftError::JoinClusterFail(format!(
+            "join cluster accross addrs {:?} fail",
+            tc1.config.raft_config.join
+        ))
+        .into();
+
+        match ret {
+            Ok(_) => panic!("must return JoinClusterFail"),
+            Err(e) => {
+                assert_eq!(e.to_string(), expect.to_string());
+            }
+        }
+    }
+
+    // second test join has bad_addr and tc0 addr case, MUST return success
+    {
+        let mut tc1 = MetaSrvTestContext::new(1);
+        tc1.config.raft_config.single = false;
+        tc1.config.raft_config.join = vec![
+            bad_addr,
+            tc0.config.raft_config.raft_api_addr().await?.to_string(),
+        ];
+        let ret = start_metasrv_with_context(&mut tc1).await;
+        match ret {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                panic!("must JoinCluster success: {:?}", e);
+            }
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
     // - Join node-1 to node-0
@@ -138,7 +192,7 @@ async fn test_join() -> anyhow::Result<()> {
     let mut tc1 = MetaSrvTestContext::new(1);
 
     tc1.config.raft_config.single = false;
-    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?];
+    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
     start_metasrv_with_context(&mut tc0).await?;
     start_metasrv_with_context(&mut tc1).await?;
