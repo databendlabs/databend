@@ -15,5 +15,5 @@
 pub mod fetch;
 pub mod list;
 pub mod package;
-pub mod switch;
 pub mod purge;
+pub mod switch;

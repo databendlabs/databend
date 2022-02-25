@@ -125,13 +125,15 @@ fn package() -> Result<(), CliError> {
 
     // purge
     fusectl()
-    .arg("package")
-    .arg("purge")
-    .arg("v0.5.38-nightly")
-    .assert()
-    .success()
-    .stdout(contains_all!("[ok] Package v0.5.38-nightly had been deleted"))
-    .stderr("");
+        .arg("package")
+        .arg("purge")
+        .arg("v0.5.38-nightly")
+        .assert()
+        .success()
+        .stdout(contains_all!(
+            "[ok] Package v0.5.38-nightly had been deleted"
+        ))
+        .stderr("");
     tmp_dir.close()?;
     Ok(())
 }

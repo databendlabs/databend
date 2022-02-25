@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use std::fs;
 use std::sync::Arc;
 
@@ -48,7 +47,9 @@ impl Command for PurgeCommand {
     }
 
     fn clap(&self) -> App<'static> {
-        App::new("purge").arg(Arg::new("version").takes_value(true)).about(self.about())
+        App::new("purge")
+            .arg(Arg::new("version").takes_value(true))
+            .about(self.about())
     }
 
     fn subcommands(&self) -> Vec<Arc<dyn Command>> {
@@ -69,11 +70,11 @@ impl Command for PurgeCommand {
         let mut dst_version: String = "".to_string();
         if let Some(args) = args {
             match args.value_of("version") {
-              Some(ver) => dst_version = ver.to_string(),
-              None => {
-                writer.writeln("need give a specify version to purge, for example: package purge v0.6.68-nightly.");
-                return Ok(())
-              }
+                Some(ver) => dst_version = ver.to_string(),
+                None => {
+                    writer.writeln("need give a specify version to purge, for example: package purge v0.6.68-nightly.");
+                    return Ok(());
+                }
             }
         }
 
@@ -101,26 +102,26 @@ impl Command for PurgeCommand {
                 .to_string_lossy()
                 .into_owned();
             if version == dst_version {
-              matched = true;
-              fs::remove_dir_all(path.path())?;
-              let mut row = vec![];
-              row.push(Cell::new(version.as_str()));
-              row.push(Cell::new(format!("{}", path.path().display(),)));
-              
-              let mut current_marker = Cell::new("");
-              if current == version {
-                  current_marker = Cell::new("✅").fg(Color::Green);
-              }
-              row.push(current_marker.set_alignment(CellAlignment::Center));
-              table.add_row(row); 
+                matched = true;
+                fs::remove_dir_all(path.path())?;
+                let mut row = vec![];
+                row.push(Cell::new(version.as_str()));
+                row.push(Cell::new(format!("{}", path.path().display(),)));
+
+                let mut current_marker = Cell::new("");
+                if current == version {
+                    current_marker = Cell::new("✅").fg(Color::Green);
+                }
+                row.push(current_marker.set_alignment(CellAlignment::Center));
+                table.add_row(row);
             }
         }
-        
+
         if matched {
-          writer.write_ok(format!("[ok] Package {} had been deleted.", dst_version));
-          writer.writeln(&table.trim_fmt());
+            writer.write_ok(format!("[ok] Package {} had been deleted.", dst_version));
+            writer.writeln(&table.trim_fmt());
         } else {
-          writer.writeln("No matching package found.");
+            writer.writeln("No matching package found.");
         }
 
         Ok(())

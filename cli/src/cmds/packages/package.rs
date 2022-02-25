@@ -22,8 +22,8 @@ use crate::cmds::command::Command;
 use crate::cmds::Config;
 use crate::cmds::FetchCommand;
 use crate::cmds::ListCommand;
-use crate::cmds::SwitchCommand;
 use crate::cmds::PurgeCommand;
+use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
 use crate::error::Result;
 
