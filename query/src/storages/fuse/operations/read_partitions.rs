@@ -39,7 +39,7 @@ impl FuseTable {
         match snapshot {
             Some(snapshot) => {
                 let schema = self.table_info.schema();
-                let block_metas = BlockPruner::new(&snapshot)
+                let block_metas = BlockPruner::new(snapshot.clone())
                     .apply(schema, &push_downs, ctx.as_ref())
                     .await?;
 
@@ -72,9 +72,12 @@ impl FuseTable {
         blocks_metas.iter().fold(
             (Statistics::default(), Partitions::default()),
             |(mut stats, mut parts), block_meta| {
-                let name =
-                    PartInfo::new(block_meta.location.path.as_str(), block_meta.storage_size)
-                        .encode();
+                let name = PartInfo::new(
+                    block_meta.location.path.as_str(),
+                    block_meta.storage_size,
+                    block_meta.format_version,
+                )
+                .encode();
                 parts.push(Part { name, version: 0 });
 
                 stats.read_rows += block_meta.row_count as usize;

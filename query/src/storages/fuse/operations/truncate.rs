@@ -37,7 +37,7 @@ impl FuseTable {
             let new_snapshot = TableSnapshot {
                 format_version: 1,
                 snapshot_id: Uuid::new_v4(),
-                prev_snapshot_id: Some(prev_id),
+                prev_snapshot_id: Some((prev_id, prev_snapshot.format_version)),
                 schema: prev_snapshot.schema.clone(),
                 summary: Default::default(),
                 segments: vec![],

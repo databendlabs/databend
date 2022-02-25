@@ -32,6 +32,7 @@ use uuid::Uuid;
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io;
+use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
@@ -142,12 +143,14 @@ impl FuseTable {
         let prev = self.read_table_snapshot(ctx).await?;
         let schema = self.table_info.meta.schema.as_ref().clone();
         let (segments, summary) = Self::merge_append_operations(&schema, operation_log)?;
+        // TODO refine this
+        let segments = segments.into_iter().map(|loc| (loc, 1u64)).collect();
         let rows_written = summary.row_count;
         let new_snapshot = if overwrite {
             TableSnapshot {
-                format_version: 1,
+                format_version: TableSnapshot::current_format_version(),
                 snapshot_id: Uuid::new_v4(),
-                prev_snapshot_id: prev.as_ref().map(|v| v.snapshot_id),
+                prev_snapshot_id: prev.as_ref().map(|v| (v.snapshot_id, v.format_version)),
                 schema,
                 summary,
                 segments,
@@ -180,7 +183,7 @@ impl FuseTable {
     fn merge_table_operations(
         schema: &DataSchema,
         previous: Option<Arc<TableSnapshot>>,
-        mut new_segments: Vec<String>,
+        mut new_segments: Vec<Location>,
         statistics: Statistics,
     ) -> Result<TableSnapshot> {
         // 1. merge stats with previous snapshot, if any
@@ -190,7 +193,7 @@ impl FuseTable {
         } else {
             statistics
         };
-        let prev_snapshot_id = previous.as_ref().map(|v| v.snapshot_id);
+        let prev_snapshot_id = previous.as_ref().map(|v| (v.snapshot_id, v.format_version));
 
         // 2. merge segment locations with previous snapshot, if any
         if let Some(snapshot) = &previous {
@@ -199,7 +202,7 @@ impl FuseTable {
         };
 
         let new_snapshot = TableSnapshot {
-            format_version: 0,
+            format_version: 1,
             snapshot_id: Uuid::new_v4(),
             prev_snapshot_id,
             schema: schema.clone(),

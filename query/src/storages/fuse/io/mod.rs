@@ -15,13 +15,18 @@
 mod block_reader;
 mod block_stream_writer;
 mod block_writer;
+mod cached_reader;
 mod locations;
 mod meta_readers;
+mod versioned_meta_readers;
 
 pub use block_reader::BlockReader;
 pub use block_stream_writer::BlockRegulator;
 pub use block_stream_writer::BlockStreamWriter;
 pub use block_stream_writer::SegmentInfoStream;
+pub use cached_reader::CachedReader;
+pub use cached_reader::HasTenantLabel;
+pub use cached_reader::Loader;
 pub use locations::gen_segment_info_location;
 pub use locations::snapshot_location;
 pub use meta_readers::BlockMetaCache;

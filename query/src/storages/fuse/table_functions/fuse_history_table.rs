@@ -32,9 +32,9 @@ use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::TableSnapshot;
-use crate::storages::fuse::table::is_fuse_table;
 use crate::storages::fuse::table_functions::table_arg_util::parse_func_history_args;
 use crate::storages::fuse::table_functions::table_arg_util::string_literal;
+use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::TBL_OPT_SNAPSHOT_LOC;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
@@ -58,6 +58,7 @@ impl FuseHistoryTable {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("snapshot_id", Vu8::to_data_type()),
             DataField::new_nullable("prev_snapshot_id", Vu8::to_data_type()),
+            DataField::new_nullable("prev_snapshot_format", u64::to_data_type()),
             DataField::new("segment_count", u64::to_data_type()),
             DataField::new("block_count", u64::to_data_type()),
             DataField::new("row_count", u64::to_data_type()),
@@ -100,7 +101,7 @@ impl FuseHistoryTable {
             snapshot_ids.push(s.snapshot_id.simple().to_string().into_bytes());
             prev_snapshot_ids.push(
                 s.prev_snapshot_id
-                    .map(|v| v.simple().to_string().into_bytes()),
+                    .map(|(id, _v)| id.simple().to_string().into_bytes()),
             );
             segment_count.push(s.segments.len() as u64);
             block_count.push(s.summary.block_count);
@@ -153,17 +154,25 @@ impl Table for FuseHistoryTable {
             )
             .await?;
 
-        if !is_fuse_table(tbl.as_ref()) {
-            return Err(ErrorCode::BadArguments(format!(
-                "expecting fuse table, but got table of engine type: {}",
-                tbl.get_table_info().meta.engine
-            )));
-        }
+        // TODO proper exception
+        let fuse_tbl = tbl
+            .as_ref()
+            .as_any()
+            .downcast_ref::<FuseTable>()
+            .ok_or_else(|| {
+                ErrorCode::BadArguments(format!(
+                    "expecting fuse table, but got table of engine type: {}",
+                    tbl.get_table_info().meta.engine
+                ))
+            })?;
 
         let tbl_info = tbl.get_table_info();
         let location = tbl_info.meta.options.get(TBL_OPT_SNAPSHOT_LOC);
+        let format_version = fuse_tbl.snapshot_format_version()?;
         let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
-        let snapshots = reader.read_snapshot_history(location).await?;
+        let snapshots = reader
+            .read_snapshot_history(location, format_version)
+            .await?;
         let blocks = vec![self.snapshots_to_block(snapshots)];
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),

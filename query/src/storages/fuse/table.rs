@@ -14,11 +14,11 @@
 //
 
 use std::any::Any;
-use std::any::TypeId;
 use std::convert::TryFrom;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
@@ -35,6 +35,7 @@ use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::TBL_OPT_SNAPSHOT_LOC;
+use crate::storages::fuse::TBL_OPT_SNAPSHOT_VER;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
@@ -135,8 +136,24 @@ impl Table for FuseTable {
 }
 
 impl FuseTable {
-    pub(crate) fn snapshot_loc(&self) -> Option<String> {
+    fn snapshot_loc(&self) -> Option<String> {
         self.table_info.options().get(TBL_OPT_SNAPSHOT_LOC).cloned()
+    }
+
+    pub fn snapshot_format_version(&self) -> Result<u64> {
+        self.table_info
+            .options()
+            .get(TBL_OPT_SNAPSHOT_VER)
+            .map(|ver_str| {
+                let v = ver_str.as_str();
+                v.parse::<u64>().map_err(|_| {
+                    ErrorCode::LogicalError(format!(
+                        "invalid snapshot version {v}, can not be parsed as u64"
+                    ))
+                })
+            })
+            .transpose()
+            .map(|opt| opt.unwrap_or(0))
     }
 
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
@@ -146,14 +163,10 @@ impl FuseTable {
     ) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc() {
             let reader = MetaReaders::table_snapshot_reader(ctx);
-            Ok(Some(reader.read(&loc).await?))
+            let ver = self.snapshot_format_version()?;
+            Ok(Some(reader.read(loc.as_str(), None, ver).await?))
         } else {
             Ok(None)
         }
     }
-}
-
-pub fn is_fuse_table(table: &dyn Table) -> bool {
-    let tid = table.as_any().type_id();
-    tid == TypeId::of::<FuseTable>()
 }

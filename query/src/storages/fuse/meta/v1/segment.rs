@@ -13,15 +13,16 @@
 //  limitations under the License.
 //
 
-pub mod current;
-mod v1;
-mod versioned;
+use crate::storages::fuse::meta::BlockMeta;
+use crate::storages::fuse::meta::Statistics;
 
-pub use v1::block::BlockLocation;
-pub use v1::block::BlockMeta;
-pub use v1::segment::SegmentInfo;
-pub use v1::snapshot::ColumnId;
-pub use v1::snapshot::Location;
-pub use v1::snapshot::SnapshotId;
-pub use v1::snapshot::Statistics;
-pub use v1::snapshot::TableSnapshot;
+/// A segment comprised of one or more blocks
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct SegmentInfo {
+    /// format version
+    pub format_version: u32,
+    /// blocks belong to this segment
+    pub blocks: Vec<BlockMeta>,
+    /// summary statistics
+    pub summary: Statistics,
+}

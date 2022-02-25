@@ -117,7 +117,7 @@ impl PartiallyAccumulated {
         let mut stats = &mut self.accumulator;
         stats.file_size += file_size;
         let block_meta = BlockMeta {
-            format_version: 1,
+            format_version: BlockMeta::current_version(),
             location: BlockLocation {
                 path: location,
                 meta_size: 0,

@@ -20,7 +20,7 @@ use databend_query::storages::fuse::operations::PartInfo;
 #[test]
 fn test_part_info_encode_decode() -> Result<()> {
     // Normal
-    let info = PartInfo::new("test_loc", 1);
+    let info = PartInfo::new("test_loc", 1, 1);
     let encode_str = info.encode();
     let decoded = PartInfo::decode(&encode_str)?;
     assert_eq!(info, decoded);

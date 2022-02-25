@@ -24,6 +24,7 @@ use opendal::Operator;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::io::MetaReaders;
+use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::TBL_OPT_SNAPSHOT_LOC;
 use crate::storages::Table;
@@ -37,8 +38,12 @@ impl FuseTable {
         let accessor = ctx.get_storage_operator().await?;
         let tbl_info = self.get_table_info();
         let snapshot_loc = tbl_info.meta.options.get(TBL_OPT_SNAPSHOT_LOC);
+        let format_version = self.snapshot_format_version()?;
         let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
-        let mut snapshots = reader.read_snapshot_history(snapshot_loc).await?;
+
+        let mut snapshots = reader
+            .read_snapshot_history(snapshot_loc, format_version)
+            .await?;
 
         let min_history_len = if !keep_last_snapshot { 0 } else { 1 };
 
@@ -47,7 +52,7 @@ impl FuseTable {
             return Ok(());
         }
 
-        let current_segments: HashSet<&String>;
+        let current_segments: HashSet<&Location>;
         let current_snapshot;
         if !keep_last_snapshot {
             // if truncate_all requested, gc root contains nothing;
@@ -65,10 +70,14 @@ impl FuseTable {
         // segments which no longer need to be kept
         let seg_delta = prevs.difference(&current_segments).collect::<Vec<_>>();
 
+        // TODO rm those deference **
         // blocks to be removed
-        let prev_blocks: HashSet<String> = self.blocks_of(seg_delta.iter(), ctx.clone()).await?;
-        let current_blocks: HashSet<String> =
-            self.blocks_of(current_segments.iter(), ctx.clone()).await?;
+        let prev_blocks: HashSet<String> = self
+            .blocks_of(seg_delta.iter().map(|i| **i), ctx.clone())
+            .await?;
+        let current_blocks: HashSet<String> = self
+            .blocks_of(current_segments.iter().copied(), ctx.clone())
+            .await?;
         let block_delta = prev_blocks.difference(&current_blocks);
 
         // NOTE: the following actions are NOT transactional yet
@@ -83,7 +92,7 @@ impl FuseTable {
         }
 
         // 2. remove the segments
-        for x in seg_delta {
+        for (x, _v) in seg_delta {
             self.remove_location(accessor.clone(), x.as_str()).await?;
             if let Some(c) = ctx.get_storage_cache_manager().get_table_segment_cache() {
                 let cache = &mut *c.write().await;
@@ -106,13 +115,16 @@ impl FuseTable {
 
     async fn blocks_of(
         &self,
-        locations: impl Iterator<Item = impl AsRef<str>>,
+        //locations: impl Iterator<Item = impl AsRef<Location>>,
+        locations: impl Iterator<Item = &Location>,
         ctx: Arc<QueryContext>,
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
         let reader = MetaReaders::segment_info_reader(ctx.as_ref());
-        for location in locations {
-            let res = reader.read(location).await?;
+        for l in locations {
+            //let (x, ver) = l.as_ref();
+            let (x, ver) = l;
+            let res = reader.read(x, None, *ver).await?;
             for block_meta in &res.blocks {
                 result.insert(block_meta.location.path.clone());
             }

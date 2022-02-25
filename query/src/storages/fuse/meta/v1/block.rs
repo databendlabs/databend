@@ -1,4 +1,4 @@
-//  Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::collections::HashMap;
 
@@ -23,14 +22,22 @@ use crate::storages::index::ColumnStatistics;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BlockMeta {
     /// format version
-    pub format_version: u32,
+    pub format_version: u64,
     /// Pointer of the data Block
     pub row_count: u64,
     /// in memory size of the block
     pub in_memory_size: u64,
+    /// size of the block in storage
     pub storage_size: u64,
+    // statistics of columns
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub location: BlockLocation,
+}
+
+impl BlockMeta {
+    pub const fn current_version() -> u64 {
+        1
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

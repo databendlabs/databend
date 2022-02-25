@@ -37,6 +37,7 @@ pub struct BlockReader {
     arrow_table_schema: ArrowSchema,
     projection: Vec<usize>,
     file_len: u64,
+    format_version: u64,
     metadata_reader: BlockMetaReader,
 }
 
@@ -47,6 +48,7 @@ impl BlockReader {
         table_schema: DataSchemaRef,
         projection: Vec<usize>,
         file_len: u64,
+        format_version: u64,
         reader: BlockMetaReader,
     ) -> Self {
         let block_schema = Arc::new(table_schema.project(projection.clone()));
@@ -58,13 +60,17 @@ impl BlockReader {
             arrow_table_schema,
             projection,
             file_len,
+            format_version,
             metadata_reader: reader,
         }
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn read(&mut self) -> Result<DataBlock> {
-        let block_meta = &self.metadata_reader.read(self.path.as_str()).await?;
+        let block_meta = &self
+            .metadata_reader
+            .read(self.path.as_str(), None, self.format_version)
+            .await?;
         let metadata = block_meta.inner();
 
         // FUSE uses exact one "row group"

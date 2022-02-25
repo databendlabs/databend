@@ -27,12 +27,12 @@ use opendal::Reader;
 use serde::de::DeserializeOwned;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::cache::CachedReader;
-use crate::storages::fuse::cache::HasTenantLabel;
-use crate::storages::fuse::cache::Loader;
 use crate::storages::fuse::cache::MemoryCache;
 use crate::storages::fuse::cache::TenantLabel;
 use crate::storages::fuse::io::snapshot_location;
+use crate::storages::fuse::io::CachedReader;
+use crate::storages::fuse::io::HasTenantLabel;
+use crate::storages::fuse::io::Loader;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
 
@@ -103,11 +103,13 @@ impl<'a> TableSnapshotReader<'a> {
     pub async fn read_snapshot_history(
         &self,
         latest_snapshot_location: Option<&String>,
+        format_version: u64,
     ) -> Result<Vec<Arc<TableSnapshot>>> {
         let mut snapshots = vec![];
         let mut current_snapshot_location = latest_snapshot_location.cloned();
+        let current_format_version = format_version;
         while let Some(loc) = current_snapshot_location {
-            let r = self.read(loc).await;
+            let r = self.read(loc, None, current_format_version).await;
             let snapshot = match r {
                 Ok(s) => s,
                 Err(e) if e.code() == ErrorCode::dal_path_not_found_code() => {
@@ -117,7 +119,8 @@ impl<'a> TableSnapshotReader<'a> {
             };
             let prev = snapshot.prev_snapshot_id;
             snapshots.push(snapshot);
-            current_snapshot_location = prev.map(|id| snapshot_location(&id));
+            // TODO buggy, set the current ver
+            current_snapshot_location = prev.map(|(id, _ver)| snapshot_location(&id));
         }
         Ok(snapshots)
     }
@@ -129,7 +132,7 @@ where
     T: BufReaderProvider + Sync,
     V: DeserializeOwned,
 {
-    async fn load(&self, key: &str, length_hint: Option<u64>) -> Result<V> {
+    async fn load(&self, key: &str, length_hint: Option<u64>, _version: u64) -> Result<V> {
         let mut reader = self.buf_reader(key, length_hint).await?;
         let mut buffer = vec![];
 
@@ -151,7 +154,7 @@ where
 impl<T> Loader<BlockMeta> for T
 where T: BufReaderProvider + Sync
 {
-    async fn load(&self, key: &str, length_hint: Option<u64>) -> Result<BlockMeta> {
+    async fn load(&self, key: &str, length_hint: Option<u64>, _version: u64) -> Result<BlockMeta> {
         let mut reader = self.buf_reader(key, length_hint).await?;
         let meta = read_metadata_async(&mut reader)
             .instrument(debug_span!("parquet_source_read_meta"))

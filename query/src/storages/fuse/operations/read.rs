@@ -73,6 +73,7 @@ impl FuseTable {
                     let part_info = PartInfo::decode(&part.name)?;
                     let part_location = part_info.location();
                     let part_len = part_info.length();
+                    let format_version = part_info.format_version();
 
                     let mut block_reader = BlockReader::new(
                         da,
@@ -80,6 +81,7 @@ impl FuseTable {
                         table_schema,
                         projection,
                         part_len,
+                        format_version,
                         reader,
                     );
                     block_reader.read().await.map_err(|e| {

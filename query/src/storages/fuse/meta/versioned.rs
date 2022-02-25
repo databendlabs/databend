@@ -1,4 +1,4 @@
-//  Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -11,17 +11,12 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
+
+//use serde::Deserialize;
+//use serde::Serialize;
 //
-
-pub mod current;
-mod v1;
-mod versioned;
-
-pub use v1::block::BlockLocation;
-pub use v1::block::BlockMeta;
-pub use v1::segment::SegmentInfo;
-pub use v1::snapshot::ColumnId;
-pub use v1::snapshot::Location;
-pub use v1::snapshot::SnapshotId;
-pub use v1::snapshot::Statistics;
-pub use v1::snapshot::TableSnapshot;
+//#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+//#[non_exhaustive]
+//pub enum VersionedMeta<T> {
+//    V1(T),
+//}

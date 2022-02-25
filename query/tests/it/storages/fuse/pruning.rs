@@ -45,7 +45,7 @@ async fn apply_block_pruning(
     push_down: &Option<Extras>,
     ctx: Arc<QueryContext>,
 ) -> Result<Vec<BlockMeta>> {
-    BlockPruner::new(table_snapshot)
+    BlockPruner::new(Arc::new(table_snapshot.clone()))
         .apply(schema, push_down, ctx.as_ref())
         .await
 }
@@ -138,7 +138,7 @@ async fn test_block_pruner() -> Result<()> {
         .unwrap();
 
     let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
-    let snapshot = reader.read(snapshot_loc.as_str()).await?;
+    let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
     // nothing will be pruned
     let push_downs = None;
@@ -198,7 +198,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         DataField::new("b", u64::to_data_type()),
     ]);
 
-    let row_per_block = 3;
+    let row_per_block = 3i32;
     let num_blocks_opt = row_per_block.to_string();
 
     // create test table
@@ -269,7 +269,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         .unwrap();
 
     let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
-    let snapshot = reader.read(snapshot_loc.as_str()).await?;
+    let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
     // a + b > 20; some blocks pruned
     let mut extra = Extras::default();
