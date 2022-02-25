@@ -18,17 +18,19 @@ use databend_query::configs::DiskStorageConfig;
 use databend_query::configs::S3StorageConfig;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+// This test need network
 async fn test_get_storage_accessor_s3() -> Result<()> {
     let mut conf = crate::tests::ConfigBuilder::create().config();
 
     conf.storage.storage_type = "s3".to_string();
     conf.storage.s3 = S3StorageConfig {
-        region: "test".to_string(),
-        endpoint_url: "http://127.0.0.1:9000".to_string(),
-        access_key_id: "access_key_id".to_string(),
-        secret_access_key: "secret_access_key".to_string(),
+        region: "us-east-2".to_string(),
+        endpoint_url: "http://s3.amazonaws.com".to_string(),
+        access_key_id: "".to_string(),
+        secret_access_key: "".to_string(),
         enable_pod_iam_policy: true,
         bucket: "bucket".to_string(),
+        root: "".to_string(),
     };
 
     let qctx = crate::tests::create_query_context_with_config(conf)?;
