@@ -13,8 +13,13 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
+use std::fs::File;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -26,7 +31,14 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use walkdir::WalkDir;
 
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::SyncSource;
+use crate::pipelines::new::processors::SyncSourcer;
+use crate::pipelines::new::NewPipe;
+use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
+use crate::storages::system::tracing_table_stream::LogEntry;
 use crate::storages::system::TracingTableStream;
 use crate::storages::Table;
 
@@ -61,6 +73,18 @@ impl TracingTable {
 
         TracingTable { table_info }
     }
+
+    fn log_files(ctx: Arc<QueryContext>) -> Result<VecDeque<String>> {
+        WalkDir::new(ctx.get_config().log.log_dir.as_str())
+            .sort_by_key(|file| file.file_name().to_owned())
+            .into_iter()
+            .filter_map(|dir_entry| match dir_entry {
+                Ok(entry) if entry.path().is_dir() => None,
+                Ok(entry) => Some(Ok(entry.path().display().to_string())),
+                Err(cause) => Some(Err(ErrorCode::UnknownException(format!("{}", cause)))),
+            })
+            .collect::<Result<VecDeque<String>>>()
+    }
 }
 
 #[async_trait::async_trait]
@@ -78,16 +102,7 @@ impl Table for TracingTable {
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let mut log_files = vec![];
-
-        for entry in WalkDir::new(ctx.get_config().log.log_dir.as_str())
-            .sort_by_key(|file| file.file_name().to_owned())
-        {
-            let entry = entry.map_err(|e| ErrorCode::UnknownException(format!("{}", e)))?;
-            if !entry.path().is_dir() {
-                log_files.push(entry.path().display().to_string());
-            }
-        }
+        let log_files = Self::log_files(ctx)?;
 
         // Default limit.
         let mut limit = 100000000_usize;
@@ -104,5 +119,129 @@ impl Table for TracingTable {
             log_files,
             limit,
         )?))
+    }
+
+    fn read2(
+        &self,
+        ctx: Arc<QueryContext>,
+        _: &ReadDataSourcePlan,
+        pipeline: &mut NewPipeline,
+    ) -> Result<()> {
+        let settings = ctx.get_settings();
+
+        let output = OutputPort::create();
+        let log_files = Self::log_files(ctx)?;
+        let schema = self.table_info.schema();
+        let max_block_size = settings.get_max_block_size()? as usize;
+
+        pipeline.add_pipe(NewPipe::SimplePipe {
+            inputs_port: vec![],
+            outputs_port: vec![output.clone()],
+            processors: vec![TracingSource::create(
+                output,
+                max_block_size,
+                log_files,
+                schema,
+            )?],
+        });
+
+        Ok(())
+    }
+}
+
+struct TracingSource {
+    rows_pre_block: usize,
+    schema: DataSchemaRef,
+    tracing_files: VecDeque<String>,
+    data_blocks: VecDeque<DataBlock>,
+}
+
+impl TracingSource {
+    pub fn create(
+        output: Arc<OutputPort>,
+        rows: usize,
+        log_files: VecDeque<String>,
+        schema: DataSchemaRef,
+    ) -> Result<ProcessorPtr> {
+        SyncSourcer::create(output, TracingSource {
+            schema,
+            rows_pre_block: rows,
+            tracing_files: log_files,
+            data_blocks: Default::default(),
+        })
+    }
+}
+
+impl SyncSource for TracingSource {
+    const NAME: &'static str = "system.tracing";
+
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
+        loop {
+            if let Some(data_block) = self.data_blocks.pop_front() {
+                return Ok(Some(data_block));
+            }
+
+            if self.tracing_files.is_empty() {
+                return Ok(None);
+            }
+
+            if let Some(file_name) = self.tracing_files.pop_front() {
+                let max_rows = self.rows_pre_block;
+                let buffer = BufReader::new(File::open(file_name)?);
+
+                let mut time_column = MutableStringColumn::with_capacity(max_rows);
+                let mut host_column = MutableStringColumn::with_capacity(max_rows);
+                let mut msg_column = MutableStringColumn::with_capacity(max_rows);
+                let mut name_column = MutableStringColumn::with_capacity(max_rows);
+                let mut level_column = MutablePrimitiveColumn::<i8>::with_capacity(max_rows);
+                let mut pid_column = MutablePrimitiveColumn::<i64>::with_capacity(max_rows);
+                let mut version_column = MutablePrimitiveColumn::<i64>::with_capacity(max_rows);
+
+                for (index, line) in buffer.lines().enumerate() {
+                    if index != 0 && index % max_rows == 0 {
+                        self.data_blocks
+                            .push_back(DataBlock::create(self.schema.clone(), vec![
+                                Arc::new(version_column.finish()),
+                                Arc::new(name_column.finish()),
+                                Arc::new(msg_column.finish()),
+                                Arc::new(level_column.finish()),
+                                Arc::new(host_column.finish()),
+                                Arc::new(pid_column.finish()),
+                                Arc::new(time_column.finish()),
+                            ]));
+
+                        time_column = MutableStringColumn::with_capacity(max_rows);
+                        host_column = MutableStringColumn::with_capacity(max_rows);
+                        msg_column = MutableStringColumn::with_capacity(max_rows);
+                        name_column = MutableStringColumn::with_capacity(max_rows);
+                        level_column = MutablePrimitiveColumn::<i8>::with_capacity(max_rows);
+                        pid_column = MutablePrimitiveColumn::<i64>::with_capacity(max_rows);
+                        version_column = MutablePrimitiveColumn::<i64>::with_capacity(max_rows);
+                    }
+
+                    let entry: LogEntry = serde_json::from_str(line.unwrap().as_str())?;
+                    pid_column.push(entry.pid);
+                    version_column.push(entry.v);
+                    level_column.push(entry.level);
+                    msg_column.push(entry.msg.as_bytes());
+                    name_column.push(entry.name.as_bytes());
+                    time_column.push(entry.time.as_bytes());
+                    host_column.push(entry.hostname.as_bytes());
+                }
+
+                if !pid_column.is_empty() {
+                    self.data_blocks
+                        .push_back(DataBlock::create(self.schema.clone(), vec![
+                            Arc::new(version_column.finish()),
+                            Arc::new(name_column.finish()),
+                            Arc::new(msg_column.finish()),
+                            Arc::new(level_column.finish()),
+                            Arc::new(host_column.finish()),
+                            Arc::new(pid_column.finish()),
+                            Arc::new(time_column.finish()),
+                        ]));
+                }
+            }
+        }
     }
 }

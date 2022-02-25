@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_infallible::Mutex;
-use futures::future::BoxFuture;
 use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::new::executor::executor_worker_context::ExecutorTask;
@@ -32,11 +31,11 @@ pub struct ExecutorTasksQueue {
 }
 
 impl ExecutorTasksQueue {
-    pub fn create(workers_size: usize) -> ExecutorTasksQueue {
-        ExecutorTasksQueue {
+    pub fn create(workers_size: usize) -> Arc<ExecutorTasksQueue> {
+        Arc::new(ExecutorTasksQueue {
             finished: AtomicBool::new(false),
             workers_tasks: Mutex::new(ExecutorTasks::create(workers_size)),
-        }
+        })
     }
 
     pub fn finish(&self) {
@@ -107,38 +106,36 @@ impl ExecutorTasksQueue {
         }
     }
 
-    pub fn push_executing_async_task(
-        &self,
-        worker_id: usize,
-        task: ExecutingAsyncTask,
-    ) -> Option<ExecutingAsyncTask> {
-        unsafe {
-            let mut workers_tasks = self.workers_tasks.lock();
+    pub fn completed_async_task(&self, task: CompletedAsyncTask) {
+        let mut workers_tasks = self.workers_tasks.lock();
 
-            // The finished when wait the lock tasks. TODO: maybe use try lock.
-            match task.finished.load(Ordering::Relaxed) {
-                true => Some(task),
-                false => {
-                    workers_tasks.push_executing_async_task(worker_id, task);
-                    None
-                }
-            }
-        }
+        let worker_id = task.worker_id;
+        workers_tasks.tasks_size += 1;
+        workers_tasks.workers_completed_async_tasks[worker_id].push_back(task);
     }
 }
 
-pub struct ExecutingAsyncTask {
+pub struct CompletedAsyncTask {
     pub id: NodeIndex,
     pub worker_id: usize,
-    pub finished: Arc<AtomicBool>,
-    pub future: BoxFuture<'static, Result<()>>,
+    pub res: Result<()>,
+}
+
+impl CompletedAsyncTask {
+    pub fn create(proc: ProcessorPtr, worker_id: usize, res: Result<()>) -> Self {
+        CompletedAsyncTask {
+            id: unsafe { proc.id() },
+            worker_id,
+            res,
+        }
+    }
 }
 
 struct ExecutorTasks {
     tasks_size: usize,
     workers_sync_tasks: Vec<VecDeque<ProcessorPtr>>,
     workers_async_tasks: Vec<VecDeque<ProcessorPtr>>,
-    workers_executing_async_tasks: Vec<VecDeque<ExecutingAsyncTask>>,
+    workers_completed_async_tasks: Vec<VecDeque<CompletedAsyncTask>>,
 }
 
 unsafe impl Send for ExecutorTasks {}
@@ -147,19 +144,19 @@ impl ExecutorTasks {
     pub fn create(workers_size: usize) -> ExecutorTasks {
         let mut workers_sync_tasks = Vec::with_capacity(workers_size);
         let mut workers_async_tasks = Vec::with_capacity(workers_size);
-        let mut workers_executing_async_tasks = Vec::with_capacity(workers_size);
+        let mut workers_completed_async_tasks = Vec::with_capacity(workers_size);
 
         for _index in 0..workers_size {
             workers_sync_tasks.push(VecDeque::new());
             workers_async_tasks.push(VecDeque::new());
-            workers_executing_async_tasks.push(VecDeque::new());
+            workers_completed_async_tasks.push(VecDeque::new());
         }
 
         ExecutorTasks {
             tasks_size: 0,
             workers_sync_tasks,
             workers_async_tasks,
-            workers_executing_async_tasks,
+            workers_completed_async_tasks,
         }
     }
 
@@ -177,15 +174,8 @@ impl ExecutorTasks {
             return ExecutorTask::Async(processor);
         }
 
-        if !self.workers_executing_async_tasks[worker_id].is_empty() {
-            let async_tasks = &mut self.workers_executing_async_tasks[worker_id];
-            for index in 0..async_tasks.len() {
-                if async_tasks[index].finished.load(Ordering::Relaxed) {
-                    return ExecutorTask::AsyncSchedule(
-                        async_tasks.swap_remove_front(index).unwrap(),
-                    );
-                }
-            }
+        if let Some(task) = self.workers_completed_async_tasks[worker_id].pop_front() {
+            return ExecutorTask::AsyncCompleted(task);
         }
 
         ExecutorTask::None
@@ -205,14 +195,8 @@ impl ExecutorTasks {
                 return worker_id;
             }
 
-            if !self.workers_executing_async_tasks[worker_id].is_empty() {
-                let async_tasks = &self.workers_executing_async_tasks[worker_id];
-
-                for task_item in async_tasks {
-                    if task_item.finished.load(Ordering::Relaxed) {
-                        return worker_id;
-                    }
-                }
+            if !self.workers_completed_async_tasks[worker_id].is_empty() {
+                return worker_id;
             }
 
             worker_id += 1;
@@ -243,18 +227,13 @@ impl ExecutorTasks {
         self.tasks_size += 1;
         let sync_queue = &mut self.workers_sync_tasks[worker_id];
         let async_queue = &mut self.workers_async_tasks[worker_id];
-        let executing_queue = &mut self.workers_executing_async_tasks[worker_id];
+        let completed_queue = &mut self.workers_completed_async_tasks[worker_id];
 
         match task {
             ExecutorTask::None => unreachable!(),
             ExecutorTask::Sync(processor) => sync_queue.push_back(processor),
             ExecutorTask::Async(processor) => async_queue.push_back(processor),
-            ExecutorTask::AsyncSchedule(task) => executing_queue.push_back(task),
+            ExecutorTask::AsyncCompleted(task) => completed_queue.push_back(task),
         }
-    }
-
-    pub unsafe fn push_executing_async_task(&mut self, worker: usize, task: ExecutingAsyncTask) {
-        self.tasks_size += 1;
-        self.workers_executing_async_tasks[worker].push_back(task)
     }
 }

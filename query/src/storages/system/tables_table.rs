@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -21,58 +20,26 @@ use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::ReadDataSourcePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
+use crate::storages::system::table::AsyncOneBlockSystemTable;
+use crate::storages::system::table::AsyncSystemTable;
 use crate::storages::Table;
 
 pub struct TablesTable {
     table_info: TableInfo,
 }
 
-impl TablesTable {
-    pub fn create(table_id: u64) -> Self {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("database", Vu8::to_data_type()),
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("engine", Vu8::to_data_type()),
-            DataField::new("created_on", Vu8::to_data_type()),
-        ]);
-
-        let table_info = TableInfo {
-            desc: "'system'.'tables'".to_string(),
-            name: "tables".to_string(),
-            ident: TableIdent::new(table_id, 0),
-            meta: TableMeta {
-                schema,
-                engine: "SystemTables".to_string(),
-
-                ..Default::default()
-            },
-        };
-
-        TablesTable { table_info }
-    }
-}
-
 #[async_trait::async_trait]
-impl Table for TablesTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+impl AsyncSystemTable for TablesTable {
+    const NAME: &'static str = "system.tables";
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }
 
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
+    async fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog();
         let databases = catalog.list_databases(tenant.as_str()).await?;
@@ -106,17 +73,36 @@ impl Table for TablesTable {
             .collect();
         let created_ons: Vec<&[u8]> = created_ons.iter().map(|s| s.as_bytes()).collect();
 
-        let block = DataBlock::create(self.table_info.schema(), vec![
+        Ok(DataBlock::create(self.table_info.schema(), vec![
             Series::from_data(databases),
             Series::from_data(names),
             Series::from_data(engines),
             Series::from_data(created_ons),
+        ]))
+    }
+}
+
+impl TablesTable {
+    pub fn create(table_id: u64) -> Arc<dyn Table> {
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("database", Vu8::to_data_type()),
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("engine", Vu8::to_data_type()),
+            DataField::new("created_on", Vu8::to_data_type()),
         ]);
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema(),
-            None,
-            vec![block],
-        )))
+        let table_info = TableInfo {
+            desc: "'system'.'tables'".to_string(),
+            name: "tables".to_string(),
+            ident: TableIdent::new(table_id, 0),
+            meta: TableMeta {
+                schema,
+                engine: "SystemTables".to_string(),
+
+                ..Default::default()
+            },
+        };
+
+        AsyncOneBlockSystemTable::create(TablesTable { table_info })
     }
 }
