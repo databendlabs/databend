@@ -15,9 +15,9 @@
 use std::fs;
 use std::sync::Arc;
 
-use clap::App;
 use clap::Arg;
 use clap::ArgMatches;
+use clap::Command as App;
 use comfy_table::Cell;
 use comfy_table::CellAlignment;
 use comfy_table::Color;
@@ -118,7 +118,7 @@ impl Command for PurgeCommand {
         }
 
         if matched {
-            writer.write_ok(format!("[ok] Package {} had been deleted.", dst_version));
+            writer.write_ok(format!("Package {} had been deleted.", dst_version));
             writer.writeln(&table.trim_fmt());
         } else {
             writer.writeln("No matching package found.");
