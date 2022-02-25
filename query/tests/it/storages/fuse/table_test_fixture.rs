@@ -34,7 +34,7 @@ use databend_query::storages::fuse::FuseHistoryTable;
 use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
-use databend_query::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
+use databend_query::storages::fuse::TBL_OPT_CHUNK_BLOCK_NUM;
 use databend_query::storages::Table;
 use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::TableArgs;
@@ -116,7 +116,7 @@ impl TestFixture {
                 schema: TestFixture::default_schema(),
                 engine: "FUSE".to_string(),
                 // make sure blocks will not be merged
-                options: [(TBL_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), "1".to_owned())].into(),
+                options: [(TBL_OPT_CHUNK_BLOCK_NUM.to_owned(), "1".to_owned())].into(),
                 ..Default::default()
             },
             as_select: None,

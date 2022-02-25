@@ -26,7 +26,7 @@ use crate::sessions::QueryContext;
 use crate::storages::fuse::io;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::FuseTable;
-use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
+use crate::storages::fuse::TBL_OPT_SNAPSHOT_LOC;
 
 impl FuseTable {
     #[inline]
@@ -35,6 +35,7 @@ impl FuseTable {
             let prev_id = prev_snapshot.snapshot_id;
 
             let new_snapshot = TableSnapshot {
+                format_version: 1,
                 snapshot_id: Uuid::new_v4(),
                 prev_snapshot_id: Some(prev_id),
                 schema: prev_snapshot.schema.clone(),
@@ -58,7 +59,7 @@ impl FuseTable {
             ctx.get_catalog()
                 .upsert_table_option(UpsertTableOptionReq::new(
                     &self.table_info.ident,
-                    TBL_OPT_KEY_SNAPSHOT_LOC,
+                    TBL_OPT_SNAPSHOT_LOC,
                     new_snapshot_loc,
                 ))
                 .await?;

@@ -53,7 +53,7 @@ impl StatisticsAccumulator {
         Ok(PartiallyAccumulated {
             accumulator: self,
             block_row_count: block.num_rows() as u64,
-            block_size: block.memory_size() as u64,
+            in_memory_size: block.memory_size() as u64,
             block_column_statistics: block_stats,
         })
     }
@@ -108,7 +108,7 @@ impl StatisticsAccumulator {
 pub struct PartiallyAccumulated {
     accumulator: StatisticsAccumulator,
     block_row_count: u64,
-    block_size: u64,
+    in_memory_size: u64,
     block_column_statistics: HashMap<ColumnId, ColumnStatistics>,
 }
 
@@ -117,13 +117,14 @@ impl PartiallyAccumulated {
         let mut stats = &mut self.accumulator;
         stats.file_size += file_size;
         let block_meta = BlockMeta {
+            format_version: 1,
             location: BlockLocation {
                 path: location,
                 meta_size: 0,
             },
             row_count: self.block_row_count,
-            block_size: self.block_size,
-            file_size,
+            in_memory_size: self.in_memory_size,
+            storage_size: file_size,
             col_stats: self.block_column_statistics,
         };
         stats.blocks_metas.push(block_meta);

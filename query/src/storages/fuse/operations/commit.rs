@@ -38,7 +38,7 @@ use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::operations::TableOperationLog;
 use crate::storages::fuse::statistics;
 use crate::storages::fuse::FuseTable;
-use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
+use crate::storages::fuse::TBL_OPT_SNAPSHOT_LOC;
 use crate::storages::Table;
 
 impl FuseTable {
@@ -145,6 +145,7 @@ impl FuseTable {
         let rows_written = summary.row_count;
         let new_snapshot = if overwrite {
             TableSnapshot {
+                format_version: 1,
                 snapshot_id: Uuid::new_v4(),
                 prev_snapshot_id: prev.as_ref().map(|v| v.snapshot_id),
                 schema,
@@ -198,6 +199,7 @@ impl FuseTable {
         };
 
         let new_snapshot = TableSnapshot {
+            format_version: 0,
             snapshot_id: Uuid::new_v4(),
             prev_snapshot_id,
             schema: schema.clone(),
@@ -221,7 +223,7 @@ impl FuseTable {
                     table_id,
                     version: table_version,
                 },
-                TBL_OPT_KEY_SNAPSHOT_LOC,
+                TBL_OPT_SNAPSHOT_LOC,
                 new_snapshot_location,
             ))
             .await

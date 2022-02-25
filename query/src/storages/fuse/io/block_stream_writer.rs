@@ -125,6 +125,7 @@ impl BlockStreamWriter {
         if self.number_of_blocks_accumulated >= self.num_block_threshold {
             let summary = acc.summary(self.data_schema.as_ref())?;
             let seg = SegmentInfo {
+                format_version: 1,
                 blocks: acc.blocks_metas,
                 summary: Statistics {
                     row_count: acc.summary_row_count,
@@ -184,6 +185,7 @@ impl Regulator<DataBlock, SegmentInfo> for BlockStreamWriter {
             Some(acc) => {
                 let summary = acc.summary(data_schema)?;
                 let seg = SegmentInfo {
+                    format_version: 1,
                     blocks: acc.blocks_metas,
                     summary: Statistics {
                         row_count: acc.summary_row_count,

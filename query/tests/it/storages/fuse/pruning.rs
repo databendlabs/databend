@@ -32,9 +32,9 @@ use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::meta::BlockMeta;
 use databend_query::storages::fuse::meta::TableSnapshot;
 use databend_query::storages::fuse::pruning::BlockPruner;
-use databend_query::storages::fuse::TBL_OPT_KEY_BLOCK_PER_SEGMENT;
-use databend_query::storages::fuse::TBL_OPT_KEY_ROW_PER_BLOCK;
-use databend_query::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
+use databend_query::storages::fuse::TBL_OPT_BLOCK_PER_SEGMENT;
+use databend_query::storages::fuse::TBL_OPT_ROW_PER_BLOCK;
+use databend_query::storages::fuse::TBL_OPT_SNAPSHOT_LOC;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -75,9 +75,9 @@ async fn test_block_pruner() -> Result<()> {
             schema: test_schema.clone(),
             engine: "FUSE".to_string(),
             options: [
-                (TBL_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
+                (TBL_OPT_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
                 // for the convenience of testing, let one seegment contains one block
-                (TBL_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
+                (TBL_OPT_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
             ]
             .into(),
             ..Default::default()
@@ -134,7 +134,7 @@ async fn test_block_pruner() -> Result<()> {
     let snapshot_loc = table
         .get_table_info()
         .options()
-        .get(TBL_OPT_KEY_SNAPSHOT_LOC)
+        .get(TBL_OPT_SNAPSHOT_LOC)
         .unwrap();
 
     let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
@@ -211,9 +211,9 @@ async fn test_block_pruner_monotonic() -> Result<()> {
             schema: test_schema.clone(),
             engine: "FUSE".to_string(),
             options: [
-                (TBL_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
+                (TBL_OPT_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
                 // for the convenience of testing, let one seegment contains one block
-                (TBL_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
+                (TBL_OPT_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
             ]
             .into(),
             ..Default::default()
@@ -265,7 +265,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     let snapshot_loc = table
         .get_table_info()
         .options()
-        .get(TBL_OPT_KEY_SNAPSHOT_LOC)
+        .get(TBL_OPT_SNAPSHOT_LOC)
         .unwrap();
 
     let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());

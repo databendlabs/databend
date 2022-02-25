@@ -34,7 +34,7 @@ use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
-use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
+use crate::storages::fuse::TBL_OPT_SNAPSHOT_LOC;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
@@ -136,10 +136,7 @@ impl Table for FuseTable {
 
 impl FuseTable {
     pub(crate) fn snapshot_loc(&self) -> Option<String> {
-        self.table_info
-            .options()
-            .get(TBL_OPT_KEY_SNAPSHOT_LOC)
-            .cloned()
+        self.table_info.options().get(TBL_OPT_SNAPSHOT_LOC).cloned()
     }
 
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]

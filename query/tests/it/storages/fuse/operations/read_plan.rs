@@ -42,12 +42,13 @@ fn test_to_partitions() -> Result<()> {
         .collect::<HashMap<_, _>>();
 
     let block_meta = BlockMeta {
+        format_version: 1,
         row_count: 0,
-        block_size: cols_stats
+        in_memory_size: cols_stats
             .iter()
             .map(|(_, col_stats)| col_stats.in_memory_size)
             .sum(),
-        file_size: 0,
+        storage_size: 0,
         col_stats: cols_stats.clone(),
         location: BlockLocation {
             path: "".to_string(),

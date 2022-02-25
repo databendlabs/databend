@@ -27,8 +27,8 @@ pub type Location = String;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
-    // TODO format_version
-    // pub format_version: u32,
+    /// format version of snapshot
+    pub format_version: u32,
     /// id of snapshot
     pub snapshot_id: SnapshotId,
 

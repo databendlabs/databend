@@ -25,7 +25,7 @@ use crate::sessions::QueryContext;
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::FuseTable;
-use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
+use crate::storages::fuse::TBL_OPT_SNAPSHOT_LOC;
 use crate::storages::Table;
 
 impl FuseTable {
@@ -36,7 +36,7 @@ impl FuseTable {
     ) -> Result<()> {
         let accessor = ctx.get_storage_operator().await?;
         let tbl_info = self.get_table_info();
-        let snapshot_loc = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
+        let snapshot_loc = tbl_info.meta.options.get(TBL_OPT_SNAPSHOT_LOC);
         let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
         let mut snapshots = reader.read_snapshot_history(snapshot_loc).await?;
 

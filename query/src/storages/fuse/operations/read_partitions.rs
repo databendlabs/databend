@@ -73,7 +73,8 @@ impl FuseTable {
             (Statistics::default(), Partitions::default()),
             |(mut stats, mut parts), block_meta| {
                 let name =
-                    PartInfo::new(block_meta.location.path.as_str(), block_meta.file_size).encode();
+                    PartInfo::new(block_meta.location.path.as_str(), block_meta.storage_size)
+                        .encode();
                 parts.push(Part { name, version: 0 });
 
                 stats.read_rows += block_meta.row_count as usize;
@@ -86,7 +87,7 @@ impl FuseTable {
                             .map(|(_, col_stats)| col_stats.in_memory_size)
                             .sum::<u64>() as usize
                     }
-                    None => stats.read_bytes += block_meta.block_size as usize,
+                    None => stats.read_bytes += block_meta.in_memory_size as usize,
                 }
 
                 (stats, parts)
