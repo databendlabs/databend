@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -24,63 +23,25 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UserDefinedFunction;
-use common_planners::ReadDataSourcePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::sessions::QueryContext;
+use crate::storages::system::table::AsyncOneBlockSystemTable;
+use crate::storages::system::table::AsyncSystemTable;
 use crate::storages::Table;
 
 pub struct FunctionsTable {
     table_info: TableInfo,
 }
 
-impl FunctionsTable {
-    pub fn create(table_id: u64) -> Self {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("is_builtin", bool::to_data_type()),
-            DataField::new("is_aggregate", bool::to_data_type()),
-            DataField::new("definition", Vu8::to_data_type()),
-            DataField::new("description", Vu8::to_data_type()),
-        ]);
-
-        let table_info = TableInfo {
-            desc: "'system'.'functions'".to_string(),
-            name: "functions".to_string(),
-            ident: TableIdent::new(table_id, 0),
-            meta: TableMeta {
-                schema,
-                engine: "SystemFunctions".to_string(),
-
-                ..Default::default()
-            },
-        };
-        FunctionsTable { table_info }
-    }
-
-    async fn get_udfs(ctx: Arc<QueryContext>) -> Result<Vec<UserDefinedFunction>> {
-        let tenant = ctx.get_tenant();
-        let user_mgr = ctx.get_user_manager();
-        user_mgr.get_udfs(&tenant).await
-    }
-}
-
 #[async_trait::async_trait]
-impl Table for FunctionsTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+impl AsyncSystemTable for FunctionsTable {
+    const NAME: &'static str = "system.functions";
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }
 
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
+    async fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
         let function_factory = FunctionFactory::instance();
         let aggregate_function_factory = AggregateFunctionFactory::instance();
         let func_names = function_factory.registered_names();
@@ -125,18 +86,44 @@ impl Table for FunctionsTable {
             })
             .collect::<Vec<&str>>();
 
-        let block = DataBlock::create(self.table_info.schema(), vec![
+        Ok(DataBlock::create(self.table_info.schema(), vec![
             Series::from_data(names),
             Series::from_data(is_builtin),
             Series::from_data(is_aggregate),
             Series::from_data(definitions),
             Series::from_data(descriptions),
+        ]))
+    }
+}
+
+impl FunctionsTable {
+    pub fn create(table_id: u64) -> Arc<dyn Table> {
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("is_builtin", bool::to_data_type()),
+            DataField::new("is_aggregate", bool::to_data_type()),
+            DataField::new("definition", Vu8::to_data_type()),
+            DataField::new("description", Vu8::to_data_type()),
         ]);
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema(),
-            None,
-            vec![block],
-        )))
+        let table_info = TableInfo {
+            desc: "'system'.'functions'".to_string(),
+            name: "functions".to_string(),
+            ident: TableIdent::new(table_id, 0),
+            meta: TableMeta {
+                schema,
+                engine: "SystemFunctions".to_string(),
+
+                ..Default::default()
+            },
+        };
+
+        AsyncOneBlockSystemTable::create(FunctionsTable { table_info })
+    }
+
+    async fn get_udfs(ctx: Arc<QueryContext>) -> Result<Vec<UserDefinedFunction>> {
+        let tenant = ctx.get_tenant();
+        let user_mgr = ctx.get_user_manager();
+        user_mgr.get_udfs(&tenant).await
     }
 }

@@ -17,6 +17,7 @@ mod sync_source;
 mod sync_source_receiver;
 mod table_source;
 
+pub use async_source::AsyncSource;
 pub use async_source::AsyncSourcer;
 pub use sync_source::SyncSource;
 pub use sync_source::SyncSourcer;

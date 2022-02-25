@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -21,55 +20,25 @@ use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::ReadDataSourcePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
+use crate::storages::system::table::SyncOneBlockSystemTable;
+use crate::storages::system::table::SyncSystemTable;
 use crate::storages::Table;
 
 pub struct CreditsTable {
     table_info: TableInfo,
 }
 
-impl CreditsTable {
-    pub fn create(table_id: u64) -> Self {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("version", Vu8::to_data_type()),
-            DataField::new("license", Vu8::to_data_type()),
-        ]);
-
-        let table_info = TableInfo {
-            desc: "'system'.'credits'".to_string(),
-            name: "credits".to_string(),
-            ident: TableIdent::new(table_id, 0),
-            meta: TableMeta {
-                schema,
-                engine: "SystemCredits".to_string(),
-                ..Default::default()
-            },
-        };
-        CreditsTable { table_info }
-    }
-}
-
-#[async_trait::async_trait]
-impl Table for CreditsTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+impl SyncSystemTable for CreditsTable {
+    const NAME: &'static str = "system.credits";
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }
 
-    async fn read(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
+    fn get_full_data(&self, _: Arc<QueryContext>) -> Result<DataBlock> {
         let metadata_command = cargo_metadata::MetadataCommand::new();
 
         let deps =
@@ -92,16 +61,33 @@ impl Table for CreditsTable {
             })
             .collect();
 
-        let block = DataBlock::create(self.table_info.schema(), vec![
+        Ok(DataBlock::create(self.table_info.schema(), vec![
             Series::from_data(names),
             Series::from_data(versions),
             Series::from_data(licenses),
+        ]))
+    }
+}
+
+impl CreditsTable {
+    pub fn create(table_id: u64) -> Arc<dyn Table> {
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("version", Vu8::to_data_type()),
+            DataField::new("license", Vu8::to_data_type()),
         ]);
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema(),
-            None,
-            vec![block],
-        )))
+        let table_info = TableInfo {
+            desc: "'system'.'credits'".to_string(),
+            name: "credits".to_string(),
+            ident: TableIdent::new(table_id, 0),
+            meta: TableMeta {
+                schema,
+                engine: "SystemCredits".to_string(),
+                ..Default::default()
+            },
+        };
+
+        SyncOneBlockSystemTable::create(CreditsTable { table_info })
     }
 }

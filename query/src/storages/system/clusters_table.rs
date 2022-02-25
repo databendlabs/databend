@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -21,19 +20,48 @@ use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::ReadDataSourcePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::sessions::QueryContext;
+use crate::storages::system::table::SyncOneBlockSystemTable;
+use crate::storages::system::table::SyncSystemTable;
 use crate::storages::Table;
 
 pub struct ClustersTable {
     table_info: TableInfo,
 }
 
+impl SyncSystemTable for ClustersTable {
+    const NAME: &'static str = "system.cluster";
+
+    fn get_table_info(&self) -> &TableInfo {
+        &self.table_info
+    }
+
+    fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
+        let cluster_nodes = ctx.get_cluster().get_nodes();
+
+        let mut names = MutableStringColumn::with_capacity(cluster_nodes.len());
+        let mut addresses = MutableStringColumn::with_capacity(cluster_nodes.len());
+        let mut addresses_port = MutablePrimitiveColumn::<u16>::with_capacity(cluster_nodes.len());
+
+        for cluster_node in &cluster_nodes {
+            let (ip, port) = cluster_node.ip_port()?;
+
+            names.append_value(cluster_node.id.as_bytes());
+            addresses.append_value(ip.as_bytes());
+            addresses_port.append_value(port);
+        }
+
+        Ok(DataBlock::create(self.table_info.schema(), vec![
+            names.finish().arc(),
+            addresses.finish().arc(),
+            addresses_port.finish().arc(),
+        ]))
+    }
+}
+
 impl ClustersTable {
-    pub fn create(table_id: u64) -> Self {
+    pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("name", Vu8::to_data_type()),
             DataField::new("host", Vu8::to_data_type()),
@@ -51,47 +79,6 @@ impl ClustersTable {
             },
         };
 
-        ClustersTable { table_info }
-    }
-}
-
-#[async_trait::async_trait]
-impl Table for ClustersTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn get_table_info(&self) -> &TableInfo {
-        &self.table_info
-    }
-
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let cluster_nodes = ctx.get_cluster().get_nodes();
-
-        let mut names = MutableStringColumn::with_capacity(cluster_nodes.len());
-        let mut addresses = MutableStringColumn::with_capacity(cluster_nodes.len());
-        let mut addresses_port = MutablePrimitiveColumn::<u16>::with_capacity(cluster_nodes.len());
-
-        for cluster_node in &cluster_nodes {
-            let (ip, port) = cluster_node.ip_port()?;
-
-            names.append_value(cluster_node.id.as_bytes());
-            addresses.append_value(ip.as_bytes());
-            addresses_port.append_value(port);
-        }
-
-        Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema(),
-            None,
-            vec![DataBlock::create(self.table_info.schema(), vec![
-                names.finish().arc(),
-                addresses.finish().arc(),
-                addresses_port.finish().arc(),
-            ])],
-        )))
+        SyncOneBlockSystemTable::create(ClustersTable { table_info })
     }
 }

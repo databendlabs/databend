@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -23,26 +24,30 @@ use common_exception::Result;
 use futures::Stream;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-struct LogEntry {
-    v: i64,
-    name: String,
-    msg: String,
-    level: i8,
-    hostname: String,
-    pid: i64,
-    time: String,
+pub struct LogEntry {
+    pub v: i64,
+    pub name: String,
+    pub msg: String,
+    pub level: i8,
+    pub hostname: String,
+    pub pid: i64,
+    pub time: String,
 }
 
 pub struct TracingTableStream {
     schema: DataSchemaRef,
     file_idx: usize,
-    log_files: Vec<String>,
+    log_files: VecDeque<String>,
     limit: usize,
     limit_offset: usize,
 }
 
 impl TracingTableStream {
-    pub fn try_create(schema: DataSchemaRef, log_files: Vec<String>, limit: usize) -> Result<Self> {
+    pub fn try_create(
+        schema: DataSchemaRef,
+        log_files: VecDeque<String>,
+        limit: usize,
+    ) -> Result<Self> {
         Ok(TracingTableStream {
             schema,
             log_files,
