@@ -12,22 +12,86 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+
 #[derive(Clone, Debug, Default)]
 pub struct DalMetrics {
     /// Read bytes.
-    pub read_bytes: usize,
-    /// Seek times of read.
-    pub read_seeks: usize,
+    read_bytes: Arc<AtomicUsize>,
     /// Cost(in ms) of read bytes.
-    pub read_byte_cost_ms: usize,
-    /// Cost(in ms) of seek by reading.
-    pub read_seek_cost_ms: usize,
+    read_bytes_cost_ms: Arc<AtomicU64>,
     /// Bytes written by data access layer
-    pub write_bytes: usize,
+    write_bytes: Arc<AtomicUsize>,
     /// Number of rows written
-    pub write_rows: usize,
+    write_rows: Arc<AtomicU64>,
     /// Number of partitions scanned, after pruning
-    pub partitions_scanned: usize,
+    partitions_scanned: Arc<AtomicU64>,
     /// Number of partitions, before pruning
-    pub partitions_total: usize,
+    partitions_total: Arc<AtomicU64>,
+}
+
+impl DalMetrics {
+    pub fn inc_read_bytes(&self, v: usize) {
+        if v > 0 {
+            self.read_bytes.fetch_add(v, Ordering::Relaxed);
+        }
+    }
+
+    pub fn get_read_bytes(&self) -> usize {
+        self.read_bytes.load(Ordering::Relaxed)
+    }
+
+    pub fn inc_read_bytes_cost(&self, ms: u64) {
+        if ms > 0 {
+            self.read_bytes_cost_ms.fetch_add(ms, Ordering::Relaxed);
+        }
+    }
+
+    pub fn get_read_bytes_cost(&self) -> u64 {
+        self.read_bytes_cost_ms.load(Ordering::Relaxed)
+    }
+
+    pub fn inc_write_bytes(&self, v: usize) {
+        if v > 0 {
+            self.write_bytes.fetch_add(v, Ordering::Relaxed);
+        }
+    }
+
+    pub fn get_write_bytes(&self) -> usize {
+        self.write_bytes.load(Ordering::Relaxed)
+    }
+
+    // Increment read rows.
+    pub fn inc_write_rows(&self, v: u64) {
+        if v > 0 {
+            self.write_rows.fetch_add(v, Ordering::Relaxed);
+        }
+    }
+
+    pub fn get_write_rows(&self) -> u64 {
+        self.write_rows.load(Ordering::Relaxed)
+    }
+
+    pub fn inc_partitions_scanned(&self, v: u64) {
+        if v > 0 {
+            self.partitions_scanned.fetch_add(v, Ordering::Relaxed);
+        }
+    }
+
+    pub fn get_partitions_scanned(&self) -> u64 {
+        self.partitions_scanned.load(Ordering::Relaxed)
+    }
+
+    pub fn inc_partitions_total(&self, v: u64) {
+        if v > 0 {
+            self.partitions_total.fetch_add(v, Ordering::Relaxed);
+        }
+    }
+
+    pub fn get_partitions_total(&self) -> u64 {
+        self.partitions_total.load(Ordering::Relaxed)
+    }
 }

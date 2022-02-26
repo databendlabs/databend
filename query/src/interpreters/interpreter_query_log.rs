@@ -269,15 +269,15 @@ impl InterpreterQueryLog {
             .as_millis() as u64;
         let event_date = (event_time / (24 * 3600000)) as i32;
         let dal_metrics = self.ctx.get_dal_metrics();
-        let written_rows = dal_metrics.write_rows as u64;
-        let written_bytes = dal_metrics.write_bytes as u64;
+        let written_rows = dal_metrics.get_write_rows();
+        let written_bytes = dal_metrics.get_write_bytes() as u64;
         let scan_rows = self.ctx.get_scan_progress_value().read_rows as u64;
         let scan_bytes = self.ctx.get_scan_progress_value().read_bytes as u64;
-        let scan_byte_cost_ms = dal_metrics.read_byte_cost_ms as u64;
-        let scan_seeks = dal_metrics.read_seeks as u64;
-        let scan_seek_cost_ms = dal_metrics.read_seek_cost_ms as u64;
-        let scan_partitions = dal_metrics.partitions_scanned as u64;
-        let total_partitions = dal_metrics.partitions_total as u64;
+        let scan_byte_cost_ms = dal_metrics.get_read_bytes_cost();
+        let scan_seeks = 0u64;
+        let scan_seek_cost_ms = 0u64;
+        let scan_partitions = dal_metrics.get_partitions_scanned();
+        let total_partitions = dal_metrics.get_partitions_total();
         let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
         let memory_usage = self.ctx.get_current_session().get_memory_usage() as u64;
 

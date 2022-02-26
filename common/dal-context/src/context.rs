@@ -14,7 +14,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_infallible::RwLock;
 use opendal::error::Result as DalResult;
 use opendal::ops::OpDelete;
 use opendal::ops::OpRead;
@@ -31,7 +30,7 @@ use crate::metrics::DalMetrics;
 #[derive(Clone, Default)]
 pub struct DalContext {
     inner: Option<Arc<dyn Accessor>>,
-    metrics: Arc<RwLock<DalMetrics>>,
+    metrics: Arc<DalMetrics>,
 }
 
 impl DalContext {
@@ -42,70 +41,12 @@ impl DalContext {
         }
     }
 
-    /// Increment read bytes.
-    pub fn inc_read_bytes(&self, bytes: usize) {
-        if bytes > 0 {
-            let mut metrics = self.metrics.write();
-            metrics.read_bytes += bytes;
-        }
-    }
-
-    /// Increment write bytes.
-    pub fn inc_write_bytes(&self, bytes: usize) {
-        if bytes > 0 {
-            let mut metrics = self.metrics.write();
-            metrics.write_bytes += bytes;
-        }
-    }
-
-    /// Increment read seek times.
-    pub fn inc_read_seeks(&self) {
-        let mut metrics = self.metrics.write();
-        metrics.read_seeks += 1;
-    }
-
-    /// Increment cost for reading bytes.
-    pub fn inc_read_byte_cost_ms(&self, cost: usize) {
-        if cost > 0 {
-            let mut metrics = self.metrics.write();
-            metrics.read_byte_cost_ms += cost;
-        }
-    }
-
-    //// Increment cost for reading seek.
-    pub fn inc_read_seek_cost_ms(&self, cost: usize) {
-        if cost > 0 {
-            let mut metrics = self.metrics.write();
-            metrics.read_seek_cost_ms += cost;
-        }
-    }
-
-    //// Increment numbers of rows written
-    pub fn inc_write_rows(&self, rows: usize) {
-        if rows > 0 {
-            let mut metrics = self.metrics.write();
-            metrics.write_rows += rows;
-        }
-    }
-
-    //// Increment numbers of partitions scanned
-    pub fn inc_partitions_scanned(&self, partitions: usize) {
-        if partitions > 0 {
-            let mut metrics = self.metrics.write();
-            metrics.partitions_scanned += partitions;
-        }
-    }
-
-    //// Increment numbers of partitions (before pruning)
-    pub fn inc_partitions_total(&self, partitions: usize) {
-        if partitions > 0 {
-            let mut metrics = self.metrics.write();
-            metrics.partitions_total += partitions;
-        }
+    pub fn get_metric(&self) -> Arc<DalMetrics> {
+        self.metrics.clone()
     }
 
     pub fn get_metrics(&self) -> DalMetrics {
-        self.metrics.read().clone()
+        self.metrics.as_ref().clone()
     }
 }
 
@@ -121,27 +62,27 @@ impl Layer for DalContext {
 #[async_trait]
 impl Accessor for DalContext {
     async fn read(&self, args: &OpRead) -> DalResult<BoxedAsyncReader> {
-        let metrics = self.metrics.clone();
-
-        // TODO(xuanwo): Maybe it's better to move into metrics.
+        let metric = self.metrics.clone();
         self.inner.as_ref().unwrap().read(args).await.map(|reader| {
             let r = CallbackReader::new(reader, move |n| {
-                let mut metrics = metrics.write();
-                metrics.read_bytes += n;
+                metric.inc_read_bytes(n);
             });
 
             Box::new(r) as BoxedAsyncReader
         })
     }
+
     async fn write(&self, r: BoxedAsyncReader, args: &OpWrite) -> DalResult<usize> {
         self.inner.as_ref().unwrap().write(r, args).await.map(|n| {
-            self.inc_write_bytes(n);
+            self.metrics.inc_write_bytes(n);
             n
         })
     }
+
     async fn stat(&self, args: &OpStat) -> DalResult<Metadata> {
         self.inner.as_ref().unwrap().stat(args).await
     }
+
     async fn delete(&self, args: &OpDelete) -> DalResult<()> {
         self.inner.as_ref().unwrap().delete(args).await
     }
