@@ -64,8 +64,6 @@ pub struct LogEvent {
     pub scan_rows: u64,
     pub scan_bytes: u64,
     pub scan_byte_cost_ms: u64,
-    pub scan_seeks: u64,
-    pub scan_seek_cost_ms: u64,
     pub scan_partitions: u64,
     pub total_partitions: u64,
     pub result_rows: u64,
@@ -131,8 +129,6 @@ impl InterpreterQueryLog {
             Series::from_data(vec![event.scan_rows as u64]),
             Series::from_data(vec![event.scan_bytes as u64]),
             Series::from_data(vec![event.scan_byte_cost_ms as u64]),
-            Series::from_data(vec![event.scan_seeks as u64]),
-            Series::from_data(vec![event.scan_seek_cost_ms as u64]),
             Series::from_data(vec![event.scan_partitions as u64]),
             Series::from_data(vec![event.total_partitions as u64]),
             Series::from_data(vec![event.result_rows as u64]),
@@ -190,8 +186,6 @@ impl InterpreterQueryLog {
         let scan_rows = 0u64;
         let scan_bytes = 0u64;
         let scan_byte_cost_ms = 0u64;
-        let scan_seeks = 0u64;
-        let scan_seek_cost_ms = 0u64;
         let scan_partitions = 0u64;
         let total_partitions = 0u64;
         let result_rows = 0u64;
@@ -225,8 +219,6 @@ impl InterpreterQueryLog {
             scan_rows,
             scan_bytes,
             scan_byte_cost_ms,
-            scan_seeks,
-            scan_seek_cost_ms,
             scan_partitions,
             total_partitions,
             result_rows,
@@ -274,8 +266,6 @@ impl InterpreterQueryLog {
         let scan_rows = self.ctx.get_scan_progress_value().read_rows as u64;
         let scan_bytes = self.ctx.get_scan_progress_value().read_bytes as u64;
         let scan_byte_cost_ms = dal_metrics.get_read_bytes_cost();
-        let scan_seeks = 0u64;
-        let scan_seek_cost_ms = 0u64;
         let scan_partitions = dal_metrics.get_partitions_scanned();
         let total_partitions = dal_metrics.get_partitions_total();
         let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
@@ -313,8 +303,6 @@ impl InterpreterQueryLog {
             scan_rows,
             scan_bytes,
             scan_byte_cost_ms,
-            scan_seeks,
-            scan_seek_cost_ms,
             scan_partitions,
             total_partitions,
             result_rows,
