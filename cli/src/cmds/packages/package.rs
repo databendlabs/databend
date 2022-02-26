@@ -22,6 +22,7 @@ use crate::cmds::command::Command;
 use crate::cmds::Config;
 use crate::cmds::FetchCommand;
 use crate::cmds::ListCommand;
+use crate::cmds::PurgeCommand;
 use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
 use crate::error::Result;
@@ -57,7 +58,8 @@ impl Command for PackageCommand {
             .about(self.about())
             .subcommand(subcommands[0].clap())
             .subcommand(subcommands[1].clap())
-            .subcommand(subcommands[2].clap());
+            .subcommand(subcommands[2].clap())
+            .subcommand(subcommands[3].clap());
         app
     }
 
@@ -66,6 +68,7 @@ impl Command for PackageCommand {
             Arc::new(ListCommand::create(self.conf.clone())),
             Arc::new(FetchCommand::create(self.conf.clone())),
             Arc::new(SwitchCommand::create(self.conf.clone())),
+            Arc::new(PurgeCommand::create(self.conf.clone())),
         ]
     }
 
