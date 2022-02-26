@@ -16,7 +16,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use common_base::ProgressValues;
-use common_dal_context::DalMetrics;
+use common_contexts::DalMetrics;
 use common_meta_types::UserInfo;
 
 use crate::sessions::Session;
@@ -101,7 +101,7 @@ impl Session {
         status
             .get_query_context_shared()
             .as_ref()
-            .map(|context_shared| context_shared.dal_ctx.get_metrics())
+            .map(|context_shared| context_shared.dal_ctx.get_metrics().as_ref().clone())
     }
 
     fn query_scan_progress_value(status: &SessionContext) -> Option<ProgressValues> {

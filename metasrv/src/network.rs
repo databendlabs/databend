@@ -71,7 +71,7 @@ impl Network {
         }
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(id=self.sto.id))]
+    #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
     pub async fn make_client(&self, target: &NodeId) -> anyhow::Result<RaftServiceClient<Channel>> {
         let endpoint = self.sto.get_node_endpoint(target).await?;
         let addr = format!("http://{}", endpoint);
