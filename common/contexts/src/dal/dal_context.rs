@@ -25,7 +25,7 @@ use opendal::BoxedAsyncReader;
 use opendal::Layer;
 use opendal::Metadata;
 
-use crate::metrics::DalMetrics;
+use crate::DalMetrics;
 
 #[derive(Clone, Default)]
 pub struct DalContext {
