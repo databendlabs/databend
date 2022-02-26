@@ -122,11 +122,6 @@ const config = {
                         ]
                     },
                     {
-                        to: '/learn/category/lessons', label: 'Learn', position: 'left', items:[
-                            {label: 'Lessons', to: '/learn/category/lessons'},
-                        ]
-                    },
-                    {
                         label: 'Dev Guide', position: 'left',
                         to: '/dev',
                         items: [
@@ -135,6 +130,11 @@ const config = {
                             {label: 'Roadmap', to: '/dev/roadmap'},
                             {label: 'Policies', to: '/dev/category/policies'},
                             {label: 'RFCs', to: '/dev/category/rfcs'}
+                        ]
+                    },
+                    {
+                        to: '/learn/category/lessons', label: 'Learn', position: 'left', items:[
+                            {label: 'Lessons', to: '/learn/category/lessons'},
                         ]
                     },
                     {

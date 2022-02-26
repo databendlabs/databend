@@ -10,10 +10,11 @@ doctest = false
 test = false
 
 [dependencies]
-common-base = {path = "../base" }
-tikv-jemalloc-sys = "0.4.2"
+common-base = { path = "../base" }
 common-infallible = { path = "../infallible" }
+
 parking_lot = "0.12.0"
+tikv-jemalloc-sys = "0.4.2"
 
 [dev-dependencies]
 common-macros = { path = "../macros" }

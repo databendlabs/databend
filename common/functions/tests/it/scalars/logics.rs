@@ -46,7 +46,7 @@ fn test_logic_not_function() -> Result<()> {
             error: "",
         },
     ];
-    test_scalar_functions(LogicNotFunction::try_create("not")?, &tests)
+    test_scalar_functions(LogicNotFunction::try_create("not")?, &tests, true)
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn test_logic_and_function() -> Result<()> {
             error: "",
         },
     ];
-    test_scalar_functions(LogicAndFunction::try_create("and")?, &tests)
+    test_scalar_functions(LogicAndFunction::try_create("and")?, &tests, true)
 }
 
 #[test]
@@ -123,7 +123,7 @@ fn test_logic_or_function() -> Result<()> {
             error: "",
         },
     ];
-    test_scalar_functions(LogicOrFunction::try_create("or")?, &tests)
+    test_scalar_functions(LogicOrFunction::try_create("or")?, &tests, false)
 }
 
 #[test]
@@ -157,5 +157,5 @@ fn test_logic_xor_function() -> Result<()> {
             error: "",
         },
     ];
-    test_scalar_functions(LogicXorFunction::try_create("or")?, &tests)
+    test_scalar_functions(LogicXorFunction::try_create("or")?, &tests, true)
 }

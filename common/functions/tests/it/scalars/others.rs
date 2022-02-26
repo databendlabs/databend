@@ -225,7 +225,7 @@ fn test_running_difference_first_null() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(RunningDifferenceFunction::try_create("a")?, &tests)
+    test_scalar_functions(RunningDifferenceFunction::try_create("a")?, &tests, false)
 }
 
 #[test]
@@ -260,7 +260,7 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
         },
     ];
 
-    test_scalar_functions_with_type(RunningDifferenceFunction::try_create("a")?, &tests)
+    test_scalar_functions_with_type(RunningDifferenceFunction::try_create("a")?, &tests, false)
 }
 
 #[test]
@@ -289,7 +289,7 @@ fn test_try_inet_aton_function() -> Result<()> {
     ];
 
     let test_func = TryInetAtonFunction::try_create("try_inet_aton")?;
-    test_scalar_functions(test_func, &tests)
+    test_scalar_functions(test_func, &tests, true)
 }
 
 #[test]
@@ -324,7 +324,7 @@ fn test_inet_aton_function() -> Result<()> {
     ];
 
     let test_func = InetAtonFunction::try_create("inet_aton")?;
-    test_scalar_functions(test_func, &tests)
+    test_scalar_functions(test_func, &tests, false)
 }
 
 #[test]
@@ -374,7 +374,7 @@ fn test_try_inet_ntoa_function() -> Result<()> {
     ];
 
     let test_func = TryInetNtoaFunction::try_create("try_inet_ntoa")?;
-    test_scalar_functions(test_func, &tests)
+    test_scalar_functions(test_func, &tests, true)
 }
 
 #[test]
@@ -424,5 +424,5 @@ fn test_inet_ntoa_function() -> Result<()> {
     ];
 
     let test_func = InetNtoaFunction::try_create("inet_ntoa")?;
-    test_scalar_functions(test_func, &tests)
+    test_scalar_functions(test_func, &tests, true)
 }

@@ -117,21 +117,6 @@ async fn test_management_mode_access() -> Result<()> {
             ],
         },
         TestGroup {
-            name: "stage",
-            tests: vec![
-                Test {
-                    name: "stage-create-access-passed",
-                    query: "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter='\n') comments='test'",
-                    is_err: false,
-                },
-                Test {
-                    name: "stage-drop-access-passed",
-                    query: "DROP STAGE test_stage",
-                    is_err: false,
-                },
-            ],
-        },
-        TestGroup {
             name: "denied",
             tests: vec![
                 Test {

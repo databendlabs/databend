@@ -9,7 +9,7 @@ Copy data from stage.
 ### Syntax
 
 ```
-copy into default.test_csv from '@s3_stage/tests/data/sample.csv' format CSV field_delimitor = ',';
+copy into default.test_csv from '@s3_stage/tests/data/sample.csv' format CSV field_delimiter = ',';
 
 COPY INTO [<db>.]<table_name> [ <schema> ]
     FROM { stage_location }
@@ -24,7 +24,7 @@ COPY INTO [<db>.]<table_name> [ <schema> ]
   * `schema`: optional schema fields, eg:  `(a,b,c)`
   * `stage_location`: stage location, eg:  `@s3_stage/tests/data/sample.csv`
   * `format_name`: format name, supported format:  `CSV`, `Parquet`
-  * `options`: other options, supported options:  `field_delimitor`, `record_delimitor`, `csv_header`
+  * `options`: other options, supported options:  `field_delimiter`, `record_delimiter`, `skip_header`
 
 
 ### Examples
@@ -35,7 +35,7 @@ Example:
 ```sql
 mysql> create table default.test_csv (id int,name varchar(255),rank int);
 
-mysql> copy into default.test_csv from '@s3_stage/tests/data/sample.csv' format CSV field_delimitor = ',';
+mysql> copy into default.test_csv from '@s3_stage/tests/data/sample.csv' format CSV field_delimiter = ',';
 Query OK, 0 rows affected (0.17 sec)
 Read 6 rows, 163 B in 0.160 sec., 37.53 rows/sec., 1.02 KB/sec.
 

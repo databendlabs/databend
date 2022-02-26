@@ -133,5 +133,5 @@ fn test_locate_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(LocateFunction::try_create("locate")?, &tests)
+    test_scalar_functions(LocateFunction::try_create("locate")?, &tests, true)
 }

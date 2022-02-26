@@ -31,7 +31,7 @@ fn test_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonEqFunction::try_create_func("")?, &tests)
+    test_scalar_functions(ComparisonEqFunction::try_create_func("")?, &tests, true)
 }
 
 #[test]
@@ -46,7 +46,7 @@ fn test_gt_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonGtFunction::try_create_func("")?, &tests)
+    test_scalar_functions(ComparisonGtFunction::try_create_func("")?, &tests, true)
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn test_gt_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonGtEqFunction::try_create_func("")?, &tests)
+    test_scalar_functions(ComparisonGtEqFunction::try_create_func("")?, &tests, true)
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn test_lt_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonLtFunction::try_create_func("")?, &tests)
+    test_scalar_functions(ComparisonLtFunction::try_create_func("")?, &tests, true)
 }
 
 #[test]
@@ -91,7 +91,7 @@ fn test_lt_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonLtEqFunction::try_create_func("")?, &tests)
+    test_scalar_functions(ComparisonLtEqFunction::try_create_func("")?, &tests, true)
 }
 
 #[test]
@@ -106,7 +106,7 @@ fn test_not_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonNotEqFunction::try_create_func("")?, &tests)
+    test_scalar_functions(ComparisonNotEqFunction::try_create_func("")?, &tests, true)
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn test_like_comparison_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(ComparisonLikeFunction::try_create_like("")?, &tests)
+    test_scalar_functions(ComparisonLikeFunction::try_create_like("")?, &tests, true)
 }
 
 #[test]
@@ -147,7 +147,7 @@ fn test_not_like_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonLikeFunction::try_create_nlike("")?, &tests)
+    test_scalar_functions(ComparisonLikeFunction::try_create_nlike("")?, &tests, true)
 }
 
 #[test]
@@ -173,7 +173,11 @@ fn test_regexp_comparison_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(ComparisonRegexpFunction::try_create_regexp("")?, &tests)
+    test_scalar_functions(
+        ComparisonRegexpFunction::try_create_regexp("")?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -188,5 +192,9 @@ fn test_not_regexp_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonRegexpFunction::try_create_nregexp("")?, &tests)
+    test_scalar_functions(
+        ComparisonRegexpFunction::try_create_nregexp("")?,
+        &tests,
+        true,
+    )
 }

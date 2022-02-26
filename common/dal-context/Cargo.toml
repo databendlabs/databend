@@ -4,9 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+doctest = false
+test = false
 
 [dependencies]
 common-infallible = { path = "../infallible" }
 
-opendal = "0.0.3"
 async-trait = "0.1.52"
+opendal = "0.0.5"

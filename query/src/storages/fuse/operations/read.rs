@@ -63,7 +63,6 @@ impl FuseTable {
 
         let part_stream = futures::stream::iter(iter);
 
-        let read_buffer_size = ctx.get_settings().get_storage_read_buffer_size()?;
         let stream = part_stream
             .map(move |part| {
                 let da = operator.clone();
@@ -81,7 +80,6 @@ impl FuseTable {
                         table_schema,
                         projection,
                         part_len,
-                        read_buffer_size,
                         reader,
                     );
                     block_reader.read().await.map_err(|e| {

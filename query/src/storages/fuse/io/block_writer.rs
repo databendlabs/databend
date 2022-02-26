@@ -22,7 +22,6 @@ use common_arrow::parquet::encoding::Encoding;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use futures::io::Cursor;
 use opendal::Operator;
 
 pub async fn write_block(
@@ -57,8 +56,9 @@ pub async fn write_block(
         .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
 
     data_accessor
-        .write(location, len)
-        .run(Box::new(Cursor::new(buf)))
+        .object(location)
+        .writer()
+        .write_bytes(buf)
         .await
         .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 

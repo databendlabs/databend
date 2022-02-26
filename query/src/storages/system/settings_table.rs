@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -21,59 +20,24 @@ use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::ReadDataSourcePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
 use crate::sessions::QueryContext;
+use crate::storages::system::table::SyncOneBlockSystemTable;
+use crate::storages::system::table::SyncSystemTable;
 use crate::storages::Table;
 
 pub struct SettingsTable {
     table_info: TableInfo,
 }
 
-impl SettingsTable {
-    pub fn create(table_id: u64) -> Self {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("value", Vu8::to_data_type()),
-            DataField::new("default", Vu8::to_data_type()),
-            DataField::new("level", Vu8::to_data_type()),
-            DataField::new("description", Vu8::to_data_type()),
-            DataField::new("type", Vu8::to_data_type()),
-        ]);
-
-        let table_info = TableInfo {
-            desc: "'system'.'settings'".to_string(),
-            name: "settings".to_string(),
-            ident: TableIdent::new(table_id, 0),
-            meta: TableMeta {
-                schema,
-                engine: "SystemSettings".to_string(),
-
-                ..Default::default()
-            },
-        };
-
-        SettingsTable { table_info }
-    }
-}
-
-#[async_trait::async_trait]
-impl Table for SettingsTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+impl SyncSystemTable for SettingsTable {
+    const NAME: &'static str = "system.settings";
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }
 
-    async fn read(
-        &self,
-        ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
+    fn get_full_data(&self, ctx: Arc<QueryContext>) -> Result<DataBlock> {
         let settings = ctx.get_settings().get_setting_values();
 
         let mut names: Vec<String> = vec![];
@@ -105,19 +69,41 @@ impl Table for SettingsTable {
         let levels: Vec<&[u8]> = levels.iter().map(|x| x.as_bytes()).collect();
         let descs: Vec<&[u8]> = descs.iter().map(|x| x.as_bytes()).collect();
         let types: Vec<&[u8]> = types.iter().map(|x| x.as_bytes()).collect();
-        let block = DataBlock::create(self.table_info.schema(), vec![
+
+        Ok(DataBlock::create(self.table_info.schema(), vec![
             Series::from_data(names),
             Series::from_data(values),
             Series::from_data(defaults),
             Series::from_data(levels),
             Series::from_data(descs),
             Series::from_data(types),
+        ]))
+    }
+}
+
+impl SettingsTable {
+    pub fn create(table_id: u64) -> Arc<dyn Table> {
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("value", Vu8::to_data_type()),
+            DataField::new("default", Vu8::to_data_type()),
+            DataField::new("level", Vu8::to_data_type()),
+            DataField::new("description", Vu8::to_data_type()),
+            DataField::new("type", Vu8::to_data_type()),
         ]);
 
-        Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema(),
-            None,
-            vec![block],
-        )))
+        let table_info = TableInfo {
+            desc: "'system'.'settings'".to_string(),
+            name: "settings".to_string(),
+            ident: TableIdent::new(table_id, 0),
+            meta: TableMeta {
+                schema,
+                engine: "SystemSettings".to_string(),
+
+                ..Default::default()
+            },
+        };
+
+        SyncOneBlockSystemTable::create(SettingsTable { table_info })
     }
 }

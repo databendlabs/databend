@@ -28,5 +28,5 @@ fn test_version_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(VersionFunction::try_create("version")?, &tests)
+    test_scalar_functions(VersionFunction::try_create("version")?, &tests, true)
 }

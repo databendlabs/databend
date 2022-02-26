@@ -73,7 +73,7 @@ fn test_substring_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(SubstringFunction::try_create("substring")?, &tests)
+    test_scalar_functions(SubstringFunction::try_create("substring")?, &tests, true)
 }
 
 #[test]
@@ -89,5 +89,5 @@ fn test_substring_nullable() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(SubstringFunction::try_create("substring")?, &tests)
+    test_scalar_functions(SubstringFunction::try_create("substring")?, &tests, true)
 }

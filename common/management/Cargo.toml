@@ -13,24 +13,23 @@ doctest = false
 test = false
 
 [dependencies]
-common-base= {path = "../base" }
-common-datavalues = {path = "../datavalues" }
-common-exception= {path = "../exception"}
-common-meta-api= {path = "../meta/api" }
-common-meta-types= {path = "../meta/types"}
-common-tracing= {path = "../tracing"}
-common-functions= {path = "../functions"}
-common-ast= {path = "../ast"}
+common-ast = { path = "../ast" }
+common-base = { path = "../base" }
+common-datavalues = { path = "../datavalues" }
+common-exception = { path = "../exception" }
+common-functions = { path = "../functions" }
+common-meta-api = { path = "../meta/api" }
+common-meta-types = { path = "../meta/types" }
+common-tracing = { path = "../tracing" }
 
 async-trait = "0.1.52"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.78"
 tempfile = "3.3.0"
 
-
 [dev-dependencies]
 common-base = { path = "../base" }
-common-meta-embedded = {path = "../meta/embedded" }
+common-meta-embedded = { path = "../meta/embedded" }
 
 mockall = "0.11.0"
 tempfile = "3.3.0"

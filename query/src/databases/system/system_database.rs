@@ -31,22 +31,22 @@ pub struct SystemDatabase {
 impl SystemDatabase {
     pub fn create(sys_db_meta: &mut InMemoryMetas) -> Self {
         let table_list: Vec<Arc<dyn Table>> = vec![
-            Arc::new(system::OneTable::create(sys_db_meta.next_id())),
-            Arc::new(system::FunctionsTable::create(sys_db_meta.next_id())),
-            Arc::new(system::ContributorsTable::create(sys_db_meta.next_id())),
-            Arc::new(system::CreditsTable::create(sys_db_meta.next_id())),
-            Arc::new(system::SettingsTable::create(sys_db_meta.next_id())),
-            Arc::new(system::TablesTable::create(sys_db_meta.next_id())),
-            Arc::new(system::ClustersTable::create(sys_db_meta.next_id())),
-            Arc::new(system::DatabasesTable::create(sys_db_meta.next_id())),
+            system::OneTable::create(sys_db_meta.next_id()),
+            system::FunctionsTable::create(sys_db_meta.next_id()),
+            system::ContributorsTable::create(sys_db_meta.next_id()),
+            system::CreditsTable::create(sys_db_meta.next_id()),
+            system::SettingsTable::create(sys_db_meta.next_id()),
+            system::TablesTable::create(sys_db_meta.next_id()),
+            system::ClustersTable::create(sys_db_meta.next_id()),
+            system::DatabasesTable::create(sys_db_meta.next_id()),
             Arc::new(system::TracingTable::create(sys_db_meta.next_id())),
-            Arc::new(system::ProcessesTable::create(sys_db_meta.next_id())),
-            Arc::new(system::ConfigsTable::create(sys_db_meta.next_id())),
-            Arc::new(system::MetricsTable::create(sys_db_meta.next_id())),
-            Arc::new(system::ColumnsTable::create(sys_db_meta.next_id())),
-            Arc::new(system::UsersTable::create(sys_db_meta.next_id())),
+            system::ProcessesTable::create(sys_db_meta.next_id()),
+            system::ConfigsTable::create(sys_db_meta.next_id()),
+            system::MetricsTable::create(sys_db_meta.next_id()),
+            system::ColumnsTable::create(sys_db_meta.next_id()),
+            system::UsersTable::create(sys_db_meta.next_id()),
             Arc::new(system::QueryLogTable::create(sys_db_meta.next_id())),
-            Arc::new(system::EnginesTable::create(sys_db_meta.next_id())),
+            system::EnginesTable::create(sys_db_meta.next_id()),
         ];
 
         for tbl in table_list.into_iter() {

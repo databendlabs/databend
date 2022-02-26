@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod source;
+mod sources;
 mod stream_cast;
 mod stream_datablock;
 mod stream_limit_by;

@@ -21,56 +21,62 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-databend-query = { path = "../query" }
 common-base = { path = "../common/base" }
 common-datavalues = { path = "../common/datavalues" }
-common-tracing = { path = "../common/tracing" }
-
-itertools = "0.10.3"
-databend-meta = { path = "../metasrv" }
 common-meta-raft-store = { path = "../common/meta/raft-store" }
-colored = "2.0.0"
-comfy-table = "5.0.0"
-dirs = "4.0.0"
+common-tracing = { path = "../common/tracing" }
+databend-meta = { path = "../metasrv" }
+databend-query = { path = "../query" }
+
+async-trait = "0.1.52"
+byte-unit = "4.0.13"
 clap = { version = "3.1.1", features = ["derive", "env"] }
 clap_complete = "3.1.0"
+colored = "2.0.0"
+comfy-table = "5.0.0"
+csv = "1.1.6"
+dirs = "4.0.0"
 dyn-clone = "1.0.4"
 flate2 = "1.0.22"
+fs_extra = "1.2.0"
+futures = "0.3.21"
 handlebars = "4.2.1"
 hostname = "0.3"
+http = "0.2.6"
 indicatif = "0.16.2"
+itertools = "0.10.3"
+lexical-util = "0.8.1"
+libc = "0.2.117"
+nix = "0.23.1"
+num-format = "0.4.0"
+portpicker = "0.1.1"
+reqwest = { version = "0.11.9", features = [
+    "json",
+    "native-tls",
+    "multipart",
+    "blocking",
+    "tokio-rustls",
+    "stream",
+] }
 run_script = "0.9.0"
 rustyline = "9.1.2"
-futures = "0.3.21"
-byte-unit = "4.0.13"
-num-format = "0.4.0"
-fs_extra = "1.2.0"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.78"
+serde_yaml = "0.8.23"
 sha2 = "0.10.1"
 sysinfo = "0.23.0"
 tar = "0.4.38"
 thiserror = "1.0.30"
-ureq = { version = "2.4.0", features = ["json"] }
-nix = "0.23.1"
-serde_yaml = "0.8.23"
-portpicker = "0.1.1"
-reqwest = { version = "0.11.9", features = ["json", "native-tls", "multipart", "blocking", "tokio-rustls", "stream"] }
-libc = "0.2.117"
-lexical-util = "0.8.1"
-async-trait = "0.1.52"
-webbrowser = "0.5.5"
-async-std = "1.10.0"
-tryhard = "0.4.0"
 tokio-util = "0.6.9"
-csv = "1.1.6"
-http = "0.2.6"
+tryhard = "0.4.0"
+ureq = { version = "2.4.0", features = ["json"] }
+webbrowser = "0.5.5"
 
 [dev-dependencies]
-tempfile = "3.3.0"
 assert_cmd = "2.0.4"
 predicates = "2.1.1"
-httpmock = "0.6.6"
+tempfile = "3.3.0"
+wiremock = "0.5.10"
 
 [build-dependencies]
 common-building = { path = "../common/building" }

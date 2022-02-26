@@ -136,7 +136,7 @@ fn test_siphash_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(SipHash64Function::try_create("siphash")?, &tests)
+    test_scalar_functions(SipHash64Function::try_create("siphash")?, &tests, true)
 }
 
 #[test]
@@ -148,7 +148,7 @@ fn test_md5hash_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(Md5HashFunction::try_create("md5")?, &tests)
+    test_scalar_functions(Md5HashFunction::try_create("md5")?, &tests, true)
 }
 
 #[test]
@@ -160,7 +160,7 @@ fn test_sha1hash_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(Sha1HashFunction::try_create("sha1")?, &tests)
+    test_scalar_functions(Sha1HashFunction::try_create("sha1")?, &tests, true)
 }
 
 #[test]
@@ -222,7 +222,7 @@ fn test_sha2hash_function() -> Result<()> {
         },
     ];
 
-    test_scalar_functions(Sha2HashFunction::try_create("sha2")?, &tests)
+    test_scalar_functions(Sha2HashFunction::try_create("sha2")?, &tests, true)
 }
 
 #[test]
@@ -236,7 +236,7 @@ fn test_blake3hash_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(Blake3HashFunction::try_create("blake3")?, &tests)
+    test_scalar_functions(Blake3HashFunction::try_create("blake3")?, &tests, true)
 }
 
 #[test]
@@ -248,7 +248,7 @@ fn test_xxhash32_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(XxHash32Function::try_create("xxhash32")?, &tests)
+    test_scalar_functions(XxHash32Function::try_create("xxhash32")?, &tests, true)
 }
 
 #[test]
@@ -260,7 +260,7 @@ fn test_xxhash64_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(XxHash64Function::try_create("xxhash64")?, &tests)
+    test_scalar_functions(XxHash64Function::try_create("xxhash64")?, &tests, true)
 }
 
 #[test]
@@ -316,6 +316,7 @@ fn test_cityhash64_with_seed_u8() -> Result<()> {
     test_scalar_functions(
         City64WithSeedFunction::try_create("city64WithSeed")?,
         &tests,
+        true,
     )
 }
 
@@ -367,5 +368,6 @@ fn test_cityhash64_with_seed_string() -> Result<()> {
     test_scalar_functions(
         City64WithSeedFunction::try_create("city64WithSeed")?,
         &tests,
+        true,
     )
 }

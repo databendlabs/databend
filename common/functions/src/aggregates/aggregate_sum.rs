@@ -33,6 +33,7 @@ use super::aggregate_function::AggregateFunctionRef;
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
+use crate::scalars::default_column_cast;
 
 struct AggregateSumState<T> {
     pub value: T,
@@ -94,8 +95,14 @@ where
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let value = sum_primitive::<T, SumT>(&columns[0], validity)?;
         let state = place.get::<AggregateSumState<SumT>>();
+        let value = if columns[0].data_type().data_type_id() == TypeID::Boolean {
+            let u8_type = u8::to_data_type();
+            let column = default_column_cast(&columns[0], &u8_type)?;
+            sum_primitive::<T, SumT>(&column, validity)?
+        } else {
+            sum_primitive::<T, SumT>(&columns[0], validity)?
+        };
         state.add(value);
         Ok(())
     }
@@ -108,21 +115,42 @@ where
         columns: &[ColumnRef],
         _input_rows: usize,
     ) -> Result<()> {
-        let darray: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
-        darray.iter().zip(places.iter()).for_each(|(c, place)| {
-            let place = place.next(offset);
-            let state = place.get::<AggregateSumState<SumT>>();
-            state.add(c.as_());
-        });
+        if columns[0].data_type().data_type_id() == TypeID::Boolean {
+            let u8_type = u8::to_data_type();
+            let column = default_column_cast(&columns[0], &u8_type)?;
+            let darray: &PrimitiveColumn<T> = unsafe { Series::static_cast(&column) };
+            darray.iter().zip(places.iter()).for_each(|(c, place)| {
+                let place = place.next(offset);
+                let state = place.get::<AggregateSumState<SumT>>();
+                state.add(c.as_());
+            });
+        } else {
+            let darray: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+            darray.iter().zip(places.iter()).for_each(|(c, place)| {
+                let place = place.next(offset);
+                let state = place.get::<AggregateSumState<SumT>>();
+                state.add(c.as_());
+            });
+        }
+
         Ok(())
     }
 
     fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
-        let column: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+        if columns[0].data_type().data_type_id() == TypeID::Boolean {
+            let u8_type = u8::to_data_type();
+            let col = default_column_cast(&columns[0], &u8_type)?;
+            let column: &PrimitiveColumn<T> = unsafe { Series::static_cast(&col) };
+            let state = place.get::<AggregateSumState<SumT>>();
+            let v: SumT = unsafe { column.value_unchecked(row).as_() };
+            state.add(v);
+        } else {
+            let column: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+            let state = place.get::<AggregateSumState<SumT>>();
+            let v: SumT = unsafe { column.value_unchecked(row).as_() };
+            state.add(v);
+        }
 
-        let state = place.get::<AggregateSumState<SumT>>();
-        let v: SumT = unsafe { column.value_unchecked(row).as_() };
-        state.add(v);
         Ok(())
     }
 
@@ -184,6 +212,9 @@ pub fn try_create_aggregate_sum_function(
     assert_unary_arguments(display_name, arguments.len())?;
 
     let data_type = arguments[0].data_type();
+    if data_type.data_type_id() == TypeID::Boolean {
+        return AggregateSumFunction::<u8, u64>::try_create(display_name, arguments);
+    }
     with_match_primitive_type_id!(data_type.data_type_id(), |$T| {
         AggregateSumFunction::<$T, <$T as PrimitiveType>::LargestType>::try_create(
              display_name,

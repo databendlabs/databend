@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
@@ -23,7 +21,6 @@ use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserQuota;
 use databend_query::storages::system::UsersTable;
-use databend_query::storages::Table;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
@@ -68,7 +65,7 @@ async fn test_users_table() -> Result<()> {
         })
         .await?;
 
-    let table: Arc<dyn Table> = Arc::new(UsersTable::create(1));
+    let table = UsersTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     let stream = table.read(ctx, &source_plan).await?;

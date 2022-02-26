@@ -225,10 +225,6 @@ impl Function for LogicFunction {
             _ => self.eval_and_not_or(columns, input_rows),
         }
     }
-
-    fn passthrough_null(&self) -> bool {
-        !matches!(self.op, LogicOperator::Or)
-    }
 }
 
 impl std::fmt::Display for LogicFunction {

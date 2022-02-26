@@ -33,7 +33,6 @@ use databend_query::servers::http::v1::ExecuteStateName;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
 use headers::Header;
-use httpmock::MockServer;
 use hyper::header;
 use jwt_simple::algorithms::RS256KeyPair;
 use jwt_simple::algorithms::RSAKeyPairLike;
@@ -49,6 +48,11 @@ use poem::Response;
 use poem::Route;
 use pretty_assertions::assert_eq;
 use tokio::time::sleep;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
 
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
@@ -348,15 +352,18 @@ async fn test_auth_jwt() -> Result<()> {
     let j =
         serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
 
-    let server = MockServer::start();
-    let path = "/jwks.json";
-    let mock = server.mock(|when, then| {
-        when.method(httpmock::Method::GET).path(path);
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(j);
-    });
-    let jwks_url = format!("http://{}{}", server.address(), path);
+    let server = MockServer::start().await;
+    let json_path = "/jwks.json";
+    // Create a mock on the server.
+    let template = ResponseTemplate::new(200).set_body_raw(j, "application/json");
+    Mock::given(method("GET"))
+        .and(path(json_path))
+        .respond_with(template)
+        .expect(1..)
+        // Mounting the mock on the mock server - it's now effective!
+        .mount(&server)
+        .await;
+    let jwks_url = format!("http://{}{}", server.address(), json_path);
 
     let session_manager = SessionManagerBuilder::create()
         .jwt_key_file(jwks_url)
@@ -397,7 +404,6 @@ async fn test_auth_jwt() -> Result<()> {
     let token = key_pair.sign(claims)?;
     let bear = headers::Authorization::bearer(&token).unwrap();
     test_auth_post(&ep, user_name, bear).await?;
-    mock.assert();
     Ok(())
 }
 

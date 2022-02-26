@@ -30,7 +30,7 @@ fn test_degress_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(DegressFunction::try_create("degrees")?, &tests)
+    test_scalar_functions(DegressFunction::try_create("degrees")?, &tests, true)
 }
 
 #[test]
@@ -42,5 +42,5 @@ fn test_radians_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(RadiansFunction::try_create("radians")?, &tests)
+    test_scalar_functions(RadiansFunction::try_create("radians")?, &tests, true)
 }

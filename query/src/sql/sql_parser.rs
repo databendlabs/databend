@@ -216,17 +216,13 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => {
                 //TODO:make stage to sql parser keyword
-                if w.value.to_uppercase() == "STAGE" {
-                    self.parse_create_stage()
-                } else {
-                    match w.keyword {
-                        Keyword::TABLE => self.parse_create_table(),
-                        Keyword::DATABASE => self.parse_create_database(),
-                        Keyword::USER => self.parse_create_user(),
-                        Keyword::ROLE => self.parse_create_role(),
-                        Keyword::FUNCTION => self.parse_create_udf(),
-                        _ => self.expected("create statement", Token::Word(w)),
-                    }
+                match w.keyword {
+                    Keyword::TABLE => self.parse_create_table(),
+                    Keyword::DATABASE => self.parse_create_database(),
+                    Keyword::USER => self.parse_create_user(),
+                    Keyword::ROLE => self.parse_create_role(),
+                    Keyword::FUNCTION => self.parse_create_udf(),
+                    _ => self.expected("create statement", Token::Word(w)),
                 }
             }
             unexpected => self.expected("create statement", unexpected),
@@ -263,7 +259,7 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_value_or_ident(&mut self) -> Result<String, ParserError> {
+    pub(crate) fn parse_value_or_ident(&mut self) -> Result<String, ParserError> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::TRUE => Ok("true".to_string()),
@@ -294,31 +290,21 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_describe(&mut self) -> Result<DfStatement, ParserError> {
-        if self.consume_token("stage") {
-            self.parse_desc_stage()
-        } else {
-            self.consume_token("table");
-            self.parse_desc_table()
-        }
+        self.consume_token("table");
+        self.parse_desc_table()
     }
 
     /// Drop database/table.
     fn parse_drop(&mut self) -> Result<DfStatement, ParserError> {
         match self.parser.next_token() {
-            Token::Word(w) => {
-                if w.value.to_uppercase() == "STAGE" {
-                    self.parse_drop_stage()
-                } else {
-                    match w.keyword {
-                        Keyword::DATABASE => self.parse_drop_database(),
-                        Keyword::TABLE => self.parse_drop_table(),
-                        Keyword::USER => self.parse_drop_user(),
-                        Keyword::ROLE => self.parse_drop_role(),
-                        Keyword::FUNCTION => self.parse_drop_udf(),
-                        _ => self.expected("drop statement", Token::Word(w)),
-                    }
-                }
-            }
+            Token::Word(w) => match w.keyword {
+                Keyword::DATABASE => self.parse_drop_database(),
+                Keyword::TABLE => self.parse_drop_table(),
+                Keyword::USER => self.parse_drop_user(),
+                Keyword::ROLE => self.parse_drop_role(),
+                Keyword::FUNCTION => self.parse_drop_udf(),
+                _ => self.expected("drop statement", Token::Word(w)),
+            },
             unexpected => self.expected("drop statement", unexpected),
         }
     }
@@ -361,9 +347,22 @@ impl<'a> DfParser<'a> {
             }
             let value = self.parse_value_or_ident()?;
 
-            options.insert(name.to_string(), value);
+            options.insert(name.to_string().to_lowercase(), value);
         }
         Ok(options)
+    }
+
+    pub(crate) fn parse_list(&mut self, token: &Token) -> Result<Vec<String>, ParserError> {
+        let mut list: Vec<String> = vec![];
+        loop {
+            let value = self.parse_value()?;
+            list.push(value.to_string());
+
+            if !self.parser.consume_token(token) {
+                break;
+            }
+        }
+        Ok(list)
     }
 
     pub(crate) fn consume_token(&mut self, expected: &str) -> bool {

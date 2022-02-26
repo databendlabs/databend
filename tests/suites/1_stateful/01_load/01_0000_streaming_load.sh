@@ -21,7 +21,7 @@ if [ $? -ne 0 ]; then
 fi
 
 
-curl -H "insert_sql:insert into ontime_streaming_load format CSV" -H "csv_header:1" -F  "upload=@/tmp/ontime.csv"  -XPUT http://localhost:8001/v1/streaming_load > /dev/null 2>&1
+curl -H "insert_sql:insert into ontime_streaming_load format CSV" -H "skip_header:1" -F  "upload=@/tmp/ontime.csv"  -XPUT http://localhost:8001/v1/streaming_load > /dev/null 2>&1
 
 
 echo "select count(1) ,avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT

@@ -46,7 +46,7 @@ fn test_tuple_function() -> Result<()> {
 
     for (t, v) in tests.iter().zip(values.iter()) {
         let func = TupleFunction::try_create_func("")?;
-        let result = test_eval(&func, &t.columns)?;
+        let result = test_eval(&func, &t.columns, false)?;
         let result = result.convert_full_column();
 
         let result = (0..result.len()).map(|i| result.get(i)).collect::<Vec<_>>();

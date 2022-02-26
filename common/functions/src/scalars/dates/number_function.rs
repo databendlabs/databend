@@ -388,7 +388,7 @@ where
             None => return Ok(Monotonicity::clone_without_range(&args[0])),
         };
 
-        let func = FunctionAdapter::create(func);
+        let func = FunctionAdapter::create(func, true);
 
         if args[0].left.is_none() || args[0].right.is_none() {
             return Ok(Monotonicity::default());

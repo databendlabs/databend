@@ -41,11 +41,15 @@ use super::Monotonicity;
 #[derive(Clone)]
 pub struct FunctionAdapter {
     inner: Box<dyn Function>,
+    passthrough_null: bool,
 }
 
 impl FunctionAdapter {
-    pub fn create(inner: Box<dyn Function>) -> Box<dyn Function> {
-        Box::new(Self { inner })
+    pub fn create(inner: Box<dyn Function>, passthrough_null: bool) -> Box<dyn Function> {
+        Box::new(Self {
+            inner,
+            passthrough_null,
+        })
     }
 }
 impl Function for FunctionAdapter {
@@ -54,7 +58,7 @@ impl Function for FunctionAdapter {
     }
 
     fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if self.passthrough_null() {
+        if self.passthrough_null {
             // one is null, result is null
             if args.iter().any(|v| v.data_type_id() == TypeID::Null) {
                 return Ok(NullType::arc());
@@ -80,7 +84,7 @@ impl Function for FunctionAdapter {
         }
 
         // unwrap nullable
-        if self.passthrough_null() {
+        if self.passthrough_null {
             // one is null, result is null
             if columns
                 .iter()
@@ -177,10 +181,6 @@ impl Function for FunctionAdapter {
         self.inner.get_monotonicity(args)
     }
 
-    fn passthrough_null(&self) -> bool {
-        self.inner.passthrough_null()
-    }
-
     fn passthrough_constant(&self) -> bool {
         self.inner.passthrough_constant()
     }
@@ -195,11 +195,15 @@ impl std::fmt::Display for FunctionAdapter {
 #[derive(Clone)]
 pub struct ArithmeticAdapter {
     inner: Option<Box<dyn Function>>,
+    passthrough_null: bool,
 }
 
 impl ArithmeticAdapter {
-    pub fn create(inner: Option<Box<dyn Function>>) -> Box<dyn Function> {
-        Box::new(Self { inner })
+    pub fn create(inner: Option<Box<dyn Function>>, passthrough_null: bool) -> Box<dyn Function> {
+        Box::new(Self {
+            inner,
+            passthrough_null,
+        })
     }
 
     pub fn try_create(
@@ -207,14 +211,21 @@ impl ArithmeticAdapter {
         name: &str,
         args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function>> {
-        // one is null, result is null
-        if args.iter().any(|v| v.data_type_id() == TypeID::Null) {
-            return Ok(Self::create(None));
-        }
-        let types = args.iter().map(|v| remove_nullable(v)).collect::<Vec<_>>();
-        let types = types.iter().collect::<Vec<_>>();
-        let inner = (desc.arithmetic_creator)(name, &types)?;
-        Ok(Self::create(Some(inner)))
+        let passthrough_null = desc.features.passthrough_null;
+
+        let inner = if passthrough_null {
+            // one is null, result is null
+            if args.iter().any(|v| v.data_type_id() == TypeID::Null) {
+                return Ok(Self::create(None, true));
+            }
+            let types = args.iter().map(|v| remove_nullable(v)).collect::<Vec<_>>();
+            let types = types.iter().collect::<Vec<_>>();
+            (desc.arithmetic_creator)(name, &types)?
+        } else {
+            (desc.arithmetic_creator)(name, args)?
+        };
+
+        Ok(Self::create(Some(inner), passthrough_null))
     }
 }
 
@@ -228,15 +239,21 @@ impl Function for ArithmeticAdapter {
             return Ok(NullType::arc());
         }
 
-        let has_nullable = args.iter().any(|v| v.is_nullable());
-        let types = args.iter().map(|v| remove_nullable(v)).collect::<Vec<_>>();
-        let types = types.iter().collect::<Vec<_>>();
-        let typ = self.inner.as_ref().unwrap().return_type(&types)?;
+        let inner = self.inner.as_ref().unwrap();
 
-        if has_nullable {
-            Ok(wrap_nullable(&typ))
+        if self.passthrough_null {
+            let has_nullable = args.iter().any(|v| v.is_nullable());
+            let types = args.iter().map(|v| remove_nullable(v)).collect::<Vec<_>>();
+            let types = types.iter().collect::<Vec<_>>();
+            let typ = inner.return_type(&types)?;
+
+            if has_nullable {
+                Ok(wrap_nullable(&typ))
+            } else {
+                Ok(typ)
+            }
         } else {
-            Ok(typ)
+            inner.return_type(args)
         }
     }
 
@@ -250,7 +267,8 @@ impl Function for ArithmeticAdapter {
             return inner.eval(columns, input_rows);
         }
 
-        if columns.iter().any(|v| v.data_type().is_nullable()) {
+        // unwrap nullable
+        if self.passthrough_null && columns.iter().any(|v| v.data_type().is_nullable()) {
             let mut validity: Option<Bitmap> = None;
             let mut has_all_null = false;
 

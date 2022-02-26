@@ -1,6 +1,6 @@
 UInt64
 UInt64	Int64	Float64	UInt64
-String	String
+String	String	Null
 === TEST_numeric_coercion
 UInt8 OP UInt8	UInt16	Int16	UInt16	Float64
 UInt8 OP UInt16	UInt32	Int32	UInt32	Float64

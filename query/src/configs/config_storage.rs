@@ -91,7 +91,7 @@ pub struct S3StorageConfig {
     pub region: String,
 
     /// Endpoint URL for S3 storage
-    #[clap(long, env = S3_STORAGE_ENDPOINT_URL, default_value = "")]
+    #[clap(long, env = S3_STORAGE_ENDPOINT_URL, default_value = "https://s3.amazonaws.com")]
     pub endpoint_url: String,
 
     // Access key for S3 storage
@@ -115,7 +115,7 @@ impl Default for S3StorageConfig {
     fn default() -> Self {
         Self {
             region: "".to_string(),
-            endpoint_url: "".to_string(),
+            endpoint_url: "https://s3.amazonaws.com".to_string(),
             access_key_id: "".to_string(),
             secret_access_key: "".to_string(),
             bucket: "".to_string(),

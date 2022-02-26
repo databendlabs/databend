@@ -45,6 +45,7 @@ impl EltFunction {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
+                .disable_passthrough_null()
                 .variadic_arguments(2, usize::MAX - 1),
         )
     }
@@ -87,10 +88,6 @@ impl Function for EltFunction {
         },{
             unreachable!()
         })
-    }
-
-    fn passthrough_null(&self) -> bool {
-        false
     }
 }
 
