@@ -23,8 +23,8 @@ use common_base::tokio::task::JoinHandle;
 use common_base::Progress;
 use common_base::ProgressValues;
 use common_base::TrySpawn;
-use common_dal_context::DalContext;
-use common_dal_context::DalMetrics;
+use common_contexts::DalContext;
+use common_contexts::DalMetrics;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -269,7 +269,7 @@ impl QueryContext {
 
     /// Get the data accessor metrics.
     pub fn get_dal_metrics(&self) -> DalMetrics {
-        self.shared.dal_ctx.get_metrics()
+        self.shared.dal_ctx.get_metrics().as_ref().clone()
     }
 
     /// Get the session running query.
