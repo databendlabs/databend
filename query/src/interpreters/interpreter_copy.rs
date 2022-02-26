@@ -40,29 +40,25 @@ impl CopyInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(CopyInterpreter { ctx, plan }))
     }
-}
 
-#[async_trait::async_trait]
-impl Interpreter for CopyInterpreter {
-    fn name(&self) -> &str {
-        "CopyInterpreter"
-    }
+    // Read a file and commit it to the table.
+    // If the file_name is empty, we will read it {path}/{file_name}.
+    async fn write_one_file(&self, file_name: Option<String>, commit: bool) -> Result<()> {
+        let ctx = self.ctx.clone();
+        let stage_plan = self.plan.stage_plan.clone();
 
-    async fn execute(
-        &self,
-        mut _input_stream: Option<SendableDataBlockStream>,
-    ) -> Result<SendableDataBlockStream> {
-        tracing::info!("Plan:{:?}", self.plan);
-
-        let plan = self.plan.stage_plan.clone();
-        let source_stream = match plan.stage_info.stage_type {
+        let source_stream = match stage_plan.stage_info.stage_type {
             StageType::External => {
-                match plan.stage_info.file_format_options.format {
+                match stage_plan.stage_info.file_format_options.format {
                     // CSV.
                     StageFileFormatType::Csv => {
-                        CsvSourceTransform::try_create(self.ctx.clone(), plan.clone())?
-                            .execute()
-                            .await
+                        CsvSourceTransform::try_create(
+                            self.ctx.clone(),
+                            file_name,
+                            stage_plan.clone(),
+                        )?
+                        .execute()
+                        .await
                     }
                     // Unsupported.
                     format => Err(ErrorCode::LogicalError(format!(
@@ -77,8 +73,6 @@ impl Interpreter for CopyInterpreter {
             )),
         }?;
 
-        let ctx = self.ctx.clone();
-
         let progress_stream = Box::pin(ProgressStream::try_create(
             source_stream,
             ctx.get_scan_progress(),
@@ -92,7 +86,38 @@ impl Interpreter for CopyInterpreter {
             .await?
             .try_collect()
             .await?;
-        table.commit_insertion(ctx.clone(), r, false).await?;
+
+        if commit {
+            table.commit_insertion(ctx.clone(), r, false).await?;
+        }
+
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl Interpreter for CopyInterpreter {
+    fn name(&self) -> &str {
+        "CopyInterpreter"
+    }
+
+    async fn execute(
+        &self,
+        mut _input_stream: Option<SendableDataBlockStream>,
+    ) -> Result<SendableDataBlockStream> {
+        tracing::info!("Plan:{:?}", self.plan);
+
+        // Commit after each file write.
+        let commit = true;
+        let files = self.plan.files.clone();
+
+        if files.is_empty() {
+            self.write_one_file(None, commit).await?;
+        } else {
+            for file in files {
+                self.write_one_file(Some(file), commit).await?;
+            }
+        }
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

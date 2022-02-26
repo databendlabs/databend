@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::StageStorage;
 use common_meta_types::UserStageInfo;
+use common_tracing::tracing;
 use opendal::credential::Credential;
 use opendal::Reader;
 
@@ -26,8 +27,9 @@ use crate::sessions::QueryContext;
 pub struct DataAccessor {}
 
 impl DataAccessor {
-    pub async fn get_source_reader(
+    pub async fn get_file_reader(
         ctx: &Arc<QueryContext>,
+        file_name: Option<String>,
         stage_info: &UserStageInfo,
     ) -> Result<Reader> {
         match &stage_info.stage_params.storage {
@@ -35,18 +37,12 @@ impl DataAccessor {
                 let mut builder = opendal::services::s3::Backend::build();
 
                 // Endpoint url.
-                {
-                    let endpoint = ctx.get_config().storage.s3.endpoint_url;
-                    builder.endpoint(&endpoint);
-                }
+                let endpoint = ctx.get_config().storage.s3.endpoint_url;
+                builder.endpoint(&endpoint);
 
-                // Region.
-                {
-                    // TODO(bohu): opendal to check the region.
-                    let region = "us-east-2";
-                    let bucket = &s3.bucket;
-                    builder.region(region).bucket(bucket);
-                }
+                // Bucket.
+                let bucket = &s3.bucket;
+                builder.bucket(bucket);
 
                 // Credentials.
                 if !s3.credentials_aws_key_id.is_empty() {
@@ -61,7 +57,29 @@ impl DataAccessor {
                     .await
                     .map_err(|e| ErrorCode::DalS3Error(format!("s3 dal build error:{:?}", e)))?;
                 let operator = opendal::Operator::new(accessor);
-                Ok(operator.object(&s3.path).reader())
+
+                let path = match file_name {
+                    None => s3.path.clone(),
+                    Some(v) => {
+                        let mut path = s3.path.clone();
+                        if path.starts_with('/') {
+                            path.remove(0);
+                        }
+                        if path.ends_with('/') {
+                            path.pop();
+                        }
+                        format!("{}/{}", path, v)
+                    }
+                };
+
+                tracing::info!(
+                    "get_source_reader: endpoint url:{}, bucket:{}, path:{}",
+                    endpoint,
+                    bucket,
+                    path
+                );
+
+                Ok(operator.object(&path).reader())
             }
         }
     }

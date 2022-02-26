@@ -65,7 +65,7 @@ async fn test_statement_copy() -> Result<()> {
         file_format = (type = csv field_delimiter = '|' skip_header = 1)
         VALIDATION_MODE = RETURN_13_ROWS
         ",
-            expect: r#"Copy into system.configs ,UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "" } ,files:["'file1.csv'", "'file2.csv'"] ,validation_mode:ReturnNRows(13)"#,
+            expect: r#"Copy into system.configs ,UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "" } ,files:["file1.csv", "file2.csv"] ,validation_mode:ReturnNRows(13)"#,
             err: "",
         },
 
@@ -80,7 +80,7 @@ async fn test_statement_copy() -> Result<()> {
         on_error = CONTINUE size_limit = 10
         VALIDATION_MODE = RETURN_13_ROWS
         ",
-            expect: r#"Copy into system.configs ,UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: Continue, size_limit: 10 }, comment: "" } ,files:["'file1.csv'", "'file2.csv'"] ,validation_mode:ReturnNRows(13)"#,
+            expect: r#"Copy into system.configs ,UserStageInfo { stage_name: "s3://mybucket/data/files", stage_type: External, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "mybucket", path: "/data/files", credentials_aws_key_id: "my_key_id", credentials_aws_secret_key: "my_secret_key", encryption_master_key: "my_master_key" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 1, field_delimiter: "|", record_delimiter: "", compression: None }, copy_options: CopyOptions { on_error: Continue, size_limit: 10 }, comment: "" } ,files:["file1.csv", "file2.csv"] ,validation_mode:ReturnNRows(13)"#,
             err: "",
         },
 

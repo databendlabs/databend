@@ -35,6 +35,7 @@ const S3_STORAGE_ACCESS_KEY_ID: &str = "S3_STORAGE_ACCESS_KEY_ID";
 const S3_STORAGE_SECRET_ACCESS_KEY: &str = "S3_STORAGE_SECRET_ACCESS_KEY";
 const S3_STORAGE_ENABLE_POD_IAM_POLICY: &str = "S3_STORAGE_ENABLE_POD_IAM_POLICY";
 const S3_STORAGE_BUCKET: &str = "S3_STORAGE_BUCKET";
+const S3_STORAGE_ROOT: &str = "S3_STORAGE_ROOT";
 
 // Azure Storage Blob env.
 const AZURE_STORAGE_ACCOUNT: &str = "AZURE_STORAGE_ACCOUNT";
@@ -109,6 +110,10 @@ pub struct S3StorageConfig {
     /// S3 Bucket to use for storage
     #[clap(long, env = S3_STORAGE_BUCKET, default_value = "")]
     pub bucket: String,
+
+    /// <bucket>/<root>
+    #[clap(long, env = S3_STORAGE_ROOT, default_value = "")]
+    pub root: String,
 }
 
 impl Default for S3StorageConfig {
@@ -118,8 +123,9 @@ impl Default for S3StorageConfig {
             endpoint_url: "https://s3.amazonaws.com".to_string(),
             access_key_id: "".to_string(),
             secret_access_key: "".to_string(),
-            bucket: "".to_string(),
             enable_pod_iam_policy: false,
+            bucket: "".to_string(),
+            root: "".to_string(),
         }
     }
 }
@@ -253,6 +259,7 @@ impl StorageConfig {
             S3_STORAGE_ENABLE_POD_IAM_POLICY
         );
         env_helper!(mut_config.storage, s3, bucket, String, S3_STORAGE_BUCKET);
+        env_helper!(mut_config.storage, s3, root, String, S3_STORAGE_ROOT);
 
         // Azure Storage Blob.
         env_helper!(

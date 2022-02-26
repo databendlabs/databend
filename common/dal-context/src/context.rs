@@ -22,7 +22,7 @@ use opendal::ops::OpStat;
 use opendal::ops::OpWrite;
 use opendal::readers::CallbackReader;
 use opendal::Accessor;
-use opendal::BoxedAsyncRead;
+use opendal::BoxedAsyncReader;
 use opendal::Layer;
 use opendal::Metadata;
 
@@ -120,7 +120,7 @@ impl Layer for DalContext {
 
 #[async_trait]
 impl Accessor for DalContext {
-    async fn read(&self, args: &OpRead) -> DalResult<BoxedAsyncRead> {
+    async fn read(&self, args: &OpRead) -> DalResult<BoxedAsyncReader> {
         let metrics = self.metrics.clone();
 
         // TODO(xuanwo): Maybe it's better to move into metrics.
@@ -130,10 +130,10 @@ impl Accessor for DalContext {
                 metrics.read_bytes += n;
             });
 
-            Box::new(r) as BoxedAsyncRead
+            Box::new(r) as BoxedAsyncReader
         })
     }
-    async fn write(&self, r: BoxedAsyncRead, args: &OpWrite) -> DalResult<usize> {
+    async fn write(&self, r: BoxedAsyncReader, args: &OpWrite) -> DalResult<usize> {
         self.inner.as_ref().unwrap().write(r, args).await.map(|n| {
             self.inc_write_bytes(n);
             n
