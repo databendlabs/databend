@@ -60,7 +60,16 @@ impl DataAccessor {
 
                 let path = match file_name {
                     None => s3.path.clone(),
-                    Some(v) => format!("{}/{}", s3.path, v),
+                    Some(v) => {
+                        let mut path = s3.path.clone();
+                        if path.starts_with("/") {
+                            path.remove(0);
+                        }
+                        if path.ends_with("/") {
+                            path.pop();
+                        }
+                        format!("{}/{}", path, v)
+                    }
                 };
 
                 tracing::info!(
