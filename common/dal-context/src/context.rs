@@ -41,12 +41,8 @@ impl DalContext {
         }
     }
 
-    pub fn get_metric(&self) -> Arc<DalMetrics> {
+    pub fn get_metrics(&self) -> Arc<DalMetrics> {
         self.metrics.clone()
-    }
-
-    pub fn get_metrics(&self) -> DalMetrics {
-        self.metrics.as_ref().clone()
     }
 }
 

@@ -173,7 +173,7 @@ impl FuseTable {
 
         Self::commit_to_meta_server(ctx, &self.get_table_info().ident, snapshot_loc).await?;
         ctx.get_dal_context()
-            .get_metric()
+            .get_metrics()
             .inc_write_rows(rows_written);
         Ok(())
     }

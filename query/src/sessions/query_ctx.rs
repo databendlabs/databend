@@ -269,7 +269,7 @@ impl QueryContext {
 
     /// Get the data accessor metrics.
     pub fn get_dal_metrics(&self) -> DalMetrics {
-        self.shared.dal_ctx.get_metrics()
+        self.shared.dal_ctx.get_metrics().as_ref().clone()
     }
 
     /// Get the session running query.

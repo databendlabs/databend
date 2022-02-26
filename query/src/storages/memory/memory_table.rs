@@ -179,10 +179,10 @@ impl Table for MemoryTable {
         let written_rows: usize = operations.iter().map(|b| b.num_rows()).sum();
         let written_bytes: usize = operations.iter().map(|b| b.memory_size()).sum();
         ctx.get_dal_context()
-            .get_metric()
+            .get_metrics()
             .inc_write_rows(written_rows as u64);
         ctx.get_dal_context()
-            .get_metric()
+            .get_metrics()
             .inc_write_bytes(written_bytes);
 
         if overwrite {

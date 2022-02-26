@@ -54,10 +54,10 @@ impl FuseTable {
 
                 // Update context statistics.
                 ctx.get_dal_context()
-                    .get_metric()
+                    .get_metrics()
                     .inc_partitions_total(partitions_total as u64);
                 ctx.get_dal_context()
-                    .get_metric()
+                    .get_metrics()
                     .inc_partitions_scanned(partitions_scanned as u64);
 
                 Ok((statistics, parts))
