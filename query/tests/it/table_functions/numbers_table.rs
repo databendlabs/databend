@@ -57,3 +57,46 @@ async fn test_number_table() -> Result<()> {
 
     Ok(())
 }
+
+use databend_query::optimizers::Optimizers;
+use databend_query::sql::PlanParser;
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_limit_pushdown() -> Result<()> {
+    struct Test {
+        name: &'static str,
+        query: &'static str,
+        expect: &'static str,
+    }
+
+    let tests: Vec<Test> = vec![
+        Test {
+            name: "only-limit",
+            query: "select * from numbers_mt(10) limit 2",
+            expect: "\
+            Limit: 2\
+            \n  Projection: number:UInt64\
+            \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 2, read_bytes: 16, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], limit: 2]",
+        },
+        Test {
+            name: "limit-with-filter",
+            query: "select * from numbers_mt(10) where number > 8 limit 2",
+            expect: "\
+            Limit: 2\
+            \n  Projection: number:UInt64\
+            \n    Filter: (number > 8)\
+            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(number > 8)], limit: 2]",
+        },
+    ];
+
+    for test in tests {
+        let ctx = crate::tests::create_query_context()?;
+        let plan = PlanParser::parse(ctx.clone(), test.query).await?;
+        let mut optimizer = Optimizers::without_scatters(ctx);
+
+        let optimized_plan = optimizer.optimize(&plan)?;
+        let actual = format!("{:?}", optimized_plan);
+        assert_eq!(test.expect, actual, "{:#?}", test.name);
+    }
+    Ok(())
+}
