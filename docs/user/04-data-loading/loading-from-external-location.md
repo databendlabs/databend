@@ -14,7 +14,7 @@ Load files from a storage location (Amazon S3) using [COPY command](../01-sql-st
 ### Example: Loading a file from an External Location
 
 First, let's try to read 5 rows(`SIZE_LIMIT=5`) from the csv file to make sure it works:
-```sql
+```
 
 COPY INTO ontime FROM 's3://databend-external/t_ontime/t_ontime.csv'
     CREDENTIALS=(aws_key_id='<your-key-id>' aws_secret_key='<your-secret-key>')
