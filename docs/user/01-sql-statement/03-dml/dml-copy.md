@@ -1,5 +1,5 @@
 ---
-title: COPY INTO \<table\>
+title: COPY INTO table
 ---
 
 Loads data from staged files to a table. The files must be staged in one of the following locations:
