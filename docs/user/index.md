@@ -31,6 +31,7 @@ $ docker run --init --rm -p 3307:3307 datafuselabs/databend
 ```shell
 $ git clone https://github.com/datafuselabs/databend.git
 $ cd databend && make setup
+$ export PATH=$PATH:~/.cargo/bin
 $ make run
 ```
   </TabItem>

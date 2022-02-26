@@ -7,7 +7,7 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 /** @type {import('@docusaurus/types').Config} */
 const config = {
     title: 'Databend',
-    tagline: 'The Open Source Serverless Data Warehouse for Everyone.',
+    tagline: 'The Modern Cloud Data Warehouse for Everyone.',
     url: 'https://databend.rs',
     baseUrl: '/',
     onBrokenLinks: 'throw',
