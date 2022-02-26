@@ -62,10 +62,10 @@ impl DataAccessor {
                     None => s3.path.clone(),
                     Some(v) => {
                         let mut path = s3.path.clone();
-                        if path.starts_with("/") {
+                        if path.starts_with('/') {
                             path.remove(0);
                         }
-                        if path.ends_with("/") {
+                        if path.ends_with('/') {
                             path.pop();
                         }
                         format!("{}/{}", path, v)
