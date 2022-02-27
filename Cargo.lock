@@ -1326,11 +1326,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-dal-context"
+name = "common-contexts"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "common-infallible",
  "opendal 0.0.5 (git+https://github.com/datafuselabs/opendal?rev=80e8bca)",
 ]
 
@@ -2201,7 +2200,7 @@ dependencies = [
  "common-building",
  "common-cache",
  "common-clickhouse-srv",
- "common-dal-context",
+ "common-contexts",
  "common-datablocks",
  "common-datavalues",
  "common-exception",

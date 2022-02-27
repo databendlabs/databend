@@ -17,6 +17,8 @@ use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
+use databend_query::interpreters::InterpreterFactory;
+use databend_query::sql::PlanParser;
 use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::NumbersTable;
 use futures::TryStreamExt;
@@ -55,5 +57,68 @@ async fn test_number_table() -> Result<()> {
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_limit_push_down() -> Result<()> {
+    struct Test {
+        name: &'static str,
+        query: &'static str,
+        expect: &'static str,
+        result: Vec<&'static str>,
+    }
+
+    let tests: Vec<Test> = vec![
+        Test {
+            name: "only-limit",
+            query: "select * from numbers_mt(10) limit 2",
+            expect: "\
+            Limit: 2\
+            \n  Projection: number:UInt64\
+            \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 2, read_bytes: 16, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], limit: 2]",
+            result:
+            vec![
+                    "+--------+",
+                    "| number |",
+                    "+--------+",
+                    "| 0      |",
+                    "| 1      |",
+                    "+--------+",
+            ],
+        },
+        Test {
+            name: "limit-with-filter",
+            query: "select * from numbers_mt(10) where number > 8 limit 2",
+            expect: "\
+            Limit: 2\
+            \n  Projection: number:UInt64\
+            \n    Filter: (number > 8)\
+            \n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80, partitions_scanned: 1, partitions_total: 1], push_downs: [projections: [0], filters: [(number > 8)], limit: 2]",
+            result:
+                vec![
+                    "+--------+",
+                    "| number |",
+                    "+--------+",
+                    "| 9      |",
+                    "+--------+",
+                ],
+        },
+    ];
+
+    for test in tests {
+        let ctx = crate::tests::create_query_context()?;
+        let plan = PlanParser::parse(ctx.clone(), test.query).await?;
+        let actual = format!("{:?}", plan);
+        assert_eq!(test.expect, actual, "{:#?}", test.name);
+
+        let executor = InterpreterFactory::get(ctx.clone(), plan)?;
+
+        let stream = executor.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let expect = test.result;
+        let actual = result.as_slice();
+        common_datablocks::assert_blocks_sorted_eq_with_name(test.name, expect, actual);
+    }
     Ok(())
 }
