@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
+use futures::Future;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::new::processors::port::OutputPort;
@@ -61,23 +62,28 @@ impl TableSource {
     }
 }
 
-#[async_trait::async_trait]
 impl AsyncSource for TableSource {
     const NAME: &'static str = "TableSource";
 
-    async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if !self.initialized {
-            self.initialized = true;
-            self.initialize().await?;
-        }
+    type BlockFuture<'a>
+    where Self: 'a
+    = impl Future<Output = Result<Option<DataBlock>>>;
 
-        match &mut self.wrap_stream {
-            None => Err(ErrorCode::LogicalError("")),
-            Some(stream) => match stream.next().await {
-                None => Ok(None),
-                Some(Err(cause)) => Err(cause),
-                Some(Ok(data)) => Ok(Some(data)),
-            },
+    fn generate(&mut self) -> Self::BlockFuture<'_> {
+        async move {
+            if !self.initialized {
+                self.initialized = true;
+                self.initialize().await?;
+            }
+
+            match &mut self.wrap_stream {
+                None => Err(ErrorCode::LogicalError("")),
+                Some(stream) => match stream.next().await {
+                    None => Ok(None),
+                    Some(Err(cause)) => Err(cause),
+                    Some(Ok(data)) => Ok(Some(data)),
+                },
+            }
         }
     }
 }
