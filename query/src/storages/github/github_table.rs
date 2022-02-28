@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::fmt::Display;
+use std::future::Future;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -177,13 +178,19 @@ impl GithubSource {
 impl AsyncSource for GithubSource {
     const NAME: &'static str = "GithubSource";
 
-    async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if self.finish {
-            return Ok(None);
-        }
+    type BlockFuture<'a>
+    where Self: 'a
+    = impl Future<Output = Result<Option<DataBlock>>>;
 
-        self.finish = true;
-        let arrays = get_data_from_github(self.options.clone()).await?;
-        Ok(Some(DataBlock::create(self.schema.clone(), arrays)))
+    fn generate(&mut self) -> Self::BlockFuture<'_> {
+        async {
+            if self.finish {
+                return Ok(None);
+            }
+
+            self.finish = true;
+            let arrays = get_data_from_github(self.options.clone()).await?;
+            Ok(Some(DataBlock::create(self.schema.clone(), arrays)))
+        }
     }
 }
