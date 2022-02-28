@@ -16,12 +16,14 @@ use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
+use async_trait::async_trait;
 use common_base::tokio::sync::mpsc::Receiver;
 use common_base::tokio::sync::mpsc::Sender;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
+use futures::Future;
 
 use crate::pipelines::new::executor::pipeline_runtime_executor::PipelineRuntimeExecutor;
 use crate::pipelines::new::pipe::SinkPipeBuilder;
@@ -142,10 +144,13 @@ impl AsyncPullingSink {
         AsyncSinker::create(input, AsyncPullingSink::Running(tx))
     }
 }
-
-#[async_trait::async_trait]
+#[async_trait]
 impl AsyncSink for AsyncPullingSink {
     const NAME: &'static str = "PullingExecutorSink";
+
+    type ConsumeFuture<'a>
+    where Self: 'a
+    = impl Future<Output = Result<()>>;
 
     async fn on_finish(&mut self) -> Result<()> {
         if let AsyncPullingSink::Running(_) = self {
@@ -155,13 +160,15 @@ impl AsyncSink for AsyncPullingSink {
         Ok(())
     }
 
-    async fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        match self {
-            AsyncPullingSink::Finished => Ok(()),
-            AsyncPullingSink::Running(tx) => match tx.send(data_block).await {
-                Ok(_) => Ok(()),
-                Err(cause) => Err(ErrorCode::LogicalError(format!("{:?}", cause))),
-            },
+    fn consume(&mut self, data_block: DataBlock) -> Self::ConsumeFuture<'_> {
+        async move {
+            match self {
+                AsyncPullingSink::Finished => Ok(()),
+                AsyncPullingSink::Running(tx) => match tx.send(data_block).await {
+                    Ok(_) => Ok(()),
+                    Err(cause) => Err(ErrorCode::LogicalError(format!("{:?}", cause))),
+                },
+            }
         }
     }
 }

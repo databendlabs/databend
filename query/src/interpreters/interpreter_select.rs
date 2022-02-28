@@ -32,6 +32,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
+use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 
@@ -78,9 +79,7 @@ impl Interpreter for SelectInterpreter {
                 ));
             }
 
-            let builder = QueryPipelineBuilder::create(self.ctx.clone());
-            let mut new_pipeline = builder.finalize(&self.select)?;
-            new_pipeline.set_max_threads(settings.get_max_threads()? as usize);
+            let new_pipeline = self.execute2().await?;
             let executor = PipelinePullingExecutor::try_create(new_pipeline)?;
 
             Ok(Box::pin(NewProcessorStreamWrap::create(executor)?))
@@ -88,6 +87,14 @@ impl Interpreter for SelectInterpreter {
             let optimized_plan = self.rewrite_plan()?;
             plan_schedulers::schedule_query(&self.ctx, &optimized_plan).await
         }
+    }
+
+    async fn execute2(&self) -> Result<NewPipeline> {
+        let settings = self.ctx.get_settings();
+        let builder = QueryPipelineBuilder::create(self.ctx.clone());
+        let mut new_pipeline = builder.finalize(&self.select)?;
+        new_pipeline.set_max_threads(settings.get_max_threads()? as usize);
+        Ok(new_pipeline)
     }
 }
 
