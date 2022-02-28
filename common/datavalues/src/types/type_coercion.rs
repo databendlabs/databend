@@ -330,10 +330,6 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
         }
     }
 
-    // one of is String and other is number
-    if (lhs_id.is_numeric() && rhs_id.is_string()) || (rhs_id.is_numeric() && rhs_id.is_string()) {
-        return Ok(Float64Type::arc());
-    }
 
     // one of is datetime and other is number or string
     {

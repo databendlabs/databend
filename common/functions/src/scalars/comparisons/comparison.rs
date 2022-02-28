@@ -16,6 +16,8 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_arrow::arrow::compute::comparison;
+use common_arrow::arrow::compute::comparison::Simd8;
+use common_arrow::arrow::compute::comparison::Simd8PartialEq;
 use common_datavalues::prelude::*;
 use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::BooleanType;
@@ -23,6 +25,7 @@ use common_datavalues::DataValueComparisonOperator;
 use common_datavalues::TypeID;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use num::traits::AsPrimitive;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::ComparisonEqFunction;
@@ -33,6 +36,7 @@ use crate::scalars::ComparisonLtEqFunction;
 use crate::scalars::ComparisonLtFunction;
 use crate::scalars::ComparisonNotEqFunction;
 use crate::scalars::ComparisonRegexpFunction;
+use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionFactory;
 
@@ -61,6 +65,24 @@ impl ComparisonFunction {
     pub fn try_create_func(op: DataValueComparisonOperator) -> Result<Box<dyn Function>> {
         Ok(Box::new(ComparisonFunction { op }))
     }
+}
+
+fn bool_eq_bool(l: bool, r: bool, _ctx: &mut EvalContext) -> bool {
+    !(l ^ r)
+}
+
+fn num_eq_num<L, R, M>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> bool
+where
+    L: PrimitiveType + AsPrimitive<M>,
+    R: PrimitiveType + AsPrimitive<M>,
+    M: PrimitiveType + Simd8,
+    M::Simd: Simd8PartialEq,
+{
+    l.to_owned_scalar().as_().eq(&r.to_owned_scalar().as_())
+}
+
+fn binary_eq_binary<L, M>(l: &[u8], r: &[u8], _ctx: &mut EvalContext) -> bool {
+    l == r
 }
 
 impl Function for ComparisonFunction {
