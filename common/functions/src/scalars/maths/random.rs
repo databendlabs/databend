@@ -82,7 +82,7 @@ impl Function for RandomFunction {
 }
 
 fn rand_seed<T: AsPrimitive<u64>>(seed: T, _ctx: &mut EvalContext) -> f64 {
-    let mut rng = rand::rngs::StdRng::seed_from_u64(seed.as_());
+    let mut rng = rand::rngs::SmallRng::seed_from_u64(seed.as_());
     rng.gen::<f64>()
 }
 
