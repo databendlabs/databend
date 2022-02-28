@@ -15,11 +15,13 @@
 
 use std::any::Any;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
 use common_exception::Result;
+use common_infallible::Mutex;
 use common_infallible::RwLock;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
@@ -29,6 +31,12 @@ use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::SyncSource;
+use crate::pipelines::new::processors::SyncSourcer;
+use crate::pipelines::new::NewPipeline;
+use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
 use crate::storages::memory::MemoryTableStream;
 use crate::storages::StorageContext;
@@ -65,6 +73,17 @@ impl MemoryTable {
             engine_name: "MEMORY".to_string(),
             comment: "MEMORY Storage Engine".to_string(),
         }
+    }
+
+    fn get_read_data_blocks(&self) -> Arc<Mutex<VecDeque<DataBlock>>> {
+        let data_blocks = self.blocks.read();
+        let mut read_data_blocks = VecDeque::with_capacity(data_blocks.len());
+
+        for data_block in data_blocks.iter() {
+            read_data_blocks.push_back(data_block.clone());
+        }
+
+        Arc::new(Mutex::new(read_data_blocks))
     }
 }
 
@@ -162,6 +181,32 @@ impl Table for MemoryTable {
         Ok(Box::pin(MemoryTableStream::try_create(ctx, blocks)?))
     }
 
+    fn read2(
+        &self,
+        ctx: Arc<QueryContext>,
+        plan: &ReadDataSourcePlan,
+        pipeline: &mut NewPipeline,
+    ) -> Result<()> {
+        let settings = ctx.get_settings();
+        let mut builder = SourcePipeBuilder::create();
+        let read_data_blocks = self.get_read_data_blocks();
+
+        for _index in 0..settings.get_max_threads()? {
+            let output = OutputPort::create();
+            builder.add_source(
+                output.clone(),
+                MemoryTableSource::create(
+                    output,
+                    read_data_blocks.clone(),
+                    plan.push_downs.clone(),
+                )?,
+            );
+        }
+
+        pipeline.add_pipe(builder.finalize());
+        Ok(())
+    }
+
     async fn append_data(
         &self,
         _ctx: Arc<QueryContext>,
@@ -204,5 +249,52 @@ impl Table for MemoryTable {
         let mut blocks = self.blocks.write();
         blocks.clear();
         Ok(())
+    }
+}
+
+struct MemoryTableSource {
+    extras: Option<Extras>,
+    data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
+}
+
+impl MemoryTableSource {
+    pub fn create(
+        output: Arc<OutputPort>,
+        data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
+        extras: Option<Extras>,
+    ) -> Result<ProcessorPtr> {
+        SyncSourcer::create(output, MemoryTableSource {
+            extras,
+            data_blocks,
+        })
+    }
+
+    fn projection(&self, data_block: DataBlock) -> Result<Option<DataBlock>> {
+        if let Some(extras) = &self.extras {
+            if let Some(projection) = &extras.projection {
+                let pruned_schema = data_block.schema().project(projection.clone());
+                let raw_columns = data_block.columns();
+                let columns = projection
+                    .iter()
+                    .map(|idx| raw_columns[*idx].clone())
+                    .collect();
+
+                return Ok(Some(DataBlock::create(Arc::new(pruned_schema), columns)));
+            }
+        }
+
+        Ok(None)
+    }
+}
+
+impl SyncSource for MemoryTableSource {
+    const NAME: &'static str = "MemoryTable";
+
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
+        let mut blocks_guard = self.data_blocks.lock();
+        match blocks_guard.pop_front() {
+            None => Ok(None),
+            Some(data_block) => self.projection(data_block),
+        }
     }
 }
