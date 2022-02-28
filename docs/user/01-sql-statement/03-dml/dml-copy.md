@@ -1,5 +1,5 @@
 ---
-title: COPY INTO \<table\>
+title: COPY INTO table
 ---
 
 Loads data from staged files to a table. The files must be staged in one of the following locations:
@@ -12,6 +12,7 @@ Loads data from staged files to a table. The files must be staged in one of the 
 ```sql
 COPY INTO [<database>.]<table_name>
 FROM { externalLocation }
+[ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
 [ FILE_FORMAT = ( TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] } ) ]
 [ copyOptions ]
 [ VALIDATION_MODE = RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS ]

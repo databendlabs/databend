@@ -74,8 +74,6 @@ impl QueryLogTable {
             DataField::new("scan_rows", u64::to_data_type()),
             DataField::new("scan_bytes", u64::to_data_type()),
             DataField::new("scan_byte_cost_ms", u64::to_data_type()),
-            DataField::new("scan_seeks", u64::to_data_type()),
-            DataField::new("scan_seek_cost_ms", u64::to_data_type()),
             DataField::new("scan_partitions", u64::to_data_type()),
             DataField::new("total_partitions", u64::to_data_type()),
             DataField::new("result_rows", u64::to_data_type()),

@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::UserStageInfo;
 use common_planners::UserStagePlan;
 use common_streams::CsvSourceBuilder;
 use common_streams::ProgressStream;
@@ -32,15 +31,26 @@ use crate::sessions::QueryContext;
 
 pub struct CsvSourceTransform {
     ctx: Arc<QueryContext>,
+    file_name: Option<String>,
     stage_plan: UserStagePlan,
 }
 
 impl CsvSourceTransform {
-    pub fn try_create(ctx: Arc<QueryContext>, stage_plan: UserStagePlan) -> Result<Self> {
-        Ok(CsvSourceTransform { ctx, stage_plan })
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        file_name: Option<String>,
+        stage_plan: UserStagePlan,
+    ) -> Result<Self> {
+        Ok(CsvSourceTransform {
+            ctx,
+            file_name,
+            stage_plan,
+        })
     }
 
-    async fn get_csv_stream(&self, stage_info: &UserStageInfo) -> Result<SourceStream> {
+    async fn get_csv_stream(&self) -> Result<SourceStream> {
+        let file_name = &self.file_name;
+        let stage_info = &self.stage_plan.stage_info;
         let schema = self.stage_plan.schema.clone();
         let mut builder = CsvSourceBuilder::create(schema);
         let size_limit = stage_info.copy_options.size_limit;
@@ -75,7 +85,8 @@ impl CsvSourceTransform {
             builder.record_delimiter(record_delimiter);
         }
 
-        let reader = DataAccessor::get_source_reader(&self.ctx, stage_info).await?;
+        let reader =
+            DataAccessor::get_file_reader(&self.ctx, file_name.clone(), stage_info).await?;
         let source = builder.build(reader)?;
 
         Ok(SourceStream::new(Box::new(source)))
@@ -104,8 +115,7 @@ impl Processor for CsvSourceTransform {
 
     #[tracing::instrument(level = "debug", name="csv_source_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let stage_info = &self.stage_plan.stage_info;
-        let csv_stream = self.get_csv_stream(stage_info).await?;
+        let csv_stream = self.get_csv_stream().await?;
         let input_stream = csv_stream.execute().await?;
         let progress_stream =
             ProgressStream::try_create(input_stream, self.ctx.get_scan_progress())?;

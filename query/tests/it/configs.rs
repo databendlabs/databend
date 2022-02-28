@@ -103,6 +103,7 @@ access_key_id = \"\"
 secret_access_key = \"\"
 enable_pod_iam_policy = false
 bucket = \"\"
+root = \"\"
 
 [storage.azure_storage_blob]
 account = \"\"

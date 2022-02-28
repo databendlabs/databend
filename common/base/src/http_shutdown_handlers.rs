@@ -55,10 +55,10 @@ impl HttpShutdownHandler {
         assert!(self.join_handle.is_none());
         assert!(self.abort_handle.is_none());
 
-        let mut acceptor = TcpListener::bind(listening)
+        let mut acceptor = TcpListener::bind(listening.clone())
             .into_acceptor()
             .await
-            .map_err(|err| ErrorCode::CannotListenerPort(err.to_string()))?
+            .map_err(|err| ErrorCode::CannotListenerPort(format!("{}:{}", err, listening)))?
             .boxed();
 
         let addr = acceptor

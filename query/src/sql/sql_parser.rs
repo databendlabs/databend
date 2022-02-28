@@ -355,7 +355,7 @@ impl<'a> DfParser<'a> {
     pub(crate) fn parse_list(&mut self, token: &Token) -> Result<Vec<String>, ParserError> {
         let mut list: Vec<String> = vec![];
         loop {
-            let value = self.parse_value()?;
+            let value = self.parse_value_or_ident()?;
             list.push(value.to_string());
 
             if !self.parser.consume_token(token) {

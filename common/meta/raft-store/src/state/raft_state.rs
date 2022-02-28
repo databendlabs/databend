@@ -58,7 +58,7 @@ impl RaftState {
     /// 1. If `open` is `Some`,  it tries to open an existent RaftState if there is one.
     /// 2. If `create` is `Some`, it tries to initialize a new RaftState if there is not one.
     /// If none of them is `Some`, it is a programming error and will panic.
-    #[tracing::instrument(level = "info", skip(db,config,open,create), fields(config_id=%config.config_id))]
+    #[tracing::instrument(level = "debug", skip(db,config,open,create), fields(config_id=%config.config_id))]
     pub async fn open_create(
         db: &sled::Db,
         config: &RaftConfig,
@@ -106,7 +106,7 @@ impl RaftState {
 
     /// Initialize a raft state. The only thing to do is to persist the node id
     /// so that next time opening it the caller knows it is initialized.
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn init(&self) -> MetaResult<()> {
         let state = self.state();
         state

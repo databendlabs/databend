@@ -1,7 +1,7 @@
 <div align="center">
 
 <p align="center"><img alt="Databend Logo" src="website/static/img/favicon.svg" width="20%"/></p>
-<p align="center">The Open Source Serverless Data Warehouse for Everyone</p>
+<p align="center"> A Modern Cloud Data Warehouse for Everyone</p>
  
 <h4 align="center">
   <a href="https://databend.rs">Website</a> |

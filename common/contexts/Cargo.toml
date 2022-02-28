@@ -1,5 +1,5 @@
 [package]
-name = "common-dal-context"
+name = "common-contexts"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,7 +9,6 @@ doctest = false
 test = false
 
 [dependencies]
-common-infallible = { path = "../infallible" }
 
 async-trait = "0.1.52"
-opendal = "0.0.5"
+opendal = { git = "https://github.com/datafuselabs/opendal", rev = "80e8bca" }

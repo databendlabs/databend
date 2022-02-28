@@ -176,7 +176,9 @@ impl FuseTable {
             .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 
         Self::commit_to_meta_server(ctx, &self.get_table_info().ident, snapshot_loc).await?;
-        ctx.get_dal_context().inc_write_rows(rows_written as usize);
+        ctx.get_dal_context()
+            .get_metrics()
+            .inc_write_rows(rows_written);
         Ok(())
     }
 

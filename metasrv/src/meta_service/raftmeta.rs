@@ -201,7 +201,7 @@ impl MetaNode {
     }
 
     /// Start the grpc service for raft communication and meta operation API.
-    #[tracing::instrument(level = "info", skip(mn))]
+    #[tracing::instrument(level = "debug", skip(mn))]
     pub async fn start_grpc(mn: Arc<MetaNode>, host: &str, port: u32) -> MetaNetworkResult<()> {
         let mut rx = mn.running_rx.clone();
 
@@ -269,7 +269,7 @@ impl MetaNode {
     /// 3. If `init_cluster` is `Some` and it is just created, try to initialize a single-node cluster.
     ///
     /// TODO(xp): `init_cluster`: pass in a Map<id, address> to initialize the cluster.
-    #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
+    #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn open_create_boot(
         config: &RaftConfig,
         open: Option<()>,
@@ -313,7 +313,7 @@ impl MetaNode {
         Ok(mn)
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn stop(&self) -> MetaResult<i32> {
         // TODO(xp): need to be reentrant.
 
@@ -406,7 +406,7 @@ impl MetaNode {
 
     /// Start MetaNode in either `boot`, `single`, `join` or `open` mode,
     /// according to config.
-    #[tracing::instrument(level = "info", skip(config))]
+    #[tracing::instrument(level = "debug", skip(config))]
     pub async fn start(config: &RaftConfig) -> Result<Arc<MetaNode>, MetaError> {
         tracing::info!(?config, "start()");
         let mn = Self::do_start(config).await?;
@@ -502,7 +502,7 @@ impl MetaNode {
 
     /// Boot up the first node to create a cluster.
     /// For every cluster this func should be called exactly once.
-    #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
+    #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn boot(config: &RaftConfig) -> MetaResult<Arc<MetaNode>> {
         // 1. Bring a node up as non voter, start the grpc service for raft communication.
         // 2. Initialize itself as leader, because it is the only one in the new cluster.
@@ -516,7 +516,7 @@ impl MetaNode {
     // Initialized a single node cluster by:
     // - Initializing raft membership.
     // - Adding current node into the meta data.
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn init_cluster(&self, endpoint: Endpoint) -> MetaResult<()> {
         let node_id = self.sto.id;
 
@@ -539,7 +539,7 @@ impl MetaNode {
     /// When a leader is established, it is the leader's responsibility to setup replication from itself to non-voters, AKA learners.
     /// openraft does not persist the node set of non-voters, thus we need to do it manually.
     /// This fn should be called once a node found it becomes leader.
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn add_configured_non_voters(&self) -> MetaResult<()> {
         // TODO after leader established, add non-voter through apis
         let node_ids = self.sto.list_non_voters().await;
@@ -731,7 +731,7 @@ impl MetaNode {
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.
-    #[tracing::instrument(level = "info", skip(self, req))]
+    #[tracing::instrument(level = "debug", skip(self, req))]
     pub async fn write(&self, req: LogEntry) -> Result<AppliedState, MetaError> {
         tracing::debug!("req: {:?}", req);
 
@@ -749,7 +749,7 @@ impl MetaNode {
 
     /// Try to get the leader from the latest metrics of the local raft node.
     /// If leader is absent, wait for an metrics update in which a leader is set.
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn get_leader(&self) -> NodeId {
         // fast path: there is a known leader
 
@@ -779,7 +779,7 @@ impl MetaNode {
         }
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn forward(
         &self,
         node_id: &NodeId,

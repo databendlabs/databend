@@ -273,14 +273,34 @@ impl SessionManager {
         let accessor: Arc<dyn Accessor> = match schema {
             DalSchema::S3 => {
                 let s3_conf = &storage_conf.s3;
-                s3::Backend::build()
-                    .region(&s3_conf.region)
-                    .endpoint(&s3_conf.endpoint_url)
-                    .bucket(&s3_conf.bucket)
-                    .credential(Credential::hmac(
+                let mut builder = s3::Backend::build();
+
+                // Endpoint.
+                {
+                    builder.endpoint(&s3_conf.endpoint_url);
+                }
+
+                // Credential.
+                {
+                    builder.credential(Credential::hmac(
                         &s3_conf.access_key_id,
                         &s3_conf.secret_access_key,
-                    ))
+                    ));
+                }
+
+                // Bucket.
+                {
+                    builder.bucket(&s3_conf.bucket);
+                }
+
+                // Root.
+                {
+                    if !s3_conf.root.is_empty() {
+                        builder.root(&s3_conf.root);
+                    }
+                }
+
+                builder
                     .finish()
                     .await
                     .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?
