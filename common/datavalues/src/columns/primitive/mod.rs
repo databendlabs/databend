@@ -189,17 +189,32 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         if length == self.len() {
             return Arc::new(self.clone());
         }
-        let iter = self
-            .values()
-            .iter()
-            .zip(filter.values().iter())
-            .filter(|(_, f)| *f)
-            .map(|(v, _)| *v);
 
-        let values: Vec<T> = iter.collect();
-        let col = PrimitiveColumn {
-            values: values.into(),
-        };
+        let mut res = Vec::<T>::with_capacity(length);
+        let mut offset = 0;
+        let values = self.values();
+
+        const MASK_BITS: usize = 64;
+        for mut mask in filter.values().chunks::<u64>() {
+            if mask == u64::MAX {
+                res.extend(&values[offset..offset + MASK_BITS]);
+            } else {
+                while mask != 0 {
+                    let n = std::intrinsics::cttz(mask) as usize;
+                    res.push(values[offset + n]);
+                    mask = mask & (mask - 1);
+                }
+            }
+            offset += MASK_BITS;
+        }
+
+        for i in offset..self.len() {
+            if filter.get_data(i) {
+                res.push(values[i]);
+            }
+        }
+
+        let col = PrimitiveColumn { values: res.into() };
 
         Arc::new(col)
     }
