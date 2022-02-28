@@ -2176,6 +2176,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-metactl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.1.1",
+ "common-base",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-tracing",
+ "databend-meta",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
