@@ -80,10 +80,10 @@ fn test_filter_column() {
             expect: (0..N).map(|i| i as i32).filter(|i| i % 10 == 0).collect(),
         },
         Test {
-            filter: BooleanColumn::from_iterator((0..N).map(|i| i < 100 || i > 800)),
+            filter: BooleanColumn::from_iterator((0..N).map(|i| !(100..=800).contains(&i))),
             expect: (0..N)
                 .map(|i| i as i32)
-                .filter(|&i| i < 100 || i > 800)
+                .filter(|&i| !(100..=800).contains(&i))
                 .collect(),
         },
     ];

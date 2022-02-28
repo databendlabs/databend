@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::bitmap::utils::BitChunkIterExact;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::arity::unary;
@@ -190,34 +191,49 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
             return Arc::new(self.clone());
         }
 
-        let mut res = Vec::<T>::with_capacity(length);
-        let mut offset = 0;
-        let values = self.values();
+        let mut new = Vec::<T>::with_capacity(length);
+        let mut dst = new.as_mut_ptr();
 
-        const MASK_BITS: usize = 64;
-        for mut mask in filter.values().chunks::<u64>() {
-            if mask == u64::MAX {
-                res.extend(&values[offset..offset + MASK_BITS]);
-            } else {
-                while mask != 0 {
-                    let n = std::intrinsics::cttz(mask) as usize;
-                    res.push(values[offset + n]);
-                    mask = mask & (mask - 1);
+        const CHUNK_SIZE: usize = 64;
+        let mut chunks = self.values().chunks_exact(CHUNK_SIZE);
+        let mut mask_chunks = filter.values().chunks::<u64>();
+
+        chunks
+            .by_ref()
+            .zip(mask_chunks.by_ref())
+            .for_each(|(chunk, mut mask)| {
+                if mask == u64::MAX {
+                    unsafe {
+                        std::ptr::copy(chunk.as_ptr(), dst, CHUNK_SIZE);
+                        dst = dst.add(CHUNK_SIZE);
+                    }
+                } else {
+                    while mask != 0 {
+                        let n = mask.trailing_zeros() as usize;
+                        unsafe {
+                            dst.write(chunk[n]);
+                            dst = dst.add(1);
+                        }
+                        mask = mask & (mask - 1);
+                    }
                 }
-            }
-            offset += MASK_BITS;
-        }
+            });
 
-        for (&v, _) in values
+        chunks
+            .remainder()
             .iter()
-            .zip(filter.values().iter())
-            .skip(offset)
-            .filter(|(_, f)| *f)
-        {
-            res.push(v);
-        }
+            .zip(mask_chunks.remainder_iter())
+            .for_each(|(value, is_selected)| {
+                if is_selected {
+                    unsafe {
+                        dst.write(*value);
+                        dst = dst.add(1);
+                    }
+                }
+            });
 
-        let col = PrimitiveColumn { values: res.into() };
+        unsafe { new.set_len(length) };
+        let col = PrimitiveColumn { values: new.into() };
 
         Arc::new(col)
     }
