@@ -19,14 +19,15 @@ use common_base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
 use common_planners::add;
 use common_planners::col;
 use common_planners::lit;
 use common_planners::sub;
+use common_planners::CreateTablePlan;
 use common_planners::Extras;
 use databend_query::catalogs::Catalog;
+use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::meta::BlockMeta;
@@ -66,7 +67,7 @@ async fn test_block_pruner() -> Result<()> {
     let num_blocks_opt = row_per_block.to_string();
 
     // create test table
-    let crate_table_plan = CreateTableReq {
+    let create_table_plan = CreateTablePlan {
         if_not_exists: false,
         tenant: fixture.default_tenant(),
         db: fixture.default_db_name(),
@@ -82,10 +83,12 @@ async fn test_block_pruner() -> Result<()> {
             .into(),
             ..Default::default()
         },
+        as_select: None,
     };
 
     let catalog = ctx.get_catalog();
-    catalog.create_table(crate_table_plan).await?;
+    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    interpreter.execute(None).await?;
 
     // get table
     let table = catalog
@@ -213,7 +216,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     let num_blocks_opt = row_per_block.to_string();
 
     // create test table
-    let crate_table_plan = CreateTableReq {
+    let create_table_plan = CreateTablePlan {
         if_not_exists: false,
         tenant: fixture.default_tenant(),
         db: fixture.default_db_name(),
@@ -229,10 +232,12 @@ async fn test_block_pruner_monotonic() -> Result<()> {
             .into(),
             ..Default::default()
         },
+        as_select: None,
     };
 
     let catalog = ctx.get_catalog();
-    catalog.create_table(crate_table_plan).await?;
+    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    interpreter.execute(None).await?;
 
     // get table
     let table = catalog

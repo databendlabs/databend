@@ -44,17 +44,17 @@ async fn interpreter_show_create_table_test() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+-------+-------------------------------------+",
-            "| Table | Create Table                        |",
-            "+-------+-------------------------------------+",
-            "| a     | CREATE TABLE `a` (                  |",
-            "|       |   `a` Int64,                        |",
-            "|       |   `b` Int32,                        |",
-            "|       |   `c` String,                       |",
-            "|       |   `d` Int16,                        |",
-            "|       |   `e` Date16,                       |",
-            "|       | ) ENGINE=Null COMMENT='test create' |",
-            "+-------+-------------------------------------+",
+            "+-------+-----------------------------------------------------+",
+            "| Table | Create Table                                        |",
+            "+-------+-----------------------------------------------------+",
+            "| a     | CREATE TABLE `a` (                                  |",
+            "|       |   `a` Int64,                                        |",
+            "|       |   `b` Int32,                                        |",
+            "|       |   `c` String,                                       |",
+            "|       |   `d` Int16,                                        |",
+            "|       |   `e` Date16,                                       |",
+            "|       | ) ENGINE=Null COMMENT='test create' DATABASE_ID='1' |",
+            "+-------+-----------------------------------------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }

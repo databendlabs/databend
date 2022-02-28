@@ -27,6 +27,7 @@ use common_planners::Expression;
 use common_planners::Extras;
 use common_streams::SendableDataBlockStream;
 use databend_query::catalogs::Catalog;
+use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::PlanParser;
@@ -125,8 +126,9 @@ impl TestFixture {
 
     pub async fn create_default_table(&self) -> Result<()> {
         let create_table_plan = self.default_crate_table_plan();
-        let catalog = self.ctx.get_catalog();
-        catalog.create_table(create_table_plan.into()).await
+        let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
+        interpreter.execute(None).await?;
+        Ok(())
     }
 
     pub fn gen_sample_blocks(num: usize, start: i32) -> Vec<Result<DataBlock>> {
