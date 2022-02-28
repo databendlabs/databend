@@ -23,7 +23,6 @@ use uuid::Uuid;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
@@ -41,7 +40,8 @@ impl FuseTable {
                 summary: Default::default(),
                 segments: vec![],
             };
-            let new_snapshot_loc = io::snapshot_location(&new_snapshot.snapshot_id);
+            let loc = self.meta_locations();
+            let new_snapshot_loc = loc.snapshot_location_from_uuid(&new_snapshot.snapshot_id);
             let operator = ctx.get_storage_operator().await?;
             let bytes = serde_json::to_vec(&new_snapshot)?;
             operator

@@ -31,6 +31,7 @@ use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
+use crate::storages::OPT_KEY_DATABASE_ID;
 
 pub struct CreateTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -60,28 +61,43 @@ impl Interpreter for CreateTableInterpreter {
                 UserPrivilegeType::Create,
             )
             .await?;
-
+        // we do not have db_id in the TableInfo yet, thus ...
+        let create_plan = self.plan_with_db_id().await?;
         match &self.plan.as_select {
             Some(select_plan_node) => {
-                self.create_table_as_select(input_stream, select_plan_node.clone())
+                self.create_table_as_select(input_stream, create_plan, select_plan_node.clone())
                     .await
             }
-            None => self.create_table().await,
+            None => self.create_table(create_plan).await,
         }
     }
 }
 
 impl CreateTableInterpreter {
+    async fn plan_with_db_id(&self) -> Result<CreateTablePlan> {
+        let catalog = self.ctx.get_catalog();
+        let db = catalog
+            .get_database(self.ctx.get_tenant().as_str(), self.plan.db.as_str())
+            .await?;
+        let db_id = db.get_db_info().database_id;
+        let mut plan = self.plan.clone();
+        plan.table_meta
+            .options
+            .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+        Ok(plan)
+    }
+
     async fn create_table_as_select(
         &self,
         input_stream: Option<SendableDataBlockStream>,
+        create_plan: CreateTablePlan,
         select_plan_node: Box<PlanNode>,
     ) -> Result<SendableDataBlockStream> {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog();
 
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
-        catalog.create_table(self.plan.clone().into()).await?;
+        catalog.create_table(create_plan.into()).await?;
         let table = catalog
             .get_table(tenant.as_str(), &self.plan.db, &self.plan.table)
             .await?;
@@ -122,10 +138,9 @@ impl CreateTableInterpreter {
         )))
     }
 
-    async fn create_table(&self) -> Result<SendableDataBlockStream> {
+    async fn create_table(&self, create_plan: CreateTablePlan) -> Result<SendableDataBlockStream> {
         let catalog = self.ctx.get_catalog();
-        catalog.create_table(self.plan.clone().into()).await?;
-
+        catalog.create_table(create_plan.into()).await?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,

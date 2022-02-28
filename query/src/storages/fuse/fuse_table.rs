@@ -14,11 +14,11 @@
 //
 
 use std::any::Any;
-use std::any::TypeId;
 use std::convert::TryFrom;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
@@ -32,20 +32,41 @@ use futures::StreamExt;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
+use crate::storages::fuse::io::TableMetaLocation;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
+use crate::storages::OPT_KEY_DATABASE_ID;
 
 pub struct FuseTable {
     pub(crate) table_info: TableInfo,
+    pub(crate) meta_locations: TableMetaLocation,
 }
 
 impl FuseTable {
     pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
-        Ok(Box::new(FuseTable { table_info }))
+        let storage_prefix = Self::parse_storage_prefix(&table_info)?;
+        Ok(Box::new(FuseTable {
+            table_info,
+            meta_locations: TableMetaLocation::with_prefix(storage_prefix),
+        }))
+    }
+
+    pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
+        let table_id = table_info.ident.table_id;
+        let db_id = table_info
+            .options()
+            .get(OPT_KEY_DATABASE_ID)
+            .ok_or_else(|| {
+                ErrorCode::LogicalError(format!(
+                    "Invalid fuse table, table option {} not found",
+                    OPT_KEY_DATABASE_ID
+                ))
+            })?;
+        Ok(format!("{}/{}", table_id, db_id))
     }
 
     pub fn description() -> StorageDescription {
@@ -154,9 +175,17 @@ impl FuseTable {
             Ok(None)
         }
     }
-}
 
-pub fn is_fuse_table(table: &dyn Table) -> bool {
-    let tid = table.as_any().type_id();
-    tid == TypeId::of::<FuseTable>()
+    pub fn meta_locations(&self) -> &TableMetaLocation {
+        &self.meta_locations
+    }
+
+    pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
+        tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::LogicalError(format!(
+                "expects table of engine FUSE, but got {}",
+                tbl.engine()
+            ))
+        })
+    }
 }

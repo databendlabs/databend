@@ -22,7 +22,6 @@ use common_exception::Result;
 use opendal::Operator;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
@@ -38,7 +37,9 @@ impl FuseTable {
         let tbl_info = self.get_table_info();
         let snapshot_loc = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
         let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
-        let mut snapshots = reader.read_snapshot_history(snapshot_loc).await?;
+        let mut snapshots = reader
+            .read_snapshot_history(snapshot_loc, self.meta_locations().clone())
+            .await?;
 
         let min_history_len = if !keep_last_snapshot { 0 } else { 1 };
 
@@ -91,9 +92,10 @@ impl FuseTable {
             }
         }
 
+        let locs = self.meta_locations();
         // 3. remove the snapshots
         for x in snapshots.iter().rev() {
-            let loc = snapshot_location(&x.snapshot_id);
+            let loc = locs.snapshot_location_from_uuid(&x.snapshot_id);
             self.remove_location(accessor.clone(), loc.as_str()).await?;
             if let Some(c) = ctx.get_storage_cache_manager().get_table_snapshot_cache() {
                 let cache = &mut *c.write().await;

@@ -21,11 +21,9 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::index::BlockStatistics;
 use crate::storages::index::RangeFilter;
 
@@ -35,9 +33,9 @@ pub struct BlockPruner {
 
 type Pred = Box<dyn Fn(&BlockStatistics) -> Result<bool> + Send + Sync + Unpin>;
 impl BlockPruner {
-    pub fn new(table_snapshot: &TableSnapshot) -> Self {
+    pub fn new(table_snapshot_loc: impl Into<String>) -> Self {
         Self {
-            table_snapshot_location: snapshot_location(&table_snapshot.snapshot_id),
+            table_snapshot_location: table_snapshot_loc.into(),
         }
     }
 

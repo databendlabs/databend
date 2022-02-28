@@ -30,8 +30,8 @@ use databend_query::catalogs::Catalog;
 use databend_query::sessions::QueryContext;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::meta::BlockMeta;
-use databend_query::storages::fuse::meta::TableSnapshot;
 use databend_query::storages::fuse::pruning::BlockPruner;
+use databend_query::storages::fuse::FuseTable;
 use databend_query::storages::fuse::TBL_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::TBL_OPT_KEY_ROW_PER_BLOCK;
 use databend_query::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
@@ -40,12 +40,12 @@ use futures::TryStreamExt;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 async fn apply_block_pruning(
-    table_snapshot: &TableSnapshot,
+    table_snapshot_loc: impl Into<String>,
     schema: DataSchemaRef,
     push_down: &Option<Extras>,
     ctx: Arc<QueryContext>,
 ) -> Result<Vec<BlockMeta>> {
-    BlockPruner::new(table_snapshot)
+    BlockPruner::new(table_snapshot_loc)
         .apply(schema, push_down, ctx.as_ref())
         .await
 }
@@ -139,11 +139,14 @@ async fn test_block_pruner() -> Result<()> {
 
     let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
     let snapshot = reader.read(snapshot_loc.as_str()).await?;
+    let fuse_tbl = FuseTable::try_from_table(table.as_ref())?;
 
     // nothing will be pruned
     let push_downs = None;
     let blocks = apply_block_pruning(
-        &snapshot,
+        fuse_tbl
+            .meta_locations()
+            .snapshot_location_from_uuid(&snapshot.snapshot_id),
         table.get_table_info().schema(),
         &push_downs,
         ctx.clone(),
@@ -159,8 +162,12 @@ async fn test_block_pruner() -> Result<()> {
     let pred = col("a").gt(lit(30u64));
     extra.filters = vec![pred];
 
+    let fuse_tbl = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot_loc = fuse_tbl
+        .meta_locations()
+        .snapshot_location_from_uuid(&snapshot.snapshot_id);
     let blocks = apply_block_pruning(
-        &snapshot,
+        snapshot_loc,
         table.get_table_info().schema(),
         &Some(extra),
         ctx.clone(),
@@ -174,8 +181,12 @@ async fn test_block_pruner() -> Result<()> {
     let pred = col("a").gt(lit(0u64)).and(col("b").gt(lit(max_val_of_b)));
     extra.filters = vec![pred];
 
+    let fuse_tbl = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot_loc = fuse_tbl
+        .meta_locations()
+        .snapshot_location_from_uuid(&snapshot.snapshot_id);
     let blocks = apply_block_pruning(
-        &snapshot,
+        snapshot_loc,
         table.get_table_info().schema(),
         &Some(extra),
         ctx.clone(),
@@ -198,7 +209,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         DataField::new("b", u64::to_data_type()),
     ]);
 
-    let row_per_block = 3;
+    let row_per_block = 3u32;
     let num_blocks_opt = row_per_block.to_string();
 
     // create test table
@@ -267,7 +278,6 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         .options()
         .get(TBL_OPT_KEY_SNAPSHOT_LOC)
         .unwrap();
-
     let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
     let snapshot = reader.read(snapshot_loc.as_str()).await?;
 
@@ -276,8 +286,12 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     let pred = add(col("a"), col("b")).gt(lit(20u64));
     extra.filters = vec![pred];
 
+    let fuse_tbl = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot_loc = fuse_tbl
+        .meta_locations()
+        .snapshot_location_from_uuid(&snapshot.snapshot_id);
     let blocks = apply_block_pruning(
-        &snapshot,
+        snapshot_loc,
         table.get_table_info().schema(),
         &Some(extra),
         ctx.clone(),
@@ -291,8 +305,13 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     let pred = sub(col("b"), col("a")).lt(lit(20u64));
     extra.filters = vec![pred];
 
+    let fuse_tbl = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot_loc = fuse_tbl
+        .meta_locations()
+        .snapshot_location_from_uuid(&snapshot.snapshot_id);
+
     let blocks = apply_block_pruning(
-        &snapshot,
+        snapshot_loc,
         table.get_table_info().schema(),
         &Some(extra),
         ctx.clone(),

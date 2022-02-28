@@ -23,7 +23,6 @@ use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io;
 use crate::storages::fuse::io::BlockStreamWriter;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::FuseTable;
@@ -55,14 +54,16 @@ impl FuseTable {
             self.table_info.schema().clone(),
             rows_per_block,
             block_per_seg,
+            self.meta_locations().clone(),
         )
         .await;
 
+        let locs = self.meta_locations().clone();
         let log_entries = stream! {
             while let Some(segment) = segment_stream.next().await {
                 let log_entry_res = match segment {
                     Ok(seg) => {
-                        let seg_loc = io::gen_segment_info_location();
+                        let seg_loc = locs.gen_segment_info_location();
                         let bytes = serde_json::to_vec(&seg)?;
                         da.object(&seg_loc)
                         .writer()

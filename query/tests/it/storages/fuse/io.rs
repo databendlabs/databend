@@ -20,8 +20,9 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use databend_query::storages::fuse::io::BlockRegulator;
+use databend_query::storages::fuse::io::BlockCompactor;
 use databend_query::storages::fuse::io::BlockStreamWriter;
+use databend_query::storages::fuse::io::TableMetaLocation;
 use databend_query::storages::fuse::DEFAULT_CHUNK_BLOCK_NUM;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -49,12 +50,14 @@ async fn test_fuse_table_block_appender() {
     let block = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1, 2, 3])]);
     let block_stream = futures::stream::iter(vec![Ok(block)]);
 
+    let locs = TableMetaLocation::with_prefix(".".to_owned());
     let segments = BlockStreamWriter::write_block_stream(
         local_fs.clone(),
         Box::pin(block_stream),
         schema.clone(),
         DEFAULT_CHUNK_BLOCK_NUM,
         0,
+        locs.clone(),
     )
     .await
     .collect::<Vec<_>>()
@@ -81,6 +84,7 @@ async fn test_fuse_table_block_appender() {
         schema.clone(),
         max_rows_per_block,
         max_blocks_per_segment,
+        locs.clone(),
     )
     .await
     .collect::<Vec<_>>()
@@ -100,6 +104,7 @@ async fn test_fuse_table_block_appender() {
         schema,
         DEFAULT_CHUNK_BLOCK_NUM,
         0,
+        locs,
     )
     .await
     .collect::<Vec<_>>()
@@ -118,19 +123,19 @@ fn test_block_regulator() -> common_exception::Result<()> {
             // One block, contains `rows_per_sample_block` rows
             let sample_block = gen_block(gen_rows(rows_per_sample_block));
 
-            let mut regulator = BlockRegulator::new(max_row_per_block);
+            let mut regulator = BlockCompactor::new(max_row_per_block);
             let total_rows = rows_per_sample_block * num_blocks;
 
             let mut generated: Vec<DataBlock> = vec![];
 
             // feed blocks into shaper
             for _i in 0..num_blocks {
-                let blks = regulator.regulate(sample_block.clone())?;
+                let blks = regulator.compact(sample_block.clone())?;
                 generated.extend(blks.into_iter().flatten())
             }
 
             // indicates the shaper that we are done
-            let sealed = regulator.seal()?;
+            let sealed = regulator.finish()?;
 
             // Invariants of `generated` Blocks
             //
@@ -262,13 +267,14 @@ async fn test_block_stream_writer() -> common_exception::Result<()> {
 
         let data_accessor = Arc::new(MockDataAccessor::new());
         let operator = Operator::new(data_accessor.clone());
-
+        let locs = TableMetaLocation::with_prefix(".".to_owned());
         let stream = BlockStreamWriter::write_block_stream(
             operator,
             Box::pin(block_stream),
             schema,
             max_rows_per_block,
             max_blocks_per_segment,
+            locs,
         )
         .await;
         let segs = stream.try_collect::<Vec<_>>().await?;
