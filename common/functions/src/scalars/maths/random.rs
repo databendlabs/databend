@@ -61,7 +61,7 @@ impl Function for RandomFunction {
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
         match columns.len() {
             0 => {
-                let mut rng = rand::thread_rng();
+                let mut rng = rand::rngs::SmallRng::from_entropy();
                 Ok(Float64Column::from_owned_iterator(
                     (0..input_rows).into_iter().map(|_| rng.gen::<f64>()),
                 )
@@ -82,7 +82,7 @@ impl Function for RandomFunction {
 }
 
 fn rand_seed<T: AsPrimitive<u64>>(seed: T, _ctx: &mut EvalContext) -> f64 {
-    let mut rng = rand::rngs::StdRng::seed_from_u64(seed.as_());
+    let mut rng = rand::rngs::SmallRng::seed_from_u64(seed.as_());
     rng.gen::<f64>()
 }
 
