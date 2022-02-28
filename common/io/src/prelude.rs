@@ -23,6 +23,7 @@ pub use crate::buf_read::BufReadExt;
 pub use crate::marshal::Marshal;
 pub use crate::options_deserializer::OptionsDeserializer;
 pub use crate::options_deserializer::OptionsDeserializerError;
+pub use crate::readers::S3FileReader;
 pub use crate::stat_buffer::StatBuffer;
 pub use crate::unmarshal::Unmarshal;
 pub use crate::utils::*;

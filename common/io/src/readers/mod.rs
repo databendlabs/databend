@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,17 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// https://github.com/rust-lang/rust-clippy/issues/8334
-#![allow(clippy::ptr_arg)]
+mod s3_file_reader;
 
-pub mod prelude;
-
-mod binary_read;
-mod binary_write;
-mod buf_read;
-mod marshal;
-mod options_deserializer;
-mod readers;
-mod stat_buffer;
-mod unmarshal;
-mod utils;
+pub use s3_file_reader::S3FileReader;

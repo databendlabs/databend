@@ -18,6 +18,7 @@ common-exception = { path = "../exception" }
 
 # Github dependencies
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
+opendal = { git = "https://github.com/datafuselabs/opendal", rev = "80e8bca" }
 
 # Crates.io dependencies
 bytes = "1.1.0"

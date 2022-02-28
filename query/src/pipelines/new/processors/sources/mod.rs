@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod async_source;
+mod external_source;
 mod sync_source;
 mod sync_source_receiver;
 mod table_source;
