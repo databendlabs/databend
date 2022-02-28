@@ -70,15 +70,15 @@ impl Interpreter for ShowCreateTableInterpreter {
         }
         let table_engine = format!(") ENGINE={}", engine);
         table_info.push_str(table_engine.as_str());
-        table_info.push_str(
-            table
-                .options()
-                .iter()
+        table_info.push_str({
+            let mut opts = table.options().iter().collect::<Vec<_>>();
+            opts.sort_by_key(|(k, _)| *k);
+            opts.iter()
                 .map(|(k, v)| format!(" {}='{}'", k.to_uppercase(), v))
                 .collect::<Vec<_>>()
                 .join("")
-                .as_str(),
-        );
+                .as_str()
+        });
 
         let show_fields = vec![
             DataField::new("Table", Vu8::to_data_type()),
