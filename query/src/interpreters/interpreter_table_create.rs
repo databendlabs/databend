@@ -75,16 +75,22 @@ impl Interpreter for CreateTableInterpreter {
 
 impl CreateTableInterpreter {
     async fn plan_with_db_id(&self) -> Result<CreateTablePlan> {
-        let catalog = self.ctx.get_catalog();
-        let db = catalog
-            .get_database(self.ctx.get_tenant().as_str(), self.plan.db.as_str())
-            .await?;
-        let db_id = db.get_db_info().database_id;
-        let mut plan = self.plan.clone();
-        plan.table_meta
-            .options
-            .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
-        Ok(plan)
+        let engine = self.plan.table_meta.engine.to_uppercase();
+        let engine = engine.as_str();
+        if engine.is_empty() || engine == "FUSE" {
+            let catalog = self.ctx.get_catalog();
+            let db = catalog
+                .get_database(self.ctx.get_tenant().as_str(), self.plan.db.as_str())
+                .await?;
+            let db_id = db.get_db_info().database_id;
+            let mut plan = self.plan.clone();
+            plan.table_meta
+                .options
+                .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+            Ok(plan)
+        } else {
+            Ok(self.plan.clone())
+        }
     }
 
     async fn create_table_as_select(
