@@ -33,6 +33,7 @@ use opendal::Accessor;
 use opendal::BoxedAsyncReader;
 use opendal::Operator;
 use tempfile::TempDir;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn test_fuse_table_block_appender() {
@@ -114,7 +115,7 @@ async fn test_fuse_table_block_appender() {
 }
 
 #[test]
-fn test_block_regulator() -> common_exception::Result<()> {
+fn test_block_compactor() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
     let gen_rows = |n| std::iter::repeat(1i32).take(n).collect::<Vec<_>>();
     let gen_block = |col| DataBlock::create(schema.clone(), vec![Series::from_data(col)]);
@@ -123,19 +124,19 @@ fn test_block_regulator() -> common_exception::Result<()> {
             // One block, contains `rows_per_sample_block` rows
             let sample_block = gen_block(gen_rows(rows_per_sample_block));
 
-            let mut regulator = BlockCompactor::new(max_row_per_block);
+            let mut compactor = BlockCompactor::new(max_row_per_block);
             let total_rows = rows_per_sample_block * num_blocks;
 
             let mut generated: Vec<DataBlock> = vec![];
 
             // feed blocks into shaper
             for _i in 0..num_blocks {
-                let blks = regulator.compact(sample_block.clone())?;
+                let blks = compactor.compact(sample_block.clone())?;
                 generated.extend(blks.into_iter().flatten())
             }
 
             // indicates the shaper that we are done
-            let sealed = regulator.finish()?;
+            let sealed = compactor.finish()?;
 
             // Invariants of `generated` Blocks
             //
@@ -323,6 +324,20 @@ async fn test_block_stream_writer() -> common_exception::Result<()> {
     )
     .await?;
 
+    Ok(())
+}
+
+#[test]
+fn test_meta_locations() -> Result<()> {
+    let test_prefix = "test_pref";
+    let locs = TableMetaLocation::with_prefix(test_prefix.to_owned());
+    let block_loc = locs.gen_block_location();
+    assert!(block_loc.starts_with(test_prefix));
+    let seg_loc = locs.gen_segment_info_location();
+    assert!(seg_loc.starts_with(test_prefix));
+    let uuid = Uuid::new_v4();
+    let snapshot_loc = locs.snapshot_location_from_uuid(&uuid);
+    assert!(snapshot_loc.starts_with(test_prefix));
     Ok(())
 }
 

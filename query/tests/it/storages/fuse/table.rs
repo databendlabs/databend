@@ -13,15 +13,20 @@
 //  limitations under the License.
 //
 
+use std::default::Default;
+
 use common_base::tokio;
 use common_exception::Result;
+use common_meta_types::TableInfo;
 use common_planners::ReadDataSourcePlan;
 use common_planners::TruncateTablePlan;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::PlanParser;
+use databend_query::storages::fuse::FuseTable;
 use databend_query::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
 use databend_query::storages::ToReadDataSourcePlan;
+use databend_query::storages::OPT_KEY_DATABASE_ID;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -275,5 +280,20 @@ async fn test_fuse_table_optimize() -> Result<()> {
     // blocks are so tiny, they should be compacted into one
     assert_eq!(parts.len(), 1);
 
+    Ok(())
+}
+
+#[test]
+fn test_parse_storage_prefix() -> Result<()> {
+    let mut tbl_info = TableInfo::default();
+    let db_id = 2;
+    let tbl_id = 1;
+    tbl_info.ident.table_id = tbl_id;
+    tbl_info
+        .meta
+        .options
+        .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+    let prefix = FuseTable::parse_storage_prefix(&tbl_info)?;
+    assert_eq!(format!("{}/{}", db_id, tbl_id), prefix);
     Ok(())
 }

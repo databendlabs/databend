@@ -66,7 +66,7 @@ impl FuseTable {
                     OPT_KEY_DATABASE_ID
                 ))
             })?;
-        Ok(format!("{}/{}", table_id, db_id))
+        Ok(format!("{}/{}", db_id, table_id))
     }
 
     pub fn description() -> StorageDescription {
