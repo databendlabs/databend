@@ -208,10 +208,13 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
             offset += MASK_BITS;
         }
 
-        for i in offset..self.len() {
-            if filter.get_data(i) {
-                res.push(values[i]);
-            }
+        for (&v, _) in values
+            .iter()
+            .zip(filter.values().iter())
+            .skip(offset)
+            .filter(|(_, f)| *f)
+        {
+            res.push(v);
         }
 
         let col = PrimitiveColumn { values: res.into() };
