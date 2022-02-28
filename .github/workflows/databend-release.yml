@@ -46,6 +46,7 @@ jobs:
                   objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-query
                   objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-benchmark
                   objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-meta
+                  objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-metactl
                   objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/bendctl
               fi
           fi
@@ -60,9 +61,11 @@ jobs:
             sudo /usr/sbin/purge
             gtar -C ./target/${{ matrix.config.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-query databend-meta
             gtar -C ./target/${{ matrix.config.target }}/release -czvf bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz bendctl
+            gtar -C ./target/${{ matrix.config.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-benchmark databend-metactl
           else
             tar -C ./target/${{ matrix.config.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-query databend-meta
             tar -C ./target/${{ matrix.config.target }}/release -czvf bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz bendctl
+            tar -C ./target/${{ matrix.config.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-benchmark databend-metactl
           fi
 
       - name: Release databend
@@ -82,6 +85,17 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.*
           asset_name: bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}
+          tag: ${{ github.ref }}
+          file_glob: true
+          overwrite: true
+          body: ${{ steps.changelog_reader.outputs.log_entry }}
+
+      - name: Release databend-tools
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.*
+          asset_name: databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}
           tag: ${{ github.ref }}
           file_glob: true
           overwrite: true
