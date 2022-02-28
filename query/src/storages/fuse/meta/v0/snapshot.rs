@@ -29,17 +29,11 @@ pub type Location = String;
 pub struct TableSnapshot {
     pub snapshot_id: SnapshotId,
     pub prev_snapshot_id: Option<SnapshotId>,
-
     /// For each snapshot, we keep a schema for it (in case of schema evolution)
     pub schema: DataSchema,
-
     /// Summary Statistics
     pub summary: Statistics,
-
     /// Pointers to SegmentInfos (may be of different format)
-    ///
-    /// We rely on background merge tasks to keep merging segments, so that
-    /// this the size of this vector could be kept reasonable
     pub segments: Vec<Location>,
 }
 

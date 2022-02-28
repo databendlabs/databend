@@ -19,11 +19,8 @@ use crate::storages::fuse::meta::Statistics;
 /// A segment comprised of one or more blocks
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct SegmentInfo {
-    // TODO format_version
-    // pub format_version: u32,
     /// blocks belong to this segment
     pub blocks: Vec<BlockMeta>,
-
     /// summary statistics
     pub summary: Statistics,
 }
