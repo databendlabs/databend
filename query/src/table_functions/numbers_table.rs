@@ -128,7 +128,7 @@ impl Table for NumbersTable {
         let mut limit = None;
 
         if let Some(extras) = &push_downs {
-            if extras.limit.is_some() {
+            if extras.limit.is_some() && extras.filters.is_empty() {
                 let sort_descriptions_result =
                     get_sort_descriptions(&self.table_info.schema(), &extras.order_by);
 

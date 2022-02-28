@@ -62,7 +62,7 @@ function install_rustup {
 }
 
 function install_cargo_binary {
-  BIN_NAME=$1
+	BIN_NAME=$1
 	if cargo install --list | grep "${BIN_NAME}" &>/dev/null; then
 		echo "${BIN_NAME} is already installed"
 	else

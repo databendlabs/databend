@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use common_base::Progress;
 use common_base::Runtime;
-use common_dal_context::DalContext;
+use common_contexts::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;

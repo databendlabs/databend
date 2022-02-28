@@ -30,6 +30,7 @@ mod source_example {
 
     use common_datablocks::DataBlock;
     use common_exception::Result;
+    use futures::Future;
 
     use crate::pipelines::new::processors::port::OutputPort;
     use crate::pipelines::new::processors::processor::ProcessorPtr;
@@ -84,15 +85,19 @@ mod source_example {
         }
     }
 
-    #[async_trait::async_trait]
     impl AsyncSource for ExampleAsyncSource {
         const NAME: &'static str = "Async";
+        type BlockFuture<'a>
+        where Self: 'a
+        = impl Future<Output = Result<Option<DataBlock>>>;
 
-        async fn generate(&mut self) -> Result<Option<DataBlock>> {
-            self.pos += 1;
-            match self.data_blocks.len() >= self.pos {
-                true => Ok(Some(self.data_blocks[self.pos - 1].clone())),
-                false => Ok(None),
+        fn generate(&mut self) -> Self::BlockFuture<'_> {
+            async move {
+                self.pos += 1;
+                match self.data_blocks.len() >= self.pos {
+                    true => Ok(Some(self.data_blocks[self.pos - 1].clone())),
+                    false => Ok(None),
+                }
             }
         }
     }

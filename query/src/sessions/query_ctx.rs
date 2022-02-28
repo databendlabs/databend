@@ -23,8 +23,8 @@ use common_base::tokio::task::JoinHandle;
 use common_base::Progress;
 use common_base::ProgressValues;
 use common_base::TrySpawn;
-use common_dal_context::DalContext;
-use common_dal_context::DalMetrics;
+use common_contexts::DalContext;
+use common_contexts::DalMetrics;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -269,7 +269,7 @@ impl QueryContext {
 
     /// Get the data accessor metrics.
     pub fn get_dal_metrics(&self) -> DalMetrics {
-        self.shared.dal_ctx.get_metrics()
+        self.shared.dal_ctx.get_metrics().as_ref().clone()
     }
 
     /// Get the session running query.
@@ -290,7 +290,7 @@ impl QueryContext {
     // Get the storage data accessor operator from the session manager.
     pub async fn get_storage_operator(&self) -> Result<Operator> {
         let operator = self.shared.session.get_storage_operator();
-        Ok(operator.layer(self.shared.dal_ctx.clone()))
+        Ok(operator.layer(self.shared.dal_ctx.as_ref().clone()))
     }
 
     pub fn get_dal_context(&self) -> &DalContext {

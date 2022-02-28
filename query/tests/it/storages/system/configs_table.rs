@@ -32,7 +32,6 @@ async fn test_configs_table() -> Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
-    assert_eq!(block.num_rows(), 60);
 
     let expected = vec![
         "+--------------------------------------+--------------------------+---------+-------------+",
@@ -81,6 +80,7 @@ async fn test_configs_table() -> Result<()> {
         "| rpc_tls_server_key                   |                          | query   |             |",
         "| s3.access_key_id                     |                          | storage |             |",
         "| s3.bucket                            |                          | storage |             |",
+        "| s3.root                              |                          | storage |             |",
         "| s3.enable_pod_iam_policy             | false                    | storage |             |",
         "| s3.endpoint_url                      | https://s3.amazonaws.com | storage |             |",
         "| s3.region                            |                          | storage |             |",
