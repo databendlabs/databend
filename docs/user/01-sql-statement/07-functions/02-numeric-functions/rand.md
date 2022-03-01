@@ -1,5 +1,5 @@
 ---
-title: PI
+title: RAND
 ---
 
 Returns a random floating-point value v in the range 0 <= v < 1.0.

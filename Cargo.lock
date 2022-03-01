@@ -1360,6 +1360,7 @@ dependencies = [
  "common-io",
  "common-macros",
  "common-mem-allocator",
+ "criterion",
  "dyn-clone",
  "itertools",
  "lexical-core 0.8.2",
@@ -1368,6 +1369,7 @@ dependencies = [
  "ordered-float 2.10.0",
  "paste",
  "pretty_assertions",
+ "rand 0.8.4",
  "serde",
  "serde_json",
  "typetag",
@@ -2173,6 +2175,21 @@ dependencies = [
  "tonic",
  "tonic-build",
  "uuid 0.8.2",
+]
+
+[[package]]
+name = "databend-metactl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.1.1",
+ "common-base",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-tracing",
+ "databend-meta",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

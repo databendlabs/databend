@@ -23,14 +23,13 @@ use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io;
 use crate::storages::fuse::io::BlockStreamWriter;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::storages::fuse::DEFAULT_ROW_PER_BLOCK;
-use crate::storages::fuse::TBL_OPT_KEY_BLOCK_PER_SEGMENT;
-use crate::storages::fuse::TBL_OPT_KEY_ROW_PER_BLOCK;
+use crate::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use crate::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
 pub type AppendOperationLogEntryStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<AppendOperationLogEntry>> + Send>>;
@@ -42,10 +41,10 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,
     ) -> Result<AppendOperationLogEntryStream> {
-        let rows_per_block = self.get_option(TBL_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
+        let rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
 
         let block_per_seg =
-            self.get_option(TBL_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+            self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
         let da = ctx.get_storage_operator().await?;
 
@@ -55,14 +54,16 @@ impl FuseTable {
             self.table_info.schema().clone(),
             rows_per_block,
             block_per_seg,
+            self.meta_locations().clone(),
         )
         .await;
 
+        let locs = self.meta_locations().clone();
         let log_entries = stream! {
             while let Some(segment) = segment_stream.next().await {
                 let log_entry_res = match segment {
                     Ok(seg) => {
-                        let seg_loc = io::gen_segment_info_location();
+                        let seg_loc = locs.gen_segment_info_location();
                         let bytes = serde_json::to_vec(&seg)?;
                         da.object(&seg_loc)
                         .writer()
