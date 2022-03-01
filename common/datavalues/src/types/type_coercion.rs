@@ -200,83 +200,6 @@ pub fn numerical_arithmetic_coercion(
 }
 
 #[inline]
-pub fn datetime_arithmetic_coercion(
-    op: &DataValueBinaryOperator,
-    lhs_type: &DataTypePtr,
-    rhs_type: &DataTypePtr,
-) -> Result<DataTypePtr> {
-    let e = || {
-        Result::Err(ErrorCode::BadDataValueType(format!(
-            "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
-            lhs_type, op, rhs_type
-        )))
-    };
-
-    let lhs_id = lhs_type.data_type_id();
-    let rhs_id = rhs_type.data_type_id();
-
-    if !lhs_id.is_date_or_date_time() && !rhs_id.is_date_or_date_time() {
-        return e();
-    }
-
-    let mut a = lhs_type.clone();
-    let mut b = rhs_type.clone();
-    if !a.data_type_id().is_date_or_date_time() {
-        a = rhs_type.clone();
-        b = lhs_type.clone();
-    }
-
-    match op {
-        DataValueBinaryOperator::Plus => Ok(a),
-
-        DataValueBinaryOperator::Minus => {
-            if b.data_type_id().is_numeric() || b.data_type_id().is_interval() {
-                Ok(a)
-            } else {
-                // Date minus Date or DateTime minus DateTime
-                Ok(Int32Type::arc())
-            }
-        }
-        _ => e(),
-    }
-}
-
-#[inline]
-pub fn interval_arithmetic_coercion(
-    op: &DataValueBinaryOperator,
-    lhs_type: &DataTypePtr,
-    rhs_type: &DataTypePtr,
-) -> Result<DataTypePtr> {
-    let e = || {
-        Result::Err(ErrorCode::BadDataValueType(format!(
-            "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
-            lhs_type, op, rhs_type
-        )))
-    };
-
-    let lhs_id = lhs_type.data_type_id();
-    let rhs_id = rhs_type.data_type_id();
-
-    // only allow date/datetime [+/-] interval
-    if !(lhs_id.is_date_or_date_time() && rhs_id.is_interval()
-        || rhs_id.is_date_or_date_time() && lhs_id.is_interval())
-    {
-        return e();
-    }
-
-    match op {
-        DataValueBinaryOperator::Plus | DataValueBinaryOperator::Minus => {
-            if lhs_id.is_date_or_date_time() {
-                Ok(lhs_type.clone())
-            } else {
-                Ok(rhs_type.clone())
-            }
-        }
-        _ => e(),
-    }
-}
-
-#[inline]
 pub fn numerical_unary_arithmetic_coercion(
     op: &DataValueUnaryOperator,
     val_type: &DataTypePtr,
@@ -310,13 +233,24 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
     let lhs_id = lhs_type.data_type_id();
     let rhs_id = rhs_type.data_type_id();
 
-    if lhs_id == rhs_id {
+    if lhs_type.eq(rhs_type) {
         // same type => equality is possible
         return Ok(lhs_type.clone());
     }
 
     if lhs_id.is_numeric() && rhs_id.is_numeric() {
         return numerical_coercion(lhs_type, rhs_type, true);
+    }
+
+    //  one of is nothing
+    {
+        if lhs_id == TypeID::Null {
+            return Ok(wrap_nullable(rhs_type));
+        }
+
+        if rhs_id == TypeID::Null {
+            return Ok(wrap_nullable(lhs_type));
+        }
     }
 
     // one of is String and other is number
@@ -335,13 +269,22 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
         }
     }
 
-    if lhs_id.is_date_or_date_time() || rhs_id.is_date_or_date_time() {
-        // one of is datetime
-        // TODO datetime64
-        if matches!(lhs_id, TypeID::DateTime32) || matches!(rhs_id, TypeID::DateTime32) {
-            return Ok(DateTime32Type::arc(None));
-        }
-        return Ok(Date32Type::arc());
+    if lhs_id.is_date_or_date_time() && rhs_id.is_date_or_date_time() {
+        return match (lhs_id, rhs_id) {
+            (TypeID::Date16, _) => Ok(rhs_type.clone()),
+            (_, TypeID::Date16) => Ok(lhs_type.clone()),
+            (TypeID::Date32, TypeID::DateTime32) => Ok(DateTime64Type::arc(0, None)),
+            (TypeID::DateTime32, TypeID::Date32) => Ok(DateTime64Type::arc(0, None)),
+            (TypeID::Date32 | TypeID::DateTime32, TypeID::DateTime64) => Ok(rhs_type.clone()),
+            (TypeID::DateTime64, TypeID::Date32 | TypeID::DateTime32) => Ok(lhs_type.clone()),
+            (TypeID::DateTime64, TypeID::DateTime64) => {
+                let lhs: &DateTime64Type = lhs_type.as_any().downcast_ref().unwrap();
+                let rhs: &DateTime64Type = rhs_type.as_any().downcast_ref().unwrap();
+                let precision = cmp::max(lhs.precision(), rhs.precision());
+                Ok(DateTime64Type::arc(precision, None))
+            }
+            _ => unreachable!(),
+        };
     }
 
     Err(ErrorCode::IllegalDataType(format!(

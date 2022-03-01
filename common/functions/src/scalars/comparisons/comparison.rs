@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::fmt;
-use std::sync::Arc;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use common_arrow::arrow::compute::comparison;
 use common_arrow::arrow::compute::comparison::Simd8;
@@ -22,12 +22,17 @@ use common_arrow::arrow::compute::comparison::Simd8PartialEq;
 use common_arrow::arrow::compute::comparison::Simd8PartialOrd;
 use common_datavalues::prelude::*;
 use common_datavalues::type_coercion::compare_coercion;
+use common_datavalues::with_match_physical_primitive_type;
+use common_datavalues::with_match_physical_primitive_type_error;
 use common_datavalues::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::traits::AsPrimitive;
 
 use crate::scalars::cast_column_field;
+use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::ArithmeticCreator;
+use crate::scalars::ArithmeticDescription;
 use crate::scalars::ComparisonEqFunction;
 use crate::scalars::ComparisonGtEqFunction;
 use crate::scalars::ComparisonGtFunction;
@@ -49,7 +54,10 @@ pub struct ComparisonFunction {
 
 impl ComparisonFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("=", ComparisonEqFunction::desc());
+        factory.register_arithmetic(
+            "=",
+            EqualFunction::desc(DataValueComparisonOperator::Eq, "<>"),
+        );
         factory.register("<", ComparisonLtFunction::desc());
         factory.register(">", ComparisonGtFunction::desc());
         factory.register("<=", ComparisonLtEqFunction::desc());
@@ -116,6 +124,7 @@ impl ComparisonImpl for EqualImpl {
     }
 }
 
+pub type EqualFunction = ComparisonFunctionCreator<EqualImpl>;
 
 pub struct ComparisonFunctionCreator<T> {
     t: PhantomData<T>,
@@ -143,6 +152,36 @@ where T: ComparisonImpl + Send + Sync + Clone + 'static
         let lhs_id = args[0].data_type_id();
         let rhs_id = args[1].data_type_id();
 
+        if args[0].eq(args[1]) {
+            return with_match_physical_primitive_type!(lhs_id.to_physical_type(), |$T| {
+                ComparisonFunction2::<$T, $T, bool, _>::try_create_func(
+                    op,
+                    args[0].clone(),
+                    false,
+                    T::eval_primitive::<$T, $T, $T>,
+                )
+            }, {
+                match lhs_id {
+                    TypeID::Boolean => ComparisonFunction2::<bool, bool, bool, _>::try_create_func(
+                        op,
+                        args[0].clone(),
+                        false,
+                        T::eval_bool,
+                    ),
+                    TypeID::String => ComparisonFunction2::<Vu8, Vu8, bool, _>::try_create_func(
+                        op,
+                        args[0].clone(),
+                        false,
+                        T::eval_binary,
+                    ),
+                    _ => Err(ErrorCode::IllegalDataType(format!(
+                        "Can not compare {:?} with {:?}",
+                        args[0], args[1]
+                    ))),
+                }
+            });
+        }
+
         if lhs_id.is_numeric() && rhs_id.is_numeric() {
             return with_match_primitive_types_error!(lhs_id, |$T| {
                 with_match_primitive_types_error!(rhs_id, |$D| {
@@ -157,30 +196,29 @@ where T: ComparisonImpl + Send + Sync + Clone + 'static
             });
         }
 
-        if lhs_id == rhs_id {
-
-        }
-
-        // f64
-        if lhs_id.is_numeric() && rhs_id.is_string() {
-
-        }
-
-        // f64
-        if lhs_id.is_string() && rhs_id.is_numeric() {
-
-        }
-
-        todo!()
+        let least_supertype = compare_coercion(args[0], args[1])?;
+        with_match_physical_primitive_type_error!(least_supertype.data_type_id().to_physical_type(), |$T| {
+            ComparisonFunction2::<$T, $T, bool, _>::try_create_func(
+                op,
+                least_supertype,
+                true,
+                T::eval_primitive::<$T, $T, $T>,
+            )
+        })
     }
-/*
-    pub fn desc(factor: i64) -> ArithmeticDescription {
-        let function_creator: ArithmeticCreator =
-            Box::new(move |display_name, args| Self::try_create_func(display_name, factor, args));
 
-        ArithmeticDescription::creator(function_creator)
-            .features(FunctionFeatures::default().deterministic().num_arguments(2))
-    }*/
+    pub fn desc(op: DataValueComparisonOperator, negative_name: &str) -> ArithmeticDescription {
+        let function_creator: ArithmeticCreator =
+            Box::new(move |display_name, args| Self::try_create_func(op.clone(), args));
+
+        ArithmeticDescription::creator(Box::new(function_creator)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .negative_function(negative_name)
+                .bool_function()
+                .num_arguments(2),
+        )
+    }
 }
 
 #[derive(Clone)]

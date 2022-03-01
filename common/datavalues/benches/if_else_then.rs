@@ -20,6 +20,7 @@ use common_arrow::arrow::array::*;
 use common_arrow::arrow::compute::if_then_else::if_then_else;
 use common_arrow::arrow::types::NativeType;
 use common_datavalues::prelude::*;
+use common_datavalues::with_match_physical_primitive_type_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use criterion::Criterion;
@@ -68,7 +69,7 @@ fn databend_if_else_then(
         .data_type_id()
         .to_physical_type();
 
-    macro_rules! with_match_physical_primitive_type {(
+    macro_rules! with_match_physical_primitive_type_error {(
         $key_type:expr, | $_:tt $T:ident | $($body:tt)*
     ) => ({
         macro_rules! __with_ty__ {( $_ $T:ident ) => ( $($body)* )}
@@ -87,7 +88,7 @@ fn databend_if_else_then(
         }
     })}
 
-    with_match_physical_primitive_type!(physical_id, |$T| {
+    with_match_physical_primitive_type_error!(physical_id, |$T| {
         let lhs_wrapper = $T::try_create_viewer(lhs)?;
         let rhs_wrapper = $T::try_create_viewer(rhs)?;
         let size = lhs_wrapper.len();
