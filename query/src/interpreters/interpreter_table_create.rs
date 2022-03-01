@@ -76,8 +76,15 @@ impl Interpreter for CreateTableInterpreter {
 impl CreateTableInterpreter {
     async fn plan_with_db_id(&self) -> Result<CreateTablePlan> {
         let engine = self.plan.table_meta.engine.to_uppercase();
-        let engine = engine.as_str();
-        if engine.is_empty() || engine == "FUSE" {
+        if engine.as_str() == "FUSE" {
+            // Currently, [Table] can not accesses its database id yet, thus
+            // here we keep the db id as an entry of `table_meta.options`.
+            //
+            // To make the unit/stateless test cases (`show create ..`) easier,
+            // here we care about the FUSE engine only.
+            //
+            // Later, when database id is kept, let say in `TableInfo`, we can
+            // safely eliminate this "FUSE" constant and the table meta option entry.
             let catalog = self.ctx.get_catalog();
             let db = catalog
                 .get_database(self.ctx.get_tenant().as_str(), self.plan.db.as_str())
