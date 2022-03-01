@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::fmt::Display;
+use std::future::Future;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -25,6 +26,12 @@ use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::AsyncSource;
+use crate::pipelines::new::processors::AsyncSourcer;
+use crate::pipelines::new::NewPipe;
+use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::storages::github::RepoCommentsTable;
 use crate::storages::github::RepoInfoTable;
@@ -67,30 +74,6 @@ impl GithubTable {
         }))
     }
 
-    fn get_table_type(&self) -> Result<GithubTableType> {
-        match self.options.table_type.as_str() {
-            "comments" => Ok(GithubTableType::Comments),
-            "issues" => Ok(GithubTableType::Issues),
-            "pull_requests" => Ok(GithubTableType::PullRequests),
-            "info" => Ok(GithubTableType::Info),
-            table_type => Err(ErrorCode::UnexpectedError(format!(
-                "Unsupported Github table type: {}",
-                table_type
-            ))),
-        }
-    }
-
-    async fn get_data_from_github(&self) -> Result<Vec<ColumnRef>> {
-        let table_type = self.get_table_type()?;
-        let table = match table_type {
-            GithubTableType::Comments => RepoCommentsTable::create(self.options.clone()),
-            GithubTableType::Info => RepoInfoTable::create(self.options.clone()),
-            GithubTableType::Issues => RepoIssuesTable::create(self.options.clone()),
-            GithubTableType::PullRequests => RepoPRsTable::create(self.options.clone()),
-        };
-        table.get_data_from_github().await
-    }
-
     pub fn description() -> StorageDescription {
         StorageDescription {
             engine_name: "GITHUB".to_string(),
@@ -114,7 +97,7 @@ impl Table for GithubTable {
         _ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let arrays = self.get_data_from_github().await?;
+        let arrays = get_data_from_github(self.options.clone()).await?;
         let block = DataBlock::create(self.table_info.schema(), arrays);
 
         Ok(Box::pin(DataBlockStream::create(
@@ -123,9 +106,91 @@ impl Table for GithubTable {
             vec![block],
         )))
     }
+
+    fn read2(
+        &self,
+        _: Arc<QueryContext>,
+        _: &ReadDataSourcePlan,
+        pipeline: &mut NewPipeline,
+    ) -> Result<()> {
+        let output = OutputPort::create();
+        let options = self.options.clone();
+        let schema = self.table_info.schema();
+        pipeline.add_pipe(NewPipe::SimplePipe {
+            inputs_port: vec![],
+            outputs_port: vec![output.clone()],
+            processors: vec![GithubSource::create(output, schema, options)?],
+        });
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
 pub trait GithubDataGetter: Sync + Send {
     async fn get_data_from_github(&self) -> Result<Vec<ColumnRef>>;
+}
+
+fn get_table_type(options: &RepoTableOptions) -> Result<GithubTableType> {
+    match options.table_type.as_str() {
+        "comments" => Ok(GithubTableType::Comments),
+        "issues" => Ok(GithubTableType::Issues),
+        "pull_requests" => Ok(GithubTableType::PullRequests),
+        "info" => Ok(GithubTableType::Info),
+        table_type => Err(ErrorCode::UnexpectedError(format!(
+            "Unsupported Github table type: {}",
+            table_type
+        ))),
+    }
+}
+
+async fn get_data_from_github(options: RepoTableOptions) -> Result<Vec<ColumnRef>> {
+    let table = match get_table_type(&options)? {
+        GithubTableType::Comments => RepoCommentsTable::create(options),
+        GithubTableType::Info => RepoInfoTable::create(options),
+        GithubTableType::Issues => RepoIssuesTable::create(options),
+        GithubTableType::PullRequests => RepoPRsTable::create(options),
+    };
+    table.get_data_from_github().await
+}
+
+struct GithubSource {
+    finish: bool,
+    schema: DataSchemaRef,
+    options: RepoTableOptions,
+}
+
+impl GithubSource {
+    pub fn create(
+        output: Arc<OutputPort>,
+        schema: DataSchemaRef,
+        options: RepoTableOptions,
+    ) -> Result<ProcessorPtr> {
+        AsyncSourcer::create(output, GithubSource {
+            schema,
+            options,
+            finish: false,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncSource for GithubSource {
+    const NAME: &'static str = "GithubSource";
+
+    type BlockFuture<'a>
+    where Self: 'a
+    = impl Future<Output = Result<Option<DataBlock>>>;
+
+    fn generate(&mut self) -> Self::BlockFuture<'_> {
+        async {
+            if self.finish {
+                return Ok(None);
+            }
+
+            self.finish = true;
+            let arrays = get_data_from_github(self.options.clone()).await?;
+            Ok(Some(DataBlock::create(self.schema.clone(), arrays)))
+        }
+    }
 }

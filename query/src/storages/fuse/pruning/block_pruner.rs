@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+use std::sync::Arc;
+
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::Extras;
@@ -21,7 +23,6 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::SegmentInfo;
@@ -30,15 +31,13 @@ use crate::storages::index::BlockStatistics;
 use crate::storages::index::RangeFilter;
 
 pub struct BlockPruner {
-    table_snapshot_location: String,
+    table_snapshot: Arc<TableSnapshot>,
 }
 
 type Pred = Box<dyn Fn(&BlockStatistics) -> Result<bool> + Send + Sync + Unpin>;
 impl BlockPruner {
-    pub fn new(table_snapshot: &TableSnapshot) -> Self {
-        Self {
-            table_snapshot_location: snapshot_location(&table_snapshot.snapshot_id),
-        }
+    pub fn new(table_snapshot: Arc<TableSnapshot>) -> Self {
+        Self { table_snapshot }
     }
 
     #[tracing::instrument(level = "debug", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
@@ -57,10 +56,8 @@ impl BlockPruner {
             _ => Box::new(|_: &BlockStatistics| Ok(true)),
         };
 
-        let reader = MetaReaders::table_snapshot_reader(ctx);
-        let snapshot = reader.read(self.table_snapshot_location.as_str()).await?;
-        let segment_num = snapshot.segments.len();
-        let segment_locs = snapshot.segments.clone();
+        let segment_locs = self.table_snapshot.segments.clone();
+        let segment_num = segment_locs.len();
 
         if segment_locs.is_empty() {
             return Ok(vec![]);

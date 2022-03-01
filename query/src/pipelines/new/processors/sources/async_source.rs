@@ -16,17 +16,19 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use futures::Future;
 
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
 
-#[async_trait::async_trait]
 pub trait AsyncSource: Send {
     const NAME: &'static str;
+    type BlockFuture<'a>: Future<Output = Result<Option<DataBlock>>> + Send
+    where Self: 'a;
 
-    async fn generate(&mut self) -> Result<Option<DataBlock>>;
+    fn generate(&mut self) -> Self::BlockFuture<'_>;
 }
 
 // TODO: This can be refactored using proc macros

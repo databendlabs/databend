@@ -18,7 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::*;
-use databend_query::catalogs::Catalog;
+use databend_query::interpreters::CreateTableInterpreter;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 use crate::storages::fuse::table_test_fixture::*;
@@ -77,8 +77,8 @@ async fn test_fuse_history_table_read() -> Result<()> {
 
     // test db & table
     let create_table_plan = fixture.default_crate_table_plan();
-    let catalog = ctx.get_catalog();
-    catalog.create_table(create_table_plan.into()).await?;
+    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    interpreter.execute(None).await?;
 
     // func args
     let arg_db = Expression::create_literal(DataValue::String(db.as_bytes().to_vec()));

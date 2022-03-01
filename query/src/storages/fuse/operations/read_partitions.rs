@@ -39,7 +39,10 @@ impl FuseTable {
         match snapshot {
             Some(snapshot) => {
                 let schema = self.table_info.schema();
-                let block_metas = BlockPruner::new(&snapshot)
+                //let snapshot_loc = self
+                //    .meta_locations()
+                //    .snapshot_location_from_uuid(&snapshot.snapshot_id);
+                let block_metas = BlockPruner::new(snapshot.clone())
                     .apply(schema, &push_downs, ctx.as_ref())
                     .await?;
 
@@ -53,9 +56,12 @@ impl FuseTable {
                 statistics.partitions_scanned = partitions_scanned;
 
                 // Update context statistics.
-                ctx.get_dal_context().inc_partitions_total(partitions_total);
                 ctx.get_dal_context()
-                    .inc_partitions_scanned(partitions_scanned);
+                    .get_metrics()
+                    .inc_partitions_total(partitions_total as u64);
+                ctx.get_dal_context()
+                    .get_metrics()
+                    .inc_partitions_scanned(partitions_scanned as u64);
 
                 Ok((statistics, parts))
             }

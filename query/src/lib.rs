@@ -16,6 +16,8 @@
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]
 #![feature(bool_to_option)]
+#![feature(generic_associated_types)]
+#![feature(type_alias_impl_trait)]
 
 pub mod api;
 pub mod catalogs;
