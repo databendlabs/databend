@@ -24,7 +24,7 @@ common-tracing = { path = "../tracing" }
 
 async-trait = "0.1.52"
 serde = { version = "1.0.136", features = ["derive"] }
-serde_json = "1.0.78"
+serde_json = "1.0.79"
 tempfile = "3.3.0"
 
 [dev-dependencies]

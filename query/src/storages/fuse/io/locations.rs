@@ -20,15 +20,15 @@ use crate::storages::fuse::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 
 pub fn gen_block_location() -> String {
-    let part_uuid = Uuid::new_v4().simple().to_string() + ".parquet";
+    let part_uuid = Uuid::new_v4().to_simple().to_string() + ".parquet";
     format!("{}/{}", FUSE_TBL_BLOCK_PREFIX, part_uuid)
 }
 
 pub fn gen_segment_info_location() -> String {
-    let segment_uuid = Uuid::new_v4().simple().to_string();
+    let segment_uuid = Uuid::new_v4().to_simple().to_string();
     format!("{}/{}", FUSE_TBL_SEGMENT_PREFIX, segment_uuid)
 }
 
 pub fn snapshot_location(id: &Uuid) -> String {
-    format!("{}/{}", FUSE_TBL_SNAPSHOT_PREFIX, id.simple())
+    format!("{}/{}", FUSE_TBL_SNAPSHOT_PREFIX, id.to_simple())
 }

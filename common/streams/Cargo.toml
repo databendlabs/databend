@@ -33,4 +33,4 @@ tempfile = "3.3.0"
 tokio-stream = { version = "0.1.8", features = ["net"] }
 
 [dev-dependencies]
-opendal = "0.0.5"
+opendal = { git = "https://github.com/datafuselabs/opendal", rev = "80e8bca" }

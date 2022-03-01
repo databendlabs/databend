@@ -62,7 +62,7 @@ impl TestFixture {
         let ctx = crate::tests::create_query_context_with_config(conf).unwrap();
 
         let tenant = ctx.get_tenant();
-        let random_prefix: String = Uuid::new_v4().simple().to_string();
+        let random_prefix: String = Uuid::new_v4().to_simple().to_string();
         // prepare a randomly named default database
         let db_name = gen_db_name(&random_prefix);
         let plan = CreateDatabasePlan {
