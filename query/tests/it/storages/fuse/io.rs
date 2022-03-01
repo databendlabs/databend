@@ -22,7 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use databend_query::storages::fuse::io::BlockCompactor;
 use databend_query::storages::fuse::io::BlockStreamWriter;
-use databend_query::storages::fuse::io::TableMetaLocation;
+use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::DEFAULT_CHUNK_BLOCK_NUM;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -51,7 +51,7 @@ async fn test_fuse_table_block_appender() {
     let block = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1, 2, 3])]);
     let block_stream = futures::stream::iter(vec![Ok(block)]);
 
-    let locs = TableMetaLocation::with_prefix(".".to_owned());
+    let locs = TableMetaLocationGenerator::with_prefix(".".to_owned());
     let segments = BlockStreamWriter::write_block_stream(
         local_fs.clone(),
         Box::pin(block_stream),
@@ -268,7 +268,7 @@ async fn test_block_stream_writer() -> common_exception::Result<()> {
 
         let data_accessor = Arc::new(MockDataAccessor::new());
         let operator = Operator::new(data_accessor.clone());
-        let locs = TableMetaLocation::with_prefix(".".to_owned());
+        let locs = TableMetaLocationGenerator::with_prefix(".".to_owned());
         let stream = BlockStreamWriter::write_block_stream(
             operator,
             Box::pin(block_stream),
@@ -330,7 +330,7 @@ async fn test_block_stream_writer() -> common_exception::Result<()> {
 #[test]
 fn test_meta_locations() -> Result<()> {
     let test_prefix = "test_pref";
-    let locs = TableMetaLocation::with_prefix(test_prefix.to_owned());
+    let locs = TableMetaLocationGenerator::with_prefix(test_prefix.to_owned());
     let block_loc = locs.gen_block_location();
     assert!(block_loc.starts_with(test_prefix));
     let seg_loc = locs.gen_segment_info_location();

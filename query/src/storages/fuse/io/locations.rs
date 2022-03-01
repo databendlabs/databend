@@ -20,11 +20,11 @@ use crate::storages::fuse::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 
 #[derive(Clone)]
-pub struct TableMetaLocation {
+pub struct TableMetaLocationGenerator {
     prefix: String,
 }
 
-impl TableMetaLocation {
+impl TableMetaLocationGenerator {
     pub fn with_prefix(prefix: String) -> Self {
         Self { prefix }
     }

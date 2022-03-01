@@ -26,7 +26,7 @@ use futures::TryStreamExt;
 use opendal::Operator;
 
 use crate::storages::fuse::io::block_writer;
-use crate::storages::fuse::io::TableMetaLocation;
+use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
@@ -40,7 +40,7 @@ pub struct BlockStreamWriter {
     data_schema: Arc<DataSchema>,
     number_of_blocks_accumulated: usize,
     statistics_accumulator: Option<StatisticsAccumulator>,
-    meta_locations: TableMetaLocation,
+    meta_locations: TableMetaLocationGenerator,
 }
 
 impl BlockStreamWriter {
@@ -50,7 +50,7 @@ impl BlockStreamWriter {
         data_schema: Arc<DataSchema>,
         row_per_block: usize,
         block_per_segment: usize,
-        meta_locations: TableMetaLocation,
+        meta_locations: TableMetaLocationGenerator,
     ) -> SegmentInfoStream {
         // filter out empty blocks
         let block_stream =
@@ -81,7 +81,7 @@ impl BlockStreamWriter {
         num_block_threshold: usize,
         data_accessor: Operator,
         data_schema: Arc<DataSchema>,
-        meta_locations: TableMetaLocation,
+        meta_locations: TableMetaLocationGenerator,
     ) -> Self {
         Self {
             num_block_threshold,

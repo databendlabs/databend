@@ -32,7 +32,7 @@ use futures::StreamExt;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::io::TableMetaLocation;
+use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
@@ -43,7 +43,7 @@ use crate::storages::OPT_KEY_DATABASE_ID;
 
 pub struct FuseTable {
     pub(crate) table_info: TableInfo,
-    pub(crate) meta_locations: TableMetaLocation,
+    pub(crate) meta_location_generator: TableMetaLocationGenerator,
 }
 
 impl FuseTable {
@@ -51,7 +51,7 @@ impl FuseTable {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         Ok(Box::new(FuseTable {
             table_info,
-            meta_locations: TableMetaLocation::with_prefix(storage_prefix),
+            meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
         }))
     }
 
@@ -176,8 +176,8 @@ impl FuseTable {
         }
     }
 
-    pub fn meta_locations(&self) -> &TableMetaLocation {
-        &self.meta_locations
+    pub fn meta_locations(&self) -> &TableMetaLocationGenerator {
+        &self.meta_location_generator
     }
 
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {

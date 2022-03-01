@@ -32,7 +32,7 @@ use crate::storages::fuse::cache::HasTenantLabel;
 use crate::storages::fuse::cache::Loader;
 use crate::storages::fuse::cache::MemoryCache;
 use crate::storages::fuse::cache::TenantLabel;
-use crate::storages::fuse::io::TableMetaLocation;
+use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
 
@@ -103,7 +103,7 @@ impl<'a> TableSnapshotReader<'a> {
     pub async fn read_snapshot_history(
         &self,
         latest_snapshot_location: Option<&String>,
-        meta_locs: TableMetaLocation,
+        meta_locs: TableMetaLocationGenerator,
     ) -> Result<Vec<Arc<TableSnapshot>>> {
         let mut snapshots = vec![];
         let mut current_snapshot_location = latest_snapshot_location.cloned();
