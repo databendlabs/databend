@@ -14,15 +14,15 @@
 
 use std::fmt;
 use std::sync::Arc;
+use std::marker::PhantomData;
 
 use common_arrow::arrow::compute::comparison;
 use common_arrow::arrow::compute::comparison::Simd8;
 use common_arrow::arrow::compute::comparison::Simd8PartialEq;
+use common_arrow::arrow::compute::comparison::Simd8PartialOrd;
 use common_datavalues::prelude::*;
 use common_datavalues::type_coercion::compare_coercion;
-use common_datavalues::BooleanType;
-use common_datavalues::DataValueComparisonOperator;
-use common_datavalues::TypeID;
+use common_datavalues::with_match_primitive_types_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::traits::AsPrimitive;
@@ -39,6 +39,8 @@ use crate::scalars::ComparisonRegexpFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionFactory;
+use crate::scalars::ScalarBinaryExpression;
+use crate::scalars::ScalarBinaryFunction;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
@@ -67,22 +69,194 @@ impl ComparisonFunction {
     }
 }
 
-fn bool_eq_bool(l: bool, r: bool, _ctx: &mut EvalContext) -> bool {
-    !(l ^ r)
+pub trait ComparisonImpl {
+    fn eval_primitive<L, R, M>(
+        _l: L::RefType<'_>,
+        _r: R::RefType<'_>,
+        _ctx: &mut EvalContext,
+    ) -> bool
+    where
+        L: PrimitiveType + AsPrimitive<M>,
+        R: PrimitiveType + AsPrimitive<M>,
+        M: PrimitiveType + Simd8,
+        M::Simd: Simd8PartialEq + Simd8PartialOrd,
+    {
+        unimplemented!()
+    }
+
+    fn eval_binary(_l: &[u8], _r: &[u8], _ctx: &mut EvalContext) -> bool {
+        unimplemented!()
+    }
+
+    fn eval_bool(_l: bool, _r: bool, _ctx: &mut EvalContext) -> bool {
+        unimplemented!()
+    }
 }
 
-fn num_eq_num<L, R, M>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> bool
-where
-    L: PrimitiveType + AsPrimitive<M>,
-    R: PrimitiveType + AsPrimitive<M>,
-    M: PrimitiveType + Simd8,
-    M::Simd: Simd8PartialEq,
+#[derive(Clone)]
+pub struct EqualImpl;
+
+impl ComparisonImpl for EqualImpl {
+    fn eval_primitive<L, R, M>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> bool
+    where
+        L: PrimitiveType + AsPrimitive<M>,
+        R: PrimitiveType + AsPrimitive<M>,
+        M: PrimitiveType + Simd8,
+        M::Simd: Simd8PartialEq + Simd8PartialOrd,
+    {
+        l.to_owned_scalar().as_().eq(&r.to_owned_scalar().as_())
+    }
+
+    fn eval_binary(l: &[u8], r: &[u8], _ctx: &mut EvalContext) -> bool {
+        l == r
+    }
+
+    fn eval_bool(l: bool, r: bool, _ctx: &mut EvalContext) -> bool {
+        !(l ^ r)
+    }
+}
+
+
+pub struct ComparisonFunctionCreator<T> {
+    t: PhantomData<T>,
+}
+
+impl<T> ComparisonFunctionCreator<T>
+where T: ComparisonImpl + Send + Sync + Clone + 'static
 {
-    l.to_owned_scalar().as_().eq(&r.to_owned_scalar().as_())
+    pub fn try_create_func(
+        op: DataValueComparisonOperator,
+        args: &[&DataTypePtr],
+    ) -> Result<Box<dyn Function>> {
+        // expect array & struct
+        let has_array_struct = args
+            .iter()
+            .any(|arg| matches!(arg.data_type_id(), TypeID::Struct | TypeID::Array));
+
+        if has_array_struct {
+            return Err(ErrorCode::BadArguments(format!(
+                "Illegal types {:?} of argument of function {}, can not be struct or array",
+                args, op
+            )));
+        }
+
+        let lhs_id = args[0].data_type_id();
+        let rhs_id = args[1].data_type_id();
+
+        if lhs_id.is_numeric() && rhs_id.is_numeric() {
+            return with_match_primitive_types_error!(lhs_id, |$T| {
+                with_match_primitive_types_error!(rhs_id, |$D| {
+                    let least_supertype = <($T, $D) as ResultTypeOfBinary>::LeastSuper::to_data_type();
+                    ComparisonFunction2::<$T, $D, bool, _>::try_create_func(
+                            op,
+                            least_supertype,
+                            false,
+                            T::eval_primitive::<$T, $D, <($T, $D) as ResultTypeOfBinary>::LeastSuper>,
+                    )
+                })
+            });
+        }
+
+        if lhs_id == rhs_id {
+
+        }
+
+        // f64
+        if lhs_id.is_numeric() && rhs_id.is_string() {
+
+        }
+
+        // f64
+        if lhs_id.is_string() && rhs_id.is_numeric() {
+
+        }
+
+        todo!()
+    }
+/*
+    pub fn desc(factor: i64) -> ArithmeticDescription {
+        let function_creator: ArithmeticCreator =
+            Box::new(move |display_name, args| Self::try_create_func(display_name, factor, args));
+
+        ArithmeticDescription::creator(function_creator)
+            .features(FunctionFeatures::default().deterministic().num_arguments(2))
+    }*/
 }
 
-fn binary_eq_binary<L, M>(l: &[u8], r: &[u8], _ctx: &mut EvalContext) -> bool {
-    l == r
+#[derive(Clone)]
+pub struct ComparisonFunction2<L: Scalar, R: Scalar, O: Scalar, F> {
+    op: DataValueComparisonOperator,
+    least_supertype: DataTypePtr,
+    need_cast: bool,
+    binary: ScalarBinaryExpression<L, R, O, F>,
+}
+
+impl<L, R, O, F> ComparisonFunction2<L, R, O, F>
+where
+    L: Scalar + Send + Sync + Clone,
+    R: Scalar + Send + Sync + Clone,
+    O: Scalar + Send + Sync + Clone,
+    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone + 'static,
+{
+    pub fn try_create_func(
+        op: DataValueComparisonOperator,
+        least_supertype: DataTypePtr,
+        need_cast: bool,
+        func: F,
+    ) -> Result<Box<dyn Function>> {
+        let binary = ScalarBinaryExpression::<L, R, O, _>::new(func);
+        Ok(Box::new(Self {
+            op,
+            least_supertype,
+            need_cast,
+            binary,
+        }))
+    }
+}
+
+impl<L, R, O, F> Function for ComparisonFunction2<L, R, O, F>
+where
+    L: Scalar + Send + Sync + Clone,
+    R: Scalar + Send + Sync + Clone,
+    O: Scalar + Send + Sync + Clone,
+    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone,
+{
+    fn name(&self) -> &str {
+        "ComparisonFunction"
+    }
+
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        Ok(BooleanType::arc())
+    }
+
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        let lhs = if self.need_cast && columns[0].data_type() != &self.least_supertype {
+            cast_column_field(&columns[0], &self.least_supertype)?
+        } else {
+            columns[0].column().clone()
+        };
+
+        let rhs = if self.need_cast && columns[1].data_type() != &self.least_supertype {
+            cast_column_field(&columns[1], &self.least_supertype)?
+        } else {
+            columns[1].column().clone()
+        };
+
+        let col = self.binary.eval(&lhs, &rhs, &mut EvalContext::default())?;
+        Ok(Arc::new(col))
+    }
+}
+
+impl<L, R, O, F> fmt::Display for ComparisonFunction2<L, R, O, F>
+where
+    L: Scalar + Send + Sync + Clone,
+    R: Scalar + Send + Sync + Clone,
+    O: Scalar + Send + Sync + Clone,
+    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.op)
+    }
 }
 
 impl Function for ComparisonFunction {
@@ -90,10 +264,7 @@ impl Function for ComparisonFunction {
         "ComparisonFunction"
     }
 
-    fn return_type(
-        &self,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         // expect array & struct
         let has_array_struct = args
             .iter()
@@ -110,11 +281,7 @@ impl Function for ComparisonFunction {
         Ok(BooleanType::arc())
     }
 
-    fn eval(
-        &self,
-        columns: &common_datavalues::ColumnsWithField,
-        input_rows: usize,
-    ) -> Result<common_datavalues::ColumnRef> {
+    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
         if columns[0].data_type() != columns[1].data_type() {
             // TODO cached it inside the function
             let least_supertype = compare_coercion(columns[0].data_type(), columns[1].data_type())?;

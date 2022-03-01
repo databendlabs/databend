@@ -319,17 +319,10 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
         return numerical_coercion(lhs_type, rhs_type, true);
     }
 
-    //  one of is nothing
-    {
-        if lhs_id == TypeID::Null {
-            return Ok(wrap_nullable(rhs_type));
-        }
-
-        if rhs_id == TypeID::Null {
-            return Ok(wrap_nullable(lhs_type));
-        }
+    // one of is String and other is number
+    if (lhs_id.is_numeric() && rhs_id.is_string()) || (rhs_id.is_numeric() && lhs_id.is_string()) {
+        return Ok(Float64Type::arc());
     }
-
 
     // one of is datetime and other is number or string
     {
@@ -342,7 +335,6 @@ pub fn compare_coercion(lhs_type: &DataTypePtr, rhs_type: &DataTypePtr) -> Resul
         }
     }
 
-    // one of is datetime and other is number or string
     if lhs_id.is_date_or_date_time() || rhs_id.is_date_or_date_time() {
         // one of is datetime
         // TODO datetime64
