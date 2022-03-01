@@ -13,12 +13,12 @@
 //  limitations under the License.
 //
 
-pub const TBL_OPT_KEY_SNAPSHOT_LOC: &str = "snapshot_loc";
-pub const TBL_OPT_KEY_CHUNK_BLOCK_NUM: &str = "chunk_block_num";
-pub const TBL_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD: &str = "block_size_threshold";
+pub const FUSE_OPT_KEY_SNAPSHOT_LOC: &str = "snapshot_loc";
+pub const FUSE_OPT_KEY_CHUNK_BLOCK_NUM: &str = "chunk_block_num";
+pub const FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD: &str = "block_size_threshold";
+pub const FUSE_OPT_KEY_BLOCK_PER_SEGMENT: &str = "block_per_segment";
+pub const FUSE_OPT_KEY_ROW_PER_BLOCK: &str = "row_per_block";
 
-pub const TBL_OPT_KEY_BLOCK_PER_SEGMENT: &str = "block_per_segment";
-pub const TBL_OPT_KEY_ROW_PER_BLOCK: &str = "row_per_block";
 pub const FUSE_TBL_BLOCK_PREFIX: &str = "_b";
 pub const FUSE_TBL_SEGMENT_PREFIX: &str = "_sg";
 pub const FUSE_TBL_SNAPSHOT_PREFIX: &str = "_ss";

@@ -39,7 +39,10 @@ impl FuseTable {
         match snapshot {
             Some(snapshot) => {
                 let schema = self.table_info.schema();
-                let block_metas = BlockPruner::new(&snapshot)
+                //let snapshot_loc = self
+                //    .meta_locations()
+                //    .snapshot_location_from_uuid(&snapshot.snapshot_id);
+                let block_metas = BlockPruner::new(snapshot.clone())
                     .apply(schema, &push_downs, ctx.as_ref())
                     .await?;
 
