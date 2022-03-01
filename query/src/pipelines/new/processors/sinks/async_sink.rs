@@ -14,17 +14,22 @@
 
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use futures::Future;
 
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
 
-#[async_trait::async_trait]
+#[async_trait]
 pub trait AsyncSink: Send {
     const NAME: &'static str;
+
+    type ConsumeFuture<'a>: Future<Output = Result<()>> + Send
+    where Self: 'a;
 
     async fn on_start(&mut self) -> Result<()> {
         Ok(())
@@ -34,7 +39,8 @@ pub trait AsyncSink: Send {
         Ok(())
     }
 
-    async fn consume(&mut self, data_block: DataBlock) -> Result<()>;
+    /// We don't use async_trait for consume method, using GAT instead to make it more static dispatchable.
+    fn consume(&mut self, data_block: DataBlock) -> Self::ConsumeFuture<'_>;
 }
 
 pub struct AsyncSinker<T: AsyncSink + 'static> {

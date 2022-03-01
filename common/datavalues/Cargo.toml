@@ -36,4 +36,14 @@ serde_json = "1.0.78"
 typetag = "0.1.8"
 
 [dev-dependencies]
+criterion = "0.3.5"
 pretty_assertions = "1.1.0"
+rand = "0.8.4"
+
+[[bench]]
+name = "builder"
+harness = false
+
+[[bench]]
+name = "if_else_then"
+harness = false

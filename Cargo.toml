@@ -39,8 +39,9 @@ members = [
     "cli",
 
     # Tools
-    "tools/fuzz",
     "tools/benchmark",
+    "tools/fuzz",
+    "tools/metactl",
 ]
 
 [profile.release]
