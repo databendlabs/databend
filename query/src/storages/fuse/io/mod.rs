@@ -27,8 +27,6 @@ pub use block_stream_writer::SegmentInfoStream;
 pub use cached_reader::CachedReader;
 pub use cached_reader::HasTenantLabel;
 pub use cached_reader::Loader;
-pub use locations::gen_segment_info_location;
-pub use locations::snapshot_location;
 pub use locations::TableMetaLocationGenerator;
 pub use meta_readers::BlockMetaCache;
 pub use meta_readers::MetaReaders;

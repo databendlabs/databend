@@ -36,7 +36,6 @@ use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
-use crate::storages::fuse::TBL_OPT_SNAPSHOT_LOC;
 use crate::storages::fuse::TBL_OPT_SNAPSHOT_VER;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
@@ -166,7 +165,8 @@ impl FuseTable {
     }
 
     pub fn snapshot_format_version(&self) -> Result<u64> {
-        self.table_info
+        let result = self
+            .table_info
             .options()
             .get(TBL_OPT_SNAPSHOT_VER)
             .map(|ver_str| {
@@ -178,7 +178,8 @@ impl FuseTable {
                 })
             })
             .transpose()
-            .map(|opt| opt.unwrap_or(0))
+            .map(|opt| opt.unwrap_or(0));
+        result
     }
 
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]

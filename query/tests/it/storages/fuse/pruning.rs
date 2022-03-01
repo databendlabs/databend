@@ -42,12 +42,12 @@ use futures::TryStreamExt;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 async fn apply_block_pruning(
-    table_snapshot: &TableSnapshot,
+    table_snapshot: Arc<TableSnapshot>,
     schema: DataSchemaRef,
     push_down: &Option<Extras>,
     ctx: Arc<QueryContext>,
 ) -> Result<Vec<BlockMeta>> {
-    BlockPruner::new(Arc::new(table_snapshot.clone()))
+    BlockPruner::new(table_snapshot)
         .apply(schema, push_down, ctx.as_ref())
         .await
 }
@@ -69,7 +69,7 @@ async fn test_block_pruner() -> Result<()> {
 
     // create test table
     let create_table_plan = CreateTablePlan {
-        if_not_exists: falsemeta_locs.snapshot_location_from_uuid,
+        if_not_exists: false,
         tenant: fixture.default_tenant(),
         db: fixture.default_db_name(),
         table: test_tbl_name.to_string(),
@@ -78,7 +78,7 @@ async fn test_block_pruner() -> Result<()> {
             engine: "FUSE".to_string(),
             options: [
                 (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
-                // for the convenience of testing, let one seegment contains one block
+                // for the convenience of testing, let one segment contains one block
                 (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
                 // database id is required for FUSE
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),

@@ -29,7 +29,6 @@ use serde::de::DeserializeOwned;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::cache::MemoryCache;
 use crate::storages::fuse::cache::TenantLabel;
-use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::io::CachedReader;
 use crate::storages::fuse::io::HasTenantLabel;
 use crate::storages::fuse::io::Loader;
@@ -122,7 +121,8 @@ impl<'a> TableSnapshotReader<'a> {
             let prev = snapshot.prev_snapshot_id;
             snapshots.push(snapshot);
             // TODO buggy, set the current ver
-            current_snapshot_location = prev.map(|id| meta_locs.snapshot_location_from_uuid(&id));
+            current_snapshot_location =
+                prev.map(|(id, _)| meta_locs.snapshot_location_from_uuid(&id));
         }
         Ok(snapshots)
     }

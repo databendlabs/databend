@@ -162,11 +162,15 @@ impl Table for FuseHistoryTable {
         })?;
 
         let tbl_info = tbl.get_table_info();
-        let location = tbl_info.meta.options.get(TBL_OPT_SNAPSHOT_LOC);
-        let format_version = fuse_tbl.snapshot_format_version()?;
+        let location = tbl_info.meta.options.get(FUSE_OPT_KEY_SNAPSHOT_LOC);
+        let format_version = tbl.snapshot_format_version()?;
         let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
         let snapshots = reader
-            .read_snapshot_history(location, format_version)
+            .read_snapshot_history(
+                location,
+                format_version,
+                tbl.meta_location_generator.clone(),
+            )
             .await?;
         let blocks = vec![self.snapshots_to_block(snapshots)];
         Ok(Box::pin(DataBlockStream::create(

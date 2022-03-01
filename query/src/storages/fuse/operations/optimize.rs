@@ -41,7 +41,11 @@ impl FuseTable {
         let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
 
         let mut snapshots = reader
-            .read_snapshot_history(snapshot_loc, self.meta_locations().clone(), format_version)
+            .read_snapshot_history(
+                snapshot_loc,
+                format_version,
+                self.meta_location_generator.clone(),
+            )
             .await?;
 
         let min_history_len = if !keep_last_snapshot { 0 } else { 1 };
