@@ -12,28 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataValueComparisonOperator;
-use common_exception::Result;
+use common_datavalues::PrimitiveType;
+use common_datavalues::ScalarRef;
+use num::traits::AsPrimitive;
 
-use crate::scalars::function_factory::FunctionDescription;
-use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::ComparisonFunction;
-use crate::scalars::Function;
+use super::comparison::ComparisonFunctionCreator;
+use super::comparison::ComparisonImpl;
+use crate::scalars::EvalContext;
 
-pub struct ComparisonGtEqFunction;
+#[derive(Clone)]
+pub struct ComparisonGtEqImpl;
 
-impl ComparisonGtEqFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
-        ComparisonFunction::try_create_func(DataValueComparisonOperator::GtEq)
+impl ComparisonImpl for ComparisonGtEqImpl {
+    fn eval_primitive<L, R, M>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> bool
+    where
+        L: PrimitiveType + AsPrimitive<M>,
+        R: PrimitiveType + AsPrimitive<M>,
+        M: PrimitiveType,
+    {
+        l.to_owned_scalar().as_().ge(&r.to_owned_scalar().as_())
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .negative_function("<")
-                .bool_function()
-                .num_arguments(2),
-        )
+    fn eval_binary(l: &[u8], r: &[u8], _ctx: &mut EvalContext) -> bool {
+        l >= r
+    }
+
+    fn eval_bool(l: bool, r: bool, _ctx: &mut EvalContext) -> bool {
+        l | !r
     }
 }
+
+pub type ComparisonGtEqFunction = ComparisonFunctionCreator<ComparisonGtEqImpl>;

@@ -17,9 +17,6 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::compute::comparison;
-use common_arrow::arrow::compute::comparison::Simd8;
-use common_arrow::arrow::compute::comparison::Simd8PartialEq;
-use common_arrow::arrow::compute::comparison::Simd8PartialOrd;
 use common_datavalues::prelude::*;
 use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::with_match_physical_primitive_type;
@@ -31,7 +28,6 @@ use num::traits::AsPrimitive;
 
 use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::ArithmeticCreator;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::ComparisonEqFunction;
 use crate::scalars::ComparisonGtEqFunction;
@@ -54,14 +50,11 @@ pub struct ComparisonFunction {
 
 impl ComparisonFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register_arithmetic(
-            "=",
-            EqualFunction::desc(DataValueComparisonOperator::Eq, "<>"),
-        );
+        factory.register_arithmetic("=", ComparisonEqFunction::desc("<>"));
         factory.register("<", ComparisonLtFunction::desc());
         factory.register(">", ComparisonGtFunction::desc());
         factory.register("<=", ComparisonLtEqFunction::desc());
-        factory.register(">=", ComparisonGtEqFunction::desc());
+        factory.register_arithmetic(">=", ComparisonGtEqFunction::desc("<"));
         factory.register("!=", ComparisonNotEqFunction::desc());
         factory.register("<>", ComparisonNotEqFunction::desc());
         factory.register("like", ComparisonLikeFunction::desc_like());
@@ -86,8 +79,7 @@ pub trait ComparisonImpl {
     where
         L: PrimitiveType + AsPrimitive<M>,
         R: PrimitiveType + AsPrimitive<M>,
-        M: PrimitiveType + Simd8,
-        M::Simd: Simd8PartialEq + Simd8PartialOrd,
+        M: PrimitiveType,
     {
         unimplemented!()
     }
@@ -101,31 +93,6 @@ pub trait ComparisonImpl {
     }
 }
 
-#[derive(Clone)]
-pub struct EqualImpl;
-
-impl ComparisonImpl for EqualImpl {
-    fn eval_primitive<L, R, M>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> bool
-    where
-        L: PrimitiveType + AsPrimitive<M>,
-        R: PrimitiveType + AsPrimitive<M>,
-        M: PrimitiveType + Simd8,
-        M::Simd: Simd8PartialEq + Simd8PartialOrd,
-    {
-        l.to_owned_scalar().as_().eq(&r.to_owned_scalar().as_())
-    }
-
-    fn eval_binary(l: &[u8], r: &[u8], _ctx: &mut EvalContext) -> bool {
-        l == r
-    }
-
-    fn eval_bool(l: bool, r: bool, _ctx: &mut EvalContext) -> bool {
-        !(l ^ r)
-    }
-}
-
-pub type EqualFunction = ComparisonFunctionCreator<EqualImpl>;
-
 pub struct ComparisonFunctionCreator<T> {
     t: PhantomData<T>,
 }
@@ -133,10 +100,7 @@ pub struct ComparisonFunctionCreator<T> {
 impl<T> ComparisonFunctionCreator<T>
 where T: ComparisonImpl + Send + Sync + Clone + 'static
 {
-    pub fn try_create_func(
-        op: DataValueComparisonOperator,
-        args: &[&DataTypePtr],
-    ) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         // expect array & struct
         let has_array_struct = args
             .iter()
@@ -145,7 +109,7 @@ where T: ComparisonImpl + Send + Sync + Clone + 'static
         if has_array_struct {
             return Err(ErrorCode::BadArguments(format!(
                 "Illegal types {:?} of argument of function {}, can not be struct or array",
-                args, op
+                args, display_name
             )));
         }
 
@@ -155,7 +119,7 @@ where T: ComparisonImpl + Send + Sync + Clone + 'static
         if args[0].eq(args[1]) {
             return with_match_physical_primitive_type!(lhs_id.to_physical_type(), |$T| {
                 ComparisonFunction2::<$T, $T, bool, _>::try_create_func(
-                    op,
+                    display_name,
                     args[0].clone(),
                     false,
                     T::eval_primitive::<$T, $T, $T>,
@@ -163,13 +127,13 @@ where T: ComparisonImpl + Send + Sync + Clone + 'static
             }, {
                 match lhs_id {
                     TypeID::Boolean => ComparisonFunction2::<bool, bool, bool, _>::try_create_func(
-                        op,
+                        display_name,
                         args[0].clone(),
                         false,
                         T::eval_bool,
                     ),
                     TypeID::String => ComparisonFunction2::<Vu8, Vu8, bool, _>::try_create_func(
-                        op,
+                        display_name,
                         args[0].clone(),
                         false,
                         T::eval_binary,
@@ -187,7 +151,7 @@ where T: ComparisonImpl + Send + Sync + Clone + 'static
                 with_match_primitive_types_error!(rhs_id, |$D| {
                     let least_supertype = <($T, $D) as ResultTypeOfBinary>::LeastSuper::to_data_type();
                     ComparisonFunction2::<$T, $D, bool, _>::try_create_func(
-                            op,
+                        display_name,
                             least_supertype,
                             false,
                             T::eval_primitive::<$T, $D, <($T, $D) as ResultTypeOfBinary>::LeastSuper>,
@@ -199,7 +163,7 @@ where T: ComparisonImpl + Send + Sync + Clone + 'static
         let least_supertype = compare_coercion(args[0], args[1])?;
         with_match_physical_primitive_type_error!(least_supertype.data_type_id().to_physical_type(), |$T| {
             ComparisonFunction2::<$T, $T, bool, _>::try_create_func(
-                op,
+                display_name,
                 least_supertype,
                 true,
                 T::eval_primitive::<$T, $T, $T>,
@@ -207,11 +171,8 @@ where T: ComparisonImpl + Send + Sync + Clone + 'static
         })
     }
 
-    pub fn desc(op: DataValueComparisonOperator, negative_name: &str) -> ArithmeticDescription {
-        let function_creator: ArithmeticCreator =
-            Box::new(move |display_name, args| Self::try_create_func(op.clone(), args));
-
-        ArithmeticDescription::creator(Box::new(function_creator)).features(
+    pub fn desc(negative_name: &str) -> ArithmeticDescription {
+        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function(negative_name)
@@ -223,7 +184,7 @@ where T: ComparisonImpl + Send + Sync + Clone + 'static
 
 #[derive(Clone)]
 pub struct ComparisonFunction2<L: Scalar, R: Scalar, O: Scalar, F> {
-    op: DataValueComparisonOperator,
+    display_name: String,
     least_supertype: DataTypePtr,
     need_cast: bool,
     binary: ScalarBinaryExpression<L, R, O, F>,
@@ -237,14 +198,14 @@ where
     F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone + 'static,
 {
     pub fn try_create_func(
-        op: DataValueComparisonOperator,
+        display_name: &str,
         least_supertype: DataTypePtr,
         need_cast: bool,
         func: F,
     ) -> Result<Box<dyn Function>> {
         let binary = ScalarBinaryExpression::<L, R, O, _>::new(func);
         Ok(Box::new(Self {
-            op,
+            display_name: display_name.to_string(),
             least_supertype,
             need_cast,
             binary,
@@ -260,10 +221,10 @@ where
     F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone,
 {
     fn name(&self) -> &str {
-        "ComparisonFunction"
+        self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+    fn return_type(&self, _args: &[&DataTypePtr]) -> Result<DataTypePtr> {
         Ok(BooleanType::arc())
     }
 
@@ -293,7 +254,7 @@ where
     F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.op)
+        write!(f, "{}", self.display_name)
     }
 }
 

@@ -155,11 +155,11 @@ select toString(111) = '111';
 select toString(3 + 4) = '7';
 
 -- TODO remove explicit cast
-select '123 ab' = 123; -- {ErrorCode 1007}
-select '123' = 123; -- {ErrorCode 1007}
-select '7.4' = 7.4; -- {ErrorCode 1007}
-select '7.4' > 7; -- {ErrorCode 1007}
-select '777.4' < 778; -- {ErrorCode 1007}
+select '123 ab' = 123; -- {ErrorCode 1010}
+select '123' = 123;
+select '7.4' = 7.4;
+select '7.4' > 7;
+select '777.4' < 778;
 
 select '==compare_datetime==';
 -- compare with date/datetime strings
