@@ -23,6 +23,6 @@ echo "checking table clone (upper case option key)"
 echo "select *  from t09_0011_clone2" | $MYSQL_CLIENT_CONNECT
 
 ## Drop table.
-#echo "drop table  t09_0011" | $MYSQL_CLIENT_CONNECT
-#echo "drop table  t09_0011_clone2" | $MYSQL_CLIENT_CONNECT
-#echo "drop table  t09_0011_clone1" | $MYSQL_CLIENT_CONNECT
+echo "drop table  t09_0011" | $MYSQL_CLIENT_CONNECT
+echo "drop table  t09_0011_clone2" | $MYSQL_CLIENT_CONNECT
+echo "drop table  t09_0011_clone1" | $MYSQL_CLIENT_CONNECT
