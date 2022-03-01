@@ -19,8 +19,8 @@ common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
 common-functions = { path = "../functions" }
 common-io = { path = "../io" }
-common-tracing = { path = "../tracing" }
 common-meta-types = { path = "../meta/types" }
+common-tracing = { path = "../tracing" }
 
 # Github dependencies
 

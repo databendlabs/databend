@@ -157,6 +157,7 @@ pub use plan_partition::Part;
 pub use plan_partition::Partitions;
 pub use plan_projection::ProjectionPlan;
 pub use plan_read_datasource::ReadDataSourcePlan;
+pub use plan_read_datasource::SourceInfo;
 pub use plan_remote::RemotePlan;
 pub use plan_role_create::CreateRolePlan;
 pub use plan_role_drop::DropRolePlan;

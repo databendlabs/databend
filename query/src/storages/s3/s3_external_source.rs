@@ -19,15 +19,11 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::S3FileReader;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageStorage;
 use common_meta_types::UserStageInfo;
-use common_planners::UserStagePlan;
 use common_streams::CsvSourceBuilder;
-use common_streams::SendableDataBlockStream;
-use common_streams::SourceStream;
-use futures::StreamExt;
+use common_streams::Source;
 use opendal::Reader;
 
 use crate::pipelines::new::processors::port::OutputPort;
@@ -35,38 +31,42 @@ use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::AsyncSource;
 use crate::pipelines::new::processors::AsyncSourcer;
 use crate::sessions::QueryContext;
+use crate::storages::s3::S3FileReader;
 
 pub struct ExternalSource {
     ctx: Arc<QueryContext>,
-    plan: UserStagePlan,
+    schema: DataSchemaRef,
+    stage_info: UserStageInfo,
     file_name: Option<String>,
     initialized: bool,
-    wrap_stream: Option<SendableDataBlockStream>,
+    source: Option<Box<dyn Source>>,
 }
 
 impl ExternalSource {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,
-        plan: UserStagePlan,
+        schema: DataSchemaRef,
+        stage_info: UserStageInfo,
         file_name: Option<String>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(output, ExternalSource {
             ctx,
-            plan,
+            schema,
+            stage_info,
             file_name,
             initialized: false,
-            wrap_stream: None,
+            source: None,
         })
     }
 
     // Get csv source stream.
-    async fn csv_stream(
+    async fn csv_source(
         ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         stage_info: &UserStageInfo,
         reader: Reader,
-    ) -> Result<SourceStream> {
+    ) -> Result<Box<dyn Source>> {
         let mut builder = CsvSourceBuilder::create(schema);
         let size_limit = stage_info.copy_options.size_limit;
 
@@ -79,8 +79,8 @@ impl ExternalSource {
 
         // Block size.
         {
-            let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
-            builder.block_size(max_block_size);
+            let max_block_size = ctx.get_settings().get_max_block_size()?;
+            builder.block_size(max_block_size as usize);
         }
 
         // Skip header.
@@ -100,13 +100,12 @@ impl ExternalSource {
             builder.record_delimiter(record_delimiter);
         }
 
-        let source = builder.build(reader)?;
-        Ok(SourceStream::new(Box::new(source)))
+        Ok(Box::new(builder.build(reader)?))
     }
 
     async fn initialize(&mut self) -> Result<()> {
         let ctx = self.ctx.clone();
-        let stage = &self.plan.stage_info;
+        let stage = &self.stage_info;
         let file_format = stage.file_format_options.format.clone();
         let file_name = self.file_name.clone();
 
@@ -123,15 +122,10 @@ impl ExternalSource {
             }
         }?;
 
-        // Get the format(CSV) stream.
-        let format_stream = match &file_format {
+        // Get the format(CSV) source stream.
+        let source = match &file_format {
             StageFileFormatType::Csv => {
-                Ok(
-                    Self::csv_stream(ctx.clone(), self.plan.schema.clone(), stage, file_reader)
-                        .await?
-                        .execute()
-                        .await?,
-                )
+                Ok(Self::csv_source(ctx.clone(), self.schema.clone(), stage, file_reader).await?)
             }
             // Unsupported.
             format => Err(ErrorCode::LogicalError(format!(
@@ -139,8 +133,7 @@ impl ExternalSource {
                 format
             ))),
         }?;
-
-        self.wrap_stream = Some(format_stream);
+        self.source = Some(source);
 
         Ok(())
     }
@@ -160,12 +153,11 @@ impl AsyncSource for ExternalSource {
                 self.initialize().await?;
             }
 
-            match &mut self.wrap_stream {
-                None => Err(ErrorCode::LogicalError("")),
-                Some(stream) => match stream.next().await {
+            match &mut self.source {
+                None => Err(ErrorCode::LogicalError("Please init source first!")),
+                Some(source) => match source.read().await? {
                     None => Ok(None),
-                    Some(Err(cause)) => Err(cause),
-                    Some(Ok(data)) => Ok(Some(data)),
+                    Some(data) => Ok(Some(data)),
                 },
             }
         }

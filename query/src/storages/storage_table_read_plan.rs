@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
+use common_planners::SourceInfo;
 use common_planners::Statistics;
 
 use crate::sessions::QueryContext;
@@ -60,7 +61,7 @@ impl ToReadDataSourcePlan for dyn Table {
         };
 
         Ok(ReadDataSourcePlan {
-            table_info: table_info.clone(),
+            source_info: SourceInfo::TableSource(table_info.clone()),
             scan_fields,
             parts,
             statistics,
