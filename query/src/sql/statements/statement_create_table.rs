@@ -29,6 +29,7 @@ use sqlparser::ast::ColumnOption;
 use sqlparser::ast::ObjectName;
 
 use super::analyzer_expr::ExpressionAnalyzer;
+use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -36,6 +37,7 @@ use crate::sql::statements::DfQueryStatement;
 use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::sql::SQLCommon;
+use crate::storages::OPT_KEY_DATABASE_ID;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfCreateTable {
@@ -57,11 +59,10 @@ pub struct DfCreateTable {
 impl AnalyzableStatement for DfCreateTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let mut table_meta = self.table_meta(ctx.clone()).await?;
+        let (db, table) = Self::resolve_table(ctx.clone(), &self.name)?;
+        let mut table_meta = self.table_meta(ctx.clone(), db.as_str()).await?;
         let if_not_exists = self.if_not_exists;
         let tenant = ctx.get_tenant();
-        let (db, table) = Self::resolve_table(ctx.clone(), &self.name)?;
-
         let as_select_plan_node = match &self.query {
             // CTAS
             Some(query_statement) => {
@@ -112,15 +113,16 @@ impl DfCreateTable {
         }
     }
 
-    async fn table_meta(&self, ctx: Arc<QueryContext>) -> Result<TableMeta> {
+    async fn table_meta(&self, ctx: Arc<QueryContext>, db_name: &str) -> Result<TableMeta> {
         let engine = self.engine.clone();
-        let schema = self.table_schema(ctx).await?;
-        Ok(TableMeta {
+        let schema = self.table_schema(ctx.clone()).await?;
+        let meta = TableMeta {
             schema,
             engine,
             options: self.options.clone(),
             ..Default::default()
-        })
+        };
+        self.plan_with_db_id(ctx.as_ref(), db_name, meta).await
     }
 
     async fn table_schema(&self, ctx: Arc<QueryContext>) -> Result<DataSchemaRef> {
@@ -169,5 +171,31 @@ impl DfCreateTable {
                 Ok(DataSchemaRefExt::create(fields))
             }
         }
+    }
+
+    async fn plan_with_db_id(
+        &self,
+        ctx: &QueryContext,
+        database_name: &str,
+        mut meta: TableMeta,
+    ) -> Result<TableMeta> {
+        if self.engine.to_uppercase().as_str() == "FUSE" {
+            // Currently, [Table] can not accesses its database id yet, thus
+            // here we keep the db id as an entry of `table_meta.options`.
+            //
+            // To make the unit/stateless test cases (`show create ..`) easier,
+            // here we care about the FUSE engine only.
+            //
+            // Later, when database id is kept, let say in `TableInfo`, we can
+            // safely eliminate this "FUSE" constant and the table meta option entry.
+            let catalog = ctx.get_catalog();
+            let db = catalog
+                .get_database(ctx.get_tenant().as_str(), database_name)
+                .await?;
+            let db_id = db.get_db_info().database_id;
+            meta.options
+                .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+        }
+        Ok(meta)
     }
 }

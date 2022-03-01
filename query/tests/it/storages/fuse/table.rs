@@ -13,15 +13,20 @@
 //  limitations under the License.
 //
 
+use std::default::Default;
+
 use common_base::tokio;
 use common_exception::Result;
+use common_meta_types::TableInfo;
 use common_planners::ReadDataSourcePlan;
 use common_planners::TruncateTablePlan;
-use databend_query::catalogs::Catalog;
+use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::PlanParser;
-use databend_query::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
+use databend_query::storages::fuse::FuseTable;
+use databend_query::storages::fuse::FUSE_OPT_KEY_CHUNK_BLOCK_NUM;
 use databend_query::storages::ToReadDataSourcePlan;
+use databend_query::storages::OPT_KEY_DATABASE_ID;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -32,8 +37,8 @@ async fn test_fuse_table_normal_case() -> Result<()> {
     let ctx = fixture.ctx();
 
     let create_table_plan = fixture.default_crate_table_plan();
-    let catalog = ctx.get_catalog();
-    catalog.create_table(create_table_plan.into()).await?;
+    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    interpreter.execute(None).await?;
 
     let mut table = fixture.latest_default_table().await?;
 
@@ -157,8 +162,8 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let ctx = fixture.ctx();
 
     let create_table_plan = fixture.default_crate_table_plan();
-    let catalog = ctx.get_catalog();
-    catalog.create_table(create_table_plan.into()).await?;
+    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    interpreter.execute(None).await?;
 
     let table = fixture.latest_default_table().await?;
     let truncate_plan = TruncateTablePlan {
@@ -228,13 +233,13 @@ async fn test_fuse_table_optimize() -> Result<()> {
     create_table_plan
         .table_meta
         .options
-        .insert(TBL_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), 100.to_string());
+        .insert(FUSE_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), 100.to_string());
 
     // create test table
     let tbl_name = create_table_plan.table.clone();
     let db_name = create_table_plan.db.clone();
-    let catalog = ctx.get_catalog();
-    catalog.create_table(create_table_plan.into()).await?;
+    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    interpreter.execute(None).await?;
 
     // insert 5 times
     let n = 5;
@@ -275,5 +280,20 @@ async fn test_fuse_table_optimize() -> Result<()> {
     // blocks are so tiny, they should be compacted into one
     assert_eq!(parts.len(), 1);
 
+    Ok(())
+}
+
+#[test]
+fn test_parse_storage_prefix() -> Result<()> {
+    let mut tbl_info = TableInfo::default();
+    let db_id = 2;
+    let tbl_id = 1;
+    tbl_info.ident.table_id = tbl_id;
+    tbl_info
+        .meta
+        .options
+        .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+    let prefix = FuseTable::parse_storage_prefix(&tbl_info)?;
+    assert_eq!(format!("{}/{}", db_id, tbl_id), prefix);
     Ok(())
 }
