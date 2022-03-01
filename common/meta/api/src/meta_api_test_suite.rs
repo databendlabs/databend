@@ -27,6 +27,7 @@ use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
+use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -641,6 +642,138 @@ impl MetaApiTestSuite {
                     tenant: tenant.to_string(),
                     db: db_name.to_string(),
                     table: tbl_name.to_string(),
+                };
+                mt.drop_table(plan.clone()).await?;
+            }
+        }
+
+        tracing::info!("--- rename table");
+        {
+            let created_on = Utc::now();
+            let req = CreateTableReq {
+                if_not_exists: false,
+                tenant: tenant.to_string(),
+                db: db_name.to_string(),
+                table: tbl_name.to_string(),
+                table_meta: table_meta(created_on),
+            };
+
+            tracing::info!("--- create table for rename");
+            {
+                let res = mt.create_table(req.clone()).await?;
+                assert_eq!(2, res.table_id, "table id is 2");
+
+                let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+
+                let want = TableInfo {
+                    ident: TableIdent::new(2, 3),
+                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    name: tbl_name.into(),
+                    meta: table_meta(created_on),
+                };
+                assert_eq!(want, got.as_ref().clone(), "get created table after drop");
+            }
+
+            tracing::info!("--- rename table, ok");
+            {
+                let req = RenameTableReq {
+                    tenant: tenant.to_string(),
+                    db: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                    new_table_name: "tb3".to_string(),
+                };
+                mt.rename_table(req.clone()).await?;
+
+                let got = mt.get_table((tenant, db_name, "tb3").into()).await?;
+                let want = TableInfo {
+                    ident: TableIdent::new(3, 4),
+                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, "tb3"),
+                    name: "tb3".into(),
+                    meta: table_meta(created_on),
+                };
+                assert_eq!(want, got.as_ref().clone(), "get renamed table");
+
+                tracing::info!("--- get old table after rename");
+                {
+                    let res = mt.get_table((tenant, db_name, tbl_name).into()).await;
+                    let err = res.err().unwrap();
+                    assert_eq!(
+                        ErrorCode::UnknownTable("").code(),
+                        ErrorCode::from(err).code()
+                    );
+                }
+            }
+
+            tracing::info!("--- rename table again, error");
+            {
+                let req = RenameTableReq {
+                    tenant: tenant.to_string(),
+                    db: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                    new_table_name: "tb3".to_string(),
+                };
+                let res = mt.rename_table(req.clone()).await;
+                let err = res.unwrap_err();
+                assert_eq!(
+                    ErrorCode::UnknownTable("").code(),
+                    ErrorCode::from(err).code(),
+                    "rename table {} again",
+                    tbl_name
+                );
+            }
+
+            tracing::info!("--- create table again after rename, ok");
+            {
+                let res = mt.create_table(req.clone()).await?;
+                assert_eq!(4, res.table_id, "table id is 4");
+
+                let got = mt.get_table((tenant, db_name, tbl_name).into()).await?;
+
+                let want = TableInfo {
+                    ident: TableIdent::new(4, 5),
+                    desc: format!("'{}'.'{}'.'{}'", tenant, db_name, tbl_name),
+                    name: tbl_name.into(),
+                    meta: table_meta(created_on),
+                };
+                assert_eq!(want, got.as_ref().clone(), "get created table after rename");
+            }
+
+            tracing::info!("--- rename table again after recreate, error");
+            {
+                let req = RenameTableReq {
+                    tenant: tenant.to_string(),
+                    db: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                    new_table_name: "tb3".to_string(),
+                };
+                let res = mt.rename_table(req.clone()).await;
+                let err = res.unwrap_err();
+                assert_eq!(
+                    ErrorCode::TableAlreadyExists("").code(),
+                    ErrorCode::from(err).code(),
+                    "rename table {} again after recreate",
+                    tbl_name
+                );
+            }
+
+            tracing::info!("--- drop table after rename");
+            {
+                let plan = DropTableReq {
+                    if_exists: false,
+                    tenant: tenant.to_string(),
+                    db: db_name.to_string(),
+                    table: tbl_name.to_string(),
+                };
+                mt.drop_table(plan.clone()).await?;
+            }
+
+            tracing::info!("--- drop table after rename");
+            {
+                let plan = DropTableReq {
+                    if_exists: false,
+                    tenant: tenant.to_string(),
+                    db: db_name.to_string(),
+                    table: "tb3".to_string(),
                 };
                 mt.drop_table(plan.clone()).await?;
             }

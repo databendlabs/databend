@@ -34,6 +34,8 @@ use common_meta_types::ListTableReq;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MetaId;
 use common_meta_types::PrefixListReply;
+use common_meta_types::RenameTableReply;
+use common_meta_types::RenameTableReq;
 use common_meta_types::TableInfo;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
@@ -53,6 +55,7 @@ pub enum MetaGrpcWriteReq {
 
     CreateTable(CreateTableReq),
     DropTable(DropTableReq),
+    RenameTable(RenameTableReq),
     CommitTable(UpsertTableOptionReq),
 
     UpsertKV(UpsertKVAction),
@@ -191,6 +194,10 @@ impl RequestFor for CreateTableReq {
 
 impl RequestFor for DropTableReq {
     type Reply = DropTableReply;
+}
+
+impl RequestFor for RenameTableReq {
+    type Reply = RenameTableReply;
 }
 
 impl RequestFor for GetTableReq {
