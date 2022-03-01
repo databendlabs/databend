@@ -16,7 +16,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use common_base::ProgressValues;
-use common_dal_context::DalMetrics;
+use common_contexts::DalMetrics;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -143,8 +143,8 @@ impl ProcessesTable {
         if dal_metrics_opt.is_some() {
             let dal_metrics = dal_metrics_opt.as_ref().unwrap();
             (
-                Some(dal_metrics.read_bytes as u64),
-                Some(dal_metrics.write_bytes as u64),
+                Some(dal_metrics.get_read_bytes() as u64),
+                Some(dal_metrics.get_write_bytes() as u64),
             )
         } else {
             (None, None)

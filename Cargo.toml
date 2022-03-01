@@ -7,7 +7,7 @@ members = [
     "common/cache",
     "common/clickhouse-srv",
     "common/containers",
-    "common/dal-context",
+    "common/contexts",
     "common/datablocks",
     "common/datavalues",
     "common/exception",
@@ -39,8 +39,9 @@ members = [
     "cli",
 
     # Tools
-    "tools/fuzz",
     "tools/benchmark",
+    "tools/fuzz",
+    "tools/metactl",
 ]
 
 [profile.release]

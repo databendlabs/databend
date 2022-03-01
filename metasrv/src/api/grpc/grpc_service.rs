@@ -76,7 +76,7 @@ impl MetaService for MetaServiceImpl {
     type HandshakeStream = GrpcStream<HandshakeResponse>;
 
     // rpc handshake first
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn handshake(
         &self,
         request: Request<Streaming<HandshakeRequest>>,

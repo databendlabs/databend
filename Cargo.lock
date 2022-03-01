@@ -1326,12 +1326,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-dal-context"
+name = "common-contexts"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "common-infallible",
- "opendal 0.0.5 (git+https://github.com/datafuselabs/opendal?rev=80e8bca)",
+ "opendal",
 ]
 
 [[package]]
@@ -1361,6 +1360,7 @@ dependencies = [
  "common-io",
  "common-macros",
  "common-mem-allocator",
+ "criterion",
  "dyn-clone",
  "itertools",
  "lexical-core 0.8.2",
@@ -1369,6 +1369,7 @@ dependencies = [
  "ordered-float 2.10.0",
  "paste",
  "pretty_assertions",
+ "rand 0.8.4",
  "serde",
  "serde_json",
  "typetag",
@@ -1698,7 +1699,7 @@ dependencies = [
  "common-tracing",
  "csv-async",
  "futures",
- "opendal 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "opendal",
  "pin-project-lite",
  "tempfile",
  "tokio-stream",
@@ -2175,6 +2176,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-metactl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.1.1",
+ "common-base",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-tracing",
+ "databend-meta",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
@@ -2201,7 +2217,7 @@ dependencies = [
  "common-building",
  "common-cache",
  "common-clickhouse-srv",
- "common-dal-context",
+ "common-contexts",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -2238,7 +2254,7 @@ dependencies = [
  "num_cpus",
  "octocrab",
  "once_cell",
- "opendal 0.0.5 (git+https://github.com/datafuselabs/opendal?rev=80e8bca)",
+ "opendal",
  "parquet-format-async-temp",
  "paste",
  "petgraph",
@@ -4464,9 +4480,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.0.5"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bfb5fdecd830716bdb98ad27074b9f3944421180b682d24cc6982932b2c547e"
+checksum = "fba37dc2b160771e2804fd06fd4059d225e721df63e288efddd52d12d5fde768"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4475,33 +4491,13 @@ dependencies = [
  "aws-sdk-s3",
  "aws-smithy-http",
  "aws-types",
+ "bitflags",
  "blocking",
  "bytes",
  "futures",
  "http",
  "hyper",
- "pin-project",
- "thiserror",
-]
-
-[[package]]
-name = "opendal"
-version = "0.0.5"
-source = "git+https://github.com/datafuselabs/opendal?rev=80e8bca#80e8bcac933ed0fa98928d0f9f09496c09b5a52c"
-dependencies = [
- "anyhow",
- "async-trait",
- "aws-config",
- "aws-endpoint",
- "aws-sdk-s3",
- "aws-smithy-http",
- "aws-types",
- "blocking",
- "bytes",
- "futures",
- "http",
- "hyper",
- "lazy_static",
+ "once_cell",
  "pin-project",
  "reqwest",
  "thiserror",

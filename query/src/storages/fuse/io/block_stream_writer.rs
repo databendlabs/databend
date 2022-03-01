@@ -26,7 +26,7 @@ use futures::TryStreamExt;
 use opendal::Operator;
 
 use crate::storages::fuse::io::block_writer;
-use crate::storages::fuse::io::locations::gen_block_location;
+use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
@@ -40,6 +40,7 @@ pub struct BlockStreamWriter {
     data_schema: Arc<DataSchema>,
     number_of_blocks_accumulated: usize,
     statistics_accumulator: Option<StatisticsAccumulator>,
+    meta_locations: TableMetaLocationGenerator,
 }
 
 impl BlockStreamWriter {
@@ -49,13 +50,14 @@ impl BlockStreamWriter {
         data_schema: Arc<DataSchema>,
         row_per_block: usize,
         block_per_segment: usize,
+        meta_locations: TableMetaLocationGenerator,
     ) -> SegmentInfoStream {
         // filter out empty blocks
         let block_stream =
             block_stream.try_filter(|block| std::future::ready(block.num_rows() > 0));
 
         // merge or split the blocks according to the settings `row_per_block`
-        let block_stream_shaper = BlockRegulator::new(row_per_block);
+        let block_stream_shaper = BlockCompactor::new(row_per_block);
         let block_stream = Self::transform(block_stream, block_stream_shaper);
         // flatten a TryStream of Vec<DataBlock> into a TryStream of DataBlock
         let block_stream = block_stream
@@ -64,7 +66,12 @@ impl BlockStreamWriter {
 
         // Write out the blocks.
         // And transform the stream of DataBlocks into Stream of SegmentInfo at the same time.
-        let block_writer = BlockStreamWriter::new(block_per_segment, data_accessor, data_schema);
+        let block_writer = BlockStreamWriter::new(
+            block_per_segment,
+            data_accessor,
+            data_schema,
+            meta_locations,
+        );
         let segments = Self::transform(Box::pin(block_stream), block_writer);
 
         Box::pin(segments)
@@ -74,6 +81,7 @@ impl BlockStreamWriter {
         num_block_threshold: usize,
         data_accessor: Operator,
         data_schema: Arc<DataSchema>,
+        meta_locations: TableMetaLocationGenerator,
     ) -> Self {
         Self {
             num_block_threshold,
@@ -81,6 +89,7 @@ impl BlockStreamWriter {
             data_schema,
             number_of_blocks_accumulated: 0,
             statistics_accumulator: None,
+            meta_locations,
         }
     }
 
@@ -92,7 +101,7 @@ impl BlockStreamWriter {
     fn transform<R, A, S, T>(inputs: R, mapper: A) -> impl futures::stream::Stream<Item = Result<T>>
     where
         R: Stream<Item = Result<S>> + Unpin,
-        A: Regulator<S, T>,
+        A: Compactor<S, T>,
     {
         // For the convenience of passing mutable state back and forth, `unfold` is used
         let init_state = (Some(mapper), inputs);
@@ -112,11 +121,11 @@ impl BlockStreamWriter {
         })
     }
 
-    pub async fn write_block(&mut self, block: DataBlock) -> Result<Option<SegmentInfo>> {
+    async fn write_block(&mut self, block: DataBlock) -> Result<Option<SegmentInfo>> {
         let mut acc = self.statistics_accumulator.take().unwrap_or_default();
         let partial_acc = acc.begin(&block)?;
         let schema = block.schema().to_arrow();
-        let location = gen_block_location();
+        let location = self.meta_locations.gen_block_location();
         let file_size =
             block_writer::write_block(&schema, block, self.data_accessor.clone(), &location)
                 .await?;
@@ -150,10 +159,8 @@ impl BlockStreamWriter {
 }
 
 /// Takes elements of type S in, and spills elements of type T.
-///
-/// The "shape" of the sequence of S might be not be preserved.
 #[async_trait::async_trait]
-pub trait Regulator<S, T> {
+pub trait Compactor<S, T> {
     /// Takes an element s of type S, convert it into [Some<T>] if possible;
     /// otherwise, returns [None]
     ///
@@ -171,7 +178,7 @@ pub trait Regulator<S, T> {
 }
 
 #[async_trait::async_trait]
-impl Regulator<DataBlock, SegmentInfo> for BlockStreamWriter {
+impl Compactor<DataBlock, SegmentInfo> for BlockStreamWriter {
     async fn regulate(&mut self, s: DataBlock) -> Result<Option<SegmentInfo>> {
         self.write_block(s).await
     }
@@ -199,7 +206,7 @@ impl Regulator<DataBlock, SegmentInfo> for BlockStreamWriter {
     }
 }
 
-pub struct BlockRegulator {
+pub struct BlockCompactor {
     /// Max number of rows per data block
     max_row_per_block: usize,
     /// Number of rows accumulate in `accumulated_blocks`.
@@ -210,7 +217,7 @@ pub struct BlockRegulator {
     accumulated_blocks: Vec<DataBlock>,
 }
 
-impl BlockRegulator {
+impl BlockCompactor {
     pub fn new(max_row_per_block: usize) -> Self {
         Self {
             max_row_per_block,
@@ -224,7 +231,7 @@ impl BlockRegulator {
     }
 
     /// split or merge the DataBlock according to the configuration
-    pub fn regulate(&mut self, block: DataBlock) -> Result<Option<Vec<DataBlock>>> {
+    pub fn compact(&mut self, block: DataBlock) -> Result<Option<Vec<DataBlock>>> {
         let num_rows = block.num_rows();
 
         // For cases like stmt `insert into .. select ... from ...`, the blocks that feeded
@@ -253,7 +260,7 @@ impl BlockRegulator {
     }
 
     /// Pack the remainders into a DataBlock
-    pub fn seal(self) -> Result<Option<Vec<DataBlock>>> {
+    pub fn finish(self) -> Result<Option<Vec<DataBlock>>> {
         let remains = self.accumulated_blocks;
         Ok(if remains.is_empty() {
             None
@@ -265,12 +272,12 @@ impl BlockRegulator {
 
 // A delegation to keep trait [Regulator] private (to unit tests)
 #[async_trait::async_trait]
-impl Regulator<DataBlock, Vec<DataBlock>> for BlockRegulator {
+impl Compactor<DataBlock, Vec<DataBlock>> for BlockCompactor {
     async fn regulate(&mut self, block: DataBlock) -> Result<Option<Vec<DataBlock>>> {
-        BlockRegulator::regulate(self, block)
+        BlockCompactor::compact(self, block)
     }
 
     fn seal(self) -> Result<Option<Vec<DataBlock>>> {
-        BlockRegulator::seal(self)
+        BlockCompactor::finish(self)
     }
 }

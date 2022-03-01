@@ -41,7 +41,7 @@ pub struct RaftLog {
 
 impl RaftLog {
     /// Open RaftLog
-    #[tracing::instrument(level = "info", skip(db,config), fields(config_id=%config.config_id))]
+    #[tracing::instrument(level = "debug", skip(db,config), fields(config_id=%config.config_id))]
     pub async fn open(db: &sled::Db, config: &RaftConfig) -> MetaStorageResult<RaftLog> {
         tracing::info!(?config);
 
