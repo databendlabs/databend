@@ -27,7 +27,7 @@ use opendal::Metadata;
 
 use crate::DalMetrics;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct DalContext {
     inner: Option<Arc<dyn Accessor>>,
     metrics: Arc<DalMetrics>,
