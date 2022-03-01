@@ -62,6 +62,14 @@ impl BooleanColumn {
     pub fn values(&self) -> &Bitmap {
         &self.values
     }
+
+    pub fn from_trusted_len_iter_unchecked<I>(it: I) -> Self
+    where I: Iterator<Item = bool> {
+        let bitmap = unsafe { MutableBitmap::from_trusted_len_iter_unchecked(it) };
+        BooleanColumn {
+            values: bitmap.into(),
+        }
+    }
 }
 
 impl Column for BooleanColumn {

@@ -89,10 +89,8 @@ fn databend_eq(lhs: &ColumnRef, rhs: &ColumnRef) -> Result<ColumnRef> {
         let left: &<$T as Scalar>::ColumnType = unsafe { Series::static_cast(&lhs) };
         let right: &<$T as Scalar>::ColumnType = unsafe { Series::static_cast(&rhs) };
 
-        let it = left.scalar_iter().zip(right.scalar_iter()).map(|(a, b)| a.to_owned_scalar().eq(&b.to_owned_scalar()));
-
-        let col = <bool as Scalar>::ColumnType::from_owned_iterator(it);
-        Arc::new(col)
+        let it = left.scalar_iter().zip(right.scalar_iter()).map(|(a, b)| a.eq(&b));
+        Arc::new(BooleanColumn::from_trusted_len_iter_unchecked(it))
     });
 
     Ok(Arc::new(NullableColumn::new(col, validity.unwrap())))
