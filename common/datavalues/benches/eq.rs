@@ -17,7 +17,8 @@ extern crate criterion;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
-use common_arrow::arrow::compute::if_then_else::if_then_else;
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::compute::comparison;
 use common_arrow::arrow::types::NativeType;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -28,46 +29,24 @@ fn add_benchmark(c: &mut Criterion) {
     let size = 1048576;
     let lhs: ArrayRef = Arc::new(create_primitive_array::<i32>(size, 0.2));
     let rhs: ArrayRef = Arc::new(create_primitive_array::<i32>(size, 0.3));
-    let ifs: ArrayRef = Arc::new(create_boolean_array(size, 0.0, 0.3));
 
-    c.bench_function("arrow2_if_else_then", |b| {
-        b.iter(|| criterion::black_box(arrow2_if_else_then(&lhs, &rhs, &ifs)))
+    c.bench_function("arrow2_eq", |b| {
+        b.iter(|| criterion::black_box(arrow2_eq(&lhs, &rhs)))
     });
 
     let lhs: ColumnRef = lhs.into_nullable_column();
     let rhs: ColumnRef = rhs.into_nullable_column();
-    let ifs: ColumnRef = ifs.into_nullable_column();
 
-    c.bench_function("databend_if_else_then", |b| {
-        b.iter(|| criterion::black_box(databend_if_else_then(&lhs, &rhs, &ifs)))
+    c.bench_function("databend_eq", |b| {
+        b.iter(|| criterion::black_box(databend_eq(&lhs, &rhs)))
     });
 }
 
-fn arrow2_if_else_then(lhs: &ArrayRef, rhs: &ArrayRef, ifs: &ArrayRef) -> Result<Box<dyn Array>> {
-    let predicate = ifs.as_any().downcast_ref::<BooleanArray>().unwrap();
-    Ok(if_then_else(predicate, lhs.as_ref(), rhs.as_ref()).unwrap())
+fn arrow2_eq(lhs: &ArrayRef, rhs: &ArrayRef) -> BooleanArray {
+    comparison::eq(lhs.as_ref(), rhs.as_ref())
 }
 
-fn databend_if_else_then(
-    lhs: &ColumnRef,
-    rhs: &ColumnRef,
-    ifs: &ColumnRef,
-) -> Result<Arc<dyn Column>> {
-    let predicate: &NullableColumn = Series::check_get(ifs)?;
-    let bool_c: &BooleanColumn = Series::check_get(predicate.inner())?;
-    let bools = bool_c.values();
-    let validity_predict = predicate.ensure_validity();
-
-    if lhs.data_type() != rhs.data_type() {
-        return Err(ErrorCode::BadDataValueType(
-            "lhs and rhs must have the same data type".to_string(),
-        ));
-    }
-
-    let physical_id = remove_nullable(&lhs.data_type())
-        .data_type_id()
-        .to_physical_type();
-
+fn databend_eq(lhs: &ColumnRef, rhs: &ColumnRef) -> Result<ColumnRef> {
     macro_rules! with_match_physical_primitive_type {(
         $key_type:expr, | $_:tt $T:ident | $($body:tt)*
     ) => ({
@@ -87,24 +66,36 @@ fn databend_if_else_then(
         }
     })}
 
-    with_match_physical_primitive_type!(physical_id, |$T| {
-        let lhs_wrapper = $T::try_create_viewer(lhs)?;
-        let rhs_wrapper = $T::try_create_viewer(rhs)?;
-        let size = lhs_wrapper.len();
+    let mut validity: Option<Bitmap> = None;
+    let (_, valid) = lhs.validity();
+    validity = combine_validities_2(validity.clone(), valid.cloned());
+    let lhs = Series::remove_nullable(lhs);
 
-        let mut builder = NullableColumnBuilder::<$T>::with_capacity(size);
+    let (_, valid) = rhs.validity();
+    validity = combine_validities_2(validity.clone(), valid.cloned());
+    let rhs = Series::remove_nullable(rhs);
 
-        for row in 0..size {
-            let valid = validity_predict.get_bit(row);
-            if bools.get_bit(row) {
-                builder.append(lhs_wrapper.value_at(row), valid & lhs_wrapper.valid_at(row));
-            } else {
-                builder.append(rhs_wrapper.value_at(row), valid & rhs_wrapper.valid_at(row));
-            };
-        }
+    if lhs.data_type() != rhs.data_type() {
+        return Err(ErrorCode::BadDataValueType(
+            "lhs and rhs must have the same data type".to_string(),
+        ));
+    }
 
-        Ok(builder.build(size))
-    })
+    let physical_id = remove_nullable(&lhs.data_type())
+        .data_type_id()
+        .to_physical_type();
+
+    let col = with_match_physical_primitive_type!(physical_id, |$T| {
+        let left: &<$T as Scalar>::ColumnType = unsafe { Series::static_cast(&lhs) };
+        let right: &<$T as Scalar>::ColumnType = unsafe { Series::static_cast(&rhs) };
+
+        let it = left.scalar_iter().zip(right.scalar_iter()).map(|(a, b)| a.to_owned_scalar().eq(&b.to_owned_scalar()));
+
+        let col = <bool as Scalar>::ColumnType::from_owned_iterator(it);
+        Arc::new(col)
+    });
+
+    Ok(Arc::new(NullableColumn::new(col, validity.unwrap())))
 }
 
 criterion_group!(benches, add_benchmark);
@@ -159,20 +150,4 @@ where
             }
         })
         .collect::<PrimitiveArray<T>>()
-}
-
-/// Creates an random (but fixed-seeded) array of a given size and null density
-pub fn create_boolean_array(size: usize, null_density: f32, true_density: f32) -> BooleanArray
-where Standard: Distribution<bool> {
-    let mut rng = seedable_rng();
-    (0..size)
-        .map(|_| {
-            if rng.gen::<f32>() < null_density {
-                None
-            } else {
-                let value = rng.gen::<f32>() < true_density;
-                Some(value)
-            }
-        })
-        .collect()
 }
