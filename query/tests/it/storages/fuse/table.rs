@@ -24,7 +24,7 @@ use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::PlanParser;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
+use databend_query::storages::fuse::FUSE_OPT_KEY_CHUNK_BLOCK_NUM;
 use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::storages::OPT_KEY_DATABASE_ID;
 use futures::TryStreamExt;
@@ -233,7 +233,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
     create_table_plan
         .table_meta
         .options
-        .insert(TBL_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), 100.to_string());
+        .insert(FUSE_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), 100.to_string());
 
     // create test table
     let tbl_name = create_table_plan.table.clone();

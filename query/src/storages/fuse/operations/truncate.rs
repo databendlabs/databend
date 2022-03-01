@@ -25,7 +25,7 @@ use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::FuseTable;
-use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
+use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 
 impl FuseTable {
     #[inline]
@@ -58,7 +58,7 @@ impl FuseTable {
             ctx.get_catalog()
                 .upsert_table_option(UpsertTableOptionReq::new(
                     &self.table_info.ident,
-                    TBL_OPT_KEY_SNAPSHOT_LOC,
+                    FUSE_OPT_KEY_SNAPSHOT_LOC,
                     new_snapshot_loc,
                 ))
                 .await?;

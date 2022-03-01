@@ -35,7 +35,7 @@ use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::table_functions::table_arg_util::parse_func_history_args;
 use crate::storages::fuse::table_functions::table_arg_util::string_literal;
 use crate::storages::fuse::FuseTable;
-use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
+use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
@@ -161,7 +161,7 @@ impl Table for FuseHistoryTable {
         })?;
 
         let tbl_info = tbl.get_table_info();
-        let location = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
+        let location = tbl_info.meta.options.get(FUSE_OPT_KEY_SNAPSHOT_LOC);
         let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
         let snapshots = reader
             .read_snapshot_history(location, tbl.meta_locations().clone())

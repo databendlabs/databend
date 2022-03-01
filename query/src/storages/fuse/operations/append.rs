@@ -28,8 +28,8 @@ use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::storages::fuse::DEFAULT_ROW_PER_BLOCK;
-use crate::storages::fuse::TBL_OPT_KEY_BLOCK_PER_SEGMENT;
-use crate::storages::fuse::TBL_OPT_KEY_ROW_PER_BLOCK;
+use crate::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use crate::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
 pub type AppendOperationLogEntryStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<AppendOperationLogEntry>> + Send>>;
@@ -41,10 +41,10 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,
     ) -> Result<AppendOperationLogEntryStream> {
-        let rows_per_block = self.get_option(TBL_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
+        let rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
 
         let block_per_seg =
-            self.get_option(TBL_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+            self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
         let da = ctx.get_storage_operator().await?;
 

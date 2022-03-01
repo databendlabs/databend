@@ -37,7 +37,7 @@ use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::operations::TableOperationLog;
 use crate::storages::fuse::statistics;
 use crate::storages::fuse::FuseTable;
-use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
+use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
 
 impl FuseTable {
@@ -217,7 +217,7 @@ impl FuseTable {
                     table_id,
                     version: table_version,
                 },
-                TBL_OPT_KEY_SNAPSHOT_LOC,
+                FUSE_OPT_KEY_SNAPSHOT_LOC,
                 new_snapshot_location,
             ))
             .await
