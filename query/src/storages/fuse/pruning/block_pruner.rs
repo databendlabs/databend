@@ -56,9 +56,8 @@ impl BlockPruner {
             _ => Box::new(|_: &BlockStatistics| Ok(true)),
         };
 
-        let snapshot = self.table_snapshot.as_ref();
-        let segment_num = snapshot.segments.len();
-        let segment_locs = snapshot.segments.clone();
+        let segment_locs = self.table_snapshot.segments.clone();
+        let segment_num = segment_locs.len();
 
         if segment_locs.is_empty() {
             return Ok(vec![]);

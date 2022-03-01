@@ -19,22 +19,24 @@ use common_base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
 use common_planners::add;
 use common_planners::col;
 use common_planners::lit;
 use common_planners::sub;
+use common_planners::CreateTablePlan;
 use common_planners::Extras;
 use databend_query::catalogs::Catalog;
+use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::meta::BlockMeta;
 use databend_query::storages::fuse::meta::TableSnapshot;
 use databend_query::storages::fuse::pruning::BlockPruner;
-use databend_query::storages::fuse::TBL_OPT_BLOCK_PER_SEGMENT;
-use databend_query::storages::fuse::TBL_OPT_ROW_PER_BLOCK;
-use databend_query::storages::fuse::TBL_OPT_SNAPSHOT_LOC;
+use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
+use databend_query::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
+use databend_query::storages::OPT_KEY_DATABASE_ID;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -66,8 +68,8 @@ async fn test_block_pruner() -> Result<()> {
     let num_blocks_opt = row_per_block.to_string();
 
     // create test table
-    let crate_table_plan = CreateTableReq {
-        if_not_exists: false,
+    let create_table_plan = CreateTablePlan {
+        if_not_exists: falsemeta_locs.snapshot_location_from_uuid,
         tenant: fixture.default_tenant(),
         db: fixture.default_db_name(),
         table: test_tbl_name.to_string(),
@@ -75,19 +77,23 @@ async fn test_block_pruner() -> Result<()> {
             schema: test_schema.clone(),
             engine: "FUSE".to_string(),
             options: [
-                (TBL_OPT_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
+                (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
                 // for the convenience of testing, let one seegment contains one block
-                (TBL_OPT_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
+                (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
+                // database id is required for FUSE
+                (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
             ..Default::default()
         },
+        as_select: None,
     };
 
-    let catalog = ctx.get_catalog();
-    catalog.create_table(crate_table_plan).await?;
+    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    interpreter.execute(None).await?;
 
     // get table
+    let catalog = ctx.get_catalog();
     let table = catalog
         .get_table(
             fixture.default_tenant().as_str(),
@@ -134,7 +140,7 @@ async fn test_block_pruner() -> Result<()> {
     let snapshot_loc = table
         .get_table_info()
         .options()
-        .get(TBL_OPT_SNAPSHOT_LOC)
+        .get(FUSE_OPT_KEY_SNAPSHOT_LOC)
         .unwrap();
 
     let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
@@ -143,7 +149,7 @@ async fn test_block_pruner() -> Result<()> {
     // nothing will be pruned
     let push_downs = None;
     let blocks = apply_block_pruning(
-        &snapshot,
+        snapshot.clone(),
         table.get_table_info().schema(),
         &push_downs,
         ctx.clone(),
@@ -160,7 +166,7 @@ async fn test_block_pruner() -> Result<()> {
     extra.filters = vec![pred];
 
     let blocks = apply_block_pruning(
-        &snapshot,
+        snapshot.clone(),
         table.get_table_info().schema(),
         &Some(extra),
         ctx.clone(),
@@ -175,7 +181,7 @@ async fn test_block_pruner() -> Result<()> {
     extra.filters = vec![pred];
 
     let blocks = apply_block_pruning(
-        &snapshot,
+        snapshot.clone(),
         table.get_table_info().schema(),
         &Some(extra),
         ctx.clone(),
@@ -198,11 +204,11 @@ async fn test_block_pruner_monotonic() -> Result<()> {
         DataField::new("b", u64::to_data_type()),
     ]);
 
-    let row_per_block = 3i32;
+    let row_per_block = 3u32;
     let num_blocks_opt = row_per_block.to_string();
 
     // create test table
-    let crate_table_plan = CreateTableReq {
+    let create_table_plan = CreateTablePlan {
         if_not_exists: false,
         tenant: fixture.default_tenant(),
         db: fixture.default_db_name(),
@@ -211,17 +217,21 @@ async fn test_block_pruner_monotonic() -> Result<()> {
             schema: test_schema.clone(),
             engine: "FUSE".to_string(),
             options: [
-                (TBL_OPT_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
+                (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
                 // for the convenience of testing, let one seegment contains one block
-                (TBL_OPT_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
+                (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
+                // database id is required for FUSE
+                (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
             ..Default::default()
         },
+        as_select: None,
     };
 
     let catalog = ctx.get_catalog();
-    catalog.create_table(crate_table_plan).await?;
+    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    interpreter.execute(None).await?;
 
     // get table
     let table = catalog
@@ -265,9 +275,8 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     let snapshot_loc = table
         .get_table_info()
         .options()
-        .get(TBL_OPT_SNAPSHOT_LOC)
+        .get(FUSE_OPT_KEY_SNAPSHOT_LOC)
         .unwrap();
-
     let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
@@ -277,7 +286,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     extra.filters = vec![pred];
 
     let blocks = apply_block_pruning(
-        &snapshot,
+        snapshot.clone(),
         table.get_table_info().schema(),
         &Some(extra),
         ctx.clone(),
@@ -292,7 +301,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     extra.filters = vec![pred];
 
     let blocks = apply_block_pruning(
-        &snapshot,
+        snapshot.clone(),
         table.get_table_info().schema(),
         &Some(extra),
         ctx.clone(),

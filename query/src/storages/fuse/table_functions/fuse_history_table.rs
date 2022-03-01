@@ -35,7 +35,7 @@ use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::table_functions::table_arg_util::parse_func_history_args;
 use crate::storages::fuse::table_functions::table_arg_util::string_literal;
 use crate::storages::fuse::FuseTable;
-use crate::storages::fuse::TBL_OPT_SNAPSHOT_LOC;
+use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
@@ -154,17 +154,12 @@ impl Table for FuseHistoryTable {
             )
             .await?;
 
-        // TODO proper exception
-        let fuse_tbl = tbl
-            .as_ref()
-            .as_any()
-            .downcast_ref::<FuseTable>()
-            .ok_or_else(|| {
-                ErrorCode::BadArguments(format!(
-                    "expecting fuse table, but got table of engine type: {}",
-                    tbl.get_table_info().meta.engine
-                ))
-            })?;
+        let tbl = tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::BadArguments(format!(
+                "expecting fuse table, but got table of engine type: {}",
+                tbl.get_table_info().meta.engine
+            ))
+        })?;
 
         let tbl_info = tbl.get_table_info();
         let location = tbl_info.meta.options.get(TBL_OPT_SNAPSHOT_LOC);

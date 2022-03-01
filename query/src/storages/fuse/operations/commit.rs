@@ -31,7 +31,6 @@ use uuid::Uuid;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io;
 use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::meta::TableSnapshot;
@@ -39,7 +38,7 @@ use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::operations::TableOperationLog;
 use crate::storages::fuse::statistics;
 use crate::storages::fuse::FuseTable;
-use crate::storages::fuse::TBL_OPT_SNAPSHOT_LOC;
+use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
 
 impl FuseTable {
@@ -108,12 +107,7 @@ impl FuseTable {
                                 meta: meta.as_ref().clone(),
                             };
                             latest = catalog.get_table_by_info(&table_info)?;
-                            tbl = latest.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-                                ErrorCode::LogicalError(format!(
-                                    "expects table engine FUSE, but got {}",
-                                    latest.engine()
-                                ))
-                            })?;
+                            tbl = FuseTable::try_from_table(latest.as_ref())?;
                             retry_times += 1;
                             continue;
                         }
@@ -165,7 +159,7 @@ impl FuseTable {
         };
 
         let uuid = new_snapshot.snapshot_id;
-        let snapshot_loc = io::snapshot_location(&uuid);
+        let snapshot_loc = self.meta_locations().snapshot_location_from_uuid(&uuid);
         let bytes = serde_json::to_vec(&new_snapshot)?;
         let operator = ctx.get_storage_operator().await?;
         operator
@@ -204,7 +198,7 @@ impl FuseTable {
         };
 
         let new_snapshot = TableSnapshot {
-            format_version: 1,
+            format_version: 1, // TODO
             snapshot_id: Uuid::new_v4(),
             prev_snapshot_id,
             schema: schema.clone(),
@@ -228,7 +222,7 @@ impl FuseTable {
                     table_id,
                     version: table_version,
                 },
-                TBL_OPT_SNAPSHOT_LOC,
+                FUSE_OPT_KEY_SNAPSHOT_LOC,
                 new_snapshot_location,
             ))
             .await

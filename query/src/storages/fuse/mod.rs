@@ -14,15 +14,15 @@
 
 pub mod cache;
 mod constants;
+mod fuse_table;
 pub mod io;
 pub mod meta;
 pub mod operations;
 pub mod pruning;
 pub mod statistics;
-mod table;
 mod table_functions;
 
 pub use constants::*;
-pub use table::FuseTable;
+pub use fuse_table::FuseTable;
 pub use table_functions::FuseHistoryTable;
 pub use table_functions::FUSE_FUNC_HIST;

@@ -33,6 +33,7 @@ use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::io::CachedReader;
 use crate::storages::fuse::io::HasTenantLabel;
 use crate::storages::fuse::io::Loader;
+use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
 
@@ -104,6 +105,7 @@ impl<'a> TableSnapshotReader<'a> {
         &self,
         latest_snapshot_location: Option<&String>,
         format_version: u64,
+        meta_locs: TableMetaLocationGenerator,
     ) -> Result<Vec<Arc<TableSnapshot>>> {
         let mut snapshots = vec![];
         let mut current_snapshot_location = latest_snapshot_location.cloned();
@@ -120,7 +122,7 @@ impl<'a> TableSnapshotReader<'a> {
             let prev = snapshot.prev_snapshot_id;
             snapshots.push(snapshot);
             // TODO buggy, set the current ver
-            current_snapshot_location = prev.map(|(id, _ver)| snapshot_location(&id));
+            current_snapshot_location = prev.map(|id| meta_locs.snapshot_location_from_uuid(&id));
         }
         Ok(snapshots)
     }
