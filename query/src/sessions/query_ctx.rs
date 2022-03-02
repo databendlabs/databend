@@ -25,18 +25,17 @@ use common_base::ProgressValues;
 use common_base::TrySpawn;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::TableInfo;
 use common_meta_types::UserInfo;
-use common_meta_types::UserStageInfo;
 use common_planners::Expression;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
+use common_planners::S3ExternalTableInfo;
 use common_planners::SourceInfo;
 use common_planners::Statistics;
 use common_streams::AbortStream;
@@ -99,8 +98,8 @@ impl QueryContext {
             SourceInfo::TableSource(table_info) => {
                 self.build_table_by_table_info(table_info, plan.tbl_args.clone())
             }
-            SourceInfo::S3ExternalSource(stage_info) => {
-                self.build_s3_external_table_by_stage_info(plan.schema(), stage_info.clone())
+            SourceInfo::S3ExternalSource(s3_table_info) => {
+                self.build_s3_external_table_by_stage_info(s3_table_info)
             }
         }
     }
@@ -127,10 +126,9 @@ impl QueryContext {
     // 's3://' here is a s3 external stage, and build it to the external table.
     fn build_s3_external_table_by_stage_info(
         &self,
-        schema: DataSchemaRef,
-        stage_info: UserStageInfo,
+        table_info: &S3ExternalTableInfo,
     ) -> Result<Arc<dyn Table>> {
-        S3ExternalTable::try_create(schema, stage_info)
+        S3ExternalTable::try_create(table_info.clone())
     }
 
     pub fn get_scan_progress(&self) -> Arc<Progress> {

@@ -15,11 +15,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_meta_types::UserStageInfo;
 use common_planners::ReadDataSourcePlan;
+use common_planners::S3ExternalTableInfo;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
@@ -31,22 +30,20 @@ use crate::storages::ExternalSource;
 use crate::storages::Table;
 
 pub struct S3ExternalTable {
-    schema: DataSchemaRef,
-    stage_info: UserStageInfo,
+    table_info: S3ExternalTableInfo,
 
     // This is no used but a placeholder.
     // But the Table trait need it:
     // fn get_table_info(&self) -> &TableInfo).
-    table_info: TableInfo,
+    table_info_placeholder: TableInfo,
 }
 
 impl S3ExternalTable {
-    pub fn try_create(schema: DataSchemaRef, stage_info: UserStageInfo) -> Result<Arc<dyn Table>> {
-        let table_info = TableInfo::default();
+    pub fn try_create(table_info: S3ExternalTableInfo) -> Result<Arc<dyn Table>> {
+        let table_info_placeholder = TableInfo::default();
         Ok(Arc::new(Self {
-            schema,
-            stage_info,
             table_info,
+            table_info_placeholder,
         }))
     }
 }
@@ -59,7 +56,7 @@ impl Table for S3ExternalTable {
 
     // S3 external has no table info yet.
     fn get_table_info(&self) -> &TableInfo {
-        &self.table_info
+        &self.table_info_placeholder
     }
 
     async fn read(
@@ -76,17 +73,17 @@ impl Table for S3ExternalTable {
         _plan: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
+        let schema = self.table_info.schema.clone();
+        let stage_info = self.table_info.stage_info.clone();
+        let file_name = self.table_info.file_name.clone();
+
         // Add ExternalSource Pipe to the pipeline.
         let output = OutputPort::create();
         pipeline.add_pipe(NewPipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
             processors: vec![ExternalSource::try_create(
-                ctx,
-                output,
-                self.schema.clone(),
-                self.stage_info.clone(),
-                None,
+                ctx, output, schema, stage_info, file_name,
             )?],
         });
 
