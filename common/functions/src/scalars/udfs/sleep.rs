@@ -74,8 +74,26 @@ impl Function for SleepFunction {
             )));
         }
 
-        let seconds = c.get_u64(0)?;
-        std::thread::sleep(Duration::from_secs(seconds));
+        let value = c.get(0);
+        let err = || ErrorCode::BadArguments(format!("Incorrect arguments to sleep: {}", value));
+
+        // is_numeric is checked in return_type()
+        // value >= 0  is checked here
+        let duration = if c.data_type_id().is_floating() {
+            value
+                .as_f64()
+                .and_then(|v| Duration::try_from_secs_f64(v).map_err(|_| err()))?
+        } else {
+            value.as_u64().map(Duration::from_secs).map_err(|_| err())?
+        };
+
+        if duration.ge(&Duration::from_secs(3)) {
+            return Err(ErrorCode::BadArguments(format!(
+                "The maximum sleep time is 3 seconds. Requested: {:?}",
+                duration
+            )));
+        };
+        std::thread::sleep(duration);
         let t = Int8Type::arc();
         t.create_constant_column(&DataValue::UInt64(0), input_rows)
     }
