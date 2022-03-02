@@ -77,7 +77,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.data.len(), 10);
-    assert_eq!(result.state, ExecuteStateName::Succeeded);
+    assert_eq!(result.state, ExecuteStateName::Succeeded, "{:?}", result);
     assert!(result.next_uri.is_none(), "{:?}", result);
     assert!(result.stats.progress.is_some());
     assert!(result.schema.is_some());
