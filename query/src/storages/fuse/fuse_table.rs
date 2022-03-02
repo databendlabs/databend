@@ -36,7 +36,7 @@ use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
-use crate::storages::fuse::TBL_OPT_SNAPSHOT_VER;
+use crate::storages::fuse::FUSE_OPT_KYE_SNAPSHOT_VER;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
@@ -168,7 +168,7 @@ impl FuseTable {
         let result = self
             .table_info
             .options()
-            .get(TBL_OPT_SNAPSHOT_VER)
+            .get(FUSE_OPT_KYE_SNAPSHOT_VER)
             .map(|ver_str| {
                 let v = ver_str.as_str();
                 v.parse::<u64>().map_err(|_| {

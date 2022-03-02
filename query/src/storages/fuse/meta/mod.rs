@@ -13,16 +13,8 @@
 //  limitations under the License.
 //
 
-pub mod current;
+mod current;
 mod v0;
 mod v1;
-//mod versioned;
 
-pub use v1::block::BlockLocation;
-pub use v1::block::BlockMeta;
-pub use v1::segment::SegmentInfo;
-pub use v1::snapshot::ColumnId;
-pub use v1::snapshot::Location;
-pub use v1::snapshot::SnapshotId;
-pub use v1::snapshot::Statistics;
-pub use v1::snapshot::TableSnapshot;
+pub use current::*;

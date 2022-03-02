@@ -12,6 +12,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use crate::storages::fuse::meta::TableSnapshot;
+pub use v1::block::BlockLocation;
+pub use v1::block::BlockMeta;
+pub use v1::segment::SegmentInfo;
+pub use v1::snapshot::ColumnId;
+pub use v1::snapshot::Location;
+pub use v1::snapshot::SnapshotId;
+pub use v1::snapshot::Statistics;
+pub use v1::snapshot::TableSnapshot;
 
-pub type Snapshot = TableSnapshot;
+use super::v1;

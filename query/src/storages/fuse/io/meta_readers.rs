@@ -45,7 +45,7 @@ pub trait BufReaderProvider {
     async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<Reader>>;
 }
 
-/// A Newtype for [FileMetaData].
+/// A Newtype of [FileMetaData].
 ///
 /// To avoid implementation (of trait [Loader]) conflicts
 pub struct BlockMeta(FileMetaData);
@@ -64,10 +64,6 @@ pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, &'a QueryContext>;
 pub type TableSnapshotReader<'a> = CachedReader<TableSnapshot, &'a QueryContext>;
 
 /// A sugar type of BlockMeta reader
-///
-/// To make it "lifetime-compliant", `Arc<QueryContext>` is used as the `Loader` of [CachedReader],
-/// instead of `&QueryContext`.  (BlockMetaReader is used in constructing async streams)
-///
 pub type BlockMetaReader = CachedReader<BlockMeta, Arc<QueryContext>>;
 
 /// Aux struct, factory of common readers
