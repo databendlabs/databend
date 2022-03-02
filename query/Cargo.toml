@@ -54,10 +54,10 @@ common-tracing = { path = "../common/tracing" }
 # Github dependencies
 cargo-license = { git = "https://github.com/datafuse-extras/cargo-license", rev = "f1ce4a2" }
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "70aa0b2" }
-opendal = "0.1.2"
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "472f5b6" }
 
 # Crates.io dependencies
+opendal = "0.1.3"
 ahash = "0.7.6"
 async-compat = "0.2.1"
 async-recursion = "1.0.0"

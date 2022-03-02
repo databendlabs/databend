@@ -110,8 +110,7 @@ impl BlockReader {
                     permit,
                     data_accessor
                         .object(path.as_str())
-                        .reader()
-                        .total_size(stream_len),
+                        .limited_reader(stream_len),
                 ))
             }) as BoxFuture<_>
         };
