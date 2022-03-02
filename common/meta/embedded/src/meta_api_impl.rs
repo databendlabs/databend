@@ -31,6 +31,8 @@ use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
+use common_meta_types::RenameTableReply;
+use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -81,6 +83,11 @@ impl MetaApi for MetaEmbedded {
         let sm = self.inner.lock().await;
         let reply = sm.drop_table(req).await?;
         Ok(reply)
+    }
+
+    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
+        let sm = self.inner.lock().await;
+        sm.rename_table(req).await
     }
 
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, MetaError> {

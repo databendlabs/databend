@@ -37,8 +37,8 @@ pub struct MetaEmbedded {
     pub(crate) inner: Arc<Mutex<StateMachine>>,
 }
 
-static GLOBAL_META_EMBEDDED: Lazy<Arc<std::sync::Mutex<Option<Arc<MetaEmbedded>>>>> =
-    Lazy::new(|| Arc::new(std::sync::Mutex::new(None)));
+static GLOBAL_META_EMBEDDED: Lazy<Arc<Mutex<Option<Arc<MetaEmbedded>>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(None)));
 
 impl MetaEmbedded {
     /// Creates a KVApi impl backed with a `StateMachine`.
@@ -89,7 +89,7 @@ impl MetaEmbedded {
         common_meta_sled_store::init_sled_db(path);
 
         {
-            let mut m = GLOBAL_META_EMBEDDED.as_ref().lock().unwrap();
+            let mut m = GLOBAL_META_EMBEDDED.as_ref().lock().await;
             let r = m.as_ref();
 
             if r.is_none() {
@@ -107,7 +107,7 @@ impl MetaEmbedded {
     /// Otherwise, return a meta store backed with temp dir for test.
     pub async fn get_meta() -> common_exception::Result<Arc<MetaEmbedded>> {
         {
-            let m = GLOBAL_META_EMBEDDED.as_ref().lock().unwrap();
+            let m = GLOBAL_META_EMBEDDED.as_ref().lock().await;
             let r = m.as_ref();
 
             if let Some(x) = r {

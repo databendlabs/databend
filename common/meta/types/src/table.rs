@@ -214,6 +214,20 @@ pub struct DropTableReq {
 pub struct DropTableReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct RenameTableReq {
+    pub tenant: String,
+    pub db: String,
+    pub table_name: String,
+    pub new_db: String,
+    pub new_table_name: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct RenameTableReply {
+    pub table_id: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct UpsertTableOptionReq {
     pub table_id: u64,
     pub seq: MatchSeq,
