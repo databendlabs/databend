@@ -17,13 +17,13 @@ mod block_stream_writer;
 mod block_writer;
 mod locations;
 mod meta_readers;
+mod parallel_async_reader;
 
 pub use block_reader::BlockReader;
-pub use block_stream_writer::BlockRegulator;
+pub use block_stream_writer::BlockCompactor;
 pub use block_stream_writer::BlockStreamWriter;
 pub use block_stream_writer::SegmentInfoStream;
-pub use locations::gen_segment_info_location;
-pub use locations::snapshot_location;
+pub use locations::TableMetaLocationGenerator;
 pub use meta_readers::BlockMetaCache;
 pub use meta_readers::MetaReaders;
 pub use meta_readers::SegmentInfoCache;

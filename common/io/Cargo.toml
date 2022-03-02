@@ -24,4 +24,4 @@ bytes = "1.1.0"
 serde = { version = "1.0.136", features = ["derive"] }
 
 [dev-dependencies]
-rand = "0.8.4"
+rand = "0.8.5"

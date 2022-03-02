@@ -27,16 +27,18 @@ use common_planners::Expression;
 use common_planners::Extras;
 use common_streams::SendableDataBlockStream;
 use databend_query::catalogs::Catalog;
+use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::PlanParser;
 use databend_query::storages::fuse::FuseHistoryTable;
+use databend_query::storages::fuse::FUSE_OPT_KEY_CHUNK_BLOCK_NUM;
 use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
-use databend_query::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
 use databend_query::storages::Table;
 use databend_query::storages::ToReadDataSourcePlan;
+use databend_query::storages::OPT_KEY_DATABASE_ID;
 use databend_query::table_functions::TableArgs;
 use futures::TryStreamExt;
 use tempfile::TempDir;
@@ -62,7 +64,7 @@ impl TestFixture {
         let ctx = crate::tests::create_query_context_with_config(conf).unwrap();
 
         let tenant = ctx.get_tenant();
-        let random_prefix: String = Uuid::new_v4().simple().to_string();
+        let random_prefix: String = Uuid::new_v4().to_simple().to_string();
         // prepare a randomly named default database
         let db_name = gen_db_name(&random_prefix);
         let plan = CreateDatabasePlan {
@@ -116,7 +118,12 @@ impl TestFixture {
                 schema: TestFixture::default_schema(),
                 engine: "FUSE".to_string(),
                 // make sure blocks will not be merged
-                options: [(TBL_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), "1".to_owned())].into(),
+                options: [
+                    (FUSE_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), "1".to_owned()),
+                    // database id is required for FUSE
+                    (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+                ]
+                .into(),
                 ..Default::default()
             },
             as_select: None,
@@ -125,8 +132,9 @@ impl TestFixture {
 
     pub async fn create_default_table(&self) -> Result<()> {
         let create_table_plan = self.default_crate_table_plan();
-        let catalog = self.ctx.get_catalog();
-        catalog.create_table(create_table_plan.into()).await
+        let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
+        interpreter.execute(None).await?;
+        Ok(())
     }
 
     pub fn gen_sample_blocks(num: usize, start: i32) -> Vec<Result<DataBlock>> {

@@ -17,4 +17,4 @@ common-tracing = { path = "../tracing" }
 async-trait = "0.1.52"
 
 [dev-dependencies]
-anyhow = "1.0.53"
+anyhow = "1.0.55"

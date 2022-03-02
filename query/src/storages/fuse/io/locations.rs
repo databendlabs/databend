@@ -19,16 +19,39 @@ use crate::storages::fuse::constants::FUSE_TBL_BLOCK_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 
-pub fn gen_block_location() -> String {
-    let part_uuid = Uuid::new_v4().simple().to_string() + ".parquet";
-    format!("{}/{}", FUSE_TBL_BLOCK_PREFIX, part_uuid)
+#[derive(Clone)]
+pub struct TableMetaLocationGenerator {
+    prefix: String,
 }
 
-pub fn gen_segment_info_location() -> String {
-    let segment_uuid = Uuid::new_v4().simple().to_string();
-    format!("{}/{}", FUSE_TBL_SEGMENT_PREFIX, segment_uuid)
-}
+impl TableMetaLocationGenerator {
+    pub fn with_prefix(prefix: String) -> Self {
+        Self { prefix }
+    }
 
-pub fn snapshot_location(id: &Uuid) -> String {
-    format!("{}/{}", FUSE_TBL_SNAPSHOT_PREFIX, id.simple())
+    pub fn prefix(&self) -> &str {
+        &self.prefix
+    }
+
+    pub fn gen_block_location(&self) -> String {
+        let part_uuid = Uuid::new_v4().to_simple().to_string() + ".parquet";
+        format!("{}/{}/{}", &self.prefix, FUSE_TBL_BLOCK_PREFIX, part_uuid)
+    }
+
+    pub fn gen_segment_info_location(&self) -> String {
+        let segment_uuid = Uuid::new_v4().to_simple().to_string();
+        format!(
+            "{}/{}/{}",
+            &self.prefix, FUSE_TBL_SEGMENT_PREFIX, segment_uuid
+        )
+    }
+
+    pub fn snapshot_location_from_uuid(&self, id: &Uuid) -> String {
+        format!(
+            "{}/{}/{}",
+            &self.prefix,
+            FUSE_TBL_SNAPSHOT_PREFIX,
+            id.to_simple()
+        )
+    }
 }

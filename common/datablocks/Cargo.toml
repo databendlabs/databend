@@ -22,7 +22,7 @@ common-io = { path = "../io" }
 
 # Crates.io dependencies
 ahash = "0.7.6"
-comfy-table = "5.0.0"
+comfy-table = "5.0.1"
 regex = "1.5.4"
 
 [dev-dependencies]

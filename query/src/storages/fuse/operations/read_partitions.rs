@@ -39,7 +39,10 @@ impl FuseTable {
         match snapshot {
             Some(snapshot) => {
                 let schema = self.table_info.schema();
-                let block_metas = BlockPruner::new(&snapshot)
+                //let snapshot_loc = self
+                //    .meta_locations()
+                //    .snapshot_location_from_uuid(&snapshot.snapshot_id);
+                let block_metas = BlockPruner::new(snapshot.clone())
                     .apply(schema, &push_downs, ctx.as_ref())
                     .await?;
 
@@ -70,6 +73,12 @@ impl FuseTable {
         blocks_metas: &[BlockMeta], // TODO is &[&BlockMeta] enough?
         push_downs: Option<Extras>,
     ) -> (Statistics, Partitions) {
+        let is_exact = match &push_downs {
+            // We don't have limit push down in parquet reader
+            Some(extra) => extra.filters.is_empty(),
+            None => true,
+        };
+
         let proj_cols =
             push_downs.and_then(|extras| extras.projection.map(HashSet::<usize>::from_iter));
         blocks_metas.iter().fold(
@@ -79,6 +88,7 @@ impl FuseTable {
                     PartInfo::new(block_meta.location.path.as_str(), block_meta.file_size).encode();
                 parts.push(Part { name, version: 0 });
 
+                stats.is_exact = is_exact;
                 stats.read_rows += block_meta.row_count as usize;
                 match &proj_cols {
                     Some(proj) => {
