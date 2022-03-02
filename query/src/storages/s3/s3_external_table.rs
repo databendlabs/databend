@@ -57,12 +57,16 @@ impl Table for S3ExternalTable {
         &self.table_info_placeholder
     }
 
+    // S3 external only supported new pipeline.
+    // TODO(bohu): Remove after new pipeline ready.
     async fn read(
         &self,
         _ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        unimplemented!()
+        Err(ErrorCode::UnImplement(
+            "S3 external table not support read()!",
+        ))
     }
 
     fn read2(
@@ -96,19 +100,25 @@ impl Table for S3ExternalTable {
         Ok(())
     }
 
+    // Write data to s3 file.
     async fn append_data(
         &self,
         _ctx: Arc<QueryContext>,
         _stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
-        unimplemented!()
+        Err(ErrorCode::UnImplement(
+            "S3 external table append_data() unimplemented yet!",
+        ))
     }
 
+    // Truncate the s3 file.
     async fn truncate(
         &self,
         _ctx: Arc<QueryContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
-        Ok(())
+        Err(ErrorCode::UnImplement(
+            "S3 external table truncate() unimplemented yet!",
+        ))
     }
 }
