@@ -15,10 +15,11 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::ReadDataSourcePlan;
-use common_planners::S3ExternalTableInfo;
+use common_planners::SourceInfo;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
@@ -30,8 +31,6 @@ use crate::storages::ExternalSource;
 use crate::storages::Table;
 
 pub struct S3ExternalTable {
-    table_info: S3ExternalTableInfo,
-
     // This is no used but a placeholder.
     // But the Table trait need it:
     // fn get_table_info(&self) -> &TableInfo).
@@ -39,10 +38,9 @@ pub struct S3ExternalTable {
 }
 
 impl S3ExternalTable {
-    pub fn try_create(table_info: S3ExternalTableInfo) -> Result<Arc<dyn Table>> {
+    pub fn try_create() -> Result<Arc<dyn Table>> {
         let table_info_placeholder = TableInfo::default();
         Ok(Arc::new(Self {
-            table_info,
             table_info_placeholder,
         }))
     }
@@ -70,12 +68,19 @@ impl Table for S3ExternalTable {
     fn read2(
         &self,
         ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
+        plan: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
-        let schema = self.table_info.schema.clone();
-        let stage_info = self.table_info.stage_info.clone();
-        let file_name = self.table_info.file_name.clone();
+        let table_info = match &plan.source_info {
+            SourceInfo::S3ExternalSource(s3) => Ok(s3),
+            other => Err(ErrorCode::LogicalError(format!(
+                "S3ExternalTable.read only for S3 source, got:{:?}",
+                other
+            ))),
+        }?;
+        let schema = table_info.schema.clone();
+        let stage_info = table_info.stage_info.clone();
+        let file_name = table_info.file_name.clone();
 
         // Add ExternalSource Pipe to the pipeline.
         let output = OutputPort::create();

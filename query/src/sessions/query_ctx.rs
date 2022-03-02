@@ -35,7 +35,6 @@ use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
-use common_planners::S3ExternalTableInfo;
 use common_planners::SourceInfo;
 use common_planners::Statistics;
 use common_streams::AbortStream;
@@ -98,9 +97,7 @@ impl QueryContext {
             SourceInfo::TableSource(table_info) => {
                 self.build_table_by_table_info(table_info, plan.tbl_args.clone())
             }
-            SourceInfo::S3ExternalSource(s3_table_info) => {
-                self.build_s3_external_table_by_stage_info(s3_table_info)
-            }
+            SourceInfo::S3ExternalSource(_s3_table_info) => self.build_s3_external_table(),
         }
     }
 
@@ -124,11 +121,8 @@ impl QueryContext {
     // Build s3 external table by stage info, this is used in:
     // COPY INTO t1 FROM 's3://'
     // 's3://' here is a s3 external stage, and build it to the external table.
-    fn build_s3_external_table_by_stage_info(
-        &self,
-        table_info: &S3ExternalTableInfo,
-    ) -> Result<Arc<dyn Table>> {
-        S3ExternalTable::try_create(table_info.clone())
+    fn build_s3_external_table(&self) -> Result<Arc<dyn Table>> {
+        S3ExternalTable::try_create()
     }
 
     pub fn get_scan_progress(&self) -> Arc<Progress> {
