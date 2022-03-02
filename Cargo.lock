@@ -1704,6 +1704,7 @@ dependencies = [
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
+ "backtrace",
  "console-subscriber",
  "once_cell",
  "opentelemetry",
@@ -4584,8 +4585,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.0.5"
-source = "git+https://github.com/datafuselabs/opendal?rev=80e8bca#80e8bcac933ed0fa98928d0f9f09496c09b5a52c"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fba37dc2b160771e2804fd06fd4059d225e721df63e288efddd52d12d5fde768"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4594,12 +4596,13 @@ dependencies = [
  "aws-sdk-s3",
  "aws-smithy-http",
  "aws-types",
+ "bitflags",
  "blocking",
  "bytes",
  "futures",
  "http",
  "hyper",
- "lazy_static",
+ "once_cell",
  "pin-project",
  "reqwest",
  "thiserror",

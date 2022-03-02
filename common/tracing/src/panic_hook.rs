@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use backtrace::Backtrace;
+
 pub fn set_panic_hook() {
     // Set a panic hook that records the panic as a `tracing` event at the
     // `ERROR` verbosity level.
@@ -20,15 +22,18 @@ pub fn set_panic_hook() {
     // will include the current span, allowing the context in which the panic
     // occurred to be recorded.
     std::panic::set_hook(Box::new(|panic| {
+        let backtrace = Backtrace::new();
+        let backtrace = format!("{:?}", backtrace);
         if let Some(location) = panic.location() {
             tracing::error!(
                 message = %panic,
+                backtrace = %backtrace,
                 panic.file = location.file(),
                 panic.line = location.line(),
                 panic.column = location.column(),
             );
         } else {
-            tracing::error!(message = %panic);
+            tracing::error!(message = %panic, backtrace = %backtrace);
         }
     }));
 }

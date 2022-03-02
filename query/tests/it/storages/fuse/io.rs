@@ -342,6 +342,8 @@ fn test_meta_locations() -> Result<()> {
 }
 
 use common_infallible::Mutex;
+
+#[derive(Debug)]
 struct MockDataAccessor {
     put_stream_called: Arc<Mutex<usize>>,
 }
