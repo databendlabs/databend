@@ -18,7 +18,6 @@ mod block_writer;
 mod cached_reader;
 mod locations;
 mod meta_readers;
-mod versioned_meta_readers;
 
 pub use block_reader::BlockReader;
 pub use block_stream_writer::BlockCompactor;
