@@ -38,6 +38,8 @@ use common_meta_types::ListTableReq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::MetaStorageError;
+use common_meta_types::RenameTableReply;
+use common_meta_types::RenameTableReq;
 use common_meta_types::TableAlreadyExists;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -204,6 +206,27 @@ impl MetaApi for StateMachine {
         }
 
         Ok(DropTableReply {})
+    }
+
+    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
+        let tenant = &req.tenant;
+        let db_name = &req.db;
+        let table_name = &req.table_name;
+        let new_db_name = &req.new_db;
+        let new_table_name = &req.new_table_name;
+
+        let cmd = Cmd::RenameTable {
+            tenant: tenant.to_string(),
+            db_name: db_name.to_string(),
+            table_name: table_name.to_string(),
+            new_db_name: new_db_name.to_string(),
+            new_table_name: new_table_name.to_string(),
+        };
+        let res = self.sm_tree.txn(true, |t| self.apply_cmd(&cmd, &t))?;
+
+        let mut ch: Change<TableMeta, u64> = res.try_into().unwrap();
+        let table_id = ch.ident.take().unwrap();
+        Ok(RenameTableReply { table_id })
     }
 
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, MetaError> {

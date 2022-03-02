@@ -62,6 +62,15 @@ pub enum Cmd {
         table_name: String,
     },
 
+    /// Rename a table
+    RenameTable {
+        tenant: String,
+        db_name: String,
+        table_name: String,
+        new_db_name: String,
+        new_table_name: String,
+    },
+
     /// Update, remove or insert table options.
     ///
     /// This Cmd requires a present table to operate on.
@@ -122,6 +131,19 @@ impl fmt::Display for Cmd {
                 table_name,
             } => {
                 write!(f, "delete_table:{}/{}-{}", tenant, db_name, table_name)
+            }
+            Cmd::RenameTable {
+                tenant,
+                db_name,
+                table_name,
+                new_db_name,
+                new_table_name,
+            } => {
+                write!(
+                    f,
+                    "rename_table:{}/{}-{}=>{}-{}",
+                    tenant, db_name, table_name, new_db_name, new_table_name
+                )
             }
             Cmd::UpsertKV {
                 key,

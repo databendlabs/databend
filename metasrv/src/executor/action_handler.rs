@@ -67,6 +67,10 @@ impl ActionHandler {
                 let r = self.handle(a).await;
                 RaftReply::from(r)
             }
+            MetaGrpcWriteReq::RenameTable(a) => {
+                let r = self.handle(a).await;
+                RaftReply::from(r)
+            }
             MetaGrpcWriteReq::CommitTable(a) => {
                 let r = self.handle(a).await;
                 RaftReply::from(r)

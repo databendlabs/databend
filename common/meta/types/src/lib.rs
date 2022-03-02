@@ -138,6 +138,8 @@ pub use table::DropTableReply;
 pub use table::DropTableReq;
 pub use table::GetTableReq;
 pub use table::ListTableReq;
+pub use table::RenameTableReply;
+pub use table::RenameTableReq;
 pub use table::TableIdent;
 pub use table::TableInfo;
 pub use table::TableMeta;
