@@ -146,11 +146,7 @@ impl TypeID {
     /// Determine if a TypeID is numeric or not
     #[inline]
     pub fn is_numeric(&self) -> bool {
-        self.is_signed_numeric()
-            || matches!(
-                self,
-                TypeID::UInt8 | TypeID::UInt16 | TypeID::UInt32 | TypeID::UInt64
-            )
+        self.is_integer() || self.is_floating()
     }
 
     #[inline]

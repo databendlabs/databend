@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![feature(core_intrinsics)]
+#![feature(duration_checked_float)]
 
 pub mod aggregates;
 pub mod scalars;

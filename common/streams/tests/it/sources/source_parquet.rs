@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::ParquetSourceBuilder;
 use common_streams::Source;
+use futures::io::BufReader;
 use opendal::services::fs;
 use opendal::Operator;
 
@@ -77,6 +78,7 @@ async fn test_source_parquet() -> Result<()> {
             .unwrap(),
     );
     let stream = local.object(name).limited_reader(len);
+    let stream = BufReader::with_capacity(4 * 1024 * 1024, stream);
 
     let default_proj = (0..schema.fields().len())
         .into_iter()
