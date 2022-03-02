@@ -21,6 +21,7 @@ pull_request_rules:
     actions:
       queue:
         name: shared_queue
+        method: squash
 
   - name: put other pr to queue
     conditions:
@@ -31,6 +32,7 @@ pull_request_rules:
     actions:
       queue:
         name: shared_queue
+        method: squash
 
   # if there is a conflict in a approved PR, ping the author.
   - name: ping author on conflicts
