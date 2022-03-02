@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use std::sync::Arc;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use opendal::error::Result as DalResult;
@@ -19,7 +20,8 @@ use opendal::ops::OpDelete;
 use opendal::ops::OpRead;
 use opendal::ops::OpStat;
 use opendal::ops::OpWrite;
-use opendal::readers::CallbackReader;
+use opendal::readers::ObserveReader;
+use opendal::readers::ReadEvent;
 use opendal::Accessor;
 use opendal::BoxedAsyncReader;
 use opendal::Layer;
@@ -59,9 +61,23 @@ impl Layer for DalContext {
 impl Accessor for DalContext {
     async fn read(&self, args: &OpRead) -> DalResult<BoxedAsyncReader> {
         let metric = self.metrics.clone();
+        let mut last_pending = None;
+
         self.inner.as_ref().unwrap().read(args).await.map(|reader| {
-            let r = CallbackReader::new(reader, move |n| {
-                metric.inc_read_bytes(n);
+            let r = ObserveReader::new(reader, move |e| {
+                let start = match last_pending {
+                    None => Instant::now(),
+                    Some(t) => t,
+                };
+                match e {
+                    ReadEvent::Pending => last_pending = Some(start),
+                    ReadEvent::Read(n) => {
+                        last_pending = None;
+                        metric.inc_read_bytes(n);
+                    }
+                    _ => {}
+                }
+                metric.inc_read_bytes_cost(start.elapsed().as_millis() as u64);
             });
 
             Box::new(r) as BoxedAsyncReader
