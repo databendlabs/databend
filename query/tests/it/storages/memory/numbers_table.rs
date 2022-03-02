@@ -19,8 +19,8 @@ use common_exception::Result;
 use common_planners::*;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::PlanParser;
+use databend_query::storages::memory::NumbersTable;
 use databend_query::storages::ToReadDataSourcePlan;
-use databend_query::table_functions::NumbersTable;
 use futures::TryStreamExt;
 
 #[tokio::test]

@@ -141,7 +141,7 @@ impl Table for MemoryTable {
             }
         };
 
-        let parts = crate::table_functions::generate_block_parts(
+        let parts = super::generate_block_parts(
             0,
             ctx.get_settings().get_max_threads()? as u64,
             blocks.len() as u64,

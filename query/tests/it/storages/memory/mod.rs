@@ -13,4 +13,5 @@
 //  limitations under the License.W
 
 mod memory_block_part;
+mod memory_table;
 mod numbers_table;

@@ -34,7 +34,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 
-use super::numbers_stream::NumbersStream;
+use super::numbers_table_stream::NumbersStream;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::SyncSource;
@@ -44,8 +44,7 @@ use crate::pipelines::new::SourcePipeBuilder;
 use crate::pipelines::transforms::get_sort_descriptions;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
-use crate::table_functions::generate_block_parts;
-use crate::table_functions::table_function_factory::TableArgs;
+use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 
 pub struct NumbersTable {
@@ -159,7 +158,8 @@ impl Table for NumbersTable {
             fake_partitions as usize,
         );
 
-        let parts = generate_block_parts(0, ctx.get_settings().get_max_threads()? as u64, total);
+        let parts =
+            super::generate_block_parts(0, ctx.get_settings().get_max_threads()? as u64, total);
 
         Ok((statistics, parts))
     }

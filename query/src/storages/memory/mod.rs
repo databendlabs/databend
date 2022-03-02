@@ -12,8 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+mod memory_block_part;
 mod memory_table;
 mod memory_table_stream;
+mod numbers_table;
+mod numbers_table_stream;
 
+pub use memory_block_part::generate_block_parts;
 pub use memory_table::MemoryTable;
 pub use memory_table_stream::MemoryTableStream;
+pub use numbers_table::NumbersTable;
+pub use numbers_table_stream::NumbersStream;

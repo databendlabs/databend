@@ -14,7 +14,7 @@
 
 use common_exception::Result;
 use common_planners::Part;
-use databend_query::table_functions::generate_block_parts;
+use databend_query::storages::memory::generate_block_parts;
 use pretty_assertions::assert_eq;
 
 #[test]
