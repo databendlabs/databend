@@ -227,6 +227,7 @@ impl RequestHandler<RenameTableReq> for ActionHandler {
         let tenant = req.tenant;
         let db_name = &req.db;
         let table_name = &req.table_name;
+        let new_db_name = &req.new_db;
         let new_table_name = &req.new_table_name;
 
         let cr = LogEntry {
@@ -235,6 +236,7 @@ impl RequestHandler<RenameTableReq> for ActionHandler {
                 tenant,
                 db_name: db_name.clone(),
                 table_name: table_name.clone(),
+                new_db_name: new_db_name.clone(),
                 new_table_name: new_table_name.clone(),
             },
         };

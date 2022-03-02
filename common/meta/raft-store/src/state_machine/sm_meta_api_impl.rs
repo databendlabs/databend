@@ -212,12 +212,14 @@ impl MetaApi for StateMachine {
         let tenant = &req.tenant;
         let db_name = &req.db;
         let table_name = &req.table_name;
+        let new_db_name = &req.new_db;
         let new_table_name = &req.new_table_name;
 
         let cmd = Cmd::RenameTable {
             tenant: tenant.to_string(),
             db_name: db_name.to_string(),
             table_name: table_name.to_string(),
+            new_db_name: new_db_name.to_string(),
             new_table_name: new_table_name.to_string(),
         };
         let res = self.sm_tree.txn(true, |t| self.apply_cmd(&cmd, &t))?;

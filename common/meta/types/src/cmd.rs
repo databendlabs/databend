@@ -67,6 +67,7 @@ pub enum Cmd {
         tenant: String,
         db_name: String,
         table_name: String,
+        new_db_name: String,
         new_table_name: String,
     },
 
@@ -135,12 +136,13 @@ impl fmt::Display for Cmd {
                 tenant,
                 db_name,
                 table_name,
+                new_db_name,
                 new_table_name,
             } => {
                 write!(
                     f,
-                    "rename_table:{}/{}-{}=>{}",
-                    tenant, db_name, table_name, new_table_name
+                    "rename_table:{}/{}-{}=>{}-{}",
+                    tenant, db_name, table_name, new_db_name, new_table_name
                 )
             }
             Cmd::UpsertKV {

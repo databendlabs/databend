@@ -511,6 +511,7 @@ impl StateMachine {
         tenant: &str,
         db_name: &str,
         table_name: &str,
+        new_db_name: &str,
         new_table_name: &str,
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
@@ -524,6 +525,7 @@ impl StateMachine {
         assert!(result.is_none());
 
         let table_meta = &prev.as_ref().unwrap().data;
+        let db_id = self.txn_get_database_id(tenant, new_db_name, txn_tree)?;
         let (new_table_id, new_prev, new_result) =
             self.txn_create_table(txn_tree, db_id, new_table_name, table_meta)?;
         if new_prev.is_some() {
@@ -534,7 +536,13 @@ impl StateMachine {
         assert!(new_result.is_some());
 
         self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)?;
-        tracing::debug!("applied rename Table: {} -> {}", table_name, new_table_name);
+        tracing::debug!(
+            "applied rename Table: {}:{} -> {}:{}",
+            db_name,
+            table_name,
+            new_db_name,
+            new_table_name
+        );
         Ok(AppliedState::TableMeta(Change::new_with_id(
             new_table_id.unwrap(),
             prev,
@@ -666,8 +674,16 @@ impl StateMachine {
                 tenant,
                 ref db_name,
                 ref table_name,
+                ref new_db_name,
                 ref new_table_name,
-            } => self.apply_rename_table_cmd(tenant, db_name, table_name, new_table_name, txn_tree),
+            } => self.apply_rename_table_cmd(
+                tenant,
+                db_name,
+                table_name,
+                new_db_name,
+                new_table_name,
+                txn_tree,
+            ),
 
             Cmd::UpsertKV {
                 key,

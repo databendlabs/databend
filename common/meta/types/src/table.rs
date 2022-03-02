@@ -218,6 +218,7 @@ pub struct RenameTableReq {
     pub tenant: String,
     pub db: String,
     pub table_name: String,
+    pub new_db: String,
     pub new_table_name: String,
 }
 

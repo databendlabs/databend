@@ -680,6 +680,7 @@ impl MetaApiTestSuite {
                     tenant: tenant.to_string(),
                     db: db_name.to_string(),
                     table_name: tbl_name.to_string(),
+                    new_db: db_name.to_string(),
                     new_table_name: "tb3".to_string(),
                 };
                 mt.rename_table(req.clone()).await?;
@@ -710,6 +711,7 @@ impl MetaApiTestSuite {
                     tenant: tenant.to_string(),
                     db: db_name.to_string(),
                     table_name: tbl_name.to_string(),
+                    new_db: db_name.to_string(),
                     new_table_name: "tb3".to_string(),
                 };
                 let res = mt.rename_table(req.clone()).await;
@@ -744,6 +746,7 @@ impl MetaApiTestSuite {
                     tenant: tenant.to_string(),
                     db: db_name.to_string(),
                     table_name: tbl_name.to_string(),
+                    new_db: db_name.to_string(),
                     new_table_name: "tb3".to_string(),
                 };
                 let res = mt.rename_table(req.clone()).await;
