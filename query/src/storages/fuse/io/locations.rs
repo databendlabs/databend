@@ -34,12 +34,12 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn gen_block_location(&self) -> String {
-        let part_uuid = Uuid::new_v4().simple().to_string() + ".parquet";
+        let part_uuid = Uuid::new_v4().to_simple().to_string() + ".parquet";
         format!("{}/{}/{}", &self.prefix, FUSE_TBL_BLOCK_PREFIX, part_uuid)
     }
 
     pub fn gen_segment_info_location(&self) -> String {
-        let segment_uuid = Uuid::new_v4().simple().to_string();
+        let segment_uuid = Uuid::new_v4().to_simple().to_string();
         format!(
             "{}/{}/{}",
             &self.prefix, FUSE_TBL_SEGMENT_PREFIX, segment_uuid
@@ -51,7 +51,7 @@ impl TableMetaLocationGenerator {
             "{}/{}/{}",
             &self.prefix,
             FUSE_TBL_SNAPSHOT_PREFIX,
-            id.simple()
+            id.to_simple()
         )
     }
 }
