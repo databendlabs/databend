@@ -34,5 +34,4 @@ pub mod servers;
 pub mod sessions;
 pub mod sql;
 pub mod storages;
-pub mod table_functions;
 pub mod users;

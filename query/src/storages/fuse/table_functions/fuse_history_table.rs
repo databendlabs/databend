@@ -29,6 +29,8 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
+use crate::functions::TableArgs;
+use crate::functions::TableFunction;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::TableSnapshot;
@@ -37,8 +39,6 @@ use crate::storages::fuse::table_functions::table_arg_util::string_literal;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
-use crate::table_functions::TableArgs;
-use crate::table_functions::TableFunction;
 
 pub const FUSE_FUNC_HIST: &str = "fuse_history";
 

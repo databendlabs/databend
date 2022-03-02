@@ -31,10 +31,10 @@ use common_meta_types::UpsertTableOptionReq;
 use dyn_clone::DynClone;
 
 use crate::databases::Database;
+use crate::functions::TableArgs;
+use crate::functions::TableFunction;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
-use crate::table_functions::TableArgs;
-use crate::table_functions::TableFunction;
 
 #[async_trait::async_trait]
 pub trait Catalog: DynClone + Send + Sync {

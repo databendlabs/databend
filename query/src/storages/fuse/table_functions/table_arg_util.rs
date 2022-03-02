@@ -18,7 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 
-use crate::table_functions::TableArgs;
+use crate::functions::TableArgs;
 
 pub fn string_value(expr: &Expression) -> Result<String> {
     if let Expression::Literal { value, .. } = expr {

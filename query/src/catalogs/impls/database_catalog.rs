@@ -36,15 +36,15 @@ use crate::catalogs::impls::ImmutableCatalog;
 use crate::catalogs::impls::MutableCatalog;
 use crate::configs::Config;
 use crate::databases::Database;
+use crate::functions::TableArgs;
+use crate::functions::TableFunction;
+use crate::functions::TableFunctionFactory;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
-use crate::table_functions::TableArgs;
-use crate::table_functions::TableFunction;
-use crate::table_functions::TableFunctionFactory;
 
 /// Combine two catalogs together
 /// - read/search like operations are always performed at
-///   upper layer first, and bottom layer later(if necessary)  
+///   upper layer first, and bottom layer later(if necessary)
 /// - metadata are written to the bottom layer
 #[derive(Clone)]
 pub struct DatabaseCatalog {

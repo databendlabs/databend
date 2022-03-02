@@ -13,5 +13,9 @@
 // limitations under the License.
 
 mod context_function;
+mod table_functions;
 
 pub use context_function::ContextFunction;
+pub use table_functions::TableArgs;
+pub use table_functions::TableFunction;
+pub use table_functions::TableFunctionFactory;

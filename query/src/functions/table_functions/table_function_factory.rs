@@ -24,10 +24,10 @@ use common_planners::Expression;
 
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
+use crate::functions::TableFunction;
 use crate::storages::fuse::FuseHistoryTable;
 use crate::storages::fuse::FUSE_FUNC_HIST;
 use crate::storages::memory::NumbersTable;
-use crate::table_functions::TableFunction;
 
 pub type TableArgs = Option<Vec<Expression>>;
 type TableFunctionCreators = RwLock<HashMap<String, (MetaId, Arc<dyn TableFunctionCreator>)>>;
