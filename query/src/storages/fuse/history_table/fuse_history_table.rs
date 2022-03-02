@@ -28,14 +28,14 @@ use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
+use super::table_arg_util::parse_func_history_args;
+use super::table_arg_util::string_literal;
 use crate::catalogs::Catalog;
 use crate::functions::TableArgs;
 use crate::functions::TableFunction;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::meta::TableSnapshot;
-use crate::storages::fuse::table_functions::table_arg_util::parse_func_history_args;
-use crate::storages::fuse::table_functions::table_arg_util::string_literal;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
