@@ -73,7 +73,7 @@ impl Debug for CopyPlan {
     // Ignore the schema.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Copy into {:}.{:}", self.db_name, self.tbl_name)?;
-        write!(f, " ,{:?}", self.from)?;
+        write!(f, ", {:?}", self.from)?;
         if !self.files.is_empty() {
             write!(f, " ,files:{:?}", self.files)?;
         }

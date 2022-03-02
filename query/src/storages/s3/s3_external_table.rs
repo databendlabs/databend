@@ -79,8 +79,6 @@ impl Table for S3ExternalTable {
             ))),
         }?;
         let schema = table_info.schema.clone();
-        let stage_info = table_info.stage_info.clone();
-        let file_name = table_info.file_name.clone();
 
         // Add ExternalSource Pipe to the pipeline.
         let output = OutputPort::create();
@@ -88,7 +86,10 @@ impl Table for S3ExternalTable {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
             processors: vec![ExternalSource::try_create(
-                ctx, output, schema, stage_info, file_name,
+                ctx,
+                output,
+                schema,
+                table_info.clone(),
             )?],
         });
 

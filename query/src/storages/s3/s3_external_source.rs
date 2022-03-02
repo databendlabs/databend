@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageStorage;
 use common_meta_types::UserStageInfo;
+use common_planners::S3ExternalTableInfo;
 use common_streams::CsvSourceBuilder;
 use common_streams::Source;
 use opendal::Reader;
@@ -36,8 +37,7 @@ use crate::storages::s3::S3FileReader;
 pub struct ExternalSource {
     ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
-    stage_info: UserStageInfo,
-    file_name: Option<String>,
+    table_info: S3ExternalTableInfo,
     initialized: bool,
     source: Option<Box<dyn Source>>,
 }
@@ -47,14 +47,12 @@ impl ExternalSource {
         ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
-        stage_info: UserStageInfo,
-        file_name: Option<String>,
+        table_info: S3ExternalTableInfo,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(output, ExternalSource {
             ctx,
             schema,
-            stage_info,
-            file_name,
+            table_info,
             initialized: false,
             source: None,
         })
@@ -105,9 +103,9 @@ impl ExternalSource {
 
     async fn initialize(&mut self) -> Result<()> {
         let ctx = self.ctx.clone();
-        let stage = &self.stage_info;
+        let file_name = self.table_info.file_name.clone();
+        let stage = &self.table_info.stage_info;
         let file_format = stage.file_format_options.format.clone();
-        let file_name = self.file_name.clone();
 
         // Get the dal file reader.
         let file_reader = match &stage.stage_params.storage {
