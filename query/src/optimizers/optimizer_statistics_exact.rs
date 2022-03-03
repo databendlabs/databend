@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
-use common_planners::ExpressionPlan;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
@@ -53,35 +52,30 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                     ref args,
                     ..
                 }],
-                PlanNode::Expression(ExpressionPlan { input, .. }),
-            ) if op == "count" && args.len() == 1 => match (&args[0], input.as_ref()) {
-                (Expression::Literal { .. }, PlanNode::ReadSource(read_source_plan))
-                    if read_source_plan.statistics.is_exact =>
-                {
-                    let db_name = "system";
-                    let table_name = "one";
+                PlanNode::ReadSource(read_source_plan),
+            ) if op == "count" && args.is_empty() && read_source_plan.statistics.is_exact => {
+                let db_name = "system";
+                let table_name = "one";
 
-                    futures::executor::block_on(async move {
-                        let table = self.ctx.get_table(db_name, table_name).await?;
-                        let source_plan = table.read_plan(self.ctx.clone(), None).await?;
-                        let dummy_read_plan = PlanNode::ReadSource(source_plan);
+                futures::executor::block_on(async move {
+                    let table = self.ctx.get_table(db_name, table_name).await?;
+                    let source_plan = table.read_plan(self.ctx.clone(), None).await?;
+                    let dummy_read_plan = PlanNode::ReadSource(source_plan);
 
-                        let expr = Expression::create_literal_with_type(
-                            DataValue::UInt64(read_source_plan.statistics.read_rows as u64),
-                            u64::to_data_type(),
-                        );
+                    let expr = Expression::create_literal_with_type(
+                        DataValue::UInt64(read_source_plan.statistics.read_rows as u64),
+                        u64::to_data_type(),
+                    );
 
-                        self.rewritten = true;
-                        let alias_name = plan.aggr_expr[0].column_name();
-                        PlanBuilder::from(&dummy_read_plan)
-                            .expression(&[expr.clone()], "Exact Statistics")?
-                            .project(&[expr.alias(&alias_name)])?
-                            .build()
-                    })?
-                }
-                _ => PlanNode::AggregatorPartial(plan.clone()),
-            },
-            (_, _, _) => PlanNode::AggregatorPartial(plan.clone()),
+                    self.rewritten = true;
+                    let alias_name = plan.aggr_expr[0].column_name();
+                    PlanBuilder::from(&dummy_read_plan)
+                        .expression(&[expr.clone()], "Exact Statistics")?
+                        .project(&[expr.alias(&alias_name)])?
+                        .build()
+                })?
+            }
+            _ => PlanNode::AggregatorPartial(plan.clone()),
         };
         Ok(new_plan)
     }
@@ -118,6 +112,7 @@ impl Optimizer for StatisticsExactOptimizer {
                     )
                 )
         */
+
         let mut visitor = StatisticsExactImpl {
             ctx: &self.ctx,
             rewritten: false,

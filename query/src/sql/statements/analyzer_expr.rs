@@ -215,14 +215,18 @@ impl ExpressionAnalyzer {
             };
         }
 
-        if info.name.eq_ignore_ascii_case("count")
-            && !args.is_empty()
-            && matches!(args[0], Expression::Wildcard)
-        {
+        let optimize_remove_count_args = info.name.eq_ignore_ascii_case("count")
+            && !info.distinct
+            && (args.len() == 1 && matches!(args[0], Expression::Wildcard)
+                || args.iter().all(
+                    |expr| matches!(expr, Expression::Literal { value, .. } if !value.is_null()),
+                ));
+
+        if optimize_remove_count_args {
             Ok(Expression::AggregateFunction {
                 op: info.name.clone(),
                 distinct: info.distinct,
-                args: vec![common_planners::lit(0i64)],
+                args: vec![],
                 params: parameters,
             })
         } else {
