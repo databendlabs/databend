@@ -32,6 +32,7 @@ def remove_control_characters(s):
     """
     https://github.com/html5lib/html5lib-python/issues/96#issuecomment-43438438
     """
+
     def str_to_int(s, default, base=10):
         if int(s, base) < 0x10000:
             return chr(int(s, base))

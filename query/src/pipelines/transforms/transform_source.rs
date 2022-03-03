@@ -72,7 +72,7 @@ impl Processor for SourceTransform {
 
     #[tracing::instrument(level = "debug", name="source_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let desc = self.source_plan.table_info.desc.clone();
+        let desc = self.source_plan.source_info.desc();
         tracing::debug!("execute, table:{:#} ...", desc);
 
         Ok(Box::pin(CorrectWithSchemaStream::new(

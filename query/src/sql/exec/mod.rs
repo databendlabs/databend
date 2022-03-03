@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::ReadDataSourcePlan;
+use common_planners::SourceInfo;
 
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::transforms::ProjectionTransform;
@@ -107,7 +108,7 @@ impl Executor {
         let table = self.metadata.table(scan.table_index).table.clone();
         let (statistics, parts) = table.read_partitions(self.ctx.clone(), None).await?;
         let plan = ReadDataSourcePlan {
-            table_info: table.get_table_info().clone(),
+            source_info: SourceInfo::TableSource(table.get_table_info().clone()),
             scan_fields: None,
             parts,
             statistics,

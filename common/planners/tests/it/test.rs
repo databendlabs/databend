@@ -19,6 +19,7 @@ use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
+use common_planners::SourceInfo;
 use common_planners::Statistics;
 
 pub struct Test {}
@@ -40,7 +41,7 @@ impl Test {
         };
 
         Ok(PlanNode::ReadSource(ReadDataSourcePlan {
-            table_info: TableInfo::simple("system", "numbers_mt", schema),
+            source_info: SourceInfo::TableSource(TableInfo::simple("system", "numbers_mt", schema)),
             scan_fields: None,
             parts: Self::generate_partitions(8, total as u64),
             statistics: statistics.clone(),
