@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod parser_admin;
+mod parser_call;
 mod parser_copy;
 mod parser_database;
 mod parser_explain;

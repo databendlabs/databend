@@ -21,6 +21,7 @@ use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
+use crate::CallPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateRolePlan;
@@ -137,6 +138,9 @@ pub trait PlanVisitor {
 
             // Copy.
             PlanNode::Copy(plan) => self.visit_copy(plan),
+
+            // Call.
+            PlanNode::Call(plan) => self.visit_call(plan),
 
             // Show.
             PlanNode::Show(plan) => self.visit_show(plan),
@@ -366,6 +370,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_copy(&mut self, _: &CopyPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_call(&mut self, _: &CallPlan) -> Result<()> {
         Ok(())
     }
 

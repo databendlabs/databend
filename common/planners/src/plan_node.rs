@@ -22,6 +22,7 @@ use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
 use crate::BroadcastPlan;
+use crate::CallPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateRolePlan;
@@ -96,6 +97,9 @@ pub enum PlanNode {
 
     // Copy.
     Copy(CopyPlan),
+
+    // Call.
+    Call(CallPlan),
 
     // Show.
     Show(ShowPlan),
@@ -181,6 +185,9 @@ impl PlanNode {
             // Copy.
             PlanNode::Copy(v) => v.schema(),
 
+            // Call.
+            PlanNode::Call(v) => v.schema(),
+
             // Show.
             PlanNode::Show(v) => v.schema(),
 
@@ -263,6 +270,9 @@ impl PlanNode {
 
             // Copy.
             PlanNode::Copy(_) => "CopyPlan",
+
+            // Call.
+            PlanNode::Call(_) => "CallPlan",
 
             // Show.
             PlanNode::Show(_) => "ShowPlan",
