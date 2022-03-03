@@ -176,7 +176,11 @@ impl ExecuteState {
         let executor_clone = executor.clone();
         let ctx_clone = ctx.clone();
         ctx.try_spawn(async move {
-            match execute(interpreter, ctx_clone, block_tx, &mut abort_rx).await {
+            // drop/close block_tx after calling Executor::stop
+            // so handler task can get newest state before return
+            // otherwise the handler task and this task may competing for the executor lock
+            let block_tx_clone = block_tx.clone();
+            match execute(interpreter, ctx_clone, block_tx_clone, &mut abort_rx).await {
                 Ok(_) => Executor::stop(&executor_clone, Ok(()), false).await,
                 Err(err) => {
                     let kill = err.message().starts_with("aborted");
