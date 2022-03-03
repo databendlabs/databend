@@ -53,8 +53,16 @@ pub async fn state_handler(
             StatusCode::INTERNAL_SERVER_ERROR,
         )
     })?;
+    let leader_id = meta_node.get_leader().await;
+    let leader_node = meta_node.get_node(&leader_id).await.map_err(|e| {
+        poem::Error::from_string(
+            format!("failed to get leader: {}", e),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
+    })?;
     Ok(Json(serde_json::json!({
         "voters": voters,
         "non_voters": non_voters,
+        "leader": leader_node,
     })))
 }
