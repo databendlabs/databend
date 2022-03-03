@@ -28,11 +28,14 @@ use common_contexts::DalMetrics;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_meta_types::TableInfo;
 use common_meta_types::UserInfo;
+use common_planners::Expression;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
+use common_planners::SourceInfo;
 use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
@@ -50,6 +53,7 @@ use crate::sessions::Session;
 use crate::sessions::SessionRef;
 use crate::sessions::Settings;
 use crate::storages::cache::CacheManager;
+use crate::storages::S3ExternalTable;
 use crate::storages::Table;
 use crate::users::UserApiProvider;
 
@@ -89,15 +93,36 @@ impl QueryContext {
         &self,
         plan: &ReadDataSourcePlan,
     ) -> Result<Arc<dyn Table>> {
+        match &plan.source_info {
+            SourceInfo::TableSource(table_info) => {
+                self.build_table_by_table_info(table_info, plan.tbl_args.clone())
+            }
+            SourceInfo::S3ExternalSource(_s3_table_info) => self.build_s3_external_table(),
+        }
+    }
+
+    // Build fuse/system normal table by table info.
+    fn build_table_by_table_info(
+        &self,
+        table_info: &TableInfo,
+        table_args: Option<Vec<Expression>>,
+    ) -> Result<Arc<dyn Table>> {
         let catalog = self.get_catalog();
 
-        if plan.tbl_args.is_none() {
-            catalog.get_table_by_info(&plan.table_info)
+        if table_args.is_none() {
+            catalog.get_table_by_info(table_info)
         } else {
             Ok(catalog
-                .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?
+                .get_table_function(&table_info.name, table_args)?
                 .as_table())
         }
+    }
+
+    // Build s3 external table by stage info, this is used in:
+    // COPY INTO t1 FROM 's3://'
+    // 's3://' here is a s3 external stage, and build it to the external table.
+    fn build_s3_external_table(&self) -> Result<Arc<dyn Table>> {
+        S3ExternalTable::try_create()
     }
 
     pub fn get_scan_progress(&self) -> Arc<Progress> {

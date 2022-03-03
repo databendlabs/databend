@@ -14,21 +14,22 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::StageFileFormatType;
-use common_meta_types::StageType;
 use common_planners::CopyPlan;
+use common_planners::PlanNode;
+use common_planners::ReadDataSourcePlan;
+use common_planners::SourceInfo;
 use common_streams::DataBlockStream;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::TryStreamExt;
 
+use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::pipelines::processors::Processor;
-use crate::pipelines::transforms::CsvSourceTransform;
+use crate::pipelines::new::executor::PipelinePullingExecutor;
+use crate::pipelines::new::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
 
 pub struct CopyInterpreter {
@@ -41,38 +42,46 @@ impl CopyInterpreter {
         Ok(Arc::new(CopyInterpreter { ctx, plan }))
     }
 
+    // Rewrite the ReadDataSourcePlan.S3ExternalSource.file_name to new file name.
+    fn rewrite_read_plan_file_name(
+        mut plan: ReadDataSourcePlan,
+        file_name: Option<String>,
+    ) -> ReadDataSourcePlan {
+        if let SourceInfo::S3ExternalSource(ref mut s3) = plan.source_info {
+            s3.file_name = file_name;
+        }
+        plan
+    }
+
     // Read a file and commit it to the table.
-    // If the file_name is empty, we will read it {path}/{file_name}.
-    async fn write_one_file(&self, file_name: Option<String>, commit: bool) -> Result<()> {
+    // Progress:
+    // 1. Build a select pipeline
+    // 2. Execute the pipeline and get the stream
+    // 3. Read from the stream and write to the table.
+    // Note:
+    //  We parse the `s3://` to ReadSourcePlan instead of to a SELECT plan is that:
+    //  COPY should deal with the file one by one and do some error handler on the OnError strategy.
+
+    #[tracing::instrument(level = "debug", name = "copy_one_file_to_table", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    async fn copy_one_file_to_table(&self, file_name: Option<String>) -> Result<()> {
         let ctx = self.ctx.clone();
-        let stage_plan = self.plan.stage_plan.clone();
+        let settings = self.ctx.get_settings();
 
-        let source_stream = match stage_plan.stage_info.stage_type {
-            StageType::External => {
-                match stage_plan.stage_info.file_format_options.format {
-                    // CSV.
-                    StageFileFormatType::Csv => {
-                        CsvSourceTransform::try_create(
-                            self.ctx.clone(),
-                            file_name,
-                            stage_plan.clone(),
-                        )?
-                        .execute()
-                        .await
-                    }
-                    // Unsupported.
-                    format => Err(ErrorCode::LogicalError(format!(
-                        "Unsupported file format: {:?}",
-                        format
-                    ))),
-                }
-            }
+        let read_source_plan = self.plan.from.clone();
+        let read_source_plan = Self::rewrite_read_plan_file_name(read_source_plan, file_name);
 
-            StageType::Internal => Err(ErrorCode::LogicalError(
-                "Unsupported copy from internal stage",
-            )),
-        }?;
+        tracing::info!("copy_one_file_to_table: source plan:{:?}", read_source_plan);
 
+        let from_plan = common_planners::SelectPlan {
+            input: Arc::new(PlanNode::ReadSource(read_source_plan)),
+        };
+
+        let pipeline_builder = QueryPipelineBuilder::create(ctx.clone());
+        let mut pipeline = pipeline_builder.finalize(&from_plan)?;
+        pipeline.set_max_threads(settings.get_max_threads()? as usize);
+
+        let executor = PipelinePullingExecutor::try_create(pipeline)?;
+        let source_stream = Box::pin(ProcessorExecutorStream::create(executor)?);
         let progress_stream = Box::pin(ProgressStream::try_create(
             source_stream,
             ctx.get_scan_progress(),
@@ -81,15 +90,16 @@ impl CopyInterpreter {
         let table = ctx
             .get_table(&self.plan.db_name, &self.plan.tbl_name)
             .await?;
-        let r = table
+        let operations = table
             .append_data(ctx.clone(), progress_stream)
             .await?
             .try_collect()
             .await?;
 
-        if commit {
-            table.commit_insertion(ctx.clone(), r, false).await?;
-        }
+        // Commit.
+        table
+            .commit_insertion(ctx.clone(), operations, false)
+            .await?;
 
         Ok(())
     }
@@ -101,21 +111,18 @@ impl Interpreter for CopyInterpreter {
         "CopyInterpreter"
     }
 
+    #[tracing::instrument(level = "debug", name = "copy_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,
         mut _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        tracing::info!("Plan:{:?}", self.plan);
-
-        // Commit after each file write.
-        let commit = true;
         let files = self.plan.files.clone();
 
         if files.is_empty() {
-            self.write_one_file(None, commit).await?;
+            self.copy_one_file_to_table(None).await?;
         } else {
             for file in files {
-                self.write_one_file(Some(file), commit).await?;
+                self.copy_one_file_to_table(Some(file)).await?;
             }
         }
 

@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.join(CURDIR))
 
 
 class client(object):
+
     def __init__(self, name='', log=None):
         self.name = name
         self.log = log
