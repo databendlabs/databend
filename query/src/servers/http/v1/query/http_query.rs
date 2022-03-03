@@ -37,6 +37,7 @@ use crate::servers::http::v1::query::Wait;
 use crate::sessions::SessionManager;
 
 #[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct HttpQueryRequest {
     #[serde(default)]
     pub session: HttpSessionConf,
