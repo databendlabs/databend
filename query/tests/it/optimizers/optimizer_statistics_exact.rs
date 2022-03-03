@@ -60,25 +60,21 @@ fn test_statistics_exact_optimizer() -> Result<()> {
         op: "count".to_string(),
         distinct: false,
         params: vec![],
-        args: vec![Expression::create_literal(DataValue::UInt64(0))],
+        args: vec![],
     };
 
     let plan = PlanBuilder::from(&source_plan)
-        .expression(
-            &[Expression::create_literal(DataValue::UInt64(0))],
-            "Before GroupBy",
-        )?
         .aggregate_partial(&[aggr_expr.clone()], &[])?
         .aggregate_final(source_plan.schema(), &[aggr_expr], &[])?
-        .project(&[Expression::Column("count(0)".to_string())])?
+        .project(&[Expression::Column("count()".to_string())])?
         .build()?;
 
     let mut statistics_exact = StatisticsExactOptimizer::create(ctx);
     let optimized = statistics_exact.optimize(&plan)?;
 
     let expect = "\
-        Projection: count(0):UInt64\
-        \n  Projection: 10000 as count(0):UInt64\
+        Projection: count():UInt64\
+        \n  Projection: 10000 as count():UInt64\
         \n    Expression: 10000:UInt64 (Exact Statistics)\
         \n      ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1]";
     let actual = format!("{:?}", optimized);

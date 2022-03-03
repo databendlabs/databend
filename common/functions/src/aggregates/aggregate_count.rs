@@ -53,21 +53,14 @@ impl AggregateCountFunction {
         }))
     }
 
-    pub fn try_create_own(
-        display_name: &str,
-        _params: Vec<DataValue>,
-        arguments: Vec<DataField>,
-    ) -> Result<Self> {
-        assert_variadic_arguments(display_name, arguments.len(), (0, 1))?;
-        Ok(AggregateCountFunction {
-            display_name: display_name.to_string(),
-            arguments,
-            nullable: false,
-        })
-    }
-
     pub fn desc() -> AggregateFunctionDescription {
-        AggregateFunctionDescription::creator(Box::new(Self::try_create))
+        let properties = super::aggregate_function_factory::AggregateFunctionProperties {
+            returns_default_when_only_null: true,
+        };
+        AggregateFunctionDescription::creator_with_properties(
+            Box::new(Self::try_create),
+            properties,
+        )
     }
 }
 
@@ -96,6 +89,7 @@ impl AggregateFunction for AggregateCountFunction {
         input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateCountState>();
+
         let nulls = match validity {
             Some(b) => b.null_count(),
             None => 0,

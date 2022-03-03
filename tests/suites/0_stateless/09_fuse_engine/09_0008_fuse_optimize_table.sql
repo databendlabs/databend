@@ -12,6 +12,9 @@ insert into t values (7);
 
 optimize table t compact;
 
+-- optimize exact
+explain select count(1) from t;
+
 -- expects 4 history items, 3 of previous insertion, 1 for last compaction
 select count(*)=4 from fuse_history('db_09_0008', 't');
 
