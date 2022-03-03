@@ -19,7 +19,7 @@ use std::str::FromStr;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 
-use crate::UserStagePlan;
+use crate::ReadDataSourcePlan;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
 pub enum ValidationMode {
@@ -58,7 +58,7 @@ pub struct CopyPlan {
     pub tbl_name: String,
     pub tbl_id: MetaId,
     pub schema: DataSchemaRef,
-    pub stage_plan: UserStagePlan,
+    pub from: ReadDataSourcePlan,
     pub validation_mode: ValidationMode,
     pub files: Vec<String>,
 }
@@ -73,7 +73,7 @@ impl Debug for CopyPlan {
     // Ignore the schema.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Copy into {:}.{:}", self.db_name, self.tbl_name)?;
-        write!(f, " ,{:?}", self.stage_plan)?;
+        write!(f, ", {:?}", self.from)?;
         if !self.files.is_empty() {
             write!(f, " ,files:{:?}", self.files)?;
         }

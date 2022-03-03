@@ -349,7 +349,7 @@ impl PlanRewriter for ExprTransformImpl {
             // of the having is literal false like 'having 1=2'
             // then we overwrites the ReadDataSourcePlan to an empty one.
             let node = PlanNode::ReadSource(ReadDataSourcePlan {
-                table_info: plan.table_info.clone(),
+                source_info: plan.source_info.clone(),
                 scan_fields: plan.scan_fields.clone(),
                 parts: vec![], // set parts to empty vector, read_table should return None immediately
                 statistics: Statistics {
@@ -359,7 +359,7 @@ impl PlanRewriter for ExprTransformImpl {
                     partitions_total: 0,
                     is_exact: true,
                 },
-                description: format!("(Read from {} table)", plan.table_info.desc),
+                description: format!("(Read from {} table)", plan.source_info.desc()),
                 tbl_args: plan.tbl_args.clone(),
                 push_downs: plan.push_downs.clone(),
             });

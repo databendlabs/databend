@@ -29,7 +29,9 @@ use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_planners::CopyPlan;
 use common_planners::PlanNode;
-use common_planners::UserStagePlan;
+use common_planners::ReadDataSourcePlan;
+use common_planners::S3ExternalTableInfo;
+use common_planners::SourceInfo;
 use common_planners::ValidationMode;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
@@ -108,10 +110,19 @@ impl AnalyzableStatement for DfCopy {
         let validation_mode = ValidationMode::from_str(self.validation_mode.as_str())
             .map_err(ErrorCode::SyntaxException)?;
 
-        // Stage plan.
-        let stage_plan = UserStagePlan {
-            schema: schema.clone(),
-            stage_info,
+        // Read source plan.
+        let from = ReadDataSourcePlan {
+            source_info: SourceInfo::S3ExternalSource(S3ExternalTableInfo {
+                schema: schema.clone(),
+                file_name: None,
+                stage_info,
+            }),
+            scan_fields: None,
+            parts: vec![],
+            statistics: Default::default(),
+            description: "".to_string(),
+            tbl_args: None,
+            push_downs: None,
         };
 
         // Copy plan.
@@ -120,7 +131,7 @@ impl AnalyzableStatement for DfCopy {
             tbl_name,
             tbl_id,
             schema,
-            stage_plan,
+            from,
             validation_mode,
             files: self.files.clone(),
         };

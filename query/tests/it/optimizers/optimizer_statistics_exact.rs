@@ -36,7 +36,7 @@ fn test_statistics_exact_optimizer() -> Result<()> {
     );
     ctx.try_set_statistics(&statistics)?;
     let source_plan = PlanNode::ReadSource(ReadDataSourcePlan {
-        table_info: TableInfo::simple(
+        source_info: SourceInfo::TableSource(TableInfo::simple(
             "system",
             "test",
             DataSchemaRefExt::create(vec![
@@ -44,7 +44,7 @@ fn test_statistics_exact_optimizer() -> Result<()> {
                 DataField::new("b", Vu8::to_data_type()),
                 DataField::new("c", Vu8::to_data_type()),
             ]),
-        ),
+        )),
         scan_fields: None,
         parts: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
