@@ -215,20 +215,12 @@ impl ExpressionAnalyzer {
             };
         }
 
-        let mut optimize_remove_count_args = false;
-        if info.name.eq_ignore_ascii_case("count") && !info.distinct {
-            if args.len() == 1 && (matches!(args[0], Expression::Wildcard)) {
-                // count(*)
-                optimize_remove_count_args = true;
-            } else if args
-                .iter()
-                .all(|expr| matches!(expr, Expression::Literal { value, .. } if !value.is_null() ))
-            {
-                // all args not nullable constant value
-                // count(1), count(1,2,3,4)
-                optimize_remove_count_args = true;
-            }
-        }
+        let optimize_remove_count_args = info.name.eq_ignore_ascii_case("count")
+            && !info.distinct
+            && (args.len() == 1 && matches!(args[0], Expression::Wildcard)
+                || args.iter().all(
+                    |expr| matches!(expr, Expression::Literal { value, .. } if !value.is_null()),
+                ));
 
         if optimize_remove_count_args {
             Ok(Expression::AggregateFunction {
