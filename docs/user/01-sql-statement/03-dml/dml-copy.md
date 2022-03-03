@@ -5,7 +5,7 @@ title: COPY INTO table
 Loads data from staged files to a table. The files must be staged in one of the following locations:
 
 * Named internal stage. (TODO)
-* External location (Amazon S3, Google Cloud Storage, or Microsoft Azure).
+* External location (Amazon S3-Like, Google Cloud Storage, or Microsoft Azure).
 
 ## Syntax
 
@@ -19,13 +19,24 @@ FROM { externalLocation }
 ```
 
 Where:
+
+**externalLocation (for Amazon S3)**
 ```
 externalLocation (for Amazon S3) ::=
   's3://<bucket>[/<path>]'
+  [ ENDPOINT_URL = '<endpoint_url>' ]
   [ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]
-  [ ENCRYPTION = ( [ MASTER_KEY = '<string>' ] ) ]
 ```
 
+| Parameters  | Description | Required |
+| ----------- | ----------- | --- |
+| `s3://<bucket>/[<path>]`  | Files are in the specified external location (S3-like bucket) | YES |
+| `[ ENDPOINT_URL = '<endpoint_url>' ]`  | S3-compatible endpoint URL like MinIO, default is `https://s3.amazonaws.com` |  Optional |
+| `[ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]' ]`  | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. |  Optional |
+| `[ ENDPOINT_URL = '<endpoint_url>' ]`  | S3-compatible endpoint URL like MinIO, default is `https://s3.amazonaws.com` |  Optional |
+
+
+**formatTypeOptions**
 ```
 formatTypeOptions ::=
   RECORD_DELIMITER = '<character>' 
@@ -33,11 +44,21 @@ formatTypeOptions ::=
   SKIP_HEADER = <integer>
 ```
 
+| Parameters  | Description | Required |
+| ----------- | ----------- | --- |
+| `RECORD_DELIMITER = '<character>'`  | One characters that separate records in an input file. Default `'\n'` | Optional |
+| `FIELD_DELIMITER = '<character>'`  | One characters that separate fields in an input file. Default `','` | Optional |
+| `SKIP_HEADER = <integer>`  | Number of lines at the start of the file to skip. Default `0` | Optional |
+
+**copyOptions**
 ```
 copyOptions ::=
-  ON_ERROR = { CONTINUE | SKIP_FILE | SKIP_FILE_<num>| ABORT_STATEMENT }
-  SIZE_LIMIT = <num>
+  [ SIZE_LIMIT = <num> ]
 ```
+
+| Parameters  | Description | Required |
+| ----------- | ----------- | --- |
+| `SIZE_LIMIT = <num>` | Number (> 0) that specifies the maximum rows of data to be loaded for a given COPY statement | Optional |
 
 ## Examples
 

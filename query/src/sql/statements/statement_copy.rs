@@ -44,6 +44,7 @@ use crate::sql::statements::AnalyzedResult;
 pub struct DfCopy {
     pub name: ObjectName,
     pub columns: Vec<Ident>,
+    pub endpoint_url: String,
     pub location: String,
     pub credential_options: HashMap<String, String>,
     pub encryption_options: HashMap<String, String>,
@@ -214,6 +215,9 @@ impl DfCopy {
             Some(v) => match v {
                 // AWS s3 plan.
                 "s3" => {
+                    // Endpoint url.
+                    let endpoint_url = self.endpoint_url.clone();
+
                     let credentials_aws_key_id = self
                         .credential_options
                         .get("aws_key_id")
@@ -231,6 +235,7 @@ impl DfCopy {
                         .clone();
 
                     Ok(StageStorage::S3(StageS3Storage {
+                        endpoint_url,
                         bucket,
                         path,
                         credentials_aws_key_id,

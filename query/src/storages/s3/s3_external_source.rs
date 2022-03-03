@@ -110,7 +110,7 @@ impl ExternalSource {
         // Get the dal file reader.
         let file_reader = match &stage.stage_params.storage {
             StageStorage::S3(s3) => {
-                let endpoint = &ctx.get_config().storage.s3.endpoint_url;
+                let endpoint = &s3.endpoint_url;
                 let bucket = &s3.bucket;
                 let path = &s3.path;
 

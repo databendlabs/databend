@@ -31,7 +31,9 @@ impl S3FileReader {
         let mut builder = opendal::services::s3::Backend::build();
 
         // Endpoint url.
-        builder.endpoint(s3_endpoint);
+        if !s3_endpoint.is_empty() {
+            builder.endpoint(s3_endpoint);
+        }
 
         // Bucket.
         builder.bucket(s3_bucket);

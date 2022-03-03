@@ -39,6 +39,13 @@ impl<'a> DfParser<'a> {
         self.parser.expect_keyword(Keyword::FROM)?;
         let location = self.parser.parse_literal_string()?;
 
+        // endpoint_url
+        let mut endpoint_url = "".to_string();
+        if self.consume_token("ENDPOINT_URL") {
+            self.expect_token("=")?;
+            endpoint_url = self.parse_value_or_ident()?;
+        }
+
         // credentials=(aws_key_id='$AWS_ACCESS_KEY_ID' aws_secret_key='$AWS_SECRET_ACCESS_KEY')
         let mut credential_options = HashMap::default();
         if self.consume_token("CREDENTIALS") {
@@ -102,6 +109,7 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::Copy(DfCopy {
             name,
             columns,
+            endpoint_url,
             location,
             credential_options,
             encryption_options,

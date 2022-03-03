@@ -29,36 +29,71 @@ fn copy_from_external_test() -> Result<()> {
         expect: Option<DfCopy>,
     }
 
-    let tests = vec![Test {
-        query: "copy into mytable
+    let tests = vec![
+        Test {
+            query: "copy into mytable
         from 's3://mybucket/data/files'
         credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
         encryption=(master_key = 'my_master_key')
         file_format = (type = csv field_delimiter = '|' skip_header = 1);",
-        err: "",
-        expect: Some(DfCopy {
-            name: ObjectName(vec![Ident::new("mytable")]),
-            columns: vec![],
-            location: "s3://mybucket/data/files".to_string(),
-            credential_options: maplit::hashmap! {
-                   "aws_key_id".into() => "my_key_id".into(),
-                   "aws_secret_key".into() => "my_secret_key".into(),
-            },
-            encryption_options: maplit::hashmap! {
-                   "master_key".into() => "my_master_key".into(),
-            },
+            err: "",
+            expect: Some(DfCopy {
+                name: ObjectName(vec![Ident::new("mytable")]),
+                columns: vec![],
+                endpoint_url: "".to_string(),
+                location: "s3://mybucket/data/files".to_string(),
+                credential_options: maplit::hashmap! {
+                       "aws_key_id".into() => "my_key_id".into(),
+                       "aws_secret_key".into() => "my_secret_key".into(),
+                },
+                encryption_options: maplit::hashmap! {
+                       "master_key".into() => "my_master_key".into(),
+                },
 
-            file_format_options: maplit::hashmap! {
-                   "type".into() => "csv".into(),
-                   "field_delimiter".into() => "|".into(),
-                   "skip_header".into() => "1".into(),
-            },
-            files: vec![],
-            on_error: "".to_string(),
-            size_limit: "".to_string(),
-            validation_mode: "".to_string(),
-        }),
-    }];
+                file_format_options: maplit::hashmap! {
+                       "type".into() => "csv".into(),
+                       "field_delimiter".into() => "|".into(),
+                       "skip_header".into() => "1".into(),
+                },
+                files: vec![],
+                on_error: "".to_string(),
+                size_limit: "".to_string(),
+                validation_mode: "".to_string(),
+            }),
+        },
+        Test {
+            query: "copy into mytable
+        from 's3://mybucket/data/files'
+        endpoint_url='http://127.0.0.1:9900'
+        credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
+        encryption=(master_key = 'my_master_key')
+        file_format = (type = csv field_delimiter = '|' skip_header = 1);",
+            err: "",
+            expect: Some(DfCopy {
+                name: ObjectName(vec![Ident::new("mytable")]),
+                columns: vec![],
+                endpoint_url: "http://127.0.0.1:9900".to_string(),
+                location: "s3://mybucket/data/files".to_string(),
+                credential_options: maplit::hashmap! {
+                       "aws_key_id".into() => "my_key_id".into(),
+                       "aws_secret_key".into() => "my_secret_key".into(),
+                },
+                encryption_options: maplit::hashmap! {
+                       "master_key".into() => "my_master_key".into(),
+                },
+
+                file_format_options: maplit::hashmap! {
+                       "type".into() => "csv".into(),
+                       "field_delimiter".into() => "|".into(),
+                       "skip_header".into() => "1".into(),
+                },
+                files: vec![],
+                on_error: "".to_string(),
+                size_limit: "".to_string(),
+                validation_mode: "".to_string(),
+            }),
+        },
+    ];
 
     for test in tests {
         if test.err.is_empty() {
