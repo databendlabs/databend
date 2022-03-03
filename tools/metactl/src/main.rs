@@ -61,14 +61,14 @@ async fn main() -> anyhow::Result<()> {
 
     let _guards = init_global_tracing("metactl", "./_metactl_log", &config.log_level);
 
-    eprintln!("");
+    eprintln!();
     eprintln!("███╗   ███╗███████╗████████╗ █████╗        ██████╗████████╗██╗     ");
     eprintln!("████╗ ████║██╔════╝╚══██╔══╝██╔══██╗      ██╔════╝╚══██╔══╝██║     ");
     eprintln!("██╔████╔██║█████╗     ██║   ███████║█████╗██║        ██║   ██║     ");
     eprintln!("██║╚██╔╝██║██╔══╝     ██║   ██╔══██║╚════╝██║        ██║   ██║     ");
     eprintln!("██║ ╚═╝ ██║███████╗   ██║   ██║  ██║      ╚██████╗   ██║   ███████╗");
     eprintln!("╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝       ╚═════╝   ╚═╝   ╚══════╝");
-    eprintln!("");
+    eprintln!();
 
     eprintln!("raft_config: {}", pretty(raft_config)?);
 

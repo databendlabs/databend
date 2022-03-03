@@ -61,9 +61,9 @@ impl Layer for DalContext {
 impl Accessor for DalContext {
     async fn read(&self, args: &OpRead) -> DalResult<BoxedAsyncReader> {
         let metric = self.metrics.clone();
-        let mut last_pending = None;
 
         self.inner.as_ref().unwrap().read(args).await.map(|reader| {
+            let mut last_pending = None;
             let r = ObserveReader::new(reader, move |e| {
                 let start = match last_pending {
                     None => Instant::now(),
@@ -75,6 +75,7 @@ impl Accessor for DalContext {
                         last_pending = None;
                         metric.inc_read_bytes(n);
                     }
+                    ReadEvent::Error(_) => last_pending = None,
                     _ => {}
                 }
                 metric.inc_read_bytes_cost(start.elapsed().as_millis() as u64);
