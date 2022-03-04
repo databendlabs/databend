@@ -19,6 +19,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::S3File;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageStorage;
 use common_meta_types::UserStageInfo;
@@ -32,7 +33,6 @@ use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::AsyncSource;
 use crate::pipelines::new::processors::AsyncSourcer;
 use crate::sessions::QueryContext;
-use crate::storages::s3::S3FileReader;
 
 pub struct ExternalSource {
     ctx: Arc<QueryContext>,
@@ -116,7 +116,7 @@ impl ExternalSource {
 
                 let key_id = &s3.credentials_aws_key_id;
                 let secret_key = &s3.credentials_aws_secret_key;
-                S3FileReader::create(file_name, endpoint, bucket, path, key_id, secret_key).await
+                S3File::read(file_name, endpoint, bucket, path, key_id, secret_key).await
             }
         }?;
 

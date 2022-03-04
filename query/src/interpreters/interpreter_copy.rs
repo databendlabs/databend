@@ -14,7 +14,10 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::S3File;
+use common_meta_types::StageStorage;
 use common_planners::CopyPlan;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
@@ -40,6 +43,38 @@ pub struct CopyInterpreter {
 impl CopyInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(CopyInterpreter { ctx, plan }))
+    }
+
+    // List the files under a folder.
+    async fn list_files(&self) -> Result<Vec<String>> {
+        // We already set the files sets to the COPY command with: `files=(<file1>, <file2>)` syntax.
+        if !self.plan.files.is_empty() {
+            return Ok(self.plan.files.clone());
+        }
+
+        let files = match &self.plan.from.source_info {
+            SourceInfo::S3ExternalSource(table_info) => {
+                let storage = &table_info.stage_info.stage_params.storage;
+                match &storage {
+                    StageStorage::S3(s3) => {
+                        let endpoint = &self.ctx.get_config().storage.s3.endpoint_url;
+                        let bucket = &s3.bucket;
+                        let path = &s3.path;
+
+                        let key_id = &s3.credentials_aws_key_id;
+                        let secret_key = &s3.credentials_aws_secret_key;
+
+                        S3File::list(endpoint, bucket, path, key_id, secret_key).await
+                    }
+                }
+            }
+            other => Err(ErrorCode::LogicalError(format!(
+                "Cannot list files for the source info: {:?}",
+                other
+            ))),
+        };
+
+        files
     }
 
     // Rewrite the ReadDataSourcePlan.S3ExternalSource.file_name to new file name.
@@ -116,14 +151,9 @@ impl Interpreter for CopyInterpreter {
         &self,
         mut _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let files = self.plan.files.clone();
-
-        if files.is_empty() {
-            self.copy_one_file_to_table(None).await?;
-        } else {
-            for file in files {
-                self.copy_one_file_to_table(Some(file)).await?;
-            }
+        let files = self.list_files().await?;
+        for file in files {
+            self.copy_one_file_to_table(Some(file)).await?;
         }
 
         Ok(Box::pin(DataBlockStream::create(

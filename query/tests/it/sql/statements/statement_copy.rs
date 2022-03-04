@@ -132,7 +132,7 @@ async fn test_statement_copy() -> Result<()> {
         encryption=(master_key = 'my_master_key')
         file_format = (type = csv field_delimiter = '|' skip_header = 1)",
             expect: "",
-            err: "Code: 1005, displayText = File location scheme must be specified.",
+            err: "Code: 1005, displayText = File location uri must be specified, for example: 's3://<bucket>[/<path>]'.",
         },
         TestCase {
             name: "copy-external-location-unsupported-error",

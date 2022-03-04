@@ -228,3 +228,10 @@ impl From<ErrorCode> for tonic::Status {
         }
     }
 }
+
+// OpenDAL error.
+impl From<opendal::error::Error> for ErrorCode {
+    fn from(error: opendal::error::Error) -> Self {
+        ErrorCode::DalError(format!("{:?}", error))
+    }
+}

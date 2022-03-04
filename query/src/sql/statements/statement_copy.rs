@@ -198,12 +198,21 @@ impl DfCopy {
         };
 
         // Parse uri.
-        let uri = self
-            .location
-            .as_str()
-            .parse::<http::Uri>()
-            .map_err(|_e| ErrorCode::SyntaxException("File location uri must be specified"))?;
-        let bucket = uri.host().unwrap_or("").to_string();
+        // 's3://<bucket>[/<path>]'
+        let uri = self.location.as_str().parse::<http::Uri>().map_err(|_e| {
+            ErrorCode::SyntaxException(
+                "File location uri must be specified, for example: 's3://<bucket>[/<path>]'",
+            )
+        })?;
+        let bucket = uri
+            .host()
+            .ok_or_else(|| {
+                ErrorCode::SyntaxException(
+                    "File location uri must be specified, for example: 's3://<bucket>[/<path>]'",
+                )
+            })?
+            .to_string();
+        // Path maybe a dir or a file.
         let path = uri.path().to_string();
 
         // File storage plan.
