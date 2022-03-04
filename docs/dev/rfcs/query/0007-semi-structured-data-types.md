@@ -11,6 +11,39 @@ In order to be compatible with [Snowflake's SQL syntax](https://docs.snowflake.c
 
 Since `Object` and `Array` can be regarded as a type of `Variant`, the following introduction mainly takes `Variant` as an example.
 
+### Examples
+
+The following example shows how to create a table with `VARIANT`, `ARRAY` and `OBJECT` data types, insert and query some test data.
+
+```sql
+CREATE TABLE test_semi_structured (
+    var variant,
+    arr array,
+    obj object
+);
+
+INSERT INTO test_semi_structured (var, arr, obj)
+SELECT 1, array_construct(1, 2, 3)
+    , parse_json(' { "key1": "value1", "key2": "value2" } ');
+
+INSERT INTO test_semi_structured (var, arr, obj)
+SELECT to_variant('abc')
+    , array_construct('a', 'b', 'c')
+    , parse_json(' { "key1": [1, 2, 3], "key2": ["a", "b", "c"] } ');
+
+
+SELECT * FROM test_semi_structured;
+
++-------+-------------------+----------------------------------------------------+
+| var   | arr               | obj                                                |
++-------+-------------------+----------------------------------------------------+
+| 1     | [ 1, 2, 3 ]       | { "key1": "value1", "key2": "value2" }             |
+| "abc" | [ "a", "b", "c" ] | { "key1": [ 1, 2, 3 ], "key2": [ "a", "b", "c" ] } |
++-------+-------------------+----------------------------------------------------+
+```
+
+## Design Details
+
 ### Data storage format
 
 In order to store the `Variant` type values in the `parquet` format file with schema, we need to do some conversion on the original raw value. We have the following two choices:
@@ -51,8 +84,6 @@ In order to have good performance and balance in various scenarios, we can refer
 From the perspective of performance, a better solution is to store data in binary JSON-like format and extract some frequently queried unique keys as sub-columns.
 However, in order to simplify development, we use the JSON format in the first version.
 Binary JSON-like format and separately stored sub-columns will be adopted in a future optimized version.
-
-## Design Details
 
 ### Data Types
 
