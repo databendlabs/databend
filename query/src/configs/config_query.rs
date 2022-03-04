@@ -187,7 +187,7 @@ pub struct QueryConfig {
     #[clap(long, env = QUERY_TABLE_CACHE_ENABLED)]
     pub table_cache_enabled: bool,
 
-    /// Max number of cached table snapshot  
+    /// Max number of cached table snapshot
     #[clap(long, env = QUERY_TABLE_CACHE_SNAPSHOT_COUNT, default_value = "256")]
     pub table_cache_snapshot_count: u64,
 
@@ -224,7 +224,7 @@ impl Default for QueryConfig {
         Self {
             tenant_id: "".to_string(),
             cluster_id: "".to_string(),
-            num_cpus: 8,
+            num_cpus: 0,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
             max_active_sessions: 256,
