@@ -17,6 +17,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::BinaryOperator;
 use sqlparser::ast::DataType;
+use sqlparser::ast::DateTimeField;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Function;
 use sqlparser::ast::FunctionArg;
@@ -25,7 +26,6 @@ use sqlparser::ast::Ident;
 use sqlparser::ast::Query;
 use sqlparser::ast::UnaryOperator;
 use sqlparser::ast::Value;
-use sqlparser::ast::DateTimeField;
 
 pub struct ExprTraverser;
 
