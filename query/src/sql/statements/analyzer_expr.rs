@@ -34,6 +34,7 @@ use sqlparser::ast::Ident;
 use sqlparser::ast::Query;
 use sqlparser::ast::UnaryOperator;
 use sqlparser::ast::Value;
+use sqlparser::ast::DateTimeField;
 
 use crate::functions::ContextFunction;
 use crate::sessions::QueryContext;
@@ -542,6 +543,16 @@ impl ExprRPNBuilder {
                 list_size: list.len(),
                 negated: *negated,
             })),
+            Expr::Extract { field, .. } => {
+                match field {
+                    DateTimeField::Year => self.rpn.push(ExprRPNItem::function(String::from("toYear"), 1)),
+                    DateTimeField::Month => self.rpn.push(ExprRPNItem::function(String::from("toMonth"), 1)),
+                    DateTimeField::Day => self.rpn.push(ExprRPNItem::function(String::from("toDayOfMonth"), 1)),
+                    DateTimeField::Hour => self.rpn.push(ExprRPNItem::function(String::from("toHour"), 1)),
+                    DateTimeField::Minute => self.rpn.push(ExprRPNItem::function(String::from("toMinute"), 1)),
+                    DateTimeField::Second => self.rpn.push(ExprRPNItem::function(String::from("toSecond"), 1)),
+                }
+            }
             _ => (),
         }
 

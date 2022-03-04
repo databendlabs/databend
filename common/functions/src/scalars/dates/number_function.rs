@@ -296,6 +296,17 @@ impl NumberOperator<u16> for ToMonday {
     }
 }
 
+#[derive(Clone)]
+pub struct ToYear;
+
+impl NumberOperator<u16> for ToYear {
+    const IS_DETERMINISTIC: bool = true;
+
+    fn to_number(value: DateTime<Utc>) -> u16 {
+        value.year() as u16
+    }
+}
+
 impl<T, R> NumberFunction<T, R>
 where
     T: NumberOperator<R> + Clone + Sync + Send + 'static,
@@ -436,3 +447,5 @@ pub type ToMinuteFunction = NumberFunction<ToMinute, u8>;
 pub type ToSecondFunction = NumberFunction<ToSecond, u8>;
 
 pub type ToMondayFunction = NumberFunction<ToMonday, u16>;
+
+pub type ToYearFunction = NumberFunction<ToYear, u16>;
