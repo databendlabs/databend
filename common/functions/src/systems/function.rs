@@ -12,18 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core_intrinsics)]
-#![feature(duration_checked_float)]
+use common_datavalues::ColumnRef;
+use common_exception::Result;
 
-pub mod aggregates;
-pub mod scalars;
-pub mod systems;
+pub trait Function {
+    fn name(&self) -> &str;
 
-mod macros;
-
-use aggregates::AggregateFunctionFactory;
-use scalars::FunctionFactory;
-
-pub fn is_builtin_function(name: &str) -> bool {
-    FunctionFactory::instance().check(name) || AggregateFunctionFactory::instance().check(name)
+    fn eval(&self, args: Vec<String>) -> Result<ColumnRef>;
 }

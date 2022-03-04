@@ -14,6 +14,7 @@
 
 mod access;
 mod interpreter_admin_use_tenant;
+mod interpreter_call;
 mod interpreter_database_create;
 mod interpreter_database_drop;
 mod interpreter_database_show_create;

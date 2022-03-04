@@ -15,7 +15,11 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_functions::systems::FunctionFactory;
+use common_meta_types::GrantObject;
+use common_meta_types::UserPrivilegeType;
 use common_planners::CallPlan;
+use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
@@ -45,7 +49,20 @@ impl Interpreter for CallInterpreter {
         &self,
         mut _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        println!("{:?}", self.plan);
-        unimplemented!()
+        let plan = &self.plan;
+        plan.validate()?;
+        // TODO: fine-grained permissions
+        self.ctx
+            .get_current_session()
+            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super)
+            .await?;
+        let name = plan.name.clone();
+        let func = FunctionFactory::instance().get(name)?;
+        func.eval(plan.args.clone())?;
+        Ok(Box::pin(DataBlockStream::create(
+            self.plan.schema(),
+            None,
+            vec![],
+        )))
     }
 }

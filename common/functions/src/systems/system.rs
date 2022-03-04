@@ -12,18 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core_intrinsics)]
-#![feature(duration_checked_float)]
+use crate::systems::FunctionFactory;
 
-pub mod aggregates;
-pub mod scalars;
-pub mod systems;
+pub struct SystemFunction;
 
-mod macros;
-
-use aggregates::AggregateFunctionFactory;
-use scalars::FunctionFactory;
-
-pub fn is_builtin_function(name: &str) -> bool {
-    FunctionFactory::instance().check(name) || AggregateFunctionFactory::instance().check(name)
+impl SystemFunction {
+    pub fn register(_factory: &mut FunctionFactory) {}
 }

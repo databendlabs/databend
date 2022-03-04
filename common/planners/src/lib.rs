@@ -137,6 +137,7 @@ pub use plan_expression_monotonicity::ExpressionMonotonicityVisitor;
 pub use plan_expression_rewriter::ExpressionRewriter;
 pub use plan_expression_sort::sort;
 pub use plan_expression_validator::validate_expression;
+pub use plan_expression_validator::validate_function_arg;
 pub use plan_expression_visitor::ExpressionVisitor;
 pub use plan_expression_visitor::Recursion;
 pub use plan_filter::FilterPlan;
