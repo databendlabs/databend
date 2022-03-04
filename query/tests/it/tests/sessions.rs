@@ -40,7 +40,10 @@ pub struct SessionManagerBuilder {
 
 impl SessionManagerBuilder {
     pub fn create() -> SessionManagerBuilder {
-        let conf = crate::tests::ConfigBuilder::create().config();
+        let mut conf = crate::tests::ConfigBuilder::create().config();
+        if conf.query.num_cpus == 0 {
+            conf.query.num_cpus = num_cpus::get() as u64;
+        }
         SessionManagerBuilder::create_with_conf(conf).log_dir_with_relative("../tests/data/logs")
     }
 
