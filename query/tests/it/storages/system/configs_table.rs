@@ -71,7 +71,7 @@ async fn test_configs_table() -> Result<()> {
         "| metric_api_address                   | 127.0.0.1:7070           | query   |             |",
         "| mysql_handler_host                   | 127.0.0.1                | query   |             |",
         "| mysql_handler_port                   | 3307                     | query   |             |",
-        "| num_cpus                             | 8                        | query   |             |",
+        "| num_cpus                             | 0                        | query   |             |",
         "| rpc_tls_meta_server_root_ca_cert     |                          | meta    |             |",
         "| rpc_tls_meta_service_domain_name     | localhost                | meta    |             |",
         "| rpc_tls_query_server_root_ca_cert    |                          | query   |             |",
