@@ -62,10 +62,6 @@ impl BooleanColumn {
     pub fn values(&self) -> &Bitmap {
         &self.values
     }
-
-    pub fn from_data(values: Bitmap) -> Self {
-        BooleanColumn { values }
-    }
 }
 
 impl Column for BooleanColumn {

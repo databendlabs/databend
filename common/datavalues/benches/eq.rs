@@ -86,7 +86,7 @@ fn databend_eq(lhs: &ColumnRef, rhs: &ColumnRef) -> Result<ColumnRef> {
         with_match_physical_primitive_type_error!(rhs_id, |$R| {
             let left: &<$L as Scalar>::ColumnType = unsafe { Series::static_cast(&lhs) };
             let right: &<$R as Scalar>::ColumnType = unsafe { Series::static_cast(&rhs) };
-            
+
             let it = left.scalar_iter().zip(right.scalar_iter()).map(|(a, b)| {
                 let a = a as <($L, $R) as ResultTypeOfBinary>::LeastSuper;
                 let b = b as <($L, $R) as ResultTypeOfBinary>::LeastSuper;
@@ -219,7 +219,7 @@ where
 {
     let values = compare_values_op(lhs.values(), rhs.values(), op);
 
-    BooleanColumn::from_data(values.into())
+    BooleanColumn::from_arrow_data(values.into())
 }
 
 pub(crate) fn compare_values_op<T, F>(lhs: &[T], rhs: &[T], op: F) -> MutableBitmap

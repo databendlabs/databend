@@ -20,6 +20,7 @@ use common_arrow::arrow::array::*;
 use common_arrow::arrow::compute::if_then_else::if_then_else;
 use common_arrow::arrow::types::NativeType;
 use common_datavalues::prelude::*;
+use common_datavalues::with_match_physical_primitive_type_error;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use criterion::Criterion;
@@ -68,26 +69,7 @@ fn databend_if_else_then(
         .data_type_id()
         .to_physical_type();
 
-    macro_rules! with_match_physical_primitive_type {(
-        $key_type:expr, | $_:tt $T:ident | $($body:tt)*
-    ) => ({
-        macro_rules! __with_ty__ {( $_ $T:ident ) => ( $($body)* )}
-        match $key_type {
-             PhysicalTypeID::Int8 => __with_ty__! { i8 },
-             PhysicalTypeID::Int16 => __with_ty__! { i16 },
-             PhysicalTypeID::Int32 => __with_ty__! { i32 },
-             PhysicalTypeID::Int64 => __with_ty__! { i64 },
-             PhysicalTypeID::UInt8 => __with_ty__! { u8 },
-             PhysicalTypeID::UInt16 => __with_ty__! { u16 },
-             PhysicalTypeID::UInt32 => __with_ty__! { u32 },
-             PhysicalTypeID::UInt64 => __with_ty__! { u64 },
-             PhysicalTypeID::Float32 => __with_ty__! { f32 },
-             PhysicalTypeID::Float64 => __with_ty__! { f64 },
-             _ => unreachable!()
-        }
-    })}
-
-    with_match_physical_primitive_type!(physical_id, |$T| {
+    with_match_physical_primitive_type_error!(physical_id, |$T| {
         let lhs_wrapper = $T::try_create_viewer(lhs)?;
         let rhs_wrapper = $T::try_create_viewer(rhs)?;
         let size = lhs_wrapper.len();
