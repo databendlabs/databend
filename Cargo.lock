@@ -4586,16 +4586,21 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28f64c86db7a9582ff665373afd19d91a76b0f094e14308eb96eb2f109e8e2b9"
+checksum = "abb6f94d5653944786dd46d6d20fe1c94c83f6640abcaf8ca35a983e5431b7a2"
 dependencies = [
  "anyhow",
  "async-trait",
  "aws-config",
  "aws-endpoint",
+ "aws-http",
  "aws-sdk-s3",
+ "aws-sig-auth",
+ "aws-sigv4",
+ "aws-smithy-client",
  "aws-smithy-http",
+ "aws-smithy-http-tower",
  "aws-types",
  "bitflags",
  "blocking",
@@ -4607,6 +4612,7 @@ dependencies = [
  "pin-project",
  "reqwest",
  "thiserror",
+ "tower",
 ]
 
 [[package]]
