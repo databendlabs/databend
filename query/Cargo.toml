@@ -53,7 +53,7 @@ common-tracing = { path = "../common/tracing" }
 
 # Github dependencies
 cargo-license = { git = "https://github.com/datafuse-extras/cargo-license", rev = "f1ce4a2" }
-msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "70aa0b2" }
+msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "af29f7b" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "472f5b6" }
 
 # Crates.io dependencies

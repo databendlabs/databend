@@ -55,7 +55,7 @@ pub struct InteractiveWorker<W: std::io::Write> {
 }
 
 #[async_trait::async_trait]
-impl<W: std::io::Write + Send> AsyncMysqlShim<W> for InteractiveWorker<W> {
+impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W> {
     type Error = ErrorCode;
 
     fn version(&self) -> &str {
@@ -78,7 +78,7 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for InteractiveWorker<W> {
         self.salt
     }
 
-    fn authenticate(
+    async fn authenticate(
         &self,
         _auth_plugin: &str,
         username: &[u8],
@@ -86,26 +86,25 @@ impl<W: std::io::Write + Send> AsyncMysqlShim<W> for InteractiveWorker<W> {
         auth_data: &[u8],
     ) -> bool {
         let username = String::from_utf8_lossy(username);
-        let info = CertifiedInfo::create(&username, auth_data, &self.client_addr);
+        let client_addr = self.client_addr.clone();
+        let info = CertifiedInfo::create(&username, auth_data, &client_addr);
 
         let authenticate = self.base.authenticate(salt, info);
-        futures::executor::block_on(async move {
-            match authenticate.await {
-                Ok(res) => res,
-                Err(failure) => {
-                    tracing::error!(
-                        "MySQL handler authenticate failed, \
+        match authenticate.await {
+            Ok(res) => res,
+            Err(failure) => {
+                tracing::error!(
+                    "MySQL handler authenticate failed, \
                         user_name: {}, \
                         client_address: {}, \
                         failure_cause: {}",
-                        username,
-                        self.client_addr,
-                        failure
-                    );
-                    false
-                }
+                    username,
+                    client_addr,
+                    failure
+                );
+                false
             }
-        })
+        }
     }
 
     async fn on_prepare<'a>(
