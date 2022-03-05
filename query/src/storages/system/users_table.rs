@@ -68,7 +68,7 @@ impl UsersTable {
             DataField::new("name", Vu8::to_data_type()),
             DataField::new("hostname", Vu8::to_data_type()),
             DataField::new("auth_type", Vu8::to_data_type()),
-            DataField::new_nullable("auth_string", Vu8::to_data_type()),
+            DataField::new("auth_string", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {
