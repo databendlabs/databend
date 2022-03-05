@@ -203,12 +203,12 @@ impl ClusterApi for ClusterMgr {
         }
     }
 
-    async fn heartbeat(&self, node_id: String, seq: Option<u64>) -> Result<u64> {
+    async fn heartbeat(&self, node: &NodeInfo, seq: Option<u64>) -> Result<u64> {
         let meta = Some(self.new_lift_time());
         let node_key = format!(
             "{}/{}",
             self.cluster_prefix,
-            Self::escape_for_key(&node_id)?
+            Self::escape_for_key(&node.id)?
         );
         let seq = match seq {
             None => MatchSeq::GE(1),
@@ -225,10 +225,7 @@ impl ClusterApi for ClusterMgr {
                 prev: Some(_),
                 result: Some(SeqV { seq: s, .. }),
             } => Ok(s),
-            UpsertKVActionReply { .. } => Err(ErrorCode::ClusterUnknownNode(format!(
-                "unknown node {:?}",
-                node_id
-            ))),
+            UpsertKVActionReply { .. } => self.add_node(node.clone()).await,
         }
     }
 }
