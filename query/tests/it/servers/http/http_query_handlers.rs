@@ -20,6 +20,7 @@ use base64::encode_config;
 use base64::URL_SAFE_NO_PAD;
 use common_base::get_free_tcp_port;
 use common_base::tokio;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::UserInfo;
@@ -186,6 +187,54 @@ async fn test_result_timeout() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_system_tables() -> Result<()> {
+    let session_manager = SessionManagerBuilder::create().build().unwrap();
+    let ep = Route::new()
+        .nest("/v1/query", query_route())
+        .with(HTTPSessionMiddleware { session_manager });
+
+    let sql = "select name from system.tables where database='system' order by name";
+
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.data.len() > 0, "{:?}", result);
+
+    let table_names = result
+        .data
+        .iter()
+        .flatten()
+        .map(|j| j.as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+
+    let skipped = vec![
+        "credits", // slow for ci (> 1s) and maybe flaky
+        "metrics", // QueryError: "Prometheus recorder is not initialized yet"
+    ];
+    for table_name in table_names {
+        if skipped.contains(&table_name.as_str()) {
+            continue;
+        };
+        let sql = format!("select * from system.{}", table_name);
+        let (status, result) = post_sql_to_endpoint(&ep, &sql, 1).await.map_err(|e| {
+            ErrorCode::UnexpectedError(format!("system.{}: {}", table_name, e.message()))
+        })?;
+        let error_message = format!("{}: status={:?}, result={:?}", table_name, status, result);
+        assert_eq!(status, StatusCode::OK, "{}", error_message);
+        assert!(result.error.is_none(), "{}", error_message);
+        assert_eq!(
+            result.state,
+            ExecuteStateName::Succeeded,
+            "{}",
+            error_message
+        );
+        assert!(result.stats.progress.is_some());
+        assert!(result.next_uri.is_none(), "{:?}", result);
+        assert!(result.schema.is_some());
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_multi_page() -> Result<()> {
     let session_manager = SessionManagerBuilder::create().build().unwrap();
     let num_parts = session_manager.get_conf().query.num_cpus as usize;
@@ -320,7 +369,7 @@ async fn post_json_to_endpoint(
                 .body(body),
         )
         .await
-        .unwrap();
+        .map_err(|e| ErrorCode::UnexpectedError(e.to_string()))?;
 
     check_response(response).await
 }

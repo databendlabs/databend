@@ -80,7 +80,7 @@ impl ResultDataManager {
     pub async fn get_a_page(&mut self, page_no: usize, tp: &Wait) -> Result<Page> {
         let next_no = self.total_pages;
         if page_no == next_no && !self.end {
-            let (block, end) = self.collect_new_page(tp).await;
+            let (block, end) = self.collect_new_page(tp).await?;
             let num_row = block.len();
             self.total_rows += num_row;
             let page = Page {
@@ -126,7 +126,7 @@ impl ResultDataManager {
         }
     }
 
-    pub async fn collect_new_page(&mut self, tp: &Wait) -> (JsonBlock, bool) {
+    pub async fn collect_new_page(&mut self, tp: &Wait) -> Result<(JsonBlock, bool)> {
         let mut results: Vec<JsonBlock> = Vec::new();
         let mut rows = 0;
         let block_rx = &mut self.block_rx;
@@ -136,7 +136,7 @@ impl ResultDataManager {
             match ResultDataManager::receive(block_rx, tp).await {
                 Ok(block) => {
                     rows += block.num_rows();
-                    results.push(block_to_json(&block).unwrap());
+                    results.push(block_to_json(&block)?);
                     // TODO(youngsofun):  set it in post if needed
                     if rows >= TARGET_ROWS_PER_PAGE {
                         break;
@@ -150,6 +150,6 @@ impl ResultDataManager {
                 }
             }
         }
-        (results.concat(), end)
+        Ok((results.concat(), end))
     }
 }
