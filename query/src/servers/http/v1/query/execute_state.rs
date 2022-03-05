@@ -82,10 +82,10 @@ impl Executor {
             Stopped(f) => f.progress.clone(),
         }
     }
-    pub(crate) fn elapsed(&self) -> Duration {
+    pub(crate) fn elapsed(&self) -> Option<Duration> {
         match &self.state {
-            Running(_) => Instant::now() - self.start_time,
-            Stopped(f) => f.stop_time - self.start_time,
+            Running(_) => None,
+            Stopped(f) => Some(f.stop_time - self.start_time),
         }
     }
     pub(crate) async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>, kill: bool) {
