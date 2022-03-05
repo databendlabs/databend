@@ -25,7 +25,7 @@ pub struct NullDeserializer {
 }
 
 impl TypeDeserializer for NullDeserializer {
-    fn de(&mut self, _reader: &mut &[u8]) -> Result<()> {
+    fn de_binary(&mut self, _reader: &mut &[u8]) -> Result<()> {
         self.builder.append_default();
         Ok(())
     }
@@ -34,7 +34,7 @@ impl TypeDeserializer for NullDeserializer {
         self.builder.append_default();
     }
 
-    fn de_batch(&mut self, _reader: &[u8], _step: usize, rows: usize) -> Result<()> {
+    fn de_fixed_binary_batch(&mut self, _reader: &[u8], _step: usize, rows: usize) -> Result<()> {
         for _ in 0..rows {
             self.builder.append_default();
         }
