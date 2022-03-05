@@ -16,6 +16,7 @@ use common_exception::Result;
 
 use super::now::NowFunction;
 use super::number_function::ToMondayFunction;
+use super::number_function::ToYearFunction;
 use super::AddDaysFunction;
 use super::AddMonthsFunction;
 use super::AddTimesFunction;
@@ -83,6 +84,7 @@ impl DateFunction {
         factory.register("toMinute", ToMinuteFunction::desc());
         factory.register("toSecond", ToSecondFunction::desc());
         factory.register("toMonday", ToMondayFunction::desc());
+        factory.register("toYear", ToYearFunction::desc());
 
         // rounders
         factory.register("toStartOfSecond", Self::round_function_creator(1));

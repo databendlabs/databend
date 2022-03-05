@@ -28,6 +28,7 @@ use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
 use common_planners::Expression;
+use sqlparser::ast::DateTimeField;
 use sqlparser::ast::Expr;
 use sqlparser::ast::FunctionArgExpr;
 use sqlparser::ast::Ident;
@@ -542,6 +543,26 @@ impl ExprRPNBuilder {
                 list_size: list.len(),
                 negated: *negated,
             })),
+            Expr::Extract { field, .. } => match field {
+                DateTimeField::Year => self
+                    .rpn
+                    .push(ExprRPNItem::function(String::from("toYear"), 1)),
+                DateTimeField::Month => self
+                    .rpn
+                    .push(ExprRPNItem::function(String::from("toMonth"), 1)),
+                DateTimeField::Day => self
+                    .rpn
+                    .push(ExprRPNItem::function(String::from("toDayOfMonth"), 1)),
+                DateTimeField::Hour => self
+                    .rpn
+                    .push(ExprRPNItem::function(String::from("toHour"), 1)),
+                DateTimeField::Minute => self
+                    .rpn
+                    .push(ExprRPNItem::function(String::from("toMinute"), 1)),
+                DateTimeField::Second => self
+                    .rpn
+                    .push(ExprRPNItem::function(String::from("toSecond"), 1)),
+            },
             _ => (),
         }
 
