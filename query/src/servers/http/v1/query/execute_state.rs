@@ -140,6 +140,7 @@ impl ExecuteState {
         block_tx: mpsc::Sender<DataBlock>,
     ) -> Result<(Arc<RwLock<Executor>>, DataSchemaRef)> {
         let sql = &request.sql;
+        let start_time = Instant::now();
         let session = session_manager.create_session("http-statement")?;
         let ctx = session.create_query_context().await?;
         if let Some(db) = &request.session.database {
@@ -169,7 +170,7 @@ impl ExecuteState {
             interpreter: interpreter.clone(),
         };
         let executor = Arc::new(RwLock::new(Executor {
-            start_time: Instant::now(),
+            start_time,
             state: Running(running_state),
         }));
 
