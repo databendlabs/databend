@@ -118,7 +118,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.9.1"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=22bf173#22bf173ec297fbc2ce156bd482cb410b7769073d"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=f71124b#f71124b2e07cebcfd6bcb0210567d08edd5cf581"
 dependencies = [
  "ahash",
  "arrow-format",
@@ -126,6 +126,7 @@ dependencies = [
  "bytemuck",
  "chrono",
  "csv",
+ "csv-core",
  "either",
  "fallible-streaming-iterator",
  "futures",

@@ -25,6 +25,7 @@ use common_meta_types::StageStorage;
 use common_meta_types::UserStageInfo;
 use common_planners::S3ExternalTableInfo;
 use common_streams::CsvSourceBuilder;
+use common_streams::ParquetSourceBuilder;
 use common_streams::Source;
 use opendal::Reader;
 
@@ -101,6 +102,24 @@ impl ExternalSource {
         Ok(Box::new(builder.build(reader)?))
     }
 
+    // Get parquet source stream.
+    async fn parquet_source(
+        _ctx: Arc<QueryContext>,
+        schema: DataSchemaRef,
+        _stage_info: &UserStageInfo,
+        reader: Reader,
+    ) -> Result<Box<dyn Source>> {
+        let mut builder = ParquetSourceBuilder::create(schema.clone());
+
+        // Default is all the columns.
+        let default_proj = (0..schema.fields().len())
+            .into_iter()
+            .collect::<Vec<usize>>();
+        builder.projection(default_proj);
+
+        Ok(Box::new(builder.build(reader)?))
+    }
+
     async fn initialize(&mut self) -> Result<()> {
         let ctx = self.ctx.clone();
         let file_name = self.table_info.file_name.clone();
@@ -124,6 +143,12 @@ impl ExternalSource {
         let source = match &file_format {
             StageFileFormatType::Csv => {
                 Ok(Self::csv_source(ctx.clone(), self.schema.clone(), stage, file_reader).await?)
+            }
+            StageFileFormatType::Parquet => {
+                Ok(
+                    Self::parquet_source(ctx.clone(), self.schema.clone(), stage, file_reader)
+                        .await?,
+                )
             }
             // Unsupported.
             format => Err(ErrorCode::LogicalError(format!(
