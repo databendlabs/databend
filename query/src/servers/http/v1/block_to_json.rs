@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use serde_json::Value as JsonValue;
 
@@ -44,7 +45,13 @@ pub fn block_to_json(block: &DataBlock) -> Result<Vec<Vec<JsonValue>>> {
         let field = block.schema().field(col_index);
         let data_type = field.data_type();
         let serializer = data_type.create_serializer();
-        col_table.push(serializer.serialize_json(&column)?);
+        col_table.push(serializer.serialize_json(&column).map_err(|e| {
+            ErrorCode::UnexpectedError(format!(
+                "fail to serialize filed {}, error = {}",
+                field.name(),
+                e
+            ))
+        })?);
     }
 
     Ok(transpose(col_table))
