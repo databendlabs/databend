@@ -6,4 +6,7 @@ ignore = [
     "RUSTSEC-2020-0071",
     # https://github.com/datafuselabs/databend/issues/2690
     "RUSTSEC-2021-0122",
+    # https://github.com/datafuselabs/databend/issues/4335
+    "RUSTSEC-2022-0012"
+
 ]
