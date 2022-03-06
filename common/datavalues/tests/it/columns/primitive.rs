@@ -66,7 +66,7 @@ fn test_filter_column() {
         expect: Vec<i32>,
     }
 
-    let tests: Vec<Test> = vec![
+    let mut tests: Vec<Test> = vec![
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|_| true)),
             expect: (0..N).map(|i| i as i32).collect(),
@@ -87,6 +87,23 @@ fn test_filter_column() {
                 .collect(),
         },
     ];
+
+    let offset = 10;
+    let filter = BooleanColumn::from_iterator(
+        (0..N + offset).map(|i| !(100 + offset..=800 + offset).contains(&i)),
+    )
+    .slice(offset, N)
+    .as_any()
+    .downcast_ref::<BooleanColumn>()
+    .unwrap()
+    .clone();
+    tests.push(Test {
+        filter,
+        expect: (0..N)
+            .map(|i| i as i32)
+            .filter(|&i| !(100..=800).contains(&i))
+            .collect(),
+    });
 
     for test in tests {
         let res = data_column.filter(&test.filter);
