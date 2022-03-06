@@ -14,8 +14,8 @@
 
 use std::net::Shutdown;
 
-use common_base::tokio;
 use common_base::tokio::net::TcpStream;
+use common_base::Runtime;
 use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -34,9 +34,8 @@ impl MySQLConnection {
         MySQLConnection::attach_session(&session, &blocking_stream)?;
 
         let non_blocking_stream = TcpStream::from_std(blocking_stream)?;
-
-        tokio::spawn(async move {
-            let query_executor = session.create_query_context().await.unwrap();
+        let query_executor = Runtime::with_worker_threads(1)?;
+        std::thread::spawn(move || {
             let join_handle = query_executor.spawn(async move {
                 let client_addr = non_blocking_stream.peer_addr().unwrap().to_string();
                 let interactive_worker = InteractiveWorker::create(session, client_addr);
