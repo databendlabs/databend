@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use common_datavalues::prelude::*;
+use serde_json::json;
+use serde_json::Value as JsonValue;
 
 #[test]
-fn test_empty_string_column() {
-    let mut builder = MutableStringColumn::with_values_capacity(16, 16);
-    let data_column: StringColumn = builder.finish();
+fn test_empty_object_column() {
+    let mut builder = MutableObjectColumn::<JsonValue>::with_capacity(16);
+    let data_column: ObjectColumn<JsonValue> = builder.finish();
     let mut iter = data_column.iter();
     assert_eq!(None, iter.next());
     assert!(data_column.is_empty());
@@ -25,27 +27,28 @@ fn test_empty_string_column() {
 
 #[test]
 fn test_new_from_slice() {
-    let data_column: StringColumn = NewColumn::new_from_slice(&["你好", "hello"]);
+    let v = vec![&JsonValue::Bool(true), &JsonValue::Bool(false)];
+    let data_column: ObjectColumn<JsonValue> = JsonColumn::from_slice(v.as_slice());
     let mut iter = data_column.iter();
-    assert_eq!("你好".as_bytes().to_vec(), iter.next().unwrap().to_vec());
-    assert_eq!("hello".as_bytes().to_vec(), iter.next().unwrap().to_vec());
+    assert_eq!(Some(&JsonValue::Bool(true)), iter.next());
+    assert_eq!(Some(&JsonValue::Bool(false)), iter.next());
     assert_eq!(None, iter.next());
 }
 
 #[test]
-fn test_string_column() {
+fn test_object_column() {
     const N: usize = 1024;
-    let it = (0..N).map(|i| if i % 2 == 0 { "你好" } else { "hello" });
-    let data_column: StringColumn = NewColumn::new_from_iter(it);
+    let a = json!(true);
+    let b = json!(false);
+    let it = (0..N).map(|i| if i % 2 == 0 { &a } else { &b });
+    let data_column: ObjectColumn<JsonValue> = JsonColumn::from_iterator(it);
     assert!(!data_column.is_empty());
     assert!(data_column.len() == N);
-
     assert!(!data_column.null_at(1));
 
-    {
-        let nihao = data_column.get(512).as_string().unwrap();
-        assert_eq!(nihao, "你好".as_bytes().to_vec());
-    }
+    assert!(data_column.get(512) == DataValue::Json(json!(true)));
+    assert!(data_column.get(513) == DataValue::Json(json!(false)));
+
     let slice = data_column.slice(0, N / 2);
     assert!(slice.len() == N / 2);
 }

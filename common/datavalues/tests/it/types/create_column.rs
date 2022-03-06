@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
+use serde_json::json;
+use serde_json::Value as JsonValue;
 
 #[test]
 fn test_create_constant() -> Result<()> {
@@ -84,6 +86,48 @@ fn test_create_constant() -> Result<()> {
             value: DataValue::Null,
             size: 2,
             column_expected: Series::from_data(&[None, None, Some(1i32)][0..2]),
+        },
+        Test {
+            name: "variant_null",
+            data_type: VariantType::arc(),
+            value: DataValue::Null,
+            size: 2,
+            column_expected: Series::from_data(vec![JsonValue::Null, JsonValue::Null]),
+        },
+        Test {
+            name: "variant_boolean",
+            data_type: VariantType::arc(),
+            value: DataValue::Boolean(true),
+            size: 2,
+            column_expected: Series::from_data(vec![json!(true), json!(true)]),
+        },
+        Test {
+            name: "variant_int64",
+            data_type: VariantType::arc(),
+            value: DataValue::Int64(1234),
+            size: 2,
+            column_expected: Series::from_data(vec![json!(1234i64), json!(1234i64)]),
+        },
+        Test {
+            name: "variant_uint64",
+            data_type: VariantType::arc(),
+            value: DataValue::UInt64(1234),
+            size: 2,
+            column_expected: Series::from_data(vec![json!(1234u64), json!(1234u64)]),
+        },
+        Test {
+            name: "variant_float64",
+            data_type: VariantType::arc(),
+            value: DataValue::Float64(12.34),
+            size: 2,
+            column_expected: Series::from_data(vec![json!(12.34f64), json!(12.34f64)]),
+        },
+        Test {
+            name: "variant_string",
+            data_type: VariantType::arc(),
+            value: DataValue::String("hello".as_bytes().to_vec()),
+            size: 2,
+            column_expected: Series::from_data(vec![json!("hello"), json!("hello")]),
         },
     ];
 
