@@ -31,7 +31,11 @@ fn test_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonEqFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?, &tests, true)
+    test_scalar_functions(
+        ComparisonEqFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -46,7 +50,11 @@ fn test_gt_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonGtFunction::try_create_func("",&[&Int64Type::arc(), &Int64Type::arc()])?, &tests, true)
+    test_scalar_functions(
+        ComparisonGtFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -61,7 +69,11 @@ fn test_gt_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonGtEqFunction::try_create_func("",&[&Int64Type::arc(), &Int64Type::arc()])?, &tests, true)
+    test_scalar_functions(
+        ComparisonGtEqFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -76,7 +88,11 @@ fn test_lt_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonLtFunction::try_create_func("",&[&Int64Type::arc(), &Int64Type::arc()])?, &tests, true)
+    test_scalar_functions(
+        ComparisonLtFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -91,7 +107,11 @@ fn test_lt_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonLtEqFunction::try_create_func("",&[&Int64Type::arc(), &Int64Type::arc()])?, &tests, true)
+    test_scalar_functions(
+        ComparisonLtEqFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -106,24 +126,30 @@ fn test_not_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonNotEqFunction::try_create_func("",&[&Int64Type::arc(), &Int64Type::arc()])?, &tests, true)
+    test_scalar_functions(
+        ComparisonNotEqFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
 fn test_like_comparison_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "like-passed",
-            columns: vec![
-                Series::from_data(vec!["abc", "abd", "abe", "abf"]),
-                Series::from_data(vec!["a%", "_b_", "abe", "a"]),
-            ],
-            expect: Series::from_data(vec![true, true, true, false]),
-            error: "",
-        },
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "like-passed",
+        columns: vec![
+            Series::from_data(vec!["abc", "abd", "abe", "abf"]),
+            Series::from_data(vec!["a%", "_b_", "abe", "a"]),
+        ],
+        expect: Series::from_data(vec![true, true, true, false]),
+        error: "",
+    }];
 
-    test_scalar_functions(ComparisonLikeFunction::try_create_func("",&[&StringType::arc(), &StringType::arc()])?, &tests, true)
+    test_scalar_functions(
+        ComparisonLikeFunction::try_create_func("", &[&StringType::arc(), &StringType::arc()])?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
@@ -138,25 +164,27 @@ fn test_not_like_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonNotLikeFunction::try_create_func("",&[&StringType::arc(), &StringType::arc()])?, &tests, true)
+    test_scalar_functions(
+        ComparisonNotLikeFunction::try_create_func("", &[&StringType::arc(), &StringType::arc()])?,
+        &tests,
+        true,
+    )
 }
 
 #[test]
 fn test_regexp_comparison_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "regexp-passed",
-            columns: vec![
-                Series::from_data(vec!["abc", "abd", "abe", "abf", "abc", ""]),
-                Series::from_data(vec!["^a", "^b", "abe", "a", "", ""]),
-            ],
-            expect: Series::from_data(vec![true, false, true, true, false, true]),
-            error: "",
-        },
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "regexp-passed",
+        columns: vec![
+            Series::from_data(vec!["abc", "abd", "abe", "abf", "abc", ""]),
+            Series::from_data(vec!["^a", "^b", "abe", "a", "", ""]),
+        ],
+        expect: Series::from_data(vec![true, false, true, true, false, true]),
+        error: "",
+    }];
 
     test_scalar_functions(
-        ComparisonRegexpFunction::try_create_func("",&[&StringType::arc(), &StringType::arc()])?,
+        ComparisonRegexpFunction::try_create_func("", &[&StringType::arc(), &StringType::arc()])?,
         &tests,
         true,
     )
@@ -175,7 +203,10 @@ fn test_not_regexp_comparison_function() -> Result<()> {
     }];
 
     test_scalar_functions(
-        ComparisonNotRegexpFunction::try_create_func("",&[&StringType::arc(), &StringType::arc()])?,
+        ComparisonNotRegexpFunction::try_create_func("", &[
+            &StringType::arc(),
+            &StringType::arc(),
+        ])?,
         &tests,
         true,
     )
