@@ -19,6 +19,7 @@ use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::ReadDataSourcePlan;
+use common_planners::SourceInfo;
 use common_planners::TruncateTablePlan;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::InterpreterFactory;
@@ -65,7 +66,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         ctx.try_set_partitions(parts)?;
         let stream = table
             .read(ctx.clone(), &ReadDataSourcePlan {
-                table_info: Default::default(),
+                source_info: SourceInfo::TableSource(Default::default()),
                 scan_fields: None,
                 parts: Default::default(),
                 statistics: Default::default(),
@@ -124,7 +125,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
         let stream = table
             .read(ctx.clone(), &ReadDataSourcePlan {
-                table_info: Default::default(),
+                source_info: SourceInfo::TableSource(Default::default()),
                 scan_fields: None,
                 parts: Default::default(),
                 statistics: Default::default(),

@@ -17,6 +17,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::BinaryOperator;
 use sqlparser::ast::DataType;
+use sqlparser::ast::DateTimeField;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Function;
 use sqlparser::ast::FunctionArg;
@@ -77,6 +78,7 @@ pub trait ExprVisitor: Sized + Send {
             } => self.visit_between(expr, negated, low, high).await,
             Expr::Tuple(exprs) => self.visit_tuple(exprs).await,
             Expr::InList { expr, list, .. } => self.visit_inlist(expr, list).await,
+            Expr::Extract { field, expr } => self.visit_extract(field, expr).await,
             other => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
@@ -218,5 +220,9 @@ pub trait ExprVisitor: Sized + Send {
         }
 
         Ok(())
+    }
+
+    async fn visit_extract(&mut self, _field: &DateTimeField, expr: &Expr) -> Result<()> {
+        ExprTraverser::accept(expr, self).await
     }
 }

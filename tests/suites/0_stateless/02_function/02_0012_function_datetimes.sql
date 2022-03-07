@@ -170,3 +170,16 @@ select '===toSecond===';
 select '===toMonday===';
 select toMonday(toDateTime(1634614318))  =  toDate('2021-10-18');
 select '===toMonday===';
+
+select '===toYear===';
+select toYear(toDateTime(1646404329)) = 2022;
+select '===toYear===';
+
+select '===EXTRACT===';
+select EXTRACT(YEAR FROM toDateTime('2022-03-04 22:32:09')) = 2022;
+select EXTRACT(MONTH FROM toDateTime('2022-03-04 22:32:09')) = 3;
+select EXTRACT(DAY FROM toDateTime('2022-03-04 22:32:09')) = 4;
+select EXTRACT(HOUR FROM toDateTime('2022-03-04 22:32:09')) = 22;
+select EXTRACT(MINUTE FROM toDateTime('2022-03-04 22:32:09')) = 32;
+select EXTRACT(SECOND FROM toDateTime('2022-03-04 22:32:09')) = 9;
+select '===EXTRACT===';

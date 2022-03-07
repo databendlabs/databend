@@ -29,11 +29,9 @@ mod transform_sort_partial;
 mod transform_source;
 
 pub mod group_by;
-mod sources;
 mod streams;
 mod transform_sink;
 
-pub use sources::CsvSourceTransform;
 pub use streams::AddOnStream;
 pub use transform_aggregator_final::AggregatorFinalTransform;
 pub use transform_aggregator_partial::AggregatorPartialTransform;

@@ -180,7 +180,7 @@ impl BufReaderProvider for &QueryContext {
             }
         };
 
-        let reader = object.reader().total_size(len);
+        let reader = object.limited_reader(len);
         let read_buffer_size = self.get_settings().get_storage_read_buffer_size()?;
         Ok(BufReader::with_capacity(read_buffer_size as usize, reader))
     }

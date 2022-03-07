@@ -105,7 +105,7 @@ impl ProcessesTable {
             DataField::new("state", Vu8::to_data_type()),
             DataField::new("database", Vu8::to_data_type()),
             DataField::new_nullable("extra_info", Vu8::to_data_type()),
-            DataField::new_nullable("memory_usage", i64::to_data_type()),
+            DataField::new("memory_usage", i64::to_data_type()),
             DataField::new_nullable("dal_metrics_read_bytes", u64::to_data_type()),
             DataField::new_nullable("dal_metrics_write_bytes", u64::to_data_type()),
             DataField::new_nullable("scan_progress_read_rows", u64::to_data_type()),

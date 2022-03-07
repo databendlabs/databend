@@ -20,6 +20,7 @@ use base64::encode_config;
 use base64::URL_SAFE_NO_PAD;
 use common_base::get_free_tcp_port;
 use common_base::tokio;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::UserInfo;
@@ -77,7 +78,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.data.len(), 10);
-    assert_eq!(result.state, ExecuteStateName::Succeeded);
+    assert_eq!(result.state, ExecuteStateName::Succeeded, "{:?}", result);
     assert!(result.next_uri.is_none(), "{:?}", result);
     assert!(result.stats.progress.is_some());
     assert!(result.schema.is_some());
@@ -98,32 +99,31 @@ async fn test_bad_sql() -> Result<()> {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_async() -> Result<()> {
     let ep = create_endpoint();
-    let sql = "select sleep(0.2)";
+    let sql = "select sleep(0.01)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json).await?;
     assert_eq!(status, StatusCode::OK);
-    let query_id = result.id;
-    let next_uri = make_page_uri(&query_id, 0);
+    let query_id = &result.id;
+    let next_uri = make_page_uri(query_id, 0);
+    assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(result.data.len(), 0);
-    assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.next_uri, Some(next_uri));
     assert!(result.stats.progress.is_some());
     assert!(result.schema.is_some());
     assert_eq!(result.state, ExecuteStateName::Running,);
-    sleep(Duration::from_millis(300)).await;
+    sleep(Duration::from_millis(100)).await;
 
     // get page, support retry
     for _ in 1..3 {
-        let uri = make_page_uri(&query_id, 0);
+        let uri = make_page_uri(query_id, 0);
 
         let (status, result) = get_uri_checked(&ep, &uri).await?;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(result.data.len(), 1);
-        assert!(result.error.is_none(), "{:?}", result.error);
+        assert!(result.error.is_none(), "{:?}", result);
+        assert_eq!(result.data.len(), 1, "{:?}", result);
         assert!(result.next_uri.is_none());
         assert!(result.schema.is_none());
         assert!(result.stats.progress.is_some());
@@ -131,7 +131,7 @@ async fn test_async() -> Result<()> {
     }
 
     // get state
-    let uri = make_state_uri(&query_id);
+    let uri = make_state_uri(query_id);
     let (status, result) = get_uri_checked(&ep, &uri).await?;
     assert_eq!(status, StatusCode::OK);
     assert!(result.error.is_none(), "{:?}", result.error);
@@ -142,14 +142,14 @@ async fn test_async() -> Result<()> {
     assert_eq!(result.state, ExecuteStateName::Succeeded);
 
     // get page not expected
-    let uri = make_page_uri(&query_id, 1);
+    let uri = make_page_uri(query_id, 1);
     let response = get_uri(&ep, &uri).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(body, "wrong page number 1");
 
     // delete
-    let status = delete_query(&ep, query_id.clone()).await;
+    let status = delete_query(&ep, query_id).await;
     assert_eq!(status, StatusCode::OK);
 
     let response = get_uri(&ep, &uri).await;
@@ -183,6 +183,54 @@ async fn test_result_timeout() -> Result<()> {
     sleep(std::time::Duration::from_millis(210)).await;
     let response = get_uri(&ep, &next_uri).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_system_tables() -> Result<()> {
+    let session_manager = SessionManagerBuilder::create().build().unwrap();
+    let ep = Route::new()
+        .nest("/v1/query", query_route())
+        .with(HTTPSessionMiddleware { session_manager });
+
+    let sql = "select name from system.tables where database='system' order by name";
+
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.data.len() > 0, "{:?}", result);
+
+    let table_names = result
+        .data
+        .iter()
+        .flatten()
+        .map(|j| j.as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+
+    let skipped = vec![
+        "credits", // slow for ci (> 1s) and maybe flaky
+        "metrics", // QueryError: "Prometheus recorder is not initialized yet"
+    ];
+    for table_name in table_names {
+        if skipped.contains(&table_name.as_str()) {
+            continue;
+        };
+        let sql = format!("select * from system.{}", table_name);
+        let (status, result) = post_sql_to_endpoint(&ep, &sql, 1).await.map_err(|e| {
+            ErrorCode::UnexpectedError(format!("system.{}: {}", table_name, e.message()))
+        })?;
+        let error_message = format!("{}: status={:?}, result={:?}", table_name, status, result);
+        assert_eq!(status, StatusCode::OK, "{}", error_message);
+        assert!(result.error.is_none(), "{}", error_message);
+        assert_eq!(
+            result.state,
+            ExecuteStateName::Succeeded,
+            "{}",
+            error_message
+        );
+        assert!(result.stats.progress.is_some());
+        assert!(result.next_uri.is_none(), "{:?}", result);
+        assert!(result.schema.is_some());
+    }
     Ok(())
 }
 
@@ -243,8 +291,8 @@ async fn test_insert() -> Result<()> {
     Ok(())
 }
 
-async fn delete_query(ep: &EndpointType, query_id: String) -> StatusCode {
-    let uri = make_final_uri(&query_id);
+async fn delete_query(ep: &EndpointType, query_id: &str) -> StatusCode {
+    let uri = make_final_uri(query_id);
     let resp = get_uri(ep, &uri).await;
     resp.status()
 }
@@ -321,7 +369,7 @@ async fn post_json_to_endpoint(
                 .body(body),
         )
         .await
-        .unwrap();
+        .map_err(|e| ErrorCode::UnexpectedError(e.to_string()))?;
 
     check_response(response).await
 }

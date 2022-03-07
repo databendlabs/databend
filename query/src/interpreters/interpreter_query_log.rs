@@ -116,7 +116,7 @@ impl InterpreterQueryLog {
             Series::from_data(vec![event.query_kind.as_str()]),
             Series::from_data(vec![event.query_text.as_str()]),
             Series::from_data(vec![event.event_date as i32]),
-            Series::from_data(vec![event.event_time as u64]),
+            Series::from_data(vec![event.event_time as i64]),
             // Schema.
             Series::from_data(vec![event.current_database.as_str()]),
             Series::from_data(vec![event.databases.as_str()]),

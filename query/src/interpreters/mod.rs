@@ -56,6 +56,7 @@ mod interpreter_user_udf_alter;
 mod interpreter_user_udf_create;
 mod interpreter_user_udf_drop;
 mod plan_schedulers;
+mod stream;
 
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;

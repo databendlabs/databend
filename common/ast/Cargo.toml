@@ -25,7 +25,7 @@ sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "47
 async-trait = "0.1.52"
 logos = "0.12.0"
 nom = "7.1.0"
-nom-rule = "0.2.0"
+nom-rule = "0.2.1"
 once_cell = "1.9.0"
 pratt = "0.3.0"
 thiserror = "1.0.30"

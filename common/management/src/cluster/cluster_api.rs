@@ -27,5 +27,5 @@ pub trait ClusterApi: Sync + Send {
     async fn drop_node(&self, node_id: String, seq: Option<u64>) -> Result<()>;
 
     // Keep the tenant's cluster node alive.
-    async fn heartbeat(&self, node_id: String, seq: Option<u64>) -> Result<u64>;
+    async fn heartbeat(&self, node: &NodeInfo, seq: Option<u64>) -> Result<u64>;
 }

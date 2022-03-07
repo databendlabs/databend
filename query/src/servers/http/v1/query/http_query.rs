@@ -37,6 +37,7 @@ use crate::servers::http::v1::query::Wait;
 use crate::sessions::SessionManager;
 
 #[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct HttpQueryRequest {
     #[serde(default)]
     pub session: HttpSessionConf,
@@ -77,7 +78,7 @@ pub struct ResponseInitialState {
 }
 
 pub struct ResponseState {
-    pub wall_time_ms: u128,
+    pub wall_time_ms: Option<f64>,
     pub progress: Option<ProgressValues>,
     pub state: ExecuteStateName,
     pub error: Option<ErrorCode>,
@@ -163,7 +164,7 @@ impl HttpQuery {
     async fn get_state(&self) -> ResponseState {
         let state = self.state.read().await;
         let (exe_state, err) = state.state.extract();
-        let wall_time_ms = state.elapsed().as_millis();
+        let wall_time_ms = state.elapsed().map(|d| d.as_secs_f64() * 1000.0);
         ResponseState {
             wall_time_ms,
             progress: state.get_progress(),

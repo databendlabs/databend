@@ -1,3 +1,7 @@
+Projection: count():UInt64
+  Projection: 3 as count():UInt64
+    Expression: 3:UInt64 (Exact Statistics)
+      ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1]
 1
 1
 5

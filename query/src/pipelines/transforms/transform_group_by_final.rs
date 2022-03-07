@@ -209,7 +209,8 @@ impl Processor for GroupByFinalTransform {
                 }
 
                 {
-                    let group_columns = $hash_method.de_group_columns(keys, &group_fields)?;
+                    let group_columns =
+                        $hash_method.deserialize_group_columns(keys, &group_fields)?;
                     columns.extend_from_slice(&group_columns);
                 }
 

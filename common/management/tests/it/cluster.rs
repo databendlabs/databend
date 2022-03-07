@@ -127,7 +127,7 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
     assert!(value.unwrap().meta.unwrap().expire_at.unwrap() - current_time >= 60);
 
     let current_time = current_seconds_time();
-    cluster_api.heartbeat(node_info.id.clone(), None).await?;
+    cluster_api.heartbeat(&node_info, None).await?;
 
     let value = kv_api
         .get_kv("__fd_clusters/admin//databend_query/test_node")

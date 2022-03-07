@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
+use common_io::prelude::BinaryRead;
 
 use crate::ColumnRef;
 use crate::NullableColumn;
@@ -27,9 +28,15 @@ pub struct NullableDeserializer {
 }
 
 impl TypeDeserializer for NullableDeserializer {
-    fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.bitmap.push(true);
-        self.inner.de(reader)
+    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
+        let valid: bool = reader.read_scalar()?;
+        if valid {
+            self.inner.de_binary(reader)?;
+        } else {
+            self.inner.de_default();
+        }
+        self.bitmap.push(valid);
+        Ok(())
     }
 
     fn de_default(&mut self) {
@@ -37,15 +44,11 @@ impl TypeDeserializer for NullableDeserializer {
         self.bitmap.push(false);
     }
 
-    fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
-        for row in 0..rows {
-            let mut reader = &reader[step * row..];
-            self.inner.de(&mut reader)?;
-            self.bitmap.push(true);
-        }
-        Ok(())
+    fn de_fixed_binary_batch(&mut self, _reader: &[u8], _step: usize, _rows: usize) -> Result<()> {
+        unreachable!()
     }
 
+    // TODO: support null text setting
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
         self.inner.de_text(reader)?;
         self.bitmap.push(true);

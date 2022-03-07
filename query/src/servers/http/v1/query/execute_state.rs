@@ -82,10 +82,10 @@ impl Executor {
             Stopped(f) => f.progress.clone(),
         }
     }
-    pub(crate) fn elapsed(&self) -> Duration {
+    pub(crate) fn elapsed(&self) -> Option<Duration> {
         match &self.state {
-            Running(_) => Instant::now() - self.start_time,
-            Stopped(f) => f.stop_time - self.start_time,
+            Running(_) => None,
+            Stopped(f) => Some(f.stop_time - self.start_time),
         }
     }
     pub(crate) async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>, kill: bool) {
@@ -140,6 +140,7 @@ impl ExecuteState {
         block_tx: mpsc::Sender<DataBlock>,
     ) -> Result<(Arc<RwLock<Executor>>, DataSchemaRef)> {
         let sql = &request.sql;
+        let start_time = Instant::now();
         let session = session_manager.create_session("http-statement")?;
         let ctx = session.create_query_context().await?;
         if let Some(db) = &request.session.database {
@@ -158,9 +159,6 @@ impl ExecuteState {
             .await
             .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
 
-        let data_stream = interpreter.execute(None).await?;
-        let mut data_stream = ctx.try_create_abortable(data_stream)?;
-
         let (abort_tx, mut abort_rx) = mpsc::channel(2);
         ctx.attach_http_query(HttpQueryHandle {
             abort_sender: abort_tx,
@@ -172,36 +170,48 @@ impl ExecuteState {
             interpreter: interpreter.clone(),
         };
         let executor = Arc::new(RwLock::new(Executor {
-            start_time: Instant::now(),
+            start_time,
             state: Running(running_state),
         }));
 
         let executor_clone = executor.clone();
-        ctx
-            .try_spawn(async move {
-                loop {
-                    if let Some(block_r) = data_stream.next().await {
-                        match block_r {
-                            Ok(block) => tokio::select! {
-                                _ = block_tx.send(block) => { },
-                                _ = abort_rx.recv() => {
-                                    Executor::stop(&executor, Err(ErrorCode::AbortedQuery("query aborted")), true).await;
-                                    break;
-                                },
-                            },
-                            Err(err) => {
-                                Executor::stop(&executor, Err(err), false).await;
-                                break;
-                            }
-                        };
-                    } else {
-                        Executor::stop(&executor, Ok(()), false).await;
-                        break;
-                    }
+        let ctx_clone = ctx.clone();
+        ctx.try_spawn(async move {
+            // drop/close block_tx after calling Executor::stop
+            // so handler task can get newest state before return
+            // otherwise the handler task and this task may competing for the executor lock
+            let block_tx_clone = block_tx.clone();
+            match execute(interpreter, ctx_clone, block_tx_clone, &mut abort_rx).await {
+                Ok(_) => Executor::stop(&executor_clone, Ok(()), false).await,
+                Err(err) => {
+                    let kill = err.message().starts_with("aborted");
+                    Executor::stop(&executor_clone, Err(err), kill).await
                 }
-                tracing::debug!("drop block sender!");
-            })?;
+            };
+        })?;
 
-        Ok((executor_clone, schema))
+        Ok((executor, schema))
     }
+}
+
+async fn execute(
+    interpreter: Arc<dyn Interpreter>,
+    ctx: Arc<QueryContext>,
+    block_tx: mpsc::Sender<DataBlock>,
+    abort_rx: &mut mpsc::Receiver<()>,
+) -> Result<()> {
+    let data_stream = interpreter.execute(None).await?;
+    let mut data_stream = ctx.try_create_abortable(data_stream)?;
+    while let Some(block_r) = data_stream.next().await {
+        match block_r {
+            Ok(block) => tokio::select! {
+                _ = block_tx.send(block) => { },
+                _ = abort_rx.recv() => {
+                    return Err(ErrorCode::AbortedQuery("aborted"))
+                },
+            },
+            Err(err) => return Err(err),
+        };
+    }
+    Ok(())
 }

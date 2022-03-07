@@ -72,7 +72,7 @@ impl QueryError {
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct QueryStats {
     pub progress: Option<ProgressValues>,
-    pub wall_time_ms: u128,
+    pub wall_time_ms: Option<f64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

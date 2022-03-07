@@ -9,6 +9,5 @@ doctest = false
 test = false
 
 [dependencies]
-
 async-trait = "0.1.52"
-opendal = { git = "https://github.com/datafuselabs/opendal", rev = "80e8bca" }
+opendal = "0.1.4"

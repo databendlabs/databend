@@ -38,7 +38,7 @@ fn test_default_config() -> Result<()> {
 [query]
 tenant_id = \"\"
 cluster_id = \"\"
-num_cpus = 8
+num_cpus = 0
 mysql_handler_host = \"127.0.0.1\"
 mysql_handler_port = 3307
 max_active_sessions = 256

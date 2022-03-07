@@ -162,15 +162,15 @@ impl ClusterDiscovery {
         let node_info = NodeInfo::create(self.local_id.clone(), cpus, address);
 
         self.drop_invalid_nodes(&node_info).await?;
-        match self.api_provider.add_node(node_info).await {
-            Ok(_) => self.start_heartbeat().await,
+        match self.api_provider.add_node(node_info.clone()).await {
+            Ok(_) => self.start_heartbeat(node_info).await,
             Err(cause) => Err(cause.add_message_back("(while cluster api add_node).")),
         }
     }
 
-    async fn start_heartbeat(self: &Arc<Self>) -> Result<()> {
+    async fn start_heartbeat(self: &Arc<Self>, node_info: NodeInfo) -> Result<()> {
         let mut heartbeat = self.heartbeat.lock().await;
-        heartbeat.start(self.local_id.clone());
+        heartbeat.start(node_info);
         Ok(())
     }
 }
@@ -256,7 +256,7 @@ impl ClusterHeartbeat {
         }
     }
 
-    fn heartbeat_loop(&self, local_id: String) -> impl Future<Output = ()> + 'static {
+    fn heartbeat_loop(&self, node: NodeInfo) -> impl Future<Output = ()> + 'static {
         let shutdown = self.shutdown.clone();
         let shutdown_notify = self.shutdown_notify.clone();
         let cluster_api = self.cluster_api.clone();
@@ -279,7 +279,7 @@ impl ClusterHeartbeat {
                     }
                     Either::Right((_, new_shutdown_notified)) => {
                         shutdown_notified = new_shutdown_notified;
-                        let heartbeat = cluster_api.heartbeat(local_id.clone(), None);
+                        let heartbeat = cluster_api.heartbeat(&node, None);
                         if let Err(failure) = heartbeat.await {
                             tracing::error!("Cluster cluster api heartbeat failure: {:?}", failure);
                         }
@@ -293,8 +293,8 @@ impl ClusterHeartbeat {
         (duration / 3).as_millis()..=((duration / 3) * 2).as_millis()
     }
 
-    pub fn start(&mut self, local_id: String) {
-        self.shutdown_handler = Some(tokio::spawn(self.heartbeat_loop(local_id)));
+    pub fn start(&mut self, node_info: NodeInfo) {
+        self.shutdown_handler = Some(tokio::spawn(self.heartbeat_loop(node_info)));
     }
 
     pub async fn shutdown(&mut self) -> Result<()> {

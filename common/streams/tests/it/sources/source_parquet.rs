@@ -77,7 +77,7 @@ async fn test_source_parquet() -> Result<()> {
             .await
             .unwrap(),
     );
-    let stream = local.object(name).reader().total_size(len);
+    let stream = local.object(name).limited_reader(len);
     let stream = BufReader::with_capacity(4 * 1024 * 1024, stream);
 
     let default_proj = (0..schema.fields().len())
