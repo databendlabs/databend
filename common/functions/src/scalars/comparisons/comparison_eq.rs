@@ -12,22 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::compute::comparison;
+use common_arrow::arrow::compute::comparison::Simd8;
 use common_arrow::arrow::compute::comparison::Simd8PartialEq;
 use common_datavalues::prelude::*;
-use common_datavalues::with_match_physical_primitive_type;
 use num::traits::AsPrimitive;
 
 use super::comparison::ComparisonFunctionCreator;
 use super::comparison::ComparisonImpl;
-use super::utils::compare_op;
-use super::utils::compare_op_scalar;
+use super::utils::*;
 use crate::scalars::EvalContext;
+
+pub type ComparisonEqFunction = ComparisonFunctionCreator<ComparisonEqImpl>;
 
 #[derive(Clone)]
 pub struct ComparisonEqImpl;
 
 impl ComparisonImpl for ComparisonEqImpl {
+    type PrimitiveSimd = PrimitiveSimdEq;
+    type BooleanSimd = BooleanSimdEq;
+
     fn eval_primitive<L, R, M>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> bool
     where
         L: PrimitiveType + AsPrimitive<M>,
@@ -40,108 +43,58 @@ impl ComparisonImpl for ComparisonEqImpl {
     fn eval_binary(l: &[u8], r: &[u8], _ctx: &mut EvalContext) -> bool {
         l == r
     }
+}
 
-    fn eval_bool(l: bool, r: bool, _ctx: &mut EvalContext) -> bool {
-        !(l ^ r)
+#[derive(Clone)]
+pub struct PrimitiveSimdEq;
+
+impl PrimitiveSimdImpl for PrimitiveSimdEq {
+    fn vector_vector<T>(lhs: &PrimitiveColumn<T>, rhs: &PrimitiveColumn<T>) -> BooleanColumn
+    where
+        T: PrimitiveType + Simd8,
+        T::Simd: Simd8PartialEq,
+    {
+        CommonPrimitiveImpl::compare_op(lhs, rhs, |a, b| a.eq(b))
+    }
+
+    fn vector_const<T>(lhs: &PrimitiveColumn<T>, rhs: T) -> BooleanColumn
+    where
+        T: PrimitiveType + Simd8,
+        T::Simd: Simd8PartialEq,
+    {
+        CommonPrimitiveImpl::compare_op_scalar(lhs, rhs, |a, b| a.eq(b))
+    }
+
+    fn const_vector<T>(lhs: T, rhs: &PrimitiveColumn<T>) -> BooleanColumn
+    where
+        T: PrimitiveType + Simd8,
+        T::Simd: Simd8PartialEq,
+    {
+        CommonPrimitiveImpl::compare_op_scalar(rhs, lhs, |a, b| a.eq(b))
     }
 }
 
-pub type ComparisonEqFunction = ComparisonFunctionCreator<ComparisonEqImpl>;
+#[derive(Clone)]
+pub struct BooleanSimdEq;
 
-/// Perform `lhs == rhs` operation on two arrays.
-pub fn primitive_eq<T>(lhs: &PrimitiveColumn<T>, rhs: &PrimitiveColumn<T>) -> BooleanColumn
-where
-    T: PrimitiveType + comparison::Simd8,
-    T::Simd: comparison::Simd8PartialEq,
-{
-    compare_op(lhs, rhs, |a, b| a.eq(b))
-}
+impl BooleanSimdImpl for BooleanSimdEq {
+    fn vector_vector(lhs: &BooleanColumn, rhs: &BooleanColumn) -> BooleanColumn {
+        CommonBooleanImpl::compare_op(lhs, rhs, |a, b| !(a ^ b))
+    }
 
-/// Perform `left == right` operation on an array and a scalar value.
-pub fn eq_scalar<T>(lhs: &PrimitiveColumn<T>, rhs: T) -> BooleanColumn
-where
-    T: PrimitiveType + comparison::Simd8,
-    T::Simd: comparison::Simd8PartialEq,
-{
-    compare_op_scalar(lhs, rhs, |a, b| a.eq(b))
-}
-
-/// `==` between two [`Array`]s.
-/// Use [`can_eq`] to check whether the operation is valid
-/// # Panic
-/// Panics iff either:
-/// * the arrays do not have have the same logical type
-/// * the arrays do not have the same length
-/// * the operation is not supported for the logical type
-pub fn eq(lhs: &ColumnRef, rhs: &ColumnRef) -> BooleanColumn {
-    assert_eq!(lhs.data_type_id(), rhs.data_type_id());
-
-    use PhysicalTypeID::*;
-    let physical_id = lhs.data_type_id().to_physical_type();
-    with_match_physical_primitive_type!(physical_id, |$T| {
-        let lhs: &PrimitiveColumn<$T> = lhs.as_any().downcast_ref().unwrap();
-        let rhs: &PrimitiveColumn<$T> = rhs.as_any().downcast_ref().unwrap();
-        primitive_eq::<$T>(lhs, rhs)
-    },{
-        match physical_id {
-            Boolean => todo!(),
-            _ => todo!(
-                "Comparison between {:?} are not yet supported",
-                lhs.data_type_id()
-            ),
+    fn vector_const(lhs: &BooleanColumn, rhs: bool) -> BooleanColumn {
+        if rhs {
+            lhs.clone()
+        } else {
+            CommonBooleanImpl::compare_op_scalar(lhs, rhs, |a, _| !a)
         }
-    })
-}
+    }
 
-/*
-
-macro_rules! compare {
-    ($lhs:expr, $rhs:expr, $op:tt, $p:tt) => {{
-        let lhs = $lhs;
-        let rhs = $rhs;
-        assert_eq!(
-            lhs.data_type().to_logical_type(),
-            rhs.data_type().to_logical_type()
-        );
-
-        use crate::datatypes::PhysicalType::*;
-        match lhs.data_type().to_physical_type() {
-            Boolean => {
-                let lhs = lhs.as_any().downcast_ref().unwrap();
-                let rhs = rhs.as_any().downcast_ref().unwrap();
-                boolean::$op(lhs, rhs)
-            }
-            Primitive(primitive) => $p!(primitive, |$T| {
-                let lhs = lhs.as_any().downcast_ref().unwrap();
-                let rhs = rhs.as_any().downcast_ref().unwrap();
-                primitive::$op::<$T>(lhs, rhs)
-            }),
-            Utf8 => {
-                let lhs = lhs.as_any().downcast_ref().unwrap();
-                let rhs = rhs.as_any().downcast_ref().unwrap();
-                utf8::$op::<i32>(lhs, rhs)
-            }
-            LargeUtf8 => {
-                let lhs = lhs.as_any().downcast_ref().unwrap();
-                let rhs = rhs.as_any().downcast_ref().unwrap();
-                utf8::$op::<i64>(lhs, rhs)
-            }
-            Binary => {
-                let lhs = lhs.as_any().downcast_ref().unwrap();
-                let rhs = rhs.as_any().downcast_ref().unwrap();
-                binary::$op::<i32>(lhs, rhs)
-            }
-            LargeBinary => {
-                let lhs = lhs.as_any().downcast_ref().unwrap();
-                let rhs = rhs.as_any().downcast_ref().unwrap();
-                binary::$op::<i64>(lhs, rhs)
-            }
-            _ => todo!(
-                "Comparison between {:?} are not yet supported",
-                lhs.data_type()
-            ),
+    fn const_vector(lhs: bool, rhs: &BooleanColumn) -> BooleanColumn {
+        if lhs {
+            rhs.clone()
+        } else {
+            CommonBooleanImpl::compare_op_scalar(rhs, lhs, |a, _| !a)
         }
-    }};
+    }
 }
-
-*/
