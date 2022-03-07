@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::marker::PhantomData;
+use std::ops::Not;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -120,6 +121,8 @@ pub type HashMethodKeysU16 = HashMethodFixedKeys<u16>;
 pub type HashMethodKeysU32 = HashMethodFixedKeys<u32>;
 pub type HashMethodKeysU64 = HashMethodFixedKeys<u64>;
 
+/// These methods are `generic` method to generate hash key,
+/// that is the 'numeric' or 'binary` representation of each column value as hash key.
 pub enum HashMethodKind {
     Serializer(HashMethodSerializer),
     KeysU8(HashMethodKeysU8),
@@ -159,11 +162,12 @@ impl HashMethodSerializer {
         v.to_owned()
     }
 
-    pub fn de_group_columns(
+    pub fn deserialize_group_columns(
         &self,
         keys: Vec<Vec<u8>>,
         group_fields: &[DataField],
     ) -> Result<Vec<ColumnRef>> {
+        debug_assert!(!keys.is_empty());
         let mut keys: Vec<&[u8]> = keys.iter().map(|x| x.as_slice()).collect();
         let rows = keys.len();
 
@@ -173,7 +177,7 @@ impl HashMethodSerializer {
             let mut deserializer = data_type.create_deserializer(rows);
 
             for (_row, key) in keys.iter_mut().enumerate() {
-                deserializer.de(key)?;
+                deserializer.de_binary(key)?;
             }
             res.push(deserializer.finish_to_column());
         }
@@ -206,7 +210,7 @@ impl HashMethod for HashMethodSerializer {
             }
 
             for col in group_columns {
-                Series::serialize(col, &mut group_keys)?
+                Series::serialize(col, &mut group_keys, None)?
             }
         }
         Ok(group_keys)
@@ -228,11 +232,12 @@ where T: PrimitiveType
     pub fn get_key(&self, column: &PrimitiveColumn<T>, row: usize) -> T {
         unsafe { column.value_unchecked(row) }
     }
-    pub fn de_group_columns(
+    pub fn deserialize_group_columns(
         &self,
         keys: Vec<T>,
         group_fields: &[DataField],
     ) -> Result<Vec<ColumnRef>> {
+        debug_assert!(!keys.is_empty());
         let mut keys = keys;
         let rows = keys.len();
         let step = std::mem::size_of::<T>();
@@ -247,16 +252,75 @@ where T: PrimitiveType
 
         let mut res = Vec::with_capacity(group_fields.len());
         let mut offsize = 0;
-        for f in group_fields.iter() {
-            let data_type = f.data_type();
-            let mut deserializer = data_type.create_deserializer(rows);
-            let reader = vec8.as_slice();
-            deserializer.de_batch(&reader[offsize..], step, rows)?;
-            res.push(deserializer.finish_to_column());
 
-            offsize += data_type.data_type_id().numeric_byte_size()?;
+        let mut null_offsize = group_fields
+            .iter()
+            .map(|c| {
+                let ty = c.data_type();
+                remove_nullable(ty)
+                    .data_type_id()
+                    .numeric_byte_size()
+                    .unwrap()
+            })
+            .sum();
+
+        let mut sorted_group_fields = group_fields.to_vec();
+        sorted_group_fields.sort_by(|a, b| {
+            let a = remove_nullable(a.data_type()).data_type_id();
+            let b = remove_nullable(b.data_type()).data_type_id();
+            b.numeric_byte_size()
+                .unwrap()
+                .cmp(&a.numeric_byte_size().unwrap())
+        });
+
+        for f in sorted_group_fields.iter() {
+            let data_type = f.data_type();
+            let non_null_type = remove_nullable(data_type);
+            let mut deserializer = non_null_type.create_deserializer(rows);
+            let reader = vec8.as_slice();
+
+            let col = match f.is_nullable() {
+                false => {
+                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows)?;
+                    deserializer.finish_to_column()
+                }
+
+                true => {
+                    let mut bitmap_deserializer = bool::to_data_type().create_deserializer(rows);
+                    bitmap_deserializer.de_fixed_binary_batch(
+                        &reader[null_offsize..],
+                        step,
+                        rows,
+                    )?;
+
+                    null_offsize += 1;
+
+                    let col = bitmap_deserializer.finish_to_column();
+                    let col: &BooleanColumn = Series::check_get(&col)?;
+
+                    // we store 1 for nulls in fixed_hash
+                    let bitmap = col.values().not();
+                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows)?;
+                    let inner = deserializer.finish_to_column();
+                    NullableColumn::new(inner, bitmap).arc()
+                }
+            };
+
+            offsize += non_null_type.data_type_id().numeric_byte_size()?;
+            res.push(col);
         }
-        Ok(res)
+
+        // sort back
+        let mut result_columns = Vec::with_capacity(res.len());
+        for f in group_fields.iter() {
+            for (sf, col) in sorted_group_fields.iter().zip(res.iter()) {
+                if f.data_type() == sf.data_type() && f.name() == sf.name() {
+                    result_columns.push(col.clone());
+                    break;
+                }
+            }
+        }
+        Ok(result_columns)
     }
 }
 
@@ -271,37 +335,62 @@ where
         format!("FixedKeys{}", std::mem::size_of::<Self::HashKey>())
     }
 
+    // More details about how it works, see: Series::fixed_hash
     fn build_keys(&self, group_columns: &[&ColumnRef], rows: usize) -> Result<Vec<Self::HashKey>> {
         let step = std::mem::size_of::<T>();
         let mut group_keys: Vec<T> = vec![T::default(); rows];
         let ptr = group_keys.as_mut_ptr() as *mut u8;
         let mut offsize = 0;
-        let mut size = step;
-        while size > 0 {
-            build(size, &mut offsize, group_columns, ptr, step)?;
-            size /= 2;
+        let mut null_offsize = group_columns
+            .iter()
+            .map(|c| {
+                let ty = c.data_type();
+                remove_nullable(&ty)
+                    .data_type_id()
+                    .numeric_byte_size()
+                    .unwrap()
+            })
+            .sum();
+
+        let mut group_columns = group_columns.to_vec();
+        group_columns.sort_by(|a, b| {
+            let a = remove_nullable(&a.data_type()).data_type_id();
+            let b = remove_nullable(&b.data_type()).data_type_id();
+            b.numeric_byte_size()
+                .unwrap()
+                .cmp(&a.numeric_byte_size().unwrap())
+        });
+
+        for col in group_columns.iter() {
+            build(&mut offsize, &mut null_offsize, col, ptr, step)?;
         }
+
         Ok(group_keys)
     }
 }
 
 #[inline]
 fn build(
-    mem_size: usize,
     offsize: &mut usize,
-    group_columns: &[&ColumnRef],
+    null_offsize: &mut usize,
+    col: &ColumnRef,
     writer: *mut u8,
     step: usize,
 ) -> Result<()> {
-    for col in group_columns.iter() {
-        let data_type = col.data_type();
-        let type_id = data_type.data_type_id();
-        let size = type_id.numeric_byte_size()?;
-        if size == mem_size {
-            let writer = unsafe { writer.add(*offsize) };
-            Series::fixed_hash(col, writer, step)?;
-            *offsize += size;
-        }
-    }
+    let data_type_nonull = remove_nullable(&col.data_type());
+    let size = data_type_nonull.data_type_id().numeric_byte_size()?;
+
+    let writer = unsafe { writer.add(*offsize) };
+    let nulls = if col.is_nullable() {
+        // origin_ptr-------ptr<------old------>null_offset
+        let null_offsize_from_ptr = *null_offsize - *offsize;
+        *null_offsize += 1;
+        Some((null_offsize_from_ptr, None))
+    } else {
+        None
+    };
+
+    Series::fixed_hash(col, writer, step, nulls)?;
+    *offsize += size;
     Ok(())
 }

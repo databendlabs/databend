@@ -36,7 +36,7 @@ impl StringDeserializer {
 impl TypeDeserializer for StringDeserializer {
     // See GroupHash.rs for StringColumn
     #[allow(clippy::uninit_vec)]
-    fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
+    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let offset: u64 = reader.read_uvarint()?;
 
         self.buffer.clear();
@@ -54,7 +54,7 @@ impl TypeDeserializer for StringDeserializer {
         self.builder.append_value("");
     }
 
-    fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
+    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
         for row in 0..rows {
             let reader = &reader[step * row..];
             self.builder.append_value(reader);

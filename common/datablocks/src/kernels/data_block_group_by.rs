@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::remove_nullable;
 use common_exception::Result;
 
 use crate::kernels::HashMethodKeysU16;
@@ -31,18 +32,26 @@ impl DataBlock {
         let mut group_key_len = 0;
         for col in column_names {
             let column = block.try_column_by_name(col)?;
-            let typ = column.data_type();
-            if typ.data_type_id().is_integer() {
+            let typ = remove_nullable(&column.data_type());
+
+            if typ.data_type_id().is_numeric() {
                 group_key_len += typ.data_type_id().numeric_byte_size()?;
+
+                //extra one byte for null flag
+                if column.is_nullable() {
+                    group_key_len += 1;
+                }
             } else {
                 return Ok(HashMethodKind::Serializer(HashMethodSerializer::default()));
             }
         }
+
         match group_key_len {
             1 => Ok(HashMethodKind::KeysU8(HashMethodKeysU8::default())),
             2 => Ok(HashMethodKind::KeysU16(HashMethodKeysU16::default())),
             3..=4 => Ok(HashMethodKind::KeysU32(HashMethodKeysU32::default())),
             5..=8 => Ok(HashMethodKind::KeysU64(HashMethodKeysU64::default())),
+            // TODO support u128, u256
             _ => Ok(HashMethodKind::Serializer(HashMethodSerializer::default())),
         }
     }

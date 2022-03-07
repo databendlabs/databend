@@ -23,7 +23,7 @@ pub struct BooleanDeserializer {
 }
 
 impl TypeDeserializer for BooleanDeserializer {
-    fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
+    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: bool = reader.read_scalar()?;
         self.builder.append_value(value);
         Ok(())
@@ -33,7 +33,7 @@ impl TypeDeserializer for BooleanDeserializer {
         self.builder.append_value(false);
     }
 
-    fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
+    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: bool = reader.read_scalar()?;
