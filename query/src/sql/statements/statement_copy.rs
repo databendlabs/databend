@@ -49,6 +49,7 @@ pub struct DfCopy {
     pub encryption_options: HashMap<String, String>,
     pub file_format_options: HashMap<String, String>,
     pub files: Vec<String>,
+    pub pattern: String,
     pub on_error: String,
     pub size_limit: String,
     pub validation_mode: String,
@@ -125,6 +126,9 @@ impl AnalyzableStatement for DfCopy {
             push_downs: None,
         };
 
+        // Pattern.
+        let pattern = self.pattern.clone();
+
         // Copy plan.
         let plan_node = CopyPlan {
             db_name,
@@ -134,6 +138,7 @@ impl AnalyzableStatement for DfCopy {
             from,
             validation_mode,
             files: self.files.clone(),
+            pattern,
         };
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Copy(

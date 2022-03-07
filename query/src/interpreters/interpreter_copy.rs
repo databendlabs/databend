@@ -27,6 +27,7 @@ use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::TryStreamExt;
+use regex::Regex;
 
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
@@ -151,7 +152,28 @@ impl Interpreter for CopyInterpreter {
         &self,
         mut _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let files = self.list_files().await?;
+        let mut files = self.list_files().await?;
+
+        // Pattern match check.
+        let pattern = &self.plan.pattern;
+        if !pattern.is_empty() {
+            let regex = Regex::new(pattern).map_err(|e| {
+                ErrorCode::SyntaxException(format!(
+                    "Pattern format invalid, got:{}, error:{:?}",
+                    pattern, e
+                ))
+            })?;
+
+            let matched_files = files
+                .iter()
+                .filter(|file| regex.is_match(file))
+                .cloned()
+                .collect();
+            files = matched_files;
+        }
+
+        tracing::info!("copy file list:{:?}, pattern:{}", &files, pattern,);
+
         for file in files {
             self.copy_one_file_to_table(Some(file)).await?;
         }
