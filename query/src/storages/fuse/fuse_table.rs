@@ -178,7 +178,7 @@ impl FuseTable {
                 })
             })
             .transpose()
-            .map(|opt| opt.unwrap_or(0));
+            .map(|opt| opt.unwrap_or(0)); // TODO make 0 a constant
         result
     }
 

@@ -34,3 +34,4 @@ pub use meta_readers::SegmentInfoCache;
 pub use meta_readers::SegmentInfoReader;
 pub use meta_readers::TableSnapshotCache;
 pub use meta_readers::TableSnapshotReader;
+pub use meta_readers::VersionedLoader;

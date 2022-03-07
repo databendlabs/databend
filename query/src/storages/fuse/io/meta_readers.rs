@@ -22,9 +22,9 @@ use common_exception::Result;
 use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
 use futures::io::BufReader;
+use futures::AsyncRead;
 use opendal::error::Kind as DalErrorKind;
 use opendal::Reader;
-use serde::de::DeserializeOwned;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::cache::MemoryCache;
@@ -34,7 +34,14 @@ use crate::storages::fuse::io::HasTenantLabel;
 use crate::storages::fuse::io::Loader;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::SegmentInfo;
+use crate::storages::fuse::meta::SnapshotVersions;
 use crate::storages::fuse::meta::TableSnapshot;
+
+#[async_trait::async_trait]
+pub trait VersionedLoader<T> {
+    async fn vload<R>(&self, read: R, location: &str, len_hint: Option<u64>) -> Result<T>
+    where R: AsyncRead + Unpin + Send;
+}
 
 /// Provider of [BufReader]
 ///
@@ -125,12 +132,15 @@ impl<'a> TableSnapshotReader<'a> {
 }
 
 #[async_trait::async_trait]
-impl<T, V> Loader<V> for T
-where
-    T: BufReaderProvider + Sync,
-    V: DeserializeOwned,
+impl<T> Loader<SegmentInfo> for T
+where T: BufReaderProvider + Sync
 {
-    async fn load(&self, key: &str, length_hint: Option<u64>, _version: u64) -> Result<V> {
+    async fn load(
+        &self,
+        key: &str,
+        length_hint: Option<u64>,
+        _version: u64,
+    ) -> Result<SegmentInfo> {
         let mut reader = self.buf_reader(key, length_hint).await?;
         let mut buffer = vec![];
 
@@ -143,8 +153,24 @@ where
                 ErrorCode::DalTransportError(msg)
             }
         })?;
-        let r = serde_json::from_slice::<V>(&buffer)?;
+        let r = serde_json::from_slice(&buffer)?;
         Ok(r)
+    }
+}
+
+#[async_trait::async_trait]
+impl<T> Loader<TableSnapshot> for T
+where T: BufReaderProvider + Sync
+{
+    async fn load(
+        &self,
+        key: &str,
+        length_hint: Option<u64>,
+        version: u64,
+    ) -> Result<TableSnapshot> {
+        let version = SnapshotVersions::try_from(version)?;
+        let reader = self.buf_reader(key, length_hint).await?;
+        version.vload(reader, key, length_hint).await
     }
 }
 

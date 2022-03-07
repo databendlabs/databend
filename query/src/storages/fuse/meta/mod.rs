@@ -13,8 +13,11 @@
 //  limitations under the License.
 //
 
+// TODO refine mod scopes!
 mod current;
-mod v0;
+pub mod v0;
 mod v1;
+mod versions;
 
 pub use current::*;
+pub use versions::SnapshotVersions;

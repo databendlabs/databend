@@ -14,4 +14,6 @@
 
 mod block;
 mod segment;
-mod snapshot;
+// TODO adjust scope
+pub mod snapshot;
+pub use snapshot::Statistics;

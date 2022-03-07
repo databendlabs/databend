@@ -12,15 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::HashMap;
-
 use common_datavalues::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
 
-//use crate::storages::fuse::meta::versioned::VersionedMeta;
-use crate::storages::index::ColumnStatistics;
+use crate::storages::fuse::meta::v0::snapshot::Statistics;
 
 pub type ColumnId = u32;
 pub type SnapshotId = Uuid;
@@ -56,15 +53,17 @@ impl TableSnapshot {
     }
 }
 
-//pub type VersionedTableSnapshot = VersionedMeta<TableSnapshot>;
+use super::super::v0::snapshot::TableSnapshot as V0;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
-pub struct Statistics {
-    pub row_count: u64,
-    pub block_count: u64,
-
-    pub uncompressed_byte_size: u64,
-    pub compressed_byte_size: u64,
-
-    pub col_stats: HashMap<ColumnId, ColumnStatistics>,
+impl From<V0> for TableSnapshot {
+    fn from(s: V0) -> Self {
+        Self {
+            format_version: 1,
+            snapshot_id: s.snapshot_id,
+            prev_snapshot_id: s.prev_snapshot_id.map(|id| (id, 0)),
+            schema: s.schema,
+            summary: s.summary,
+            segments: s.segments.into_iter().map(|l| (l, 0)).collect(),
+        }
+    }
 }
