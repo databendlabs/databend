@@ -16,10 +16,6 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_exception::Result;
-use common_functions::systems::FunctionFactory;
-
-use crate::validate_function_arg;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CallPlan {
@@ -30,17 +26,5 @@ pub struct CallPlan {
 impl CallPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
-    }
-
-    pub fn validate(&self) -> Result<()> {
-        let name = self.name.clone();
-        let features = FunctionFactory::instance().get_features(&name)?;
-        validate_function_arg(
-            &name,
-            self.args.len(),
-            features.variadic_arguments,
-            features.num_arguments,
-        )?;
-        Ok(())
     }
 }

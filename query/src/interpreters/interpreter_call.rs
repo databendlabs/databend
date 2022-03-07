@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_functions::systems::FunctionFactory;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
+use common_planners::validate_function_arg;
 use common_planners::CallPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -25,6 +25,7 @@ use common_tracing::tracing;
 
 use super::Interpreter;
 use super::InterpreterPtr;
+use crate::functions::systems::FunctionFactory;
 use crate::sessions::QueryContext;
 
 pub struct CallInterpreter {
@@ -35,6 +36,21 @@ pub struct CallInterpreter {
 impl CallInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CallPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(CallInterpreter { ctx, plan }))
+    }
+}
+
+impl CallInterpreter {
+    fn validate(&self) -> Result<()> {
+        let plan = &self.plan;
+        let name = plan.name.clone();
+        let features = FunctionFactory::instance().get_features(&name)?;
+        validate_function_arg(
+            &name,
+            plan.args.len(),
+            features.variadic_arguments,
+            features.num_arguments,
+        )?;
+        Ok(())
     }
 }
 
@@ -50,7 +66,7 @@ impl Interpreter for CallInterpreter {
         mut _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
-        plan.validate()?;
+        self.validate()?;
         // TODO: fine-grained permissions
         self.ctx
             .get_current_session()

@@ -19,8 +19,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
-use crate::systems::Function;
-use crate::systems::SystemFunction;
+use crate::functions::systems::Function;
+use crate::functions::systems::SystemFunction;
 
 pub type Factory2Creator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send + Sync>;
 

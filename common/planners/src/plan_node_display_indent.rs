@@ -307,8 +307,8 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
         write!(f, "{:?}", plan)
     }
 
-    fn format_call(f: &mut Formatter, _plan: &CallPlan) -> fmt::Result {
-        // TODO
-        write!(f, "Call")
+    fn format_call(f: &mut Formatter, plan: &CallPlan) -> fmt::Result {
+        write!(f, "Call {:}", plan.name)?;
+        write!(f, " args: {:?}", plan.args)
     }
 }

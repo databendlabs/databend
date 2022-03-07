@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::systems::FunctionFactory;
+use crate::functions::systems::FunctionFactory;
 
 pub struct SystemFunction;
 

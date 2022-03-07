@@ -17,7 +17,6 @@
 
 pub mod aggregates;
 pub mod scalars;
-pub mod systems;
 
 mod macros;
 
