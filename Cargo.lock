@@ -118,7 +118,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.9.1"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=f71124b#f71124b2e07cebcfd6bcb0210567d08edd5cf581"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=b0774c8#b0774c8a9b4819fef513934a6ed665b7df606315"
 dependencies = [
  "ahash",
  "arrow-format",
@@ -136,7 +136,6 @@ dependencies = [
  "lexical-core",
  "multiversion",
  "num-traits",
- "packed_simd_2",
  "parquet2",
  "regex",
  "serde",
@@ -3774,12 +3773,6 @@ dependencies = [
 
 [[package]]
 name = "libm"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fc7aa29613bd6a620df431842069224d8bc9011086b1db4c0e0cd47fa03ec9a"
-
-[[package]]
-name = "libm"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
@@ -4422,7 +4415,7 @@ dependencies = [
  "autocfg 0.1.7",
  "byteorder",
  "lazy_static",
- "libm 0.2.1",
+ "libm",
  "num-integer",
  "num-iter",
  "num-traits",
@@ -4490,7 +4483,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a64b1ec5cda2586e284722486d802acf1f7dbdc623e2bfc57e65ca1cd099290"
 dependencies = [
  "autocfg 1.0.1",
- "libm 0.2.1",
+ "libm",
 ]
 
 [[package]]
@@ -4761,16 +4754,6 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "sha2 0.9.9",
-]
-
-[[package]]
-name = "packed_simd_2"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "defdcfef86dcc44ad208f71d9ff4ce28df6537a4e0d6b0e8e845cb8ca10059a6"
-dependencies = [
- "cfg-if",
- "libm 0.1.4",
 ]
 
 [[package]]
