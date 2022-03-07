@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::Path;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::StreamExt;
@@ -52,23 +54,16 @@ impl S3File {
     }
 
     // Read a file, returns the reader.
-    // path params maybe:
-    // (1) `/a/b/c.csv` and the file_name is None
-    // (2) `/a/b/` and the file_name is Some("c.csv")
+    // file_name is the Some(/path/to/path/xx.csv)
     pub async fn read(
         file_name: Option<String>,
         s3_endpoint: &str,
         s3_bucket: &str,
-        path: &str,
         aws_key_id: &str,
         aws_secret_key: &str,
     ) -> Result<Reader> {
         let operator = Self::open(s3_endpoint, s3_bucket, aws_key_id, aws_secret_key).await?;
-        let path = match file_name {
-            None => path.to_string(),
-            Some(v) => format!("{}/{}", path, v),
-        };
-
+        let path = file_name.unwrap_or_else(|| "".to_string());
         Ok(operator.object(&path).reader())
     }
 
@@ -93,7 +88,8 @@ impl S3File {
                 let mut objects = operator.objects(path);
                 while let Some(object) = objects.next().await {
                     let meta = object?.metadata().await?;
-                    list.push(meta.path().to_string());
+                    let new_path = Path::new(path).join(meta.path());
+                    list.push(new_path.to_string_lossy().to_string());
                 }
             }
             other => {

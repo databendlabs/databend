@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -46,26 +47,37 @@ impl CopyInterpreter {
         Ok(Arc::new(CopyInterpreter { ctx, plan }))
     }
 
-    // List the files under a folder.
+    // List the files.
+    // There are two cases here:
+    // 1. If the plan.files is not empty, we already set the files sets to the COPY command with: `files=(<file1>, <file2>)` syntax, only need to add the prefix to the file.
+    // 2. If the plan.files is empty, there are also two case:
+    //     2.1 If the path is a file like /path/to/path/file, S3File::list() will return the same file path.
+    //     2.2 If the path is a folder, S3File::list() will return all the files in it.
     async fn list_files(&self) -> Result<Vec<String>> {
-        // We already set the files sets to the COPY command with: `files=(<file1>, <file2>)` syntax.
-        if !self.plan.files.is_empty() {
-            return Ok(self.plan.files.clone());
-        }
-
         let files = match &self.plan.from.source_info {
             SourceInfo::S3ExternalSource(table_info) => {
                 let storage = &table_info.stage_info.stage_params.storage;
                 match &storage {
                     StageStorage::S3(s3) => {
-                        let endpoint = &self.ctx.get_config().storage.s3.endpoint_url;
-                        let bucket = &s3.bucket;
                         let path = &s3.path;
 
-                        let key_id = &s3.credentials_aws_key_id;
-                        let secret_key = &s3.credentials_aws_secret_key;
+                        // Here we add the path to the file: /path/to/path/file1.
+                        if !self.plan.files.is_empty() {
+                            let mut files_with_path = vec![];
+                            for file in &self.plan.files {
+                                let new_path = Path::new(path).join(file);
+                                files_with_path.push(new_path.to_string_lossy().to_string());
+                            }
+                            Ok(files_with_path)
+                        } else {
+                            let endpoint = &self.ctx.get_config().storage.s3.endpoint_url;
+                            let bucket = &s3.bucket;
 
-                        S3File::list(endpoint, bucket, path, key_id, secret_key).await
+                            let key_id = &s3.credentials_aws_key_id;
+                            let secret_key = &s3.credentials_aws_secret_key;
+
+                            S3File::list(endpoint, bucket, path, key_id, secret_key).await
+                        }
                     }
                 }
             }

@@ -131,11 +131,10 @@ impl ExternalSource {
             StageStorage::S3(s3) => {
                 let endpoint = &ctx.get_config().storage.s3.endpoint_url;
                 let bucket = &s3.bucket;
-                let path = &s3.path;
 
                 let key_id = &s3.credentials_aws_key_id;
                 let secret_key = &s3.credentials_aws_secret_key;
-                S3File::read(file_name, endpoint, bucket, path, key_id, secret_key).await
+                S3File::read(file_name, endpoint, bucket, key_id, secret_key).await
             }
         }?;
 
