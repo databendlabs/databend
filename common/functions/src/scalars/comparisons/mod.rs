@@ -31,4 +31,5 @@ pub use comparison_like::*;
 pub use comparison_lt::ComparisonLtFunction;
 pub use comparison_lt_eq::ComparisonLtEqFunction;
 pub use comparison_not_eq::ComparisonNotEqFunction;
+pub use comparison_regexp::ComparisonNotRegexpFunction;
 pub use comparison_regexp::ComparisonRegexpFunction;

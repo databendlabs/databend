@@ -46,6 +46,16 @@ pub trait BooleanSimdImpl {
     fn const_vector(lhs: bool, rhs: &BooleanColumn) -> BooleanColumn;
 }
 
+pub trait StringSearchImpl {
+    fn vector_vector(
+        lhs: &StringColumn,
+        rhs: &StringColumn,
+        op: impl Fn(bool) -> bool,
+    ) -> BooleanColumn;
+
+    fn vector_const(lhs: &StringColumn, rhs: &[u8], op: impl Fn(bool) -> bool) -> BooleanColumn;
+}
+
 pub(crate) struct CommonPrimitiveImpl;
 
 impl CommonPrimitiveImpl {

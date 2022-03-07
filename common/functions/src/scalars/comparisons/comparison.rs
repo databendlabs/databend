@@ -28,6 +28,8 @@ use num::traits::AsPrimitive;
 
 use super::utils::BooleanSimdImpl;
 use super::utils::PrimitiveSimdImpl;
+use super::utils::StringSearchImpl;
+use crate::scalars::assert_string;
 use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticDescription;
@@ -38,6 +40,8 @@ use crate::scalars::ComparisonLikeFunction;
 use crate::scalars::ComparisonLtEqFunction;
 use crate::scalars::ComparisonLtFunction;
 use crate::scalars::ComparisonNotEqFunction;
+use crate::scalars::ComparisonNotLikeFunction;
+use crate::scalars::ComparisonNotRegexpFunction;
 use crate::scalars::ComparisonRegexpFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
@@ -60,12 +64,12 @@ impl ComparisonFunction {
         factory.register_arithmetic(">=", ComparisonGtEqFunction::desc("<"));
         factory.register_arithmetic("!=", ComparisonNotEqFunction::desc("="));
         factory.register_arithmetic("<>", ComparisonNotEqFunction::desc("="));
-        factory.register("like", ComparisonLikeFunction::desc_like());
-        factory.register("not like", ComparisonLikeFunction::desc_unlike());
-        factory.register("regexp", ComparisonRegexpFunction::desc_regexp());
-        factory.register("not regexp", ComparisonRegexpFunction::desc_unregexp());
-        factory.register("rlike", ComparisonRegexpFunction::desc_regexp());
-        factory.register("not rlike", ComparisonRegexpFunction::desc_unregexp());
+        factory.register_arithmetic("like", ComparisonLikeFunction::desc("not like"));
+        factory.register_arithmetic("not like", ComparisonNotLikeFunction::desc("like"));
+        factory.register_arithmetic("regexp", ComparisonRegexpFunction::desc("not regexp"));
+        factory.register_arithmetic("not regexp", ComparisonNotRegexpFunction::desc("regexp"));
+        factory.register_arithmetic("rlike", ComparisonRegexpFunction::desc("not regexp"));
+        factory.register_arithmetic("not rlike", ComparisonNotRegexpFunction::desc("regexp"));
     }
 
     pub fn try_create_func(
@@ -307,29 +311,98 @@ impl<F> ComparisonExpression for ComparisonBooleanImpl<F>
 where F: BooleanSimdImpl + Send + Sync + Clone
 {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
-        let lhs = l.column().clone();
-        let rhs = r.column().clone();
+        let lhs = l.column();
+        let rhs = r.column();
         let res = match (lhs.is_const(), rhs.is_const()) {
             (false, false) => {
-                let lhs: &BooleanColumn = Series::check_get(&lhs)?;
-                let rhs: &BooleanColumn = Series::check_get(&rhs)?;
+                let lhs: &BooleanColumn = Series::check_get(lhs)?;
+                let rhs: &BooleanColumn = Series::check_get(rhs)?;
                 F::vector_vector(lhs, rhs)
             }
             (false, true) => {
-                let lhs: &BooleanColumn = Series::check_get(&lhs)?;
-                let rhs = bool::try_create_viewer(&rhs)?;
-                let r = rhs.value_at(0).to_owned_scalar();
+                let lhs: &BooleanColumn = Series::check_get(lhs)?;
+                let r = rhs.get_bool(0)?;
                 F::vector_const(lhs, r)
             }
             (true, false) => {
-                let lhs = bool::try_create_viewer(&lhs)?;
-                let l = lhs.value_at(0).to_owned_scalar();
-
-                let rhs: &BooleanColumn = Series::check_get(&rhs)?;
+                let l = lhs.get_bool(0)?;
+                let rhs: &BooleanColumn = Series::check_get(rhs)?;
                 F::const_vector(l, rhs)
             }
             (true, true) => unreachable!(),
         };
         Ok(res)
+    }
+}
+
+pub type StringSearchFn = fn(bool) -> bool;
+
+pub struct ComparisonStringImpl<T> {
+    op: StringSearchFn,
+    _phantom: PhantomData<T>,
+}
+
+impl<T> ComparisonStringImpl<T>
+where T: StringSearchImpl + Send + Sync + Clone
+{
+    pub fn new(op: StringSearchFn) -> Self {
+        Self {
+            op,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T> ComparisonExpression for ComparisonStringImpl<T>
+where T: StringSearchImpl + Send + Sync + Clone
+{
+    fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
+        let lhs = l.column();
+        let rhs = r.column();
+        let res = match rhs.is_const() {
+            true => {
+                let lhs: &StringColumn = Series::check_get(lhs)?;
+                let r = rhs.get_string(0)?;
+                T::vector_const(lhs, &r, self.op)
+            }
+            false => {
+                let lhs: &StringColumn = Series::check_get(lhs)?;
+                let rhs: &StringColumn = Series::check_get(rhs)?;
+                T::vector_vector(lhs, rhs, self.op)
+            }
+        };
+        Ok(res)
+    }
+}
+
+pub struct StringSearchCreator<const NEGATED: bool, T> {
+    t: PhantomData<T>,
+}
+
+impl<const NEGATED: bool, T> StringSearchCreator<NEGATED, T>
+where T: StringSearchImpl + Send + Sync + Clone + 'static
+{
+    pub fn try_create_func(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_string(*arg)?;
+        }
+
+        let f: StringSearchFn = match NEGATED {
+            true => |x| !x,
+            false => |x| x,
+        };
+
+        let func = Arc::new(ComparisonStringImpl::<T>::new(f));
+        ComparisonFunction::try_create_func(display_name, func)
+    }
+
+    pub fn desc(negative_name: &str) -> ArithmeticDescription {
+        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .negative_function(negative_name)
+                .bool_function()
+                .num_arguments(2),
+        )
     }
 }

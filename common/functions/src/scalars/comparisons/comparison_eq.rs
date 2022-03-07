@@ -91,10 +91,6 @@ impl BooleanSimdImpl for BooleanSimdEq {
     }
 
     fn const_vector(lhs: bool, rhs: &BooleanColumn) -> BooleanColumn {
-        if lhs {
-            rhs.clone()
-        } else {
-            CommonBooleanImpl::compare_op_scalar(rhs, lhs, |a, _| !a)
-        }
+        Self::vector_const(rhs, lhs)
     }
 }
