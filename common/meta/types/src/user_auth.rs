@@ -28,7 +28,7 @@ pub enum AuthType {
     NoPassword,
     PlaintextPassword,
     Sha256Password,
-    DoubleShaPassword,
+    DoubleSha1Password,
     JWT,
 }
 
@@ -38,7 +38,7 @@ impl std::str::FromStr for AuthType {
         match s {
             PLAINTEXT_PASSWORD_STR => Ok(AuthType::PlaintextPassword),
             SHA256_PASSWORD_STR => Ok(AuthType::Sha256Password),
-            DOUBLE_SHA1_PASSWORD_STR => Ok(AuthType::DoubleShaPassword),
+            DOUBLE_SHA1_PASSWORD_STR => Ok(AuthType::DoubleSha1Password),
             NO_PASSWORD_STR => Ok(AuthType::NoPassword),
             JWT_AUTH_STR => Ok(AuthType::JWT),
             _ => Err(AuthType::bad_auth_types(s)),
@@ -52,7 +52,7 @@ impl AuthType {
             AuthType::NoPassword => NO_PASSWORD_STR,
             AuthType::PlaintextPassword => PLAINTEXT_PASSWORD_STR,
             AuthType::Sha256Password => SHA256_PASSWORD_STR,
-            AuthType::DoubleShaPassword => DOUBLE_SHA1_PASSWORD_STR,
+            AuthType::DoubleSha1Password => DOUBLE_SHA1_PASSWORD_STR,
             AuthType::JWT => JWT_AUTH_STR,
         }
     }
@@ -77,7 +77,7 @@ impl AuthType {
         match self {
             AuthType::PlaintextPassword => Some(PasswordHashMethod::PlainText),
             AuthType::Sha256Password => Some(PasswordHashMethod::Sha256),
-            AuthType::DoubleShaPassword => Some(PasswordHashMethod::DoubleSha1),
+            AuthType::DoubleSha1Password => Some(PasswordHashMethod::DoubleSha1),
             _ => None,
         }
     }
@@ -110,7 +110,7 @@ impl AuthInfo {
             AuthType::JWT => Ok(AuthInfo::JWT),
             AuthType::PlaintextPassword
             | AuthType::Sha256Password
-            | AuthType::DoubleShaPassword => match auth_string {
+            | AuthType::DoubleSha1Password => match auth_string {
                 Some(p) => {
                     let method = auth_type.get_password_type().unwrap();
                     Ok(AuthInfo::Password {
@@ -160,7 +160,7 @@ impl AuthInfo {
             } => match t {
                 PasswordHashMethod::PlainText => AuthType::PlaintextPassword,
                 PasswordHashMethod::Sha256 => AuthType::Sha256Password,
-                PasswordHashMethod::DoubleSha1 => AuthType::DoubleShaPassword,
+                PasswordHashMethod::DoubleSha1 => AuthType::DoubleSha1Password,
             },
         }
     }
