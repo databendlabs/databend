@@ -13,21 +13,12 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::fmt;
-use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataValueComparisonOperator;
-use common_exception::ErrorCode;
-use common_exception::Result;
 use regex::bytes::Regex as BytesRegex;
 
 use super::comparison::StringSearchCreator;
 use super::utils::StringSearchImpl;
-use crate::scalars::assert_string;
-use crate::scalars::function_factory::FunctionDescription;
-use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
 
 pub type ComparisonLikeFunction = StringSearchCreator<false, StringSearchLike>;
 pub type ComparisonNotLikeFunction = StringSearchCreator<true, StringSearchLike>;

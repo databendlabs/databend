@@ -31,7 +31,7 @@ fn test_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonEqFunction::try_create_func("")?, &tests, true)
+    test_scalar_functions(ComparisonEqFunction::try_create_func("", &[&Int64Type::arc(), &Int64Type::arc()])?, &tests, true)
 }
 
 #[test]
@@ -46,7 +46,7 @@ fn test_gt_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonGtFunction::try_create_func("")?, &tests, true)
+    test_scalar_functions(ComparisonGtFunction::try_create_func("",&[&Int64Type::arc(), &Int64Type::arc()])?, &tests, true)
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn test_gt_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonGtEqFunction::try_create_func("")?, &tests, true)
+    test_scalar_functions(ComparisonGtEqFunction::try_create_func("",&[&Int64Type::arc(), &Int64Type::arc()])?, &tests, true)
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn test_lt_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonLtFunction::try_create_func("")?, &tests, true)
+    test_scalar_functions(ComparisonLtFunction::try_create_func("",&[&Int64Type::arc(), &Int64Type::arc()])?, &tests, true)
 }
 
 #[test]
@@ -91,7 +91,7 @@ fn test_lt_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonLtEqFunction::try_create_func("")?, &tests, true)
+    test_scalar_functions(ComparisonLtEqFunction::try_create_func("",&[&Int64Type::arc(), &Int64Type::arc()])?, &tests, true)
 }
 
 #[test]
@@ -106,7 +106,7 @@ fn test_not_eq_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonNotEqFunction::try_create_func("")?, &tests, true)
+    test_scalar_functions(ComparisonNotEqFunction::try_create_func("",&[&Int64Type::arc(), &Int64Type::arc()])?, &tests, true)
 }
 
 #[test]
@@ -121,18 +121,9 @@ fn test_like_comparison_function() -> Result<()> {
             expect: Series::from_data(vec![true, true, true, false]),
             error: "",
         },
-        ScalarFunctionTest {
-            name: "like-with-type-error",
-            columns: vec![
-                Series::from_data(vec!["abc", "abd"]),
-                Series::from_data(vec![1, 2]),
-            ],
-            expect: Series::from_data(vec![true, true]),
-            error: "Expected a string type, but got Int32",
-        },
     ];
 
-    test_scalar_functions(ComparisonLikeFunction::try_create_like("")?, &tests, true)
+    test_scalar_functions(ComparisonLikeFunction::try_create_func("",&[&StringType::arc(), &StringType::arc()])?, &tests, true)
 }
 
 #[test]
@@ -147,7 +138,7 @@ fn test_not_like_comparison_function() -> Result<()> {
         error: "",
     }];
 
-    test_scalar_functions(ComparisonLikeFunction::try_create_nlike("")?, &tests, true)
+    test_scalar_functions(ComparisonNotLikeFunction::try_create_func("",&[&StringType::arc(), &StringType::arc()])?, &tests, true)
 }
 
 #[test]
@@ -162,19 +153,10 @@ fn test_regexp_comparison_function() -> Result<()> {
             expect: Series::from_data(vec![true, false, true, true, false, true]),
             error: "",
         },
-        ScalarFunctionTest {
-            name: "regexp-with-type-error",
-            columns: vec![
-                Series::from_data(vec!["abc", "abd"]),
-                Series::from_data(vec![1, 2]),
-            ],
-            expect: Series::from_data(vec![true, false]),
-            error: "Expected a string type, but got Int32",
-        },
     ];
 
     test_scalar_functions(
-        ComparisonRegexpFunction::try_create_regexp("")?,
+        ComparisonRegexpFunction::try_create_func("",&[&StringType::arc(), &StringType::arc()])?,
         &tests,
         true,
     )
@@ -193,7 +175,7 @@ fn test_not_regexp_comparison_function() -> Result<()> {
     }];
 
     test_scalar_functions(
-        ComparisonRegexpFunction::try_create_nregexp("")?,
+        ComparisonNotRegexpFunction::try_create_func("",&[&StringType::arc(), &StringType::arc()])?,
         &tests,
         true,
     )

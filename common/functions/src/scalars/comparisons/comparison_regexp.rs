@@ -13,11 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::fmt;
-use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataValueComparisonOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use regex::bytes::Regex as BytesRegex;
@@ -25,10 +22,6 @@ use regex::bytes::RegexBuilder as BytesRegexBuilder;
 
 use super::comparison::StringSearchCreator;
 use super::utils::StringSearchImpl;
-use crate::scalars::assert_string;
-use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
-use crate::scalars::FunctionDescription;
 
 pub type ComparisonRegexpFunction = StringSearchCreator<false, StringSearchRegex>;
 pub type ComparisonNotRegexpFunction = StringSearchCreator<true, StringSearchRegex>;
@@ -62,7 +55,6 @@ impl StringSearchImpl for StringSearchRegex {
 
     fn vector_const(lhs: &StringColumn, rhs: &[u8], op: impl Fn(bool) -> bool) -> BooleanColumn {
         let re = build_regexp_from_pattern(rhs).unwrap();
-        let lhs: &StringColumn = unsafe { Series::static_cast(lhs) };
         BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(re.is_match(x))))
     }
 }
