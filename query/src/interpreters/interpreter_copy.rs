@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::Path;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::S3File;
+use common_meta_types::StageStorage;
 use common_planners::CopyPlan;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
@@ -24,6 +28,7 @@ use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::TryStreamExt;
+use regex::Regex;
 
 use crate::interpreters::stream::ProcessorExecutorStream;
 use crate::interpreters::Interpreter;
@@ -40,6 +45,49 @@ pub struct CopyInterpreter {
 impl CopyInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(CopyInterpreter { ctx, plan }))
+    }
+
+    // List the files.
+    // There are two cases here:
+    // 1. If the plan.files is not empty, we already set the files sets to the COPY command with: `files=(<file1>, <file2>)` syntax, only need to add the prefix to the file.
+    // 2. If the plan.files is empty, there are also two case:
+    //     2.1 If the path is a file like /path/to/path/file, S3File::list() will return the same file path.
+    //     2.2 If the path is a folder, S3File::list() will return all the files in it.
+    async fn list_files(&self) -> Result<Vec<String>> {
+        let files = match &self.plan.from.source_info {
+            SourceInfo::S3ExternalSource(table_info) => {
+                let storage = &table_info.stage_info.stage_params.storage;
+                match &storage {
+                    StageStorage::S3(s3) => {
+                        let path = &s3.path;
+
+                        // Here we add the path to the file: /path/to/path/file1.
+                        if !self.plan.files.is_empty() {
+                            let mut files_with_path = vec![];
+                            for file in &self.plan.files {
+                                let new_path = Path::new(path).join(file);
+                                files_with_path.push(new_path.to_string_lossy().to_string());
+                            }
+                            Ok(files_with_path)
+                        } else {
+                            let endpoint = &self.ctx.get_config().storage.s3.endpoint_url;
+                            let bucket = &s3.bucket;
+
+                            let key_id = &s3.credentials_aws_key_id;
+                            let secret_key = &s3.credentials_aws_secret_key;
+
+                            S3File::list(endpoint, bucket, path, key_id, secret_key).await
+                        }
+                    }
+                }
+            }
+            other => Err(ErrorCode::LogicalError(format!(
+                "Cannot list files for the source info: {:?}",
+                other
+            ))),
+        };
+
+        files
     }
 
     // Rewrite the ReadDataSourcePlan.S3ExternalSource.file_name to new file name.
@@ -116,14 +164,30 @@ impl Interpreter for CopyInterpreter {
         &self,
         mut _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let files = self.plan.files.clone();
+        let mut files = self.list_files().await?;
 
-        if files.is_empty() {
-            self.copy_one_file_to_table(None).await?;
-        } else {
-            for file in files {
-                self.copy_one_file_to_table(Some(file)).await?;
-            }
+        // Pattern match check.
+        let pattern = &self.plan.pattern;
+        if !pattern.is_empty() {
+            let regex = Regex::new(pattern).map_err(|e| {
+                ErrorCode::SyntaxException(format!(
+                    "Pattern format invalid, got:{}, error:{:?}",
+                    pattern, e
+                ))
+            })?;
+
+            let matched_files = files
+                .iter()
+                .filter(|file| regex.is_match(file))
+                .cloned()
+                .collect();
+            files = matched_files;
+        }
+
+        tracing::info!("copy file list:{:?}, pattern:{}", &files, pattern,);
+
+        for file in files {
+            self.copy_one_file_to_table(Some(file)).await?;
         }
 
         Ok(Box::pin(DataBlockStream::create(
