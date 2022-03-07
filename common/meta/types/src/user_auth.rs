@@ -127,7 +127,7 @@ impl AuthInfo {
         auth_type: &Option<String>,
         auth_string: &Option<String>,
     ) -> Result<AuthInfo, String> {
-        let default = AuthType::Sha256Password;
+        let default = AuthType::DoubleSha1Password;
         let auth_type = auth_type
             .clone()
             .map(|s| AuthType::from_str(&s))
