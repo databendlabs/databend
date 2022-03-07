@@ -18,9 +18,8 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_planners::{Extras, PartitionsInfo};
-use common_planners::Part;
-use common_planners::Partitions;
+use common_planners::Extras;
+use common_planners::PartitionsInfo;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::DataBlockStream;
@@ -48,11 +47,8 @@ pub trait SyncSystemTable: Send + Sync {
         &self,
         _ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![Part {
-            name: "".to_string(),
-            version: 0,
-        }]))
+    ) -> Result<(Statistics, PartitionsInfo)> {
+        Ok((Statistics::default(), vec![]))
     }
 }
 
@@ -85,8 +81,7 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, PartitionsInfo)> {
-        self.inner_table.get_partitions(ctx, push_downs);
-        unimplemented!()
+        self.inner_table.get_partitions(ctx, push_downs)
     }
 
     async fn read(
@@ -170,11 +165,8 @@ pub trait AsyncSystemTable: Send + Sync {
         &self,
         _ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![Part {
-            name: "".to_string(),
-            version: 0,
-        }]))
+    ) -> Result<(Statistics, PartitionsInfo)> {
+        Ok((Statistics::default(), vec![]))
     }
 }
 
@@ -207,8 +199,7 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, PartitionsInfo)> {
-        self.inner_table.get_partitions(ctx, push_downs).await;
-        unimplemented!()
+        self.inner_table.get_partitions(ctx, push_downs).await
     }
 
     async fn read(

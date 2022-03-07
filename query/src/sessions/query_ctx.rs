@@ -30,9 +30,9 @@ use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::TableInfo;
 use common_meta_types::UserInfo;
-use common_planners::{Expression, PartInfo, PartitionsInfo};
-use common_planners::Part;
-use common_planners::Partitions;
+use common_planners::Expression;
+use common_planners::PartInfoPtr;
+use common_planners::PartitionsInfo;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
@@ -60,7 +60,7 @@ use crate::users::UserApiProvider;
 pub struct QueryContext {
     version: String,
     statistics: Arc<RwLock<Statistics>>,
-    partition_queue: Arc<RwLock<VecDeque<Arc<Box<dyn PartInfo>>>>>,
+    partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
 }
 
@@ -327,9 +327,9 @@ impl TrySpawn for QueryContext {
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-        where
-            T: Future + Send + 'static,
-            T::Output: Send + 'static,
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
     {
         Ok(self.shared.try_get_runtime()?.spawn(task))
     }

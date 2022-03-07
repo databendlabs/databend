@@ -1,6 +1,7 @@
 use std::any::Any;
+
 use common_exception::Result;
-use common_planners::{PartInfo};
+use common_planners::PartInfo;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct TestPartInfoA {
@@ -40,7 +41,6 @@ fn test_serialize_part_info() -> Result<()> {
         field_b: 456,
     });
 
-
     assert_eq!(
         serde_json::to_string(&info_a)?,
         "{\"type\":\"TestA\",\"field_a\":123,\"field_b\":\"456\"}"
@@ -56,12 +56,15 @@ fn test_serialize_part_info() -> Result<()> {
 
 #[test]
 fn test_deserialize_part_info() -> Result<()> {
-    let info_a: Box<dyn PartInfo> = serde_json::from_str("{\"type\":\"TestA\",\"field_a\":123,\"field_b\":\"456\"}")?;
+    let info_a: Box<dyn PartInfo> =
+        serde_json::from_str("{\"type\":\"TestA\",\"field_a\":123,\"field_b\":\"456\"}")?;
     let test_part_a = info_a.as_any().downcast_ref::<TestPartInfoA>().unwrap();
     assert_eq!(test_part_a.field_a, 123);
     assert_eq!(test_part_a.field_b, String::from("456"));
 
-    let info_b = serde_json::from_str::<Box<dyn PartInfo>>("{\"type\":\"TestB\",\"field_a\":\"123\",\"field_b\":456}")?;
+    let info_b = serde_json::from_str::<Box<dyn PartInfo>>(
+        "{\"type\":\"TestB\",\"field_a\":\"123\",\"field_b\":456}",
+    )?;
     let test_part_a = info_b.as_any().downcast_ref::<TestPartInfoB>().unwrap();
     assert_eq!(test_part_a.field_a, String::from("123"));
     assert_eq!(test_part_a.field_b, 456);

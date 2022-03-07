@@ -23,7 +23,10 @@ use common_infallible::RwLock;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_planners::Extras;
+use common_planners::PartitionsInfo;
 use common_planners::ReadDataSourcePlan;
+use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -125,6 +128,14 @@ impl Table for QueryLogTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
+    }
+
+    async fn read_partitions(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _push_downs: Option<Extras>,
+    ) -> Result<(Statistics, PartitionsInfo)> {
+        Ok((Statistics::default(), vec![]))
     }
 
     async fn read(

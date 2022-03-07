@@ -12,17 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_planners::{Part, PartitionsInfo};
-use common_planners::Partitions;
+use common_planners::PartitionsInfo;
+
 use crate::table_functions::numbers_part::NumbersPartInfo;
 
-struct MemoryPartInfo {
-    total: u64,
-    part_start: u64,
-    part_end: u64,
-}
-
-pub fn generate_block_parts(start: u64, workers: u64, total: u64) -> PartitionsInfo {
+pub fn generate_numbers_parts(start: u64, workers: u64, total: u64) -> PartitionsInfo {
     let part_size = total / workers;
     let part_remain = total % workers;
 

@@ -12,29 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+use std::sync::Arc;
+
 use common_planners::*;
 
-pub fn generate_partitions(workers: u64, total: u64) -> Partitions {
+#[derive(serde::Serialize, serde::Deserialize)]
+struct OptimizerTestPartInfo {}
+
+#[typetag::serde(name = "optimizer_test")]
+impl PartInfo for OptimizerTestPartInfo {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl OptimizerTestPartInfo {
+    pub fn create() -> Arc<Box<dyn PartInfo>> {
+        Arc::new(Box::new(OptimizerTestPartInfo {}))
+    }
+}
+
+pub fn generate_partitions(workers: u64, total: u64) -> PartitionsInfo {
     let part_size = total / workers;
-    let part_remain = total % workers;
+    // let part_remain = total % workers;
 
     let mut partitions = Vec::with_capacity(workers as usize);
     if part_size == 0 {
-        partitions.push(Part {
-            name: format!("{}-{}-{}", total, 0, total,),
-            version: 0,
-        })
+        partitions.push(OptimizerTestPartInfo::create())
     } else {
-        for part in 0..workers {
-            let part_begin = part * part_size;
-            let mut part_end = (part + 1) * part_size;
-            if part == (workers - 1) && part_remain > 0 {
-                part_end += part_remain;
-            }
-            partitions.push(Part {
-                name: format!("{}-{}-{}", total, part_begin, part_end,),
-                version: 0,
-            })
+        for _part in 0..workers {
+            // let part_begin = part * part_size;
+            // let mut part_end = (part + 1) * part_size;
+            // if part == (workers - 1) && part_remain > 0 {
+            //     part_end += part_remain;
+            // }
+            partitions.push(OptimizerTestPartInfo::create())
         }
     }
     partitions
@@ -73,33 +86,33 @@ async fn test_skip_read_data_source() -> Result<()> {
     }
 
     let tests: Vec<Test> = vec![
-            Test {
-                name: "Filter with 'where 1 + 2 = 2' should skip the scan",
-                query: "select * from numbers_mt(10) where 1 + 2 = 2",
-                expect:"\
+        Test {
+            name: "Filter with 'where 1 + 2 = 2' should skip the scan",
+            query: "select * from numbers_mt(10) where 1 + 2 = 2",
+            expect: "\
                 Projection: number:UInt64\
                 \n  Filter: false\
                 \n    ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [((1 + 2) = 2)]]",
-            },
-            Test {
-                name: "Limit with zero should skip the scan",
-                query: "select * from numbers_mt(10) where true limit 0",
-                expect: "\
+        },
+        Test {
+            name: "Limit with zero should skip the scan",
+            query: "select * from numbers_mt(10) where true limit 0",
+            expect: "\
                 Limit: 0\
                 \n  Projection: number:UInt64\n    Filter: true\n      ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [true], limit: 0]",
-            },
-            Test {
-                name: "Having with 'having 1+1=3' should skip the scan",
-                query: "select avg(number) from numbers_mt(100) group by number%10 having 1+1=3",
-                expect: "\
+        },
+        Test {
+            name: "Having with 'having 1+1=3' should skip the scan",
+            query: "select avg(number) from numbers_mt(100) group by number%10 having 1+1=3",
+            expect: "\
                 Projection: avg(number):Float64\
                 \n  Having: false\
                 \n    AggregatorFinal: groupBy=[[(number % 10)]], aggr=[[avg(number)]]\
                 \n      AggregatorPartial: groupBy=[[(number % 10)]], aggr=[[avg(number)]]\
                 \n        Expression: (number % 10):UInt8, number:UInt64 (Before GroupBy)\
                 \n          ReadDataSource: scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0]]",
-            },
-        ];
+        },
+    ];
 
     for test in tests {
         let ctx = crate::tests::create_query_context()?;

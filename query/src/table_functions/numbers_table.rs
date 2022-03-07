@@ -27,9 +27,10 @@ use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::{Expression, PartInfo, PartitionsInfo};
+use common_planners::Expression;
 use common_planners::Extras;
-use common_planners::Partitions;
+use common_planners::PartInfoPtr;
+use common_planners::PartitionsInfo;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
@@ -44,7 +45,7 @@ use crate::pipelines::new::SourcePipeBuilder;
 use crate::pipelines::transforms::get_sort_descriptions;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
-use crate::table_functions::generate_block_parts;
+use crate::table_functions::generate_numbers_parts;
 use crate::table_functions::numbers_part::NumbersPartInfo;
 use crate::table_functions::table_function_factory::TableArgs;
 use crate::table_functions::TableFunction;
@@ -160,7 +161,7 @@ impl Table for NumbersTable {
             fake_partitions as usize,
         );
 
-        let parts = generate_block_parts(0, ctx.get_settings().get_max_threads()? as u64, total);
+        let parts = generate_numbers_parts(0, ctx.get_settings().get_max_threads()? as u64, total);
 
         Ok((statistics, parts))
     }
@@ -223,7 +224,7 @@ impl NumbersSource {
     pub fn create(
         output: Arc<OutputPort>,
         ctx: Arc<QueryContext>,
-        numbers_part: &Box<dyn PartInfo>,
+        numbers_part: &PartInfoPtr,
         schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
@@ -266,7 +267,7 @@ impl TableFunction for NumbersTable {
     }
 
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
-        where Self: 'a {
+    where Self: 'a {
         self
     }
 }

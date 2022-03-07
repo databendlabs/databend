@@ -11,7 +11,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::any::Any;
 use std::sync::Arc;
@@ -22,33 +21,33 @@ use common_planners::PartInfo;
 use common_planners::PartInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct NumbersPartInfo {
-    pub total: u64,
-    pub part_start: u64,
-    pub part_end: u64,
+pub struct MemoryPartInfo {
+    pub total: usize,
+    pub part_start: usize,
+    pub part_end: usize,
 }
 
 #[typetag::serde(name = "numbers")]
-impl PartInfo for NumbersPartInfo {
+impl PartInfo for MemoryPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
     }
 }
 
-impl NumbersPartInfo {
-    pub fn create(start: u64, end: u64, total: u64) -> Arc<Box<dyn PartInfo>> {
-        Arc::new(Box::new(NumbersPartInfo {
+impl MemoryPartInfo {
+    pub fn create(start: usize, end: usize, total: usize) -> Arc<Box<dyn PartInfo>> {
+        Arc::new(Box::new(MemoryPartInfo {
             total,
             part_start: start,
             part_end: end,
         }))
     }
 
-    pub fn from_part(info: &PartInfoPtr) -> Result<&NumbersPartInfo> {
-        match info.as_any().downcast_ref::<NumbersPartInfo>() {
+    pub fn from_part(info: &PartInfoPtr) -> Result<&MemoryPartInfo> {
+        match info.as_any().downcast_ref::<MemoryPartInfo>() {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::LogicalError(
-                "Cannot downcast from PartInfo to NumbersPartInfo.",
+                "Cannot downcast from PartInfo to MemoryPartInfo.",
             )),
         }
     }

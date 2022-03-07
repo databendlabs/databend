@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 pub type Partitions = Vec<Part>;
@@ -33,17 +34,16 @@ impl Debug for Box<dyn PartInfo> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match serde_json::to_string(self) {
             Ok(str) => write!(f, "{}", str),
-            Err(cause) => Err(std::fmt::Error {})
+            Err(_cause) => Err(std::fmt::Error {}),
         }
     }
 }
 
 impl PartialEq for Box<dyn PartInfo> {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         todo!()
     }
 }
 
+pub type PartInfoPtr = Arc<Box<dyn PartInfo>>;
 pub type PartitionsInfo = Vec<Arc<Box<dyn PartInfo>>>;
-
-

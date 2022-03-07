@@ -20,9 +20,9 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::TableInfo;
 
-use crate::{Expression, PartitionsInfo};
+use crate::Expression;
 use crate::Extras;
-use crate::Partitions;
+use crate::PartitionsInfo;
 use crate::S3ExternalTableInfo;
 use crate::Statistics;
 
@@ -99,9 +99,9 @@ impl ReadDataSourcePlan {
         };
 
         if let Some(Extras {
-                        projection: Some(prj),
-                        ..
-                    }) = &self.push_downs
+            projection: Some(prj),
+            ..
+        }) = &self.push_downs
         {
             prj.clone()
         } else {

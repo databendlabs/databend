@@ -22,8 +22,8 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing_futures::Instrument;
 use futures::StreamExt;
 
-use super::part_info::PartInfo;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::fuse_part::FusePartInfo;
 use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::FuseTable;
@@ -70,22 +70,21 @@ impl FuseTable {
                 let projection = projection.clone();
                 let reader = MetaReaders::block_meta_reader(ctx.clone());
                 async move {
-                    let part_info = PartInfo::decode(&part.name)?;
-                    let part_location = part_info.location();
-                    let part_len = part_info.length();
+                    let fuse_part = FusePartInfo::from_part(&part)?;
 
                     let mut block_reader = BlockReader::new(
                         da,
-                        part_info.location().to_owned(),
+                        fuse_part.location.to_owned(),
                         table_schema,
                         projection,
-                        part_len,
+                        fuse_part.file_size,
                         reader,
                     );
                     block_reader.read().await.map_err(|e| {
                         ErrorCode::ParquetError(format!(
                             "fail to read block {}, {}",
-                            part_location, e
+                            fuse_part.location.to_owned(),
+                            e
                         ))
                     })
                 }

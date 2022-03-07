@@ -17,14 +17,13 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::{Extras, PartitionsInfo};
-use common_planners::Part;
-use common_planners::Partitions;
+use common_planners::Extras;
+use common_planners::PartitionsInfo;
 use common_planners::Statistics;
 
 use crate::sessions::QueryContext;
+use crate::storages::fuse::fuse_part::FusePartInfo;
 use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::operations::part_info::PartInfo;
 use crate::storages::fuse::pruning::BlockPruner;
 use crate::storages::fuse::FuseTable;
 
@@ -84,10 +83,9 @@ impl FuseTable {
         blocks_metas.iter().fold(
             (Statistics::default(), PartitionsInfo::default()),
             |(mut stats, mut parts), block_meta| {
-                let name =
-                    PartInfo::new(block_meta.location.path.as_str(), block_meta.file_size).encode();
-                // TODO:
-                // parts.push(Part { name, version: 0 });
+                let location = block_meta.location.path.clone();
+                let file_size = block_meta.file_size;
+                parts.push(FusePartInfo::create(location, file_size));
 
                 stats.is_exact = is_exact;
                 stats.read_rows += block_meta.row_count as usize;

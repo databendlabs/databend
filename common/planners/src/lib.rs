@@ -156,6 +156,7 @@ pub use plan_node_statistics::Statistics;
 pub use plan_node_visitor::PlanVisitor;
 pub use plan_partition::Part;
 pub use plan_partition::PartInfo;
+pub use plan_partition::PartInfoPtr;
 pub use plan_partition::Partitions;
 pub use plan_partition::PartitionsInfo;
 pub use plan_projection::ProjectionPlan;

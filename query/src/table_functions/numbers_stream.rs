@@ -103,7 +103,8 @@ impl NumbersStream {
             let mut blocks = Vec::with_capacity(partitions.len());
             for part in partitions {
                 let numbers_part = NumbersPartInfo::from_part(&part)?;
-                let (begin, end) = self.try_apply_top_n(numbers_part.part_start, numbers_part.part_end);
+                let (begin, end) =
+                    self.try_apply_top_n(numbers_part.part_start, numbers_part.part_end);
 
                 let diff = end - begin;
                 let block_nums = diff / block_size;
