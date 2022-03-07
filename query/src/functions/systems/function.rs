@@ -12,11 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::ColumnRef;
+use std::sync::Arc;
+
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchema;
 use common_exception::Result;
 
-pub trait Function {
+use crate::sessions::QueryContext;
+
+#[async_trait::async_trait]
+pub trait Function: Sync + Send {
     fn name(&self) -> &str;
 
-    fn eval(&self, args: Vec<String>) -> Result<ColumnRef>;
+    async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock>;
+
+    fn schema(&self) -> Arc<DataSchema>;
 }

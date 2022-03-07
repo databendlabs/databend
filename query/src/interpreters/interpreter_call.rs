@@ -74,11 +74,11 @@ impl Interpreter for CallInterpreter {
             .await?;
         let name = plan.name.clone();
         let func = FunctionFactory::instance().get(name)?;
-        func.eval(plan.args.clone())?;
+        let blocks = func.eval(self.ctx.clone(), plan.args.clone()).await?;
         Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
+            self.schema(),
             None,
-            vec![],
+            vec![blocks],
         )))
     }
 }

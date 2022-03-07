@@ -14,6 +14,7 @@
 
 mod function;
 mod function_factory;
+mod fuse_history;
 mod system;
 
 pub use function::Function;
