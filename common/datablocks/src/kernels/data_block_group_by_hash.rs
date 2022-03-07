@@ -167,6 +167,7 @@ impl HashMethodSerializer {
         keys: Vec<Vec<u8>>,
         group_fields: &[DataField],
     ) -> Result<Vec<ColumnRef>> {
+        debug_assert!(!keys.is_empty());
         let mut keys: Vec<&[u8]> = keys.iter().map(|x| x.as_slice()).collect();
         let rows = keys.len();
 
@@ -236,8 +237,8 @@ where T: PrimitiveType
         keys: Vec<T>,
         group_fields: &[DataField],
     ) -> Result<Vec<ColumnRef>> {
+        debug_assert!(!keys.is_empty());
         let mut keys = keys;
-
         let rows = keys.len();
         let step = std::mem::size_of::<T>();
         let length = rows * step;
