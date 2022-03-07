@@ -30,6 +30,8 @@ use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
+use common_meta_types::RenameTableReply;
+use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -68,6 +70,10 @@ impl MetaApi for MetaGrpcClient {
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, MetaError> {
+        self.do_write(req).await
+    }
+
+    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
         self.do_write(req).await
     }
 

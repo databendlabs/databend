@@ -91,11 +91,11 @@ async fn test_fuse_history_optimize_compact() -> Result<()> {
     // optimize compact should keep the histories
     // there should be 6 history items there, 5 for the above insertions, 1 for that compaction
     let expected = vec![
-        "+----------+",
-        "| count(0) |",
-        "+----------+",
-        "| 6        |",
-        "+----------+",
+        "+---------+",
+        "| count() |",
+        "+---------+",
+        "| 6       |",
+        "+---------+",
     ];
     let qry = format!("select count(*) from fuse_history('{}', '{}')", db, tbl);
 

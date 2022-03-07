@@ -19,12 +19,23 @@ use common_datavalues::DataSchemaRef;
 use common_meta_types::UserStageInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
-pub struct UserStagePlan {
+pub struct S3ExternalTableInfo {
     pub schema: DataSchemaRef,
+    pub file_name: Option<String>,
     pub stage_info: UserStageInfo,
 }
 
-impl Debug for UserStagePlan {
+impl S3ExternalTableInfo {
+    pub fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
+    }
+
+    pub fn desc(&self) -> String {
+        self.stage_info.stage_name.clone()
+    }
+}
+
+impl Debug for S3ExternalTableInfo {
     // Ignore the schema.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.stage_info)

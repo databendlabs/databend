@@ -18,6 +18,7 @@ use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read::read_columns_many_async;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
+use common_base::tokio::sync::Semaphore;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -28,6 +29,7 @@ use common_tracing::tracing::Instrument;
 use futures::future::BoxFuture;
 use opendal::Operator;
 
+use super::parallel_async_reader::ParallelAsyncReader;
 use crate::storages::fuse::io::meta_readers::BlockMetaReader;
 
 pub struct BlockReader {
@@ -96,14 +98,20 @@ impl BlockReader {
             })
             .collect();
 
+        // todo(youngsofun): make this a config
+        let semaphore = Arc::new(Semaphore::new(2));
         let factory = || {
             let data_accessor = self.data_accessor.clone();
             let path = self.path.clone();
+            let semaphore = semaphore.clone();
             Box::pin(async move {
-                Ok(data_accessor
-                    .object(path.as_str())
-                    .reader()
-                    .total_size(stream_len))
+                let permit = semaphore.clone().acquire_owned().await.unwrap();
+                Ok(ParallelAsyncReader::new(
+                    permit,
+                    data_accessor
+                        .object(path.as_str())
+                        .limited_reader(stream_len),
+                ))
             }) as BoxFuture<_>
         };
 

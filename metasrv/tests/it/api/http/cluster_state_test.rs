@@ -117,8 +117,10 @@ async fn test_cluster_state() -> common_exception::Result<()> {
     let state = serde_json::from_str::<serde_json::Value>(String::from_utf8_lossy(&body).as_ref())?;
     let voters = state["voters"].as_array().unwrap();
     let non_voters = state["non_voters"].as_array().unwrap();
+    let leader = state["leader"].as_object();
     assert_eq!(voters.len(), 2);
     assert_eq!(non_voters.len(), 0);
+    assert_ne!(leader, None);
     meta_node.stop().await?;
     meta_node1.stop().await?;
     Ok(())
@@ -171,6 +173,7 @@ async fn test_http_service_cluster_state() -> common_exception::Result<()> {
     let state_json = resp.json::<serde_json::Value>().await.unwrap();
     assert_eq!(state_json["voters"].as_array().unwrap().len(), 2);
     assert_eq!(state_json["non_voters"].as_array().unwrap().len(), 0);
+    assert_ne!(state_json["leader"].as_object(), None);
 
     let resp_nodes = client.get(node_url).send().await;
     assert!(resp_nodes.is_ok());

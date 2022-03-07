@@ -18,6 +18,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
+use crate::pipelines::new::NewPipeline;
+
 #[async_trait::async_trait]
 pub trait Interpreter: Sync + Send {
     fn name(&self) -> &str;
@@ -30,6 +32,14 @@ pub trait Interpreter: Sync + Send {
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream>;
+
+    // TODO: maybe remove async
+    async fn execute2(&self) -> Result<NewPipeline> {
+        Err(ErrorCode::UnImplement(format!(
+            "UnImplement execute2 method for {:?}",
+            self.name()
+        )))
+    }
 
     /// Do some start work for the interpreter.
     async fn start(&self) -> Result<()> {

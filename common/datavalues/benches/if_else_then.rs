@@ -88,8 +88,8 @@ fn databend_if_else_then(
     })}
 
     with_match_physical_primitive_type!(physical_id, |$T| {
-        let lhs_wrapper = ColumnViewer::<$T>::try_create(lhs)?;
-        let rhs_wrapper = ColumnViewer::<$T>::try_create(rhs)?;
+        let lhs_wrapper = $T::try_create_viewer(lhs)?;
+        let rhs_wrapper = $T::try_create_viewer(rhs)?;
         let size = lhs_wrapper.len();
 
         let mut builder = NullableColumnBuilder::<$T>::with_capacity(size);
@@ -97,9 +97,9 @@ fn databend_if_else_then(
         for row in 0..size {
             let valid = validity_predict.get_bit(row);
             if bools.get_bit(row) {
-                builder.append(lhs_wrapper.value(row), valid & lhs_wrapper.valid_at(row));
+                builder.append(lhs_wrapper.value_at(row), valid & lhs_wrapper.valid_at(row));
             } else {
-                builder.append(rhs_wrapper.value(row), valid & rhs_wrapper.valid_at(row));
+                builder.append(rhs_wrapper.value_at(row), valid & rhs_wrapper.valid_at(row));
             };
         }
 

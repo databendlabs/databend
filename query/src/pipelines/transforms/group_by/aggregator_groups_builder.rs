@@ -59,31 +59,8 @@ where
 
     #[inline]
     fn finish(self) -> Result<Vec<ColumnRef>> {
-        let mut keys = self.data;
-        let rows = keys.len();
-        let step = std::mem::size_of::<T>();
-        let length = rows * step;
-        let capacity = keys.capacity() * step;
-        let mutptr = keys.as_mut_ptr() as *mut u8;
-        let vec8 = unsafe {
-            std::mem::forget(keys);
-            // construct new vec
-            Vec::from_raw_parts(mutptr, length, capacity)
-        };
-
-        let mut offsize = 0;
-        let mut groups_columns = Vec::with_capacity(self.groups_fields.len());
-
-        for group_field in self.groups_fields.iter() {
-            let data_type = group_field.data_type();
-            let mut deserializer = data_type.create_deserializer(rows);
-            let reader = vec8.as_slice();
-            deserializer.de_batch(&reader[offsize..], step, rows)?;
-            groups_columns.push(deserializer.finish_to_column());
-            offsize += data_type.data_type_id().numeric_byte_size()?;
-        }
-
-        Ok(groups_columns)
+        let method = HashMethodFixedKeys::<T>::default();
+        method.deserialize_group_columns(self.data, &self.groups_fields)
     }
 }
 
@@ -122,8 +99,8 @@ impl GroupColumnsBuilder<KeysRef> for SerializedKeysGroupColumnsBuilder {
             let data_type = group_field.data_type();
             let mut deserializer = data_type.create_deserializer(rows);
 
-            for (_row, key) in keys.iter_mut().enumerate() {
-                deserializer.de(key)?;
+            for (_, key) in keys.iter_mut().enumerate() {
+                deserializer.de_binary(key)?;
             }
             res.push(deserializer.finish_to_column());
         }

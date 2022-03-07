@@ -28,6 +28,7 @@ use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::is_builtin_function;
 use common_planners::Expression;
+use sqlparser::ast::DateTimeField;
 use sqlparser::ast::Expr;
 use sqlparser::ast::FunctionArgExpr;
 use sqlparser::ast::Ident;
@@ -215,14 +216,18 @@ impl ExpressionAnalyzer {
             };
         }
 
-        if info.name.eq_ignore_ascii_case("count")
-            && !args.is_empty()
-            && matches!(args[0], Expression::Wildcard)
-        {
+        let optimize_remove_count_args = info.name.eq_ignore_ascii_case("count")
+            && !info.distinct
+            && (args.len() == 1 && matches!(args[0], Expression::Wildcard)
+                || args.iter().all(
+                    |expr| matches!(expr, Expression::Literal { value, .. } if !value.is_null()),
+                ));
+
+        if optimize_remove_count_args {
             Ok(Expression::AggregateFunction {
                 op: info.name.clone(),
                 distinct: info.distinct,
-                args: vec![common_planners::lit(0i64)],
+                args: vec![],
                 params: parameters,
             })
         } else {
@@ -538,6 +543,26 @@ impl ExprRPNBuilder {
                 list_size: list.len(),
                 negated: *negated,
             })),
+            Expr::Extract { field, .. } => match field {
+                DateTimeField::Year => self
+                    .rpn
+                    .push(ExprRPNItem::function(String::from("toYear"), 1)),
+                DateTimeField::Month => self
+                    .rpn
+                    .push(ExprRPNItem::function(String::from("toMonth"), 1)),
+                DateTimeField::Day => self
+                    .rpn
+                    .push(ExprRPNItem::function(String::from("toDayOfMonth"), 1)),
+                DateTimeField::Hour => self
+                    .rpn
+                    .push(ExprRPNItem::function(String::from("toHour"), 1)),
+                DateTimeField::Minute => self
+                    .rpn
+                    .push(ExprRPNItem::function(String::from("toMinute"), 1)),
+                DateTimeField::Second => self
+                    .rpn
+                    .push(ExprRPNItem::function(String::from("toSecond"), 1)),
+            },
             _ => (),
         }
 

@@ -20,14 +20,18 @@ pub mod memory;
 pub mod null;
 pub mod system;
 
+mod s3;
 mod storage_context;
 mod storage_factory;
 mod storage_table;
 mod storage_table_read_plan;
 
+pub use s3::ExternalSource;
+pub use s3::S3ExternalTable;
 pub use storage_context::StorageContext;
 pub use storage_factory::StorageCreator;
 pub use storage_factory::StorageDescription;
 pub use storage_factory::StorageFactory;
+pub use storage_table::opt_keys::OPT_KEY_DATABASE_ID;
 pub use storage_table::Table;
 pub use storage_table_read_plan::ToReadDataSourcePlan;

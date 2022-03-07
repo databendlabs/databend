@@ -32,7 +32,7 @@ use crate::storages::fuse::cache::HasTenantLabel;
 use crate::storages::fuse::cache::Loader;
 use crate::storages::fuse::cache::MemoryCache;
 use crate::storages::fuse::cache::TenantLabel;
-use crate::storages::fuse::io::snapshot_location;
+use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
 
@@ -103,6 +103,7 @@ impl<'a> TableSnapshotReader<'a> {
     pub async fn read_snapshot_history(
         &self,
         latest_snapshot_location: Option<&String>,
+        meta_locs: TableMetaLocationGenerator,
     ) -> Result<Vec<Arc<TableSnapshot>>> {
         let mut snapshots = vec![];
         let mut current_snapshot_location = latest_snapshot_location.cloned();
@@ -117,7 +118,7 @@ impl<'a> TableSnapshotReader<'a> {
             };
             let prev = snapshot.prev_snapshot_id;
             snapshots.push(snapshot);
-            current_snapshot_location = prev.map(|id| snapshot_location(&id));
+            current_snapshot_location = prev.map(|id| meta_locs.snapshot_location_from_uuid(&id));
         }
         Ok(snapshots)
     }
@@ -179,7 +180,7 @@ impl BufReaderProvider for &QueryContext {
             }
         };
 
-        let reader = object.reader().total_size(len);
+        let reader = object.limited_reader(len);
         let read_buffer_size = self.get_settings().get_storage_read_buffer_size()?;
         Ok(BufReader::with_capacity(read_buffer_size as usize, reader))
     }

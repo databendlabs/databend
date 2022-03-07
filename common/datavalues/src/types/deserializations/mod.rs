@@ -33,9 +33,10 @@ pub use number::*;
 pub use string::*;
 
 pub trait TypeDeserializer: Send + Sync {
-    fn de(&mut self, reader: &mut &[u8]) -> Result<()>;
+    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()>;
+
     fn de_default(&mut self);
-    fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()>;
+    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()>;
     /// If error occurrs, append a null by default
     fn de_text(&mut self, reader: &[u8]) -> Result<()>;
 
