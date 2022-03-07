@@ -12,19 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_planners::Part;
+use common_planners::{Part, PartitionsInfo};
 use common_planners::Partitions;
+use crate::table_functions::numbers_part::NumbersPartInfo;
 
-pub fn generate_block_parts(start: u64, workers: u64, total: u64) -> Partitions {
+struct MemoryPartInfo {
+    total: u64,
+    part_start: u64,
+    part_end: u64,
+}
+
+pub fn generate_block_parts(start: u64, workers: u64, total: u64) -> PartitionsInfo {
     let part_size = total / workers;
     let part_remain = total % workers;
 
     let mut partitions = Vec::with_capacity(workers as usize);
     if part_size == 0 {
-        partitions.push(Part {
-            name: format!("{}-{}-{}", total, start, total,),
-            version: 0,
-        })
+        partitions.push(NumbersPartInfo::create(total, start, total));
     } else {
         for part in 0..workers {
             let mut part_begin = part * part_size;
@@ -35,11 +39,10 @@ pub fn generate_block_parts(start: u64, workers: u64, total: u64) -> Partitions 
             if part == (workers - 1) && part_remain > 0 {
                 part_end += part_remain;
             }
-            partitions.push(Part {
-                name: format!("{}-{}-{}", total, part_begin, part_end,),
-                version: 0,
-            })
+
+            partitions.push(NumbersPartInfo::create(part_begin, part_end, total));
         }
     }
+
     partitions
 }

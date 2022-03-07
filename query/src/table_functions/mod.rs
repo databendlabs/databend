@@ -18,6 +18,7 @@ mod numbers_stream;
 mod numbers_table;
 mod table_function;
 mod table_function_factory;
+mod numbers_part;
 
 pub use memory_block_part::generate_block_parts;
 pub use numbers_table::NumbersTable;

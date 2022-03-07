@@ -17,7 +17,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::Extras;
+use common_planners::{Extras, PartitionsInfo};
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::Statistics;
@@ -34,7 +34,7 @@ impl FuseTable {
         &self,
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(Statistics, PartitionsInfo)> {
         let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
         match snapshot {
             Some(snapshot) => {
@@ -72,7 +72,7 @@ impl FuseTable {
     pub fn to_partitions(
         blocks_metas: &[BlockMeta], // TODO is &[&BlockMeta] enough?
         push_downs: Option<Extras>,
-    ) -> (Statistics, Partitions) {
+    ) -> (Statistics, PartitionsInfo) {
         let is_exact = match &push_downs {
             // We don't have limit push down in parquet reader
             Some(extra) => extra.filters.is_empty(),
@@ -82,11 +82,12 @@ impl FuseTable {
         let proj_cols =
             push_downs.and_then(|extras| extras.projection.map(HashSet::<usize>::from_iter));
         blocks_metas.iter().fold(
-            (Statistics::default(), Partitions::default()),
+            (Statistics::default(), PartitionsInfo::default()),
             |(mut stats, mut parts), block_meta| {
                 let name =
                     PartInfo::new(block_meta.location.path.as_str(), block_meta.file_size).encode();
-                parts.push(Part { name, version: 0 });
+                // TODO:
+                // parts.push(Part { name, version: 0 });
 
                 stats.is_exact = is_exact;
                 stats.read_rows += block_meta.row_count as usize;

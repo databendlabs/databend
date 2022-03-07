@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_planners::Extras;
+use common_planners::{Extras, PartitionsInfo};
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
@@ -84,8 +84,9 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         &self,
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        self.inner_table.get_partitions(ctx, push_downs)
+    ) -> Result<(Statistics, PartitionsInfo)> {
+        self.inner_table.get_partitions(ctx, push_downs);
+        unimplemented!()
     }
 
     async fn read(
@@ -205,8 +206,9 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
         &self,
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        self.inner_table.get_partitions(ctx, push_downs).await
+    ) -> Result<(Statistics, PartitionsInfo)> {
+        self.inner_table.get_partitions(ctx, push_downs).await;
+        unimplemented!()
     }
 
     async fn read(

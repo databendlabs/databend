@@ -27,7 +27,7 @@ use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::Expression;
+use common_planners::{Expression, PartInfo, PartitionsInfo};
 use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
@@ -45,6 +45,7 @@ use crate::pipelines::transforms::get_sort_descriptions;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 use crate::table_functions::generate_block_parts;
+use crate::table_functions::numbers_part::NumbersPartInfo;
 use crate::table_functions::table_function_factory::TableArgs;
 use crate::table_functions::TableFunction;
 
@@ -123,7 +124,7 @@ impl Table for NumbersTable {
         &self,
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(Statistics, PartitionsInfo)> {
         let max_block_size = ctx.get_settings().get_max_block_size()?;
         let mut limit = None;
 
@@ -200,7 +201,7 @@ impl Table for NumbersTable {
                 NumbersSource::create(
                     source_output_port,
                     source_ctx,
-                    &plan.parts[part_index].name,
+                    &plan.parts[part_index],
                     self.schema(),
                 )?,
             );
@@ -222,20 +223,17 @@ impl NumbersSource {
     pub fn create(
         output: Arc<OutputPort>,
         ctx: Arc<QueryContext>,
-        name: &str,
+        numbers_part: &Box<dyn PartInfo>,
         schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
-        let step = settings.get_max_block_size()?;
-
-        let names: Vec<_> = name.split('-').collect();
-        let (begin, end) = (names[1].parse::<u64>()?, names[2].parse::<u64>()?);
+        let numbers_part = NumbersPartInfo::from_part(numbers_part)?;
 
         SyncSourcer::create(output, NumbersSource {
             schema,
-            begin,
-            end,
-            step,
+            begin: numbers_part.part_start,
+            end: numbers_part.part_end,
+            step: settings.get_max_block_size()?,
         })
     }
 }
@@ -268,7 +266,7 @@ impl TableFunction for NumbersTable {
     }
 
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
-    where Self: 'a {
+        where Self: 'a {
         self
     }
 }

@@ -20,7 +20,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::TableInfo;
 
-use crate::Expression;
+use crate::{Expression, PartitionsInfo};
 use crate::Extras;
 use crate::Partitions;
 use crate::S3ExternalTableInfo;
@@ -64,7 +64,7 @@ pub struct ReadDataSourcePlan {
     /// If it is None, one should use `table_info.schema().fields()`.
     pub scan_fields: Option<BTreeMap<usize, DataField>>,
 
-    pub parts: Partitions,
+    pub parts: PartitionsInfo,
     pub statistics: Statistics,
     pub description: String,
 
@@ -99,9 +99,9 @@ impl ReadDataSourcePlan {
         };
 
         if let Some(Extras {
-            projection: Some(prj),
-            ..
-        }) = &self.push_downs
+                        projection: Some(prj),
+                        ..
+                    }) = &self.push_downs
         {
             prj.clone()
         } else {

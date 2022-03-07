@@ -27,3 +27,4 @@ mod plan_projection;
 mod plan_rewriter;
 mod plan_select;
 mod test;
+mod plan_partition;

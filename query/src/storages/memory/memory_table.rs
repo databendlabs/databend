@@ -24,7 +24,7 @@ use common_exception::Result;
 use common_infallible::Mutex;
 use common_infallible::RwLock;
 use common_meta_types::TableInfo;
-use common_planners::Extras;
+use common_planners::{Extras, PartitionsInfo};
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -105,7 +105,7 @@ impl Table for MemoryTable {
         &self,
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(Statistics, PartitionsInfo)> {
         let blocks = self.blocks.read();
 
         let statistics = match push_downs {

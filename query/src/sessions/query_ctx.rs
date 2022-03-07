@@ -30,7 +30,7 @@ use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::TableInfo;
 use common_meta_types::UserInfo;
-use common_planners::Expression;
+use common_planners::{Expression, PartInfo, PartitionsInfo};
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
@@ -60,7 +60,7 @@ use crate::users::UserApiProvider;
 pub struct QueryContext {
     version: String,
     statistics: Arc<RwLock<Statistics>>,
-    partition_queue: Arc<RwLock<VecDeque<Part>>>,
+    partition_queue: Arc<RwLock<VecDeque<Arc<Box<dyn PartInfo>>>>>,
     shared: Arc<QueryContextShared>,
 }
 
@@ -143,7 +143,7 @@ impl QueryContext {
 
     // Steal n partitions from the partition pool by the pipeline worker.
     // This also can steal the partitions from distributed node.
-    pub fn try_get_partitions(&self, num: u64) -> Result<Partitions> {
+    pub fn try_get_partitions(&self, num: u64) -> Result<PartitionsInfo> {
         let mut partitions = vec![];
         for _ in 0..num {
             match self.partition_queue.write().pop_back() {
@@ -157,7 +157,7 @@ impl QueryContext {
     }
 
     // Update the context partition pool from the pipeline builder.
-    pub fn try_set_partitions(&self, partitions: Partitions) -> Result<()> {
+    pub fn try_set_partitions(&self, partitions: PartitionsInfo) -> Result<()> {
         for part in partitions {
             self.partition_queue.write().push_back(part);
         }
@@ -327,9 +327,9 @@ impl TrySpawn for QueryContext {
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
+        where
+            T: Future + Send + 'static,
+            T::Output: Send + 'static,
     {
         Ok(self.shared.try_get_runtime()?.spawn(task))
     }

@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+use std::fmt::{Debug, Formatter};
+use std::sync::Arc;
+
 pub type Partitions = Vec<Part>;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -19,3 +23,27 @@ pub struct Part {
     pub name: String,
     pub version: u64,
 }
+
+#[typetag::serde(tag = "type")]
+pub trait PartInfo: Send + Sync {
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl Debug for Box<dyn PartInfo> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match serde_json::to_string(self) {
+            Ok(str) => write!(f, "{}", str),
+            Err(cause) => Err(std::fmt::Error {})
+        }
+    }
+}
+
+impl PartialEq for Box<dyn PartInfo> {
+    fn eq(&self, other: &Self) -> bool {
+        todo!()
+    }
+}
+
+pub type PartitionsInfo = Vec<Arc<Box<dyn PartInfo>>>;
+
+

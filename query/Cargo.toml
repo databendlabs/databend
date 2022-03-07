@@ -96,6 +96,7 @@ reqwest = "0.11.9"
 rsa = "0.5.0"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
+typetag = "0.1.5"
 sha1 = "0.10.1"
 sha2 = "0.10.2"
 threadpool = "1.8.1"
