@@ -66,7 +66,7 @@ impl Function for FuseHistoryFunction {
             ))
         })?;
 
-        Ok(FuseHistory::new(ctx, tbl.clone()).get_history().await?)
+        Ok(FuseHistory::new(ctx, tbl).get_history().await?)
     }
 
     fn schema(&self) -> Arc<DataSchema> {
