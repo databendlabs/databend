@@ -17,6 +17,7 @@ use std::io::ErrorKind;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::AsyncRead;
+use serde_json::from_slice;
 
 use crate::storages::fuse::io::VersionedLoader;
 use crate::storages::fuse::meta::v1::snapshot::TableSnapshot;
@@ -53,6 +54,8 @@ impl VersionedLoader<TableSnapshot> for SnapshotVersions {
         let mut buffer = vec![];
 
         use futures::AsyncReadExt;
+
+        use crate::storages::fuse::meta::v0::snapshot::TableSnapshot as TableSnapshotV0;
         reader.read_to_end(&mut buffer).await.map_err(|e| {
             let msg = e.to_string();
             if e.kind() == ErrorKind::NotFound {
@@ -61,13 +64,10 @@ impl VersionedLoader<TableSnapshot> for SnapshotVersions {
                 ErrorCode::DalTransportError(msg)
             }
         })?;
-        match self {
-            SnapshotVersions::V1 => Ok(serde_json::from_slice(&buffer)?),
-            SnapshotVersions::V0 => {
-                let r: crate::storages::fuse::meta::v0::snapshot::TableSnapshot =
-                    serde_json::from_slice(&buffer)?;
-                Ok(r.into())
-            }
-        }
+        let r = match self {
+            SnapshotVersions::V1 => from_slice(&buffer)?,
+            SnapshotVersions::V0 => from_slice::<TableSnapshotV0>(&buffer)?.into(),
+        };
+        Ok(r)
     }
 }
