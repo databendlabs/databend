@@ -33,9 +33,9 @@ use databend_query::storages::StorageFactory;
 
 use crate::tests::SessionManagerBuilder;
 
-pub fn create_query_context() -> Result<Arc<QueryContext>> {
+pub async fn create_query_context() -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
-    let dummy_session = sessions.create_session("TestSession")?;
+    let dummy_session = sessions.create_session("TestSession").await?;
 
     // Set user with all privileges
     let mut user_info = UserInfo::new(
@@ -65,9 +65,9 @@ pub fn create_query_context() -> Result<Arc<QueryContext>> {
     Ok(context)
 }
 
-pub fn create_query_context_with_config(config: Config) -> Result<Arc<QueryContext>> {
+pub async fn create_query_context_with_config(config: Config) -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create_with_conf(config.clone()).build()?;
-    let dummy_session = sessions.create_session("TestSession")?;
+    let dummy_session = sessions.create_session("TestSession").await?;
 
     let mut user_info = UserInfo::new(
         "root".to_string(),
@@ -155,9 +155,11 @@ impl Default for ClusterDescriptor {
     }
 }
 
-pub fn create_query_context_with_cluster(desc: ClusterDescriptor) -> Result<Arc<QueryContext>> {
+pub async fn create_query_context_with_cluster(
+    desc: ClusterDescriptor,
+) -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
-    let dummy_session = sessions.create_session("TestSession")?;
+    let dummy_session = sessions.create_session("TestSession").await?;
 
     let local_id = desc.local_node_id;
     let nodes = desc.cluster_nodes_list;

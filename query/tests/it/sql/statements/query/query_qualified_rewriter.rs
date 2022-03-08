@@ -100,7 +100,7 @@ async fn test_query_qualified_rewriter() -> Result<()> {
     ];
 
     for test_case in &tests {
-        let ctx = create_query_context()?;
+        let ctx = create_query_context().await?;
         let (mut statements, _) = DfParser::parse_sql(test_case.query)?;
 
         match statements.remove(0) {

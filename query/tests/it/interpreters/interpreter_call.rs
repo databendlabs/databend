@@ -23,7 +23,7 @@ use pretty_assertions::assert_eq;
 async fn test_call_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
 
     let plan = PlanParser::parse(ctx.clone(), "call system$test()").await?;
     let executor = InterpreterFactory::get(ctx, plan.clone())?;
@@ -41,7 +41,7 @@ async fn test_call_interpreter() -> Result<()> {
 async fn test_call_fuse_history_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
 
     // NumberArgumentsNotMatch
     {

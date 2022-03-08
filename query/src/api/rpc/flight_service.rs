@@ -161,7 +161,10 @@ impl FlightService for DatabendQueryFlightService {
             FlightAction::BroadcastAction(action) => {
                 let session_id = action.query_id.clone();
                 let is_aborted = self.dispatcher.is_aborted();
-                let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
+                let session = self
+                    .sessions
+                    .create_rpc_session(session_id, is_aborted)
+                    .await?;
 
                 self.dispatcher
                     .broadcast_action(session, flight_action)
@@ -171,7 +174,10 @@ impl FlightService for DatabendQueryFlightService {
             FlightAction::PrepareShuffleAction(action) => {
                 let session_id = action.query_id.clone();
                 let is_aborted = self.dispatcher.is_aborted();
-                let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
+                let session = self
+                    .sessions
+                    .create_rpc_session(session_id, is_aborted)
+                    .await?;
 
                 self.dispatcher
                     .shuffle_action(session, flight_action)

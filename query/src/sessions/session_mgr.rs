@@ -22,10 +22,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::tokio;
+use common_base::tokio::sync::RwLock;
 use common_base::SignalStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_metrics::label_counter;
 use common_tracing::tracing;
 use futures::future::Either;
@@ -125,9 +125,12 @@ impl SessionManager {
         self.storage_cache_manager.as_ref()
     }
 
-    pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
-        let mut sessions = self.active_sessions.write();
-        match sessions.len() == self.max_sessions {
+    pub async fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
+        let total_sessions = {
+            let sessions = self.active_sessions.read().await;
+            sessions.len()
+        };
+        match total_sessions == self.max_sessions {
             true => Err(ErrorCode::TooManyUserConnections(
                 "The current accept connection has exceeded mysql_handler_thread_num config",
             )),
@@ -137,7 +140,8 @@ impl SessionManager {
                     uuid::Uuid::new_v4().to_string(),
                     typ.into(),
                     self.clone(),
-                )?;
+                )
+                .await?;
 
                 label_counter(
                     super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
@@ -145,14 +149,21 @@ impl SessionManager {
                     &self.conf.query.cluster_id,
                 );
 
-                sessions.insert(session.get_id(), session.clone());
+                {
+                    let mut sessions = self.active_sessions.write().await;
+                    sessions.insert(session.get_id(), session.clone());
+                }
                 Ok(SessionRef::create(session))
             }
         }
     }
 
-    pub fn create_rpc_session(self: &Arc<Self>, id: String, aborted: bool) -> Result<SessionRef> {
-        let mut sessions = self.active_sessions.write();
+    pub async fn create_rpc_session(
+        self: &Arc<Self>,
+        id: String,
+        aborted: bool,
+    ) -> Result<SessionRef> {
+        let mut sessions = self.active_sessions.write().await;
 
         let session = match sessions.entry(id) {
             Occupied(entry) => entry.get().clone(),
@@ -163,7 +174,8 @@ impl SessionManager {
                     entry.key().clone(),
                     String::from("RPCSession"),
                     self.clone(),
-                )?;
+                )
+                .await?;
 
                 label_counter(
                     super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
@@ -180,7 +192,7 @@ impl SessionManager {
 
     #[allow(clippy::ptr_arg)]
     pub fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
-        let sessions = self.active_sessions.read();
+        let sessions = futures::executor::block_on(self.active_sessions.read());
         sessions
             .get(id)
             .map(|session| SessionRef::create(session.clone()))
@@ -194,7 +206,8 @@ impl SessionManager {
             &self.conf.query.cluster_id,
         );
 
-        self.active_sessions.write().remove(session_id);
+        let mut sessions = futures::executor::block_on(self.active_sessions.write());
+        sessions.remove(session_id);
     }
 
     pub fn graceful_shutdown(
@@ -225,14 +238,15 @@ impl SessionManager {
             tracing::info!("Will shutdown forcefully.");
             active_sessions
                 .read()
+                .await
                 .values()
                 .for_each(Session::force_kill_session);
         }
     }
 
     pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        self.active_sessions
-            .read()
+        let sessions = futures::executor::block_on(self.active_sessions.read());
+        sessions
             .values()
             .map(Session::process_info)
             .collect::<Vec<_>>()
@@ -241,7 +255,7 @@ impl SessionManager {
     fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Arc<Session>>>>) -> bool {
         // Read lock does not support reentrant
         // https://github.com/Amanieu/parking_lot/blob/lock_api-0.4.4/lock_api/src/rwlock.rs#L422
-        let active_sessions_read_guard = sessions.read();
+        let active_sessions_read_guard = futures::executor::block_on(sessions.read());
 
         // First try to kill the idle session
         active_sessions_read_guard.values().for_each(Session::kill);

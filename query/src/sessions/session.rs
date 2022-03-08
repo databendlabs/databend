@@ -58,18 +58,14 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn try_create(
+    pub async fn try_create(
         conf: Config,
         id: String,
         typ: String,
         session_mgr: Arc<SessionManager>,
     ) -> Result<Arc<Session>> {
-        let user_manager =
-            futures::executor::block_on(UserApiProvider::create_global(conf.clone()))?;
-        let auth_manager = Arc::new(futures::executor::block_on(AuthMgr::create(
-            conf.clone(),
-            user_manager.clone(),
-        ))?);
+        let user_manager = UserApiProvider::create_global(conf.clone()).await?;
+        let auth_manager = Arc::new(AuthMgr::create(conf.clone(), user_manager.clone()).await?);
         let role_cache_manager = Arc::new(RoleCacheMgr::new(user_manager.clone()));
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
         let session_settings =

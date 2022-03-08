@@ -42,7 +42,7 @@ pub async fn cluster_list_handler(
 }
 
 async fn list_nodes(sessions: &Arc<SessionManager>) -> Result<Vec<Arc<NodeInfo>>> {
-    let watch_cluster_session = sessions.create_session("WatchCluster")?;
+    let watch_cluster_session = sessions.create_session("WatchCluster").await?;
     let watch_cluster_context = watch_cluster_session.create_query_context().await?;
     Ok(watch_cluster_context.get_cluster().get_nodes())
 }
