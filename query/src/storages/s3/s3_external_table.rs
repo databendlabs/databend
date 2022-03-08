@@ -18,8 +18,11 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_planners::Extras;
+use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::S3ExternalTableInfo;
+use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
@@ -57,6 +60,14 @@ impl Table for S3ExternalTable {
     // S3 external has no table info yet.
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info_placeholder
+    }
+
+    async fn read_partitions(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _push_downs: Option<Extras>,
+    ) -> Result<(Statistics, Partitions)> {
+        Ok((Statistics::default(), vec![]))
     }
 
     // S3 external only supported new pipeline.

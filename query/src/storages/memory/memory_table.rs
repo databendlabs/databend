@@ -38,6 +38,7 @@ use crate::pipelines::new::processors::SyncSourcer;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::sessions::QueryContext;
+use crate::storages::memory::memory_part::MemoryPartInfo;
 use crate::storages::memory::MemoryTableStream;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
@@ -84,6 +85,31 @@ impl MemoryTable {
         }
 
         Arc::new(Mutex::new(read_data_blocks))
+    }
+
+    pub fn generate_memory_parts(start: usize, workers: usize, total: usize) -> Partitions {
+        let part_size = total / workers;
+        let part_remain = total % workers;
+
+        let mut partitions = Vec::with_capacity(workers as usize);
+        if part_size == 0 {
+            partitions.push(MemoryPartInfo::create(start, total, total));
+        } else {
+            for part in 0..workers {
+                let mut part_begin = part * part_size;
+                if part == 0 && start > 0 {
+                    part_begin = start;
+                }
+                let mut part_end = (part + 1) * part_size;
+                if part == (workers - 1) && part_remain > 0 {
+                    part_end += part_remain;
+                }
+
+                partitions.push(MemoryPartInfo::create(part_begin, part_end, total));
+            }
+        }
+
+        partitions
     }
 }
 
@@ -141,10 +167,10 @@ impl Table for MemoryTable {
             }
         };
 
-        let parts = crate::table_functions::generate_block_parts(
+        let parts = Self::generate_memory_parts(
             0,
-            ctx.get_settings().get_max_threads()? as u64,
-            blocks.len() as u64,
+            ctx.get_settings().get_max_threads()? as usize,
+            blocks.len(),
         );
         Ok((statistics, parts))
     }

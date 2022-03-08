@@ -20,7 +20,10 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_planners::Extras;
+use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
+use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -63,6 +66,14 @@ impl Table for NullTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
+    }
+
+    async fn read_partitions(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _push_downs: Option<Extras>,
+    ) -> Result<(Statistics, Partitions)> {
+        Ok((Statistics::default(), vec![]))
     }
 
     async fn read(

@@ -31,7 +31,7 @@ use common_infallible::RwLock;
 use common_meta_types::TableInfo;
 use common_meta_types::UserInfo;
 use common_planners::Expression;
-use common_planners::Part;
+use common_planners::PartInfoPtr;
 use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
@@ -61,7 +61,7 @@ use crate::users::UserApiProvider;
 pub struct QueryContext {
     version: String,
     statistics: Arc<RwLock<Statistics>>,
-    partition_queue: Arc<RwLock<VecDeque<Part>>>,
+    partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
 }
 

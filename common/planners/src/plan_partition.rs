@@ -12,10 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub type Partitions = Vec<Part>;
+use std::any::Any;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::sync::Arc;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct Part {
-    pub name: String,
-    pub version: u64,
+#[typetag::serde(tag = "type")]
+pub trait PartInfo: Send + Sync {
+    fn as_any(&self) -> &dyn Any;
+
+    #[allow(clippy::borrowed_box)]
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool;
 }
+
+impl Debug for Box<dyn PartInfo> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match serde_json::to_string(self) {
+            Ok(str) => write!(f, "{}", str),
+            Err(_cause) => Err(std::fmt::Error {}),
+        }
+    }
+}
+
+impl PartialEq for Box<dyn PartInfo> {
+    fn eq(&self, other: &Self) -> bool {
+        let this_type_id = self.as_any().type_id();
+        let other_type_id = other.as_any().type_id();
+
+        match this_type_id == other_type_id {
+            true => self.equals(other),
+            false => false,
+        }
+    }
+}
+
+pub type PartInfoPtr = Arc<Box<dyn PartInfo>>;
+pub type Partitions = Vec<Arc<Box<dyn PartInfo>>>;

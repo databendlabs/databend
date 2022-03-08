@@ -22,6 +22,7 @@ use common_exception::Result;
 use futures::stream::Stream;
 
 use crate::sessions::QueryContext;
+use crate::storages::memory::memory_part::MemoryPartInfo;
 
 #[derive(Debug, Clone)]
 struct BlockRange {
@@ -52,18 +53,12 @@ impl MemoryTableStream {
             if partitions.is_empty() {
                 return Ok(None);
             }
-            if partitions.len() == 1 && partitions[0].name.is_empty() {
-                return Ok(None);
-            }
 
             let mut block_ranges = Vec::with_capacity(partitions.len());
 
             for part in partitions {
-                let names: Vec<_> = part.name.split('-').collect();
-                let begin: usize = names[1].parse()?;
-                let end: usize = names[2].parse()?;
-
-                let s: Vec<usize> = (begin..end).collect();
+                let memory_part = MemoryPartInfo::from_part(&part)?;
+                let s: Vec<usize> = (memory_part.part_start..memory_part.part_end).collect();
                 block_ranges.extend_from_slice(&s);
             }
             self.block_ranges = block_ranges;

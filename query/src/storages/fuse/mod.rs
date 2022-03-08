@@ -15,6 +15,7 @@
 pub mod cache;
 mod constants;
 mod fuse_history;
+mod fuse_part;
 mod fuse_table;
 pub mod io;
 pub mod meta;
