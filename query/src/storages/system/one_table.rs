@@ -51,11 +51,7 @@ impl SyncSystemTable for OneTable {
         _ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, PartitionsInfo)> {
-        unimplemented!()
-        // Ok((Statistics::new_exact(1, 1, 1, 1), vec![Part {
-        //     name: "".to_string(),
-        //     version: 0,
-        // }]))
+        Ok((Statistics::new_exact(1, 1, 1, 1), vec![]))
     }
 }
 
