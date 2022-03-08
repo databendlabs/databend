@@ -24,6 +24,7 @@ use common_exception::ToErrorCode;
 use common_io::prelude::*;
 use common_planners::PlanNode;
 use common_tracing::tracing;
+use common_tracing::tracing::Instrument;
 use metrics::histogram;
 use msql_srv::AsyncMysqlShim;
 use msql_srv::ErrorKind;
@@ -312,28 +313,31 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let instant = Instant::now();
         let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
 
-        let query_result = context.try_spawn(async move {
-            // Write start query log.
-            let _ = interpreter
-                .start()
-                .await
-                .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
-            let data_stream = interpreter.execute(None).await?;
-            histogram!(
-                super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
-                instant.elapsed()
-            );
+        let query_result = context.try_spawn(
+            async move {
+                // Write start query log.
+                let _ = interpreter
+                    .start()
+                    .await
+                    .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+                let data_stream = interpreter.execute(None).await?;
+                histogram!(
+                    super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
+                    instant.elapsed()
+                );
 
-            let collector = data_stream.collect::<Result<Vec<DataBlock>>>();
-            let query_result = collector.await?;
-            // Write finish query log.
-            let _ = interpreter
-                .finish()
-                .await
-                .map_err(|e| tracing::error!("interpreter.finish.error: {:?}", e));
+                let collector = data_stream.collect::<Result<Vec<DataBlock>>>();
+                let query_result = collector.await?;
+                // Write finish query log.
+                let _ = interpreter
+                    .finish()
+                    .await
+                    .map_err(|e| tracing::error!("interpreter.finish.error: {:?}", e));
 
-            Ok::<Vec<DataBlock>, ErrorCode>(query_result)
-        })?;
+                Ok::<Vec<DataBlock>, ErrorCode>(query_result)
+            }
+            .in_current_span(),
+        )?;
 
         let query_result = query_result
             .await
