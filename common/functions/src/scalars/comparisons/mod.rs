@@ -21,6 +21,7 @@ mod comparison_lt;
 mod comparison_lt_eq;
 mod comparison_not_eq;
 mod comparison_regexp;
+mod utils;
 
 pub use comparison::ComparisonFunction;
 pub use comparison_eq::ComparisonEqFunction;
@@ -30,4 +31,5 @@ pub use comparison_like::*;
 pub use comparison_lt::ComparisonLtFunction;
 pub use comparison_lt_eq::ComparisonLtEqFunction;
 pub use comparison_not_eq::ComparisonNotEqFunction;
+pub use comparison_regexp::ComparisonNotRegexpFunction;
 pub use comparison_regexp::ComparisonRegexpFunction;

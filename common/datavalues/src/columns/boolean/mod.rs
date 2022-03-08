@@ -198,7 +198,10 @@ impl ScalarColumn for BooleanColumn {
     }
 
     fn from_owned_iterator(it: impl Iterator<Item = Self::OwnedItem>) -> Self {
-        let bitmap = MutableBitmap::from_iter(it);
+        let bitmap = match it.size_hint() {
+            (_, Some(_)) => unsafe { MutableBitmap::from_trusted_len_iter_unchecked(it) },
+            (_, None) => MutableBitmap::from_iter(it),
+        };
         BooleanColumn {
             values: bitmap.into(),
         }

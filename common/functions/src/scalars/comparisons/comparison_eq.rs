@@ -12,28 +12,85 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataValueComparisonOperator;
-use common_exception::Result;
+use common_arrow::arrow::compute::comparison::Simd8;
+use common_arrow::arrow::compute::comparison::Simd8PartialEq;
+use common_datavalues::prelude::*;
+use num::traits::AsPrimitive;
 
-use crate::scalars::function_factory::FunctionDescription;
-use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::ComparisonFunction;
-use crate::scalars::Function;
+use super::comparison::ComparisonFunctionCreator;
+use super::comparison::ComparisonImpl;
+use super::utils::*;
+use crate::scalars::EvalContext;
 
-pub struct ComparisonEqFunction;
+pub type ComparisonEqFunction = ComparisonFunctionCreator<ComparisonEqImpl>;
 
-impl ComparisonEqFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
-        ComparisonFunction::try_create_func(DataValueComparisonOperator::Eq)
+#[derive(Clone)]
+pub struct ComparisonEqImpl;
+
+impl ComparisonImpl for ComparisonEqImpl {
+    type PrimitiveSimd = PrimitiveSimdEq;
+    type BooleanSimd = BooleanSimdEq;
+
+    fn eval_primitive<L, R, M>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> bool
+    where
+        L: PrimitiveType + AsPrimitive<M>,
+        R: PrimitiveType + AsPrimitive<M>,
+        M: PrimitiveType,
+    {
+        l.to_owned_scalar().as_().eq(&r.to_owned_scalar().as_())
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .negative_function("<>")
-                .bool_function()
-                .num_arguments(2),
-        )
+    fn eval_binary(l: &[u8], r: &[u8], _ctx: &mut EvalContext) -> bool {
+        l == r
+    }
+}
+
+#[derive(Clone)]
+pub struct PrimitiveSimdEq;
+
+impl PrimitiveSimdImpl for PrimitiveSimdEq {
+    fn vector_vector<T>(lhs: &PrimitiveColumn<T>, rhs: &PrimitiveColumn<T>) -> BooleanColumn
+    where
+        T: PrimitiveType + Simd8,
+        T::Simd: Simd8PartialEq,
+    {
+        CommonPrimitiveImpl::compare_op(lhs, rhs, |a, b| a.eq(b))
+    }
+
+    fn vector_const<T>(lhs: &PrimitiveColumn<T>, rhs: T) -> BooleanColumn
+    where
+        T: PrimitiveType + Simd8,
+        T::Simd: Simd8PartialEq,
+    {
+        CommonPrimitiveImpl::compare_op_scalar(lhs, rhs, |a, b| a.eq(b))
+    }
+
+    fn const_vector<T>(lhs: T, rhs: &PrimitiveColumn<T>) -> BooleanColumn
+    where
+        T: PrimitiveType + Simd8,
+        T::Simd: Simd8PartialEq,
+    {
+        CommonPrimitiveImpl::compare_op_scalar(rhs, lhs, |a, b| a.eq(b))
+    }
+}
+
+#[derive(Clone)]
+pub struct BooleanSimdEq;
+
+impl BooleanSimdImpl for BooleanSimdEq {
+    fn vector_vector(lhs: &BooleanColumn, rhs: &BooleanColumn) -> BooleanColumn {
+        CommonBooleanImpl::compare_op(lhs, rhs, |a, b| !(a ^ b))
+    }
+
+    fn vector_const(lhs: &BooleanColumn, rhs: bool) -> BooleanColumn {
+        if rhs {
+            lhs.clone()
+        } else {
+            CommonBooleanImpl::compare_op_scalar(lhs, rhs, |a, _| !a)
+        }
+    }
+
+    fn const_vector(lhs: bool, rhs: &BooleanColumn) -> BooleanColumn {
+        Self::vector_const(rhs, lhs)
     }
 }

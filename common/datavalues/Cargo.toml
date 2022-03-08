@@ -47,3 +47,7 @@ harness = false
 [[bench]]
 name = "if_else_then"
 harness = false
+
+[[bench]]
+name = "eq"
+harness = false
