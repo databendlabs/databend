@@ -16,8 +16,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableIdent;
@@ -30,12 +28,10 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io::MetaReaders;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::table_functions::table_arg_util::parse_func_history_args;
 use crate::storages::fuse::table_functions::table_arg_util::string_literal;
+use crate::storages::fuse::FuseHistory;
 use crate::storages::fuse::FuseTable;
-use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
@@ -55,16 +51,6 @@ impl FuseHistoryTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("snapshot_id", Vu8::to_data_type()),
-            DataField::new_nullable("prev_snapshot_id", Vu8::to_data_type()),
-            DataField::new("segment_count", u64::to_data_type()),
-            DataField::new("block_count", u64::to_data_type()),
-            DataField::new("row_count", u64::to_data_type()),
-            DataField::new("bytes_uncompressed", u64::to_data_type()),
-            DataField::new("bytes_compressed", u64::to_data_type()),
-        ]);
-
         let (arg_database_name, arg_table_name) = parse_func_history_args(&table_args)?;
 
         let engine = FUSE_FUNC_HIST.to_owned();
@@ -74,7 +60,7 @@ impl FuseHistoryTable {
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {
-                schema,
+                schema: FuseHistory::schema(),
                 engine,
                 ..Default::default()
             },
@@ -85,39 +71,6 @@ impl FuseHistoryTable {
             arg_database_name,
             arg_table_name,
         }))
-    }
-
-    fn snapshots_to_block(&self, snapshots: Vec<Arc<TableSnapshot>>) -> DataBlock {
-        let len = snapshots.len();
-        let mut snapshot_ids: Vec<Vec<u8>> = Vec::with_capacity(len);
-        let mut prev_snapshot_ids: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
-        let mut segment_count: Vec<u64> = Vec::with_capacity(len);
-        let mut block_count: Vec<u64> = Vec::with_capacity(len);
-        let mut row_count: Vec<u64> = Vec::with_capacity(len);
-        let mut compressed: Vec<u64> = Vec::with_capacity(len);
-        let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
-        for s in snapshots {
-            snapshot_ids.push(s.snapshot_id.to_simple().to_string().into_bytes());
-            prev_snapshot_ids.push(
-                s.prev_snapshot_id
-                    .map(|v| v.to_simple().to_string().into_bytes()),
-            );
-            segment_count.push(s.segments.len() as u64);
-            block_count.push(s.summary.block_count);
-            row_count.push(s.summary.row_count);
-            compressed.push(s.summary.compressed_byte_size);
-            uncompressed.push(s.summary.uncompressed_byte_size);
-        }
-
-        DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(snapshot_ids),
-            Series::from_data(prev_snapshot_ids),
-            Series::from_data(segment_count),
-            Series::from_data(block_count),
-            Series::from_data(row_count),
-            Series::from_data(uncompressed),
-            Series::from_data(compressed),
-        ])
     }
 }
 
@@ -160,15 +113,13 @@ impl Table for FuseHistoryTable {
             ))
         })?;
 
-        let tbl_info = tbl.get_table_info();
-        let location = tbl_info.meta.options.get(FUSE_OPT_KEY_SNAPSHOT_LOC);
-        let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());
-        let snapshots = reader
-            .read_snapshot_history(location, tbl.meta_locations().clone())
-            .await?;
-        let blocks = vec![self.snapshots_to_block(snapshots)];
+        let blocks = vec![
+            FuseHistory::new(ctx.clone(), tbl.clone())
+                .get_history()
+                .await?,
+        ];
         Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema(),
+            FuseHistory::schema(),
             None,
             blocks,
         )))

@@ -196,6 +196,10 @@ impl<'a> DfParser<'a> {
                         self.parser.next_token();
                         self.parse_copy()
                     }
+                    Keyword::CALL => {
+                        self.parser.next_token();
+                        self.parse_call()
+                    }
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database
                         "USE" => self.parse_use_database(),

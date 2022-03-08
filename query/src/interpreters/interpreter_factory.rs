@@ -22,6 +22,7 @@ use common_planners::ShowPlan;
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::AlterUserUDFInterpreter;
+use crate::interpreters::CallInterpreter;
 use crate::interpreters::CopyInterpreter;
 use crate::interpreters::CreateDatabaseInterpreter;
 use crate::interpreters::CreateRoleInterpreter;
@@ -76,6 +77,9 @@ impl InterpreterFactory {
 
             // Copy.
             PlanNode::Copy(v) => CopyInterpreter::try_create(ctx_clone, v),
+
+            // Call.
+            PlanNode::Call(v) => CallInterpreter::try_create(ctx_clone, v),
 
             // Show.
             PlanNode::Show(ShowPlan::ShowDatabases(v)) => {
