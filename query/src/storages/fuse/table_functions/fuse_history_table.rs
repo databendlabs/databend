@@ -113,11 +113,7 @@ impl Table for FuseHistoryTable {
             ))
         })?;
 
-        let blocks = vec![
-            FuseHistory::new(ctx.clone(), tbl.clone())
-                .get_history()
-                .await?,
-        ];
+        let blocks = vec![FuseHistory::new(ctx.clone(), tbl).get_history().await?];
         Ok(Box::pin(DataBlockStream::create(
             FuseHistory::schema(),
             None,

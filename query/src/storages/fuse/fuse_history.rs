@@ -25,13 +25,13 @@ use super::FUSE_OPT_KEY_SNAPSHOT_LOC;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 
-pub struct FuseHistory {
+pub struct FuseHistory<'a> {
     pub ctx: Arc<QueryContext>,
-    pub table: FuseTable,
+    pub table: &'a FuseTable,
 }
 
-impl FuseHistory {
-    pub fn new(ctx: Arc<QueryContext>, table: FuseTable) -> Self {
+impl<'a> FuseHistory<'a> {
+    pub fn new(ctx: Arc<QueryContext>, table: &'a FuseTable) -> Self {
         Self { ctx, table }
     }
 
