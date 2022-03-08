@@ -66,6 +66,13 @@ impl<'a> DfParser<'a> {
             self.expect_token(")")?;
         }
 
+        // PATTERN = '<regex_pattern>'
+        let mut pattern = "".to_string();
+        if self.consume_token("PATTERN") {
+            self.expect_token("=")?;
+            pattern = self.parse_value_or_ident()?;
+        }
+
         // file_format = (type = csv field_delimiter = '|' skip_header = 1)
         let mut file_format_options = HashMap::default();
         if self.consume_token("FILE_FORMAT") {
@@ -107,6 +114,7 @@ impl<'a> DfParser<'a> {
             encryption_options,
             file_format_options,
             files,
+            pattern,
             on_error,
             size_limit,
             validation_mode,

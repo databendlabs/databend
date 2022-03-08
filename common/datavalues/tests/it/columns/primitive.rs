@@ -54,3 +54,65 @@ fn test_const_column() {
     let c = ConstColumn::new(Series::from_data(vec![PI]), 24).arc();
     println!("{:?}", c);
 }
+
+#[test]
+fn test_filter_column() {
+    const N: usize = 1000;
+    let it = (0..N).map(|i| i as i32);
+    let data_column: PrimitiveColumn<i32> = Int32Column::from_iterator(it);
+
+    struct Test {
+        filter: BooleanColumn,
+        expect: Vec<i32>,
+    }
+
+    let mut tests: Vec<Test> = vec![
+        Test {
+            filter: BooleanColumn::from_iterator((0..N).map(|_| true)),
+            expect: (0..N).map(|i| i as i32).collect(),
+        },
+        Test {
+            filter: BooleanColumn::from_iterator((0..N).map(|_| false)),
+            expect: vec![],
+        },
+        Test {
+            filter: BooleanColumn::from_iterator((0..N).map(|i| i % 10 == 0)),
+            expect: (0..N).map(|i| i as i32).filter(|i| i % 10 == 0).collect(),
+        },
+        Test {
+            filter: BooleanColumn::from_iterator((0..N).map(|i| !(100..=800).contains(&i))),
+            expect: (0..N)
+                .map(|i| i as i32)
+                .filter(|&i| !(100..=800).contains(&i))
+                .collect(),
+        },
+    ];
+
+    let offset = 10;
+    let filter = BooleanColumn::from_iterator(
+        (0..N + offset).map(|i| !(100 + offset..=800 + offset).contains(&i)),
+    )
+    .slice(offset, N)
+    .as_any()
+    .downcast_ref::<BooleanColumn>()
+    .unwrap()
+    .clone();
+    tests.push(Test {
+        filter,
+        expect: (0..N)
+            .map(|i| i as i32)
+            .filter(|&i| !(100..=800).contains(&i))
+            .collect(),
+    });
+
+    for test in tests {
+        let res = data_column.filter(&test.filter);
+        assert_eq!(
+            res.as_any()
+                .downcast_ref::<PrimitiveColumn<i32>>()
+                .unwrap()
+                .values(),
+            test.expect
+        );
+    }
+}

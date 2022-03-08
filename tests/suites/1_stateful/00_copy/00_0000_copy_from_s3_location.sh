@@ -17,8 +17,8 @@ echo "select count(1) ,avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIEN
 echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 
 
-## Copy from s3 with files.
-echo "Test copy from files"
+## Copy from s3 with files(TODO).
+#echo "Test copy from files"
 echo "copy into ontime200 from 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin') FILES = ('ontime_200.csv', 'ontime_200_v1.csv') FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1)" | $MYSQL_CLIENT_CONNECT
 
 ## Result.
