@@ -33,6 +33,8 @@ use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManager;
 use crate::sessions::Settings;
+use crate::users::auth::auth_mgr::AuthMgr;
+use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
 
 #[derive(Clone, MallocSizeOf)]
@@ -46,6 +48,12 @@ pub struct Session {
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) session_ctx: Arc<SessionContext>,
     #[ignore_malloc_size_of = "insignificant"]
+    pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
+    #[ignore_malloc_size_of = "insignificant"]
+    pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
+    #[ignore_malloc_size_of = "insignificant"]
+    pub(in crate::sessions) role_cache_manager: Arc<RoleCacheMgr>,
+    #[ignore_malloc_size_of = "insignificant"]
     session_settings: Settings,
 }
 
@@ -56,9 +64,16 @@ impl Session {
         typ: String,
         session_mgr: Arc<SessionManager>,
     ) -> Result<Arc<Session>> {
-        let user_api = session_mgr.get_user_manager();
+        let user_manager =
+            futures::executor::block_on(UserApiProvider::create_global(conf.clone()))?;
+        let auth_manager = Arc::new(futures::executor::block_on(AuthMgr::create(
+            conf.clone(),
+            user_manager.clone(),
+        ))?);
+        let role_cache_manager = Arc::new(RoleCacheMgr::new(user_manager.clone()));
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
-        let session_settings = Settings::try_create(&conf, session_ctx.clone(), user_api)?;
+        let session_settings =
+            Settings::try_create(&conf, session_ctx.clone(), user_manager.clone())?;
         let ref_count = Arc::new(AtomicUsize::new(0));
 
         Ok(Arc::new(Session {
@@ -68,6 +83,9 @@ impl Session {
             session_mgr,
             ref_count,
             session_ctx,
+            user_manager,
+            auth_manager,
+            role_cache_manager,
             session_settings,
         }))
     }
@@ -192,7 +210,7 @@ impl Session {
         }
 
         let tenant = self.get_current_tenant();
-        let role_cache = self.session_mgr.get_role_cache_manager();
+        let role_cache = self.get_role_cache_manager();
         let role_verified = role_cache
             .verify_privilege(&tenant, &current_user.grants.roles(), object, privilege)
             .await?;
@@ -219,7 +237,15 @@ impl Session {
     }
 
     pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
-        self.session_mgr.get_user_manager()
+        self.user_manager.clone()
+    }
+
+    pub fn get_auth_manager(self: &Arc<Self>) -> Arc<AuthMgr> {
+        self.auth_manager.clone()
+    }
+
+    pub fn get_role_cache_manager(self: &Arc<Self>) -> Arc<RoleCacheMgr> {
+        self.role_cache_manager.clone()
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {

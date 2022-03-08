@@ -286,7 +286,7 @@ impl QueryContext {
 
     // Get user manager api.
     pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
-        self.shared.session.get_session_manager().get_user_manager()
+        self.shared.session.get_user_manager()
     }
 
     // Get the current session.

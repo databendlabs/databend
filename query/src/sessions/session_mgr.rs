@@ -112,10 +112,6 @@ impl SessionManager {
         self.auth_manager.clone()
     }
 
-    pub fn get_role_cache_manager(self: &Arc<Self>) -> Arc<RoleCacheMgr> {
-        self.role_cache_manager.clone()
-    }
-
     /// Get the user api provider.
     pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
         self.user_manager.clone()
