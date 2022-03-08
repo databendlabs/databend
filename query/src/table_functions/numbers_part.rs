@@ -21,7 +21,7 @@ use common_exception::Result;
 use common_planners::PartInfo;
 use common_planners::PartInfoPtr;
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct NumbersPartInfo {
     pub total: u64,
     pub part_start: u64,
@@ -32,6 +32,13 @@ pub struct NumbersPartInfo {
 impl PartInfo for NumbersPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        match info.as_any().downcast_ref::<NumbersPartInfo>() {
+            None => false,
+            Some(other) => self == other,
+        }
     }
 }
 

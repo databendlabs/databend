@@ -19,7 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
-use common_planners::PartitionsInfo;
+use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::S3ExternalTableInfo;
 use common_planners::Statistics;
@@ -66,7 +66,7 @@ impl Table for S3ExternalTable {
         &self,
         _ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, PartitionsInfo)> {
+    ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![]))
     }
 

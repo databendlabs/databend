@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_planners::PartitionsInfo;
+use common_planners::Partitions;
 
 use crate::table_functions::numbers_part::NumbersPartInfo;
 
-pub fn generate_numbers_parts(start: u64, workers: u64, total: u64) -> PartitionsInfo {
+pub fn generate_numbers_parts(start: u64, workers: u64, total: u64) -> Partitions {
     let part_size = total / workers;
     let part_remain = total % workers;
 
     let mut partitions = Vec::with_capacity(workers as usize);
     if part_size == 0 {
-        partitions.push(NumbersPartInfo::create(total, start, total));
+        partitions.push(NumbersPartInfo::create(start, total, total));
     } else {
         for part in 0..workers {
             let mut part_begin = part * part_size;

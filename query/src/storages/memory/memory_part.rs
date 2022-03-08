@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_planners::PartInfo;
 use common_planners::PartInfoPtr;
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct MemoryPartInfo {
     pub total: usize,
     pub part_start: usize,
@@ -31,6 +31,13 @@ pub struct MemoryPartInfo {
 impl PartInfo for MemoryPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        match info.as_any().downcast_ref::<MemoryPartInfo>() {
+            None => false,
+            Some(other) => self == other,
+        }
     }
 }
 

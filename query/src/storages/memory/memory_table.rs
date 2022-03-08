@@ -25,7 +25,7 @@ use common_infallible::Mutex;
 use common_infallible::RwLock;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
-use common_planners::PartitionsInfo;
+use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
@@ -87,13 +87,13 @@ impl MemoryTable {
         Arc::new(Mutex::new(read_data_blocks))
     }
 
-    pub fn generate_memory_parts(start: usize, workers: usize, total: usize) -> PartitionsInfo {
+    pub fn generate_memory_parts(start: usize, workers: usize, total: usize) -> Partitions {
         let part_size = total / workers;
         let part_remain = total % workers;
 
         let mut partitions = Vec::with_capacity(workers as usize);
         if part_size == 0 {
-            partitions.push(MemoryPartInfo::create(total, start, total));
+            partitions.push(MemoryPartInfo::create(start, total, total));
         } else {
             for part in 0..workers {
                 let mut part_begin = part * part_size;
@@ -131,7 +131,7 @@ impl Table for MemoryTable {
         &self,
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, PartitionsInfo)> {
+    ) -> Result<(Statistics, Partitions)> {
         let blocks = self.blocks.read();
 
         let statistics = match push_downs {

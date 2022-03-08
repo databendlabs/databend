@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_planners::PartInfo;
 use common_planners::PartInfoPtr;
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct FusePartInfo {
     pub location: String,
     pub file_size: u64,
@@ -30,6 +30,13 @@ pub struct FusePartInfo {
 impl PartInfo for FusePartInfo {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        match info.as_any().downcast_ref::<FusePartInfo>() {
+            None => false,
+            Some(other) => self == other,
+        }
     }
 }
 

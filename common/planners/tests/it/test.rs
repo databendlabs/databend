@@ -19,7 +19,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::PartInfo;
-use common_planners::PartitionsInfo;
+use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
@@ -27,13 +27,20 @@ use common_planners::Statistics;
 
 pub struct Test {}
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 struct PlannerTestPartInfo {}
 
 #[typetag::serde(name = "planner_test")]
 impl PartInfo for PlannerTestPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        match info.as_any().downcast_ref::<PlannerTestPartInfo>() {
+            None => false,
+            Some(other) => self == other,
+        }
     }
 }
 
@@ -73,7 +80,7 @@ impl Test {
         }))
     }
 
-    pub fn generate_partitions(workers: u64, total: u64) -> PartitionsInfo {
+    pub fn generate_partitions(workers: u64, total: u64) -> Partitions {
         let part_size = total / workers;
         // let part_remain = total % workers;
 

@@ -17,13 +17,20 @@ use std::sync::Arc;
 
 use common_planners::*;
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 struct OptimizerTestPartInfo {}
 
 #[typetag::serde(name = "optimizer_test")]
 impl PartInfo for OptimizerTestPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        match info.as_any().downcast_ref::<OptimizerTestPartInfo>() {
+            None => false,
+            Some(other) => self == other,
+        }
     }
 }
 
@@ -33,7 +40,7 @@ impl OptimizerTestPartInfo {
     }
 }
 
-pub fn generate_partitions(workers: u64, total: u64) -> PartitionsInfo {
+pub fn generate_partitions(workers: u64, total: u64) -> Partitions {
     let part_size = total / workers;
     // let part_remain = total % workers;
 

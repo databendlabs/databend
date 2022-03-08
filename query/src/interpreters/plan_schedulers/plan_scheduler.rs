@@ -31,7 +31,7 @@ use common_planners::FilterPlan;
 use common_planners::HavingPlan;
 use common_planners::LimitByPlan;
 use common_planners::LimitPlan;
-use common_planners::PartitionsInfo;
+use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
@@ -861,7 +861,7 @@ impl PlanScheduler {
 }
 
 impl PlanScheduler {
-    fn repartition(&mut self, cluster_source: &ReadDataSourcePlan) -> Vec<PartitionsInfo> {
+    fn repartition(&mut self, cluster_source: &ReadDataSourcePlan) -> Vec<Partitions> {
         // We always put adjacent partitions in the same node
         let nodes = self.cluster_nodes.clone();
         let cluster_parts = &cluster_source.parts;

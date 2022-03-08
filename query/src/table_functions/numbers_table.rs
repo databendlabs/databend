@@ -30,7 +30,7 @@ use common_meta_types::TableMeta;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::PartInfoPtr;
-use common_planners::PartitionsInfo;
+use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
@@ -125,7 +125,7 @@ impl Table for NumbersTable {
         &self,
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, PartitionsInfo)> {
+    ) -> Result<(Statistics, Partitions)> {
         let max_block_size = ctx.get_settings().get_max_block_size()?;
         let mut limit = None;
 

@@ -21,7 +21,7 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::Extras;
-use common_planners::PartitionsInfo;
+use common_planners::Partitions;
 use common_planners::Statistics;
 
 use crate::sessions::QueryContext;
@@ -50,7 +50,7 @@ impl SyncSystemTable for OneTable {
         &self,
         _ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, PartitionsInfo)> {
+    ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::new_exact(1, 1, 1, 1), vec![]))
     }
 }

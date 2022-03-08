@@ -22,7 +22,7 @@ use common_meta_types::TableInfo;
 
 use crate::Expression;
 use crate::Extras;
-use crate::PartitionsInfo;
+use crate::Partitions;
 use crate::S3ExternalTableInfo;
 use crate::Statistics;
 
@@ -64,7 +64,7 @@ pub struct ReadDataSourcePlan {
     /// If it is None, one should use `table_info.schema().fields()`.
     pub scan_fields: Option<BTreeMap<usize, DataField>>,
 
-    pub parts: PartitionsInfo,
+    pub parts: Partitions,
     pub statistics: Statistics,
     pub description: String,
 

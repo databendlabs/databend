@@ -21,7 +21,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
-use common_planners::PartitionsInfo;
+use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
@@ -72,7 +72,7 @@ impl Table for NullTable {
         &self,
         _ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, PartitionsInfo)> {
+    ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![]))
     }
 

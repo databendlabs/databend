@@ -17,7 +17,7 @@ use std::any::Any;
 use common_exception::Result;
 use common_planners::PartInfo;
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 struct TestPartInfoA {
     field_a: usize,
     field_b: String,
@@ -28,9 +28,16 @@ impl PartInfo for TestPartInfoA {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        match info.as_any().downcast_ref::<TestPartInfoA>() {
+            None => false,
+            Some(other) => self == other,
+        }
+    }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 struct TestPartInfoB {
     field_a: String,
     field_b: u64,
@@ -40,6 +47,13 @@ struct TestPartInfoB {
 impl PartInfo for TestPartInfoB {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        match info.as_any().downcast_ref::<TestPartInfoB>() {
+            None => false,
+            Some(other) => self == other,
+        }
     }
 }
 
@@ -83,5 +97,23 @@ fn test_deserialize_part_info() -> Result<()> {
     assert_eq!(test_part_a.field_a, String::from("123"));
     assert_eq!(test_part_a.field_b, 456);
 
+    Ok(())
+}
+
+#[test]
+fn test_partial_equals_part_info() -> Result<()> {
+    let info_a: Box<dyn PartInfo> = Box::new(TestPartInfoA {
+        field_a: 123,
+        field_b: String::from("456"),
+    });
+
+    let info_b: Box<dyn PartInfo> = Box::new(TestPartInfoB {
+        field_a: String::from("123"),
+        field_b: 456,
+    });
+
+    assert_ne!(&info_a, &info_b);
+    assert_eq!(&info_a, &info_a);
+    assert_eq!(&info_b, &info_b);
     Ok(())
 }

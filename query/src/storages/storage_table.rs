@@ -24,7 +24,7 @@ use common_meta_types::MetaId;
 use common_meta_types::TableInfo;
 use common_planners::Expression;
 use common_planners::Extras;
-use common_planners::PartitionsInfo;
+use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
@@ -73,7 +73,7 @@ pub trait Table: Sync + Send {
         &self,
         _ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, PartitionsInfo)>;
+    ) -> Result<(Statistics, Partitions)>;
 
     fn table_args(&self) -> Option<Vec<Expression>> {
         None

@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_planners::Extras;
-use common_planners::PartitionsInfo;
+use common_planners::Partitions;
 use common_planners::Statistics;
 
 use crate::sessions::QueryContext;
@@ -33,7 +33,7 @@ impl FuseTable {
         &self,
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, PartitionsInfo)> {
+    ) -> Result<(Statistics, Partitions)> {
         let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
         match snapshot {
             Some(snapshot) => {
@@ -71,7 +71,7 @@ impl FuseTable {
     pub fn to_partitions(
         blocks_metas: &[BlockMeta], // TODO is &[&BlockMeta] enough?
         push_downs: Option<Extras>,
-    ) -> (Statistics, PartitionsInfo) {
+    ) -> (Statistics, Partitions) {
         let is_exact = match &push_downs {
             // We don't have limit push down in parquet reader
             Some(extra) => extra.filters.is_empty(),
@@ -81,7 +81,7 @@ impl FuseTable {
         let proj_cols =
             push_downs.and_then(|extras| extras.projection.map(HashSet::<usize>::from_iter));
         blocks_metas.iter().fold(
-            (Statistics::default(), PartitionsInfo::default()),
+            (Statistics::default(), Partitions::default()),
             |(mut stats, mut parts), block_meta| {
                 let location = block_meta.location.path.clone();
                 let file_size = block_meta.file_size;

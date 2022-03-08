@@ -27,7 +27,7 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::Extras;
-use common_planners::PartitionsInfo;
+use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
@@ -104,7 +104,7 @@ impl Table for TracingTable {
         &self,
         _ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, PartitionsInfo)> {
+    ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![]))
     }
 

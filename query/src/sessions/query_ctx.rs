@@ -32,7 +32,7 @@ use common_meta_types::TableInfo;
 use common_meta_types::UserInfo;
 use common_planners::Expression;
 use common_planners::PartInfoPtr;
-use common_planners::PartitionsInfo;
+use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_planners::S3ExternalTableInfo;
@@ -150,7 +150,7 @@ impl QueryContext {
 
     // Steal n partitions from the partition pool by the pipeline worker.
     // This also can steal the partitions from distributed node.
-    pub fn try_get_partitions(&self, num: u64) -> Result<PartitionsInfo> {
+    pub fn try_get_partitions(&self, num: u64) -> Result<Partitions> {
         let mut partitions = vec![];
         for _ in 0..num {
             match self.partition_queue.write().pop_back() {
@@ -164,7 +164,7 @@ impl QueryContext {
     }
 
     // Update the context partition pool from the pipeline builder.
-    pub fn try_set_partitions(&self, partitions: PartitionsInfo) -> Result<()> {
+    pub fn try_set_partitions(&self, partitions: Partitions) -> Result<()> {
         for part in partitions {
             self.partition_queue.write().push_back(part);
         }
