@@ -18,12 +18,14 @@ common-exception = { path = "../exception" }
 common-infallible = { path = "../infallible" }
 common-io = { path = "../io" }
 
+
 # Github dependencies
 
 # Crates.io dependencies
 ahash = "0.7.6"
 comfy-table = "5.0.1"
 regex = "1.5.4"
+smallvec = "1.8.0"
 
 [dev-dependencies]
 pretty_assertions = "1.1.0"
