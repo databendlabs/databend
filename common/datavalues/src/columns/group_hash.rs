@@ -89,7 +89,7 @@ impl Series {
      */
     pub fn serialize(
         column: &ColumnRef,
-        vec: &mut Vec<Vec<u8>>,
+        vec: &mut Vec<SmallVu8>,
         nulls: Option<Bitmap>,
     ) -> Result<()> {
         let column = column.convert_full_column();
@@ -133,7 +133,7 @@ pub trait GroupHash: Debug {
         )))
     }
 
-    fn serialize(&self, _vec: &mut Vec<Vec<u8>>, _nulls: Option<Bitmap>) -> Result<()> {
+    fn serialize(&self, _vec: &mut Vec<SmallVu8>, _nulls: Option<Bitmap>) -> Result<()> {
         Err(ErrorCode::BadDataValueType(format!(
             "Unsupported apply fn serialize operation for {:?}",
             self,
@@ -189,12 +189,12 @@ where
         Ok(())
     }
 
-    fn serialize(&self, vec: &mut Vec<Vec<u8>>, nulls: Option<Bitmap>) -> Result<()> {
+    fn serialize(&self, vec: &mut Vec<SmallVu8>, nulls: Option<Bitmap>) -> Result<()> {
         debug_assert_eq!(vec.len(), self.len());
 
         match nulls {
             Some(bitmap) => {
-                for ((value, valid), vec) in self.iter().zip(bitmap.iter()).zip(vec.iter_mut()) {
+                for ((value, valid), vec) in self.iter().zip(bitmap.iter()).zip(vec) {
                     BinaryWrite::write_scalar(vec, &valid)?;
                     if valid {
                         BinaryWrite::write_scalar(vec, value)?;
@@ -202,7 +202,7 @@ where
                 }
             }
             _ => {
-                for (value, vec) in self.iter().zip(vec.iter_mut()) {
+                for (value, vec) in self.iter().zip(vec) {
                     BinaryWrite::write_scalar(vec, value)?;
                 }
             }
@@ -247,12 +247,12 @@ impl GroupHash for BooleanColumn {
         Ok(())
     }
 
-    fn serialize(&self, vec: &mut Vec<Vec<u8>>, nulls: Option<Bitmap>) -> Result<()> {
+    fn serialize(&self, vec: &mut Vec<SmallVu8>, nulls: Option<Bitmap>) -> Result<()> {
         assert_eq!(vec.len(), self.len());
 
         match nulls {
             Some(bitmap) => {
-                for ((value, valid), vec) in self.iter().zip(bitmap.iter()).zip(vec.iter_mut()) {
+                for ((value, valid), vec) in self.iter().zip(bitmap.iter()).zip(vec) {
                     BinaryWrite::write_scalar(vec, &valid)?;
                     if valid {
                         BinaryWrite::write_scalar(vec, &value)?;
@@ -260,7 +260,7 @@ impl GroupHash for BooleanColumn {
                 }
             }
             None => {
-                for (value, vec) in self.iter().zip(vec.iter_mut()) {
+                for (value, vec) in self.iter().zip(vec) {
                     BinaryWrite::write_scalar(vec, &value)?;
                 }
             }
@@ -271,12 +271,12 @@ impl GroupHash for BooleanColumn {
 }
 
 impl GroupHash for StringColumn {
-    fn serialize(&self, vec: &mut Vec<Vec<u8>>, nulls: Option<Bitmap>) -> Result<()> {
+    fn serialize(&self, vec: &mut Vec<SmallVu8>, nulls: Option<Bitmap>) -> Result<()> {
         assert_eq!(vec.len(), self.len());
 
         match nulls {
             Some(bitmap) => {
-                for ((value, valid), vec) in self.iter().zip(bitmap.iter()).zip(vec.iter_mut()) {
+                for ((value, valid), vec) in self.iter().zip(bitmap.iter()).zip(vec) {
                     BinaryWrite::write_scalar(vec, &valid)?;
                     if valid {
                         BinaryWrite::write_binary(vec, value)?;
@@ -284,7 +284,7 @@ impl GroupHash for StringColumn {
                 }
             }
             None => {
-                for (value, vec) in self.iter().zip(vec.iter_mut()) {
+                for (value, vec) in self.iter().zip(vec) {
                     BinaryWrite::write_binary(vec, value)?;
                 }
             }

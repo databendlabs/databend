@@ -306,7 +306,7 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
     }
 
     #[inline(always)]
-    fn entity(&mut self, keys: &Vec<u8>, inserted: &mut bool) -> *mut Self::Entity {
+    fn entity(&mut self, keys: &SmallVu8, inserted: &mut bool) -> *mut Self::Entity {
         let mut keys_ref = KeysRef::create(keys.as_ptr() as usize, keys.len());
         let state_entity = self.data_state_map.insert_key(&keys_ref, inserted);
 
