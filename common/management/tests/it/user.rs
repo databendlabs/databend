@@ -58,6 +58,32 @@ fn format_user_key(username: &str, hostname: &str) -> String {
     format!("'{}'@'{}'", username, hostname)
 }
 
+fn escape_for_key(key: &str) -> String {
+    let mut new_key = Vec::with_capacity(key.len());
+
+    fn hex(num: u8) -> u8 {
+        match num {
+            0..=9 => b'0' + num,
+            10..=15 => b'a' + (num - 10),
+            unreachable => unreachable!("Unreachable branch num = {}", unreachable),
+        }
+    }
+
+    for char in key.as_bytes() {
+        match char {
+            b'0'..=b'9' => new_key.push(*char),
+            b'_' | b'a'..=b'z' | b'A'..=b'Z' => new_key.push(*char),
+            _other => {
+                new_key.push(b'%');
+                new_key.push(hex(*char / 16));
+                new_key.push(hex(*char % 16));
+            }
+        }
+    }
+
+    String::from_utf8(new_key).unwrap()
+}
+
 fn default_test_auth_info() -> AuthInfo {
     AuthInfo::Password {
         hash_value: Vec::from("test_password"),
@@ -85,7 +111,7 @@ mod add {
 
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))
         );
         let test_seq = MatchSeq::Exact(0);
 
@@ -189,7 +215,7 @@ mod get {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))
         );
 
         let user_info = UserInfo::new(
@@ -223,7 +249,7 @@ mod get {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))
         );
 
         let user_info = UserInfo::new(
@@ -252,7 +278,7 @@ mod get {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))
         );
 
         let mut kv = MockKV::new();
@@ -277,7 +303,7 @@ mod get {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))
         );
 
         let mut kv = MockKV::new();
@@ -306,7 +332,7 @@ mod get {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))
         );
 
         let mut kv = MockKV::new();
@@ -423,7 +449,7 @@ mod drop {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user, test_hostname)
+            escape_for_key(&format_user_key(test_user, test_hostname))
         );
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVAction::new(
@@ -449,7 +475,7 @@ mod drop {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user, test_hostname)
+            escape_for_key(&format_user_key(test_user, test_hostname))
         );
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVAction::new(
@@ -504,7 +530,7 @@ mod update {
 
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))
         );
         let test_seq = None;
 
@@ -563,7 +589,7 @@ mod update {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))
         );
         let test_seq = None;
 
@@ -597,7 +623,7 @@ mod update {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))
         );
         let test_seq = None;
 
@@ -657,7 +683,7 @@ mod set_user_privileges {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))
         );
         let test_seq = None;
 
