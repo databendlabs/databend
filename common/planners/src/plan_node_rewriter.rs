@@ -28,6 +28,7 @@ use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
+use crate::CallPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateRolePlan;
@@ -125,6 +126,9 @@ pub trait PlanRewriter: Sized {
 
             // Copy.
             PlanNode::Copy(plan) => self.rewrite_copy(plan),
+
+            // Call.
+            PlanNode::Call(plan) => self.rewrite_call(plan),
 
             // Show.
             PlanNode::Show(plan) => self.rewrite_show(plan),
@@ -374,6 +378,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_copy(&mut self, plan: &CopyPlan) -> Result<PlanNode> {
         Ok(PlanNode::Copy(plan.clone()))
+    }
+
+    fn rewrite_call(&mut self, plan: &CallPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Call(plan.clone()))
     }
 
     fn rewrite_show_create_table(&mut self, plan: &ShowCreateTablePlan) -> Result<PlanNode> {

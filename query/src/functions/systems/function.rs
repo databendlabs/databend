@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod parser_admin;
-mod parser_call;
-mod parser_copy;
-mod parser_database;
-mod parser_optimize;
-mod parser_show;
-mod parser_table;
-mod parser_udf;
-mod parser_use;
-mod parser_user;
+use std::sync::Arc;
+
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchema;
+use common_exception::Result;
+
+use crate::sessions::QueryContext;
+
+#[async_trait::async_trait]
+pub trait Function: Sync + Send {
+    fn name(&self) -> &str;
+
+    async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock>;
+
+    fn schema(&self) -> Arc<DataSchema>;
+}
