@@ -54,7 +54,7 @@ where F: Fn(&Expression) -> Result<()>
     }
 }
 
-fn validate_function_arg(
+pub fn validate_function_arg(
     name: &str,
     args_len: usize,
     variadic_arguments: Option<(usize, usize)>,
