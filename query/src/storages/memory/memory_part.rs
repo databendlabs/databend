@@ -27,7 +27,7 @@ pub struct MemoryPartInfo {
     pub part_end: usize,
 }
 
-#[typetag::serde(name = "numbers")]
+#[typetag::serde(name = "memory")]
 impl PartInfo for MemoryPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
