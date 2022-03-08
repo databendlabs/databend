@@ -185,7 +185,7 @@ impl HashMethodSerializer {
     }
 }
 impl HashMethod for HashMethodSerializer {
-    type HashKey = Vec<u8>;
+    type HashKey = SmallVu8;
 
     fn name(&self) -> String {
         "Serializer".to_string()
@@ -194,19 +194,21 @@ impl HashMethod for HashMethodSerializer {
     fn build_keys(&self, group_columns: &[&ColumnRef], rows: usize) -> Result<Vec<Self::HashKey>> {
         let mut group_keys = Vec::with_capacity(rows);
         {
-            let mut group_key_len = 0;
-            for col in group_columns {
-                let typ = col.data_type();
-                let typ_id = typ.data_type_id();
-                if typ_id.is_integer() {
-                    group_key_len += typ_id.numeric_byte_size()?;
-                } else {
-                    group_key_len += 4;
-                }
-            }
+            // TODO: Optimize the SmallVec size by group_key_len
+
+            // let mut group_key_len = 0;
+            // for col in group_columns {
+            //     let typ = col.data_type();
+            //     let typ_id = typ.data_type_id();
+            //     if typ_id.is_integer() {
+            //         group_key_len += typ_id.numeric_byte_size()?;
+            //     } else {
+            //         group_key_len += 4;
+            //     }
+            // }
 
             for _i in 0..rows {
-                group_keys.push(Vec::with_capacity(group_key_len));
+                group_keys.push(SmallVu8::new());
             }
 
             for col in group_columns {

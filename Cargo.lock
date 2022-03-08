@@ -1342,6 +1342,7 @@ dependencies = [
  "common-io",
  "pretty_assertions",
  "regex",
+ "smallvec",
 ]
 
 [[package]]
@@ -1368,6 +1369,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "smallvec",
  "typetag",
 ]
 
