@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::escape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::KVApi;
@@ -45,38 +46,8 @@ impl StageMgr {
 
         Ok(StageMgr {
             kv_api,
-            stage_prefix: format!(
-                "{}/{}",
-                USER_STAGE_API_KEY_PREFIX,
-                Self::escape_for_key(tenant)?
-            ),
+            stage_prefix: format!("{}/{}", USER_STAGE_API_KEY_PREFIX, escape_for_key(tenant)?),
         })
-    }
-
-    fn escape_for_key(key: &str) -> Result<String> {
-        let mut new_key = Vec::with_capacity(key.len());
-
-        fn hex(num: u8) -> u8 {
-            match num {
-                0..=9 => b'0' + num,
-                10..=15 => b'a' + (num - 10),
-                unreachable => unreachable!("Unreachable branch num = {}", unreachable),
-            }
-        }
-
-        for char in key.as_bytes() {
-            match char {
-                b'0'..=b'9' => new_key.push(*char),
-                b'_' | b'a'..=b'z' | b'A'..=b'Z' => new_key.push(*char),
-                _other => {
-                    new_key.push(b'%');
-                    new_key.push(hex(*char / 16));
-                    new_key.push(hex(*char % 16));
-                }
-            }
-        }
-
-        Ok(String::from_utf8(new_key)?)
     }
 }
 
@@ -88,7 +59,7 @@ impl StageApi for StageMgr {
         let key = format!(
             "{}/{}",
             self.stage_prefix,
-            Self::escape_for_key(&info.stage_name)?
+            escape_for_key(&info.stage_name)?
         );
         let upsert_info = self
             .kv_api
@@ -106,7 +77,7 @@ impl StageApi for StageMgr {
     }
 
     async fn get_stage(&self, name: &str, seq: Option<u64>) -> Result<SeqV<UserStageInfo>> {
-        let key = format!("{}/{}", self.stage_prefix, Self::escape_for_key(name)?);
+        let key = format!("{}/{}", self.stage_prefix, escape_for_key(name)?);
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
@@ -131,7 +102,7 @@ impl StageApi for StageMgr {
     }
 
     async fn drop_stage(&self, name: &str, seq: Option<u64>) -> Result<()> {
-        let key = format!("{}/{}", self.stage_prefix, Self::escape_for_key(name)?);
+        let key = format!("{}/{}", self.stage_prefix, escape_for_key(name)?);
         let kv_api = self.kv_api.clone();
         let upsert_kv = async move {
             kv_api

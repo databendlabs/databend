@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::escape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
@@ -49,7 +50,7 @@ impl UserMgr {
 
         Ok(UserMgr {
             kv_api,
-            user_prefix: format!("{}/{}", USER_API_KEY_PREFIX, Self::escape_for_key(tenant)?),
+            user_prefix: format!("{}/{}", USER_API_KEY_PREFIX, escape_for_key(tenant)?),
         })
     }
 
@@ -59,7 +60,7 @@ impl UserMgr {
         seq: Option<u64>,
     ) -> common_exception::Result<u64> {
         let user_key = format_user_key(&user_info.name, &user_info.hostname);
-        let key = format!("{}/{}", self.user_prefix, Self::escape_for_key(&user_key)?);
+        let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let value = serde_json::to_vec(&user_info)?;
 
         let match_seq = match seq {
@@ -84,32 +85,6 @@ impl UserMgr {
             ))),
         }
     }
-
-    fn escape_for_key(key: &str) -> Result<String> {
-        let mut new_key = Vec::with_capacity(key.len());
-
-        fn hex(num: u8) -> u8 {
-            match num {
-                0..=9 => b'0' + num,
-                10..=15 => b'a' + (num - 10),
-                unreachable => unreachable!("Unreachable branch num = {}", unreachable),
-            }
-        }
-
-        for char in key.as_bytes() {
-            match char {
-                b'0'..=b'9' => new_key.push(*char),
-                b'_' | b'a'..=b'z' | b'A'..=b'Z' => new_key.push(*char),
-                _other => {
-                    new_key.push(b'%');
-                    new_key.push(hex(*char / 16));
-                    new_key.push(hex(*char % 16));
-                }
-            }
-        }
-
-        Ok(String::from_utf8(new_key)?)
-    }
 }
 
 #[async_trait::async_trait]
@@ -117,7 +92,7 @@ impl UserApi for UserMgr {
     async fn add_user(&self, user_info: UserInfo) -> common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
         let user_key = format_user_key(&user_info.name, &user_info.hostname);
-        let key = format!("{}/{}", self.user_prefix, Self::escape_for_key(&user_key)?);
+        let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let value = serde_json::to_vec(&user_info)?;
 
         let kv_api = self.kv_api.clone();
@@ -144,7 +119,7 @@ impl UserApi for UserMgr {
         seq: Option<u64>,
     ) -> Result<SeqV<UserInfo>> {
         let user_key = format_user_key(&username, &hostname);
-        let key = format!("{}/{}", self.user_prefix, Self::escape_for_key(&user_key)?);
+        let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value =
             res.ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", user_key)))?;
@@ -184,7 +159,7 @@ impl UserApi for UserMgr {
         new_user_info.grants = user_info.grants;
 
         let user_key = format_user_key(&new_user_info.name, &new_user_info.hostname);
-        let key = format!("{}/{}", self.user_prefix, Self::escape_for_key(&user_key)?);
+        let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let value = serde_json::to_vec(&new_user_info)?;
 
         let match_seq = match seq {
@@ -244,7 +219,7 @@ impl UserApi for UserMgr {
 
     async fn drop_user(&self, username: String, hostname: String, seq: Option<u64>) -> Result<()> {
         let user_key = format_user_key(&username, &hostname);
-        let key = format!("{}/{}", self.user_prefix, Self::escape_for_key(&user_key)?);
+        let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
         let res = self
             .kv_api
             .upsert_kv(UpsertKVAction::new(
