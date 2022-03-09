@@ -126,11 +126,9 @@ impl SessionManager {
     }
 
     pub async fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
-        let total_sessions = {
-            let sessions = self.active_sessions.read().await;
-            sessions.len()
-        };
-        match total_sessions == self.max_sessions {
+        let mut sessions = self.active_sessions.write().await;
+
+        match sessions.len() == self.max_sessions {
             true => Err(ErrorCode::TooManyUserConnections(
                 "The current accept connection has exceeded mysql_handler_thread_num config",
             )),
@@ -149,10 +147,8 @@ impl SessionManager {
                     &self.conf.query.cluster_id,
                 );
 
-                {
-                    let mut sessions = self.active_sessions.write().await;
-                    sessions.insert(session.get_id(), session.clone());
-                }
+                sessions.insert(session.get_id(), session.clone());
+
                 Ok(SessionRef::create(session))
             }
         }
