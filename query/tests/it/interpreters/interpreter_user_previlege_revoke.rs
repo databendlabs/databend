@@ -65,7 +65,7 @@ async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
     let tenant = ctx.get_tenant().to_string();
 
-    let mut role_info = RoleInfo::new("role1".to_string(), "%".to_string());
+    let mut role_info = RoleInfo::new("role1".to_string());
     role_info.grants.grant_privileges(
         "role1",
         "%",
@@ -86,7 +86,7 @@ async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
     while let Some(_block) = stream.next().await {}
 
     let role = user_mgr
-        .get_role(&tenant, &RoleIdentity::parse("role1"))
+        .get_role(&tenant, &RoleIdentity::new("role1".to_string()))
         .await?;
     assert!(!role
         .grants
