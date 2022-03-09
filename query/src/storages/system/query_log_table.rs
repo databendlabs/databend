@@ -74,9 +74,12 @@ impl QueryLogTable {
             // Stats.
             DataField::new("written_rows", u64::to_data_type()),
             DataField::new("written_bytes", u64::to_data_type()),
+            DataField::new("written_io_bytes", u64::to_data_type()),
+            DataField::new("written_io_bytes_cost_ms", u64::to_data_type()),
             DataField::new("scan_rows", u64::to_data_type()),
             DataField::new("scan_bytes", u64::to_data_type()),
-            DataField::new("scan_byte_cost_ms", u64::to_data_type()),
+            DataField::new("scan_io_bytes", u64::to_data_type()),
+            DataField::new("scan_bytes_cost_ms", u64::to_data_type()),
             DataField::new("scan_partitions", u64::to_data_type()),
             DataField::new("total_partitions", u64::to_data_type()),
             DataField::new("result_rows", u64::to_data_type()),

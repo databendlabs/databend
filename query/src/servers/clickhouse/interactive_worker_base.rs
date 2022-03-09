@@ -146,8 +146,8 @@ impl InteractiveWorkerBase {
                 let _ = interval_stream.next().await;
                 let cur_progress_values = progress_ctx.get_scan_progress_value();
                 let diff_progress_values = ProgressValues {
-                    read_rows: cur_progress_values.read_rows - prev_progress_values.read_rows,
-                    read_bytes: cur_progress_values.read_bytes - prev_progress_values.read_bytes,
+                    rows: cur_progress_values.rows - prev_progress_values.rows,
+                    bytes: cur_progress_values.bytes - prev_progress_values.bytes,
                 };
                 prev_progress_values = cur_progress_values;
                 progress_tx

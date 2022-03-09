@@ -18,14 +18,11 @@ use common_exception::Result;
 #[test]
 fn test_progress() -> Result<()> {
     let progress = Progress::create();
-    let values = ProgressValues {
-        read_rows: 2,
-        read_bytes: 10,
-    };
+    let values = ProgressValues { rows: 2, bytes: 10 };
 
     progress.incr(&values);
 
-    assert_eq!(2, progress.get_values().read_rows);
-    assert_eq!(10, progress.get_values().read_bytes);
+    assert_eq!(2, progress.get_values().rows);
+    assert_eq!(10, progress.get_values().bytes);
     Ok(())
 }
