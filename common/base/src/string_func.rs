@@ -37,7 +37,7 @@ pub fn escape_for_key(key: &str) -> Result<String, FromUtf8Error> {
         }
     }
 
-    Ok(String::from_utf8(new_key)?)
+    String::from_utf8(new_key)
 }
 
 pub fn unescape_for_key(key: &str) -> Result<String, FromUtf8Error> {
@@ -69,5 +69,5 @@ pub fn unescape_for_key(key: &str) -> Result<String, FromUtf8Error> {
         }
     }
 
-    Ok(String::from_utf8(new_key)?)
+    String::from_utf8(new_key)
 }
