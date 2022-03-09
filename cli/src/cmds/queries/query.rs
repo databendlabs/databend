@@ -181,8 +181,8 @@ async fn query_writer(
                 writer.write_ok(
                     format!(
                         "read rows: {}, read bytes: {}, rows/sec: {} (rows/sec), bytes/sec: {} ({}/sec), time: {} sec",
-                        stat.read_rows.to_formatted_string(&Locale::en),
-                        byte_unit::Byte::from_bytes(stat.read_bytes as u128)
+                        stat.rows.to_formatted_string(&Locale::en),
+                        byte_unit::Byte::from_bytes(stat.bytes as u128)
                             .get_appropriate_unit(false),
                         (stat.rows as f64 / time).as_u128().to_formatted_string(&Locale::en),
                         byte_per_sec.get_value(),
