@@ -180,7 +180,7 @@ impl<'a> DfParser<'a> {
         Ok(PrincipalIdentity::user(name, host))
     }
 
-    /// A principal can be an user, the formats are same: 'name'@'host',
+    /// A user principal, the formats are same: 'name'@'host',
     /// the host part can be omitted, take '%' as default.
     fn parse_principal_name_and_host(&mut self) -> Result<(String, String), ParserError> {
         let name = self.parser.parse_literal_string()?;

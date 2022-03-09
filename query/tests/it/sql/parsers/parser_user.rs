@@ -14,12 +14,15 @@
 
 use common_exception::Result;
 use common_meta_types::PrincipalIdentity;
+use common_meta_types::RoleIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use databend_query::sql::statements::DfAlterUser;
 use databend_query::sql::statements::DfAuthOption;
+use databend_query::sql::statements::DfCreateRole;
 use databend_query::sql::statements::DfCreateUser;
+use databend_query::sql::statements::DfDropRole;
 use databend_query::sql::statements::DfDropUser;
 use databend_query::sql::statements::DfGrantObject;
 use databend_query::sql::statements::DfGrantPrivilegeStatement;
@@ -443,6 +446,56 @@ fn revoke_privilege_test() -> Result<()> {
     expect_parse_err(
         "REVOKE SELECT ON * 'test'@'localhost'",
         String::from("sql parser error: Expected keyword FROM, found: 'test'"),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn create_role_test() -> Result<()> {
+    expect_parse_ok(
+        "CREATE ROLE 'test'",
+        DfStatement::CreateRole(DfCreateRole {
+            if_not_exists: false,
+            role_identity: RoleIdentity {
+                name: String::from("test"),
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE ROLE IF NOT EXISTS 'test'",
+        DfStatement::CreateRole(DfCreateRole {
+            if_not_exists: true,
+            role_identity: RoleIdentity {
+                name: String::from("test"),
+            },
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn drop_role_test() -> Result<()> {
+    expect_parse_ok(
+        "DROP ROLE 'test'",
+        DfStatement::DropRole(DfDropRole {
+            if_exists: false,
+            role_identity: RoleIdentity {
+                name: String::from("test"),
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP ROLE IF EXISTS 'test'",
+        DfStatement::DropRole(DfDropRole {
+            if_exists: true,
+            role_identity: RoleIdentity {
+                name: String::from("test"),
+            },
+        }),
     )?;
 
     Ok(())
