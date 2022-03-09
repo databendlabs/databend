@@ -23,7 +23,7 @@ example:
 
 ```
 {
-   "sql": "select * from numbers(10)"
+   "sql": "select * from numbers(10)"[
 }
 ```
 
@@ -52,7 +52,7 @@ example:
             "read_bytes":80,
             "total_rows_to_read":0
             },
-        "wall_time_ms": 10
+        "running_time_ms": 10.1
     },
     error: nil
 }
@@ -85,10 +85,10 @@ Field
 
 QueryStats
 
-| field        | type          | description          |
-|--------------|---------------|----------------------|
-| wall_time_ms | int           | query execution time |
-| progress     | QueryProgress | query progress       |
+| field           | type          | description                                                                                                      |
+|-----------------|---------------|------------------------------------------------------------------------------------------------------------------|
+| running_time_ms | float         | million secs elapsed since query begin to execute internally, stop timing when query Finished (state != Running) |
+| scan_progress   | QueryProgress | query scan progress                                                                                              |
 
 QueryProgress
 
@@ -96,7 +96,7 @@ QueryProgress
 |--------------------|------|
 | read_rows          | int  |
 | read_bytes         | int  |
-| total_rows_to_read | int  |
+
 
 QueryError
 
