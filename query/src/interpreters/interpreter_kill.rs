@@ -54,7 +54,7 @@ impl Interpreter for KillInterpreter {
             .await?;
 
         let id = &self.plan.id;
-        match self.ctx.get_session_by_id(id) {
+        match self.ctx.get_session_by_id(id).await {
             None => Err(ErrorCode::UnknownSession(format!(
                 "Not found session id {}",
                 id

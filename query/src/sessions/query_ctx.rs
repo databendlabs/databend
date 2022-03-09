@@ -295,11 +295,12 @@ impl QueryContext {
     }
 
     // Get one session by session id.
-    pub fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
+    pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
         self.shared
             .session
             .get_session_manager()
             .get_session_by_id(id)
+            .await
     }
 
     // Get all the processes list info.

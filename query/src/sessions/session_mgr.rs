@@ -191,8 +191,8 @@ impl SessionManager {
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
-        let sessions = futures::executor::block_on(self.active_sessions.read());
+    pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
+        let sessions = self.active_sessions.read().await;
         sessions
             .get(id)
             .map(|session| SessionRef::create(session.clone()))

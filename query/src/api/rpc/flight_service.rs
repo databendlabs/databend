@@ -151,7 +151,7 @@ impl FlightService for DatabendQueryFlightService {
             FlightAction::CancelAction(action) => {
                 // We only destroy when session is exist
                 let session_id = action.query_id.clone();
-                if let Some(session) = self.sessions.get_session_by_id(&session_id) {
+                if let Some(session) = self.sessions.get_session_by_id(&session_id).await {
                     // TODO: remove streams
                     session.force_kill_session();
                 }
