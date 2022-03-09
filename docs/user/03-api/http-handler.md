@@ -23,7 +23,7 @@ example:
 
 ```
 {
-   "sql": "select * from numbers(10)"[
+   "sql": "select * from numbers(10)"
 }
 ```
 
