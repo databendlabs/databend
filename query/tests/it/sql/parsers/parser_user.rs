@@ -375,9 +375,9 @@ fn grant_privilege_test() -> Result<()> {
     )?;
 
     expect_parse_ok(
-        "GRANT CREATE USER, CREATE ROLE ON * TO ROLE 'myrole'@'%'",
+        "GRANT CREATE USER, CREATE ROLE ON * TO ROLE 'myrole'",
         DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
-            principal: PrincipalIdentity::role("myrole".to_string(), "%".to_string()),
+            principal: PrincipalIdentity::role("myrole".to_string()),
             on: DfGrantObject::Database(None),
             priv_types: {
                 let mut privileges = UserPrivilegeSet::empty();
@@ -391,7 +391,7 @@ fn grant_privilege_test() -> Result<()> {
     expect_parse_ok(
         "GRANT CREATE USER ON * TO ROLE 'myrole'",
         DfStatement::GrantPrivilege(DfGrantPrivilegeStatement {
-            principal: PrincipalIdentity::role("myrole".to_string(), "%".to_string()),
+            principal: PrincipalIdentity::role("myrole".to_string()),
             on: DfGrantObject::Database(None),
             priv_types: {
                 let mut privileges = UserPrivilegeSet::empty();

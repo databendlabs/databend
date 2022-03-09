@@ -24,16 +24,14 @@ use crate::UserGrantSet;
 #[serde(default)]
 pub struct RoleInfo {
     pub name: String,
-    pub host: String,
 
     pub grants: UserGrantSet,
 }
 
 impl RoleInfo {
-    pub fn new(name: String, host: String) -> Self {
+    pub fn new(name: String) -> Self {
         Self {
             name,
-            host,
             grants: UserGrantSet::empty(),
         }
     }
@@ -41,7 +39,6 @@ impl RoleInfo {
     pub fn identity(&self) -> RoleIdentity {
         RoleIdentity {
             name: self.name.clone(),
-            host: self.host.clone(),
         }
     }
 }

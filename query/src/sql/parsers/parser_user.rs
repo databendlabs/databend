@@ -95,11 +95,10 @@ impl<'a> DfParser<'a> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let (name, host) = self.parse_principal_name_and_host()?;
-
+        let name = self.parser.parse_literal_string()?;
         let create = DfCreateRole {
             if_not_exists,
-            role_identity: RoleIdentity::new(name, host),
+            role_identity: RoleIdentity::new(name),
         };
         Ok(DfStatement::CreateRole(create))
     }
@@ -107,15 +106,16 @@ impl<'a> DfParser<'a> {
     // Drop role
     pub(crate) fn parse_drop_role(&mut self) -> Result<DfStatement, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let (name, host) = self.parse_principal_name_and_host()?;
+        let name = self.parser.parse_literal_string()?;
         let drop = DfDropRole {
             if_exists,
-            role_identity: RoleIdentity::new(name, host),
+            role_identity: RoleIdentity::new(name),
         };
         Ok(DfStatement::DropRole(drop))
     }
 
-    /// GRANT privs TO [ROLE|USER] 'name'@'host'
+    /// GRANT privs TO [USER] 'name'@'host'
+    /// GRANT privs TO ROLE 'name'
     pub(crate) fn parse_grant_privilege(&mut self) -> Result<DfStatement, ParserError> {
         let privileges = self.parse_privileges()?;
         if !self.parser.parse_keyword(Keyword::ON) {
@@ -171,8 +171,8 @@ impl<'a> DfParser<'a> {
 
     fn parse_principal_identity(&mut self) -> Result<PrincipalIdentity, ParserError> {
         if self.consume_token("ROLE") {
-            let (name, host) = self.parse_principal_name_and_host()?;
-            return Ok(PrincipalIdentity::role(name, host));
+            let name = self.parser.parse_literal_string()?;
+            return Ok(PrincipalIdentity::role(name));
         }
         // USER keyword can be omitted
         self.consume_token("USER");
@@ -180,7 +180,7 @@ impl<'a> DfParser<'a> {
         Ok(PrincipalIdentity::user(name, host))
     }
 
-    /// A principal can be an user or an role, the formats are same: 'name'@'host',
+    /// A principal can be an user, the formats are same: 'name'@'host',
     /// the host part can be omitted, take '%' as default.
     fn parse_principal_name_and_host(&mut self) -> Result<(String, String), ParserError> {
         let name = self.parser.parse_literal_string()?;
