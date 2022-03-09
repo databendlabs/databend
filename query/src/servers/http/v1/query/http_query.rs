@@ -79,7 +79,7 @@ pub struct ResponseInitialState {
 
 pub struct ResponseState {
     pub wall_time_ms: Option<f64>,
-    pub progress: Option<ProgressValues>,
+    pub scan_progress: Option<ProgressValues>,
     pub state: ExecuteStateName,
     pub error: Option<ErrorCode>,
 }
@@ -167,7 +167,7 @@ impl HttpQuery {
         let wall_time_ms = state.elapsed().map(|d| d.as_secs_f64() * 1000.0);
         ResponseState {
             wall_time_ms,
-            progress: state.get_progress(),
+            scan_progress: state.get_progress(),
             state: exe_state,
             error: err,
         }

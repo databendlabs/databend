@@ -71,7 +71,7 @@ impl QueryError {
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct QueryStats {
-    pub progress: Option<ProgressValues>,
+    pub scan_progress: Option<ProgressValues>,
     pub wall_time_ms: Option<f64>,
 }
 
@@ -101,7 +101,7 @@ impl QueryResponse {
         };
         let columns = r.initial_state.as_ref().and_then(|v| v.schema.clone());
         let stats = QueryStats {
-            progress: r.state.progress.clone(),
+            scan_progress: r.state.scan_progress.clone(),
             wall_time_ms: r.state.wall_time_ms,
         };
         QueryResponse {
