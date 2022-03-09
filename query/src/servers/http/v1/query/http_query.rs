@@ -78,7 +78,7 @@ pub struct ResponseInitialState {
 }
 
 pub struct ResponseState {
-    pub wall_time_ms: f64,
+    pub running_time_ms: f64,
     pub scan_progress: Option<ProgressValues>,
     pub state: ExecuteStateName,
     pub error: Option<ErrorCode>,
@@ -164,9 +164,8 @@ impl HttpQuery {
     async fn get_state(&self) -> ResponseState {
         let state = self.state.read().await;
         let (exe_state, err) = state.state.extract();
-        let wall_time_ms = state.elapsed().as_secs_f64() * 1000.0;
         ResponseState {
-            wall_time_ms,
+            running_time_ms: state.elapsed().as_secs_f64() * 1000.0,
             scan_progress: state.get_progress(),
             state: exe_state,
             error: err,
