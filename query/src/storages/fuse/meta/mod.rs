@@ -19,6 +19,7 @@ mod snapshot;
 
 pub use block::BlockLocation;
 pub use block::BlockMeta;
+pub use block::ColumnMeta;
 pub use segment::SegmentInfo;
 pub use snapshot::ColumnId;
 pub use snapshot::Location;

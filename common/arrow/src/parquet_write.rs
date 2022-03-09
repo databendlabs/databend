@@ -18,9 +18,11 @@ use arrow::array::Array;
 use arrow::chunk::Chunk;
 use arrow::datatypes::Schema;
 use arrow::error::Result;
-use arrow::io::parquet::write::FileWriter;
+use arrow::io::parquet::write::to_parquet_schema;
 use arrow::io::parquet::write::RowGroupIterator;
+use parquet2::write::FileWriter;
 use parquet2::write::WriteOptions;
+use parquet_format_async_temp::FileMetaData;
 
 // a simple wrapper for code reuse
 pub fn write_parquet_file<W: Write, A, I>(
@@ -28,19 +30,23 @@ pub fn write_parquet_file<W: Write, A, I>(
     row_groups: RowGroupIterator<A, I>,
     schema: Schema,
     options: WriteOptions,
-) -> Result<u64>
+) -> Result<(u64, FileMetaData)>
 where
     W: Write,
     A: AsRef<dyn Array> + 'static + Send + Sync,
     I: Iterator<Item = Result<Chunk<A>>>,
 {
-    let mut file_writer = FileWriter::try_new(writer, schema, options)?;
+    let parquet_schema = to_parquet_schema(&schema)?;
+
+    // Arrow2 should be honored
+    let created_by = Some("Arrow2 - Native Rust implementation of Arrow".to_string());
+    let mut file_writer = FileWriter::new(writer, parquet_schema, options, created_by);
 
     file_writer.start()?;
     for group in row_groups {
         let (group, len) = group?;
         file_writer.write(group, len)?;
     }
-    let (size, _) = file_writer.end(None)?;
-    Ok(size)
+    let (size, _writer, file_meta_data) = file_writer.end_ext(None)?;
+    Ok((size, file_meta_data))
 }
