@@ -80,7 +80,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.data.len(), 10);
     assert_eq!(result.state, ExecuteStateName::Succeeded, "{:?}", result);
     assert!(result.next_uri.is_none(), "{:?}", result);
-    assert!(result.stats.progress.is_some());
+    assert!(result.stats.scan_progress.is_some());
     assert!(result.schema.is_some());
     Ok(())
 }
@@ -93,7 +93,7 @@ async fn test_bad_sql() -> Result<()> {
     assert_eq!(result.data.len(), 0);
     assert!(result.next_uri.is_none());
     assert_eq!(result.state, ExecuteStateName::Failed);
-    assert!(result.stats.progress.is_none());
+    assert!(result.stats.scan_progress.is_none());
     assert!(result.schema.is_none());
     Ok(())
 }
@@ -111,7 +111,7 @@ async fn test_async() -> Result<()> {
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(result.data.len(), 0);
     assert_eq!(result.next_uri, Some(next_uri));
-    assert!(result.stats.progress.is_some());
+    assert!(result.stats.scan_progress.is_some());
     assert!(result.schema.is_some());
     assert_eq!(result.state, ExecuteStateName::Running,);
     sleep(Duration::from_millis(100)).await;
@@ -126,7 +126,7 @@ async fn test_async() -> Result<()> {
         assert_eq!(result.data.len(), 1, "{:?}", result);
         assert!(result.next_uri.is_none());
         assert!(result.schema.is_none());
-        assert!(result.stats.progress.is_some());
+        assert!(result.stats.scan_progress.is_some());
         assert_eq!(result.state, ExecuteStateName::Succeeded);
     }
 
@@ -138,7 +138,7 @@ async fn test_async() -> Result<()> {
     assert_eq!(result.data.len(), 0);
     assert!(result.next_uri.is_none());
     assert!(result.schema.is_none());
-    assert!(result.stats.progress.is_some());
+    assert!(result.stats.scan_progress.is_some());
     assert_eq!(result.state, ExecuteStateName::Succeeded);
 
     // get page not expected
@@ -227,7 +227,7 @@ async fn test_system_tables() -> Result<()> {
             "{}",
             error_message
         );
-        assert!(result.stats.progress.is_some());
+        assert!(result.stats.scan_progress.is_some());
         assert!(result.next_uri.is_none(), "{:?}", result);
         assert!(result.schema.is_some());
     }
@@ -256,7 +256,7 @@ async fn test_multi_page() -> Result<()> {
         let (status, result) = get_uri_checked(&ep, &next_uri).await?;
         assert_eq!(status, StatusCode::OK);
         assert!(result.error.is_none(), "{:?}", result.error);
-        assert!(result.stats.progress.is_some());
+        assert!(result.stats.scan_progress.is_some());
         if p == num_parts {
             assert_eq!(result.data.len(), 0);
             assert_eq!(result.next_uri, None);

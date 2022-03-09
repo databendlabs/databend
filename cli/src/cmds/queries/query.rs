@@ -298,12 +298,12 @@ async fn execute_query(
         );
     }
     if data.is_empty() {
-        Ok(("".to_string(), stats.progress))
+        Ok(("".to_string(), stats.scan_progress))
     } else {
         for row in data.as_ref() {
             table.add_row(row.iter().map(|elem| Cell::new(elem.to_string())));
         }
-        Ok((table.trim_fmt(), stats.progress))
+        Ok((table.trim_fmt(), stats.scan_progress))
     }
 }
 
