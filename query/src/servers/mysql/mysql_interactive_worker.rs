@@ -352,11 +352,11 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let seconds = instant.elapsed().as_nanos() as f64 / 1e9f64;
         format!(
             "Read {} rows, {} in {:.3} sec., {} rows/sec., {}/sec.",
-            progress.read_rows,
-            convert_byte_size(progress.read_bytes as f64),
+            progress.rows,
+            convert_byte_size(progress.bytes as f64),
             seconds,
-            convert_number_size((progress.read_rows as f64) / (seconds as f64)),
-            convert_byte_size((progress.read_bytes as f64) / (seconds as f64)),
+            convert_number_size((progress.rows as f64) / (seconds as f64)),
+            convert_byte_size((progress.bytes as f64) / (seconds as f64)),
         )
     }
 

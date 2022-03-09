@@ -174,19 +174,17 @@ async fn query_writer(
             writer.writeln(res.as_str());
             if let Some(stat) = stats {
                 let time = elapsed.as_millis() as f64 / 1000f64;
-                let byte_per_sec = byte_unit::Byte::from_unit(
-                    stat.read_bytes as f64 / time,
-                    byte_unit::ByteUnit::B,
-                )
-                .expect("cannot parse byte")
-                .get_appropriate_unit(false);
+                let byte_per_sec =
+                    byte_unit::Byte::from_unit(stat.bytes as f64 / time, byte_unit::ByteUnit::B)
+                        .expect("cannot parse byte")
+                        .get_appropriate_unit(false);
                 writer.write_ok(
                     format!(
                         "read rows: {}, read bytes: {}, rows/sec: {} (rows/sec), bytes/sec: {} ({}/sec), time: {} sec",
-                        stat.read_rows.to_formatted_string(&Locale::en),
-                        byte_unit::Byte::from_bytes(stat.read_bytes as u128)
+                        stat.rows.to_formatted_string(&Locale::en),
+                        byte_unit::Byte::from_bytes(stat.bytes as u128)
                             .get_appropriate_unit(false),
-                        (stat.read_rows as f64 / time).as_u128().to_formatted_string(&Locale::en),
+                        (stat.rows as f64 / time).as_u128().to_formatted_string(&Locale::en),
                         byte_per_sec.get_value(),
                         byte_per_sec.get_unit(), time
                     )

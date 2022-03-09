@@ -157,8 +157,8 @@ impl ProcessesTable {
         if scan_progress_opt.is_some() {
             let scan_progress = scan_progress_opt.as_ref().unwrap();
             (
-                Some(scan_progress.read_rows as u64),
-                Some(scan_progress.read_bytes as u64),
+                Some(scan_progress.rows as u64),
+                Some(scan_progress.bytes as u64),
             )
         } else {
             (None, None)
