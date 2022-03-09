@@ -26,9 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use num::traits::AsPrimitive;
 
-use super::utils::BooleanSimdImpl;
-use super::utils::PrimitiveSimdImpl;
-use super::utils::StringSearchImpl;
+use super::utils::*;
 use crate::scalars::assert_string;
 use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
@@ -200,19 +198,22 @@ pub trait ComparisonExpression: Sync + Send {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn>;
 }
 
+#[derive(Clone)]
 pub struct ComparisonScalarImpl<L: Scalar, R: Scalar, F> {
-    binary: ScalarBinaryExpression<L, R, bool, F>,
+    func: F,
+    _phantom: PhantomData<(L, R, F)>,
 }
 
 impl<L, R, F> ComparisonScalarImpl<L, R, F>
 where
     L: Scalar + Send + Sync + Clone,
     R: Scalar + Send + Sync + Clone,
-    F: ScalarBinaryFunction<L, R, bool> + Send + Sync + Clone + 'static,
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> bool  + Send + Sync + Clone,
 {
     pub fn new(func: F) -> Self {
         Self {
-            binary: ScalarBinaryExpression::new(func),
+            func,
+            _phantom: PhantomData,
         }
     }
 }
@@ -221,11 +222,10 @@ impl<L, R, F> ComparisonExpression for ComparisonScalarImpl<L, R, F>
 where
     L: Scalar + Send + Sync + Clone,
     R: Scalar + Send + Sync + Clone,
-    F: ScalarBinaryFunction<L, R, bool> + Send + Sync + Clone + 'static,
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> bool + Send + Sync + Clone, 
 {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
-        self.binary
-            .eval(l.column(), r.column(), &mut EvalContext::default())
+        scalar_binary_op::<L, R, bool, F>(l.column(), r.column(), self.func.clone(), &mut EvalContext::default())
     }
 }
 

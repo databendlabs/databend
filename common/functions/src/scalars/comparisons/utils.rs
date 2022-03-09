@@ -20,7 +20,9 @@ use common_arrow::arrow::compute::comparison::Simd8Lanes;
 use common_arrow::arrow::compute::comparison::Simd8PartialEq;
 use common_arrow::arrow::compute::comparison::Simd8PartialOrd;
 use common_datavalues::prelude::*;
+use common_exception::Result;
 
+use crate::scalars::EvalContext;
 pub trait PrimitiveSimdImpl {
     fn vector_vector<T>(lhs: &PrimitiveColumn<T>, rhs: &PrimitiveColumn<T>) -> BooleanColumn
     where
@@ -155,4 +157,149 @@ impl CommonBooleanImpl {
         let values = unary(lhs.values(), |x| op(x, rhs));
         BooleanColumn::from_arrow_data(values)
     }
+}
+
+pub fn scalar_binary_op<L: Scalar, R: Scalar, O: Scalar, F>(
+    l: &ColumnRef,
+    r: &ColumnRef,
+    f: F,
+    ctx: &mut EvalContext,
+) -> Result<<O as Scalar>::ColumnType>
+where
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O,
+{
+    debug_assert!(
+        l.len() == r.len(),
+        "Size of columns must match to apply binary expression"
+    );
+
+    let result = match (l.is_const(), r.is_const()) {
+        (false, true) => {
+            let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(l) };
+            let right = R::try_create_viewer(r)?;
+
+            let b = right.value_at(0);
+            let it = left.scalar_iter().map(|a| f(a, b, ctx));
+            <O as Scalar>::ColumnType::from_owned_iterator(it)
+        }
+
+        (false, false) => {
+            let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(l) };
+            let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
+
+            let it = left
+                .scalar_iter()
+                .zip(right.scalar_iter())
+                .map(|(a, b)| f(a, b, ctx));
+            <O as Scalar>::ColumnType::from_owned_iterator(it)
+        }
+
+        (true, false) => {
+            let left = L::try_create_viewer(l)?;
+            let a = left.value_at(0);
+
+            let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
+            let it = right.scalar_iter().map(|b| f(a, b, ctx));
+            <O as Scalar>::ColumnType::from_owned_iterator(it)
+        }
+
+        // True True ?
+        (true, true) => {
+            let left = L::try_create_viewer(l)?;
+            let right = R::try_create_viewer(r)?;
+
+            let it = left.iter().zip(right.iter()).map(|(a, b)| f(a, b, ctx));
+            <O as Scalar>::ColumnType::from_owned_iterator(it)
+        }
+    };
+
+    if let Some(error) = ctx.error.take() {
+        return Err(error);
+    }
+    Ok(result)
+}
+
+fn primitive_simd_op<T, F>(l: &ColumnRef, r: &ColumnRef) -> Result<BooleanColumn>
+where
+    T: PrimitiveType + Simd8,
+    T::Simd: Simd8PartialEq + Simd8PartialOrd,
+    F: PrimitiveSimdImpl,
+{
+    debug_assert!(
+        l.len() == r.len(),
+        "Size of columns must match to apply binary expression"
+    );
+
+    let res = match (l.is_const(), r.is_const()) {
+        (false, false) => {
+            let lhs: &PrimitiveColumn<T> = Series::check_get(&l)?;
+            let rhs: &PrimitiveColumn<T> = Series::check_get(&r)?;
+            F::vector_vector::<T>(lhs, rhs)
+        }
+        (false, true) => {
+            let lhs: &PrimitiveColumn<T> = Series::check_get(&l)?;
+            let rhs = T::try_create_viewer(&r)?;
+            let r = rhs.value_at(0).to_owned_scalar();
+            F::vector_const::<T>(lhs, r)
+        }
+        (true, false) => {
+            let lhs = T::try_create_viewer(&l)?;
+            let l = lhs.value_at(0).to_owned_scalar();
+
+            let rhs: &PrimitiveColumn<T> = Series::check_get(&r)?;
+            F::const_vector::<T>(l, rhs)
+        }
+        (true, true) => unreachable!(),
+    };
+    Ok(res)
+}
+
+fn boolean_simd_op<F: BooleanSimdImpl>(l: &ColumnRef, r: &ColumnRef) -> Result<BooleanColumn> {
+    debug_assert!(
+        l.len() == r.len(),
+        "Size of columns must match to apply binary expression"
+    );
+
+    let res = match (l.is_const(), r.is_const()) {
+        (false, false) => {
+            let lhs: &BooleanColumn = Series::check_get(l)?;
+            let rhs: &BooleanColumn = Series::check_get(r)?;
+            F::vector_vector(lhs, rhs)
+        }
+        (false, true) => {
+            let lhs: &BooleanColumn = Series::check_get(l)?;
+            let r = r.get_bool(0)?;
+            F::vector_const(lhs, r)
+        }
+        (true, false) => {
+            let l = l.get_bool(0)?;
+            let rhs: &BooleanColumn = Series::check_get(r)?;
+            F::const_vector(l, rhs)
+        }
+        (true, true) => unreachable!(),
+    };
+    Ok(res)
+}
+
+fn string_search_op<T: StringSearchImpl, F>(
+    l: &ColumnRef,
+    r: &ColumnRef,
+    f: F,
+) -> Result<BooleanColumn>
+where
+    F: Fn(bool) -> bool,
+{
+    let res = match r.is_const() {
+        true => {
+            let lhs: &StringColumn = Series::check_get(l)?;
+            let r = r.get_string(0)?;
+            T::vector_const(lhs, &r, f)
+        }
+        false => {
+            let lhs: &StringColumn = Series::check_get(l)?;
+            let rhs: &StringColumn = Series::check_get(r)?;
+            T::vector_vector(lhs, rhs, f)
+        }
+    };
+    Ok(res)
 }
