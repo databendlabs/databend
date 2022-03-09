@@ -15,6 +15,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::S3File;
@@ -111,7 +112,7 @@ impl CopyInterpreter {
     //  COPY should deal with the file one by one and do some error handler on the OnError strategy.
 
     #[tracing::instrument(level = "debug", name = "copy_one_file_to_table", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn copy_one_file_to_table(&self, file_name: Option<String>) -> Result<()> {
+    async fn copy_one_file_to_table(&self, file_name: Option<String>) -> Result<Vec<DataBlock>> {
         let ctx = self.ctx.clone();
         let settings = self.ctx.get_settings();
 
@@ -144,12 +145,7 @@ impl CopyInterpreter {
             .try_collect()
             .await?;
 
-        // Commit.
-        table
-            .commit_insertion(ctx.clone(), operations, false)
-            .await?;
-
-        Ok(())
+        Ok(operations)
     }
 }
 
@@ -186,9 +182,21 @@ impl Interpreter for CopyInterpreter {
 
         tracing::info!("copy file list:{:?}, pattern:{}", &files, pattern,);
 
+        let mut write_results = vec![];
         for file in files {
-            self.copy_one_file_to_table(Some(file)).await?;
+            let result = self.copy_one_file_to_table(Some(file)).await?;
+            write_results.extend_from_slice(result.as_slice());
         }
+
+        let table = self
+            .ctx
+            .get_table(&self.plan.db_name, &self.plan.tbl_name)
+            .await?;
+
+        // Commit.
+        table
+            .commit_insertion(self.ctx.clone(), write_results, false)
+            .await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
