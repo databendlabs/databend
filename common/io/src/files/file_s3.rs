@@ -88,7 +88,9 @@ impl S3File {
                 let mut objects = operator.objects(path);
                 while let Some(object) = objects.next().await {
                     let meta = object?.metadata().await?;
-                    let new_path = Path::new(path).join(meta.path());
+
+                    // TODO (xuanwo): the list result returns the abs path
+                    let new_path = Path::new("/").join(meta.path());
                     list.push(new_path.to_string_lossy().to_string());
                 }
             }
