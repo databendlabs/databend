@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::ErrorKind;
 use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
@@ -34,6 +33,7 @@ use crate::storages::fuse::io::HasTenantLabel;
 use crate::storages::fuse::io::Loader;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::SegmentInfo;
+use crate::storages::fuse::meta::SegmentInfoVersions;
 use crate::storages::fuse::meta::SnapshotVersions;
 use crate::storages::fuse::meta::TableSnapshot;
 
@@ -126,33 +126,6 @@ impl<'a> TableSnapshotReader<'a> {
 }
 
 #[async_trait::async_trait]
-impl<T> Loader<SegmentInfo> for T
-where T: BufReaderProvider + Sync
-{
-    async fn load(
-        &self,
-        key: &str,
-        length_hint: Option<u64>,
-        _version: u64,
-    ) -> Result<SegmentInfo> {
-        let mut reader = self.buf_reader(key, length_hint).await?;
-        let mut buffer = vec![];
-
-        use futures::AsyncReadExt;
-        reader.read_to_end(&mut buffer).await.map_err(|e| {
-            let msg = e.to_string();
-            if e.kind() == ErrorKind::NotFound {
-                ErrorCode::DalPathNotFound(msg)
-            } else {
-                ErrorCode::DalTransportError(msg)
-            }
-        })?;
-        let r = serde_json::from_slice(&buffer)?;
-        Ok(r)
-    }
-}
-
-#[async_trait::async_trait]
 impl<T> Loader<TableSnapshot> for T
 where T: BufReaderProvider + Sync
 {
@@ -164,7 +137,18 @@ where T: BufReaderProvider + Sync
     ) -> Result<TableSnapshot> {
         let version = SnapshotVersions::try_from(version)?;
         let reader = self.buf_reader(key, length_hint).await?;
-        version.vload(reader, key, length_hint).await
+        version.vload(reader).await
+    }
+}
+
+#[async_trait::async_trait]
+impl<T> Loader<SegmentInfo> for T
+where T: BufReaderProvider + Sync
+{
+    async fn load(&self, key: &str, length_hint: Option<u64>, version: u64) -> Result<SegmentInfo> {
+        let version = SegmentInfoVersions::try_from(version)?;
+        let reader = self.buf_reader(key, length_hint).await?;
+        version.vload(reader).await
     }
 }
 
