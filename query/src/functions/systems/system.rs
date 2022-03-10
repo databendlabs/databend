@@ -13,12 +13,37 @@
 // limitations under the License.
 
 use super::fuse_history::FuseHistoryFunction;
+use crate::functions::systems::warehouse_metadata::CreateWarehouseMetaFunction;
+use crate::functions::systems::warehouse_metadata::DropWarehouseMetaFunction;
+use crate::functions::systems::warehouse_metadata::GetWarehouseMetaFunction;
+use crate::functions::systems::warehouse_metadata::ListWarehouseMetaFunction;
+use crate::functions::systems::warehouse_metadata::UpdateWarehouseSizeFunction;
 use crate::functions::systems::FunctionFactory;
 
 pub struct SystemFunction;
 
 impl SystemFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("system$fuse_history", FuseHistoryFunction::desc())
+        factory.register("system$fuse_history", FuseHistoryFunction::desc());
+        factory.register(
+            "system$create_warehouse_meta",
+            CreateWarehouseMetaFunction::desc(),
+        );
+        factory.register(
+            "system$update_warehouse_meta_size",
+            UpdateWarehouseSizeFunction::desc(),
+        );
+        factory.register(
+            "system$get_warehouse_meta",
+            GetWarehouseMetaFunction::desc(),
+        );
+        factory.register(
+            "system$list_warehouse_meta",
+            ListWarehouseMetaFunction::desc(),
+        );
+        factory.register(
+            "system$drop_warehouse_meta",
+            DropWarehouseMetaFunction::desc(),
+        )
     }
 }

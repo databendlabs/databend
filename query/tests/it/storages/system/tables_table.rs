@@ -48,6 +48,7 @@ async fn test_tables_table() -> Result<()> {
         r"\| system   \| settings     \| SystemSettings     \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
         r"\| system   \| tables       \| SystemTables       \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
         r"\| system   \| tracing      \| SystemTracing      \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\| system   \| warehouses   \| SystemWarehouses   \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
         r"\| system   \| users        \| SystemUsers        \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
         r"\+----------\+--------------\+--------------------\+-------------------------------\+",
     ];

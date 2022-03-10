@@ -16,6 +16,7 @@ mod function;
 mod function_factory;
 mod fuse_history;
 mod system;
+mod warehouse_metadata;
 
 pub use function::Function;
 pub use function_factory::FunctionDescription;

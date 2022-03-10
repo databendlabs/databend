@@ -30,6 +30,7 @@ mod tables_table;
 mod tracing_table;
 mod tracing_table_stream;
 mod users_table;
+mod warehouses_table;
 
 pub use clusters_table::ClustersTable;
 pub use columns_table::ColumnsTable;
@@ -48,3 +49,4 @@ pub use tables_table::TablesTable;
 pub use tracing_table::TracingTable;
 pub use tracing_table_stream::TracingTableStream;
 pub use users_table::UsersTable;
+pub use warehouses_table::WarehousesTable;

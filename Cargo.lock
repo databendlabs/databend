@@ -1631,9 +1631,11 @@ dependencies = [
  "hex",
  "lazy_static",
  "maplit",
+ "nanoid",
  "once_cell",
  "openraft",
  "prost",
+ "regex",
  "serde",
  "serde_json",
  "sha1",
@@ -4223,6 +4225,15 @@ name = "naive-cityhash"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fce7b49e1e6d8aa67232ef1c4c936c0af58756eb2db6f65c40bacb39035e7f42"
+
+[[package]]
+name = "nanoid"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
+dependencies = [
+ "rand 0.8.5",
+]
 
 [[package]]
 name = "native-tls"
