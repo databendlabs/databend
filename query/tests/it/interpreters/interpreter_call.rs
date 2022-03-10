@@ -109,12 +109,12 @@ async fn test_call_warehouse_metadata_interpreter() -> Result<()> {
 
     // NumberArgumentsNotMatch
     {
-        let plan = PlanParser::parse(ctx.clone(), "call system$create_warehouse_meta()").await?;
+        let plan = PlanParser::parse(ctx.clone(), "call admin$create_warehouse_meta()").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `system$create_warehouse_meta` expect to have 3 arguments, but got 0.";
+        let expect = "Code: 1028, displayText = Function `admin$create_warehouse_meta` expect to have 3 arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
@@ -122,7 +122,7 @@ async fn test_call_warehouse_metadata_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
+            "call admin$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -140,24 +140,23 @@ async fn test_get_warehouse_metadata_interpreter() -> Result<()> {
 
     // NumberArgumentsNotMatch. Case 1
     {
-        let plan = PlanParser::parse(ctx.clone(), "call system$get_warehouse_meta()").await?;
+        let plan = PlanParser::parse(ctx.clone(), "call admin$get_warehouse_meta()").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `system$get_warehouse_meta` expect to have 2 arguments, but got 0.";
+        let expect = "Code: 1028, displayText = Function `admin$get_warehouse_meta` expect to have 2 arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
     // NumberArgumentsNotMatch. Case 2
     {
-        let plan =
-            PlanParser::parse(ctx.clone(), "call system$get_warehouse_meta(tenant1)").await?;
+        let plan = PlanParser::parse(ctx.clone(), "call admin$get_warehouse_meta(tenant1)").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `system$get_warehouse_meta` expect to have 2 arguments, but got 1.";
+        let expect = "Code: 1028, displayText = Function `admin$get_warehouse_meta` expect to have 2 arguments, but got 1.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
@@ -165,7 +164,7 @@ async fn test_get_warehouse_metadata_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$get_warehouse_meta('tenant1', '🐸🐸@@11')",
+            "call admin$get_warehouse_meta('tenant1', '🐸🐸@@11')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -181,7 +180,7 @@ async fn test_get_warehouse_metadata_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
+            "call admin$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -190,7 +189,7 @@ async fn test_get_warehouse_metadata_interpreter() -> Result<()> {
         assert_eq!(res.is_err(), false);
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$get_warehouse_meta('tenant1', '🐸🐸@@11')",
+            "call admin$get_warehouse_meta('tenant1', '🐸🐸@@11')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -208,19 +207,19 @@ async fn test_list_warehouse_metadata_interpreter() -> Result<()> {
 
     // NumberArgumentsNotMatch.
     {
-        let plan = PlanParser::parse(ctx.clone(), "call system$list_warehouse_meta()").await?;
+        let plan = PlanParser::parse(ctx.clone(), "call admin$list_warehouse_meta()").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `system$list_warehouse_meta` expect to have 1 arguments, but got 0.";
+        let expect = "Code: 1028, displayText = Function `admin$list_warehouse_meta` expect to have 1 arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
     // Ok
     {
         let plan =
-            PlanParser::parse(ctx.clone(), "call system$list_warehouse_meta('tenant1')").await?;
+            PlanParser::parse(ctx.clone(), "call admin$list_warehouse_meta('tenant1')").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
@@ -228,7 +227,7 @@ async fn test_list_warehouse_metadata_interpreter() -> Result<()> {
 
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
+            "call admin$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -238,7 +237,7 @@ async fn test_list_warehouse_metadata_interpreter() -> Result<()> {
 
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$create_warehouse_meta('tenant1', '🐸🐸@@1212', 'Small')",
+            "call admin$create_warehouse_meta('tenant1', '🐸🐸@@1212', 'Small')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -247,7 +246,7 @@ async fn test_list_warehouse_metadata_interpreter() -> Result<()> {
         assert_eq!(res.is_err(), false);
 
         let plan =
-            PlanParser::parse(ctx.clone(), "call system$list_warehouse_meta('tenant1')").await?;
+            PlanParser::parse(ctx.clone(), "call admin$list_warehouse_meta('tenant1')").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
@@ -264,12 +263,12 @@ async fn test_update_warehouse_metadata_size_interpreter() -> Result<()> {
     // NumberArgumentsNotMatch.
     {
         let plan =
-            PlanParser::parse(ctx.clone(), "call system$update_warehouse_meta_size()").await?;
+            PlanParser::parse(ctx.clone(), "call admin$update_warehouse_meta_size()").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `system$update_warehouse_meta_size` expect to have 3 arguments, but got 0.";
+        let expect = "Code: 1028, displayText = Function `admin$update_warehouse_meta_size` expect to have 3 arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
@@ -277,7 +276,7 @@ async fn test_update_warehouse_metadata_size_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$update_warehouse_meta_size('tenant1', '🐸🐸@@11', 'Small')",
+            "call admin$update_warehouse_meta_size('tenant1', '🐸🐸@@11', 'Small')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -292,7 +291,7 @@ async fn test_update_warehouse_metadata_size_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
+            "call admin$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -302,7 +301,7 @@ async fn test_update_warehouse_metadata_size_interpreter() -> Result<()> {
 
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$update_warehouse_meta_size('tenant1', '🐸🐸@@11', 'XXXLarge')",
+            "call admin$update_warehouse_meta_size('tenant1', '🐸🐸@@11', 'XXXLarge')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -320,12 +319,12 @@ async fn test_drop_warehouse_metadata_interpreter() -> Result<()> {
 
     // NumberArgumentsNotMatch.
     {
-        let plan = PlanParser::parse(ctx.clone(), "call system$drop_warehouse_meta()").await?;
+        let plan = PlanParser::parse(ctx.clone(), "call admin$drop_warehouse_meta()").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `system$drop_warehouse_meta` expect to have 2 arguments, but got 0.";
+        let expect = "Code: 1028, displayText = Function `admin$drop_warehouse_meta` expect to have 2 arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
@@ -333,7 +332,7 @@ async fn test_drop_warehouse_metadata_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$drop_warehouse_meta('tenant1', 'non-exists')",
+            "call admin$drop_warehouse_meta('tenant1', 'non-exists')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -346,7 +345,7 @@ async fn test_drop_warehouse_metadata_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
+            "call admin$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -356,7 +355,7 @@ async fn test_drop_warehouse_metadata_interpreter() -> Result<()> {
 
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$drop_warehouse_meta('tenant1',  '🐸🐸@@11')",
+            "call admin$drop_warehouse_meta('tenant1',  '🐸🐸@@11')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;

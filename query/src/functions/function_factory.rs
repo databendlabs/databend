@@ -19,10 +19,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
-use crate::functions::systems::Function;
+use crate::functions::admins::AdminFunction;
 use crate::functions::systems::SystemFunction;
+use crate::functions::Function;
 
-pub type Factory2Creator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send + Sync>;
+pub type Factory2Creator = Box<dyn Fn() -> Result<Box<dyn Function>> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct FunctionFeatures {
@@ -79,6 +80,7 @@ pub struct FunctionFactory {
 static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     let mut factory = FunctionFactory::create();
     SystemFunction::register(&mut factory);
+    AdminFunction::register(&mut factory);
     Arc::new(factory)
 });
 
@@ -115,7 +117,7 @@ impl FunctionFactory {
         let name = origin_name.to_lowercase();
         match self.descs.get(&name) {
             Some(desc) => {
-                let inner = (desc.function_creator)(origin_name)?;
+                let inner = (desc.function_creator)()?;
                 Ok(inner)
             }
             None => Err(ErrorCode::UnknownFunction(format!(
