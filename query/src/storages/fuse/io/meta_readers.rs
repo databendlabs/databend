@@ -156,7 +156,12 @@ where T: BufReaderProvider + Sync
 impl<T> Loader<FileMetaData> for T
 where T: BufReaderProvider + Sync
 {
-    async fn load(&self, key: &str, length_hint: Option<u64>, _version: u64) -> Result<FileMetaData> {
+    async fn load(
+        &self,
+        key: &str,
+        length_hint: Option<u64>,
+        _version: u64,
+    ) -> Result<FileMetaData> {
         let mut reader = self.buf_reader(key, length_hint).await?;
         let meta = read_metadata_async(&mut reader)
             .instrument(debug_span!("parquet_source_read_meta"))

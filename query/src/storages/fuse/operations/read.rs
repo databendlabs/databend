@@ -78,6 +78,7 @@ impl FuseTable {
                         table_schema,
                         projection,
                         fuse_part.file_size,
+                        0, // TODO format version
                         reader,
                     );
                     block_reader.read().await.map_err(|e| {

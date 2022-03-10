@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use crate::storages::fuse::meta::v0::ColumnMeta;
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::index::ColumnStatistics;
 
@@ -23,14 +24,11 @@ use crate::storages::index::ColumnStatistics;
 pub struct BlockMeta {
     /// format version
     pub format_version: u64,
-    /// Pointer of the data Block
     pub row_count: u64,
-    /// in memory size of the block
-    pub in_memory_size: u64,
-    /// size of the block in storage
-    pub storage_size: u64,
-    // statistics of columns
+    pub block_size: u64,
+    pub file_size: u64,
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
+    pub col_metas: HashMap<ColumnId, ColumnMeta>,
     pub location: BlockLocation,
 }
 

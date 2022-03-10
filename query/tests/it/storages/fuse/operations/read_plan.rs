@@ -44,11 +44,11 @@ fn test_to_partitions() -> Result<()> {
     let block_meta = BlockMeta {
         format_version: 1,
         row_count: 0,
-        in_memory_size: cols_stats
+        block_size: cols_stats
             .iter()
             .map(|(_, col_stats)| col_stats.in_memory_size)
             .sum(),
-        storage_size: 0,
+        file_size: 0,
         col_stats: cols_stats.clone(),
         col_metas: Default::default(),
         location: BlockLocation {

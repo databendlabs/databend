@@ -95,7 +95,7 @@ impl FuseTable {
                             .map(|(_, col_stats)| col_stats.in_memory_size)
                             .sum::<u64>() as usize
                     }
-                    None => stats.read_bytes += block_meta.in_memory_size as usize,
+                    None => stats.read_bytes += block_meta.block_size as usize,
                 }
 
                 (stats, parts)

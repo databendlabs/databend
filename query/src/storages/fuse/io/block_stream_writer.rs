@@ -29,8 +29,8 @@ use parquet_format_async_temp::FileMetaData;
 
 use crate::storages::fuse::io::block_writer;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
+use crate::storages::fuse::meta::v0::ColumnMeta;
 use crate::storages::fuse::meta::ColumnId;
-use crate::storages::fuse::meta::ColumnMeta;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;

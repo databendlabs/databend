@@ -31,6 +31,12 @@ impl<T> Versioned<T> {
     }
 }
 
+impl<T> Default for Versioned<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub enum SnapshotVersions {
     V0(Versioned<TableSnapshotV0>),
     V1(Versioned<TableSnapshot>),
