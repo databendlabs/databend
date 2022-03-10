@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use parquet_format_async_temp::TimestampType;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -59,7 +58,6 @@ impl WarehousesTable {
             .map(|x| x.meta.warehouse_name.as_str())
             .collect();
         let warehouse_sizes: Vec<&str> = warehouses.iter().map(|x| x.meta.size.as_str()).collect();
-        let warehouse_instances: Vec<u64> = warehouses.iter().map(|x| x.meta.instance).collect();
         let warehouse_creation_time: Vec<u32> = warehouses
             .iter()
             .map(|x| (x.meta.created_on.timestamp_millis() / 1000) as u32)
@@ -69,7 +67,6 @@ impl WarehousesTable {
             Series::from_data(tenants),
             Series::from_data(warehouse_ids),
             Series::from_data(warehouse_sizes),
-            Series::from_data(warehouse_instances),
             Series::from_data(warehouse_creation_time),
         ]))
     }
@@ -79,7 +76,6 @@ impl WarehousesTable {
             DataField::new("tenant_id", Vu8::to_data_type()),
             DataField::new("warehouse_id", Vu8::to_data_type()),
             DataField::new("warehouse_size", Vu8::to_data_type()),
-            DataField::new("warehouse_instance", u64::to_data_type()),
             DataField::new("warehouse_creation_time", DateTime32Type::arc(None)),
         ])
     }

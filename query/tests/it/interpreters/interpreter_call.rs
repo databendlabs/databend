@@ -114,22 +114,7 @@ async fn test_call_warehouse_metadata_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `system$create_warehouse_meta` expect to have 4 arguments, but got 0.";
-        assert_eq!(expect, res.err().unwrap().to_string());
-    }
-
-    // Instance type error
-    {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call system$create_warehouse_meta(default, 'test', 'test', 'wrong')",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), true);
-        let expect = "Code: 1006, displayText = warehouse instance should be an unsigned integer, here is wrong.";
+        let expect = "Code: 1028, displayText = Function `system$create_warehouse_meta` expect to have 3 arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
@@ -137,7 +122,7 @@ async fn test_call_warehouse_metadata_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small', '21')",
+            "call system$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -196,7 +181,7 @@ async fn test_get_warehouse_metadata_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small', '21')",
+            "call system$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -243,7 +228,7 @@ async fn test_list_warehouse_metadata_interpreter() -> Result<()> {
 
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small', '21')",
+            "call system$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -253,7 +238,7 @@ async fn test_list_warehouse_metadata_interpreter() -> Result<()> {
 
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$create_warehouse_meta('tenant1', '🐸🐸@@1212', 'Small', '21')",
+            "call system$create_warehouse_meta('tenant1', '🐸🐸@@1212', 'Small')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -272,19 +257,19 @@ async fn test_list_warehouse_metadata_interpreter() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_update_warehouse_metadata_instance_interpreter() -> Result<()> {
+async fn test_update_warehouse_metadata_size_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
     let ctx = crate::tests::create_query_context()?;
 
     // NumberArgumentsNotMatch.
     {
         let plan =
-            PlanParser::parse(ctx.clone(), "call system$update_warehouse_meta_instance()").await?;
+            PlanParser::parse(ctx.clone(), "call system$update_warehouse_meta_size()").await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 1028, displayText = Function `system$update_warehouse_meta_instance` expect to have 3 arguments, but got 0.";
+        let expect = "Code: 1028, displayText = Function `system$update_warehouse_meta_size` expect to have 3 arguments, but got 0.";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
@@ -292,36 +277,22 @@ async fn test_update_warehouse_metadata_instance_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$update_warehouse_meta_instance('tenant1', '🐸🐸@@11', '21')",
+            "call system$update_warehouse_meta_size('tenant1', '🐸🐸@@11', 'Small')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CallInterpreter");
         let res = executor.execute(None).await;
         assert_eq!(res.is_err(), true);
-        let expect = "Code: 2901, displayText = unknown warehouse __fd_warehouses/tenant1/🐸🐸@@11(while update warehouse instance).";
+        let expect = "Code: 2901, displayText = unknown warehouse __fd_warehouses/tenant1/🐸🐸@@11(while update warehouse size).";
         assert_eq!(expect, res.err().unwrap().to_string());
     }
 
-    // instance must be an unsigned integer
-    {
-        let plan = PlanParser::parse(
-            ctx.clone(),
-            "call system$update_warehouse_meta_instance('tenant1', '🐸🐸@@11', 'wrong')",
-        )
-        .await?;
-        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        assert_eq!(executor.name(), "CallInterpreter");
-        let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), true);
-        let expect = "Code: 1006, displayText = warehouse instance should be an unsigned integer, here is wrong.";
-        assert_eq!(expect, res.err().unwrap().to_string());
-    }
     // Ok
     {
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small', '21')",
+            "call system$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -331,7 +302,7 @@ async fn test_update_warehouse_metadata_instance_interpreter() -> Result<()> {
 
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$update_warehouse_meta_instance('tenant1', '🐸🐸@@11', '3')",
+            "call system$update_warehouse_meta_size('tenant1', '🐸🐸@@11', 'XXXLarge')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -375,7 +346,7 @@ async fn test_drop_warehouse_metadata_interpreter() -> Result<()> {
     {
         let plan = PlanParser::parse(
             ctx.clone(),
-            "call system$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small', '21')",
+            "call system$create_warehouse_meta('tenant1', '🐸🐸@@11', 'Small')",
         )
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;

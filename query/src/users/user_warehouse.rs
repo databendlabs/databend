@@ -75,19 +75,13 @@ impl UserApiProvider {
         }
     }
 
-    // Update the instance of given warehouse
-    pub async fn update_warehouse_instance(
-        &self,
-        tenant: &str,
-        name: &str,
-        instance: u64,
-    ) -> Result<u64> {
+    // Update the size of given warehouse
+    pub async fn update_warehouse_size(&self, tenant: &str, name: &str, size: &str) -> Result<u64> {
         let warehouse_api_provider = self.get_warehouse_api_client(tenant)?;
-        let update_warehouse_instance =
-            warehouse_api_provider.update_warehouse_instances(name, instance, None);
-        match update_warehouse_instance.await {
+        let update_warehouse_size = warehouse_api_provider.update_warehouse_size(name, size, None);
+        match update_warehouse_size.await {
             Ok(res) => Ok(res),
-            Err(e) => Err(e.add_message_back("(while update warehouse instance)")),
+            Err(e) => Err(e.add_message_back("(while update warehouse size)")),
         }
     }
 }

@@ -13,11 +13,9 @@
 //  limitations under the License.
 
 use std::sync::Arc;
-use std::u64;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::WarehouseInfo;
 
@@ -28,7 +26,7 @@ use crate::sessions::QueryContext;
 use crate::storages::system::WarehousesTable;
 
 pub struct CreateWarehouseMetaFunction {}
-pub struct UpdateWarehouseInstanceFunction {}
+pub struct UpdateWarehouseSizeFunction {}
 pub struct GetWarehouseMetaFunction {}
 pub struct ListWarehouseMetaFunction {}
 pub struct DropWarehouseMetaFunction {}
@@ -50,10 +48,9 @@ impl CreateWarehouseMetaFunction {
     // tenant_id: string
     // warehouse_name: string
     // size: string
-    // capacity: string
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().num_arguments(4))
+            .features(FunctionFeatures::default().num_arguments(3))
     }
 }
 
@@ -66,19 +63,12 @@ impl Function for CreateWarehouseMetaFunction {
         let tenant_id = args[0].clone();
         let warehouse_name = args[1].clone();
         let warehouse_size = args[2].clone();
-        let warehouse_instances = args[3].clone().parse::<u64>();
-        if warehouse_instances.is_err() {
-            return Err(ErrorCode::BadArguments(format!(
-                "warehouse instance should be an unsigned integer, here is {}",
-                args[3].clone()
-            )));
-        }
+
         // regist a warehouse
         let warehouse_info = WarehouseInfo::new(
             warehouse_name.clone(),
             warehouse_name.clone(),
             warehouse_size,
-            warehouse_instances.unwrap(),
         );
         let provider = ctx.get_user_manager();
         provider
@@ -96,18 +86,18 @@ impl Function for CreateWarehouseMetaFunction {
 /// Scale an existed warehouse with metadata.
 /// exmaples:
 /// ```rust
-/// /// this command would update the instance to 0 e for given warehouse under tenant
-/// call system$update_warehouse_neta_instance("tenant1", "warehouse*!)#@!!#@!", "0")
+/// /// this command would update the size to Small e for given warehouse under tenant
+/// call system$update_warehouse_neta_size("tenant1", "warehouse*!)#@!!#@!", "Small")
 /// ```
-impl UpdateWarehouseInstanceFunction {
+impl UpdateWarehouseSizeFunction {
     pub fn try_create(_: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(UpdateWarehouseInstanceFunction {}))
+        Ok(Box::new(UpdateWarehouseSizeFunction {}))
     }
 
     // arguments:
     // tenant_id: string
     // warehouse_name: string
-    // capacity: string
+    // size: string
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
             .features(FunctionFeatures::default().num_arguments(3))
@@ -115,28 +105,19 @@ impl UpdateWarehouseInstanceFunction {
 }
 
 #[async_trait::async_trait]
-impl Function for UpdateWarehouseInstanceFunction {
+impl Function for UpdateWarehouseSizeFunction {
     fn name(&self) -> &str {
-        "system$update_warehouse_meta_instance"
+        "system$update_warehouse_meta_size"
     }
     async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let tenant_id = args[0].clone();
         let warehouse_name = args[1].clone();
-        let warehouse_instances = args[2].clone().parse::<u64>();
-        if warehouse_instances.is_err() {
-            return Err(ErrorCode::BadArguments(format!(
-                "warehouse instance should be an unsigned integer, here is {}",
-                args[2].clone()
-            )));
-        }
+        let size = args[2].clone();
+
         // regist a warehouse
         let provider = ctx.get_user_manager();
         provider
-            .update_warehouse_instance(
-                tenant_id.as_str(),
-                warehouse_name.as_str(),
-                warehouse_instances.unwrap(),
-            )
+            .update_warehouse_size(tenant_id.as_str(), warehouse_name.as_str(), size.as_str())
             .await?;
         let info = provider
             .get_warehouse(tenant_id.as_str(), warehouse_name.as_str())

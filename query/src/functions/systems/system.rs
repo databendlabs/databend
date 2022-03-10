@@ -17,7 +17,7 @@ use crate::functions::systems::warehouse_metadata::CreateWarehouseMetaFunction;
 use crate::functions::systems::warehouse_metadata::DropWarehouseMetaFunction;
 use crate::functions::systems::warehouse_metadata::GetWarehouseMetaFunction;
 use crate::functions::systems::warehouse_metadata::ListWarehouseMetaFunction;
-use crate::functions::systems::warehouse_metadata::UpdateWarehouseInstanceFunction;
+use crate::functions::systems::warehouse_metadata::UpdateWarehouseSizeFunction;
 use crate::functions::systems::FunctionFactory;
 
 pub struct SystemFunction;
@@ -30,8 +30,8 @@ impl SystemFunction {
             CreateWarehouseMetaFunction::desc(),
         );
         factory.register(
-            "system$update_warehouse_meta_instance",
-            UpdateWarehouseInstanceFunction::desc(),
+            "system$update_warehouse_meta_size",
+            UpdateWarehouseSizeFunction::desc(),
         );
         factory.register(
             "system$get_warehouse_meta",

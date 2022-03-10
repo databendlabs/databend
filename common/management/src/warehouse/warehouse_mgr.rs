@@ -42,7 +42,7 @@ impl WarehouseMgr {
     pub fn create(kv_api: Arc<dyn KVApi>, tenant: &str) -> Result<Self> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
-                "Tenant WAREHOUSE_API_KEY_PREFIX not empty(while warehouse mgr create)",
+                "Tenant can not empty(while warehouse mgr create)",
             ));
         }
 
@@ -99,23 +99,18 @@ impl WarehouseApi for WarehouseMgr {
         let mut r = vec![];
         for (_key, val) in values {
             let u = serde_json::from_slice::<WarehouseInfo>(&val.data)
-                .map_err_to_code(ErrorCode::IllegalUserInfoFormat, || "")?;
+                .map_err_to_code(ErrorCode::IllegalWarehouseInfoFormat, || "")?;
 
             r.push(SeqV::new(val.seq, u));
         }
         Ok(r)
     }
 
-    async fn update_warehouse_instances(
-        &self,
-        name: &str,
-        instances: u64,
-        seq: Option<u64>,
-    ) -> Result<u64> {
+    async fn update_warehouse_size(&self, name: &str, size: &str, seq: Option<u64>) -> Result<u64> {
         let warehouse_val_seq = self.get_warehouse(name, seq);
         let warehouse_info = warehouse_val_seq.await?.data;
         let mut new_warehouse_info = warehouse_info.clone();
-        new_warehouse_info.meta.instance = instances;
+        new_warehouse_info.meta.size = size.into();
         let key = format!("{}/{}", self.warehouse_prefix, name);
         let value = serde_json::to_vec(&new_warehouse_info)?;
         let match_seq = match seq {
@@ -133,8 +128,8 @@ impl WarehouseApi for WarehouseMgr {
             .await?;
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
-            None => Err(ErrorCode::UnknownUser(format!(
-                "unknown user, or seq not match {}",
+            None => Err(ErrorCode::UnknownWarehouse(format!(
+                "unknown warehouse, or seq not match {}",
                 name
             ))),
         }

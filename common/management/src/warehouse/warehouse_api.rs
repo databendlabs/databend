@@ -24,12 +24,7 @@ pub trait WarehouseApi: Sync + Send {
 
     async fn get_warehouses(&self) -> Result<Vec<SeqV<WarehouseInfo>>>;
 
-    async fn update_warehouse_instances(
-        &self,
-        name: &str,
-        instances: u64,
-        seq: Option<u64>,
-    ) -> Result<u64>;
+    async fn update_warehouse_size(&self, name: &str, size: &str, seq: Option<u64>) -> Result<u64>;
 
     async fn drop_warehouse(&self, name: &str, seq: Option<u64>) -> Result<()>;
 }

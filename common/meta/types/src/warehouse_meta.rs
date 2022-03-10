@@ -62,7 +62,6 @@ impl TryFrom<Vec<u8>> for WarehouseInfo {
 pub struct WarehouseMeta {
     pub warehouse_name: String,
     pub size: String,
-    pub instance: u64,
     pub created_on: DateTime<Utc>,
 }
 
@@ -71,7 +70,6 @@ impl Default for WarehouseMeta {
         WarehouseMeta {
             warehouse_name: String::from(""),
             size: String::from(""),
-            instance: 0,
             created_on: Utc::now(),
         }
     }
@@ -119,7 +117,6 @@ impl WarehouseInfo {
         tenant: impl Into<String>,
         warehouse_name: impl Into<String>,
         size: impl Into<String>,
-        instance: u64,
     ) -> Self {
         WarehouseInfo {
             warehouse_id: Self::generate_id(),
@@ -127,7 +124,6 @@ impl WarehouseInfo {
             meta: WarehouseMeta {
                 warehouse_name: warehouse_name.into(),
                 size: size.into(),
-                instance,
                 created_on: Utc::now(),
             },
         }

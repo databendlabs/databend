@@ -25,13 +25,12 @@ async fn test_user_warehouse() -> Result<()> {
     let tenant = "test";
     let warehouse_name = "*^)&*^*)%  🐸🐸🐸 ???";
     let size = "Large";
-    let instance = 3;
     let if_not_exists = false;
     let user_mgr = UserApiProvider::create_global(conf).await?;
 
     // create warehouse one.
     {
-        let warehouse = WarehouseInfo::new(tenant, warehouse_name, size, instance);
+        let warehouse = WarehouseInfo::new(tenant, warehouse_name, size);
         user_mgr
             .create_warehouse(tenant, warehouse.clone(), if_not_exists)
             .await?;
@@ -44,15 +43,15 @@ async fn test_user_warehouse() -> Result<()> {
     // update warehouse
     {
         user_mgr
-            .update_warehouse_instance(tenant, warehouse_name, 0)
+            .update_warehouse_size(tenant, warehouse_name, "XXXLarge")
             .await?;
         assert_eq!(
             user_mgr
                 .get_warehouse(tenant, warehouse_name)
                 .await?
                 .meta
-                .instance,
-            0
+                .size,
+            "XXXLarge"
         );
     }
 

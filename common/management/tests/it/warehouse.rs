@@ -132,21 +132,25 @@ async fn test_successfully_update_and_warehouse_without_seq() -> Result<()> {
         .await?;
     assert_eq!(warehouse.data, warehouse_info);
     let ack = warehouse_api
-        .update_warehouse_instances(warehouse_info.meta.warehouse_name.as_str(), 3, None)
+        .update_warehouse_size(warehouse_info.meta.warehouse_name.as_str(), "Large", None)
         .await?;
     assert_eq!(ack, 2);
     let warehouse = warehouse_api
         .get_warehouse(warehouse_info.meta.warehouse_name.as_str(), None)
         .await?;
-    assert_eq!(warehouse.data.meta.instance, 3);
+    assert_eq!(warehouse.data.meta.size, "Large");
     let ack = warehouse_api
-        .update_warehouse_instances(warehouse_info.meta.warehouse_name.as_str(), 0, None)
+        .update_warehouse_size(
+            warehouse_info.meta.warehouse_name.as_str(),
+            "XXXLarge",
+            None,
+        )
         .await?;
     assert_eq!(ack, 3);
     let warehouse = warehouse_api
         .get_warehouse(warehouse_info.meta.warehouse_name.as_str(), None)
         .await?;
-    assert_eq!(warehouse.data.meta.instance, 0);
+    assert_eq!(warehouse.data.meta.size, "XXXLarge");
     Ok(())
 }
 
@@ -174,7 +178,6 @@ fn create_test_warehouse_info() -> WarehouseInfo {
         "tenant1",
         "test_warehouseHB(YYYO&%^$*_*^^&*%&^$%^#$%))*&*~!?? 🐮  🐮  🐮 ",
         "Small",
-        12,
     )
 }
 

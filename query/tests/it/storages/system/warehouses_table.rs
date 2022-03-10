@@ -32,7 +32,6 @@ async fn test_warehouses_table() -> Result<()> {
     let test_id = "testsasa121id-1888-12-12-11-21-897991";
     let test_name = "fakse&*())(FFH🦀🦀🦀";
     let test_size = "Small";
-    let test_instance: u64 = 31;
     let time = DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(61, 0), Utc);
     ctx.get_user_manager()
         .create_warehouse(
@@ -43,7 +42,6 @@ async fn test_warehouses_table() -> Result<()> {
                 meta: WarehouseMeta {
                     warehouse_name: test_name.to_string(),
                     size: test_size.to_string(),
-                    instance: test_instance,
                     created_on: time,
                 },
             },
@@ -57,14 +55,15 @@ async fn test_warehouses_table() -> Result<()> {
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 6);
+    assert_eq!(block.num_columns(), 5);
 
     let expected = vec![
-        "+----------------------+-----------+---------------------------------------+----------------+--------------------+-------------------------+",
-        "| warehouse_name       | tenant_id | warehouse_id                          | warehouse_size | warehouse_instance | warehouse_creation_time |",
-        "+----------------------+-----------+---------------------------------------+----------------+--------------------+-------------------------+",
-        "| fakse&*())(FFH🦀🦀🦀 | test      | testsasa121id-1888-12-12-11-21-897991 | Small          | 31                 | 61                      |",
-        "+----------------------+-----------+---------------------------------------+----------------+--------------------+-------------------------+",    ];
+        "+----------------------+-----------+---------------------------------------+----------------+-------------------------+",
+        "| warehouse_name       | tenant_id | warehouse_id                          | warehouse_size | warehouse_creation_time |",
+        "+----------------------+-----------+---------------------------------------+----------------+-------------------------+",
+        "| fakse&*())(FFH🦀🦀🦀 | test      | testsasa121id-1888-12-12-11-21-897991 | Small          | 61                      |",
+        "+----------------------+-----------+---------------------------------------+----------------+-------------------------+",
+    ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     Ok(())
 }
