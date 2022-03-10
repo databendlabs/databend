@@ -25,9 +25,17 @@ echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 
 
 ## Copy from s3 by directory with pattern.
-echo "copy into ontime200 from 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin') PATTERN = 'ontime.*' FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1)" | $MYSQL_CLIENT_CONNECT
+echo "copy into ontime200 from 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin') PATTERN = 'ontime.*csv' FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1)" | $MYSQL_CLIENT_CONNECT
 ## Result.
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
+echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
+
+
+## Copy from parquet
+echo "copy into ontime200 from 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin') PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = 'PARQUET')
+" | $MYSQL_CLIENT_CONNECT
+echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
+
 
 
 ## Drop table.

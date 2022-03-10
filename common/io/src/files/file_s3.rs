@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::Path;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::StreamExt;
@@ -87,11 +85,9 @@ impl S3File {
             ObjectMode::DIR => {
                 let mut objects = operator.objects(path);
                 while let Some(object) = objects.next().await {
-                    let meta = object?.metadata().await?;
-
-                    // TODO (xuanwo): the list result returns the abs path
-                    let new_path = Path::new("/").join(meta.path());
-                    list.push(new_path.to_string_lossy().to_string());
+                    let mut object = object?;
+                    let meta = object.metadata_cached().await?;
+                    list.push(meta.path().to_string());
                 }
             }
             other => {

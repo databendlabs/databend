@@ -46,6 +46,7 @@ runs:
         aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://testbucket
         aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data s3://testbucket/admin/data  --recursive
         aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data/ontime_200.csv s3://testbucket/admin/data/ontime_200_v1.csv
+        aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data/ontime_200.parquet s3://testbucket/admin/data/ontime_200_v1.parquet
 
     - name: Run Stateless Tests with Standalone mode (ubuntu-latest only)
       shell: bash

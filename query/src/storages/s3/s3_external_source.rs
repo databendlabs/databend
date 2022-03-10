@@ -138,7 +138,7 @@ impl ExternalSource {
             }
         }?;
 
-        // Get the format(CSV) source stream.
+        // Get the format(CSV, Parquet) source stream.
         let source = match &file_format {
             StageFileFormatType::Csv => {
                 Ok(Self::csv_source(ctx.clone(), self.schema.clone(), stage, file_reader).await?)
