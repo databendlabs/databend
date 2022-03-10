@@ -60,7 +60,7 @@ async fn test_source_parquet() -> Result<()> {
 
     // write test parquet
     // write test parquet
-    let len = {
+    let (len, _file_meta) = {
         let rg_iter = std::iter::repeat(batch).map(Ok).take(page_nums_expects);
         let row_groups = RowGroupIterator::try_new(rg_iter, &arrow_schema, options, encodings)?;
         let path = dir.path().join(name);
