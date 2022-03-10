@@ -28,5 +28,6 @@ header:
     - "**/*.yaml"
     - "**/*.toml"
     - "**/*.lock"
+    - "**/*.yapf"
 
   comment: on-failure
