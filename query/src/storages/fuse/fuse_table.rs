@@ -42,6 +42,7 @@ use crate::storages::StorageDescription;
 use crate::storages::Table;
 use crate::storages::OPT_KEY_DATABASE_ID;
 
+#[derive(Clone)]
 pub struct FuseTable {
     pub(crate) table_info: TableInfo,
     pub(crate) meta_location_generator: TableMetaLocationGenerator,

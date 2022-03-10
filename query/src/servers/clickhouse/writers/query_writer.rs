@@ -58,8 +58,8 @@ impl<'a> QueryWriter<'a> {
 
     async fn write_progress(&mut self, values: ProgressValues) -> Result<()> {
         let progress = common_clickhouse_srv::types::Progress {
-            rows: values.read_rows as u64,
-            bytes: values.read_bytes as u64,
+            rows: values.rows as u64,
+            bytes: values.bytes as u64,
             total_rows: 0,
         };
 

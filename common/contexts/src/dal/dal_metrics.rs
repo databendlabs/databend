@@ -17,6 +17,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+/// DalMetrics represents the metrics of a DAL (all bytes metrics are compressed size).
 #[derive(Clone, Debug, Default)]
 pub struct DalMetrics {
     /// Read bytes.
@@ -25,8 +26,8 @@ pub struct DalMetrics {
     read_bytes_cost_ms: Arc<AtomicU64>,
     /// Bytes written by data access layer
     write_bytes: Arc<AtomicUsize>,
-    /// Number of rows written
-    write_rows: Arc<AtomicU64>,
+    /// Cost(in ms) of write bytes.
+    write_bytes_cost_ms: Arc<AtomicU64>,
     /// Number of partitions scanned, after pruning
     partitions_scanned: Arc<AtomicU64>,
     /// Number of partitions, before pruning
@@ -50,8 +51,18 @@ impl DalMetrics {
         }
     }
 
+    pub fn inc_write_bytes_cost(&self, ms: u64) {
+        if ms > 0 {
+            self.write_bytes_cost_ms.fetch_add(ms, Ordering::Relaxed);
+        }
+    }
+
     pub fn get_read_bytes_cost(&self) -> u64 {
         self.read_bytes_cost_ms.load(Ordering::Relaxed)
+    }
+
+    pub fn get_write_bytes_cost(&self) -> u64 {
+        self.write_bytes_cost_ms.load(Ordering::Relaxed)
     }
 
     pub fn inc_write_bytes(&self, v: usize) {
@@ -62,17 +73,6 @@ impl DalMetrics {
 
     pub fn get_write_bytes(&self) -> usize {
         self.write_bytes.load(Ordering::Relaxed)
-    }
-
-    // Increment read rows.
-    pub fn inc_write_rows(&self, v: u64) {
-        if v > 0 {
-            self.write_rows.fetch_add(v, Ordering::Relaxed);
-        }
-    }
-
-    pub fn get_write_rows(&self) -> u64 {
-        self.write_rows.load(Ordering::Relaxed)
     }
 
     pub fn inc_partitions_scanned(&self, v: u64) {

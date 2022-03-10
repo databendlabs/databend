@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+use std::sync::Arc;
+
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_planners::Part;
+use common_planners::PartInfo;
 use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
@@ -23,6 +26,29 @@ use common_planners::SourceInfo;
 use common_planners::Statistics;
 
 pub struct Test {}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
+struct PlannerTestPartInfo {}
+
+#[typetag::serde(name = "planner_test")]
+impl PartInfo for PlannerTestPartInfo {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        match info.as_any().downcast_ref::<PlannerTestPartInfo>() {
+            None => false,
+            Some(other) => self == other,
+        }
+    }
+}
+
+impl PlannerTestPartInfo {
+    pub fn create() -> Arc<Box<dyn PartInfo>> {
+        Arc::new(Box::new(PlannerTestPartInfo {}))
+    }
+}
 
 impl Test {
     pub fn create() -> Self {
@@ -56,25 +82,19 @@ impl Test {
 
     pub fn generate_partitions(workers: u64, total: u64) -> Partitions {
         let part_size = total / workers;
-        let part_remain = total % workers;
+        // let part_remain = total % workers;
 
         let mut partitions = Vec::with_capacity(workers as usize);
         if part_size == 0 {
-            partitions.push(Part {
-                name: format!("{}-{}-{}", total, 0, total,),
-                version: 0,
-            })
+            partitions.push(PlannerTestPartInfo::create())
         } else {
-            for part in 0..workers {
-                let part_begin = part * part_size;
-                let mut part_end = (part + 1) * part_size;
-                if part == (workers - 1) && part_remain > 0 {
-                    part_end += part_remain;
-                }
-                partitions.push(Part {
-                    name: format!("{}-{}-{}", total, part_begin, part_end,),
-                    version: 0,
-                })
+            for _part in 0..workers {
+                // let part_begin = part * part_size;
+                // let mut part_end = (part + 1) * part_size;
+                // if part == (workers - 1) && part_remain > 0 {
+                //     part_end += part_remain;
+                // }
+                partitions.push(PlannerTestPartInfo::create())
             }
         }
         partitions

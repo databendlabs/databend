@@ -28,8 +28,8 @@ impl PrincipalIdentity {
         PrincipalIdentity::User(UserIdentity::new(name, host))
     }
 
-    pub fn role(name: String, host: String) -> Self {
-        PrincipalIdentity::Role(RoleIdentity::new(name, host))
+    pub fn role(name: String) -> Self {
+        PrincipalIdentity::Role(RoleIdentity::new(name))
     }
 }
 

@@ -19,7 +19,6 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
-use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -49,10 +48,7 @@ pub trait SyncSystemTable: Send + Sync {
         _ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![Part {
-            name: "".to_string(),
-            version: 0,
-        }]))
+        Ok((Statistics::default(), vec![]))
     }
 }
 
@@ -170,10 +166,7 @@ pub trait AsyncSystemTable: Send + Sync {
         _ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![Part {
-            name: "".to_string(),
-            version: 0,
-        }]))
+        Ok((Statistics::default(), vec![]))
     }
 }
 

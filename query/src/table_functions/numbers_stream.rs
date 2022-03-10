@@ -24,6 +24,7 @@ use common_exception::Result;
 use futures::stream::Stream;
 
 use crate::sessions::QueryContext;
+use crate::table_functions::numbers_part::NumbersPartInfo;
 
 #[derive(Debug, Clone)]
 struct BlockRange {
@@ -93,21 +94,17 @@ impl NumbersStream {
     fn try_get_one_block(&mut self) -> Result<Option<DataBlock>> {
         if (self.block_index as usize) == self.blocks.len() {
             let partitions = self.ctx.try_get_partitions(1)?;
+
             if partitions.is_empty() {
-                return Ok(None);
-            }
-            if partitions.len() == 1 && partitions[0].name.is_empty() {
                 return Ok(None);
             }
 
             let block_size = self.ctx.get_settings().get_max_block_size()?;
             let mut blocks = Vec::with_capacity(partitions.len());
             for part in partitions {
-                let names: Vec<_> = part.name.split('-').collect();
-                let begin: u64 = names[1].parse()?;
-                let end: u64 = names[2].parse()?;
-
-                let (begin, end) = self.try_apply_top_n(begin, end);
+                let numbers_part = NumbersPartInfo::from_part(&part)?;
+                let (begin, end) =
+                    self.try_apply_top_n(numbers_part.part_start, numbers_part.part_end);
 
                 let diff = end - begin;
                 let block_nums = diff / block_size;

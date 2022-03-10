@@ -179,6 +179,14 @@ impl Processor for GroupByFinalTransform {
                 // Collect the merge states.
                 let groups = groups_locker.read();
 
+                if groups.is_empty() {
+                    return Ok(Box::pin(DataBlockStream::create(
+                        self.schema.clone(),
+                        None,
+                        vec![],
+                    )));
+                }
+
                 let mut aggr_builders: Vec<Box<dyn MutableColumn>> = {
                     let mut values = vec![];
                     for func in &funcs {

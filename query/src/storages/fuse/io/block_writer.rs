@@ -23,13 +23,14 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use opendal::Operator;
+use parquet_format_async_temp::FileMetaData;
 
 pub async fn write_block(
     arrow_schema: &ArrowSchema,
     block: DataBlock,
     data_accessor: Operator,
     location: &str,
-) -> Result<u64> {
+) -> Result<(u64, FileMetaData)> {
     let options = WriteOptions {
         write_statistics: true,
         compression: Compression::Lz4, // let's begin with lz4
@@ -52,8 +53,9 @@ pub async fn write_block(
     // we need a configuration of block size threshold here
     let mut buf = Vec::with_capacity(100 * 1024 * 1024);
 
-    let len = common_arrow::write_parquet_file(&mut buf, row_groups, arrow_schema.clone(), options)
-        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
+    let result =
+        common_arrow::write_parquet_file(&mut buf, row_groups, arrow_schema.clone(), options)
+            .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
 
     data_accessor
         .object(location)
@@ -62,7 +64,7 @@ pub async fn write_block(
         .await
         .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 
-    Ok(len)
+    Ok(result)
 }
 
 fn col_encoding(_data_type: &ArrowDataType) -> Encoding {

@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::BroadcastPlan;
+use crate::CallPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateRolePlan;
@@ -77,6 +78,7 @@ impl<'a> fmt::Display for PlanNodeIndentFormatDisplay<'a> {
             PlanNode::CreateRole(plan) => Self::format_create_role(f, plan),
             PlanNode::DropRole(plan) => Self::format_drop_role(f, plan),
             PlanNode::Copy(plan) => Self::format_copy(f, plan),
+            PlanNode::Call(plan) => Self::format_call(f, plan),
             _ => {
                 let mut printed = true;
 
@@ -303,5 +305,10 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
 
     fn format_copy(f: &mut Formatter, plan: &CopyPlan) -> fmt::Result {
         write!(f, "{:?}", plan)
+    }
+
+    fn format_call(f: &mut Formatter, plan: &CallPlan) -> fmt::Result {
+        write!(f, "Call {:}", plan.name)?;
+        write!(f, " args: {:?}", plan.args)
     }
 }

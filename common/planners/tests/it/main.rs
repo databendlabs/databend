@@ -23,6 +23,7 @@ mod plan_extras;
 mod plan_filter;
 mod plan_having;
 mod plan_limit;
+mod plan_partition;
 mod plan_projection;
 mod plan_rewriter;
 mod plan_select;

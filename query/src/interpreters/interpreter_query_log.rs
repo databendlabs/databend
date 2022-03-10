@@ -61,9 +61,12 @@ pub struct LogEvent {
     // Stats.
     pub written_rows: u64,
     pub written_bytes: u64,
+    pub written_io_bytes: u64,
+    pub written_io_bytes_cost_ms: u64,
     pub scan_rows: u64,
     pub scan_bytes: u64,
-    pub scan_byte_cost_ms: u64,
+    pub scan_io_bytes: u64,
+    pub scan_io_bytes_cost_ms: u64,
     pub scan_partitions: u64,
     pub total_partitions: u64,
     pub result_rows: u64,
@@ -126,9 +129,12 @@ impl InterpreterQueryLog {
             // Stats.
             Series::from_data(vec![event.written_rows as u64]),
             Series::from_data(vec![event.written_bytes as u64]),
+            Series::from_data(vec![event.written_io_bytes as u64]),
+            Series::from_data(vec![event.written_io_bytes_cost_ms as u64]),
             Series::from_data(vec![event.scan_rows as u64]),
             Series::from_data(vec![event.scan_bytes as u64]),
-            Series::from_data(vec![event.scan_byte_cost_ms as u64]),
+            Series::from_data(vec![event.scan_io_bytes as u64]),
+            Series::from_data(vec![event.scan_io_bytes_cost_ms as u64]),
             Series::from_data(vec![event.scan_partitions as u64]),
             Series::from_data(vec![event.total_partitions as u64]),
             Series::from_data(vec![event.result_rows as u64]),
@@ -183,9 +189,12 @@ impl InterpreterQueryLog {
 
         let written_rows = 0u64;
         let written_bytes = 0u64;
+        let written_io_bytes = 0u64;
+        let written_io_bytes_cost_ms = 0u64;
         let scan_rows = 0u64;
         let scan_bytes = 0u64;
-        let scan_byte_cost_ms = 0u64;
+        let scan_io_bytes = 0u64;
+        let scan_io_bytes_cost_ms = 0u64;
         let scan_partitions = 0u64;
         let total_partitions = 0u64;
         let result_rows = 0u64;
@@ -216,9 +225,12 @@ impl InterpreterQueryLog {
             projections: "".to_string(),
             written_rows,
             written_bytes,
+            written_io_bytes,
+            written_io_bytes_cost_ms,
             scan_rows,
             scan_bytes,
-            scan_byte_cost_ms,
+            scan_io_bytes,
+            scan_io_bytes_cost_ms,
             scan_partitions,
             total_partitions,
             result_rows,
@@ -261,19 +273,25 @@ impl InterpreterQueryLog {
             .as_millis() as u64;
         let event_date = (event_time / (24 * 3600000)) as i32;
         let dal_metrics = self.ctx.get_dal_metrics();
-        let written_rows = dal_metrics.get_write_rows();
-        let written_bytes = dal_metrics.get_write_bytes() as u64;
-        let scan_rows = self.ctx.get_scan_progress_value().read_rows as u64;
-        let scan_bytes = self.ctx.get_scan_progress_value().read_bytes as u64;
-        let scan_byte_cost_ms = dal_metrics.get_read_bytes_cost();
+
+        let written_rows = self.ctx.get_write_progress_value().rows as u64;
+        let written_bytes = self.ctx.get_write_progress_value().bytes as u64;
+        let written_io_bytes = dal_metrics.get_write_bytes() as u64;
+        let written_io_bytes_cost_ms = dal_metrics.get_write_bytes_cost();
+
+        let scan_rows = self.ctx.get_scan_progress_value().rows as u64;
+        let scan_bytes = self.ctx.get_scan_progress_value().bytes as u64;
+        let scan_io_bytes = dal_metrics.get_read_bytes() as u64;
+        let scan_io_bytes_cost_ms = dal_metrics.get_read_bytes_cost();
+
         let scan_partitions = dal_metrics.get_partitions_scanned();
         let total_partitions = dal_metrics.get_partitions_total();
         let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
         let memory_usage = self.ctx.get_current_session().get_memory_usage() as u64;
 
         // Result.
-        let result_rows = self.ctx.get_result_progress_value().read_rows as u64;
-        let result_bytes = self.ctx.get_result_progress_value().read_bytes as u64;
+        let result_rows = self.ctx.get_result_progress_value().rows as u64;
+        let result_bytes = self.ctx.get_result_progress_value().bytes as u64;
 
         // Client.
         let client_address = format!("{:?}", self.ctx.get_client_address());
@@ -300,9 +318,12 @@ impl InterpreterQueryLog {
             projections: "".to_string(),
             written_rows,
             written_bytes,
+            written_io_bytes,
+            written_io_bytes_cost_ms,
             scan_rows,
             scan_bytes,
-            scan_byte_cost_ms,
+            scan_io_bytes,
+            scan_io_bytes_cost_ms,
             scan_partitions,
             total_partitions,
             result_rows,

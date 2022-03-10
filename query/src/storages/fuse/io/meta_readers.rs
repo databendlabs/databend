@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
-use common_arrow::arrow::io::parquet::read::schema::FileMetaData;
+use common_arrow::arrow::io::parquet::read::schema::FileMetaData as ParquetFileMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing::debug_span;
@@ -49,23 +49,23 @@ pub trait BufReaderProvider {
 /// A Newtype of [FileMetaData].
 ///
 /// To avoid implementation (of trait [Loader]) conflicts
-pub struct BlockMeta(FileMetaData);
+pub struct FileMetaData(ParquetFileMetaData);
 
-impl BlockMeta {
-    pub fn inner(&self) -> &FileMetaData {
+impl FileMetaData {
+    pub fn inner(&self) -> &ParquetFileMetaData {
         &self.0
     }
 }
 
 pub type SegmentInfoCache = MemoryCache<SegmentInfo>;
 pub type TableSnapshotCache = MemoryCache<TableSnapshot>;
-pub type BlockMetaCache = MemoryCache<BlockMeta>;
+pub type BlockMetaCache = MemoryCache<FileMetaData>;
 
 pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, &'a QueryContext>;
 pub type TableSnapshotReader<'a> = CachedReader<TableSnapshot, &'a QueryContext>;
 
 /// A sugar type of BlockMeta reader
-pub type BlockMetaReader = CachedReader<BlockMeta, Arc<QueryContext>>;
+pub type BlockMetaReader = CachedReader<FileMetaData, Arc<QueryContext>>;
 
 /// Aux struct, factory of common readers
 pub struct MetaReaders;
@@ -153,16 +153,16 @@ where T: BufReaderProvider + Sync
 }
 
 #[async_trait::async_trait]
-impl<T> Loader<BlockMeta> for T
+impl<T> Loader<FileMetaData> for T
 where T: BufReaderProvider + Sync
 {
-    async fn load(&self, key: &str, length_hint: Option<u64>, _version: u64) -> Result<BlockMeta> {
+    async fn load(&self, key: &str, length_hint: Option<u64>, _version: u64) -> Result<FileMetaData> {
         let mut reader = self.buf_reader(key, length_hint).await?;
         let meta = read_metadata_async(&mut reader)
             .instrument(debug_span!("parquet_source_read_meta"))
             .await
             .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-        Ok(BlockMeta(meta))
+        Ok(FileMetaData(meta))
     }
 }
 

@@ -118,7 +118,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.9.1"
-source = "git+https://github.com/datafuse-extras/arrow2?rev=f71124b#f71124b2e07cebcfd6bcb0210567d08edd5cf581"
+source = "git+https://github.com/datafuse-extras/arrow2?rev=b0774c8#b0774c8a9b4819fef513934a6ed665b7df606315"
 dependencies = [
  "ahash",
  "arrow-format",
@@ -136,7 +136,6 @@ dependencies = [
  "lexical-core",
  "multiversion",
  "num-traits",
- "packed_simd_2",
  "parquet2",
  "regex",
  "serde",
@@ -695,15 +694,6 @@ dependencies = [
 [[package]]
 name = "bincode"
 version = "1.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "bincode"
-version = "1.3.3"
 source = "git+https://github.com/datafuse-extras/bincode?rev=fd3f9ff#fd3f9fff35b5c682ea15a9b997c7114303685b64"
 dependencies = [
  "serde",
@@ -1218,6 +1208,7 @@ dependencies = [
  "arrow-format",
  "arrow2",
  "futures",
+ "parquet-format-async-temp",
  "parquet2",
 ]
 
@@ -1343,6 +1334,7 @@ dependencies = [
  "common-io",
  "pretty_assertions",
  "regex",
+ "smallvec",
 ]
 
 [[package]]
@@ -1369,6 +1361,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "smallvec",
  "typetag",
 ]
 
@@ -1378,9 +1371,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "backtrace",
- "bincode 1.3.3 (git+https://github.com/datafuse-extras/bincode?rev=fd3f9ff)",
+ "bincode",
  "common-arrow",
  "octocrab",
+ "opendal",
  "paste",
  "prost",
  "serde",
@@ -1465,9 +1459,11 @@ dependencies = [
 name = "common-io"
 version = "0.1.0"
 dependencies = [
- "bincode 1.3.3 (git+https://github.com/datafuse-extras/bincode?rev=fd3f9ff)",
+ "bincode",
  "bytes",
  "common-exception",
+ "futures",
+ "opendal",
  "rand 0.8.5",
  "serde",
 ]
@@ -1678,6 +1674,8 @@ dependencies = [
  "once_cell",
  "pretty_assertions",
  "serde",
+ "serde_json",
+ "typetag",
 ]
 
 [[package]]
@@ -2226,7 +2224,7 @@ dependencies = [
  "async-trait",
  "backoff",
  "base64 0.13.0",
- "bincode 1.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bincode",
  "bumpalo",
  "byteorder",
  "bytes",
@@ -2301,6 +2299,7 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tonic",
+ "typetag",
  "uuid",
  "walkdir",
  "wiremock",
@@ -3774,12 +3773,6 @@ dependencies = [
 
 [[package]]
 name = "libm"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fc7aa29613bd6a620df431842069224d8bc9011086b1db4c0e0cd47fa03ec9a"
-
-[[package]]
-name = "libm"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
@@ -3966,16 +3959,12 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb2da0a53ecf563b398350e3c1834ad27dd050eb47977472f2e654ccb39ff75f"
 dependencies = [
- "hyper",
  "indexmap",
- "ipnet",
  "metrics",
  "metrics-util",
  "parking_lot 0.11.2",
  "quanta",
  "thiserror",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -4422,7 +4411,7 @@ dependencies = [
  "autocfg 0.1.7",
  "byteorder",
  "lazy_static",
- "libm 0.2.1",
+ "libm",
  "num-integer",
  "num-iter",
  "num-traits",
@@ -4490,7 +4479,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a64b1ec5cda2586e284722486d802acf1f7dbdc623e2bfc57e65ca1cd099290"
 dependencies = [
  "autocfg 1.0.1",
- "libm 0.2.1",
+ "libm",
 ]
 
 [[package]]
@@ -4764,16 +4753,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "packed_simd_2"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "defdcfef86dcc44ad208f71d9ff4ce28df6537a4e0d6b0e8e845cb8ca10059a6"
-dependencies = [
- "cfg-if",
- "libm 0.1.4",
-]
-
-[[package]]
 name = "parking"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4842,9 +4821,8 @@ dependencies = [
 
 [[package]]
 name = "parquet2"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe2f206abf5ff36f501e6b6acb646de1d236ca4ecb35dc6a58cbedbf7cab748a"
+version = "0.10.3"
+source = "git+https://github.com/datafuse-extras/parquet2?rev=b3efb4e#b3efb4e45c125b2707084be6135676279ba8908f"
 dependencies = [
  "async-stream",
  "bitpacking",
@@ -5548,9 +5526,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.5.4"
+version = "1.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d07a8629359eb56f1e2fb1652bb04212c072a87ba68546a04065d525673ac461"
+checksum = "1a11647b6b25ff05a515cb92c365cec08801e83423a235b51e231e1808747286"
 dependencies = [
  "aho-corasick",
  "memchr",

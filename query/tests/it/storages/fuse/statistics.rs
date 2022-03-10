@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+use std::collections::HashMap;
+
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use databend_query::storages::fuse::statistics::accumulator;
@@ -61,7 +63,7 @@ fn test_ft_stats_accumulator() -> common_exception::Result<()> {
     let mut stats_acc = accumulator::StatisticsAccumulator::new();
     for item in blocks {
         let block_acc = stats_acc.begin(&item?)?;
-        stats_acc = block_acc.end(1, "".to_owned());
+        stats_acc = block_acc.end(1, "".to_owned(), HashMap::new());
     }
     assert_eq!(10, stats_acc.blocks_statistics.len());
     // TODO more cases here pls

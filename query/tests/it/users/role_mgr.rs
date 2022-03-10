@@ -27,12 +27,12 @@ async fn test_role_manager() -> Result<()> {
     let conf = crate::tests::ConfigBuilder::create().config();
 
     let tenant = "tenant1";
-    let role_identity = RoleIdentity::new("test-role1".to_string(), "%".to_string());
+    let role_identity = RoleIdentity::new("test-role1".to_string());
     let role_mgr = UserApiProvider::create_global(conf).await?;
 
     // add role
     {
-        let role_info = RoleInfo::new(role_identity.name.clone(), role_identity.host.clone());
+        let role_info = RoleInfo::new(role_identity.name.clone());
         role_mgr.add_role(tenant, role_info).await?;
     }
 

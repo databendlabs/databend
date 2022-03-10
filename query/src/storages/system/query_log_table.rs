@@ -23,7 +23,10 @@ use common_infallible::RwLock;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_planners::Extras;
+use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
+use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -71,9 +74,12 @@ impl QueryLogTable {
             // Stats.
             DataField::new("written_rows", u64::to_data_type()),
             DataField::new("written_bytes", u64::to_data_type()),
+            DataField::new("written_io_bytes", u64::to_data_type()),
+            DataField::new("written_io_bytes_cost_ms", u64::to_data_type()),
             DataField::new("scan_rows", u64::to_data_type()),
             DataField::new("scan_bytes", u64::to_data_type()),
-            DataField::new("scan_byte_cost_ms", u64::to_data_type()),
+            DataField::new("scan_io_bytes", u64::to_data_type()),
+            DataField::new("scan_io_bytes_cost_ms", u64::to_data_type()),
             DataField::new("scan_partitions", u64::to_data_type()),
             DataField::new("total_partitions", u64::to_data_type()),
             DataField::new("result_rows", u64::to_data_type()),
@@ -125,6 +131,14 @@ impl Table for QueryLogTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
+    }
+
+    async fn read_partitions(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _push_downs: Option<Extras>,
+    ) -> Result<(Statistics, Partitions)> {
+        Ok((Statistics::default(), vec![]))
     }
 
     async fn read(

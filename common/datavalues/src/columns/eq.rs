@@ -97,7 +97,7 @@ pub fn equal(lhs: &dyn Column, rhs: &dyn Column) -> bool {
             lhs.values() == rhs.values()
         }
 
-        other => with_match_physical_primitive_type!(other, |$T| {
+        other => with_match_physical_primitive_type_error!(other, |$T| {
             let lhs: &PrimitiveColumn<$T> = lhs.as_any().downcast_ref().unwrap();
             let rhs: &PrimitiveColumn<$T> = rhs.as_any().downcast_ref().unwrap();
 

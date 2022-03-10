@@ -14,8 +14,6 @@
 
 mod s3_external_source;
 mod s3_external_table;
-mod s3_file_reader;
 
 pub use s3_external_source::ExternalSource;
 pub use s3_external_table::S3ExternalTable;
-pub use s3_file_reader::S3FileReader;

@@ -85,7 +85,7 @@ impl RoleMgr {
     }
 
     fn make_role_key(&self, role: &RoleIdentity) -> String {
-        format!("{}/{}@{}", self.role_prefix, role.name, role.host)
+        format!("{}/{}", self.role_prefix, role.name)
     }
 }
 
@@ -160,7 +160,7 @@ impl RoleApi for RoleMgr {
         let mut role_info = role_val_seq.await?.data;
         role_info
             .grants
-            .grant_privileges(&role.name, &role.host, &object, privileges);
+            .grant_privileges(&role.name, "", &object, privileges);
         let seq = self.upsert_role_info(&role_info, seq).await?;
         Ok(Some(seq))
     }

@@ -13,188 +13,76 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::fmt;
-use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataValueComparisonOperator;
-use common_exception::ErrorCode;
-use common_exception::Result;
 use regex::bytes::Regex as BytesRegex;
 
-use crate::scalars::assert_string;
-use crate::scalars::function_factory::FunctionDescription;
-use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use super::comparison::StringSearchCreator;
+use super::utils::StringSearchImpl;
+
+pub type ComparisonLikeFunction = StringSearchCreator<false, StringSearchLike>;
+pub type ComparisonNotLikeFunction = StringSearchCreator<true, StringSearchLike>;
 
 #[derive(Clone)]
-pub struct ComparisonLikeFunction {
-    op: DataValueComparisonOperator,
-}
+pub struct StringSearchLike;
 
-impl ComparisonLikeFunction {
-    pub fn try_create_like(_display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(ComparisonLikeFunction {
-            op: DataValueComparisonOperator::Like,
-        }))
-    }
+impl StringSearchImpl for StringSearchLike {
+    /// QUOTE: (From arrow2::arrow::compute::like::a_like_binary)
+    fn vector_vector(
+        lhs: &StringColumn,
+        rhs: &StringColumn,
+        op: impl Fn(bool) -> bool,
+    ) -> BooleanColumn {
+        let mut map = HashMap::new();
 
-    pub fn try_create_nlike(_display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(ComparisonLikeFunction {
-            op: DataValueComparisonOperator::NotLike,
-        }))
-    }
+        let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
 
-    pub fn desc_like() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_like)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .negative_function("not like")
-                .bool_function()
-                .num_arguments(2),
-        )
-    }
+        for (lhs_value, rhs_value) in lhs.scalar_iter().zip(rhs.scalar_iter()) {
+            let pattern = if let Some(pattern) = map.get(rhs_value) {
+                pattern
+            } else {
+                let pattern_str = simdutf8::basic::from_utf8(rhs_value)
+                    .expect("Unable to convert the LIKE pattern to string: {}");
+                let re_pattern = like_pattern_to_regex(pattern_str);
+                let re = BytesRegex::new(&re_pattern)
+                    .expect("Unable to build regex from LIKE pattern: {}");
+                map.insert(rhs_value, re);
+                map.get(rhs_value).unwrap()
+            };
 
-    pub fn desc_unlike() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_nlike)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .negative_function("like")
-                .bool_function()
-                .num_arguments(2),
-        )
-    }
-}
-
-impl Function for ComparisonLikeFunction {
-    fn name(&self) -> &str {
-        match self.op {
-            DataValueComparisonOperator::Like => "like",
-            DataValueComparisonOperator::NotLike => "not like",
-            _ => unreachable!(),
+            builder.append(op(pattern.is_match(lhs_value)));
         }
+        builder.build_column()
     }
 
-    fn return_type(
-        &self,
-        args: &[&common_datavalues::DataTypePtr],
-    ) -> Result<common_datavalues::DataTypePtr> {
-        for arg in args {
-            assert_string(*arg)?;
-        }
-
-        Ok(BooleanType::arc())
-    }
-
-    fn eval(
-        &self,
-        columns: &common_datavalues::ColumnsWithField,
-        _input_rows: usize,
-    ) -> Result<common_datavalues::ColumnRef> {
-        let col1: Result<&ConstColumn> = Series::check_get(columns[1].column());
-
-        if let Ok(col1) = col1 {
-            let rhs = col1.get_string(0)?;
-            return self.eval_constant(columns[0].column(), &rhs);
-        }
-
-        let result = match self.op {
-            DataValueComparisonOperator::Like => {
-                a_like_binary(columns[0].column(), columns[1].column(), |x| x)
+    /// QUOTE: (From arrow2::arrow::compute::like::a_like_binary_scalar)
+    fn vector_const(lhs: &StringColumn, rhs: &[u8], op: impl Fn(bool) -> bool) -> BooleanColumn {
+        match check_pattern_type(rhs, false) {
+            PatternType::OrdinalStr => {
+                BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(x == rhs)))
             }
-            DataValueComparisonOperator::NotLike => {
-                a_like_binary(columns[0].column(), columns[1].column(), |x| !x)
+            PatternType::EndOfPercent => {
+                // fast path, can use starts_with
+                let starts_with = &rhs[..rhs.len() - 1];
+                BooleanColumn::from_iterator(
+                    lhs.scalar_iter().map(|x| op(x.starts_with(starts_with))),
+                )
             }
-            _ => unreachable!(),
-        }?;
-
-        Ok(Arc::new(result))
-    }
-}
-
-impl ComparisonLikeFunction {
-    fn eval_constant(&self, lhs: &ColumnRef, rhs: &[u8]) -> Result<common_datavalues::ColumnRef> {
-        let result = match self.op {
-            DataValueComparisonOperator::Like => a_like_binary_scalar(lhs, rhs, |x| x),
-            DataValueComparisonOperator::NotLike => a_like_binary_scalar(lhs, rhs, |x| !x),
-            _ => unreachable!(),
-        }?;
-        Ok(Arc::new(result))
-    }
-}
-
-impl fmt::Display for ComparisonLikeFunction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.op)
-    }
-}
-
-/// QUOTE: (From arrow2::arrow::compute::like::a_like_binary)
-#[inline]
-pub fn a_like_binary<F>(lhs: &ColumnRef, rhs: &ColumnRef, op: F) -> Result<BooleanColumn>
-where F: Fn(bool) -> bool {
-    let mut map = HashMap::new();
-
-    let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
-
-    let lhs = Vu8::try_create_viewer(lhs)?;
-    let rhs = Vu8::try_create_viewer(rhs)?;
-
-    for (lhs_value, rhs_value) in lhs.iter().zip(rhs.iter()) {
-        let pattern = if let Some(pattern) = map.get(rhs_value) {
-            pattern
-        } else {
-            let pattern_str = simdutf8::basic::from_utf8(rhs_value).map_err(|e| {
-                ErrorCode::BadArguments(format!(
-                    "Unable to convert the LIKE pattern to string: {}",
-                    e
-                ))
-            })?;
-            let re_pattern = like_pattern_to_regex(pattern_str);
-            let re = BytesRegex::new(&re_pattern).map_err(|e| {
-                ErrorCode::BadArguments(format!("Unable to build regex from LIKE pattern: {}", e))
-            })?;
-            map.insert(rhs_value, re);
-            map.get(rhs_value).unwrap()
-        };
-
-        builder.append(op(pattern.is_match(lhs_value)));
-    }
-    Ok(builder.build_column())
-}
-
-/// QUOTE: (From arrow2::arrow::compute::like::a_like_binary_scalar)
-#[inline]
-pub fn a_like_binary_scalar<F>(lhs: &ColumnRef, rhs: &[u8], op: F) -> Result<BooleanColumn>
-where F: Fn(bool) -> bool {
-    let viewer = Vu8::try_create_viewer(lhs)?;
-    let column = match check_pattern_type(rhs, false) {
-        PatternType::OrdinalStr => BooleanColumn::from_iterator(viewer.iter().map(|x| x == rhs)),
-        PatternType::EndOfPercent => {
-            // fast path, can use starts_with
-            let starts_with = &rhs[..rhs.len() - 1];
-            BooleanColumn::from_iterator(viewer.iter().map(|x| op(x.starts_with(starts_with))))
+            PatternType::StartOfPercent => {
+                // fast path, can use ends_with
+                let ends_with = &rhs[1..];
+                BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(x.ends_with(ends_with))))
+            }
+            PatternType::PatternStr => {
+                let pattern = simdutf8::basic::from_utf8(rhs)
+                    .expect("Unable to convert the LIKE pattern to string: {}");
+                let re_pattern = like_pattern_to_regex(pattern);
+                let re = BytesRegex::new(&re_pattern)
+                    .expect("Unable to build regex from LIKE pattern: {}");
+                BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(re.is_match(x))))
+            }
         }
-        PatternType::StartOfPercent => {
-            // fast path, can use ends_with
-            let ends_with = &rhs[1..];
-            BooleanColumn::from_iterator(viewer.iter().map(|x| op(x.ends_with(ends_with))))
-        }
-        PatternType::PatternStr => {
-            let pattern = simdutf8::basic::from_utf8(rhs).map_err(|e| {
-                ErrorCode::BadArguments(format!(
-                    "Unable to convert the LIKE pattern to string: {}",
-                    e
-                ))
-            })?;
-            let re_pattern = like_pattern_to_regex(pattern);
-            let re = BytesRegex::new(&re_pattern).map_err(|e| {
-                ErrorCode::BadArguments(format!("Unable to build regex from LIKE pattern: {}", e))
-            })?;
-            BooleanColumn::from_iterator(viewer.iter().map(|x| op(re.is_match(x))))
-        }
-    };
-    Ok(column)
+    }
 }
 
 #[inline]

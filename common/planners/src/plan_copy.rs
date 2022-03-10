@@ -61,6 +61,7 @@ pub struct CopyPlan {
     pub from: ReadDataSourcePlan,
     pub validation_mode: ValidationMode,
     pub files: Vec<String>,
+    pub pattern: String,
 }
 
 impl CopyPlan {
@@ -76,6 +77,9 @@ impl Debug for CopyPlan {
         write!(f, ", {:?}", self.from)?;
         if !self.files.is_empty() {
             write!(f, " ,files:{:?}", self.files)?;
+        }
+        if !self.pattern.is_empty() {
+            write!(f, " ,pattern:{:?}", self.pattern)?;
         }
         write!(f, " ,validation_mode:{:?}", self.validation_mode)
     }

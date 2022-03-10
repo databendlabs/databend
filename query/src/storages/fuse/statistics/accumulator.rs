@@ -23,6 +23,7 @@ use common_functions::aggregates::eval_aggr;
 use crate::storages::fuse::meta::BlockLocation;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::ColumnId;
+use crate::storages::fuse::meta::ColumnMeta;
 use crate::storages::index::BlockStatistics;
 use crate::storages::index::ColumnStatistics;
 
@@ -113,7 +114,12 @@ pub struct PartiallyAccumulated {
 }
 
 impl PartiallyAccumulated {
-    pub fn end(mut self, file_size: u64, location: String) -> StatisticsAccumulator {
+    pub fn end(
+        mut self,
+        file_size: u64,
+        location: String,
+        col_metas: HashMap<ColumnId, ColumnMeta>,
+    ) -> StatisticsAccumulator {
         let mut stats = &mut self.accumulator;
         stats.file_size += file_size;
         let block_meta = BlockMeta {
@@ -126,6 +132,7 @@ impl PartiallyAccumulated {
             in_memory_size: self.in_memory_size,
             storage_size: file_size,
             col_stats: self.block_column_statistics,
+            col_metas,
         };
         stats.blocks_metas.push(block_meta);
         self.accumulator

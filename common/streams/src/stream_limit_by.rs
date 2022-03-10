@@ -57,7 +57,7 @@ impl LimitByStream {
         let group_indices = method.group_by_get_indices(block, &self.limit_by_columns_name)?;
 
         for (limit_by_key, (rows, _)) in group_indices {
-            let count = self.keys_count.entry(limit_by_key.clone()).or_default();
+            let count = self.keys_count.entry(limit_by_key.to_vec()).or_default();
             // limit reached, no need to check rows
             if *count >= self.limit {
                 continue;

@@ -52,7 +52,7 @@ clap = { version = "3.1.3", features = ["derive", "env"] }
 derive_more = "0.99.17"
 futures = "0.3.21"
 metrics = "0.18.0"
-metrics-exporter-prometheus = "0.8.0"
+metrics-exporter-prometheus = { version = "0.8.0", default-features = false }
 num = "0.4.0"
 num_cpus = "1.13.1"
 poem = { version = "1.3.6", features = ["rustls"] }
@@ -77,6 +77,6 @@ tonic-build = "0.6.2"
 [dev-dependencies]
 common-meta-api = { path = "../common/meta/api" }
 maplit = "1.0.2"
-regex = "1.5.4"
+regex = "1.5.5"
 pretty_assertions = "1.1.0"
 reqwest = { version = "0.11.9", features = ["json"] }

@@ -50,6 +50,7 @@ fn test_to_partitions() -> Result<()> {
             .sum(),
         storage_size: 0,
         col_stats: cols_stats.clone(),
+        col_metas: Default::default(),
         location: BlockLocation {
             path: "".to_string(),
             meta_size: 0,

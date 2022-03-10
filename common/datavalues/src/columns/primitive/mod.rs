@@ -20,6 +20,8 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::bitmap::utils::BitChunkIterExact;
+use common_arrow::arrow::bitmap::utils::BitChunksExact;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::arity::unary;
@@ -185,21 +187,78 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
     }
 
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
-        let length = filter.values().len() - filter.values().null_count();
-        if length == self.len() {
+        assert_eq!(self.len(), filter.values().len());
+
+        let selected = filter.values().len() - filter.values().null_count();
+        if selected == self.len() {
             return Arc::new(self.clone());
         }
-        let iter = self
-            .values()
-            .iter()
-            .zip(filter.values().iter())
-            .filter(|(_, f)| *f)
-            .map(|(v, _)| *v);
 
-        let values: Vec<T> = iter.collect();
-        let col = PrimitiveColumn {
-            values: values.into(),
-        };
+        let mut new = Vec::<T>::with_capacity(selected);
+        let mut dst = new.as_mut_ptr();
+
+        let (mut slice, offset, mut length) = filter.values().as_slice();
+        let mut values = self.values();
+        if offset > 0 {
+            // Consume the offset
+            let n = 8 - offset;
+            values
+                .iter()
+                .zip(filter.values().iter())
+                .take(n)
+                .for_each(|(value, is_selected)| {
+                    if is_selected {
+                        unsafe {
+                            dst.write(*value);
+                            dst = dst.add(1);
+                        }
+                    }
+                });
+            slice = &slice[1..];
+            length -= n;
+            values = &values[n..];
+        }
+
+        const CHUNK_SIZE: usize = 64;
+        let mut chunks = values.chunks_exact(CHUNK_SIZE);
+        let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
+
+        chunks
+            .by_ref()
+            .zip(mask_chunks.by_ref())
+            .for_each(|(chunk, mut mask)| {
+                if mask == u64::MAX {
+                    unsafe {
+                        std::ptr::copy(chunk.as_ptr(), dst, CHUNK_SIZE);
+                        dst = dst.add(CHUNK_SIZE);
+                    }
+                } else {
+                    while mask != 0 {
+                        let n = mask.trailing_zeros() as usize;
+                        unsafe {
+                            dst.write(chunk[n]);
+                            dst = dst.add(1);
+                        }
+                        mask = mask & (mask - 1);
+                    }
+                }
+            });
+
+        chunks
+            .remainder()
+            .iter()
+            .zip(mask_chunks.remainder_iter())
+            .for_each(|(value, is_selected)| {
+                if is_selected {
+                    unsafe {
+                        dst.write(*value);
+                        dst = dst.add(1);
+                    }
+                }
+            });
+
+        unsafe { new.set_len(selected) };
+        let col = PrimitiveColumn { values: new.into() };
 
         Arc::new(col)
     }

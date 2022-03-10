@@ -15,6 +15,7 @@
 //! Everything you need to get started with this crate.
 use common_arrow::arrow::array::BinaryArray;
 use common_arrow::arrow::array::MutableBinaryArray;
+use smallvec::SmallVec;
 
 pub use crate::columns::*;
 pub use crate::data_group_value::*;
@@ -39,5 +40,6 @@ pub use crate::DataValueUnaryOperator;
 pub type MutableLargeBinaryArray = MutableBinaryArray<i64>;
 pub type LargeBinaryArray = BinaryArray<i64>;
 
+pub type SmallVu8 = SmallVec<[u8; 16]>;
 pub type Vu8 = Vec<u8>;
 pub type Vu32 = Vec<u32>;
