@@ -72,11 +72,11 @@ impl WarehousesTable {
     }
     pub fn schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("warehouse_name", Vu8::to_data_type()),
+            DataField::new("name", Vu8::to_data_type()),
             DataField::new("tenant_id", Vu8::to_data_type()),
-            DataField::new("warehouse_id", Vu8::to_data_type()),
-            DataField::new("warehouse_size", Vu8::to_data_type()),
-            DataField::new("warehouse_creation_time", DateTime32Type::arc(None)),
+            DataField::new("id", Vu8::to_data_type()),
+            DataField::new("size", Vu8::to_data_type()),
+            DataField::new("creation_time", DateTime32Type::arc(None)),
         ])
     }
     pub fn create(table_id: u64) -> Arc<dyn Table> {
