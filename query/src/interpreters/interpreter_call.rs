@@ -25,7 +25,7 @@ use common_tracing::tracing;
 
 use super::Interpreter;
 use super::InterpreterPtr;
-use crate::functions::systems::FunctionFactory;
+use crate::functions::FunctionFactory;
 use crate::sessions::QueryContext;
 
 pub struct CallInterpreter {
