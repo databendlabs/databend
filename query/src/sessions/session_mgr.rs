@@ -126,31 +126,37 @@ impl SessionManager {
     }
 
     pub async fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
-        let mut sessions = self.active_sessions.write().await;
-
-        match sessions.len() == self.max_sessions {
-            true => Err(ErrorCode::TooManyUserConnections(
-                "The current accept connection has exceeded mysql_handler_thread_num config",
-            )),
-            false => {
-                let session = Session::try_create(
-                    self.conf.clone(),
-                    uuid::Uuid::new_v4().to_string(),
-                    typ.into(),
-                    self.clone(),
-                )
-                .await?;
-
-                label_counter(
-                    super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
-                    &self.conf.query.tenant_id,
-                    &self.conf.query.cluster_id,
-                );
-
-                sessions.insert(session.get_id(), session.clone());
-
-                Ok(SessionRef::create(session))
+        {
+            let sessions = self.active_sessions.read().await;
+            if sessions.len() == self.max_sessions {
+                return Err(ErrorCode::TooManyUserConnections(
+                    "The current accept connection has exceeded mysql_handler_thread_num config",
+                ));
             }
+        }
+        let session = Session::try_create(
+            self.conf.clone(),
+            uuid::Uuid::new_v4().to_string(),
+            typ.into(),
+            self.clone(),
+        )
+        .await?;
+
+        let mut sessions = self.active_sessions.write().await;
+        if sessions.len() < self.max_sessions {
+            label_counter(
+                super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
+                &self.conf.query.tenant_id,
+                &self.conf.query.cluster_id,
+            );
+
+            sessions.insert(session.get_id(), session.clone());
+
+            Ok(SessionRef::create(session))
+        } else {
+            Err(ErrorCode::TooManyUserConnections(
+                "The current accept connection has exceeded mysql_handler_thread_num config",
+            ))
         }
     }
 
