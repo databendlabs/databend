@@ -219,7 +219,7 @@ impl SessionManager {
             let mut signal = Box::pin(signal.next());
 
             for _index in 0..timeout_secs {
-                if SessionManager::destroy_idle_sessions(&active_sessions) {
+                if SessionManager::destroy_idle_sessions(&active_sessions).await {
                     return;
                 }
 
@@ -248,10 +248,10 @@ impl SessionManager {
             .collect::<Vec<_>>()
     }
 
-    fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Arc<Session>>>>) -> bool {
+    async fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Arc<Session>>>>) -> bool {
         // Read lock does not support reentrant
         // https://github.com/Amanieu/parking_lot/blob/lock_api-0.4.4/lock_api/src/rwlock.rs#L422
-        let active_sessions_read_guard = futures::executor::block_on(sessions.read());
+        let active_sessions_read_guard = sessions.read().await;
 
         // First try to kill the idle session
         active_sessions_read_guard.values().for_each(Session::kill);
