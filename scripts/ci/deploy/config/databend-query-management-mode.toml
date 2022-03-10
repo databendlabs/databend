@@ -7,7 +7,7 @@ wait_timeout_mills = 5000
 
 # Databend Query http address.
 # For admin RESET API.
-http_api_address = "0.0.0.0:8081"
+admin_api_address = "0.0.0.0:8081"
 
 # Databend Query metrics RESET API.
 metric_api_address = "0.0.0.0:7071"

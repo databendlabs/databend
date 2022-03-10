@@ -478,8 +478,8 @@ impl LocalRuntime for LocalQueryConfig {
                 conf.query.flight_api_address,
             )
             .env(
-                databend_query::configs::config_query::QUERY_HTTP_API_ADDRESS,
-                conf.query.http_api_address,
+                databend_query::configs::config_query::QUERY_ADMIN_API_ADDRESS,
+                conf.query.admin_api_address,
             )
             .env(
                 databend_query::configs::config_query::QUERY_METRICS_API_ADDRESS,
@@ -548,7 +548,7 @@ impl LocalRuntime for LocalQueryConfig {
 
         let url = {
             if !self.config.tls_rpc_server_enabled() {
-                format!("http://{}/v1/health", self.config.query.http_api_address)
+                format!("http://{}/v1/health", self.config.query.admin_api_address)
             } else {
                 todo!()
             }

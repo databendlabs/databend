@@ -50,7 +50,7 @@ async fn test_configs_table() -> Result<()> {
         "| disk.data_path                       | _data                    | storage |             |",
         "| disk.temp_data_path                  |                          | storage |             |",
         "| flight_api_address                   | 127.0.0.1:9090           | query   |             |",
-        "| http_api_address                     | 127.0.0.1:8080           | query   |             |",
+        "| admin_api_address                    | 127.0.0.1:8080           | query   |             |",
         "| http_handler_host                    | 127.0.0.1                | query   |             |",
         "| http_handler_port                    | 8000                     | query   |             |",
         "| http_handler_result_timeout_millis   | 10000                    | query   |             |",

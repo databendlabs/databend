@@ -213,7 +213,7 @@ async fn test_verify() -> Result<()> {
         path: Some("./".to_string()),
         log_dir: Some("./".to_string()),
     };
-    query_config.config.query.http_api_address = server2.address().to_string();
+    query_config.config.query.admin_api_address = server2.address().to_string();
 
     let mut query_config2 = LocalQueryConfig {
         config: QueryConfig::default(),
@@ -221,7 +221,7 @@ async fn test_verify() -> Result<()> {
         path: Some("./".to_string()),
         log_dir: Some("./".to_string()),
     };
-    query_config2.config.query.http_api_address = server2.address().to_string();
+    query_config2.config.query.admin_api_address = server2.address().to_string();
     // successful case should return immediately
     let t1 = meta_config.verify(Some(10), Some(Duration::from_millis(100)));
     // failed case should return after 2 times retry

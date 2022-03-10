@@ -50,7 +50,7 @@ macro_rules! build_status {
         };
         query_config.config.query.http_handler_host = "127.0.0.1".to_string();
         query_config.config.query.http_handler_port = $http_port;
-        query_config.config.query.http_api_address = format!("127.0.0.1:456");
+        query_config.config.query.admin_api_address = format!("127.0.0.1:456");
 
         Status::save_local_config(
             &mut status,
