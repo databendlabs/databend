@@ -128,7 +128,7 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("QUERY_CLICKHOUSE_HANDLER_HOST", "1.2.3.4");
     std::env::set_var("QUERY_CLICKHOUSE_HANDLER_PORT", "9000");
     std::env::set_var("QUERY_FLIGHT_API_ADDRESS", "1.2.3.4:9091");
-    std::env::set_var("QUERY_HTTP_API_ADDRESS", "1.2.3.4:8081");
+    std::env::set_var("QUERY_ADMIN_API_ADDRESS", "1.2.3.4:8081");
     std::env::set_var("QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");
     std::env::set_var("QUERY_TABLE_CACHE_ENABLED", "true");
     std::env::set_var("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", "512");
@@ -196,7 +196,7 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_PORT");
     std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_THREAD_NUM");
     std::env::remove_var("QUERY_FLIGHT_API_ADDRESS");
-    std::env::remove_var("QUERY_HTTP_API_ADDRESS");
+    std::env::remove_var("QUERY_ADMIN_API_ADDRESS");
     std::env::remove_var("QUERY_METRIC_API_ADDRESS");
     std::env::remove_var("QUERY_TABLE_CACHE_ENABLED");
     std::env::remove_var("QUERY_TABLE_MEMORY_CACHE_MB_SIZE");
