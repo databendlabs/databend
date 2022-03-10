@@ -20,7 +20,7 @@ mysql> select * from  configs;
 | http_handler_host                    | 127.0.0.1        | query |             |
 | http_handler_port                    | 8000             | query |             |
 | flight_api_address                   | 127.0.0.1:9090   | query |             |
-| http_api_address                     | 127.0.0.1:8080   | query |             |
+| admin_api_address                    | 127.0.0.1:8080   | query |             |
 | metric_api_address                   | 127.0.0.1:7070   | query |             |
 | http_handler_tls_server_cert         |                  | query |             |
 | http_handler_tls_server_key          |                  | query |             |
