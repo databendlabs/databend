@@ -13,49 +13,71 @@
 //  limitations under the License.
 
 use std::io::ErrorKind;
+use std::marker::PhantomData;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::AsyncRead;
+use serde::de::DeserializeOwned;
 use serde_json::from_slice;
 
 use crate::storages::fuse::io::VersionedLoader;
+use crate::storages::fuse::meta::v0::snapshot::TableSnapshot as TableSnapshotV0;
 use crate::storages::fuse::meta::v1::snapshot::TableSnapshot;
 
+pub struct Versioned<T> {
+    _p: PhantomData<T>,
+}
+
+impl<T> Versioned<T> {
+    fn new() -> Self {
+        Self { _p: PhantomData }
+    }
+}
+
 pub enum SnapshotVersions {
-    V0,
-    V1,
+    V0(Versioned<TableSnapshotV0>),
+    V1(Versioned<TableSnapshot>),
 }
 
 impl TryFrom<u64> for SnapshotVersions {
     type Error = ErrorCode;
     fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
         match value {
-            0 => Ok(SnapshotVersions::V0),
-            1 => Ok(SnapshotVersions::V1),
+            0 => Ok(SnapshotVersions::V0(Versioned::new())),
+            1 => Ok(SnapshotVersions::V1(Versioned::new())),
             _ => Err(ErrorCode::LogicalError("unknown snapshot version")),
         }
     }
 }
 
-// TODO more type safe versioned meta data and loader
-
 #[async_trait::async_trait]
 impl VersionedLoader<TableSnapshot> for SnapshotVersions {
     async fn vload<R>(
         &self,
-        mut reader: R,
+        reader: R,
         _location: &str,
         _len_hint: Option<u64>,
     ) -> Result<TableSnapshot>
     where
         R: AsyncRead + Unpin + Send,
     {
-        let mut buffer = vec![];
+        let r = match self {
+            SnapshotVersions::V1(v) => Self::parse_it(reader, v).await?,
+            SnapshotVersions::V0(v) => Self::parse_it(reader, v).await?.into(),
+        };
+        Ok(r)
+    }
+}
 
+impl SnapshotVersions {
+    async fn parse_it<R, T>(mut reader: T, _v: &Versioned<R>) -> Result<R>
+    where
+        R: DeserializeOwned,
+        T: AsyncRead + Unpin + Send,
+    {
+        let mut buffer: Vec<u8> = vec![];
         use futures::AsyncReadExt;
-
-        use crate::storages::fuse::meta::v0::snapshot::TableSnapshot as TableSnapshotV0;
         reader.read_to_end(&mut buffer).await.map_err(|e| {
             let msg = e.to_string();
             if e.kind() == ErrorKind::NotFound {
@@ -64,10 +86,6 @@ impl VersionedLoader<TableSnapshot> for SnapshotVersions {
                 ErrorCode::DalTransportError(msg)
             }
         })?;
-        let r = match self {
-            SnapshotVersions::V1 => from_slice(&buffer)?,
-            SnapshotVersions::V0 => from_slice::<TableSnapshotV0>(&buffer)?.into(),
-        };
-        Ok(r)
+        Ok(from_slice::<R>(&buffer)?)
     }
 }
