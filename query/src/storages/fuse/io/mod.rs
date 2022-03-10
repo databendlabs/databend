@@ -19,6 +19,7 @@ mod cached_reader;
 mod locations;
 mod meta_readers;
 mod parallel_async_reader;
+mod versioned_reader;
 
 pub use block_reader::BlockReader;
 pub use block_stream_writer::BlockCompactor;
@@ -34,4 +35,3 @@ pub use meta_readers::SegmentInfoCache;
 pub use meta_readers::SegmentInfoReader;
 pub use meta_readers::TableSnapshotCache;
 pub use meta_readers::TableSnapshotReader;
-pub use meta_readers::VersionedLoader;

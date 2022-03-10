@@ -54,7 +54,6 @@ impl TableSnapshot {
 }
 
 use super::super::v0::snapshot::TableSnapshot as V0;
-
 impl From<V0> for TableSnapshot {
     fn from(s: V0) -> Self {
         Self {

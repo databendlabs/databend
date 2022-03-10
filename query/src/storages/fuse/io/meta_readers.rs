@@ -22,13 +22,13 @@ use common_exception::Result;
 use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
 use futures::io::BufReader;
-use futures::AsyncRead;
 use opendal::error::Kind as DalErrorKind;
 use opendal::Reader;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::cache::MemoryCache;
 use crate::storages::fuse::cache::TenantLabel;
+use crate::storages::fuse::io::versioned_reader::VersionedLoader;
 use crate::storages::fuse::io::CachedReader;
 use crate::storages::fuse::io::HasTenantLabel;
 use crate::storages::fuse::io::Loader;
@@ -36,12 +36,6 @@ use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::SnapshotVersions;
 use crate::storages::fuse::meta::TableSnapshot;
-
-#[async_trait::async_trait]
-pub trait VersionedLoader<T> {
-    async fn vload<R>(&self, read: R, location: &str, len_hint: Option<u64>) -> Result<T>
-    where R: AsyncRead + Unpin + Send;
-}
 
 /// Provider of [BufReader]
 ///

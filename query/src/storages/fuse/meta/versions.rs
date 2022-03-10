@@ -12,17 +12,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::io::ErrorKind;
 use std::marker::PhantomData;
 
 use common_exception::ErrorCode;
-use common_exception::Result;
-use futures::AsyncRead;
-use serde::de::DeserializeOwned;
-use serde_json::from_slice;
 
-use crate::storages::fuse::io::VersionedLoader;
+use crate::storages::fuse::meta::v0::segment::SegmentInfo as SegmentInfoV0;
 use crate::storages::fuse::meta::v0::snapshot::TableSnapshot as TableSnapshotV0;
+use crate::storages::fuse::meta::v1::segment::SegmentInfo;
 use crate::storages::fuse::meta::v1::snapshot::TableSnapshot;
 
 pub struct Versioned<T> {
@@ -30,7 +26,7 @@ pub struct Versioned<T> {
 }
 
 impl<T> Versioned<T> {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self { _p: PhantomData }
     }
 }
@@ -40,52 +36,36 @@ pub enum SnapshotVersions {
     V1(Versioned<TableSnapshot>),
 }
 
-impl TryFrom<u64> for SnapshotVersions {
-    type Error = ErrorCode;
-    fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
-        match value {
-            0 => Ok(SnapshotVersions::V0(Versioned::new())),
-            1 => Ok(SnapshotVersions::V1(Versioned::new())),
-            _ => Err(ErrorCode::LogicalError("unknown snapshot version")),
+pub enum SegmentInfoVersions {
+    V0(Versioned<SegmentInfoV0>),
+    V1(Versioned<SegmentInfo>),
+}
+
+mod converters {
+    use super::*;
+    impl TryFrom<u64> for SnapshotVersions {
+        type Error = ErrorCode;
+        fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
+            match value {
+                0 => Ok(SnapshotVersions::V0(Versioned::new())),
+                1 => Ok(SnapshotVersions::V1(Versioned::new())),
+                _ => Err(ErrorCode::LogicalError(format!(
+                    "unknown snapshot version {value}"
+                ))),
+            }
         }
     }
-}
 
-#[async_trait::async_trait]
-impl VersionedLoader<TableSnapshot> for SnapshotVersions {
-    async fn vload<R>(
-        &self,
-        reader: R,
-        _location: &str,
-        _len_hint: Option<u64>,
-    ) -> Result<TableSnapshot>
-    where
-        R: AsyncRead + Unpin + Send,
-    {
-        let r = match self {
-            SnapshotVersions::V1(v) => Self::parse_it(reader, v).await?,
-            SnapshotVersions::V0(v) => Self::parse_it(reader, v).await?.into(),
-        };
-        Ok(r)
-    }
-}
-
-impl SnapshotVersions {
-    async fn parse_it<R, T>(mut reader: T, _v: &Versioned<R>) -> Result<R>
-    where
-        R: DeserializeOwned,
-        T: AsyncRead + Unpin + Send,
-    {
-        let mut buffer: Vec<u8> = vec![];
-        use futures::AsyncReadExt;
-        reader.read_to_end(&mut buffer).await.map_err(|e| {
-            let msg = e.to_string();
-            if e.kind() == ErrorKind::NotFound {
-                ErrorCode::DalPathNotFound(msg)
-            } else {
-                ErrorCode::DalTransportError(msg)
+    impl TryFrom<u64> for SegmentInfoVersions {
+        type Error = ErrorCode;
+        fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
+            match value {
+                0 => Ok(SegmentInfoVersions::V0(Versioned::new())),
+                1 => Ok(SegmentInfoVersions::V1(Versioned::new())),
+                _ => Err(ErrorCode::LogicalError(format!(
+                    "unknown segment version {value}"
+                ))),
             }
-        })?;
-        Ok(from_slice::<R>(&buffer)?)
+        }
     }
 }

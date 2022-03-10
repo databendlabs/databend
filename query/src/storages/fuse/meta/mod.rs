@@ -20,4 +20,6 @@ mod v1;
 mod versions;
 
 pub use current::*;
+pub use versions::SegmentInfoVersions;
 pub use versions::SnapshotVersions;
+pub use versions::Versioned;

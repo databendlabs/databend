@@ -12,8 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod block;
-mod segment;
-// TODO adjust scope
+pub mod block;
+pub mod segment;
 pub mod snapshot;
 pub use snapshot::Statistics;

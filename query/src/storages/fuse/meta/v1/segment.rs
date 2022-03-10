@@ -26,3 +26,14 @@ pub struct SegmentInfo {
     /// summary statistics
     pub summary: Statistics,
 }
+
+use super::super::v0::segment::SegmentInfo as V0;
+impl From<V0> for SegmentInfo {
+    fn from(s: V0) -> Self {
+        Self {
+            format_version: 1,
+            blocks: s.blocks,
+            summary: s.summary,
+        }
+    }
+}
