@@ -30,6 +30,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PartInfoPtr;
+use common_tracing::tracing;
 use futures::AsyncReadExt;
 use opendal::Operator;
 
@@ -39,6 +40,7 @@ use crate::storages::fuse::fuse_part::FusePartInfo;
 #[derive(Clone)]
 pub struct BlockReader {
     operator: Operator,
+    projection: Vec<usize>,
     arrow_schema: Arc<Schema>,
     projected_schema: DataSchemaRef,
     parquet_schema_descriptor: SchemaDescriptor,
@@ -50,12 +52,13 @@ impl BlockReader {
         schema: DataSchemaRef,
         projection: Vec<usize>,
     ) -> Result<Arc<BlockReader>> {
-        let projected_schema = DataSchemaRef::new(schema.project(projection));
+        let projected_schema = DataSchemaRef::new(schema.project(projection.clone()));
 
         let arrow_schema = schema.to_arrow();
         let parquet_schema_descriptor = to_parquet_schema(&arrow_schema)?;
         Ok(Arc::new(BlockReader {
             operator,
+            projection,
             projected_schema,
             parquet_schema_descriptor,
             arrow_schema: Arc::new(arrow_schema),
@@ -94,7 +97,9 @@ impl BlockReader {
         let rows = part.nums_rows;
         // TODO: add prefetch column data.
         let mut columns_array_iter = Vec::with_capacity(0);
-        for (index, column_meta) in &part.columns_meta {
+        for index in &self.projection {
+            let column_meta = &part.columns_meta[index];
+
             let mut column_reader = self
                 .operator
                 .object(&part.location)
@@ -118,6 +123,7 @@ impl BlockReader {
         Ok((rows, columns_array_iter))
     }
 
+    #[tracing::instrument(level = "debug", skip_all)]
     pub async fn read(&self, part: PartInfoPtr) -> Result<DataBlock> {
         let this = self.clone();
         let (num_rows, columns_array_iter) = this.read_columns(part).await?;
