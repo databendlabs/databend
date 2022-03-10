@@ -32,7 +32,7 @@ pub const QUERY_HTTP_HANDLER_PORT: &str = "QUERY_HTTP_HANDLER_PORT";
 pub const QUERY_HTTP_HANDLER_RESULT_TIMEOUT_MILLIS: &str =
     "QUERY_HTTP_HANDLER_RESULT_TIMEOUT_MILLIS";
 pub const QUERY_FLIGHT_API_ADDRESS: &str = "QUERY_FLIGHT_API_ADDRESS";
-pub const QUERY_HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
+pub const QUERY_ADMIN_API_ADDRESS: &str = "QUERY_ADMIN_API_ADDRESS";
 pub const QUERY_METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
 pub const QUERY_WAIT_TIMEOUT_MILLS: &str = "QUERY_WAIT_TIMEOUT_MILLS";
 pub const QUERY_MAX_QUERY_LOG_SIZE: &str = "QUERY_MAX_QUERY_LOG_SIZE";
@@ -108,8 +108,8 @@ pub struct QueryConfig {
     #[clap(long, env = QUERY_FLIGHT_API_ADDRESS, default_value = "127.0.0.1:9090")]
     pub flight_api_address: String,
 
-    #[clap(long, env = QUERY_HTTP_API_ADDRESS, default_value = "127.0.0.1:8080")]
-    pub http_api_address: String,
+    #[clap(long, env = QUERY_ADMIN_API_ADDRESS, default_value = "127.0.0.1:8080")]
+    pub admin_api_address: String,
 
     #[clap(long,env = QUERY_METRICS_API_ADDRESS, default_value = "127.0.0.1:7070")]
     pub metric_api_address: String,
@@ -234,7 +234,7 @@ impl Default for QueryConfig {
             http_handler_port: 8000,
             http_handler_result_timeout_millis: 10000,
             flight_api_address: "127.0.0.1:9090".to_string(),
-            http_api_address: "127.0.0.1:8080".to_string(),
+            admin_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
             api_tls_server_cert: "".to_string(),
             api_tls_server_key: "".to_string(),
@@ -315,9 +315,9 @@ impl QueryConfig {
         env_helper!(
             mut_config,
             query,
-            http_api_address,
+            admin_api_address,
             String,
-            QUERY_HTTP_API_ADDRESS
+            QUERY_ADMIN_API_ADDRESS
         );
         env_helper!(
             mut_config,

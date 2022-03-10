@@ -48,7 +48,7 @@ http_handler_host = \"127.0.0.1\"
 http_handler_port = 8000
 http_handler_result_timeout_millis = 10000
 flight_api_address = \"127.0.0.1:9090\"
-http_api_address = \"127.0.0.1:8080\"
+admin_api_address = \"127.0.0.1:8080\"
 metric_api_address = \"127.0.0.1:7070\"
 http_handler_tls_server_cert = \"\"
 http_handler_tls_server_key = \"\"
@@ -161,7 +161,7 @@ fn test_env_config() -> Result<()> {
     assert_eq!(9000, configured.query.clickhouse_handler_port);
 
     assert_eq!("1.2.3.4:9091", configured.query.flight_api_address);
-    assert_eq!("1.2.3.4:8081", configured.query.http_api_address);
+    assert_eq!("1.2.3.4:8081", configured.query.admin_api_address);
     assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
 
     assert_eq!("s3", configured.storage.storage_type);
