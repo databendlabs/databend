@@ -20,6 +20,7 @@ mod user_info;
 mod user_privilege;
 mod user_quota;
 mod user_stage;
+mod warehouse_metadata;
 
 #[test]
 fn test_bin_commit_version() -> anyhow::Result<()> {

@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cluster;
-mod setting;
-mod stage;
-mod udf;
-mod user;
-mod warehouse;
+mod warehouse_api;
+mod warehouse_mgr;
+
+pub use warehouse_api::WarehouseApi;
+pub use warehouse_mgr::WarehouseMgr;
