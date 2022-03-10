@@ -26,7 +26,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_warehouses_table() -> Result<()> {
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
     let tenant = ctx.get_tenant();
     ctx.get_settings().set_max_threads(2)?;
     let test_id = "testsasa121id-1888-12-12-11-21-897991";
