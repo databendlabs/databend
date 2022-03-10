@@ -1,0 +1,14 @@
+# For documentation of these options see
+# https://github.com/google/yapf/blob/HEAD/README.rst
+[style]
+based_on_style = google
+# Just a preference based on experience. Allowed by Google style guide
+indent_dictionary_value = true
+# Just a preference based on experience. Allowed by Google style guide
+split_arguments_when_comma_terminated = true
+# We think this is mandated by the Google style guide, and thus should be built
+# in the style that's included with yapf, but it's not currently.
+# See https://github.com/google/yapf/pull/738
+join_multiple_lines = false
+
+BLANK_LINE_BEFORE_NESTED_CLASS_OR_DEF=true
