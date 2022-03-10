@@ -240,8 +240,8 @@ impl SessionManager {
         }
     }
 
-    pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        let sessions = futures::executor::block_on(self.active_sessions.read());
+    pub async fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        let sessions = self.active_sessions.read().await;
         sessions
             .values()
             .map(Session::process_info)

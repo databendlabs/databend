@@ -304,8 +304,12 @@ impl QueryContext {
     }
 
     // Get all the processes list info.
-    pub fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        self.shared.session.get_session_manager().processes_info()
+    pub async fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        self.shared
+            .session
+            .get_session_manager()
+            .processes_info()
+            .await
     }
 
     /// Get the data accessor metrics.
