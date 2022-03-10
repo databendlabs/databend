@@ -3959,16 +3959,12 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb2da0a53ecf563b398350e3c1834ad27dd050eb47977472f2e654ccb39ff75f"
 dependencies = [
- "hyper",
  "indexmap",
- "ipnet",
  "metrics",
  "metrics-util",
  "parking_lot 0.11.2",
  "quanta",
  "thiserror",
- "tokio",
- "tracing",
 ]
 
 [[package]]

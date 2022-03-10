@@ -50,7 +50,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         )
         .await?;
     user_mgr
-        .add_role(&tenant, RoleInfo::new("role1".to_string(), "%".to_string()))
+        .add_role(&tenant, RoleInfo::new("role1".to_string()))
         .await?;
 
     #[allow(dead_code)]
@@ -82,12 +82,12 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         Test {
             name: "grant create user to global for role",
             query: "GRANT CREATE USER ON *.* TO ROLE 'role1'".to_string(),
-            principal_identity: Some(PrincipalIdentity::role("role1".to_string(), "%".to_string())),
+            principal_identity: Some(PrincipalIdentity::role("role1".to_string())),
             expected_grants: Some({
                 let mut grants = UserGrantSet::empty();
                 grants.grant_privileges(
                     "role1",
-                    "%",
+                    "",
                     &GrantObject::Global,
                     vec![UserPrivilegeType::CreateUser].into(),
                 );

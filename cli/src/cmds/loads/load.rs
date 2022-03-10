@@ -218,8 +218,8 @@ impl LoadCommand {
         let time = elapsed.as_millis() as f64 / 1000f64;
         writer.write_ok(format!(
             "successfully loaded {} rows, rows/src: {} (rows/sec). time: {} sec",
-            progress.read_rows.to_formatted_string(&Locale::en),
-            (progress.read_rows as f64 / time)
+            progress.rows.to_formatted_string(&Locale::en),
+            (progress.rows as f64 / time)
                 .as_u128()
                 .to_formatted_string(&Locale::en),
             time

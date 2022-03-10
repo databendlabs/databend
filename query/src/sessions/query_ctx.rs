@@ -140,6 +140,14 @@ impl QueryContext {
         self.shared.scan_progress.as_ref().get_values()
     }
 
+    pub fn get_write_progress(&self) -> Arc<Progress> {
+        self.shared.write_progress.clone()
+    }
+
+    pub fn get_write_progress_value(&self) -> ProgressValues {
+        self.shared.write_progress.as_ref().get_values()
+    }
+
     pub fn get_result_progress(&self) -> Arc<Progress> {
         self.shared.result_progress.clone()
     }

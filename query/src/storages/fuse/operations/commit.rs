@@ -19,6 +19,7 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoffBuilder;
+use common_base::ProgressValues;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -136,7 +137,12 @@ impl FuseTable {
         let prev = self.read_table_snapshot(ctx).await?;
         let schema = self.table_info.meta.schema.as_ref().clone();
         let (segments, summary) = Self::merge_append_operations(&schema, operation_log)?;
-        let rows_written = summary.row_count;
+
+        let progress_values = ProgressValues {
+            rows: summary.row_count as usize,
+            bytes: summary.uncompressed_byte_size as usize,
+        };
+
         let new_snapshot = if overwrite {
             TableSnapshot {
                 snapshot_id: Uuid::new_v4(),
@@ -166,9 +172,8 @@ impl FuseTable {
             .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 
         Self::commit_to_meta_server(ctx, &self.get_table_info().ident, snapshot_loc).await?;
-        ctx.get_dal_context()
-            .get_metrics()
-            .inc_write_rows(rows_written);
+        ctx.get_write_progress().incr(&progress_values);
+
         Ok(())
     }
 

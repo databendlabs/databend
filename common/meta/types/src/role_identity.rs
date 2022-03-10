@@ -17,30 +17,16 @@ use std::fmt;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct RoleIdentity {
     pub name: String,
-    pub host: String,
 }
 
 impl RoleIdentity {
-    pub fn new(name: String, host: String) -> Self {
-        Self { name, host }
-    }
-
-    pub fn parse(identity: &str) -> Self {
-        let chunks: Vec<_> = identity.split('@').collect();
-        let name = chunks[0].trim_matches('\'').to_string();
-        if chunks.len() <= 1 {
-            return Self {
-                name,
-                host: "%".to_string(),
-            };
-        }
-        let host = chunks[1].trim_matches('\'').to_string();
-        Self { name, host }
+    pub fn new(name: String) -> Self {
+        Self { name }
     }
 }
 
 impl fmt::Display for RoleIdentity {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
-        write!(f, "'{}'@'{}'", self.name, self.host)
+        write!(f, "'{}'", self.name)
     }
 }

@@ -234,13 +234,13 @@ async fn test_plan_parser() -> Result<()> {
         Test {
             name: "create-role",
             sql: "CREATE ROLE role1",
-            expect: "Create role 'role1'@'%' if_not_exist:false",
+            expect: "Create role 'role1' if_not_exist:false",
             error: "",
         },
         Test {
             name: "drop-role",
             sql: "DROP ROLE role1",
-            expect: "Drop role 'role1'@'%' if_exists:false",
+            expect: "Drop role 'role1' if_exists:false",
             error: "",
         }
     ];
