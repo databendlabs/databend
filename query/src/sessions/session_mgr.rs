@@ -15,6 +15,7 @@
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::hash_map::Entry::Vacant;
 use std::collections::HashMap;
+use std::env;
 use std::future::Future;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -308,11 +309,18 @@ impl SessionManager {
             DalSchema::Azblob => {
                 todo!()
             }
-            DalSchema::Fs => fs::Backend::build()
-                .root(&storage_conf.disk.data_path)
-                .finish()
-                .await
-                .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?,
+            DalSchema::Fs => {
+                let mut path = storage_conf.disk.data_path.clone();
+                if !path.starts_with('/') {
+                    path = env::current_dir().unwrap().join(path).display().to_string();
+                }
+
+                fs::Backend::build()
+                    .root(&path)
+                    .finish()
+                    .await
+                    .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?
+            }
         };
 
         Ok(Operator::new(accessor))
