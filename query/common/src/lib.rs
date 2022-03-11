@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(arbitrary_self_types)]
+#![feature(core_intrinsics)]
+
 mod hashtable;
 mod meta;
 pub mod service;

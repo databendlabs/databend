@@ -52,6 +52,7 @@ common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
 
 # databend-query dependencies
+query-common = { path = "common" }
 query-configs = { path = "configs" }
 
 # Github dependencies

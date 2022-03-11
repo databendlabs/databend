@@ -35,7 +35,7 @@ pub struct HttpShutdownHandler {
 }
 
 impl HttpShutdownHandler {
-    pub(crate) fn create(service_name: String) -> HttpShutdownHandler {
+    pub fn create(service_name: String) -> HttpShutdownHandler {
         HttpShutdownHandler {
             service_name,
             join_handle: None,
