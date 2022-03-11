@@ -43,10 +43,10 @@ use common_planners::StageKind;
 use common_planners::StagePlan;
 use common_planners::SubQueriesSetPlan;
 use common_tracing::tracing;
+use query_flight::BroadcastAction;
+use query_flight::FlightAction;
+use query_flight::ShuffleAction;
 
-use crate::api::BroadcastAction;
-use crate::api::FlightAction;
-use crate::api::ShuffleAction;
 use crate::sessions::QueryContext;
 
 #[derive(PartialEq)]

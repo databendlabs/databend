@@ -19,21 +19,18 @@
 #![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
 
-pub mod api;
-pub mod metrics;
-
+pub mod catalogs;
 pub use query_clusters as clusters;
 pub use query_common as common;
 pub use query_configs as configs;
-pub use query_middle::catalogs;
-pub use query_middle::databases;
-pub use query_middle::functions;
-pub use query_middle::interpreters;
-pub use query_middle::optimizers;
-pub use query_middle::pipelines;
-pub use query_middle::servers;
-pub use query_middle::sessions;
-pub use query_middle::sql;
-pub use query_middle::storages;
-pub use query_middle::table_functions;
+pub mod databases;
+pub mod functions;
+pub mod interpreters;
+pub mod optimizers;
+pub mod pipelines;
+pub mod servers;
+pub mod sessions;
+pub mod sql;
+pub mod storages;
+pub mod table_functions;
 pub use query_users as users;

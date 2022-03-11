@@ -28,7 +28,6 @@ use common_management::UserMgr;
 use common_management::WarehouseApi;
 use common_management::WarehouseMgr;
 use common_meta_api::KVApi;
-
 use query_common::MetaClientProvider;
 use query_configs::Config;
 

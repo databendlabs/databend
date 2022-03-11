@@ -18,8 +18,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use jwt_simple::algorithms::RS256PublicKey;
 use jwt_simple::algorithms::RSAPublicKeyLike;
-
 use query_configs::Config;
+
 use crate::auth::jwt::jwk;
 
 #[derive(Debug, Clone)]

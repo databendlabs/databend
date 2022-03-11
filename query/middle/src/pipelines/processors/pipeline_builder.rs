@@ -33,8 +33,8 @@ use common_planners::SortPlan;
 use common_planners::StagePlan;
 use common_planners::SubQueriesSetPlan;
 use common_tracing::tracing;
+use query_flight::FlightTicket;
 
-use crate::api::FlightTicket;
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::transforms::AggregatorFinalTransform;
 use crate::pipelines::transforms::AggregatorPartialTransform;

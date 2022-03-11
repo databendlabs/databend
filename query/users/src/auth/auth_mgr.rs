@@ -18,8 +18,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::UserInfo;
-
 pub use query_configs::Config;
+
 use crate::auth::jwt::JwtAuthenticator;
 use crate::UserApiProvider;
 

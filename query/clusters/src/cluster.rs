@@ -40,12 +40,11 @@ use futures::future::select;
 use futures::future::Either;
 use futures::Future;
 use futures::StreamExt;
-use rand::thread_rng;
-use rand::Rng;
-
-use query_flight::FlightClient;
 use query_common::MetaClientProvider;
 use query_configs::Config;
+use query_flight::FlightClient;
+use rand::thread_rng;
+use rand::Rng;
 
 pub struct ClusterDiscovery {
     local_id: String,

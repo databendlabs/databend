@@ -56,6 +56,7 @@ query-clusters = { path = "clusters" }
 query-common = { path = "common" }
 query-configs = { path = "configs" }
 query-flight = { path = "flight" }
+query-middle = { path = "middle" }
 query-users = { path = "users" }
 
 # Github dependencies
@@ -123,9 +124,6 @@ pretty_assertions = "1.1.0"
 reqwest = { version = "0.11.9", features = ["json", "native-tls"] }
 tempfile = "3.3.0"
 wiremock = "0.5.11"
-
-[build-dependencies]
-common-building = { path = "../common/building" }
 
 [[bench]]
 name = "bench_main"

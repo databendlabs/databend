@@ -20,9 +20,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use query_flight::FlightClient;
+use query_flight::FlightTicket;
 
-use crate::api::FlightClient;
-use crate::api::FlightTicket;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;

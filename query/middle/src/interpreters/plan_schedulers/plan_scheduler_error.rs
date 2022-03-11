@@ -16,9 +16,9 @@
 use std::sync::Arc;
 
 use common_tracing::tracing;
+use query_flight::CancelAction;
+use query_flight::FlightAction;
 
-use crate::api::CancelAction;
-use crate::api::FlightAction;
 use crate::interpreters::plan_schedulers::Scheduled;
 use crate::sessions::QueryContext;
 
