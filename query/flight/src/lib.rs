@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use flight_dispatcher::DatabendQueryFlightDispatcher;
-pub use flight_service::DatabendQueryFlightService;
+mod actions;
+mod client;
+mod client_stream;
+mod tickets;
 
-mod flight_dispatcher;
-mod flight_scatter;
-mod flight_scatter_broadcast;
-mod flight_scatter_hash;
-mod flight_service;
-mod flight_service_stream;
+pub use actions::BroadcastAction;
+pub use actions::CancelAction;
+pub use actions::FlightAction;
+pub use actions::ShuffleAction;
+pub use client::FlightClient;
+pub use client_stream::FlightDataStream;
+pub use tickets::FlightTicket;
+pub use tickets::StreamTicket;

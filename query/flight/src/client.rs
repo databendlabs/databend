@@ -28,9 +28,9 @@ use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Streaming;
 
-use crate::api::rpc::flight_actions::FlightAction;
-use crate::api::rpc::flight_client_stream::FlightDataStream;
-use crate::api::rpc::flight_tickets::FlightTicket;
+use crate::actions::FlightAction;
+use crate::client_stream::FlightDataStream;
+use crate::tickets::FlightTicket;
 
 pub struct FlightClient {
     inner: FlightServiceClient<Channel>,

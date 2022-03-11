@@ -33,17 +33,17 @@ use common_arrow::arrow_format::flight::data::SchemaResult;
 use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
 use common_tracing::tracing;
+use query_flight::FlightAction;
+use query_flight::FlightTicket;
 use tokio_stream::Stream;
 use tonic::Request;
 use tonic::Response as RawResponse;
 use tonic::Status;
 use tonic::Streaming;
 
-use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcher;
 use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcherRef;
 use crate::api::rpc::flight_service_stream::FlightDataStream;
-use crate::api::rpc::flight_tickets::FlightTicket;
 use crate::sessions::SessionManager;
 
 pub type FlightStream<T> =

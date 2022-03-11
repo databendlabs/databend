@@ -29,12 +29,12 @@ use common_infallible::RwLock;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 use common_tracing::tracing::Span;
+use query_flight::StreamTicket;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
-use crate::api::rpc::flight_tickets::StreamTicket;
 use crate::api::FlightAction;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::QueryContext;
