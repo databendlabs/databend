@@ -30,6 +30,8 @@ use super::utils::*;
 use crate::scalars::assert_string;
 use crate::scalars::cast_column_field;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::primitive_simd_op_boolean;
+use crate::scalars::scalar_binary_op;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::ComparisonEqFunction;
 use crate::scalars::ComparisonGtEqFunction;
@@ -44,8 +46,6 @@ use crate::scalars::ComparisonRegexpFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionFactory;
-use crate::scalars::ScalarBinaryExpression;
-use crate::scalars::ScalarBinaryFunction;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
@@ -106,12 +106,7 @@ pub struct ComparisonFunctionCreator<T> {
     t: PhantomData<T>,
 }
 
-impl<T> ComparisonFunctionCreator<T>
-where
-    T: ComparisonImpl + Send + Sync + Clone + 'static,
-    T::PrimitiveSimd: Send + Sync + Clone + 'static,
-    T::BooleanSimd: Send + Sync + Clone + 'static,
-{
+impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
     pub fn try_create_func(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
         // expect array & struct
         let has_array_struct = args
@@ -130,7 +125,7 @@ where
 
         if args[0].eq(args[1]) {
             return with_match_physical_primitive_type!(lhs_id.to_physical_type(), |$T| {
-                let func = Arc::new(ComparisonPrimitiveImpl::<$T, T::PrimitiveSimd>::new(args[0].clone(), false));
+                let func = Arc::new(ComparisonPrimitiveImpl::<$T, _>::new(args[0].clone(), false, T::eval_simd::<$T>));
                 ComparisonFunction::try_create_func(display_name, func)
             }, {
                 match lhs_id {
@@ -161,7 +156,7 @@ where
 
         let least_supertype = compare_coercion(args[0], args[1])?;
         with_match_physical_primitive_type_error!(least_supertype.data_type_id().to_physical_type(), |$T| {
-            let func = Arc::new(ComparisonPrimitiveImpl::<$T, T::PrimitiveSimd>::new(least_supertype, true));
+            let func = Arc::new(ComparisonPrimitiveImpl::<$T, _>::new(least_supertype, true, T::eval_simd::<$T>));
             ComparisonFunction::try_create_func(display_name, func)
         })
     }
@@ -177,9 +172,43 @@ where
     }
 }
 
-pub trait ComparisonImpl {
-    type PrimitiveSimd: PrimitiveSimdImpl;
+pub struct StringSearchCreator<const NEGATED: bool, T> {
+    t: PhantomData<T>,
+}
+
+impl<const NEGATED: bool, T: StringSearchImpl> StringSearchCreator<NEGATED, T> {
+    pub fn try_create_func(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
+        for arg in args {
+            assert_string(*arg)?;
+        }
+
+        let f: StringSearchFn = match NEGATED {
+            true => |x| !x,
+            false => |x| x,
+        };
+
+        let func = Arc::new(ComparisonStringImpl::<T>::new(f));
+        ComparisonFunction::try_create_func(display_name, func)
+    }
+
+    pub fn desc(negative_name: &str) -> ArithmeticDescription {
+        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .negative_function(negative_name)
+                .bool_function()
+                .num_arguments(2),
+        )
+    }
+}
+
+pub trait ComparisonImpl: Sync + Send + Clone + 'static {
     type BooleanSimd: BooleanSimdImpl;
+
+    fn eval_simd<T>(l: T::Simd, r: T::Simd) -> u8
+    where
+        T: PrimitiveType + comparison::Simd8,
+        T::Simd: comparison::Simd8PartialEq + comparison::Simd8PartialOrd;
 
     fn eval_primitive<L, R, M>(
         _l: L::RefType<'_>,
@@ -198,17 +227,13 @@ pub trait ComparisonExpression: Sync + Send {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn>;
 }
 
-#[derive(Clone)]
 pub struct ComparisonScalarImpl<L: Scalar, R: Scalar, F> {
     func: F,
     _phantom: PhantomData<(L, R, F)>,
 }
 
-impl<L, R, F> ComparisonScalarImpl<L, R, F>
-where
-    L: Scalar + Send + Sync + Clone,
-    R: Scalar + Send + Sync + Clone,
-    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> bool  + Send + Sync + Clone,
+impl<L: Scalar, R: Scalar, F> ComparisonScalarImpl<L, R, F>
+where F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> bool
 {
     pub fn new(func: F) -> Self {
         Self {
@@ -222,29 +247,35 @@ impl<L, R, F> ComparisonExpression for ComparisonScalarImpl<L, R, F>
 where
     L: Scalar + Send + Sync + Clone,
     R: Scalar + Send + Sync + Clone,
-    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> bool + Send + Sync + Clone, 
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> bool + Send + Sync + Clone,
 {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
-        scalar_binary_op::<L, R, bool, F>(l.column(), r.column(), self.func.clone(), &mut EvalContext::default())
+        scalar_binary_op::<L, R, bool, F>(
+            l.column(),
+            r.column(),
+            self.func.clone(),
+            &mut EvalContext::default(),
+        )
     }
 }
 
 pub struct ComparisonPrimitiveImpl<T: PrimitiveType, F> {
     least_supertype: DataTypePtr,
     need_cast: bool,
+    func: F,
     _phantom: PhantomData<(T, F)>,
 }
 
 impl<T, F> ComparisonPrimitiveImpl<T, F>
 where
-    T: PrimitiveType + comparison::Simd8 + Send + Sync + Clone,
-    T::Simd: comparison::Simd8PartialEq + comparison::Simd8PartialOrd,
-    F: PrimitiveSimdImpl + Send + Sync + Clone,
+    T: PrimitiveType + comparison::Simd8,
+    F: Fn(T::Simd, T::Simd) -> u8,
 {
-    pub fn new(least_supertype: DataTypePtr, need_cast: bool) -> Self {
+    pub fn new(least_supertype: DataTypePtr, need_cast: bool, func: F) -> Self {
         Self {
             least_supertype,
             need_cast,
+            func,
             _phantom: PhantomData,
         }
     }
@@ -253,8 +284,7 @@ where
 impl<T, F> ComparisonExpression for ComparisonPrimitiveImpl<T, F>
 where
     T: PrimitiveType + comparison::Simd8 + Send + Sync + Clone,
-    T::Simd: comparison::Simd8PartialEq + comparison::Simd8PartialOrd,
-    F: PrimitiveSimdImpl + Send + Sync + Clone,
+    F: Fn(T::Simd, T::Simd) -> u8 + Send + Sync + Clone,
 {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
         let lhs = if self.need_cast && l.data_type() != &self.least_supertype {
@@ -268,28 +298,7 @@ where
         } else {
             r.column().clone()
         };
-        let res = match (lhs.is_const(), rhs.is_const()) {
-            (false, false) => {
-                let lhs: &PrimitiveColumn<T> = Series::check_get(&lhs)?;
-                let rhs: &PrimitiveColumn<T> = Series::check_get(&rhs)?;
-                F::vector_vector::<T>(lhs, rhs)
-            }
-            (false, true) => {
-                let lhs: &PrimitiveColumn<T> = Series::check_get(&lhs)?;
-                let rhs = T::try_create_viewer(&rhs)?;
-                let r = rhs.value_at(0).to_owned_scalar();
-                F::vector_const::<T>(lhs, r)
-            }
-            (true, false) => {
-                let lhs = T::try_create_viewer(&lhs)?;
-                let l = lhs.value_at(0).to_owned_scalar();
-
-                let rhs: &PrimitiveColumn<T> = Series::check_get(&rhs)?;
-                F::const_vector::<T>(l, rhs)
-            }
-            (true, true) => unreachable!(),
-        };
-        Ok(res)
+        primitive_simd_op_boolean::<T, F>(&lhs, &rhs, self.func.clone())
     }
 }
 
@@ -297,9 +306,7 @@ pub struct ComparisonBooleanImpl<F> {
     _phantom: PhantomData<F>,
 }
 
-impl<F> ComparisonBooleanImpl<F>
-where F: BooleanSimdImpl + Send + Sync + Clone
-{
+impl<F: BooleanSimdImpl> ComparisonBooleanImpl<F> {
     pub fn new() -> Self {
         Self {
             _phantom: PhantomData,
@@ -307,9 +314,7 @@ where F: BooleanSimdImpl + Send + Sync + Clone
     }
 }
 
-impl<F> ComparisonExpression for ComparisonBooleanImpl<F>
-where F: BooleanSimdImpl + Send + Sync + Clone
-{
+impl<F: BooleanSimdImpl> ComparisonExpression for ComparisonBooleanImpl<F> {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
         let lhs = l.column();
         let rhs = r.column();
@@ -342,9 +347,7 @@ pub struct ComparisonStringImpl<T> {
     _phantom: PhantomData<T>,
 }
 
-impl<T> ComparisonStringImpl<T>
-where T: StringSearchImpl + Send + Sync + Clone
-{
+impl<T: StringSearchImpl> ComparisonStringImpl<T> {
     pub fn new(op: StringSearchFn) -> Self {
         Self {
             op,
@@ -353,9 +356,7 @@ where T: StringSearchImpl + Send + Sync + Clone
     }
 }
 
-impl<T> ComparisonExpression for ComparisonStringImpl<T>
-where T: StringSearchImpl + Send + Sync + Clone
-{
+impl<T: StringSearchImpl> ComparisonExpression for ComparisonStringImpl<T> {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
         let lhs = l.column();
         let rhs = r.column();
@@ -372,37 +373,5 @@ where T: StringSearchImpl + Send + Sync + Clone
             }
         };
         Ok(res)
-    }
-}
-
-pub struct StringSearchCreator<const NEGATED: bool, T> {
-    t: PhantomData<T>,
-}
-
-impl<const NEGATED: bool, T> StringSearchCreator<NEGATED, T>
-where T: StringSearchImpl + Send + Sync + Clone + 'static
-{
-    pub fn try_create_func(display_name: &str, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
-        for arg in args {
-            assert_string(*arg)?;
-        }
-
-        let f: StringSearchFn = match NEGATED {
-            true => |x| !x,
-            false => |x| x,
-        };
-
-        let func = Arc::new(ComparisonStringImpl::<T>::new(f));
-        ComparisonFunction::try_create_func(display_name, func)
-    }
-
-    pub fn desc(negative_name: &str) -> ArithmeticDescription {
-        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .negative_function(negative_name)
-                .bool_function()
-                .num_arguments(2),
-        )
     }
 }

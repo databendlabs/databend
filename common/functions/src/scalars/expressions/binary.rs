@@ -14,6 +14,9 @@
 
 use std::marker::PhantomData;
 
+use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::compute::comparison::Simd8;
+use common_arrow::arrow::compute::comparison::Simd8Lanes;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
@@ -201,4 +204,151 @@ where F: ScalarBinaryRefFunction<'a, L, R, O>
         }
         Ok(result)
     }
+}
+
+pub fn scalar_binary_op<L: Scalar, R: Scalar, O: Scalar, F>(
+    l: &ColumnRef,
+    r: &ColumnRef,
+    f: F,
+    ctx: &mut EvalContext,
+) -> Result<<O as Scalar>::ColumnType>
+where
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O,
+{
+    debug_assert!(
+        l.len() == r.len(),
+        "Size of columns must match to apply binary expression"
+    );
+
+    let result = match (l.is_const(), r.is_const()) {
+        (false, true) => {
+            let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(l) };
+            let right = R::try_create_viewer(r)?;
+
+            let b = right.value_at(0);
+            let it = left.scalar_iter().map(|a| f(a, b, ctx));
+            <O as Scalar>::ColumnType::from_owned_iterator(it)
+        }
+
+        (false, false) => {
+            let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(l) };
+            let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
+
+            let it = left
+                .scalar_iter()
+                .zip(right.scalar_iter())
+                .map(|(a, b)| f(a, b, ctx));
+            <O as Scalar>::ColumnType::from_owned_iterator(it)
+        }
+
+        (true, false) => {
+            let left = L::try_create_viewer(l)?;
+            let a = left.value_at(0);
+
+            let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
+            let it = right.scalar_iter().map(|b| f(a, b, ctx));
+            <O as Scalar>::ColumnType::from_owned_iterator(it)
+        }
+
+        // True True ?
+        (true, true) => {
+            let left = L::try_create_viewer(l)?;
+            let right = R::try_create_viewer(r)?;
+
+            let it = left.iter().zip(right.iter()).map(|(a, b)| f(a, b, ctx));
+            <O as Scalar>::ColumnType::from_owned_iterator(it)
+        }
+    };
+
+    if let Some(error) = ctx.error.take() {
+        return Err(error);
+    }
+    Ok(result)
+}
+
+/// QUOTE: (From arrow2::arrow::compute::comparison::primitive)
+pub fn primitive_simd_op_boolean<T, F>(l: &ColumnRef, r: &ColumnRef, op: F) -> Result<BooleanColumn>
+where
+    T: PrimitiveType + Simd8,
+    F: Fn(T::Simd, T::Simd) -> u8,
+{
+    debug_assert!(
+        l.len() == r.len(),
+        "Size of columns must match to apply binary expression"
+    );
+
+    let res = match (l.is_const(), r.is_const()) {
+        (false, false) => {
+            let lhs: &PrimitiveColumn<T> = Series::check_get(&l)?;
+            let lhs_chunks_iter = lhs.values().chunks_exact(8);
+            let lhs_remainder = lhs_chunks_iter.remainder();
+
+            let rhs: &PrimitiveColumn<T> = Series::check_get(&r)?;
+            let rhs_chunks_iter = rhs.values().chunks_exact(8);
+            let rhs_remainder = rhs_chunks_iter.remainder();
+
+            let mut values = Vec::with_capacity((lhs.len() + 7) / 8);
+            let iterator = lhs_chunks_iter.zip(rhs_chunks_iter).map(|(lhs, rhs)| {
+                let lhs = T::Simd::from_chunk(lhs);
+                let rhs = T::Simd::from_chunk(rhs);
+                op(lhs, rhs)
+            });
+            values.extend(iterator);
+
+            if !lhs_remainder.is_empty() {
+                let lhs = T::Simd::from_incomplete_chunk(lhs_remainder, T::default());
+                let rhs = T::Simd::from_incomplete_chunk(rhs_remainder, T::default());
+                values.push(op(lhs, rhs))
+            };
+            MutableBitmap::from_vec(values, lhs.len())
+        }
+        (false, true) => {
+            let lhs: &PrimitiveColumn<T> = Series::check_get(&l)?;
+            let lhs_chunks_iter = lhs.values().chunks_exact(8);
+            let lhs_remainder = lhs_chunks_iter.remainder();
+
+            let rhs = T::try_create_viewer(&r)?;
+            let r = rhs.value_at(0).to_owned_scalar();
+            let rhs = T::Simd::from_chunk(&[r; 8]);
+
+            let mut values = Vec::with_capacity((lhs.len() + 7) / 8);
+            let iterator = lhs_chunks_iter.map(|lhs| {
+                let lhs = T::Simd::from_chunk(lhs);
+                op(lhs, rhs)
+            });
+            values.extend(iterator);
+
+            if !lhs_remainder.is_empty() {
+                let lhs = T::Simd::from_incomplete_chunk(lhs_remainder, T::default());
+                values.push(op(lhs, rhs))
+            };
+
+            MutableBitmap::from_vec(values, lhs.len())
+        }
+        (true, false) => {
+            let lhs = T::try_create_viewer(&l)?;
+            let l = lhs.value_at(0).to_owned_scalar();
+            let lhs = T::Simd::from_chunk(&[l; 8]);
+
+            let rhs: &PrimitiveColumn<T> = Series::check_get(&r)?;
+            let rhs_chunks_iter = rhs.values().chunks_exact(8);
+            let rhs_remainder = rhs_chunks_iter.remainder();
+
+            let mut values = Vec::with_capacity((rhs.len() + 7) / 8);
+            let iterator = rhs_chunks_iter.map(|rhs| {
+                let rhs = T::Simd::from_chunk(rhs);
+                op(lhs, rhs)
+            });
+            values.extend(iterator);
+
+            if !rhs_remainder.is_empty() {
+                let rhs = T::Simd::from_incomplete_chunk(rhs_remainder, T::default());
+                values.push(op(lhs, rhs))
+            };
+
+            MutableBitmap::from_vec(values, rhs.len())
+        }
+        (true, true) => unreachable!(),
+    };
+    Ok(BooleanColumn::from_arrow_data(res.into()))
 }
