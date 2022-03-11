@@ -61,6 +61,11 @@ impl ExpressionExecutor {
         Ok(())
     }
 
+    #[tracing::instrument(
+        level = "debug",
+        name = "transform_expression_execute",
+        skip(self, block)
+    )]
     pub fn execute(&self, block: &DataBlock) -> Result<DataBlock> {
         tracing::debug!(
             "({:#}) execute, actions: {:?}",

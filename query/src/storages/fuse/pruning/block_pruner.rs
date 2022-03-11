@@ -40,7 +40,7 @@ impl BlockPruner {
         Self { table_snapshot }
     }
 
-    #[tracing::instrument(level = "debug", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name="block_pruner_apply", skip(self, push_down, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn apply(
         &self,
         schema: DataSchemaRef,
