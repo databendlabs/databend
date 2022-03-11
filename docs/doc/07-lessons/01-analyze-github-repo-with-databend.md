@@ -5,12 +5,7 @@ Use Databend analyzing Github repo step by step.
 
 ## Step 1 
 
-If you already have databend ,skip it .
-```
-$ curl -fsS https://repo.databend.rs/databend/install-bendctl.sh | bash
-$ export PATH="${HOME}/.databend/bin:${PATH}"
-$ bendctl cluster create
-```
+Install databend, see [deploy Databend with local disk](../01-deploy/00_local.md).
 
 ## Step 2
 

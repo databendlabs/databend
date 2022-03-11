@@ -1,5 +1,5 @@
 ---
-title: EC2 + S3 performance
+title: On AWS S3 Performance
 ---
 
 :::tip

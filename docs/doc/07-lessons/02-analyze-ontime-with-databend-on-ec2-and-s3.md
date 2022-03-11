@@ -1,71 +1,16 @@
 ---
 title: Analyzing OnTime datasets with Databend on AWS EC2 and S3
-draft: true
 ---
 
 Analyzing `OnTime` datasets on AWS EC2 and S3 with Databend step by step.
 
+## Step 1. Deploy
 
-## Step 1. Deploy environment
-- EC2 size : c5a.4xlarge
-  >EC2 region: <your S3 bucket region\> 
-  >
-  >local disk 300G, local disk only used for ontime save and databend complie. 
+Install databend, see [deploy Databend with AWS S3](../01-deploy/01_s3.md).
 
-- Os Type: ubuntu 20 x64
+## Step 2. Load OnTime datasets
 
-- Prepare install package:
-   > $sudo apt-get install unzip make mysql-client-core-8.0
-
-## Step 2. Deploy Databend
-
-### 2.1 Compile Databend
-
-```shell
-$git clone https://github.com/datafuselabs/databend.git
-
-$cd databend
-
-$make setup
-
-$export PATH=$PATH:~/.cargo/bin
-
-$make build-native
-```
-
-Finally, the databend-related binary files are at ./target/release/{databend-meta, databend-query}
-
-### 2.2 Start Databend
-
-```shell
-# Please replace the s3 env config with your own. 
-export STORAGE_TYPE=s3
-export S3_STORAGE_BUCKET=<your-s3-bucket>
-export S3_STORAGE_REGION=<your-s3-region>
-export S3_STORAGE_ENDPOINT_URL=https://s3.amazonaws.com
-export S3_STORAGE_ACCESS_KEY_ID=<your-s3-key-id>
-export S3_STORAGE_SECRET_ACCESS_KEY=<your-s3-access-key>
-
-echo "Starting standalone DatabendQuery(release)"
-./scripts/ci/deploy/databend-query-standalone.sh release
-```
-
-For S3 compatible services, please also set `S3_STORAGE_ENDPOINT_URL` to your S3 endpoint.
-
-```shell
-export S3_STORAGE_ENDPOINT_URL=http://127.0.0.1:9000
-```
-
-### 2.3 Test Databend
-
-```shell
-mysql -h 127.0.0.1 -P3307 -uroot
-```
-Check connect is ok .
-
-## Step 3. Load OnTime datasets
-
-### 3.1 Create OnTime table
+### 2.1 Create OnTime table
 
 ```shell
 CREATE TABLE ontime
@@ -182,7 +127,7 @@ CREATE TABLE ontime
 ) ENGINE = FUSE;
 ```
 
-### 3.2 Load Data into OnTime table
+### 2.2 Load Data into OnTime table
 
 ```shell
 wget --no-check-certificate https://repo.databend.rs/t_ontime/t_ontime.csv.zip
@@ -193,7 +138,7 @@ ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -
 
 ```
 
-## Step 4. Queries
+## Step 3. Queries
 
 Execute Query and set settings:
 

@@ -50,10 +50,10 @@ const config = {
             '@docusaurus/plugin-content-docs',
             /** @type {import('@docusaurus/plugin-content-docs').Options} */
             {
-                id: 'learn',
-                path: '../docs/learn',
-                routeBasePath: 'learn',
-                sidebarPath: require.resolve('../docs/learn/sidebars.js'),
+                id: 'dev',
+                path: '../docs/dev',
+                routeBasePath: 'dev',
+                sidebarPath: require.resolve('../docs/dev/sidebars.js'),
                 editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
             },
         ],
@@ -81,11 +81,6 @@ const config = {
                 },
                 items: [
                     {
-                        to: '/learn/category/lessons', label: 'Learn', position: 'left', items:[
-                            {label: 'Lessons', to: '/learn/category/lessons'},
-                        ]
-                    },
-                    {
                         href: 'https://github.com/datafuselabs/databend',
                         label: 'GitHub',
                         position: 'right',
@@ -99,8 +94,8 @@ const config = {
                         title: 'Resources',
                         items: [
                             {
-                                label: 'SQL Reference',
-                                to: 'doc/category/sql'
+                                label: 'Deploy',
+                                to: 'doc/category/deploy-databend'
                             },
                             {
                                 label: 'Performance',

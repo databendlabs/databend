@@ -3,17 +3,13 @@ title: Roadmap 2022
 ---
 
 
-:::note Notes
-Sync from the [#3706](https://github.com/datafuselabs/databend/issues/3706)
+:::tip
+This is Databend Roadmap 2022 :rocket:, sync from the [#3706](https://github.com/datafuselabs/databend/issues/3706)
 :::
-
-This is Databend Roadmap 2022 :rocket:
-
 
 # Main tasks
 
 ### 1. Query
-
 
 
 | Task                                         | Status    | Release Target | Comments        | 
@@ -26,8 +22,9 @@ This is Databend Roadmap 2022 :rocket:
 | [ COPY Command #4104](https://github.com/datafuselabs/databend/issues/4104)| PROGRESS  |     | |
 | [Index Design #3711](https://github.com/datafuselabs/databend/issues/3711) | PROGRESS  |   |   |
 | [Push-Based + Pull-Based processor](https://github.com/datafuselabs/databend/issues/3379)| PROGRESS  |   |  |
-| [Semi-structured Data Types #3916](https://github.com/datafuselabs/databend/issues/3916) | PLANNING  |   |   |
+| [Semi-structured Data Types #3916](https://github.com/datafuselabs/databend/issues/3916) | PROGRESS  |   |   |
 | [Support Fulltext Index #3915](https://github.com/datafuselabs/databend/issues/3915) | PLANNING  |   |   |
+| [Table Cluster Key #4268](https://github.com/datafuselabs/databend/issues/4268) | PLANNING  |   |   |
 | Tansactions | PLANNING  |   |  |
 | Window Functions | PLANNING  |   |  |
 | Lambda Functions | PLANNING  |   |  |
@@ -46,13 +43,6 @@ This is Databend Roadmap 2022 :rocket:
 | Task                                         | Status    | Release Target | Comments        | 
 | ----------------------------------------------- | --------- | -------------- | --------------- | 
 | [ Continuous Benchmarking #3084](https://github.com/datafuselabs/databend/issues/3084) | PROGRESS  |    | |
-
-### 3. Deployment
-
-| Task                                         | Status    | Release Target | Comments        | 
-| ----------------------------------------------- | --------- | -------------- | --------------- | 
-| [ databend cli #938](https://github.com/datafuselabs/databend/issues/938) | PROGRESS  | |  All-in-one tool for setting up, managing with Databend |
-| online playground  | PROGRESS  |   | User can try the demo on the databend.rs website |
 
 # Releases
 - [x] #2525
