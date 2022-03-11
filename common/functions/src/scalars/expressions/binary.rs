@@ -279,11 +279,11 @@ where
 
     let res = match (l.is_const(), r.is_const()) {
         (false, false) => {
-            let lhs: &PrimitiveColumn<T> = Series::check_get(&l)?;
+            let lhs: &PrimitiveColumn<T> = Series::check_get(l)?;
             let lhs_chunks_iter = lhs.values().chunks_exact(8);
             let lhs_remainder = lhs_chunks_iter.remainder();
 
-            let rhs: &PrimitiveColumn<T> = Series::check_get(&r)?;
+            let rhs: &PrimitiveColumn<T> = Series::check_get(r)?;
             let rhs_chunks_iter = rhs.values().chunks_exact(8);
             let rhs_remainder = rhs_chunks_iter.remainder();
 
@@ -303,11 +303,11 @@ where
             MutableBitmap::from_vec(values, lhs.len())
         }
         (false, true) => {
-            let lhs: &PrimitiveColumn<T> = Series::check_get(&l)?;
+            let lhs: &PrimitiveColumn<T> = Series::check_get(l)?;
             let lhs_chunks_iter = lhs.values().chunks_exact(8);
             let lhs_remainder = lhs_chunks_iter.remainder();
 
-            let rhs = T::try_create_viewer(&r)?;
+            let rhs = T::try_create_viewer(r)?;
             let r = rhs.value_at(0).to_owned_scalar();
             let rhs = T::Simd::from_chunk(&[r; 8]);
 
@@ -326,11 +326,11 @@ where
             MutableBitmap::from_vec(values, lhs.len())
         }
         (true, false) => {
-            let lhs = T::try_create_viewer(&l)?;
+            let lhs = T::try_create_viewer(l)?;
             let l = lhs.value_at(0).to_owned_scalar();
             let lhs = T::Simd::from_chunk(&[l; 8]);
 
-            let rhs: &PrimitiveColumn<T> = Series::check_get(&r)?;
+            let rhs: &PrimitiveColumn<T> = Series::check_get(r)?;
             let rhs_chunks_iter = rhs.values().chunks_exact(8);
             let rhs_remainder = rhs_chunks_iter.remainder();
 
