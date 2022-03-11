@@ -1,5 +1,6 @@
 ---
 title: Analyzing OnTime datasets with Databend on AWS EC2 and S3
+sidebar_label: Analyzing OnTime datasets
 ---
 
 Analyzing `OnTime` datasets on AWS EC2 and S3 with Databend step by step.
@@ -144,7 +145,6 @@ Execute Query and set settings:
 
 ```shell
 mysql -h 127.0.0.1 -P3307 -uroot 
-mysql>set parallel_read_threads=4;
 mysql>select count(*) from ontime;
 mysql>select Year, count(*) from ontime group by Year;
 ```

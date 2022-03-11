@@ -1,5 +1,6 @@
 ---
 title: Deploy with local disk
+sidebar_label: With local disk
 ---
 
 This guideline will deploy databend(standalone) with local disk step by step.
