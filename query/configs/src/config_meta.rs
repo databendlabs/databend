@@ -21,7 +21,7 @@ use common_meta_grpc::MetaGrpcClientConf;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::configs::Config;
+use crate::Config;
 
 // Meta env.
 pub const META_ADDRESS: &str = "META_ADDRESS";

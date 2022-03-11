@@ -16,7 +16,7 @@ use clap::Args;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::configs::Config;
+use crate::Config;
 
 // Log env.
 pub const LOG_LEVEL: &str = "LOG_LEVEL";

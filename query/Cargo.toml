@@ -51,6 +51,9 @@ common-planners = { path = "../common/planners" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
 
+# databend-query dependencies
+query-configs = { path = "configs" }
+
 # Github dependencies
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
 cargo-license = { git = "https://github.com/datafuse-extras/cargo-license", rev = "f1ce4a2" }

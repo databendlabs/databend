@@ -23,7 +23,7 @@ pub mod api;
 pub mod catalogs;
 pub mod clusters;
 pub mod common;
-pub mod configs;
+pub use query_configs as configs;
 pub mod databases;
 pub mod functions;
 pub mod interpreters;

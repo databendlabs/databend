@@ -20,10 +20,10 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::configs::LogConfig;
-use crate::configs::MetaConfig;
-use crate::configs::QueryConfig;
-use crate::configs::StorageConfig;
+use crate::LogConfig;
+use crate::MetaConfig;
+use crate::QueryConfig;
+use crate::StorageConfig;
 
 pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
     let build_semver = option_env!("VERGEN_BUILD_SEMVER");

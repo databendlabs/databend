@@ -19,7 +19,7 @@ use clap::Args;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::configs::Config;
+use crate::Config;
 
 pub const STORAGE_TYPE: &str = "STORAGE_TYPE";
 

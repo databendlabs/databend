@@ -16,7 +16,7 @@ use clap::Args;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::configs::Config;
+use crate::Config;
 
 // Query env.
 pub const QUERY_TENANT_ID: &str = "QUERY_TENANT_ID";
