@@ -19,8 +19,8 @@ use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
 
-use crate::users::User;
-use crate::users::UserApiProvider;
+use crate::User;
+use crate::UserApiProvider;
 
 impl UserApiProvider {
     // Get one user from by tenant.

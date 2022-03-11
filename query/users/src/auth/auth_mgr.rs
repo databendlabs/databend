@@ -19,9 +19,9 @@ use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::UserInfo;
 
-pub use crate::configs::Config;
-use crate::users::auth::jwt::JwtAuthenticator;
-use crate::users::UserApiProvider;
+pub use query_configs::Config;
+use crate::auth::jwt::JwtAuthenticator;
+use crate::UserApiProvider;
 
 pub struct AuthMgr {
     tenant: String,

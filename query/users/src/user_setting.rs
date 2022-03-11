@@ -15,7 +15,7 @@
 use common_exception::Result;
 use common_meta_types::UserSetting;
 
-use crate::users::UserApiProvider;
+use crate::UserApiProvider;
 
 impl UserApiProvider {
     // Set a setting.

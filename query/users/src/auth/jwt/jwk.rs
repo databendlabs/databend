@@ -25,7 +25,7 @@ use jwt_simple::prelude::RS256PublicKey;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::users::auth::jwt::PubKey;
+use crate::auth::jwt::PubKey;
 
 const JWK_REFRESH_INTERVAL: u64 = 15;
 

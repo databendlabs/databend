@@ -35,4 +35,4 @@ pub mod sessions;
 pub mod sql;
 pub mod storages;
 pub mod table_functions;
-pub mod users;
+pub use query_users as users;

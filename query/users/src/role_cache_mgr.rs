@@ -29,7 +29,7 @@ use common_meta_types::RoleInfo;
 use common_meta_types::UserPrivilegeType;
 use common_tracing::tracing;
 
-use crate::users::UserApiProvider;
+use crate::UserApiProvider;
 
 struct CachedRoles {
     roles: HashMap<String, RoleInfo>,

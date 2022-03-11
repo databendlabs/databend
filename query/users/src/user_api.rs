@@ -29,8 +29,8 @@ use common_management::WarehouseApi;
 use common_management::WarehouseMgr;
 use common_meta_api::KVApi;
 
-use crate::common::MetaClientProvider;
-use crate::configs::Config;
+use query_common::MetaClientProvider;
+use query_configs::Config;
 
 pub struct UserApiProvider {
     client: Arc<dyn KVApi>,

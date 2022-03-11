@@ -54,6 +54,7 @@ common-tracing = { path = "../common/tracing" }
 # databend-query dependencies
 query-common = { path = "common" }
 query-configs = { path = "configs" }
+query-users = { path = "users" }
 
 # Github dependencies
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }

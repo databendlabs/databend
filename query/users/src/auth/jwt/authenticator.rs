@@ -19,8 +19,8 @@ use common_exception::Result;
 use jwt_simple::algorithms::RS256PublicKey;
 use jwt_simple::algorithms::RSAPublicKeyLike;
 
-use crate::configs::Config;
-use crate::users::auth::jwt::jwk;
+use query_configs::Config;
+use crate::auth::jwt::jwk;
 
 #[derive(Debug, Clone)]
 pub enum PubKey {
