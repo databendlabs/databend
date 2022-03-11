@@ -109,6 +109,7 @@ impl BlockReader {
         // TODO: add prefetch column data.
         let mut columns_array_iter = Vec::with_capacity(0);
         let mut column_chunk_futs = Vec::with_capacity(self.projection.len());
+        let mut col_idx = vec![];
         for index in &self.projection {
             let column_meta = &part.columns_meta[index];
             let mut column_reader = self
@@ -123,14 +124,16 @@ impl BlockReader {
             .instrument(debug_span!("read_col_chunk"));
             let fut = self.io_exec.spawn(fut);
             column_chunk_futs.push(fut);
+            col_idx.push(index);
         }
 
         let chunks = try_join_all(column_chunk_futs)
             .await
             .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 
-        for (idx, chunk) in chunks.into_iter().enumerate() {
+        for (i, chunk) in chunks.into_iter().enumerate() {
             let column_chunk = chunk?;
+            let idx = *col_idx[i];
             let field = self.arrow_schema.fields[idx].clone();
             let column_descriptor = self.parquet_schema_descriptor.column(idx);
             let column_meta = &part.columns_meta[&idx];
