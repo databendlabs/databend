@@ -13,24 +13,26 @@
 // limitations under the License.
 
 use std::fmt;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::scalar_unary_op;
 use crate::scalars::ArithmeticNegateFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
-use crate::scalars::ScalarUnaryExpression;
 use crate::scalars::ScalarUnaryFunction;
 
 #[derive(Clone)]
 pub struct UnaryArithmeticFunction<L: Scalar, O: Scalar, F> {
     op: DataValueUnaryOperator,
     result_type: DataTypePtr,
-    unary: ScalarUnaryExpression<L, O, F>,
+    func: F,
+    _phantom: PhantomData<(L, O)>,
 }
 
 impl<L, O, F> UnaryArithmeticFunction<L, O, F>
@@ -44,11 +46,11 @@ where
         result_type: DataTypePtr,
         func: F,
     ) -> Result<Box<dyn Function>> {
-        let unary = ScalarUnaryExpression::<L, O, _>::new(func);
         Ok(Box::new(Self {
             op,
             result_type,
-            unary,
+            func,
+            _phantom: PhantomData,
         }))
     }
 }
@@ -68,9 +70,11 @@ where
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        let col = self
-            .unary
-            .eval(columns[0].column(), &mut EvalContext::default())?;
+        let col = scalar_unary_op(
+            columns[0].column(),
+            self.func.clone(),
+            &mut EvalContext::default(),
+        )?;
         Ok(Arc::new(col))
     }
 

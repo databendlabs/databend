@@ -24,10 +24,10 @@ use num_traits::AsPrimitive;
 use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::scalar_binary_op;
+use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
-use crate::scalars::ScalarUnaryExpression;
 
 fn round<S>(value: S, _ctx: &mut EvalContext) -> f64
 where S: AsPrimitive<f64> {
@@ -104,8 +104,7 @@ fn eval_round(columns: &ColumnsWithField) -> Result<ColumnRef> {
     match columns.len() {
         1 => {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
-                let unary = ScalarUnaryExpression::<$S, f64, _>::new(round);
-                let col = unary.eval(columns[0].column(), &mut ctx)?;
+                let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), round, &mut ctx)?;
                 Ok(Arc::new(col))
             },{
                 unreachable!()
@@ -137,8 +136,7 @@ fn eval_trunc(columns: &ColumnsWithField) -> Result<ColumnRef> {
     match columns.len() {
         1 => {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
-                let unary = ScalarUnaryExpression::<$S, f64, _>::new(trunc);
-                let col = unary.eval(columns[0].column(), &mut ctx)?;
+                let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), trunc, &mut ctx)?;
                 Ok(Arc::new(col))
             },{
                 unreachable!()

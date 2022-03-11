@@ -32,25 +32,21 @@ use crate::scalars::FunctionFactory;
 use crate::scalars::Monotonicity;
 
 #[inline]
-fn add_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
-where
-    L: PrimitiveType + AsPrimitive<O>,
-    R: PrimitiveType + AsPrimitive<O>,
-    O: PrimitiveType + Add<Output = O>,
-{
-    l.to_owned_scalar().as_() + r.to_owned_scalar().as_()
+fn add_scalar<O>(l: impl AsPrimitive<O>, r: impl AsPrimitive<O>, _ctx: &mut EvalContext) -> O
+where O: PrimitiveType + Add<Output = O> {
+    l.as_() + r.as_()
 }
 
 #[inline]
-fn wrapping_add_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
+fn wrapping_add_scalar<O>(
+    l: impl AsPrimitive<O>,
+    r: impl AsPrimitive<O>,
+    _ctx: &mut EvalContext,
+) -> O
 where
-    L: PrimitiveType + AsPrimitive<O>,
-    R: PrimitiveType + AsPrimitive<O>,
     O: IntegerType + WrappingAdd<Output = O>,
 {
-    l.to_owned_scalar()
-        .as_()
-        .wrapping_add(&r.to_owned_scalar().as_())
+    l.as_().wrapping_add(&r.as_())
 }
 
 pub struct ArithmeticPlusFunction;
@@ -78,7 +74,7 @@ impl ArithmeticPlusFunction {
                     BinaryArithmeticFunction::<$T, $D, $T, _>::try_create_func(
                         op,
                         args[0].clone(),
-                        add_scalar::<$T, $D, _>,
+                        add_scalar,
                     )
                 },{
                     if right_type.is_interval() {
@@ -99,7 +95,7 @@ impl ArithmeticPlusFunction {
                     BinaryArithmeticFunction::<$T, $D, $D, _>::try_create_func(
                         op,
                         args[1].clone(),
-                        add_scalar::<$T, $D, _>,
+                        add_scalar,
                     )
                 })
             });
@@ -112,17 +108,17 @@ impl ArithmeticPlusFunction {
                     TypeID::UInt64 => BinaryArithmeticFunction::<$T, $D, u64, _>::try_create_func(
                         op,
                         result_type,
-                        wrapping_add_scalar::<$T, $D, _>,
+                        wrapping_add_scalar,
                     ),
                     TypeID::Int64 => BinaryArithmeticFunction::<$T, $D, i64, _>::try_create_func(
                         op,
                         result_type,
-                        wrapping_add_scalar::<$T, $D, _>,
+                        wrapping_add_scalar,
                     ),
                     _ => BinaryArithmeticFunction::<$T, $D, <($T, $D) as ResultTypeOfBinary>::AddMul, _>::try_create_func(
                         op,
                         result_type,
-                        add_scalar::<$T, $D, _>,
+                        add_scalar,
                     ),
                 }
             })

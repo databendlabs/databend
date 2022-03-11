@@ -25,10 +25,10 @@ use num_traits::AsPrimitive;
 use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::scalar_binary_op;
+use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
-use crate::scalars::ScalarUnaryExpression;
 
 /// Const f64 is now allowed.
 /// feature(adt_const_params) is not stable & complete
@@ -114,8 +114,7 @@ impl<T: Base> Function for GenericLogFunction<T> {
         let mut ctx = EvalContext::default();
         if columns.len() == 1 {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
-                let unary = ScalarUnaryExpression::<$S, f64, _>::new(Self::log);
-                let col = unary.eval(columns[0].column(), &mut ctx)?;
+                let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), Self::log, &mut ctx)?;
                 Ok(Arc::new(col))
             },{
                 unreachable!()

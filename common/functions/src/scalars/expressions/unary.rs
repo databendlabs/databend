@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
@@ -32,37 +30,20 @@ where F: Fn(L::RefType<'_>, &mut EvalContext) -> O
     }
 }
 
-/// A common struct to caculate Unary expression scalar op.
-#[derive(Clone)]
-pub struct ScalarUnaryExpression<L: Scalar, O: Scalar, F> {
+pub fn scalar_unary_op<L: Scalar, O: Scalar, F>(
+    l: &ColumnRef,
     f: F,
-    _phantom: PhantomData<(L, O)>,
-}
-
-impl<'a, L: Scalar, O: Scalar, F> ScalarUnaryExpression<L, O, F>
-where F: ScalarUnaryFunction<L, O>
+    ctx: &mut EvalContext,
+) -> Result<<O as Scalar>::ColumnType>
+where
+    F: ScalarUnaryFunction<L, O>,
 {
-    /// Create a Unary expression from generic columns  and a lambda function.
-    pub fn new(f: F) -> Self {
-        Self {
-            f,
-            _phantom: PhantomData,
-        }
-    }
+    let left = Series::check_get_scalar::<L>(l)?;
+    let it = left.scalar_iter().map(|a| f.eval(a, ctx));
+    let result = <O as Scalar>::ColumnType::from_owned_iterator(it);
 
-    /// Evaluate the expression with the given array.
-    pub fn eval(
-        &self,
-        l: &'a ColumnRef,
-        ctx: &mut EvalContext,
-    ) -> Result<<O as Scalar>::ColumnType> {
-        let left = Series::check_get_scalar::<L>(l)?;
-        let it = left.scalar_iter().map(|a| (self.f).eval(a, ctx));
-        let result = <O as Scalar>::ColumnType::from_owned_iterator(it);
-
-        if let Some(error) = ctx.error.take() {
-            return Err(error);
-        }
-        Ok(result)
+    if let Some(error) = ctx.error.take() {
+        return Err(error);
     }
+    Ok(result)
 }

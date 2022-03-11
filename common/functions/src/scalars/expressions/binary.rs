@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::compute::comparison::Simd8;
 use common_arrow::arrow::compute::comparison::Simd8Lanes;
@@ -33,6 +31,69 @@ where F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O
     fn eval(&self, i1: L::RefType<'_>, i2: R::RefType<'_>, ctx: &mut EvalContext) -> O {
         self(i1, i2, ctx)
     }
+}
+
+pub fn scalar_binary_op<L: Scalar, R: Scalar, O: Scalar, F>(
+    l: &ColumnRef,
+    r: &ColumnRef,
+    f: F,
+    ctx: &mut EvalContext,
+) -> Result<<O as Scalar>::ColumnType>
+where
+    F: ScalarBinaryFunction<L, R, O>,
+{
+    debug_assert!(
+        l.len() == r.len(),
+        "Size of columns must match to apply binary expression"
+    );
+
+    let result = match (l.is_const(), r.is_const()) {
+        (false, true) => {
+            let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(l) };
+            let right = R::try_create_viewer(r)?;
+
+            let b = right.value_at(0);
+            let it = left.scalar_iter().map(|a| f.eval(a, b, ctx));
+            <O as Scalar>::ColumnType::from_owned_iterator(it)
+        }
+
+        (false, false) => {
+            let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(l) };
+            let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
+
+            let it = left
+                .scalar_iter()
+                .zip(right.scalar_iter())
+                .map(|(a, b)| f.eval(a, b, ctx));
+            <O as Scalar>::ColumnType::from_owned_iterator(it)
+        }
+
+        (true, false) => {
+            let left = L::try_create_viewer(l)?;
+            let a = left.value_at(0);
+
+            let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
+            let it = right.scalar_iter().map(|b| f.eval(a, b, ctx));
+            <O as Scalar>::ColumnType::from_owned_iterator(it)
+        }
+
+        // True True ?
+        (true, true) => {
+            let left = L::try_create_viewer(l)?;
+            let right = R::try_create_viewer(r)?;
+
+            let it = left
+                .iter()
+                .zip(right.iter())
+                .map(|(a, b)| f.eval(a, b, ctx));
+            <O as Scalar>::ColumnType::from_owned_iterator(it)
+        }
+    };
+
+    if let Some(error) = ctx.error.take() {
+        return Err(error);
+    }
+    Ok(result)
 }
 
 pub trait ScalarBinaryRefFunction<'a, L: Scalar, R: Scalar, O: Scalar> {
@@ -107,69 +168,6 @@ where
                 .zip(right.iter())
                 .map(|(a, b)| f.eval(a, b, ctx));
             <O as Scalar>::ColumnType::from_iterator(it)
-        }
-    };
-
-    if let Some(error) = ctx.error.take() {
-        return Err(error);
-    }
-    Ok(result)
-}
-
-pub fn scalar_binary_op<L: Scalar, R: Scalar, O: Scalar, F>(
-    l: &ColumnRef,
-    r: &ColumnRef,
-    f: F,
-    ctx: &mut EvalContext,
-) -> Result<<O as Scalar>::ColumnType>
-where
-    F: ScalarBinaryFunction<L, R, O>,
-{
-    debug_assert!(
-        l.len() == r.len(),
-        "Size of columns must match to apply binary expression"
-    );
-
-    let result = match (l.is_const(), r.is_const()) {
-        (false, true) => {
-            let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(l) };
-            let right = R::try_create_viewer(r)?;
-
-            let b = right.value_at(0);
-            let it = left.scalar_iter().map(|a| f.eval(a, b, ctx));
-            <O as Scalar>::ColumnType::from_owned_iterator(it)
-        }
-
-        (false, false) => {
-            let left: &<L as Scalar>::ColumnType = unsafe { Series::static_cast(l) };
-            let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
-
-            let it = left
-                .scalar_iter()
-                .zip(right.scalar_iter())
-                .map(|(a, b)| f.eval(a, b, ctx));
-            <O as Scalar>::ColumnType::from_owned_iterator(it)
-        }
-
-        (true, false) => {
-            let left = L::try_create_viewer(l)?;
-            let a = left.value_at(0);
-
-            let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
-            let it = right.scalar_iter().map(|b| f.eval(a, b, ctx));
-            <O as Scalar>::ColumnType::from_owned_iterator(it)
-        }
-
-        // True True ?
-        (true, true) => {
-            let left = L::try_create_viewer(l)?;
-            let right = R::try_create_viewer(r)?;
-
-            let it = left
-                .iter()
-                .zip(right.iter())
-                .map(|(a, b)| f.eval(a, b, ctx));
-            <O as Scalar>::ColumnType::from_owned_iterator(it)
         }
     };
 

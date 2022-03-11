@@ -26,15 +26,13 @@ use crate::scalars::EvalContext;
 use crate::scalars::Function;
 
 #[inline]
-fn intdiv_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, ctx: &mut EvalContext) -> O
+fn intdiv_scalar<O>(l: impl AsPrimitive<f64>, r: impl AsPrimitive<f64>, ctx: &mut EvalContext) -> O
 where
     f64: AsPrimitive<O>,
-    L: PrimitiveType + AsPrimitive<f64>,
-    R: PrimitiveType + AsPrimitive<f64>,
     O: IntegerType + Zero,
 {
-    let l = l.to_owned_scalar().as_();
-    let r = r.to_owned_scalar().as_();
+    let l = l.as_();
+    let r = r.as_();
     if std::intrinsics::unlikely(r == 0.0) {
         ctx.set_error(ErrorCode::BadArguments("Division by zero"));
         return O::zero();
@@ -54,7 +52,7 @@ impl ArithmeticIntDivFunction {
                 BinaryArithmeticFunction::<$T, $D, <($T, $D) as ResultTypeOfBinary>::IntDiv, _>::try_create_func(
                     DataValueBinaryOperator::IntDiv,
                     <($T, $D) as ResultTypeOfBinary>::IntDiv::to_data_type(),
-                    intdiv_scalar::<$T, $D, _>
+                    intdiv_scalar
                 )
             })
         })

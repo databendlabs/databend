@@ -75,7 +75,7 @@ where
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        let col = scalar_binary_op::<L, R, O, F>(
+        let col = scalar_binary_op(
             columns[0].column(),
             columns[1].column(),
             self.func.clone(),

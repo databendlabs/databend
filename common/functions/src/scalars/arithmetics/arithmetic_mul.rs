@@ -29,25 +29,21 @@ use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 
 #[inline]
-fn mul_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
-where
-    L: PrimitiveType + AsPrimitive<O>,
-    R: PrimitiveType + AsPrimitive<O>,
-    O: PrimitiveType + Mul<Output = O>,
-{
-    l.to_owned_scalar().as_() * r.to_owned_scalar().as_()
+fn mul_scalar<O>(l: impl AsPrimitive<O>, r: impl AsPrimitive<O>, _ctx: &mut EvalContext) -> O
+where O: PrimitiveType + Mul<Output = O> {
+    l.as_() * r.as_()
 }
 
 #[inline]
-fn wrapping_mul_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
+fn wrapping_mul_scalar<O>(
+    l: impl AsPrimitive<O>,
+    r: impl AsPrimitive<O>,
+    _ctx: &mut EvalContext,
+) -> O
 where
-    L: PrimitiveType + AsPrimitive<O>,
-    R: PrimitiveType + AsPrimitive<O>,
     O: IntegerType + WrappingMul<Output = O>,
 {
-    l.to_owned_scalar()
-        .as_()
-        .wrapping_mul(&r.to_owned_scalar().as_())
+    l.as_().wrapping_mul(&r.as_())
 }
 
 pub struct ArithmeticMulFunction;
@@ -66,17 +62,17 @@ impl ArithmeticMulFunction {
                     TypeID::UInt64 => BinaryArithmeticFunction::<$T, $D, u64, _>::try_create_func(
                         op,
                         result_type,
-                        wrapping_mul_scalar::<$T, $D, _>,
+                        wrapping_mul_scalar,
                     ),
                     TypeID::Int64 => BinaryArithmeticFunction::<$T, $D, i64, _>::try_create_func(
                         op,
                         result_type,
-                        wrapping_mul_scalar::<$T, $D, _>,
+                        wrapping_mul_scalar,
                     ),
                     _ => BinaryArithmeticFunction::<$T, $D, <($T, $D) as ResultTypeOfBinary>::AddMul, _>::try_create_func(
                         op,
                         result_type,
-                        mul_scalar::<$T, $D, _>,
+                        mul_scalar,
                     ),
                 }
             })

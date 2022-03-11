@@ -184,8 +184,7 @@ fn test_unary_size() {
 
     let l = Series::from_data(vec!["11", "22", "333"]);
     let expected = Series::from_data(vec![2i32, 2, 3]);
-    let unary_expression = ScalarUnaryExpression::<Vec<u8>, i32, _>::new(LenFunc {});
-    let result = unary_expression.eval(&l, &mut ctx).unwrap();
+    let result = scalar_unary_op::<Vec<u8>, i32, _>(&l, LenFunc {}, &mut ctx).unwrap();
     let result = Arc::new(result) as ColumnRef;
     assert!(result == expected);
 }
