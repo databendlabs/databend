@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_planners::Extras;
 use databend_query::storages::fuse::meta::BlockLocation;
 use databend_query::storages::fuse::meta::BlockMeta;
+use databend_query::storages::fuse::meta::ColumnMeta;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::storages::index::ColumnStatistics;
 
@@ -36,9 +37,20 @@ fn test_to_partitions() -> Result<()> {
         in_memory_size: col_size as u64,
     };
 
+    let col_metas_gen = || ColumnMeta {
+        offset: 0,
+        len: 0,
+        num_values: 0,
+    };
+
     let cols_stats = (0..num_of_col)
         .into_iter()
         .map(|col_id| (col_id as u32, col_stats_gen(col_id)))
+        .collect::<HashMap<_, _>>();
+
+    let cols_metas = (0..num_of_col)
+        .into_iter()
+        .map(|col_id| (col_id as u32, col_metas_gen()))
         .collect::<HashMap<_, _>>();
 
     let block_meta = BlockMeta {
@@ -49,7 +61,7 @@ fn test_to_partitions() -> Result<()> {
             .sum(),
         file_size: 0,
         col_stats: cols_stats.clone(),
-        col_metas: Default::default(),
+        col_metas: cols_metas,
         location: BlockLocation {
             path: "".to_string(),
             meta_size: 0,
