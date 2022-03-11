@@ -154,15 +154,17 @@ fn test_binary_contains() {
         }
     }
 
-    let binary_expression = ScalarBinaryExpression::<Vec<u8>, Vec<u8>, bool, _>::new(Contains {});
-
     for _ in 0..10 {
         let l = Series::from_data(vec!["11", "22", "33"]);
         let r = Series::from_data(vec!["1", "2", "43"]);
         let expected = Series::from_data(vec![true, true, false]);
-        let result = binary_expression
-            .eval(&l, &r, &mut EvalContext::default())
-            .unwrap();
+        let result = scalar_binary_op::<Vec<u8>, Vec<u8>, bool, _>(
+            &l,
+            &r,
+            Contains {},
+            &mut EvalContext::default(),
+        )
+        .unwrap();
         let result = Arc::new(result) as ColumnRef;
         assert!(result == expected);
     }

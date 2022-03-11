@@ -229,7 +229,7 @@ pub trait ComparisonExpression: Sync + Send {
 
 pub struct ComparisonScalarImpl<L: Scalar, R: Scalar, F> {
     func: F,
-    _phantom: PhantomData<(L, R, F)>,
+    _phantom: PhantomData<(L, R)>,
 }
 
 impl<L: Scalar, R: Scalar, F> ComparisonScalarImpl<L, R, F>
@@ -263,7 +263,7 @@ pub struct ComparisonPrimitiveImpl<T: PrimitiveType, F> {
     least_supertype: DataTypePtr,
     need_cast: bool,
     func: F,
-    _phantom: PhantomData<(T, F)>,
+    _phantom: PhantomData<T>,
 }
 
 impl<T, F> ComparisonPrimitiveImpl<T, F>
@@ -340,7 +340,7 @@ impl<F: BooleanSimdImpl> ComparisonExpression for ComparisonBooleanImpl<F> {
     }
 }
 
-pub type StringSearchFn = fn(bool) -> bool;
+type StringSearchFn = fn(bool) -> bool;
 
 pub struct ComparisonStringImpl<T> {
     op: StringSearchFn,

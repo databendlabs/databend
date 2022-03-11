@@ -28,6 +28,7 @@ use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 
+#[inline]
 fn mul_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
 where
     L: PrimitiveType + AsPrimitive<O>,
@@ -37,6 +38,7 @@ where
     l.to_owned_scalar().as_() * r.to_owned_scalar().as_()
 }
 
+#[inline]
 fn wrapping_mul_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
 where
     L: PrimitiveType + AsPrimitive<O>,

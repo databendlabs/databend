@@ -23,10 +23,10 @@ use num_traits::AsPrimitive;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
-use crate::scalars::ScalarBinaryExpression;
 use crate::scalars::ScalarUnaryExpression;
 
 fn round<S>(value: S, _ctx: &mut EvalContext) -> f64
@@ -115,10 +115,10 @@ fn eval_round(columns: &ColumnsWithField) -> Result<ColumnRef> {
         _ => {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
-                    let binary = ScalarBinaryExpression::<$S, $T, f64, _>::new(round_to);
-                    let col = binary.eval(
+                    let col = scalar_binary_op::<$S, $T, f64, _>(
                         columns[0].column(),
                         columns[1].column(),
+                        round_to,
                         &mut ctx
                     )?;
                     Ok(Arc::new(col))
@@ -148,10 +148,10 @@ fn eval_trunc(columns: &ColumnsWithField) -> Result<ColumnRef> {
         _ => {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
-                    let binary = ScalarBinaryExpression::<$S, $T, f64, _>::new(trunc_to);
-                    let col = binary.eval(
+                    let col = scalar_binary_op::<$S, $T, f64, _>(
                         columns[0].column(),
                         columns[1].column(),
+                        trunc_to,
                         &mut ctx,
                     )?;
                     Ok(Arc::new(col))

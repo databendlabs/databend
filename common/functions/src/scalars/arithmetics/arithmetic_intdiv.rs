@@ -25,6 +25,7 @@ use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 
+#[inline]
 fn intdiv_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, ctx: &mut EvalContext) -> O
 where
     f64: AsPrimitive<O>,

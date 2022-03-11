@@ -26,6 +26,7 @@ use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 
+#[inline]
 fn div_scalar<L, R>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> f64
 where
     L: PrimitiveType + AsPrimitive<f64>,

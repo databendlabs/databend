@@ -31,6 +31,7 @@ use crate::scalars::Function;
 use crate::scalars::FunctionFactory;
 use crate::scalars::Monotonicity;
 
+#[inline]
 fn sub_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
 where
     L: PrimitiveType + AsPrimitive<O>,
@@ -40,6 +41,7 @@ where
     l.to_owned_scalar().as_() - r.to_owned_scalar().as_()
 }
 
+#[inline]
 fn wrapping_sub_scalar<L, R, O>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> O
 where
     L: PrimitiveType + AsPrimitive<O>,

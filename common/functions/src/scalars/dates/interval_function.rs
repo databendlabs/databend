@@ -31,11 +31,11 @@ use crate::define_datetime32_add_year_months;
 use crate::define_datetime64_add_year_months;
 use crate::impl_interval_year_month;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::scalar_binary_op;
 use crate::scalars::ArithmeticCreator;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
-use crate::scalars::ScalarBinaryExpression;
 use crate::scalars::ScalarBinaryFunction;
 
 pub struct IntervalFunctionCreator<T> {
@@ -108,9 +108,10 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
 pub struct IntervalFunction<L: DateType, R: PrimitiveType, O: DateType, F> {
     display_name: String,
     result_type: DataTypePtr,
-    binary: ScalarBinaryExpression<L, R, O, F>,
+    func: F,
     factor: i64,
     precision: usize,
+    _phantom: PhantomData<(L, R, O)>,
 }
 
 impl<L, R, O, F> IntervalFunction<L, R, O, F>
@@ -127,13 +128,13 @@ where
         factor: i64,
         precision: usize,
     ) -> Result<Box<dyn Function>> {
-        let binary = ScalarBinaryExpression::<L, R, O, _>::new(func);
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
             result_type,
-            binary,
+            func,
             factor,
             precision,
+            _phantom: PhantomData,
         }))
     }
 }
@@ -156,9 +157,12 @@ where
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
         // Todo(zhyass): define the ctx out of the eval.
         let mut ctx = EvalContext::new(self.factor, self.precision, None);
-        let col = self
-            .binary
-            .eval(columns[0].column(), columns[1].column(), &mut ctx)?;
+        let col = scalar_binary_op::<L, R, O, _>(
+            columns[0].column(),
+            columns[1].column(),
+            self.func.clone(),
+            &mut ctx,
+        )?;
         Ok(Arc::new(col))
     }
 }
