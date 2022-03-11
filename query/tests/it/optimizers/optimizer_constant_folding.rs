@@ -101,7 +101,7 @@ async fn test_constant_folding_optimizer() -> Result<()> {
         ];
 
     for test in tests {
-        let ctx = crate::tests::create_query_context()?;
+        let ctx = crate::tests::create_query_context().await?;
 
         let plan = PlanParser::parse(ctx.clone(), test.query).await?;
         let mut optimizer = ConstantFoldingOptimizer::create(ctx);

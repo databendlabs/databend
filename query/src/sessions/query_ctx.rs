@@ -286,7 +286,7 @@ impl QueryContext {
 
     // Get user manager api.
     pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
-        self.shared.session.get_session_manager().get_user_manager()
+        self.shared.session.get_user_manager()
     }
 
     // Get the current session.
@@ -295,16 +295,21 @@ impl QueryContext {
     }
 
     // Get one session by session id.
-    pub fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
+    pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
         self.shared
             .session
             .get_session_manager()
             .get_session_by_id(id)
+            .await
     }
 
     // Get all the processes list info.
-    pub fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        self.shared.session.get_session_manager().processes_info()
+    pub async fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        self.shared
+            .session
+            .get_session_manager()
+            .processes_info()
+            .await
     }
 
     /// Get the data accessor metrics.

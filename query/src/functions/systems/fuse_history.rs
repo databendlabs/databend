@@ -19,10 +19,10 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::Function;
-use super::FunctionDescription;
-use super::FunctionFeatures;
 use crate::catalogs::Catalog;
+use crate::functions::Function;
+use crate::functions::FunctionDescription;
+use crate::functions::FunctionFeatures;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::FuseHistory;
 use crate::storages::fuse::FuseTable;
@@ -30,7 +30,7 @@ use crate::storages::fuse::FuseTable;
 pub struct FuseHistoryFunction {}
 
 impl FuseHistoryFunction {
-    pub fn try_create(_: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create() -> Result<Box<dyn Function>> {
         Ok(Box::new(FuseHistoryFunction {}))
     }
 
@@ -42,10 +42,6 @@ impl FuseHistoryFunction {
 
 #[async_trait::async_trait]
 impl Function for FuseHistoryFunction {
-    fn name(&self) -> &str {
-        "system$fuse_history"
-    }
-
     async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let database_name = args[0].clone();
         let table_name = args[1].clone();

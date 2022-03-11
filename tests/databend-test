@@ -45,8 +45,8 @@ def remove_control_characters(s):
     return s
 
 
-def run_single_test(args, ext, client_options, case_file_full_path,
-                    stdout_file, stderr_file, result_file):
+def run_single_test(args, ext, client_options, case_file_full_path, stdout_file,
+                    stderr_file, result_file):
 
     params = {
         'client': args.client_with_database,
@@ -128,8 +128,7 @@ def get_processlist(client_cmd):
 
 
 def get_stacktraces(server_pid):
-    cmd = "gdb -batch -ex 'thread apply all backtrace' -p {}".format(
-        server_pid)
+    cmd = "gdb -batch -ex 'thread apply all backtrace' -p {}".format(server_pid)
     try:
         return subprocess.check_output(cmd, shell=True)
     except Exception as ex:
@@ -203,8 +202,7 @@ def run_tests_array(all_tests_with_params):
     client_options = get_additional_client_options(args)
 
     if len(all_test_list):
-        print("\nRunning {} {} tests.".format(len(all_test_list), suite) +
-              "\n")
+        print("\nRunning {} {} tests.".format(len(all_test_list), suite) + "\n")
 
     def print_test_time(test_time):
         if args.print_time:
@@ -254,8 +252,8 @@ def run_tests_array(all_tests_with_params):
                         '.' + str(os.getpid())
                     ) if is_concurrent and args.test_runs > 1 else ''
                     result_file = os.path.join(suite_dir, name) + '.result'
-                    cluster_result_file = os.path.join(
-                        suite_dir, name) + '_cluster.result'
+                    cluster_result_file = os.path.join(suite_dir,
+                                                       name) + '_cluster.result'
                     stdout_file = os.path.join(suite_tmp_dir,
                                                name) + file_suffix + '.stdout'
                     stderr_file = os.path.join(suite_tmp_dir,
@@ -410,9 +408,8 @@ def run_tests_array(all_tests_with_params):
     else:
         print(
             colored(
-                "\n{passed_total} tests passed. {skipped_total} tests skipped."
-                .format(passed_total=passed_total,
-                        skipped_total=skipped_total),
+                "\n{passed_total} tests passed. {skipped_total} tests skipped.".
+                format(passed_total=passed_total, skipped_total=skipped_total),
                 args,
                 "green",
                 attrs=["bold"]))
@@ -575,14 +572,13 @@ def main(args):
                                                 [_suite_dir_len:-1]))
 
                         _suite_tmp_dir = os.path.join(
-                            suite_tmp_dir, "/".join(all_tests[_start].split(
-                                "/")[_suite_dir_len:-1]))
+                            suite_tmp_dir, "/".join(all_tests[_start].split("/")
+                                                    [_suite_dir_len:-1]))
 
                     _test_case_unit.append(all_tests[_start])
                     _test_case_unit.append(_updated_suite_dir or suite_dir)
                     _test_case_unit.append(_suite_tmp_dir or suite_tmp_dir)
-                    _test_case_unit_group.append(
-                        copy.deepcopy(_test_case_unit))
+                    _test_case_unit_group.append(copy.deepcopy(_test_case_unit))
                     _start += 1
 
                 _test_case_group_in_one_run.append(_test_case_unit_group)
@@ -642,9 +638,7 @@ if __name__ == '__main__':
                         type=int,
                         default=0,
                         help="Force override result files from stdout files")
-    parser.add_argument('test',
-                        nargs='*',
-                        help='Optional test case name regex')
+    parser.add_argument('test', nargs='*', help='Optional test case name regex')
     parser.add_argument(
         '--test-runs',
         default=1,

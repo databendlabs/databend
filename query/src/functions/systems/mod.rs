@@ -12,13 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod function;
-mod function_factory;
 mod fuse_history;
 mod system;
 
-pub use function::Function;
-pub use function_factory::FunctionDescription;
-pub use function_factory::FunctionFactory;
-pub use function_factory::FunctionFeatures;
+pub use fuse_history::FuseHistoryFunction;
 pub use system::SystemFunction;

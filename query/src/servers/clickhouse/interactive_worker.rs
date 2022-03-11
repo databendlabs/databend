@@ -106,12 +106,7 @@ impl ClickHouseSession for InteractiveWorker {
             password: Some(password.to_owned()),
             hostname: Some(client_ip.to_string()),
         };
-        let user_info_auth = self
-            .session
-            .get_session_manager()
-            .get_auth_manager()
-            .auth(&credential)
-            .await;
+        let user_info_auth = self.session.get_auth_manager().auth(&credential).await;
         match user_info_auth {
             Ok(user_info) => {
                 self.session.set_current_user(user_info);

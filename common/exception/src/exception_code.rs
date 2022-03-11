@@ -183,6 +183,12 @@ build_exceptions! {
 
     // Variable error codes.
     UnknownVariable(2801),
+
+    // Warehouse error codes
+    UnknownWarehouse(2901),
+    WarehouseAlreadyExists(2902),
+    IllegalWarehouseMetaFormat(2903),
+    IllegalWarehouseInfoFormat(2904),
 }
 
 // Storage errors [3001, 4000].

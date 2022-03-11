@@ -135,7 +135,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // HTTP API service.
     {
-        let address = conf.query.http_api_address.clone();
+        let address = conf.query.admin_api_address.clone();
         let mut srv = HttpService::create(session_manager.clone());
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);

@@ -56,6 +56,7 @@ pub async fn streaming_load(
     let session_manager = sessions_extension.0;
     let session = session_manager
         .create_session("Streaming load")
+        .await
         .map_err(InternalServerError)?;
 
     // TODO: list user's grant list and check client address

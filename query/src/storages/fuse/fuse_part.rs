@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -21,9 +22,27 @@ use common_planners::PartInfo;
 use common_planners::PartInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct ColumnMeta {
+    pub offset: u64,
+    pub length: u64,
+    pub num_values: u64,
+}
+
+impl ColumnMeta {
+    pub fn create(offset: u64, length: u64, num_values: u64) -> ColumnMeta {
+        ColumnMeta {
+            offset,
+            length,
+            num_values,
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct FusePartInfo {
     pub location: String,
-    pub file_size: u64,
+    pub nums_rows: usize,
+    pub columns_meta: HashMap<usize, ColumnMeta>,
 }
 
 #[typetag::serde(name = "fuse")]
@@ -41,10 +60,15 @@ impl PartInfo for FusePartInfo {
 }
 
 impl FusePartInfo {
-    pub fn create(location: String, file_size: u64) -> Arc<Box<dyn PartInfo>> {
+    pub fn create(
+        location: String,
+        rows_count: u64,
+        columns_meta: HashMap<usize, ColumnMeta>,
+    ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FusePartInfo {
             location,
-            file_size,
+            columns_meta,
+            nums_rows: rows_count as usize,
         }))
     }
 

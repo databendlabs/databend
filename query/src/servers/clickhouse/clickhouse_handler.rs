@@ -77,27 +77,27 @@ impl ClickHouseHandler {
         })
     }
 
-    fn reject_connection(stream: TcpStream, executor: Arc<Runtime>, error: ErrorCode) {
-        executor.spawn(async move {
-            if let Err(error) = RejectCHConnection::reject(stream, error).await {
-                tracing::error!(
-                    "Unexpected error occurred during reject connection: {:?}",
-                    error
-                );
-            }
-        });
+    async fn reject_connection(stream: TcpStream, error: ErrorCode) {
+        if let Err(error) = RejectCHConnection::reject(stream, error).await {
+            tracing::error!(
+                "Unexpected error occurred during reject connection: {:?}",
+                error
+            );
+        }
     }
 
     fn accept_socket(sessions: Arc<SessionManager>, executor: Arc<Runtime>, socket: TcpStream) {
-        match sessions.create_session("ClickHouseSession") {
-            Err(error) => Self::reject_connection(socket, executor, error),
-            Ok(session) => {
-                tracing::info!("ClickHouse connection coming: {:?}", socket.peer_addr());
-                if let Err(error) = ClickHouseConnection::run_on_stream(session, socket) {
-                    tracing::error!("Unexpected error occurred during query: {:?}", error);
+        executor.spawn(async move {
+            match sessions.create_session("ClickHouseSession").await {
+                Err(error) => Self::reject_connection(socket, error).await,
+                Ok(session) => {
+                    tracing::info!("ClickHouse connection coming: {:?}", socket.peer_addr());
+                    if let Err(error) = ClickHouseConnection::run_on_stream(session, socket) {
+                        tracing::error!("Unexpected error occurred during query: {:?}", error);
+                    }
                 }
             }
-        }
+        });
     }
 }
 

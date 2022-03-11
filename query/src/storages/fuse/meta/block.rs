@@ -26,7 +26,18 @@ pub struct BlockMeta {
     pub block_size: u64,
     pub file_size: u64,
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
+    pub col_metas: HashMap<ColumnId, ColumnMeta>,
     pub location: BlockLocation,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct ColumnMeta {
+    /// where the data of column start
+    pub offset: u64,
+    /// the length of the column
+    pub len: u64,
+    /// num of "rows"
+    pub num_values: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

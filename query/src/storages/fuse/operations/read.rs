@@ -15,7 +15,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;
 use common_streams::SendableDataBlockStream;
@@ -23,9 +22,7 @@ use common_tracing::tracing_futures::Instrument;
 use futures::StreamExt;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::fuse_part::FusePartInfo;
 use crate::storages::fuse::io::BlockReader;
-use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
@@ -60,34 +57,14 @@ impl FuseTable {
             .flatten();
         let operator = ctx.get_storage_operator().await?;
         let table_schema = self.table_info.schema();
+        let block_reader = BlockReader::create(operator, table_schema, projection)?;
 
         let part_stream = futures::stream::iter(iter);
 
         let stream = part_stream
             .map(move |part| {
-                let da = operator.clone();
-                let table_schema = table_schema.clone();
-                let projection = projection.clone();
-                let reader = MetaReaders::block_meta_reader(ctx.clone());
-                async move {
-                    let fuse_part = FusePartInfo::from_part(&part)?;
-
-                    let mut block_reader = BlockReader::new(
-                        da,
-                        fuse_part.location.to_owned(),
-                        table_schema,
-                        projection,
-                        fuse_part.file_size,
-                        reader,
-                    );
-                    block_reader.read().await.map_err(|e| {
-                        ErrorCode::ParquetError(format!(
-                            "fail to read block {}, {}",
-                            fuse_part.location.to_owned(),
-                            e
-                        ))
-                    })
-                }
+                let block_reader = block_reader.clone();
+                async move { block_reader.read(part).await }
             })
             .buffer_unordered(bite_size as usize)
             .instrument(common_tracing::tracing::Span::current());

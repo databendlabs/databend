@@ -68,7 +68,7 @@ use databend_query::sql::PlanParser;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_literal_false_filter() -> Result<()> {
     let query = "select * from numbers_mt(10) where 1 + 2 = 2";
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
 
     let plan = PlanParser::parse(ctx.clone(), query).await?;
     let mut optimizer = Optimizers::without_scatters(ctx);
@@ -122,7 +122,7 @@ async fn test_skip_read_data_source() -> Result<()> {
     ];
 
     for test in tests {
-        let ctx = crate::tests::create_query_context()?;
+        let ctx = crate::tests::create_query_context().await?;
         let plan = PlanParser::parse(ctx.clone(), test.query).await?;
         let mut optimizer = Optimizers::without_scatters(ctx);
 

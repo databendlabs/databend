@@ -1208,6 +1208,7 @@ dependencies = [
  "arrow-format",
  "arrow2",
  "futures",
+ "parquet-format-async-temp",
  "parquet2",
 ]
 
@@ -1630,9 +1631,11 @@ dependencies = [
  "hex",
  "lazy_static",
  "maplit",
+ "nanoid",
  "once_cell",
  "openraft",
  "prost",
+ "regex",
  "serde",
  "serde_json",
  "sha1",
@@ -4224,6 +4227,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fce7b49e1e6d8aa67232ef1c4c936c0af58756eb2db6f65c40bacb39035e7f42"
 
 [[package]]
+name = "nanoid"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
+dependencies = [
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "native-tls"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4575,9 +4587,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.1.4"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abb6f94d5653944786dd46d6d20fe1c94c83f6640abcaf8ca35a983e5431b7a2"
+checksum = "704b149654ed7a9b5c58a1927982244b4d6420f72ad1b86b6ff0e7fe50569838"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4591,7 +4603,6 @@ dependencies = [
  "aws-smithy-http",
  "aws-smithy-http-tower",
  "aws-types",
- "bitflags",
  "blocking",
  "bytes",
  "futures",
@@ -4820,9 +4831,8 @@ dependencies = [
 
 [[package]]
 name = "parquet2"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe2f206abf5ff36f501e6b6acb646de1d236ca4ecb35dc6a58cbedbf7cab748a"
+version = "0.10.3"
+source = "git+https://github.com/datafuse-extras/parquet2?rev=b3efb4e#b3efb4e45c125b2707084be6135676279ba8908f"
 dependencies = [
  "async-stream",
  "bitpacking",

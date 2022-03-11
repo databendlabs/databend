@@ -70,7 +70,10 @@ impl ExecutorWorkerContext {
             ExecutorTask::None => Err(ErrorCode::LogicalError("Execute none task.")),
             ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
             ExecutorTask::Async(processor) => self.execute_async_task(processor, exec),
-            ExecutorTask::AsyncCompleted(task) => Ok(Some(task.id)),
+            ExecutorTask::AsyncCompleted(task) => match task.res {
+                Ok(_) => Ok(Some(task.id)),
+                Err(cause) => Err(cause),
+            },
         }
     }
 
