@@ -19,7 +19,7 @@ use databend_query::sql::PlanParser;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_show_processlist_interpreter() -> Result<()> {
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
 
     // show processlist.
     {

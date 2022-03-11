@@ -20,7 +20,7 @@ use futures::TryStreamExt;
 
 #[tokio::test]
 async fn test_insert_into_interpreter() -> Result<()> {
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
 
     // Create default value table.
     {

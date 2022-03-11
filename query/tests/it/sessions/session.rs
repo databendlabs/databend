@@ -29,7 +29,8 @@ async fn test_session() -> Result<()> {
         String::from("test-001"),
         String::from("test-type"),
         session_manager,
-    )?;
+    )
+    .await?;
 
     // Tenant.
     {
@@ -73,7 +74,8 @@ async fn test_session_in_management_mode() -> Result<()> {
         String::from("test-001"),
         String::from("test-type"),
         session_manager,
-    )?;
+    )
+    .await?;
 
     // Tenant.
     {

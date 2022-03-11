@@ -20,7 +20,7 @@ use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_settings_table() -> Result<()> {
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
     ctx.get_settings().set_max_threads(2)?;
 
     let table = SettingsTable::create(1);

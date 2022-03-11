@@ -23,7 +23,7 @@ use pretty_assertions::assert_eq;
 async fn test_call_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
 
     let plan = PlanParser::parse(ctx.clone(), "call system$test()").await?;
     let executor = InterpreterFactory::get(ctx, plan.clone())?;
@@ -41,7 +41,7 @@ async fn test_call_interpreter() -> Result<()> {
 async fn test_call_fuse_history_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
 
     // NumberArgumentsNotMatch
     {
@@ -105,7 +105,7 @@ async fn test_call_fuse_history_interpreter() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_call_warehouse_metadata_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
 
     // NumberArgumentsNotMatch
     {
@@ -136,7 +136,7 @@ async fn test_call_warehouse_metadata_interpreter() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_warehouse_metadata_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
 
     // NumberArgumentsNotMatch. Case 1
     {
@@ -203,7 +203,7 @@ async fn test_get_warehouse_metadata_interpreter() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_list_warehouse_metadata_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
 
     // NumberArgumentsNotMatch.
     {
@@ -258,7 +258,7 @@ async fn test_list_warehouse_metadata_interpreter() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_update_warehouse_metadata_size_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
 
     // NumberArgumentsNotMatch.
     {
@@ -315,7 +315,7 @@ async fn test_update_warehouse_metadata_size_interpreter() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_drop_warehouse_metadata_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
 
     // NumberArgumentsNotMatch.
     {

@@ -20,7 +20,7 @@ use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tables_table() -> Result<()> {
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
     let table = TablesTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 

@@ -22,7 +22,7 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_configs_table() -> Result<()> {
     let conf = crate::tests::ConfigBuilder::create().config();
-    let ctx = crate::tests::create_query_context_with_config(conf)?;
+    let ctx = crate::tests::create_query_context_with_config(conf).await?;
     ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create(1);

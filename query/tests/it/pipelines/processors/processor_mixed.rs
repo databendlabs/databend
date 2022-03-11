@@ -24,7 +24,7 @@ use crate::tests;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_processor_mixed() -> Result<()> {
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
     let test_source = tests::NumberTestData::create(ctx.clone());
 
     let mut pipeline = Pipeline::create(ctx.clone());
@@ -60,7 +60,7 @@ async fn test_processor_mixed() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn test_processor_mixed2() -> Result<()> {
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
     let test_source = tests::NumberTestData::create(ctx.clone());
 
     let m = 5;
