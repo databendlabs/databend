@@ -21,7 +21,7 @@
 
 pub mod api;
 pub mod catalogs;
-pub mod clusters;
+pub use query_clusters as clusters;
 pub use query_common as common;
 pub use query_configs as configs;
 pub mod databases;

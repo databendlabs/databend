@@ -43,9 +43,9 @@ use futures::StreamExt;
 use rand::thread_rng;
 use rand::Rng;
 
-use crate::api::FlightClient;
-use crate::common::MetaClientProvider;
-use crate::configs::Config;
+use query_flight::FlightClient;
+use query_common::MetaClientProvider;
+use query_configs::Config;
 
 pub struct ClusterDiscovery {
     local_id: String,

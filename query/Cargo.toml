@@ -52,6 +52,7 @@ common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
 
 # databend-query dependencies
+query-clusters = { path = "clusters" }
 query-common = { path = "common" }
 query-configs = { path = "configs" }
 query-flight = { path = "flight" }
