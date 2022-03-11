@@ -33,13 +33,10 @@ use common_planners::PartInfoPtr;
 use common_tracing::tracing;
 use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
-use futures::future::try_join_all;
 use futures::AsyncReadExt;
 use futures::StreamExt;
-use futures::TryFutureExt;
 use futures::TryStreamExt;
 use opendal::Operator;
-use tokio_stream::iter;
 
 use crate::experiment::task::DedicatedExecutor;
 use crate::storages::fuse::fuse_part::ColumnMeta;
@@ -107,6 +104,7 @@ impl BlockReader {
 
         let rows = part.nums_rows;
         // TODO: add prefetch column data.
+        let num_cols = self.projection.len();
         let mut columns_array_iter = Vec::with_capacity(0);
         let mut column_chunk_futs = Vec::with_capacity(self.projection.len());
         let mut col_idx = vec![];
@@ -127,7 +125,9 @@ impl BlockReader {
             col_idx.push(index);
         }
 
-        let chunks = try_join_all(column_chunk_futs)
+        let chunks = futures::stream::iter(column_chunk_futs)
+            .buffered(std::cmp::min(10, num_cols))
+            .try_collect::<Vec<_>>()
             .await
             .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 
