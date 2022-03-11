@@ -7,7 +7,7 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 /** @type {import('@docusaurus/types').Config} */
 const config = {
     title: 'Databend',
-    tagline: 'The Modern Cloud Data Warehouse for Everyone.',
+    tagline: 'The modern data warehouse, have the Elasticity and Performance both',
     url: 'https://databend.rs',
     baseUrl: '/',
     onBrokenLinks: 'throw',
@@ -22,9 +22,9 @@ const config = {
             /** @type {import('@docusaurus/preset-classic').Options} */
             ({
                 docs: {
-                    path: '../docs/overview',
-                    routeBasePath: 'overview',
-                    sidebarPath: require.resolve('../docs/overview/sidebars.js'),
+                    path: '../docs/doc',
+                    routeBasePath: 'doc',
+                    sidebarPath: require.resolve('../docs/doc/sidebars.js'),
                     editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
                 },
                 blog: {
@@ -34,10 +34,6 @@ const config = {
                 },
                 theme: {
                     customCss: require.resolve('./src/css/custom.scss'),
-                },
-                gtag: {
-                  trackingID: 'G-WBQPTTG4ZG',
-                  anonymizeIP: true,
                 },
                 sitemap: {
                     changefreq: 'daily',
@@ -54,17 +50,6 @@ const config = {
             '@docusaurus/plugin-content-docs',
             /** @type {import('@docusaurus/plugin-content-docs').Options} */
             {
-                id: 'user',
-                path: '../docs/user',
-                routeBasePath: 'user',
-                sidebarPath: require.resolve('../docs/user/sidebars.js'),
-                editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
-            },
-        ],
-        [
-            '@docusaurus/plugin-content-docs',
-            /** @type {import('@docusaurus/plugin-content-docs').Options} */
-            {
                 id: 'dev',
                 path: '../docs/dev',
                 routeBasePath: 'dev',
@@ -73,27 +58,16 @@ const config = {
             },
         ],
         [
-            '@docusaurus/plugin-content-docs',
-            /** @type {import('@docusaurus/plugin-content-docs').Options} */
+            '@docusaurus/plugin-client-redirects',
             {
-                id: 'learn',
-                path: '../docs/learn',
-                routeBasePath: 'learn',
-                sidebarPath: require.resolve('../docs/learn/sidebars.js'),
-                editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
+                // this will be removed later, make a mark~.
+                redirects: [
+                    {
+                        to: '/', // string
+                        from: '/doc/index.md', // string | string[]
+                    },
+                ],
             },
-        ],
-        [
-          '@docusaurus/plugin-client-redirects',
-          {
-            // this will be removed later, make a mark~.
-            redirects: [
-              {
-                to: '/', // string
-                from: '/overview/building-and-running', // string | string[]
-              },
-            ],
-          },
         ]
     ],
     themeConfig:
@@ -106,37 +80,6 @@ const config = {
                     src: 'img/favicon.svg',
                 },
                 items: [
-                    {
-                        position: 'left', label: 'Overview', items: [
-                            {label: 'Architecture', to: '/overview/architecture'},
-                            {label: 'Performance', to: '/overview/performance'}
-                        ]
-                    },
-                    {
-                        to: '/user', label: 'User Guide', position: 'left', items: [
-                            {label: 'Get Started', to: '/user'},
-                            {label: 'SQL', to: '/user/category/sql'},
-                            {label: 'CLI', to: '/user/category/cli'},
-                            {label: 'APIs', to: '/user/category/apis'},
-                            {label: 'Data Loading', to: '/user/category/data-loading'}
-                        ]
-                    },
-                    {
-                        label: 'Dev Guide', position: 'left',
-                        to: '/dev',
-                        items: [
-                            {label: 'Contributing', to: '/dev/category/contributing'},
-                            {label: 'Development', to: '/dev/category/development'},
-                            {label: 'Roadmap', to: '/dev/roadmap'},
-                            {label: 'Policies', to: '/dev/category/policies'},
-                            {label: 'RFCs', to: '/dev/category/rfcs'}
-                        ]
-                    },
-                    {
-                        to: '/learn/category/lessons', label: 'Learn', position: 'left', items:[
-                            {label: 'Lessons', to: '/learn/category/lessons'},
-                        ]
-                    },
                     {
                         href: 'https://github.com/datafuselabs/databend',
                         label: 'GitHub',
@@ -151,12 +94,12 @@ const config = {
                         title: 'Resources',
                         items: [
                             {
-                                label: 'CLI Reference',
-                                to: '/user/category/cli'
+                                label: 'Deploy',
+                                to: 'doc/category/deploy-databend'
                             },
                             {
                                 label: 'Performance',
-                                to: '/overview/performance'
+                                to: '/doc/category/performance'
                             },
                         ]
                     },
@@ -187,7 +130,7 @@ const config = {
                         ],
                     },
                 ],
-                copyright: `Copyright © ${new Date().getFullYear()} Datafuselabs, Inc. Built with Docusaurus. <br> <a style="display:block;margin-top: 10px" href="https://vercel.com/?utm_source=databend&utm_campaign=oss"><img src="https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg"></a>`,
+                copyright: `Copyright © ${new Date().getFullYear()} Datafuse Labs, Inc. Built with Docusaurus. <br> <a style="display:block;margin-top: 10px" href="https://vercel.com/?utm_source=databend&utm_campaign=oss"><img src="https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg"></a>`,
             },
             prism: {
                 theme: lightCodeTheme,
