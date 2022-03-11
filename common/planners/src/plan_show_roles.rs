@@ -12,19 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod clusters_table;
-mod columns_table;
-mod configs_table;
-mod contributors_table;
-mod credits_table;
-mod databases_table;
-mod engines_table;
-mod functions_table;
-mod metrics_table;
-mod query_log_table;
-mod roles_table;
-mod settings_table;
-mod tables_table;
-mod tracing_table;
-mod users_table;
-mod warehouses_table;
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
+pub struct ShowRolesPlan {}
