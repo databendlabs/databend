@@ -31,9 +31,17 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PartInfoPtr;
 use common_tracing::tracing;
+use common_tracing::tracing::debug_span;
+use common_tracing::tracing::Instrument;
+use futures::future::try_join_all;
 use futures::AsyncReadExt;
+use futures::StreamExt;
+use futures::TryFutureExt;
+use futures::TryStreamExt;
 use opendal::Operator;
+use tokio_stream::iter;
 
+use crate::experiment::task::DedicatedExecutor;
 use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;
 
@@ -44,6 +52,7 @@ pub struct BlockReader {
     arrow_schema: Arc<Schema>,
     projected_schema: DataSchemaRef,
     parquet_schema_descriptor: SchemaDescriptor,
+    io_exec: DedicatedExecutor,
 }
 
 impl BlockReader {
@@ -51,6 +60,7 @@ impl BlockReader {
         operator: Operator,
         schema: DataSchemaRef,
         projection: Vec<usize>,
+        io_exec: DedicatedExecutor,
     ) -> Result<Arc<BlockReader>> {
         let projected_schema = DataSchemaRef::new(schema.project(projection.clone()));
 
@@ -62,6 +72,7 @@ impl BlockReader {
             projected_schema,
             parquet_schema_descriptor,
             arrow_schema: Arc::new(arrow_schema),
+            io_exec,
         }))
     }
 
@@ -97,20 +108,32 @@ impl BlockReader {
         let rows = part.nums_rows;
         // TODO: add prefetch column data.
         let mut columns_array_iter = Vec::with_capacity(0);
+        let mut column_chunk_futs = Vec::with_capacity(self.projection.len());
         for index in &self.projection {
             let column_meta = &part.columns_meta[index];
-
             let mut column_reader = self
                 .operator
                 .object(&part.location)
                 .range_reader(column_meta.offset, column_meta.length);
-
             let mut column_chunk = vec![0; column_meta.length as usize];
-            // TODO: check thread name
-            column_reader.read_exact(&mut column_chunk).await?;
+            let fut = async move {
+                column_reader.read_exact(&mut column_chunk).await?;
+                Ok::<_, ErrorCode>(column_chunk)
+            }
+            .instrument(debug_span!("read_col_chunk"));
+            let fut = self.io_exec.spawn(fut);
+            column_chunk_futs.push(fut);
+        }
 
-            let field = self.arrow_schema.fields[*index].clone();
-            let column_descriptor = self.parquet_schema_descriptor.column(*index);
+        let chunks = try_join_all(column_chunk_futs)
+            .await
+            .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
+
+        for (idx, chunk) in chunks.into_iter().enumerate() {
+            let column_chunk = chunk?;
+            let field = self.arrow_schema.fields[idx].clone();
+            let column_descriptor = self.parquet_schema_descriptor.column(idx);
+            let column_meta = &part.columns_meta[&idx];
             columns_array_iter.push(Self::to_deserialize(
                 column_meta,
                 column_chunk,

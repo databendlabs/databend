@@ -57,7 +57,12 @@ impl FuseTable {
             .flatten();
         let operator = ctx.get_storage_operator().await?;
         let table_schema = self.table_info.schema();
-        let block_reader = BlockReader::create(operator, table_schema, projection)?;
+        let block_reader = BlockReader::create(
+            operator,
+            table_schema,
+            projection,
+            ctx.get_storage_executor().clone(),
+        )?;
 
         let part_stream = futures::stream::iter(iter);
 
