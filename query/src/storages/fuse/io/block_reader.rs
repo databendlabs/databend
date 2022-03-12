@@ -117,11 +117,14 @@ impl BlockReader {
                 .range_reader(column_meta.offset, column_meta.length);
             let mut column_chunk = vec![0; column_meta.length as usize];
             let fut = async move {
+                tracing::debug!("executing, {:?}", std::thread::current());
                 column_reader.read_exact(&mut column_chunk).await?;
                 Ok::<_, ErrorCode>(column_chunk)
             }
             .instrument(debug_span!("read_col_chunk"));
+            tracing::debug!("issuing io task, {:?}", std::thread::current());
             let fut = self.ctx.get_storage_runtime().try_spawn(fut)?;
+            tracing::debug!("io task issued, {:?}", std::thread::current());
             column_chunk_futs.push(fut);
             col_idx.push(index);
         }
