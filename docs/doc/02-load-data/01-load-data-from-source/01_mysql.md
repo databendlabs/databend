@@ -10,7 +10,7 @@ Using `mysqldump` to load data from MySQL into Databend.
 ### Prerequisites
 
 * **MySQL client and mysqldump**
-* **Databend Deployment:** You will connect to the database and table using MySQL client, please see [How to deploy Databend](/doc/category/deploy-databend).
+* **Databend:** You will connect to the database and table using MySQL client, please see [How to deploy Databend](/doc/category/deploy-databend).
 
 ### Part 1: Dump MySQL table schema and data to file
 
