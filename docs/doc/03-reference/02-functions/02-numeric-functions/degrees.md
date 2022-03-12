@@ -1,5 +1,6 @@
 ---
 title: DEGREES
+description: DEGREES(x) function
 ---
 
 Returns the argument x, converted from radians to degrees.

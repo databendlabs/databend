@@ -1,5 +1,6 @@
 ---
 title: ROUND
+description: ROUND(x) function
 ---
 
 Rounds the argument X to D decimal places.

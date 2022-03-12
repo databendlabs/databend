@@ -1,5 +1,6 @@
 ---
 title: CRC32
+description: CRC32(x) function
 ---
 
 Returns the CRC32 checksum of a string.

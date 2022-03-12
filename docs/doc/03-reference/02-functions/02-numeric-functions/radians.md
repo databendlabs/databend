@@ -1,5 +1,6 @@
 ---
 title: RADIANS
+description: RADIANS(x) function
 ---
 
 Returns the argument X, converted from degrees to radians.

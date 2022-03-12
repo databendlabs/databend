@@ -1,5 +1,6 @@
 ---
 title: isNotNull
+description: isNotNull(expr1) function
 ---
 
 Checks whether a value is not NULL.

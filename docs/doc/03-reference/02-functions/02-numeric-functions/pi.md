@@ -1,5 +1,6 @@
 ---
 title: PI
+description: PI(x) function
 ---
 
 Returns the value of pi as a floating-point value.

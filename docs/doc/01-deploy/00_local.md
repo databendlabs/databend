@@ -1,11 +1,13 @@
 ---
-title: Deploy with local disk
+title: Deploy Databend with local disk
 sidebar_label: With local disk
+description:
+   How to deploy Databend with local disk
 ---
 
 :::tip
 
-This deploy only takes **5 minutes ⏱**!
+Expected deployment time: ** 5 minutes ⏱ **
 
 :::
 

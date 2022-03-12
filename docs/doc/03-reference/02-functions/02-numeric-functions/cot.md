@@ -1,5 +1,6 @@
 ---
 title: COT
+description: COT(x) function
 ---
 
 Returns the cotangent of x, where x is given in radians.
