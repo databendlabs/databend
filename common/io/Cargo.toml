@@ -22,7 +22,7 @@ bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" 
 # Crates.io dependencies
 bytes = "1.1.0"
 futures = "0.3.21"
-opendal = "0.1.4"
+opendal = "0.2.0"
 serde = { version = "1.0.136", features = ["derive"] }
 
 [dev-dependencies]

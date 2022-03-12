@@ -42,7 +42,7 @@ pub async fn logs_handler(
 }
 
 async fn select_table(sessions: &Arc<SessionManager>) -> Result<Body> {
-    let session = sessions.create_session("WatchLogs")?;
+    let session = sessions.create_session("WatchLogs").await?;
     let query_context = session.create_query_context().await?;
     let mut tracing_table_stream = execute_query(query_context).await?;
 

@@ -245,7 +245,7 @@ async fn test_plan_parser() -> Result<()> {
         }
     ];
 
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
     for t in tests {
         match PlanParser::parse(ctx.clone(), t.sql).await {
             Ok(v) => {

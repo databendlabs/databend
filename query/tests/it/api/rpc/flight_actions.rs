@@ -27,7 +27,7 @@ use crate::tests::create_query_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_shuffle_action_try_into() -> Result<()> {
-    let ctx = create_query_context()?;
+    let ctx = create_query_context().await?;
 
     let shuffle_action = ShuffleAction {
         query_id: String::from("query_id"),

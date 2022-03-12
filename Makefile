@@ -114,6 +114,10 @@ stateless-test: build-debug
 	rm -rf ./_meta*/
 	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
+management-test: build-debug
+	rm -rf ./_meta*/
+	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-management-mode.sh
+
 stateful-ctl-test:
 	rm -rf ./_meta*/
 	rm -rf ./.databend/

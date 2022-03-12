@@ -375,6 +375,7 @@ async fn post_json_to_endpoint(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[ignore]
 async fn test_auth_basic() -> Result<()> {
     let user_name = "user1";
     let password = "password";

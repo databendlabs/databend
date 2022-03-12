@@ -24,7 +24,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_expression() -> Result<()> {
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
     let mut pipeline = Pipeline::create(ctx.clone());
@@ -73,7 +73,7 @@ async fn test_transform_expression() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_expression_error() -> Result<()> {
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
     let mut pipeline = Pipeline::create(ctx);
@@ -95,7 +95,7 @@ async fn test_transform_expression_error() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_expression_issue2857() -> Result<()> {
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
     let mut pipeline = Pipeline::create(ctx.clone());

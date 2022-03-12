@@ -29,7 +29,7 @@ pub mod bench_sort_query_sql;
 
 pub async fn select_executor(sql: &str) -> Result<()> {
     let sessions = SessionManager::from_conf(Config::default()).await?;
-    let executor_session = sessions.create_session("Benches")?;
+    let executor_session = sessions.create_session("Benches").await?;
     let ctx = executor_session.create_query_context().await?;
 
     if let PlanNode::Select(plan) = PlanParser::parse(ctx.clone(), sql).await? {

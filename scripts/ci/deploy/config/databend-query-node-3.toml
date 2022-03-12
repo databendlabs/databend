@@ -10,7 +10,7 @@ flight_api_address = "0.0.0.0:9093"
 
 # Databend Query http address.
 # For admin RESET API.
-http_api_address = "0.0.0.0:8083"
+admin_api_address = "0.0.0.0:8083"
 
 # Databend Query metrics RESET API.
 metric_api_address = "0.0.0.0:7073"

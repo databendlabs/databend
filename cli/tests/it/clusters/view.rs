@@ -82,7 +82,7 @@ async fn test_build_table() -> Result<()> {
             path: Some("./".to_string()),
             log_dir: Some("./".to_string()),
         };
-        query_config.config.query.http_api_address = server.address().to_string();
+        query_config.config.query.admin_api_address = server.address().to_string();
 
         Status::save_local_config(
             &mut status,
@@ -179,7 +179,7 @@ async fn test_build_table_fail() -> Result<()> {
             path: Some("./".to_string()),
             log_dir: Some("./".to_string()),
         };
-        query_config.config.query.http_api_address = server2.address().to_string();
+        query_config.config.query.admin_api_address = server2.address().to_string();
 
         Status::save_local_config(
             &mut status,
@@ -194,7 +194,7 @@ async fn test_build_table_fail() -> Result<()> {
             path: Some("./".to_string()),
             log_dir: Some("./".to_string()),
         };
-        query_config2.config.query.http_api_address = server2.address().to_string();
+        query_config2.config.query.admin_api_address = server2.address().to_string();
 
         Status::save_local_config(
             &mut status,

@@ -31,6 +31,7 @@ client1.run("select 3")
 
 
 class MyModel(object):
+
     def __init__(self, name, value):
         self.name = name
         self.value = value
@@ -49,8 +50,7 @@ def test_my_model_save():
     model_instance = MyModel('steve', 'is awesome')
     model_instance.save()
 
-    body = conn.Object('mybucket',
-                       'steve').get()['Body'].read().decode("utf-8")
+    body = conn.Object('mybucket', 'steve').get()['Body'].read().decode("utf-8")
 
     assert body == 'is awesome'
 

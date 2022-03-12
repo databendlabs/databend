@@ -54,7 +54,7 @@ async fn test_transform_limit() -> Result<()> {
     ];
 
     for ((limit, offset), expected) in testcases {
-        let ctx = crate::tests::create_query_context()?;
+        let ctx = crate::tests::create_query_context().await?;
         let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
         let mut pipeline = Pipeline::create(ctx.clone());

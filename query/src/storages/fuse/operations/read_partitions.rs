@@ -13,15 +13,17 @@
 //  limitations under the License.
 //
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::Result;
 use common_planners::Extras;
+use common_planners::PartInfoPtr;
 use common_planners::Partitions;
 use common_planners::Statistics;
 
 use crate::sessions::QueryContext;
+use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::pruning::BlockPruner;
@@ -66,40 +68,89 @@ impl FuseTable {
     }
 
     pub fn to_partitions(
-        blocks_metas: &[BlockMeta], // TODO is &[&BlockMeta] enough?
+        blocks_metas: &[BlockMeta],
         push_downs: Option<Extras>,
     ) -> (Statistics, Partitions) {
-        let is_exact = match &push_downs {
-            // We don't have limit push down in parquet reader
-            Some(extra) => extra.filters.is_empty(),
-            None => true,
+        let (mut statistics, partitions) = match &push_downs {
+            None => Self::all_columns_partitions(blocks_metas),
+            Some(extras) => match &extras.projection {
+                None => Self::all_columns_partitions(blocks_metas),
+                Some(projection) => Self::projection_partitions(blocks_metas, projection),
+            },
         };
 
-        let proj_cols =
-            push_downs.and_then(|extras| extras.projection.map(HashSet::<usize>::from_iter));
-        blocks_metas.iter().fold(
-            (Statistics::default(), Partitions::default()),
-            |(mut stats, mut parts), block_meta| {
-                let location = block_meta.location.path.clone();
-                let file_size = block_meta.file_size;
-                parts.push(FusePartInfo::create(location, file_size));
+        statistics.is_exact = Self::is_exact(&push_downs);
+        (statistics, partitions)
+    }
 
-                stats.is_exact = is_exact;
-                stats.read_rows += block_meta.row_count as usize;
-                match &proj_cols {
-                    Some(proj) => {
-                        stats.read_bytes += block_meta
-                            .col_stats
-                            .iter()
-                            .filter(|(cid, _)| proj.contains(&(**cid as usize)))
-                            .map(|(_, col_stats)| col_stats.in_memory_size)
-                            .sum::<u64>() as usize
-                    }
-                    None => stats.read_bytes += block_meta.block_size as usize,
-                }
+    fn is_exact(push_downs: &Option<Extras>) -> bool {
+        match push_downs {
+            None => true,
+            // We don't have limit push down in parquet reader
+            Some(extra) => extra.filters.is_empty(),
+        }
+    }
 
-                (stats, parts)
-            },
-        )
+    fn all_columns_partitions(metas: &[BlockMeta]) -> (Statistics, Partitions) {
+        let mut statistics = Statistics::default();
+        let mut partitions = Partitions::default();
+
+        for block_meta in metas {
+            partitions.push(Self::all_columns_part(block_meta));
+            statistics.read_rows += block_meta.row_count as usize;
+            statistics.read_bytes += block_meta.block_size as usize;
+        }
+
+        (statistics, partitions)
+    }
+
+    fn projection_partitions(metas: &[BlockMeta], indices: &[usize]) -> (Statistics, Partitions) {
+        let mut statistics = Statistics::default();
+        let mut partitions = Partitions::default();
+
+        for block_meta in metas {
+            partitions.push(Self::projection_part(block_meta, indices));
+
+            statistics.read_rows += block_meta.row_count as usize;
+            for projection_index in indices {
+                let column_stats = &block_meta.col_stats;
+                let column_stats = &column_stats[&(*projection_index as u32)];
+                statistics.read_bytes += column_stats.in_memory_size as usize;
+            }
+        }
+
+        (statistics, partitions)
+    }
+
+    fn all_columns_part(meta: &BlockMeta) -> PartInfoPtr {
+        let mut columns_meta = HashMap::with_capacity(meta.col_metas.len());
+
+        for (idx, column_meta) in &meta.col_metas {
+            columns_meta.insert(
+                *idx as usize,
+                ColumnMeta::create(column_meta.offset, column_meta.len, column_meta.num_values),
+            );
+        }
+
+        let rows_count = meta.row_count;
+        let location = meta.location.path.clone();
+        FusePartInfo::create(location, rows_count, columns_meta)
+    }
+
+    fn projection_part(meta: &BlockMeta, projections: &[usize]) -> PartInfoPtr {
+        let mut columns_meta = HashMap::with_capacity(projections.len());
+
+        for projection in projections {
+            let column_meta = &meta.col_metas[&(*projection as u32)];
+
+            columns_meta.insert(
+                *projection,
+                ColumnMeta::create(column_meta.offset, column_meta.len, column_meta.num_values),
+            );
+        }
+
+        let rows_count = meta.row_count;
+        let location = meta.location.path.clone();
+        FusePartInfo::create(location, rows_count, columns_meta)
     }
 }

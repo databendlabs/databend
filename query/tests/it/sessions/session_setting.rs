@@ -28,7 +28,8 @@ async fn test_session_setting() -> Result<()> {
         String::from("test-001"),
         String::from("test-type"),
         session_manager,
-    )?;
+    )
+    .await?;
 
     // Settings.
     {

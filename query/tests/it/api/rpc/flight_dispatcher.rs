@@ -49,11 +49,11 @@ async fn test_get_stream_with_non_exists_stream() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
     if let (Some(query_id), Some(stage_id), Some(stream_id)) = generate_uuids(3) {
-        let ctx = create_query_context()?;
+        let ctx = create_query_context().await?;
         let flight_dispatcher = DatabendQueryFlightDispatcher::create();
 
         let sessions = SessionManagerBuilder::create().build()?;
-        let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;
+        let rpc_session = sessions.create_rpc_session(query_id.clone(), false).await?;
 
         flight_dispatcher
             .shuffle_action(
@@ -94,11 +94,11 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_run_shuffle_action_with_scatter() -> Result<()> {
     if let (Some(query_id), Some(stage_id), None) = generate_uuids(2) {
-        let ctx = create_query_context()?;
+        let ctx = create_query_context().await?;
         let flight_dispatcher = DatabendQueryFlightDispatcher::create();
 
         let sessions = SessionManagerBuilder::create().build()?;
-        let rpc_session = sessions.create_rpc_session(query_id.clone(), false)?;
+        let rpc_session = sessions.create_rpc_session(query_id.clone(), false).await?;
 
         flight_dispatcher
             .shuffle_action(

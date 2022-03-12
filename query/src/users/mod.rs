@@ -22,6 +22,7 @@ mod user_udf;
 pub mod auth;
 pub mod role_cache_mgr;
 mod user_setting;
+mod user_warehouse;
 
 pub use role_cache_mgr::RoleCacheMgr;
 pub use user::CertifiedInfo;

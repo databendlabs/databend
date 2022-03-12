@@ -60,7 +60,9 @@ impl TestFixture {
         // use `TempDir` as root path (auto clean)
         conf.storage.disk.data_path = tmp_dir.path().to_str().unwrap().to_string();
         conf.storage.disk.temp_data_path = tmp_dir.path().to_str().unwrap().to_string();
-        let ctx = crate::tests::create_query_context_with_config(conf).unwrap();
+        let ctx = crate::tests::create_query_context_with_config(conf)
+            .await
+            .unwrap();
 
         let tenant = ctx.get_tenant();
         let random_prefix: String = Uuid::new_v4().to_simple().to_string();
@@ -209,7 +211,7 @@ pub async fn test_drive(
 }
 
 pub async fn test_drive_with_args(tbl_args: TableArgs) -> Result<SendableDataBlockStream> {
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
     test_drive_with_args_and_ctx(tbl_args, ctx).await
 }
 

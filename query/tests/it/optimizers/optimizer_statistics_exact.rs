@@ -14,6 +14,7 @@
 
 use std::mem::size_of;
 
+use common_base::tokio;
 use common_datavalues::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
@@ -23,9 +24,9 @@ use pretty_assertions::assert_eq;
 
 use crate::optimizers::optimizer::*;
 
-#[test]
-fn test_statistics_exact_optimizer() -> Result<()> {
-    let ctx = crate::tests::create_query_context()?;
+#[tokio::test]
+async fn test_statistics_exact_optimizer() -> Result<()> {
+    let ctx = crate::tests::create_query_context().await?;
 
     let total = ctx.get_settings().get_max_block_size()? as u64;
     let statistics = Statistics::new_exact(

@@ -30,6 +30,7 @@ pub use cached_reader::HasTenantLabel;
 pub use cached_reader::Loader;
 pub use locations::TableMetaLocationGenerator;
 pub use meta_readers::BlockMetaCache;
+pub use meta_readers::BlockMetaReader;
 pub use meta_readers::MetaReaders;
 pub use meta_readers::SegmentInfoCache;
 pub use meta_readers::SegmentInfoReader;

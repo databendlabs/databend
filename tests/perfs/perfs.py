@@ -90,8 +90,7 @@ def update_index(client, bucket, path, key, file_name, output):
 
 
 def execute(suit, bin_path, host, port, concurrency, iterations, output_dir,
-            type, region, bucket, S3path, secretID, secretKey, endpoint,
-            rerun):
+            type, region, bucket, S3path, secretID, secretKey, endpoint, rerun):
     base_cfg = conf['config']
     if iterations == "":
         iterations = suit.get("iterations", base_cfg['iterations'])
@@ -135,8 +134,7 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir,
                             format(S3key))
                         return
     command = '{} -c {} -i {} -h {} -p {} --query "{}" --json "{}" '.format(
-        bin_path, concurrency, iterations, host, port, suit['query'],
-        json_path)
+        bin_path, concurrency, iterations, host, port, suit['query'], json_path)
     logging.warning("perf {}, query: {} \n".format(suit_name, suit['query']))
 
     proc = Popen(command, shell=True, env=os.environ)
@@ -232,8 +230,7 @@ if __name__ == '__main__':
         '--rerun',
         action='store_true',
         help=
-        'if use `--rerun` set as true, it will rerun all perfs.yaml completely'
-    )
+        'if use `--rerun` set as true, it will rerun all perfs.yaml completely')
     args = parser.parse_args()
 
     for suit in conf['perfs']:

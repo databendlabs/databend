@@ -103,17 +103,21 @@ async fn reconcile_local(status: &mut Status) -> Result<()> {
 
 pub fn generate_query_config() -> QueryConfig {
     let mut config = QueryConfig::default();
-    if config.query.http_api_address.parse::<SocketAddr>().is_err()
+    if config
+        .query
+        .admin_api_address
+        .parse::<SocketAddr>()
+        .is_err()
         || !portpicker::is_free(
             config
                 .query
-                .http_api_address
+                .admin_api_address
                 .parse::<SocketAddr>()
                 .unwrap()
                 .port(),
         )
     {
-        config.query.http_api_address = Status::find_unused_local_port()
+        config.query.admin_api_address = Status::find_unused_local_port()
     }
 
     if config

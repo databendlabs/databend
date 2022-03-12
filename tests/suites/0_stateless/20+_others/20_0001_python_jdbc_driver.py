@@ -33,7 +33,7 @@ mydb = mysql.connector.connect(host="127.0.0.1",
 mycursor = mydb.cursor()
 mycursor.execute("SHOW TABLES FROM db1")
 res = mycursor.fetchall()
-assert res == [('t1', )]
+assert res == [('t1',)]
 
 sql = "DROP DATABASE db1;"
 client1.run(sql)

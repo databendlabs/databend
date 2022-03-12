@@ -162,7 +162,7 @@ fn do_get_request(query_id: &str, stage_id: &str) -> Result<Request<Ticket>> {
 }
 
 async fn do_action_request(query_id: &str, stage_id: &str) -> Result<Request<Action>> {
-    let ctx = create_query_context()?;
+    let ctx = create_query_context().await?;
     let flight_action = FlightAction::PrepareShuffleAction(ShuffleAction {
         query_id: String::from(query_id),
         stage_id: String::from(stage_id),
