@@ -50,6 +50,7 @@ use crate::sql::statements::DfShowFunctions;
 use crate::sql::statements::DfShowGrants;
 use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
+use crate::sql::statements::DfShowRoles;
 use crate::sql::statements::DfShowSettings;
 use crate::sql::statements::DfShowTables;
 use crate::sql::statements::DfShowUsers;
@@ -111,6 +112,7 @@ pub enum DfStatement {
     // Role
     CreateRole(DfCreateRole),
     DropRole(DfDropRole),
+    ShowRoles(DfShowRoles),
 
     // Copy
     Copy(DfCopy),
