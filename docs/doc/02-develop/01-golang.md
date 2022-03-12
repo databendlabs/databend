@@ -12,7 +12,7 @@ description:
 
 ### Golang
 
-This guideline show how to connect and query to Databend using golang.
+This guideline show how to connect and query to Databend using Golang.
 
 We will be creating a table named `books` and insert a row, then query it.
 
@@ -35,7 +35,7 @@ const (
 )
 
 type Book struct {
-	Name   string
+	Title   string
 	Author string
 	Date   string
 }
@@ -82,7 +82,7 @@ func main() {
 
 	for res.Next() {
 		var book Book
-		err := res.Scan(&book.Name, &book.Author, &book.Date)
+		err := res.Scan(&book.Title, &book.Author, &book.Date)
 		if err != nil {
 			log.Fatal(err)
 		}
