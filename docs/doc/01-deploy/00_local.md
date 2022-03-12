@@ -3,13 +3,17 @@ title: Deploy with local disk
 sidebar_label: With local disk
 ---
 
-This guideline will deploy databend(standalone) with local disk step by step.
-
 :::tip
 
 This deploy only takes **5 minutes ⏱**!
 
 :::
+
+This guideline will deploy databend(standalone) with local disk step by step.
+
+<p align="center">
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-local-standalone.png" width="300"/>
+</p>
 
 ## 1. Download
 
