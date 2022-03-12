@@ -41,34 +41,9 @@ jobs:
           - { os: macos-11, target: aarch64-apple-darwin, cross: false }
     steps:
       - uses: actions/checkout@v2
-      - uses: ./.github/actions/build_debug
+      - uses: ./.github/actions/build_release
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-
-  test_unit:
-    runs-on: ${{ matrix.config.os }}
-    needs: check
-    strategy:
-      matrix:
-        config:
-          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
-    steps:
-      - uses: actions/checkout@v2
-      - uses: ./.github/actions/test_unit
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          codecov_token: ${{ secrets.CODECOV_TOKEN }}
-
-  test_metactl:
-    runs-on: ${{ matrix.config.os }}
-    needs: build
-    strategy:
-      matrix:
-        config:
-          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
-    steps:
-      - uses: actions/checkout@v2
-      - uses: ./.github/actions/test_metactl
 
   test_stateless_standalone:
     runs-on: ${{ matrix.config.os }}
@@ -81,6 +56,8 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: ./.github/actions/test_stateless_standalone
+        with:
+          profile: release
 
   test_stateless_cluster:
     runs-on: ${{ matrix.config.os }}
@@ -93,6 +70,8 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: ./.github/actions/test_stateless_cluster
+        with:
+          profile: release
 
   test_stateful_standalone:
     runs-on: ${{ matrix.config.os }}
@@ -104,14 +83,5 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: ./.github/actions/test_stateful_standalone
-
-  test_management_mode:
-    runs-on: ${{ matrix.config.os }}
-    needs: build
-    strategy:
-      matrix:
-        config:
-          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
-    steps:
-      - uses: actions/checkout@v2
-      - uses: ./.github/actions/test_management_mode
+        with:
+          profile: release
