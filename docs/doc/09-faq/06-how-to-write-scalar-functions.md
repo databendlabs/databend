@@ -1,13 +1,12 @@
 ---
-title: How to write scalar functions
+title: How to Write Scalar Functions
 ---
 
 ## What's scalar functions
 
 Scalar functions (sometimes referred to as User-Defined Functions / UDFs) return a single value as a return value for each row, not as a result set, and can be used in most places within a query or SET statement, except for the FROM clause.
 
-```text
-One to One Mapping execution
+```text title="One to One Mapping execution"
 
 ┌─────┐                    ┌──────┐
 │  a  │                    │   x  │
@@ -30,7 +29,7 @@ One to One Mapping execution
 
 All scalar functions implement `Function` trait, and we register them into a global static `FunctionFactory`, the factory is just an index map and the key is the name of the scalar function.
 
-:::note
+:::tip
     Function name in Databend is case-insensitive.
 :::
 
@@ -164,15 +163,13 @@ But this's inefficient because we need to check the null value every time we ite
 According to the memory layout of Arrow, we can directly use the validity bitmap of the original column to indicate the null value.
 So we have `ArrayApply` trait to help you iterate the column. If there are two zip iterator, we can use `binary` function to combine the validity bitmap of two columns.
 
-ArrayApply
-```rust
+```rust title="ArrayApply""
 let array: DFUInt8Array = self.apply_cast_numeric(|a| {
                             AsPrimitive::<u8>::as_(a - (a / rhs) * rhs)
                         });
 ```
 
-binary
-```rust
+```rust title="binary"
 binary(x_series.f64()?, y_series.f64()?, |x, y| x.pow(y))
 ```
 

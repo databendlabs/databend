@@ -1,5 +1,5 @@
 ---
-title: Analyzing OnTime datasets with Databend on AWS EC2 and S3
+title: Analyzing OnTime Datasets with Databend on AWS EC2 and S3
 sidebar_label: Analyzing OnTime datasets
 ---
 

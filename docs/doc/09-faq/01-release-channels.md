@@ -1,5 +1,5 @@
 ---
-title: Databend release channels
+title: Databend Release Channels
 ---
 
 ## What's Databend release channels?

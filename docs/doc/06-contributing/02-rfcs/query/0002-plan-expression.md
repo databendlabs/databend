@@ -19,7 +19,7 @@ In the standard SQL protocol, aliasing can work in:
 - Order By: eg: ```select a + 3 as b from table order by b```
 
 
-:::note Notes
+:::tip
 ClickHouse has extended the usage of expression alias, it can be work in:
 
 - recursive alias expression: eg: `select a + 1 as b, b + 1 as c`

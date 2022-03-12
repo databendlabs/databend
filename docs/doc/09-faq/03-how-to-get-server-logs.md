@@ -1,5 +1,5 @@
 ---
-title: How to get server logs
+title: How to Get Server Logs
 ---
 
 If you get an error from the client, such as:

@@ -1,5 +1,5 @@
 ---
-title: How to profile Databend
+title: How to Profile Databend
 ---
 
 ## go pprof tool
