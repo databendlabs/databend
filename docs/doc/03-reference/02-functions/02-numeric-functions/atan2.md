@@ -1,5 +1,6 @@
 ---
 title: ATAN2
+description: ATAN2(x) function
 ---
 
 Returns the arc tangent of the two variables x and y. It is similar to calculating the arc tangent of y / x, except that the signs of both arguments are used to determine the quadrant of the result.

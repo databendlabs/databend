@@ -1,5 +1,6 @@
 ---
 title: IF
+description: IF(expr1, ...) function
 ---
 
 If expr1 is TRUE, IF() returns expr2. Otherwise, it returns expr3.

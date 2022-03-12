@@ -1,5 +1,6 @@
 ---
 title: CEILING
+description: CEILING(x) function
 ---
 
 Returns the smallest integer value not less than x.

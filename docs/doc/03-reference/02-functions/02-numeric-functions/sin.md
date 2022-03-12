@@ -1,5 +1,6 @@
 ---
 title: SIN
+description: SIN(x) function
 ---
 
 Returns the sine of x, where x is given in radians.

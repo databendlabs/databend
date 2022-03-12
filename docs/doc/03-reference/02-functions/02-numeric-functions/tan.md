@@ -1,5 +1,6 @@
 ---
 title: TAN
+description: TAN(x) function
 ---
 
 Returns the tangent of x, where x is given in radians.

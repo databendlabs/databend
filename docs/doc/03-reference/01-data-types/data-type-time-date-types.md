@@ -1,5 +1,6 @@
 ---
 title: Time and Date Types
+description: Basic Time and Date data type
 
 ---
 | Data Type             | Size    |  Resolution | Min Value             | Max Value                     | Precision              |

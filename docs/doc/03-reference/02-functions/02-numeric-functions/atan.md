@@ -1,5 +1,6 @@
 ---
 title: ATAN
+description: ATAN(x) function
 ---
 
 Returns the arc tangent of x, that is, the value whose tangent is x.

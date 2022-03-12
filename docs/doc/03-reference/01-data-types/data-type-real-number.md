@@ -1,5 +1,6 @@
 ---
 title: Real Numbers
+description: Basic Float32/Float64 data types
 ---
 
 | Data Type        | Size    |  Precision  | Syntax   |
