@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::functions::systems::FuseHistoryFunction;
-use crate::functions::FunctionFactory;
+use crate::procedures::systems::FuseHistoryProcedure;
+use crate::procedures::ProcedureFactory;
+use crate::procedures::systems::reload_config::ReloadConfigProcedure;
 
-pub struct SystemFunction;
+pub struct SystemProcedure;
 
-impl SystemFunction {
-    pub fn register(factory: &mut FunctionFactory) {
-        factory.register("system$fuse_history", FuseHistoryFunction::desc());
+impl SystemProcedure {
+    pub fn register(factory: &mut ProcedureFactory) {
+        factory.register("system$fuse_history", FuseHistoryProcedure::desc());
+        factory.register("system$reload_config", ReloadConfigProcedure::desc());
     }
 }

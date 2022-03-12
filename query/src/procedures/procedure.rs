@@ -12,12 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod admin;
-mod warehouse_metadata;
+use std::sync::Arc;
 
-pub use admin::AdminFunction;
-pub use warehouse_metadata::CreateWarehouseMetaFunction;
-pub use warehouse_metadata::DropWarehouseMetaFunction;
-pub use warehouse_metadata::GetWarehouseMetaFunction;
-pub use warehouse_metadata::ListWarehouseMetaFunction;
-pub use warehouse_metadata::UpdateWarehouseSizeFunction;
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchema;
+use common_exception::Result;
+
+use crate::sessions::QueryContext;
+
+#[async_trait::async_trait]
+pub trait Procedure: Sync + Send {
+    async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock>;
+
+    fn schema(&self) -> Arc<DataSchema>;
+}

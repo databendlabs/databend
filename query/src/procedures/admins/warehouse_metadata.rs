@@ -19,17 +19,17 @@ use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_meta_types::WarehouseInfo;
 
-use crate::functions::Function;
-use crate::functions::FunctionDescription;
-use crate::functions::FunctionFeatures;
+use crate::procedures::Procedure;
+use crate::procedures::ProcedureDescription;
+use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::storages::system::WarehousesTable;
 
-pub struct CreateWarehouseMetaFunction {}
-pub struct UpdateWarehouseSizeFunction {}
+pub struct CreateWarehouseMetaProcedure {}
+pub struct UpdateWarehouseSizeProcedure {}
 pub struct GetWarehouseMetaFunction {}
-pub struct ListWarehouseMetaFunction {}
-pub struct DropWarehouseMetaFunction {}
+pub struct ListWarehouseMetaProcedure {}
+pub struct DropWarehouseMetaProcedure {}
 
 /// Create a new warehouse with metadata.
 /// examples:
@@ -39,23 +39,23 @@ pub struct DropWarehouseMetaFunction {}
 /// it would return created warehouse id in warehouse info if succeeded, otherwise would return error
 /// call admin$create_warehouse_meta("tenant1", "warehouse*!)#@!!#@!", "Small", "10")
 /// ```
-impl CreateWarehouseMetaFunction {
-    pub fn try_create() -> Result<Box<dyn Function>> {
-        Ok(Box::new(CreateWarehouseMetaFunction {}))
+impl CreateWarehouseMetaProcedure {
+    pub fn try_create() -> Result<Box<dyn Procedure>> {
+        Ok(Box::new(CreateWarehouseMetaProcedure {}))
     }
 
     // arguments:
     // tenant_id: string
     // warehouse_name: string
     // size: string
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().num_arguments(3))
+    pub fn desc() -> ProcedureDescription {
+        ProcedureDescription::creator(Box::new(Self::try_create))
+            .features(ProcedureFeatures::default().num_arguments(3))
     }
 }
 
 #[async_trait::async_trait]
-impl Function for CreateWarehouseMetaFunction {
+impl Procedure for CreateWarehouseMetaProcedure {
     async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let tenant_id = args[0].clone();
         let warehouse_name = args[1].clone();
@@ -86,23 +86,23 @@ impl Function for CreateWarehouseMetaFunction {
 /// /// this command would update the size to Small e for given warehouse under tenant
 /// call admin$update_warehouse_neta_size("tenant1", "warehouse*!)#@!!#@!", "Small")
 /// ```
-impl UpdateWarehouseSizeFunction {
-    pub fn try_create() -> Result<Box<dyn Function>> {
-        Ok(Box::new(UpdateWarehouseSizeFunction {}))
+impl UpdateWarehouseSizeProcedure {
+    pub fn try_create() -> Result<Box<dyn Procedure>> {
+        Ok(Box::new(UpdateWarehouseSizeProcedure {}))
     }
 
     // arguments:
     // tenant_id: string
     // warehouse_name: string
     // size: string
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().num_arguments(3))
+    pub fn desc() -> ProcedureDescription {
+        ProcedureDescription::creator(Box::new(Self::try_create))
+            .features(ProcedureFeatures::default().num_arguments(3))
     }
 }
 
 #[async_trait::async_trait]
-impl Function for UpdateWarehouseSizeFunction {
+impl Procedure for UpdateWarehouseSizeProcedure {
     async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let tenant_id = args[0].clone();
         let warehouse_name = args[1].clone();
@@ -133,21 +133,21 @@ impl Function for UpdateWarehouseSizeFunction {
 /// call admin$get_warehouse_meta("tenant1", "warehouse*!)#@!!#@!")
 /// ```
 impl GetWarehouseMetaFunction {
-    pub fn try_create() -> Result<Box<dyn Function>> {
+    pub fn try_create() -> Result<Box<dyn Procedure>> {
         Ok(Box::new(GetWarehouseMetaFunction {}))
     }
 
     // arguments:
     // tenant_id: string
     // warehouse_name: string
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().num_arguments(2))
+    pub fn desc() -> ProcedureDescription {
+        ProcedureDescription::creator(Box::new(Self::try_create))
+            .features(ProcedureFeatures::default().num_arguments(2))
     }
 }
 
 #[async_trait::async_trait]
-impl Function for GetWarehouseMetaFunction {
+impl Procedure for GetWarehouseMetaFunction {
     async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let tenant_id = args[0].clone();
         let warehouse_name = args[1].clone();
@@ -171,22 +171,22 @@ impl Function for GetWarehouseMetaFunction {
 /// /// this command would return all warehouse info under a tenant.
 /// call admin$list_warehouse_meta("tenant1")
 /// ```
-impl ListWarehouseMetaFunction {
-    pub fn try_create() -> Result<Box<dyn Function>> {
-        Ok(Box::new(ListWarehouseMetaFunction {}))
+impl ListWarehouseMetaProcedure {
+    pub fn try_create() -> Result<Box<dyn Procedure>> {
+        Ok(Box::new(ListWarehouseMetaProcedure {}))
     }
 
     // arguments:
     // tenant_id: string
     // warehouse_name: string
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().num_arguments(1))
+    pub fn desc() -> ProcedureDescription {
+        ProcedureDescription::creator(Box::new(Self::try_create))
+            .features(ProcedureFeatures::default().num_arguments(1))
     }
 }
 
 #[async_trait::async_trait]
-impl Function for ListWarehouseMetaFunction {
+impl Procedure for ListWarehouseMetaProcedure {
     async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let tenant_id = args[0].clone();
         let provider = ctx.get_user_manager();
@@ -205,22 +205,22 @@ impl Function for ListWarehouseMetaFunction {
 /// /// this command would drop the warehouse with given name under tenant
 /// call admin$drop_warehouse_meta("tenant1", "warehouse*!)#@!!#@!")
 /// ```
-impl DropWarehouseMetaFunction {
-    pub fn try_create() -> Result<Box<dyn Function>> {
-        Ok(Box::new(DropWarehouseMetaFunction {}))
+impl DropWarehouseMetaProcedure {
+    pub fn try_create() -> Result<Box<dyn Procedure>> {
+        Ok(Box::new(DropWarehouseMetaProcedure {}))
     }
 
     // arguments:
     // tenant_id: string
     // warehouse_name: string
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().num_arguments(2))
+    pub fn desc() -> ProcedureDescription {
+        ProcedureDescription::creator(Box::new(Self::try_create))
+            .features(ProcedureFeatures::default().num_arguments(2))
     }
 }
 
 #[async_trait::async_trait]
-impl Function for DropWarehouseMetaFunction {
+impl Procedure for DropWarehouseMetaProcedure {
     async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let tenant_id = args[0].clone();
         let warehouse_name = args[1].clone();

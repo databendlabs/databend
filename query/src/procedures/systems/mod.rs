@@ -12,14 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod admins;
-mod context_function;
-mod function;
-mod function_factory;
-pub mod systems;
+mod fuse_history;
+mod system;
+mod reload_config;
 
-pub use context_function::ContextFunction;
-pub use function::Function;
-pub use function_factory::FunctionDescription;
-pub use function_factory::FunctionFactory;
-pub use function_factory::FunctionFeatures;
+pub use fuse_history::FuseHistoryProcedure;
+pub use system::SystemProcedure;

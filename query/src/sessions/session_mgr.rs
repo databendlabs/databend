@@ -138,7 +138,7 @@ impl SessionManager {
             typ.into(),
             self.clone(),
         )
-        .await?;
+            .await?;
 
         let mut sessions = self.active_sessions.write();
         if sessions.len() < self.max_sessions {
@@ -177,7 +177,7 @@ impl SessionManager {
             String::from("RPCSession"),
             self.clone(),
         )
-        .await?;
+            .await?;
 
         let mut sessions = self.active_sessions.write();
         let v = sessions.get(&id);
@@ -223,7 +223,7 @@ impl SessionManager {
         self: &Arc<Self>,
         mut signal: SignalStream,
         timeout_secs: i32,
-    ) -> impl Future<Output = ()> {
+    ) -> impl Future<Output=()> {
         let active_sessions = self.active_sessions.clone();
         async move {
             tracing::info!(
@@ -338,5 +338,10 @@ impl SessionManager {
         };
 
         Ok(Operator::new(accessor))
+    }
+
+    pub fn reload_config(&self) -> Result<()> {
+        // TODO: reload config
+        Ok(())
     }
 }

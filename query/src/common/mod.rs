@@ -15,6 +15,7 @@
 mod hashtable;
 mod meta;
 pub mod service;
+pub mod context_function;
 
 pub use hashtable::*;
 pub use meta::MetaClientProvider;

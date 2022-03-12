@@ -12,8 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod fuse_history;
-mod system;
+mod admin;
+mod warehouse_metadata;
 
-pub use fuse_history::FuseHistoryFunction;
-pub use system::SystemFunction;
+pub use admin::AdminProcedure;
+pub use warehouse_metadata::CreateWarehouseMetaProcedure;
+pub use warehouse_metadata::DropWarehouseMetaProcedure;
+pub use warehouse_metadata::GetWarehouseMetaFunction;
+pub use warehouse_metadata::ListWarehouseMetaProcedure;
+pub use warehouse_metadata::UpdateWarehouseSizeProcedure;

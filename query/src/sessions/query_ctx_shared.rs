@@ -214,6 +214,10 @@ impl QueryContextShared {
         let mut sources_abort_handle = self.sources_abort_handle.write();
         sources_abort_handle.push(handle);
     }
+
+    pub fn reload_config(&self) -> Result<()> {
+        self.session.session_mgr.reload_config()
+    }
 }
 
 impl Session {

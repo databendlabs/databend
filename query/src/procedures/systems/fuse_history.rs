@@ -20,28 +20,28 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::catalogs::Catalog;
-use crate::functions::Function;
-use crate::functions::FunctionDescription;
-use crate::functions::FunctionFeatures;
+use crate::procedures::Procedure;
+use crate::procedures::ProcedureDescription;
+use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::FuseHistory;
 use crate::storages::fuse::FuseTable;
 
-pub struct FuseHistoryFunction {}
+pub struct FuseHistoryProcedure {}
 
-impl FuseHistoryFunction {
-    pub fn try_create() -> Result<Box<dyn Function>> {
-        Ok(Box::new(FuseHistoryFunction {}))
+impl FuseHistoryProcedure {
+    pub fn try_create() -> Result<Box<dyn Procedure>> {
+        Ok(Box::new(FuseHistoryProcedure {}))
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().num_arguments(2))
+    pub fn desc() -> ProcedureDescription {
+        ProcedureDescription::creator(Box::new(Self::try_create))
+            .features(ProcedureFeatures::default().num_arguments(2))
     }
 }
 
 #[async_trait::async_trait]
-impl Function for FuseHistoryFunction {
+impl Procedure for FuseHistoryProcedure {
     async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let database_name = args[0].clone();
         let table_name = args[1].clone();
