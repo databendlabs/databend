@@ -18,12 +18,59 @@ You can find the latest binaries on the [github release](https://github.com/data
 ```shell
 mkdir databend & cd databend
 ```
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs groupId="operating-systems">
+<TabItem value="linux" label="Linux">
+
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.87-nightly/databend-v0.6.87-nightly-x86_64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.88-nightly/databend-v0.6.88-nightly-x86_64-unknown-linux-gnu.tar.gz
 ```
+
+</TabItem>
+<TabItem value="mac" label="MacOS">
+
 ```shell
-tar xzvf databend-v0.6.87-nightly-x86_64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.88-nightly/databend-v0.6.88-nightly-aarch64-apple-darwin.tar.gz
 ```
+
+</TabItem>
+
+<TabItem value="arm" label="Arm">
+
+```shell
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.88-nightly/databend-v0.6.88-nightly-aarch64-unknown-linux-gnu.tar.gz
+```
+
+</TabItem>
+</Tabs>
+
+<Tabs groupId="operating-systems">
+<TabItem value="linux" label="Linux">
+
+```shell
+tar xzvf databend-v0.6.88-nightly-x86_64-unknown-linux-gnu.tar.gz
+```
+
+</TabItem>
+<TabItem value="mac" label="MacOS">
+
+```shell
+tar xzvf databend-v0.6.88-nightly-aarch64-apple-darwin.tar.gz
+```
+
+</TabItem>
+
+<TabItem value="arm" label="Arm">
+
+```shell
+tar xzvf databend-v0.6.88-nightly-aarch64-unknown-linux-gnu.tar.gz
+```
+
+</TabItem>
+</Tabs>
 
 ## 2. Deploy databend-meta (standalone)
 
