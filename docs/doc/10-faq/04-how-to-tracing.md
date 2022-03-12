@@ -1,5 +1,5 @@
 ---
-title: How to tracing in Databend
+title: How to Tracing Databend
 ---
 
 ## Tracing In Databend

@@ -1,6 +1,6 @@
 ---
-title: Deploy Databend with local disk
-sidebar_label: With local disk
+title: Deploy Databend With Local Disk
+sidebar_label: With Local Disk
 description:
    How to deploy Databend with local disk
 ---

@@ -1,5 +1,5 @@
 ---
-title: Databend routine maintenance
+title: Databend Routine Maintenance
 ---
 
 ## What is Databend routine maintenance?
@@ -37,7 +37,7 @@ Currently, the dependency upgrade process is divided into the following steps:
   - If you determine that a dependency needs to be fixed separately, restore that dependency to the previous version. Redo this step.
   - Please make sure all check passed after each step.
 
-:::note Notes
+:::tip
 If you hacked `Cargo.lock` during the process, make sure everything is working smoothly.
 :::
 
