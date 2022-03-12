@@ -94,8 +94,8 @@ const config = {
                         title: 'Resources',
                         items: [
                             {
-                                label: 'Deploy',
-                                to: 'doc/category/deploy-databend'
+                                label: 'Developer',
+                                to: '/doc/category/develop'
                             },
                             {
                                 label: 'Performance',
