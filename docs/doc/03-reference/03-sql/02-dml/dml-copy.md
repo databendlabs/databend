@@ -13,6 +13,7 @@ Loads data from staged files to a table. The files must be staged in one of the 
 COPY INTO [<database>.]<table_name>
 FROM { externalLocation }
 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+[ PATTERN = '<regex_pattern>' ]
 [ FILE_FORMAT = ( TYPE = { CSV | JSON | AVRO | ORC | PARQUET | XML } [ formatTypeOptions ] } ) ]
 [ copyOptions ]
 [ VALIDATION_MODE = RETURN_<n>_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS ]
@@ -32,6 +33,14 @@ externalLocation (for Amazon S3) ::=
 | `s3://<bucket>/[<path>]`  | Files are in the specified external location (S3-like bucket) | YES |
 | `[ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]' ]`  | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. |  Optional |
 | `[ ENDPOINT_URL = '<endpoint_url>' ]`  | S3-compatible endpoint URL like MinIO, default is `https://s3.amazonaws.com` |  Optional |
+
+**FILES = ( 'file_name' [ , 'file_name' ... ] )**
+
+Specifies a list of one or more files names (separated by commas) to be loaded.
+
+**PATTERN = 'regex_pattern'**
+
+A regular expression pattern string, enclosed in single quotes, specifying the file names to match.
 
 **formatTypeOptions**
 ```
