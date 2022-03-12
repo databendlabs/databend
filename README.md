@@ -79,11 +79,10 @@ For efficient pruning, Databend also creates indexes for each Parquet file to sp
 
 ## Getting Started
 
-* [Databend Docs](https://databend.rs/user/)
-* [Databend CLI Docs](https://databend.rs/user/cli/)
-* [Databend Contributing](https://databend.rs/dev/contributing/)
-* [Databend Architecture](https://databend.rs/overview/architecture/)
-* [Databend Performance](https://databend.rs/overview/performance/)
+* [Databend Docs](https://databend.rs/doc/)
+* [Databend Deploy](https://databend.rs/doc/category/deploy-databend/)
+* [Databend Contributing](https://databend.rs/doc/category/contributing/)
+* [Databend Performance](https://databend.rs/doc/category/performance/)
 * [Databend Weekly](https://weekly.databend.rs/)
 
 ## Roadmap
