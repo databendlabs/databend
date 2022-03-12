@@ -119,6 +119,7 @@ impl BlockReader {
             let fut = async move {
                 tracing::debug!("executing, {:?}", std::thread::current());
                 column_reader.read_exact(&mut column_chunk).await?;
+                tracing::debug!("executing, {:?}", std::thread::current());
                 Ok::<_, ErrorCode>(column_chunk)
             }
             .instrument(debug_span!("read_col_chunk"));
