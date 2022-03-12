@@ -24,6 +24,7 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
+use query_sql::optimizer::SExpr;
 
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::transforms::ProjectionTransform;
@@ -32,7 +33,6 @@ use crate::sessions::QueryContext;
 use crate::sql::exec::data_schema_helper::DataSchemaHelper;
 use crate::sql::exec::expression_builder::ExpressionBuilder;
 use crate::sql::exec::util::check_physical;
-use crate::sql::optimizer::SExpr;
 use crate::sql::Metadata;
 use crate::sql::PhysicalProject;
 use crate::sql::PhysicalScan;

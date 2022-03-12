@@ -12,19 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use query_sql::optimizer::SExpr;
+use common_exception::Result;
 
-// Check if all plans in an expression are physical plans
-pub fn check_physical(expression: &SExpr) -> bool {
-    if !expression.plan().is_physical() {
-        return false;
+use crate::optimizer::rule::rule_implement_get::RuleImplementGet;
+use crate::optimizer::rule::rule_implement_project::RuleImplementProject;
+use crate::optimizer::rule::RuleID;
+use crate::optimizer::rule::RulePtr;
+
+pub struct RuleFactory;
+
+impl RuleFactory {
+    pub fn create() -> Self {
+        RuleFactory {}
     }
 
-    for child in expression.children() {
-        if !child.plan().is_physical() {
-            return false;
+    pub fn create_rule(&self, id: RuleID) -> Result<RulePtr> {
+        match id {
+            RuleID::ImplementGet => Ok(Box::new(RuleImplementGet::create())),
+            RuleID::ImplementProject => Ok(Box::new(RuleImplementProject::create())),
         }
     }
-
-    true
 }

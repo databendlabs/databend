@@ -12,17 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod exec;
-mod parsers;
-mod plan_parser;
-mod planner;
-mod sql_parser;
-mod sql_statement;
-pub mod statements;
+pub mod common;
+pub mod metrics;
+pub mod optimizer;
+pub mod planner;
+pub mod sql_common;
 
-pub use plan_parser::PlanParser;
+pub use common::*;
 pub use planner::*;
-pub use query_sql::common::*;
-pub use query_sql::sql_common::SQLCommon;
-pub use sql_parser::DfParser;
-pub use sql_statement::*;
+pub use sql_common::SQLCommon;

@@ -14,13 +14,13 @@
 
 use std::rc::Rc;
 
-use databend_query::sql::optimizer::MExpr;
-use databend_query::sql::optimizer::Memo;
-use databend_query::sql::optimizer::PatternExtractor;
-use databend_query::sql::optimizer::SExpr;
 use databend_query::sql::LogicalGet;
 use databend_query::sql::LogicalProject;
 use databend_query::sql::Plan;
+use query_sql::optimizer::MExpr;
+use query_sql::optimizer::Memo;
+use query_sql::optimizer::PatternExtractor;
+use query_sql::optimizer::SExpr;
 
 #[test]
 fn test_unary_expression() {

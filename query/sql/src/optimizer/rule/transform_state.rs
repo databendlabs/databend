@@ -12,17 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod exec;
-mod parsers;
-mod plan_parser;
-mod planner;
-mod sql_parser;
-mod sql_statement;
-pub mod statements;
+use crate::optimizer::s_expr::SExpr;
 
-pub use plan_parser::PlanParser;
-pub use planner::*;
-pub use query_sql::common::*;
-pub use query_sql::sql_common::SQLCommon;
-pub use sql_parser::DfParser;
-pub use sql_statement::*;
+pub struct TransformState {
+    results: Vec<SExpr>,
+}
+
+impl TransformState {
+    pub fn create() -> Self {
+        TransformState { results: vec![] }
+    }
+
+    pub fn add_result(&mut self, result: SExpr) {
+        self.results.push(result);
+    }
+
+    pub fn results(&self) -> &Vec<SExpr> {
+        &self.results
+    }
+}

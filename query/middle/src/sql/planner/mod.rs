@@ -14,27 +14,22 @@
 
 use std::sync::Arc;
 
-pub use bind_context::BindContext;
 use common_ast::parser::Parser;
 use common_exception::ErrorCode;
 use common_exception::Result;
 pub use metadata::*;
-pub use plan::*;
-pub use scalar::*;
+use query_sql::optimizer::optimize;
+use query_sql::optimizer::OptimizeContext;
+pub use query_sql::planner::plan::*;
+pub use query_sql::planner::scalar::*;
 
 use crate::pipelines::processors::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sql::exec::Executor;
-use crate::sql::optimizer::optimize;
-use crate::sql::optimizer::OptimizeContext;
 use crate::sql::planner::binder::Binder;
 
-mod bind_context;
 mod binder;
-mod expression_binder;
 mod metadata;
-mod plan;
-mod scalar;
 
 pub struct Planner {
     context: Arc<QueryContext>,

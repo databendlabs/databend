@@ -74,7 +74,7 @@ impl<'a> DfParser<'a> {
         let dialect = &GenericDialect {};
         let start = Instant::now();
         let result = DfParser::parse_sql_with_dialect(sql, dialect)?;
-        histogram!(super::metrics::METRIC_PARSER_USEDTIME, start.elapsed());
+        histogram!(query_sql::metrics::METRIC_PARSER_USEDTIME, start.elapsed());
         Ok(result)
     }
 

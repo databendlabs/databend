@@ -26,20 +26,20 @@ use common_ast::parser::ast::Statement;
 use common_ast::parser::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use query_sql::optimizer::SExpr;
+use query_sql::planner::bind_context::BindContext;
+use query_sql::planner::expression_binder::ExpressionBinder;
+use query_sql::planner::plan::LogicalGet;
+use query_sql::planner::plan::LogicalProject;
+use query_sql::planner::plan::Plan;
+use query_sql::planner::scalar::BoundVariable;
+use query_sql::planner::scalar::ScalarExpr;
+use query_sql::IndexType;
+use query_sql::ProjectItem;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
-use crate::sql::optimizer::SExpr;
-use crate::sql::planner::bind_context::BindContext;
-use crate::sql::planner::expression_binder::ExpressionBinder;
 use crate::sql::planner::metadata::Metadata;
-use crate::sql::planner::plan::LogicalGet;
-use crate::sql::planner::plan::LogicalProject;
-use crate::sql::planner::plan::Plan;
-use crate::sql::planner::scalar::BoundVariable;
-use crate::sql::planner::scalar::ScalarExpr;
-use crate::sql::IndexType;
-use crate::sql::ProjectItem;
 use crate::storages::Table;
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.

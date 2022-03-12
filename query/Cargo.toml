@@ -57,6 +57,7 @@ query-common = { path = "common" }
 query-configs = { path = "configs" }
 query-flight = { path = "flight" }
 query-middle = { path = "middle" }
+query-sql = { path = "sql" }
 query-users = { path = "users" }
 
 # Github dependencies

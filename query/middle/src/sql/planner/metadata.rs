@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
+use query_sql::common::IndexType;
 
-use crate::sql::common::IndexType;
 use crate::storages::Table;
 
 #[derive(Clone)]
