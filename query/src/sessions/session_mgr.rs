@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::tokio;
+use common_base::Runtime;
 use common_base::SignalStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -38,7 +39,6 @@ use opendal::Scheme as DalSchema;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
 use crate::configs::Config;
-use crate::experiment::task::DedicatedExecutor;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
@@ -59,7 +59,7 @@ pub struct SessionManager {
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
     pub(in crate::sessions) storage_cache_manager: Arc<CacheManager>,
     storage_operator: Operator,
-    storage_task_executor: DedicatedExecutor,
+    storage_runtime: Runtime,
 }
 
 impl SessionManager {
@@ -71,8 +71,13 @@ impl SessionManager {
         // Cluster discovery.
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
 
-        let storage_task_executor =
-            DedicatedExecutor::new("IO Worker", std::cmp::max(1, num_cpus::get() / 2));
+        let storage_runtime = {
+            let mut storage_num_cpus = conf.storage.storage_num_cpus as usize;
+            if storage_num_cpus == 0 {
+                storage_num_cpus = std::cmp::max(1, num_cpus::get() / 2)
+            }
+            Runtime::with_worker_threads(storage_num_cpus, Some("IO-worker".to_owned()))?
+        };
 
         // User manager and init the default users.
         let user = UserApiProvider::create_global(conf.clone()).await?;
@@ -92,7 +97,7 @@ impl SessionManager {
             active_sessions,
             storage_cache_manager,
             storage_operator: storage_accessor,
-            storage_task_executor,
+            storage_runtime,
         }))
     }
 
@@ -129,8 +134,8 @@ impl SessionManager {
         self.storage_cache_manager.as_ref()
     }
 
-    pub fn get_storage_executor<'a>(self: &'a Arc<Self>) -> &'a DedicatedExecutor {
-        &self.storage_task_executor
+    pub fn get_storage_runtime<'a>(self: &'a Arc<Self>) -> &'a Runtime {
+        &self.storage_runtime
     }
 
     pub async fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {

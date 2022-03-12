@@ -183,7 +183,10 @@ impl QueryContextShared {
             None => {
                 let settings = self.get_settings();
                 let max_threads = settings.get_max_threads()? as usize;
-                let runtime = Arc::new(Runtime::with_worker_threads(max_threads)?);
+                let runtime = Arc::new(Runtime::with_worker_threads(
+                    max_threads,
+                    Some("query-ctx".to_string()),
+                )?);
                 *query_runtime = Some(runtime.clone());
                 Ok(runtime)
             }

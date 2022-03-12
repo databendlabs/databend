@@ -22,6 +22,7 @@ use std::sync::Arc;
 use common_base::tokio::task::JoinHandle;
 use common_base::Progress;
 use common_base::ProgressValues;
+use common_base::Runtime;
 use common_base::TrySpawn;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
@@ -47,7 +48,6 @@ use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;
 use crate::configs::Config;
-use crate::experiment::task::DedicatedExecutor;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
@@ -343,8 +343,8 @@ impl QueryContext {
         self.shared.dal_ctx.as_ref()
     }
 
-    pub fn get_storage_executor(&self) -> &DedicatedExecutor {
-        self.shared.session.session_mgr.get_storage_executor()
+    pub fn get_storage_runtime(&self) -> &Runtime {
+        self.shared.session.session_mgr.get_storage_runtime()
     }
 }
 

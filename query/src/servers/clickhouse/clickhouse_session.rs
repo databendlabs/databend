@@ -34,7 +34,8 @@ impl ClickHouseConnection {
         let blocking_stream = Self::convert_stream(stream)?;
         ClickHouseConnection::attach_session(&session, &blocking_stream)?;
         let non_blocking_stream = TcpStream::from_std(blocking_stream)?;
-        let query_executor = Runtime::with_worker_threads(1)?;
+        let query_executor =
+            Runtime::with_worker_threads(1, Some("clickhouse-query-executor".to_string()))?;
 
         Thread::spawn(move || {
             let join_handle = query_executor.spawn(async move {

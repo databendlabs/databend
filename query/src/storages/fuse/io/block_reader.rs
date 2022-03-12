@@ -25,6 +25,7 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageIterator;
+use common_base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -38,7 +39,7 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use opendal::Operator;
 
-use crate::experiment::task::DedicatedExecutor;
+use crate::sessions::QueryContext;
 use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;
 
@@ -49,7 +50,7 @@ pub struct BlockReader {
     arrow_schema: Arc<Schema>,
     projected_schema: DataSchemaRef,
     parquet_schema_descriptor: SchemaDescriptor,
-    io_exec: DedicatedExecutor,
+    ctx: Arc<QueryContext>,
 }
 
 impl BlockReader {
@@ -57,7 +58,7 @@ impl BlockReader {
         operator: Operator,
         schema: DataSchemaRef,
         projection: Vec<usize>,
-        io_exec: DedicatedExecutor,
+        ctx: Arc<QueryContext>,
     ) -> Result<Arc<BlockReader>> {
         let projected_schema = DataSchemaRef::new(schema.project(projection.clone()));
 
@@ -69,7 +70,7 @@ impl BlockReader {
             projected_schema,
             parquet_schema_descriptor,
             arrow_schema: Arc::new(arrow_schema),
-            io_exec,
+            ctx,
         }))
     }
 
@@ -120,7 +121,7 @@ impl BlockReader {
                 Ok::<_, ErrorCode>(column_chunk)
             }
             .instrument(debug_span!("read_col_chunk"));
-            let fut = self.io_exec.spawn(fut);
+            let fut = self.ctx.get_storage_runtime().try_spawn(fut)?;
             column_chunk_futs.push(fut);
             col_idx.push(index);
         }
