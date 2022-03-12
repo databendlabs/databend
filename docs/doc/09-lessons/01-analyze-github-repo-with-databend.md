@@ -1,9 +1,9 @@
 ---
 title: Analyzing Github Repository with Databend
-sidebar_label: Analyzing github repository
+sidebar_label: Analyzing Github Repository
 ---
 
-# Analyzing github repo with Databend
+# Analyzing Github Repository with Databend
 
 Use Databend analyzing Github repo step by step.
 
