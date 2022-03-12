@@ -184,6 +184,9 @@ pub struct StorageConfig {
     #[clap(long, env = STORAGE_TYPE, default_value = "disk")]
     pub storage_type: String,
 
+    #[clap(long, env = STORAGE_NUM_CPUS, default_value = "0")]
+    pub storage_num_cpus: u64,
+
     // Disk storage backend config.
     #[clap(flatten)]
     pub disk: DiskStorageConfig,
@@ -195,9 +198,6 @@ pub struct StorageConfig {
     // azure storage blob config.
     #[clap(flatten)]
     pub azure_storage_blob: AzureStorageBlobConfig,
-
-    #[clap(long, env = STORAGE_NUM_CPUS, default_value = "0")]
-    pub storage_num_cpus: u64,
 }
 
 impl Default for StorageConfig {

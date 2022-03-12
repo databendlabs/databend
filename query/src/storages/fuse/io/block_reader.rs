@@ -106,9 +106,8 @@ impl BlockReader {
         let rows = part.nums_rows;
         // TODO: add prefetch column data.
         let num_cols = self.projection.len();
-        let mut columns_array_iter = Vec::with_capacity(0);
-        let mut column_chunk_futs = Vec::with_capacity(self.projection.len());
-        let mut col_idx = vec![];
+        let mut column_chunk_futs = Vec::with_capacity(num_cols);
+        let mut col_idx = Vec::with_capacity(num_cols);
         for index in &self.projection {
             let column_meta = &part.columns_meta[index];
             let mut column_reader = self
@@ -136,6 +135,7 @@ impl BlockReader {
             .await
             .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 
+        let mut columns_array_iter = Vec::with_capacity(num_cols);
         for (i, chunk) in chunks.into_iter().enumerate() {
             let column_chunk = chunk?;
             let idx = *col_idx[i];
