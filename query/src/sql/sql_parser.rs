@@ -205,6 +205,7 @@ impl<'a> DfParser<'a> {
                     Keyword::USER => self.parse_create_user(),
                     Keyword::ROLE => self.parse_create_role(),
                     Keyword::FUNCTION => self.parse_create_udf(),
+                    Keyword::STAGE => self.parse_create_stage(),
                     _ => self.expected("create statement", Token::Word(w)),
                 }
             }
