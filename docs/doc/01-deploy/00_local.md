@@ -31,7 +31,7 @@ databend-meta is a global service for the meta data(such as user, table schema e
 
 ### 2.1 Create databend-meta.toml
 
-```shell
+```shell title="databend-meta.toml"
 log_dir = "metadata/_logs"
 admin_api_address = "0.0.0.0:8101"
 grpc_api_address = "0.0.0.0:9101"
@@ -61,7 +61,7 @@ Check the response is `HTTP/1.1 200 OK`.
 
 ### 3.1 Create databend-query.toml
 
-```shell
+```shell title="databend-query.toml"
 [log]
 log_level = "INFO"
 log_dir = "benddata/_logs"
