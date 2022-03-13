@@ -141,6 +141,7 @@ impl Processor for GroupByPartialTransform {
             HashMethodKind::KeysU16(method) => self.aggregate(method, group_cols).await,
             HashMethodKind::KeysU32(method) => self.aggregate(method, group_cols).await,
             HashMethodKind::KeysU64(method) => self.aggregate(method, group_cols).await,
+            HashMethodKind::SingleString(method) => self.aggregate(method, group_cols).await,
             HashMethodKind::Serializer(method) => self.aggregate(method, group_cols).await,
         }
     }

@@ -22,6 +22,7 @@ use common_datablocks::HashMethodKeysU32;
 use common_datablocks::HashMethodKeysU64;
 use common_datablocks::HashMethodKeysU8;
 use common_datablocks::HashMethodSerializer;
+use common_datablocks::HashMethodSingleString;
 use common_datavalues::MutableColumn;
 use common_datavalues::ScalarColumn;
 use common_datavalues::Series;
@@ -42,6 +43,9 @@ pub type KeysU8FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, H
 pub type KeysU16FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU16>;
 pub type KeysU32FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU32>;
 pub type KeysU64FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU64>;
+pub type SingleStringFinalAggregator<const HAS_AGG: bool> =
+    FinalAggregator<HAS_AGG, HashMethodSingleString>;
+
 pub type SerializerFinalAggregator<const HAS_AGG: bool> =
     FinalAggregator<HAS_AGG, HashMethodSerializer>;
 
