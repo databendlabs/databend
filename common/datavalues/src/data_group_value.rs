@@ -51,7 +51,7 @@ impl TryFrom<&DataValue> for DataGroupValue {
             v => {
                 return Err(ErrorCode::BadDataValueType(format!(
                     "Cannot convert a DataValue ({:?}) into DataGroupValue",
-                    v.data_type()
+                    v.min_data_type()
                 )));
             }
         })

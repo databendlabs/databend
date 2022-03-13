@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::num::Wrapping;
 use std::sync::Arc;
 
 use bincode;
@@ -127,8 +128,7 @@ impl BloomFilterIndexer {
                 // create bloom filter column
                 let serialized_bytes = bloom_filter.to_vec()?;
                 let bloom_value = DataValue::String(serialized_bytes);
-                let bloom_column: ColumnRef =
-                    bloom_value.as_const_column(&bloom_value.data_type(), 1)?;
+                let bloom_column: ColumnRef = bloom_value.as_const_column(&StringType::arc(), 1)?;
                 bloom_columns.push(bloom_column);
             }
         }
@@ -416,16 +416,21 @@ impl BloomFilter {
     }
 
     #[inline(always)]
+    fn compute_hash_bit_pos(&self, index: usize, h1: Wrapping<u64>, h2: Wrapping<u64>) -> usize {
+        let i = Wrapping(index as u64);
+        let hash = (h1 + i * h2 + i * i).0;
+        (hash % self.container.len() as u64) as usize
+    }
+
+    #[inline(always)]
     // Set bits for bloom filter, ported from Clickhouse.
     // https://github.com/ClickHouse/ClickHouse/blob/1bf375e2b761db5b99b0f403b90c412a530f4d5c/src/Interpreters/BloomFilter.cpp#L67
     fn set_bits(&mut self, hash1: &u64, hash2: &u64) {
-        let h1 = std::num::Wrapping(*hash1);
-        let h2 = std::num::Wrapping(*hash2);
+        let h1 = Wrapping(*hash1);
+        let h2 = Wrapping(*hash2);
 
         for i in 0..self.num_hashes {
-            let index = std::num::Wrapping(i as u64);
-            let res = (h1 + index * h2 + index * index).0;
-            let bit_pos = (res % self.container.len() as u64) as usize;
+            let bit_pos = self.compute_hash_bit_pos(i, h1, h2);
             self.container.set(bit_pos, true);
         }
     }
@@ -436,7 +441,7 @@ impl BloomFilter {
         let input_schema = Arc::new(DataSchema::new(vec![input_field]));
         let args = vec![
             Expression::Column(String::from(input_column)),
-            Expression::create_literal(DataValue::UInt64(seed)),
+            Expression::create_literal_with_type(DataValue::UInt64(seed), UInt64Type::arc()),
         ];
 
         let output_column = "output";
@@ -554,12 +559,11 @@ impl BloomFilter {
         let hash1 = hash1_column.get_u64(0)?;
         let hash2 = hash2_column.get_u64(0)?;
 
-        let h1 = std::num::Wrapping(hash1);
-        let h2 = std::num::Wrapping(hash2);
+        let h1 = Wrapping(hash1);
+        let h2 = Wrapping(hash2);
         for i in 0..self.num_hashes {
-            let index = std::num::Wrapping(i as u64);
-            let res = (h1 + index * h2 + index * index).0;
-            let bit_pos = (res % self.container.len() as u64) as usize;
+            let bit_pos = self.compute_hash_bit_pos(i, h1, h2);
+
             // If any bit is not 1 in bloom filter, it means the data never ever showed up before.
             // unwrap should be fine because 'bit_pos' was mod by container.len()
             let is_bit_set = self.container.get(bit_pos).unwrap();
