@@ -52,8 +52,6 @@ use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::StorageFactory;
 use crate::storages::Table;
-use crate::table_functions::TableArgs;
-use crate::table_functions::TableFunction;
 
 /// Catalog based on MetaStore
 /// - System Database NOT included

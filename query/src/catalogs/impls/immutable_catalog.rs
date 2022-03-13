@@ -37,10 +37,7 @@ use crate::catalogs::SYS_TBL_ID_BEGIN;
 use crate::configs::Config;
 use crate::databases::Database;
 use crate::databases::SystemDatabase;
-use crate::storages::StorageDescription;
 use crate::storages::Table;
-use crate::table_functions::TableArgs;
-use crate::table_functions::TableFunction;
 
 /// System Catalog contains ... all the system databases (no surprise :)
 /// Currently, this is only one database here, the "system" db.

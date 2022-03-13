@@ -37,7 +37,7 @@ impl AnalyzableStatement for DfRenameTable {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let tenant = ctx.get_tenant();
         let (db, table_name) = self.resolve_table(ctx.clone(), &self.name)?;
-        let (new_db, new_table_name) = self.resolve_table(ctx.clone(), &self.new_name)?;
+        let (new_db, new_table_name) = self.resolve_table(ctx, &self.new_name)?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::RenameTable(RenameTablePlan {
