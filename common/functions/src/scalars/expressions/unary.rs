@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::simd::LaneCount;
+use std::simd::Simd;
+use std::simd::SimdElement;
+use std::simd::SupportedLaneCount;
+
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
@@ -46,4 +51,34 @@ where
         return Err(error);
     }
     Ok(result)
+}
+
+pub fn unary_simd_op<L, O, F, const N: usize>(l: &ColumnRef, op: F) -> Result<PrimitiveColumn<O>>
+where
+    L: PrimitiveType + SimdElement,
+    O: PrimitiveType + SimdElement,
+    F: Fn(Simd<L, N>) -> Simd<O, N>,
+    LaneCount<N>: SupportedLaneCount,
+{
+    let left: &PrimitiveColumn<L> = Series::check_get(l)?;
+    let lhs_chunks = left.values().chunks_exact(N);
+    let lhs_remainder = lhs_chunks.remainder();
+
+    let mut values = Vec::<O>::with_capacity(l.len());
+    lhs_chunks.for_each(|lhs| {
+        let res = op(Simd::from_slice(lhs));
+        values.extend_from_slice(res.as_array())
+    });
+
+    if !lhs_remainder.is_empty() {
+        let mut lhs = [L::default(); N];
+        lhs.iter_mut()
+            .zip(lhs_remainder.iter())
+            .for_each(|(a, b)| *a = *b);
+
+        let res = op(Simd::from_array(lhs));
+        values.extend_from_slice(&res.as_array()[0..lhs_remainder.len()])
+    };
+
+    Ok(PrimitiveColumn::<O>::new_from_vec(values))
 }
