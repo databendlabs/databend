@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::simd::LaneCount;
+use std::simd::Simd;
+use std::simd::SimdElement;
+use std::simd::SupportedLaneCount;
+
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::compute::comparison::Simd8;
 use common_arrow::arrow::compute::comparison::Simd8Lanes;
@@ -175,6 +180,113 @@ where
         return Err(error);
     }
     Ok(result)
+}
+
+pub fn binary_simd_op<T, O, F, const N: usize>(
+    l: &ColumnRef,
+    r: &ColumnRef,
+    op: F,
+) -> Result<PrimitiveColumn<O>>
+where
+    T: PrimitiveType + SimdElement,
+    O: PrimitiveType + SimdElement,
+    F: Fn(Simd<T, N>, Simd<T, N>) -> Simd<O, N>,
+    LaneCount<N>: SupportedLaneCount,
+{
+    debug_assert!(
+        l.len() == r.len(),
+        "Size of columns must match to apply binary expression"
+    );
+
+    match (l.is_const(), r.is_const()) {
+        (false, false) => {
+            let lhs: &PrimitiveColumn<T> = Series::check_get(l)?;
+            let lhs_chunks = lhs.values().chunks_exact(N);
+            let lhs_remainder = lhs_chunks.remainder();
+
+            let rhs: &PrimitiveColumn<T> = Series::check_get(r)?;
+            let rhs_chunks = rhs.values().chunks_exact(N);
+            let rhs_remainder = rhs_chunks.remainder();
+
+            let mut values = Vec::<O>::with_capacity(lhs.len());
+            lhs_chunks.zip(rhs_chunks).for_each(|(lhs, rhs)| {
+                let res = op(Simd::from_slice(lhs), Simd::from_slice(rhs));
+                values.extend_from_slice(res.as_array())
+            });
+
+            if !lhs_remainder.is_empty() {
+                let mut lhs = [T::default(); N];
+                lhs.iter_mut()
+                    .zip(lhs_remainder.iter())
+                    .for_each(|(a, b)| *a = *b);
+
+                let mut rhs = [T::default(); N];
+                rhs.iter_mut()
+                    .zip(rhs_remainder.iter())
+                    .for_each(|(a, b)| *a = *b);
+
+                let res = op(Simd::from_array(lhs), Simd::from_array(rhs));
+                values.extend_from_slice(&res.as_array()[0..lhs_remainder.len()])
+            };
+
+            Ok(PrimitiveColumn::<O>::new_from_vec(values))
+        }
+        (false, true) => {
+            let lhs: &PrimitiveColumn<T> = Series::check_get(l)?;
+            let lhs_chunks = lhs.values().chunks_exact(N);
+            let lhs_remainder = lhs_chunks.remainder();
+
+            let rhs = T::try_create_viewer(r)?;
+            let r = rhs.value_at(0).to_owned_scalar();
+            let rhs = Simd::<T, N>::splat(r);
+
+            let mut values = Vec::<O>::with_capacity(lhs.len());
+            lhs_chunks.for_each(|lhs| {
+                let res = op(Simd::from_slice(lhs), rhs);
+                values.extend_from_slice(res.as_array())
+            });
+
+            if !lhs_remainder.is_empty() {
+                let mut lhs = [T::default(); N];
+                lhs.iter_mut()
+                    .zip(lhs_remainder.iter())
+                    .for_each(|(a, b)| *a = *b);
+
+                let res = op(Simd::from_array(lhs), rhs);
+                values.extend_from_slice(&res.as_array()[0..lhs_remainder.len()])
+            };
+
+            Ok(PrimitiveColumn::<O>::new_from_vec(values))
+        }
+        (true, false) => {
+            let lhs = T::try_create_viewer(l)?;
+            let l = lhs.value_at(0).to_owned_scalar();
+            let lhs = Simd::<T, N>::splat(l);
+
+            let rhs: &PrimitiveColumn<T> = Series::check_get(r)?;
+            let rhs_chunks = rhs.values().chunks_exact(N);
+            let rhs_remainder = rhs_chunks.remainder();
+
+            let mut values = Vec::<O>::with_capacity(rhs.len());
+            rhs_chunks.for_each(|rhs| {
+                let res = op(lhs, Simd::from_slice(rhs));
+                values.extend_from_slice(res.as_array())
+            });
+
+            if !rhs_remainder.is_empty() {
+                let mut rhs = [T::default(); N];
+                rhs.iter_mut()
+                    .zip(rhs_remainder.iter())
+                    .for_each(|(a, b)| *a = *b);
+
+                let res = op(lhs, Simd::from_array(rhs));
+                values.extend_from_slice(&res.as_array()[0..rhs_remainder.len()])
+            };
+
+            Ok(PrimitiveColumn::<O>::new_from_vec(values))
+        }
+        (true, true) => unreachable!(),
+    }
 }
 
 /// QUOTE: (From arrow2::arrow::compute::comparison::primitive)
