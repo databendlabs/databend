@@ -278,6 +278,7 @@ impl Catalog for DatabaseCatalog {
         }
         tracing::info!("Rename table from req:{:?}", req);
 
+        // TODO we also need to check new_db.
         if self
             .immutable_catalog
             .exists_database(&req.tenant, &req.db)
