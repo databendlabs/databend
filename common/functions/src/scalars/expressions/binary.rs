@@ -25,19 +25,6 @@ use common_exception::Result;
 
 use super::EvalContext;
 
-pub trait ScalarBinaryFunction<L: Scalar, R: Scalar, O: Scalar> {
-    fn eval(&self, l: L::RefType<'_>, r: R::RefType<'_>, ctx: &mut EvalContext) -> O;
-}
-
-/// Blanket implementation for all binary expression functions
-impl<L: Scalar, R: Scalar, O: Scalar, F> ScalarBinaryFunction<L, R, O> for F
-where F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O
-{
-    fn eval(&self, i1: L::RefType<'_>, i2: R::RefType<'_>, ctx: &mut EvalContext) -> O {
-        self(i1, i2, ctx)
-    }
-}
-
 pub fn scalar_binary_op<L: Scalar, R: Scalar, O: Scalar, F>(
     l: &ColumnRef,
     r: &ColumnRef,
@@ -45,7 +32,7 @@ pub fn scalar_binary_op<L: Scalar, R: Scalar, O: Scalar, F>(
     ctx: &mut EvalContext,
 ) -> Result<<O as Scalar>::ColumnType>
 where
-    F: ScalarBinaryFunction<L, R, O>,
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O,
 {
     debug_assert!(
         l.len() == r.len(),
@@ -58,7 +45,7 @@ where
             let right = R::try_create_viewer(r)?;
 
             let b = right.value_at(0);
-            let it = left.scalar_iter().map(|a| f.eval(a, b, ctx));
+            let it = left.scalar_iter().map(|a| f(a, b, ctx));
             <O as Scalar>::ColumnType::from_owned_iterator(it)
         }
 
@@ -69,7 +56,7 @@ where
             let it = left
                 .scalar_iter()
                 .zip(right.scalar_iter())
-                .map(|(a, b)| f.eval(a, b, ctx));
+                .map(|(a, b)| f(a, b, ctx));
             <O as Scalar>::ColumnType::from_owned_iterator(it)
         }
 
@@ -78,7 +65,7 @@ where
             let a = left.value_at(0);
 
             let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
-            let it = right.scalar_iter().map(|b| f.eval(a, b, ctx));
+            let it = right.scalar_iter().map(|b| f(a, b, ctx));
             <O as Scalar>::ColumnType::from_owned_iterator(it)
         }
 
@@ -87,10 +74,7 @@ where
             let left = L::try_create_viewer(l)?;
             let right = R::try_create_viewer(r)?;
 
-            let it = left
-                .iter()
-                .zip(right.iter())
-                .map(|(a, b)| f.eval(a, b, ctx));
+            let it = left.iter().zip(right.iter()).map(|(a, b)| f(a, b, ctx));
             <O as Scalar>::ColumnType::from_owned_iterator(it)
         }
     };
@@ -101,24 +85,6 @@ where
     Ok(result)
 }
 
-pub trait ScalarBinaryRefFunction<'a, L: Scalar, R: Scalar, O: Scalar> {
-    fn eval(&self, l: L::RefType<'a>, r: R::RefType<'a>, ctx: &mut EvalContext) -> O::RefType<'a>;
-}
-
-/// Blanket implementation for all binary expression functions
-impl<'a, L: Scalar, R: Scalar, O: Scalar, F> ScalarBinaryRefFunction<'a, L, R, O> for F
-where F: Fn(L::RefType<'a>, R::RefType<'a>, &mut EvalContext) -> O::RefType<'a>
-{
-    fn eval(
-        &self,
-        i1: L::RefType<'a>,
-        i2: R::RefType<'a>,
-        ctx: &mut EvalContext,
-    ) -> O::RefType<'a> {
-        self(i1, i2, ctx)
-    }
-}
-
 pub fn scalar_binary_op_ref<'a, L: Scalar, R: Scalar, O: Scalar, F>(
     l: &'a ColumnRef,
     r: &'a ColumnRef,
@@ -126,7 +92,7 @@ pub fn scalar_binary_op_ref<'a, L: Scalar, R: Scalar, O: Scalar, F>(
     ctx: &mut EvalContext,
 ) -> Result<<O as Scalar>::ColumnType>
 where
-    F: ScalarBinaryRefFunction<'a, L, R, O>,
+    F: Fn(L::RefType<'a>, R::RefType<'a>, &mut EvalContext) -> O::RefType<'a>,
 {
     debug_assert!(
         l.len() == r.len(),
@@ -139,7 +105,7 @@ where
             let right = R::try_create_viewer(r)?;
 
             let b = right.value_at(0);
-            let it = left.scalar_iter().map(|a| f.eval(a, b, ctx));
+            let it = left.scalar_iter().map(|a| f(a, b, ctx));
             <O as Scalar>::ColumnType::from_iterator(it)
         }
 
@@ -150,7 +116,7 @@ where
             let it = left
                 .scalar_iter()
                 .zip(right.scalar_iter())
-                .map(|(a, b)| f.eval(a, b, ctx));
+                .map(|(a, b)| f(a, b, ctx));
             <O as Scalar>::ColumnType::from_iterator(it)
         }
 
@@ -159,7 +125,7 @@ where
             let a = left.value_at(0);
 
             let right: &<R as Scalar>::ColumnType = unsafe { Series::static_cast(r) };
-            let it = right.scalar_iter().map(|b| f.eval(a, b, ctx));
+            let it = right.scalar_iter().map(|b| f(a, b, ctx));
             <O as Scalar>::ColumnType::from_iterator(it)
         }
 
@@ -168,10 +134,7 @@ where
             let left = L::try_create_viewer(l)?;
             let right = R::try_create_viewer(r)?;
 
-            let it = left
-                .iter()
-                .zip(right.iter())
-                .map(|(a, b)| f.eval(a, b, ctx));
+            let it = left.iter().zip(right.iter()).map(|(a, b)| f(a, b, ctx));
             <O as Scalar>::ColumnType::from_iterator(it)
         }
     };

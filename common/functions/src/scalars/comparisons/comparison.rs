@@ -46,7 +46,6 @@ use crate::scalars::ComparisonRegexpFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionFactory;
-use crate::scalars::ScalarBinaryFunction;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
@@ -234,7 +233,7 @@ pub struct ComparisonScalarImpl<L: Scalar, R: Scalar, F> {
 }
 
 impl<L: Scalar, R: Scalar, F> ComparisonScalarImpl<L, R, F>
-where F: ScalarBinaryFunction<L, R, bool>
+where F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> bool
 {
     pub fn new(func: F) -> Self {
         Self {
@@ -248,7 +247,7 @@ impl<L, R, F> ComparisonExpression for ComparisonScalarImpl<L, R, F>
 where
     L: Scalar + Send + Sync + Clone,
     R: Scalar + Send + Sync + Clone,
-    F: ScalarBinaryFunction<L, R, bool> + Send + Sync + Clone,
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> bool + Send + Sync + Clone,
 {
     fn eval(&self, l: &ColumnWithField, r: &ColumnWithField) -> Result<BooleanColumn> {
         scalar_binary_op(

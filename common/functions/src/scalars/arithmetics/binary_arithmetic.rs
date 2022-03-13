@@ -28,7 +28,6 @@ use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
-use crate::scalars::ScalarBinaryFunction;
 
 #[derive(Clone)]
 pub struct BinaryArithmeticFunction<L: Scalar, R: Scalar, O: Scalar, F> {
@@ -43,7 +42,7 @@ where
     L: Scalar + Send + Sync + Clone,
     R: Scalar + Send + Sync + Clone,
     O: Scalar + Send + Sync + Clone,
-    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone + 'static,
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O + Send + Sync + Clone + 'static,
 {
     pub fn try_create_func(
         op: DataValueBinaryOperator,
@@ -64,7 +63,7 @@ where
     L: Scalar + Send + Sync + Clone,
     R: Scalar + Send + Sync + Clone,
     O: Scalar + Send + Sync + Clone,
-    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone,
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O + Send + Sync + Clone,
 {
     fn name(&self) -> &str {
         "BinaryArithmeticFunction"
@@ -107,7 +106,7 @@ where
     L: Scalar + Send + Sync + Clone,
     R: Scalar + Send + Sync + Clone,
     O: Scalar + Send + Sync + Clone,
-    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone,
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O + Send + Sync + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.op)

@@ -25,7 +25,6 @@ use crate::scalars::ArithmeticNegateFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
-use crate::scalars::ScalarUnaryFunction;
 
 #[derive(Clone)]
 pub struct UnaryArithmeticFunction<L: Scalar, O: Scalar, F> {
@@ -39,7 +38,7 @@ impl<L, O, F> UnaryArithmeticFunction<L, O, F>
 where
     L: Scalar + Send + Sync + Clone,
     O: Scalar + Send + Sync + Clone,
-    F: ScalarUnaryFunction<L, O> + Send + Sync + Clone + 'static,
+    F: Fn(L::RefType<'_>, &mut EvalContext) -> O + Send + Sync + Clone + 'static,
 {
     pub fn try_create_func(
         op: DataValueUnaryOperator,
@@ -59,7 +58,7 @@ impl<L, O, F> Function for UnaryArithmeticFunction<L, O, F>
 where
     L: Scalar + Send + Sync + Clone,
     O: Scalar + Send + Sync + Clone,
-    F: ScalarUnaryFunction<L, O> + Send + Sync + Clone,
+    F: Fn(L::RefType<'_>, &mut EvalContext) -> O + Send + Sync + Clone,
 {
     fn name(&self) -> &str {
         "UnaryArithmeticFunction"
@@ -96,7 +95,7 @@ impl<L, O, F> fmt::Display for UnaryArithmeticFunction<L, O, F>
 where
     L: Scalar + Send + Sync + Clone,
     O: Scalar + Send + Sync + Clone,
-    F: ScalarUnaryFunction<L, O> + Send + Sync + Clone,
+    F: Fn(L::RefType<'_>, &mut EvalContext) -> O + Send + Sync + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.op)

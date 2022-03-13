@@ -36,7 +36,6 @@ use crate::scalars::ArithmeticCreator;
 use crate::scalars::ArithmeticDescription;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
-use crate::scalars::ScalarBinaryFunction;
 
 pub struct IntervalFunctionCreator<T> {
     t: PhantomData<T>,
@@ -119,7 +118,7 @@ where
     L: DateType + Send + Sync + Clone,
     R: PrimitiveType + Send + Sync + Clone,
     O: DateType + Send + Sync + Clone,
-    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone + 'static,
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O + Send + Sync + Clone + 'static,
 {
     pub fn try_create_func(
         display_name: &str,
@@ -144,7 +143,7 @@ where
     L: DateType + Send + Sync + Clone,
     R: PrimitiveType + Send + Sync + Clone,
     O: DateType + Send + Sync + Clone,
-    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone + 'static,
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O + Send + Sync + Clone + 'static,
 {
     fn name(&self) -> &str {
         self.display_name.as_str()
@@ -172,7 +171,7 @@ where
     L: DateType + Send + Sync + Clone,
     R: PrimitiveType + Send + Sync + Clone,
     O: DateType + Send + Sync + Clone,
-    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone + 'static,
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O + Send + Sync + Clone + 'static,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}()", self.display_name)

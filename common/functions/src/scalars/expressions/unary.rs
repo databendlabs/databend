@@ -23,29 +23,16 @@ use common_exception::Result;
 use super::from_incomplete_chunk;
 use super::EvalContext;
 
-pub trait ScalarUnaryFunction<L: Scalar, O: Scalar> {
-    fn eval(&self, l: L::RefType<'_>, _ctx: &mut EvalContext) -> O;
-}
-
-/// Blanket implementation for all binary expression functions
-impl<L: Scalar, O: Scalar, F> ScalarUnaryFunction<L, O> for F
-where F: Fn(L::RefType<'_>, &mut EvalContext) -> O
-{
-    fn eval(&self, i1: L::RefType<'_>, ctx: &mut EvalContext) -> O {
-        self(i1, ctx)
-    }
-}
-
 pub fn scalar_unary_op<L: Scalar, O: Scalar, F>(
     l: &ColumnRef,
     f: F,
     ctx: &mut EvalContext,
 ) -> Result<<O as Scalar>::ColumnType>
 where
-    F: ScalarUnaryFunction<L, O>,
+    F: Fn(L::RefType<'_>, &mut EvalContext) -> O,
 {
     let left = Series::check_get_scalar::<L>(l)?;
-    let it = left.scalar_iter().map(|a| f.eval(a, ctx));
+    let it = left.scalar_iter().map(|a| f(a, ctx));
     let result = <O as Scalar>::ColumnType::from_owned_iterator(it);
 
     if let Some(error) = ctx.error.take() {
