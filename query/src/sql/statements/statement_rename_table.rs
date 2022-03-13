@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
+use common_planners::RenameTableMap;
 use common_planners::RenameTablePlan;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
@@ -27,8 +29,7 @@ use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfRenameTable {
-    pub name: ObjectName,
-    pub new_name: ObjectName,
+    pub name_map: HashMap<ObjectName, ObjectName>,
 }
 
 #[async_trait::async_trait]
@@ -36,17 +37,20 @@ impl AnalyzableStatement for DfRenameTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let tenant = ctx.get_tenant();
-        let (db, table_name) = self.resolve_table(ctx.clone(), &self.name)?;
-        let (new_db, new_table_name) = self.resolve_table(ctx, &self.new_name)?;
-
-        Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::RenameTable(RenameTablePlan {
-                tenant,
+        let mut maps = Vec::new();
+        for (k, v) in &self.name_map {
+            let (db, table_name) = self.resolve_table(ctx.clone(), k)?;
+            let (new_db, new_table_name) = self.resolve_table(ctx.clone(), v)?;
+            maps.push(RenameTableMap {
                 db,
                 table_name,
                 new_db,
                 new_table_name,
-            }),
+            })
+        }
+
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::RenameTable(RenameTablePlan { tenant, maps }),
         )))
     }
 }

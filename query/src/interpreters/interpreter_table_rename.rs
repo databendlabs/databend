@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::RenameTableReq;
 use common_planners::RenameTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -45,31 +46,22 @@ impl Interpreter for RenameTableInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        // TODO un-comment below code to check privileges
-        // let db_name = self.plan.db.as_str();
-        // let tbl_name = self.plan.table_name.as_str();
-
-        // self.ctx
-        //     .get_current_session()
-        //     .validate_privileges(
-        //         &GrantObject::Table(db_name.into(), tbl_name.into()),
-        //         vec![UserPrivilegeType::Alter, UserPrivilegeType::Drop],
-        //     )
-        //     .await?;
-
-        // let new_db_name = self.plan.new_db.as_str();
-        // let new_tbl_name = self.plan.new_table_name.as_str();
-
-        // self.ctx
-        //     .get_current_session()
-        //     .validate_privileges(
-        //         &GrantObject::Table(new_db_name.into(), new_tbl_name.into()),
-        //         vec![UserPrivilegeType::Create, UserPrivilegeType::Insert],
-        //     )
-        //     .await?;
-
+        // TODO check privileges
+        // You must have ALTER and DROP privileges for the original table,
+        // and CREATE and INSERT privileges for the new table.
         let catalog = self.ctx.get_catalog();
-        catalog.rename_table(self.plan.clone().into()).await?;
+        for map in &self.plan.maps {
+            let tenant = self.plan.tenant.clone();
+            catalog
+                .rename_table(RenameTableReq {
+                    tenant,
+                    db: map.db.clone(),
+                    table_name: map.table_name.clone(),
+                    new_db: map.new_db.clone(),
+                    new_table_name: map.new_table_name.clone(),
+                })
+                .await?;
+        }
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

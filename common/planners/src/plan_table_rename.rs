@@ -16,11 +16,15 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_meta_types::RenameTableReq;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct RenameTablePlan {
     pub tenant: String,
+    pub maps: Vec<RenameTableMap>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct RenameTableMap {
     pub db: String,
     pub table_name: String,
     pub new_db: String,
@@ -30,17 +34,5 @@ pub struct RenameTablePlan {
 impl RenameTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
-    }
-}
-
-impl From<RenameTablePlan> for RenameTableReq {
-    fn from(p: RenameTablePlan) -> Self {
-        RenameTableReq {
-            tenant: p.tenant,
-            db: p.db,
-            table_name: p.table_name,
-            new_db: p.new_db,
-            new_table_name: p.new_table_name,
-        }
     }
 }

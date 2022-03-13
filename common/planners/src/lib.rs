@@ -193,6 +193,7 @@ pub use plan_table_describe::DescribeTablePlan;
 pub use plan_table_drop::DropTablePlan;
 pub use plan_table_optimize::Optimization;
 pub use plan_table_optimize::OptimizeTablePlan;
+pub use plan_table_rename::RenameTableMap;
 pub use plan_table_rename::RenameTablePlan;
 pub use plan_table_show_create::ShowCreateTablePlan;
 pub use plan_table_truncate::TruncateTablePlan;
