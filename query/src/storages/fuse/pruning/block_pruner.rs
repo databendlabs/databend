@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
@@ -69,13 +71,17 @@ impl BlockPruner {
             usize::MAX
         };
 
-        tracing::debug!("using limit {}", limit);
+        let rows = AtomicUsize::new(0);
 
-        let res = futures::stream::iter(segment_locs)
+        let stream = futures::stream::iter(segment_locs)
             .map(|seg_loc| async {
-                let reader = MetaReaders::segment_info_reader(ctx);
-                let segment_info = reader.read(seg_loc).await?;
-                Self::filter_segment(segment_info.as_ref(), &block_pred)
+                if rows.load(Ordering::Acquire) < limit {
+                    let reader = MetaReaders::segment_info_reader(ctx);
+                    let segment_info = reader.read(seg_loc).await?;
+                    Self::filter_segment(segment_info.as_ref(), &block_pred, &rows, limit)
+                } else {
+                    Ok(vec![])
+                }
             })
             // configuration of the max size of buffered futures
             .buffered(std::cmp::min(10, segment_num))
@@ -84,34 +90,28 @@ impl BlockPruner {
             .into_iter()
             .flatten();
 
-        let block_metas = res.collect::<Vec<_>>();
-
-        let mut result = vec![];
-        let mut counter: usize = 0;
-
-        for block_meta in block_metas {
-            counter += block_meta.row_count as usize;
-            result.push(block_meta);
-            if counter >= limit {
-                break;
-            }
-        }
-        Ok(result)
+        Ok(stream.collect::<Vec<_>>())
     }
 
     #[inline]
-    fn filter_segment(segment_info: &SegmentInfo, pred: &Pred) -> Result<Vec<BlockMeta>> {
+    fn filter_segment(
+        segment_info: &SegmentInfo,
+        pred: &Pred,
+        rows: &AtomicUsize,
+        limit: usize,
+    ) -> Result<Vec<BlockMeta>> {
         if pred(&segment_info.summary.col_stats)? {
             let block_num = segment_info.blocks.len();
-            segment_info.blocks.iter().try_fold(
-                Vec::with_capacity(block_num),
-                |mut acc, block_meta| {
-                    if pred(&block_meta.col_stats)? {
-                        acc.push(block_meta.clone())
+            let mut acc = Vec::with_capacity(block_num);
+            for block_meta in &segment_info.blocks {
+                if pred(&block_meta.col_stats)? {
+                    acc.push(block_meta.clone());
+                    if rows.fetch_add(block_meta.row_count as usize, Ordering::Release) >= limit {
+                        return Ok(acc);
                     }
-                    Ok(acc)
-                },
-            )
+                }
+            }
+            Ok(acc)
         } else {
             Ok(vec![])
         }
