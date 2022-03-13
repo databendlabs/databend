@@ -120,9 +120,12 @@ impl Runtime {
         Self::create(tracker, &mut runtime_builder)
     }
 
-    pub fn with_worker_threads(workers: usize) -> Result<Self> {
+    pub fn with_worker_threads(workers: usize, thread_name: Option<String>) -> Result<Self> {
         let tracker = RuntimeTracker::create();
         let mut runtime_builder = Self::tracker_builder(tracker.clone());
+        if let Some(v) = thread_name {
+            runtime_builder.thread_name(v);
+        }
         Self::create(tracker, runtime_builder.worker_threads(workers))
     }
 

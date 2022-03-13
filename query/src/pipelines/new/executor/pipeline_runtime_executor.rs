@@ -47,7 +47,10 @@ impl PipelineRuntimeExecutor {
     pub async fn execute(&self) -> Result<()> {
         // futures::executor::block_on(||);
         let mut threads = Vec::with_capacity(self.threads_num);
-        let runtime = Runtime::with_worker_threads(self.threads_num * 2)?;
+        let runtime = Runtime::with_worker_threads(
+            self.threads_num * 2,
+            Some("pipeline-runtime-executor".to_owned()),
+        )?;
         for thread_num in 0..self.threads_num {
             let worker_executor = self.inner_executor.clone();
             threads.push(runtime.spawn(async move {

@@ -85,6 +85,7 @@ async fn test_configs_table() -> Result<()> {
         "| s3.endpoint_url                      | https://s3.amazonaws.com | storage |             |",
         "| s3.region                            |                          | storage |             |",
         "| s3.secret_access_key                 |                          | storage |             |",
+        "| storage_num_cpus                     | 0                        | storage |             |",
         "| storage_type                         | disk                     | storage |             |",
         "| table_cache_block_meta_count         | 102400                   | query   |             |",
         "| table_cache_enabled                  | false                    | query   |             |",
