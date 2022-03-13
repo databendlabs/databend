@@ -220,6 +220,47 @@ impl Session {
         )))
     }
 
+    pub async fn validate_privileges(
+        self: &Arc<Self>,
+        object: &GrantObject,
+        privileges: Vec<UserPrivilegeType>,
+    ) -> Result<()> {
+        let mut verified = true;
+        let mut msg = String::new();
+        for privilege in privileges {
+            let current_user = self.get_current_user()?;
+            let user_verified = current_user.grants.verify_privilege(object, privilege);
+            if !user_verified {
+                verified = false;
+                msg = format!(
+                    "Permission denied, user '{}'@'{}' requires {} privilege on {}",
+                    &current_user.name, &current_user.hostname, privilege, object
+                );
+                break;
+            }
+
+            let tenant = self.get_current_tenant();
+            let role_cache = self.get_role_cache_manager();
+            let role_verified = role_cache
+                .verify_privilege(&tenant, &current_user.grants.roles(), object, privilege)
+                .await?;
+            if !role_verified {
+                verified = false;
+                msg = format!(
+                    "Permission denied, user '{}'@'{}' requires {} privilege on {}",
+                    &current_user.name, &current_user.hostname, privilege, object
+                );
+                break;
+            }
+        }
+
+        if verified {
+            Ok(())
+        } else {
+            Err(ErrorCode::PermissionDenied(msg))
+        }
+    }
+
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
         Arc::new(self.session_settings.clone())
     }

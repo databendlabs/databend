@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_api::MetaApi;
 use common_meta_embedded::MetaEmbedded;
-use common_meta_types::CreateDatabaseReply;
+use common_meta_types::{CreateDatabaseReply, RenameTableReply, RenameTableReq};
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
@@ -50,6 +50,7 @@ use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::StorageFactory;
 use crate::storages::Table;
+use crate::table_functions::{TableArgs, TableFunction};
 
 /// Catalog based on MetaStore
 /// - System Database NOT included
@@ -233,6 +234,11 @@ impl Catalog for MutableCatalog {
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
         let res = self.ctx.meta.drop_table(req).await?;
+        Ok(res)
+    }
+
+    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
+        let res = self.ctx.meta.rename_table(req).await?;
         Ok(res)
     }
 

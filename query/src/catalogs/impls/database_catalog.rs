@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::CreateDatabaseReply;
+use common_meta_types::{CreateDatabaseReply, RenameTableReply, RenameTableReq};
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
@@ -266,6 +266,24 @@ impl Catalog for DatabaseCatalog {
             return self.immutable_catalog.drop_table(req).await;
         }
         self.mutable_catalog.drop_table(req).await
+    }
+
+    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
+        if req.tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while rename table)",
+            ));
+        }
+        tracing::info!("Rename table from req:{:?}", req);
+
+        if self
+            .immutable_catalog
+            .exists_database(&req.tenant, &req.db)
+            .await?
+        {
+            return self.immutable_catalog.rename_table(req).await;
+        }
+        self.mutable_catalog.rename_table(req).await
     }
 
     async fn upsert_table_option(

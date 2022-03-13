@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::CreateDatabaseReply;
+use common_meta_types::{CreateDatabaseReply, RenameTableReply, RenameTableReq};
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
@@ -89,6 +89,8 @@ pub trait Catalog: DynClone + Send + Sync {
     async fn create_table(&self, req: CreateTableReq) -> Result<()>;
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply>;
+
+    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply>;
 
     // Check a db.table is exists or not.
     async fn exists_table(&self, tenant: &str, db_name: &str, table_name: &str) -> Result<bool> {

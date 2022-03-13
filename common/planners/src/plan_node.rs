@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 
-use crate::AdminUseTenantPlan;
+use crate::{AdminUseTenantPlan, RenameTablePlan};
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
@@ -112,6 +112,7 @@ pub enum PlanNode {
     // Table.
     CreateTable(CreateTablePlan),
     DropTable(DropTablePlan),
+    RenameTable(RenameTablePlan),
     TruncateTable(TruncateTablePlan),
     OptimizeTable(OptimizeTablePlan),
     DescribeTable(DescribeTablePlan),
@@ -199,6 +200,7 @@ impl PlanNode {
             // Table.
             PlanNode::CreateTable(v) => v.schema(),
             PlanNode::DropTable(v) => v.schema(),
+            PlanNode::RenameTable(v) => v.schema(),
             PlanNode::TruncateTable(v) => v.schema(),
             PlanNode::OptimizeTable(v) => v.schema(),
             PlanNode::DescribeTable(v) => v.schema(),
@@ -285,6 +287,7 @@ impl PlanNode {
             // Table.
             PlanNode::CreateTable(_) => "CreateTablePlan",
             PlanNode::DropTable(_) => "DropTablePlan",
+            PlanNode::RenameTable(_) => "RenameTablePlan",
             PlanNode::TruncateTable(_) => "TruncateTablePlan",
             PlanNode::OptimizeTable(_) => "OptimizeTablePlan",
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
