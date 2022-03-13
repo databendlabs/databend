@@ -30,8 +30,15 @@ pub type ComparisonGtFunction = ComparisonFunctionCreator<ComparisonGtImpl>;
 pub struct ComparisonGtImpl;
 
 impl ComparisonImpl for ComparisonGtImpl {
-    type PrimitiveSimd = PrimitiveSimdGt;
     type BooleanSimd = BooleanSimdGt;
+
+    fn eval_simd<T>(l: T::Simd, r: T::Simd) -> u8
+    where
+        T: PrimitiveType + Simd8,
+        T::Simd: Simd8PartialOrd,
+    {
+        l.gt(r)
+    }
 
     fn eval_primitive<L, R, M>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> bool
     where
@@ -48,40 +55,11 @@ impl ComparisonImpl for ComparisonGtImpl {
 }
 
 #[derive(Clone)]
-pub struct PrimitiveSimdGt;
-
-impl PrimitiveSimdImpl for PrimitiveSimdGt {
-    fn vector_vector<T>(lhs: &PrimitiveColumn<T>, rhs: &PrimitiveColumn<T>) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialOrd,
-    {
-        CommonPrimitiveImpl::compare_op(lhs, rhs, |a, b| a.gt(b))
-    }
-
-    fn vector_const<T>(lhs: &PrimitiveColumn<T>, rhs: T) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialOrd,
-    {
-        CommonPrimitiveImpl::compare_op_scalar(lhs, rhs, |a, b| a.gt(b))
-    }
-
-    fn const_vector<T>(lhs: T, rhs: &PrimitiveColumn<T>) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialOrd,
-    {
-        CommonPrimitiveImpl::compare_op_scalar(rhs, lhs, |a, b| a.lt(b))
-    }
-}
-
-#[derive(Clone)]
 pub struct BooleanSimdGt;
 
 impl BooleanSimdImpl for BooleanSimdGt {
     fn vector_vector(lhs: &BooleanColumn, rhs: &BooleanColumn) -> BooleanColumn {
-        CommonBooleanImpl::compare_op(lhs, rhs, |a, b| a & !b)
+        CommonBooleanOp::compare_op(lhs, rhs, |a, b| a & !b)
     }
 
     fn vector_const(lhs: &BooleanColumn, rhs: bool) -> BooleanColumn {

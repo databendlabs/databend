@@ -24,11 +24,11 @@ use num_traits::AsPrimitive;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::scalar_binary_op;
+use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
-use crate::scalars::ScalarBinaryExpression;
-use crate::scalars::ScalarUnaryExpression;
 
 /// Const f64 is now allowed.
 /// feature(adt_const_params) is not stable & complete
@@ -114,8 +114,7 @@ impl<T: Base> Function for GenericLogFunction<T> {
         let mut ctx = EvalContext::default();
         if columns.len() == 1 {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
-                let unary = ScalarUnaryExpression::<$S, f64, _>::new(Self::log);
-                let col = unary.eval(columns[0].column(), &mut ctx)?;
+                let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), Self::log, &mut ctx)?;
                 Ok(Arc::new(col))
             },{
                 unreachable!()
@@ -123,8 +122,7 @@ impl<T: Base> Function for GenericLogFunction<T> {
         } else {
             with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
-                    let binary = ScalarBinaryExpression::<$S, $T, f64, _>::new(Self::log_with_base);
-                    let col = binary.eval(columns[0].column(), columns[1].column(), &mut ctx)?;
+                    let col = scalar_binary_op::<$S, $T, f64, _>(columns[0].column(), columns[1].column(), Self::log_with_base, &mut ctx)?;
                     Ok(Arc::new(col))
                 },{
                     unreachable!()

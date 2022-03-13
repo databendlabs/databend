@@ -28,8 +28,15 @@ pub type ComparisonEqFunction = ComparisonFunctionCreator<ComparisonEqImpl>;
 pub struct ComparisonEqImpl;
 
 impl ComparisonImpl for ComparisonEqImpl {
-    type PrimitiveSimd = PrimitiveSimdEq;
     type BooleanSimd = BooleanSimdEq;
+
+    fn eval_simd<T>(l: T::Simd, r: T::Simd) -> u8
+    where
+        T: PrimitiveType + Simd8,
+        T::Simd: Simd8PartialEq,
+    {
+        l.eq(r)
+    }
 
     fn eval_primitive<L, R, M>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> bool
     where
@@ -46,47 +53,18 @@ impl ComparisonImpl for ComparisonEqImpl {
 }
 
 #[derive(Clone)]
-pub struct PrimitiveSimdEq;
-
-impl PrimitiveSimdImpl for PrimitiveSimdEq {
-    fn vector_vector<T>(lhs: &PrimitiveColumn<T>, rhs: &PrimitiveColumn<T>) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialEq,
-    {
-        CommonPrimitiveImpl::compare_op(lhs, rhs, |a, b| a.eq(b))
-    }
-
-    fn vector_const<T>(lhs: &PrimitiveColumn<T>, rhs: T) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialEq,
-    {
-        CommonPrimitiveImpl::compare_op_scalar(lhs, rhs, |a, b| a.eq(b))
-    }
-
-    fn const_vector<T>(lhs: T, rhs: &PrimitiveColumn<T>) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialEq,
-    {
-        CommonPrimitiveImpl::compare_op_scalar(rhs, lhs, |a, b| a.eq(b))
-    }
-}
-
-#[derive(Clone)]
 pub struct BooleanSimdEq;
 
 impl BooleanSimdImpl for BooleanSimdEq {
     fn vector_vector(lhs: &BooleanColumn, rhs: &BooleanColumn) -> BooleanColumn {
-        CommonBooleanImpl::compare_op(lhs, rhs, |a, b| !(a ^ b))
+        CommonBooleanOp::compare_op(lhs, rhs, |a, b| !(a ^ b))
     }
 
     fn vector_const(lhs: &BooleanColumn, rhs: bool) -> BooleanColumn {
         if rhs {
             lhs.clone()
         } else {
-            CommonBooleanImpl::compare_op_scalar(lhs, rhs, |a, _| !a)
+            CommonBooleanOp::compare_op_scalar(lhs, rhs, |a, _| !a)
         }
     }
 

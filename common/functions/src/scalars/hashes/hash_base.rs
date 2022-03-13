@@ -25,10 +25,10 @@ use common_exception::Result;
 use num::FromPrimitive;
 
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
-use crate::scalars::ScalarUnaryExpression;
 
 /// H ---> Hasher
 /// R ---> Result Type
@@ -92,8 +92,7 @@ where
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
         with_match_scalar_types_error!(columns[0].data_type().data_type_id().to_physical_type(), |$S| {
-            let unary = ScalarUnaryExpression::<$S, R, _>::new(hash_func::<H, $S, R>);
-            let col = unary.eval(columns[0].column(), &mut EvalContext::default())?;
+            let col = scalar_unary_op::<$S, R, _>(columns[0].column(), hash_func::<H, $S, R>, &mut EvalContext::default())?;
             Ok(Arc::new(col))
         })
     }
