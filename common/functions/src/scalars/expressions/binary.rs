@@ -215,17 +215,9 @@ where
             });
 
             if !lhs_remainder.is_empty() {
-                let mut lhs = [T::default(); N];
-                lhs.iter_mut()
-                    .zip(lhs_remainder.iter())
-                    .for_each(|(a, b)| *a = *b);
-
-                let mut rhs = [T::default(); N];
-                rhs.iter_mut()
-                    .zip(rhs_remainder.iter())
-                    .for_each(|(a, b)| *a = *b);
-
-                let res = op(Simd::from_array(lhs), Simd::from_array(rhs));
+                let lhs = from_incomplete_chunk(lhs_remainder, T::default());
+                let rhs = from_incomplete_chunk(rhs_remainder, T::default());
+                let res = op(lhs, rhs);
                 values.extend_from_slice(&res.as_array()[0..lhs_remainder.len()])
             };
 
@@ -247,12 +239,8 @@ where
             });
 
             if !lhs_remainder.is_empty() {
-                let mut lhs = [T::default(); N];
-                lhs.iter_mut()
-                    .zip(lhs_remainder.iter())
-                    .for_each(|(a, b)| *a = *b);
-
-                let res = op(Simd::from_array(lhs), rhs);
+                let lhs = from_incomplete_chunk(lhs_remainder, T::default());
+                let res = op(lhs, rhs);
                 values.extend_from_slice(&res.as_array()[0..lhs_remainder.len()])
             };
 
@@ -274,12 +262,8 @@ where
             });
 
             if !rhs_remainder.is_empty() {
-                let mut rhs = [T::default(); N];
-                rhs.iter_mut()
-                    .zip(rhs_remainder.iter())
-                    .for_each(|(a, b)| *a = *b);
-
-                let res = op(lhs, Simd::from_array(rhs));
+                let rhs = from_incomplete_chunk(rhs_remainder, T::default());
+                let res = op(lhs, rhs);
                 values.extend_from_slice(&res.as_array()[0..rhs_remainder.len()])
             };
 
@@ -374,4 +358,14 @@ where
         (true, true) => unreachable!(),
     };
     Ok(BooleanColumn::from_arrow_data(res.into()))
+}
+
+pub(crate) fn from_incomplete_chunk<T, const N: usize>(v: &[T], remaining: T) -> Simd<T, N>
+where
+    T: SimdElement,
+    LaneCount<N>: SupportedLaneCount,
+{
+    let mut res = [remaining; N];
+    res.iter_mut().zip(v.iter()).for_each(|(a, b)| *a = *b);
+    Simd::from_array(res)
 }

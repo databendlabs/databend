@@ -171,6 +171,27 @@ fn test_binary_contains() {
 }
 
 #[test]
+fn test_binary_simd_op() {
+    {
+        let l = Series::from_data(vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        let r = Series::from_data(vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        let expected = Series::from_data(vec![2u8, 4, 6, 8, 10, 12, 14, 16, 18, 20]);
+        let result = binary_simd_op::<u8, u8, _, 8>(&l, &r, |a, b| a + b).unwrap();
+        let result = Arc::new(result) as ColumnRef;
+        assert!(result == expected);
+    }
+
+    {
+        let l = Series::from_data(vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        let r = Arc::new(ConstColumn::new(Series::from_data(vec![1u8]), 10)) as ColumnRef;
+        let expected = Series::from_data(vec![2u8, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+        let result = binary_simd_op::<u8, u8, _, 8>(&l, &r, |a, b| a + b).unwrap();
+        let result = Arc::new(result) as ColumnRef;
+        assert!(result == expected);
+    }
+}
+
+#[test]
 fn test_unary_size() {
     struct LenFunc {}
 

@@ -20,6 +20,7 @@ use std::simd::SupportedLaneCount;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
+use super::from_incomplete_chunk;
 use super::EvalContext;
 
 pub trait ScalarUnaryFunction<L: Scalar, O: Scalar> {
@@ -71,12 +72,8 @@ where
     });
 
     if !lhs_remainder.is_empty() {
-        let mut lhs = [L::default(); N];
-        lhs.iter_mut()
-            .zip(lhs_remainder.iter())
-            .for_each(|(a, b)| *a = *b);
-
-        let res = op(Simd::from_array(lhs));
+        let lhs = from_incomplete_chunk(lhs_remainder, L::default());
+        let res = op(lhs);
         values.extend_from_slice(&res.as_array()[0..lhs_remainder.len()])
     };
 
