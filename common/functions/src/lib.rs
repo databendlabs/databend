@@ -14,6 +14,7 @@
 
 #![feature(core_intrinsics)]
 #![feature(duration_checked_float)]
+#![feature(portable_simd)]
 
 pub mod aggregates;
 pub mod scalars;

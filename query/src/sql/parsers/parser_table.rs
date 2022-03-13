@@ -191,14 +191,16 @@ impl<'a> DfParser<'a> {
         loop {
             if let Some(constraint) = self.parser.parse_optional_table_constraint()? {
                 constraints.push(constraint);
-            } else if let Token::Word(_) = self.parser.peek_token() {
-                let column_def = self.parse_column_def()?;
-                columns.push(column_def);
             } else {
-                return self.expected(
-                    "column name or constraint definition",
-                    self.parser.peek_token(),
-                );
+                match self.parser.peek_token() {
+                    Token::Word(_) | Token::SingleQuotedString(_) | Token::BackQuotedString(_) => {
+                        let column_def = self.parse_column_def()?;
+                        columns.push(column_def);
+                    }
+                    unexpected => {
+                        return self.expected("column name or constraint definition", unexpected);
+                    }
+                }
             }
             let comma = self.parser.consume_token(&Token::Comma);
             if self.parser.consume_token(&Token::RParen) {

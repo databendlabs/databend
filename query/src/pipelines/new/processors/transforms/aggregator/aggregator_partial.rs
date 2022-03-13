@@ -22,6 +22,7 @@ use common_datablocks::HashMethodKeysU32;
 use common_datablocks::HashMethodKeysU64;
 use common_datablocks::HashMethodKeysU8;
 use common_datablocks::HashMethodSerializer;
+use common_datablocks::HashMethodSingleString;
 use common_datavalues::ColumnRef;
 use common_datavalues::MutableColumn;
 use common_datavalues::MutableStringColumn;
@@ -47,6 +48,8 @@ pub type KeysU64PartialAggregator<const HAS_AGG: bool> =
     PartialAggregator<HAS_AGG, HashMethodKeysU64>;
 pub type SerializerPartialAggregator<const HAS_AGG: bool> =
     PartialAggregator<HAS_AGG, HashMethodSerializer>;
+pub type SingleStringPartialAggregator<const HAS_AGG: bool> =
+    PartialAggregator<HAS_AGG, HashMethodSingleString>;
 
 pub struct PartialAggregator<
     const HAS_AGG: bool,
@@ -73,7 +76,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 
     #[inline(always)]
-    fn lookup_key(keys: Vec<Method::HashKey>, state: &mut Method::State) {
+    fn lookup_key(keys: Vec<Method::HashKey<'_>>, state: &mut Method::State) {
         let mut inserted = true;
         for key in keys.iter() {
             state.entity(key, &mut inserted);
@@ -84,7 +87,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     #[inline(always)]
     fn lookup_state(
         params: &Arc<AggregatorParams>,
-        keys: Vec<Method::HashKey>,
+        keys: Vec<Method::HashKey<'_>>,
         state: &mut Method::State,
     ) -> StateAddrs {
         let mut places = Vec::with_capacity(keys.len());

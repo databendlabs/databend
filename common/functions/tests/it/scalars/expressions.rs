@@ -145,24 +145,42 @@ fn test_datetime_cast_function() -> Result<()> {
 
 #[test]
 fn test_binary_contains() {
-    //create two string columns
-    struct Contains {}
-
-    impl ScalarBinaryFunction<Vu8, Vu8, bool> for Contains {
-        fn eval(&self, a: &'_ [u8], b: &'_ [u8], _ctx: &mut EvalContext) -> bool {
-            a.windows(b.len()).any(|window| window == b)
-        }
+    fn contains(a: &'_ [u8], b: &'_ [u8], _ctx: &mut EvalContext) -> bool {
+        a.windows(b.len()).any(|window| window == b)
     }
-
-    let binary_expression = ScalarBinaryExpression::<Vec<u8>, Vec<u8>, bool, _>::new(Contains {});
 
     for _ in 0..10 {
         let l = Series::from_data(vec!["11", "22", "33"]);
         let r = Series::from_data(vec!["1", "2", "43"]);
         let expected = Series::from_data(vec![true, true, false]);
-        let result = binary_expression
-            .eval(&l, &r, &mut EvalContext::default())
-            .unwrap();
+        let result = scalar_binary_op::<Vec<u8>, Vec<u8>, bool, _>(
+            &l,
+            &r,
+            contains,
+            &mut EvalContext::default(),
+        )
+        .unwrap();
+        let result = Arc::new(result) as ColumnRef;
+        assert!(result == expected);
+    }
+}
+
+#[test]
+fn test_binary_simd_op() {
+    {
+        let l = Series::from_data(vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        let r = Series::from_data(vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        let expected = Series::from_data(vec![2u8, 4, 6, 8, 10, 12, 14, 16, 18, 20]);
+        let result = binary_simd_op::<u8, u8, _, 8>(&l, &r, |a, b| a + b).unwrap();
+        let result = Arc::new(result) as ColumnRef;
+        assert!(result == expected);
+    }
+
+    {
+        let l = Series::from_data(vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        let r = Arc::new(ConstColumn::new(Series::from_data(vec![1u8]), 10)) as ColumnRef;
+        let expected = Series::from_data(vec![2u8, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+        let result = binary_simd_op::<u8, u8, _, 8>(&l, &r, |a, b| a + b).unwrap();
         let result = Arc::new(result) as ColumnRef;
         assert!(result == expected);
     }
@@ -170,20 +188,15 @@ fn test_binary_contains() {
 
 #[test]
 fn test_unary_size() {
-    struct LenFunc {}
-
-    impl ScalarUnaryFunction<Vu8, i32> for LenFunc {
-        fn eval(&self, l: &[u8], _ctx: &mut EvalContext) -> i32 {
-            l.len() as i32
-        }
+    fn len_func(l: &[u8], _ctx: &mut EvalContext) -> i32 {
+        l.len() as i32
     }
 
     let mut ctx = EvalContext::default();
 
     let l = Series::from_data(vec!["11", "22", "333"]);
     let expected = Series::from_data(vec![2i32, 2, 3]);
-    let unary_expression = ScalarUnaryExpression::<Vec<u8>, i32, _>::new(LenFunc {});
-    let result = unary_expression.eval(&l, &mut ctx).unwrap();
+    let result = scalar_unary_op::<Vec<u8>, i32, _>(&l, len_func, &mut ctx).unwrap();
     let result = Arc::new(result) as ColumnRef;
     assert!(result == expected);
 }

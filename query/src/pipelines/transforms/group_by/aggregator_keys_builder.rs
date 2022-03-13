@@ -33,7 +33,7 @@ where T: PrimitiveType
 impl<T> KeysColumnBuilder<T> for FixedKeysColumnBuilder<T>
 where
     T: PrimitiveType,
-    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
+    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
 {
     #[inline]
     fn finish(mut self) -> ColumnRef {

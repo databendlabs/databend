@@ -28,8 +28,15 @@ pub type ComparisonNotEqFunction = ComparisonFunctionCreator<ComparisonNotEqImpl
 pub struct ComparisonNotEqImpl;
 
 impl ComparisonImpl for ComparisonNotEqImpl {
-    type PrimitiveSimd = PrimitiveSimdNotEq;
     type BooleanSimd = BooleanSimdNotEq;
+
+    fn eval_simd<T>(l: T::Simd, r: T::Simd) -> u8
+    where
+        T: PrimitiveType + Simd8,
+        T::Simd: Simd8PartialEq,
+    {
+        l.neq(r)
+    }
 
     fn eval_primitive<L, R, M>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> bool
     where
@@ -46,45 +53,16 @@ impl ComparisonImpl for ComparisonNotEqImpl {
 }
 
 #[derive(Clone)]
-pub struct PrimitiveSimdNotEq;
-
-impl PrimitiveSimdImpl for PrimitiveSimdNotEq {
-    fn vector_vector<T>(lhs: &PrimitiveColumn<T>, rhs: &PrimitiveColumn<T>) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialEq,
-    {
-        CommonPrimitiveImpl::compare_op(lhs, rhs, |a, b| a.neq(b))
-    }
-
-    fn vector_const<T>(lhs: &PrimitiveColumn<T>, rhs: T) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialEq,
-    {
-        CommonPrimitiveImpl::compare_op_scalar(lhs, rhs, |a, b| a.neq(b))
-    }
-
-    fn const_vector<T>(lhs: T, rhs: &PrimitiveColumn<T>) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialEq,
-    {
-        CommonPrimitiveImpl::compare_op_scalar(rhs, lhs, |a, b| a.neq(b))
-    }
-}
-
-#[derive(Clone)]
 pub struct BooleanSimdNotEq;
 
 impl BooleanSimdImpl for BooleanSimdNotEq {
     fn vector_vector(lhs: &BooleanColumn, rhs: &BooleanColumn) -> BooleanColumn {
-        CommonBooleanImpl::compare_op(lhs, rhs, |a, b| a ^ b)
+        CommonBooleanOp::compare_op(lhs, rhs, |a, b| a ^ b)
     }
 
     fn vector_const(lhs: &BooleanColumn, rhs: bool) -> BooleanColumn {
         if rhs {
-            CommonBooleanImpl::compare_op_scalar(lhs, rhs, |a, _| !a)
+            CommonBooleanOp::compare_op_scalar(lhs, rhs, |a, _| !a)
         } else {
             lhs.clone()
         }

@@ -38,7 +38,7 @@ use super::UdfFunction;
 use crate::scalars::DateFunction;
 use crate::scalars::UUIDFunction;
 
-pub type Factory2Creator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send + Sync>;
+pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send + Sync>;
 
 // Temporary adaptation for arithmetic.
 pub type ArithmeticCreator =
@@ -126,11 +126,11 @@ impl FunctionFeatures {
 
 pub struct FunctionDescription {
     features: FunctionFeatures,
-    function_creator: Factory2Creator,
+    function_creator: FactoryCreator,
 }
 
 impl FunctionDescription {
-    pub fn creator(creator: Factory2Creator) -> FunctionDescription {
+    pub fn creator(creator: FactoryCreator) -> FunctionDescription {
         FunctionDescription {
             function_creator: creator,
             features: FunctionFeatures::default(),

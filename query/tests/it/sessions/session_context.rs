@@ -84,7 +84,8 @@ async fn test_session_context() -> Result<()> {
             sessions.get_conf().clone(),
             Arc::new(dummy_session.as_ref().clone()),
             Cluster::empty(),
-        )?;
+        )
+        .await?;
 
         session_ctx.set_query_context_shared(Some(shared.clone()));
         let val = session_ctx.get_query_context_shared();

@@ -22,35 +22,27 @@ macro_rules! impl_interval_year_month {
             type Date16Result = u16;
             type Date32Result = i32;
 
-            fn eval_date16<R: PrimitiveType + AsPrimitive<i64>>(
+            fn eval_date16(
                 l: u16,
-                r: R::RefType<'_>,
+                r: impl AsPrimitive<i64>,
                 ctx: &mut EvalContext,
             ) -> Self::Date16Result {
                 define_date_add_year_months!(l, r, ctx, u16, $op)
             }
 
-            fn eval_date32<R: PrimitiveType + AsPrimitive<i64>>(
+            fn eval_date32(
                 l: i32,
-                r: R::RefType<'_>,
+                r: impl AsPrimitive<i64>,
                 ctx: &mut EvalContext,
             ) -> Self::Date32Result {
                 define_date_add_year_months!(l, r, ctx, i32, $op)
             }
 
-            fn eval_datetime32<R: PrimitiveType + AsPrimitive<i64>>(
-                l: u32,
-                r: R::RefType<'_>,
-                ctx: &mut EvalContext,
-            ) -> u32 {
+            fn eval_datetime32(l: u32, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> u32 {
                 define_datetime32_add_year_months!(l, r, ctx, $op)
             }
 
-            fn eval_datetime64<R: PrimitiveType + AsPrimitive<i64>>(
-                l: i64,
-                r: R::RefType<'_>,
-                ctx: &mut EvalContext,
-            ) -> i64 {
+            fn eval_datetime64(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
                 define_datetime64_add_year_months!(l, r, ctx, $op)
             }
         }
@@ -72,12 +64,7 @@ macro_rules! define_date_add_year_months {
         }
 
         let date = naive.unwrap();
-        let new_date = $op(
-            date.year(),
-            date.month(),
-            date.day(),
-            $r.to_owned_scalar().as_() * factor,
-        );
+        let new_date = $op(date.year(), date.month(), date.day(), $r.as_() * factor);
         new_date.map_or_else(
             |e| {
                 $ctx.set_error(e);
@@ -102,12 +89,7 @@ macro_rules! define_datetime32_add_year_months {
         }
 
         let date = naive.unwrap();
-        let new_date = $op(
-            date.year(),
-            date.month(),
-            date.day(),
-            $r.to_owned_scalar().as_() * factor,
-        );
+        let new_date = $op(date.year(), date.month(), date.day(), $r.as_() * factor);
         new_date.map_or_else(
             |e| {
                 $ctx.set_error(e);
@@ -136,12 +118,7 @@ macro_rules! define_datetime64_add_year_months {
         };
 
         let date = naive.unwrap();
-        let new_date = $op(
-            date.year(),
-            date.month(),
-            date.day(),
-            $r.to_owned_scalar().as_() * factor,
-        );
+        let new_date = $op(date.year(), date.month(), date.day(), $r.as_() * factor);
         new_date.map_or_else(
             |e| {
                 $ctx.set_error(e);
