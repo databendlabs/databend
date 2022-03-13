@@ -69,6 +69,8 @@ impl BlockPruner {
             usize::MAX
         };
 
+        tracing::debug!("using limit {}", limit);
+
         let res = futures::stream::iter(segment_locs)
             .map(|seg_loc| async {
                 let reader = MetaReaders::segment_info_reader(ctx);
@@ -89,10 +91,9 @@ impl BlockPruner {
 
         for block_meta in block_metas {
             counter += block_meta.row_count as usize;
+            result.push(block_meta);
             if counter >= limit {
                 break;
-            } else {
-                result.push(block_meta);
             }
         }
         Ok(result)
