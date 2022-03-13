@@ -136,7 +136,7 @@ pub enum Expression {
 
 impl Expression {
     pub fn create_literal(value: DataValue) -> Expression {
-        let data_type = value.min_data_type();
+        let data_type = value.data_type();
         Expression::Literal {
             value,
             column_name: None,

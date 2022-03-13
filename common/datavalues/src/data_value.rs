@@ -82,32 +82,8 @@ impl DataValue {
         }
     }
 
+    /// Get the minimal memory sized data type.
     pub fn data_type(&self) -> DataTypePtr {
-        match self {
-            DataValue::Null => Arc::new(NullType {}),
-            DataValue::Boolean(_) => BooleanType::arc(),
-            DataValue::Int64(_) => Int64Type::arc(),
-            DataValue::UInt64(_) => UInt64Type::arc(),
-            DataValue::Float64(_) => Float64Type::arc(),
-            DataValue::String(_) => StringType::arc(),
-            DataValue::Array(x) => {
-                let inner_type = if x.is_empty() {
-                    UInt8Type::arc()
-                } else {
-                    x[0].data_type()
-                };
-                Arc::new(ArrayType::create(inner_type))
-            }
-            DataValue::Struct(x) => {
-                let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
-                let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
-                Arc::new(StructType::create(names, types))
-            }
-        }
-    }
-
-    // convert to minimal memory sized data type
-    pub fn min_data_type(&self) -> DataTypePtr {
         match self {
             DataValue::Null => Arc::new(NullType {}),
             DataValue::Boolean(_) => BooleanType::arc(),
@@ -141,19 +117,19 @@ impl DataValue {
                 let inner_type = if x.is_empty() {
                     UInt8Type::arc()
                 } else {
-                    x[0].min_data_type()
+                    x[0].data_type()
                 };
                 Arc::new(ArrayType::create(inner_type))
             }
             DataValue::Struct(x) => {
                 let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
-                let types = x.iter().map(|v| v.min_data_type()).collect::<Vec<_>>();
+                let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
                 Arc::new(StructType::create(names, types))
             }
         }
     }
 
-    // convert to maximum memory sized data type
+    /// Get the maximum memory sized data type
     pub fn max_data_type(&self) -> DataTypePtr {
         match self {
             DataValue::Null => Arc::new(NullType {}),
@@ -166,13 +142,13 @@ impl DataValue {
                 let inner_type = if x.is_empty() {
                     UInt8Type::arc()
                 } else {
-                    x[0].max_data_type()
+                    x[0].data_type()
                 };
                 Arc::new(ArrayType::create(inner_type))
             }
             DataValue::Struct(x) => {
                 let names = (0..x.len()).map(|i| format!("{}", i)).collect::<Vec<_>>();
-                let types = x.iter().map(|v| v.max_data_type()).collect::<Vec<_>>();
+                let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
                 Arc::new(StructType::create(names, types))
             }
         }

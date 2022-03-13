@@ -167,6 +167,7 @@ impl BloomFilterIndexer {
         let bloom_column = Self::to_bloom_column_name(column_name);
         if !self.bloom_block.schema().has_field(&bloom_column)
             || !BloomFilter::is_supported_type(&typ)
+            || target.is_null()
         {
             // The column doesn't have bloom filter bitmap
             return Ok(BloomFilterExprEvalResult::NotApplicable);
@@ -606,7 +607,7 @@ impl BloomFilter {
     pub fn find(&self, val: DataValue, typ: DataTypePtr) -> Result<bool> {
         if !Self::is_supported_type(&typ) {
             return Err(ErrorCode::BadArguments(format!(
-                "Unsupported data type: {} ",
+                "Unsupported data type: {:?} ",
                 typ
             )));
         }
@@ -622,7 +623,7 @@ impl BloomFilter {
             let bit_pos = self.compute_hash_bit_pos(i, h1, h2);
 
             // If any bit is not 1 in bloom filter, it means the data never ever showed up before.
-            // unwrap should be fine because 'bit_pos' was mod by container.len()
+            // The 'unwrap' should be fine because 'bit_pos' was mod by container.len().
             let is_bit_set = self.container.get(bit_pos).unwrap();
             if !is_bit_set {
                 return Ok(false);

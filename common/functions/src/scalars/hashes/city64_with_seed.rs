@@ -144,7 +144,6 @@ impl Function for City64WithSeedFunction {
                 });
                 UInt64Column::from_iterator(iter)
             });
-
             Ok(Arc::new(result_col))
         } else {
             let seed_col = cast_column_field(&columns[1], &UInt64Type::arc())?;
@@ -159,7 +158,6 @@ impl Function for City64WithSeedFunction {
                 });
                 UInt64Column::from_iterator(iter)
             });
-
             Ok(Arc::new(result_col))
         }
     }
