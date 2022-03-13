@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_tracing::tracing;
 
+use crate::pipelines::transforms::ExpressionExecutor;
 use crate::storages::index::IndexSchemaVersion;
 
 /// BloomFilterExprEvalResult represents the evaluation result of an expression by bloom filter.
@@ -51,7 +52,7 @@ pub enum BloomFilterExprEvalResult {
 ///         | "Bob"   |  30   |
 ///         +---------+-------+
 /// ```
-/// We will create bloom filter files
+/// We will create bloom filter table as follows:
 ///```
 ///         +---Bloom(name)--+--Bloom(age)--+
 ///         |  123456789abcd |  ac2345bcd   |
@@ -63,6 +64,8 @@ pub struct BloomFilterIndexer {
 
 const BLOOM_FILTER_MAX_NUM_BITS: usize = 20480; // 2.5KB, maybe too big?
 const BLOOM_FILTER_DEFAULT_FALSE_POSITIVE_RATE: f64 = 0.05;
+const BLOOM_FILTER_SEED_GEN_A: u64 = 845897321;
+const BLOOM_FILTER_SEED_GEN_B: u64 = 217728422;
 
 impl BloomFilterIndexer {
     /// For every applicable column, we will create a bloom filter.
@@ -72,12 +75,9 @@ impl BloomFilterIndexer {
     }
 
     #[inline(always)]
-    fn create_seeds() -> [u64; 4] {
-        let seed0: u64 = rand::random();
-        let seed1: u64 = rand::random();
-        let seed2: u64 = rand::random();
-        let seed3: u64 = rand::random();
-        [seed0, seed1, seed2, seed3]
+    fn create_seed() -> u64 {
+        let seed: u64 = rand::random();
+        seed
     }
 
     /// Create a bloom filter block from input data.
@@ -85,14 +85,14 @@ impl BloomFilterIndexer {
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
     #[allow(dead_code)]
     pub fn from_data(blocks: &[DataBlock]) -> Result<Self> {
-        let seeds = Self::create_seeds();
-        Self::from_data_and_seeds(blocks, seeds)
+        let seed = Self::create_seed();
+        Self::from_data_and_seeds(blocks, seed)
     }
 
-    /// Create a bloom filter block from input data blocks and seeds.
+    /// Create a bloom filter block from input data blocks and seed(s).
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
-    pub fn from_data_and_seeds(blocks: &[DataBlock], seeds: [u64; 4]) -> Result<Self> {
+    pub fn from_data_and_seeds(blocks: &[DataBlock], seed: u64) -> Result<Self> {
         if blocks.is_empty() {
             return Err(ErrorCode::BadArguments("data blocks is empty"));
         }
@@ -105,7 +105,7 @@ impl BloomFilterIndexer {
         let fields = blocks[0].schema().fields();
         for (i, field) in fields.iter().enumerate() {
             if BloomFilter::is_supported_type(field.data_type()) {
-                // create field
+                // create field for applicable ones
                 let bloom_column_name = Self::to_bloom_column_name(field.name());
                 let bloom_field = DataField::new(&bloom_column_name, Vu8::to_data_type());
                 bloom_fields.push(bloom_field);
@@ -115,7 +115,7 @@ impl BloomFilterIndexer {
                     total_num_rows,
                     BLOOM_FILTER_DEFAULT_FALSE_POSITIVE_RATE,
                     BLOOM_FILTER_MAX_NUM_BITS,
-                    seeds,
+                    seed,
                 );
 
                 // ingest the same column data from all blocks
@@ -126,8 +126,9 @@ impl BloomFilterIndexer {
 
                 // create bloom filter column
                 let serialized_bytes = bloom_filter.to_vec()?;
-                let bloom_column =
-                    ColumnRef::Constant(DataValue::String(Some(serialized_bytes)), 1);
+                let bloom_value = DataValue::String(serialized_bytes);
+                let bloom_column: ColumnRef =
+                    bloom_value.as_const_column(&bloom_value.data_type(), 1)?;
                 bloom_columns.push(bloom_column);
             }
         }
@@ -264,24 +265,24 @@ pub struct BloomFilter {
     // Container for bitmap
     container: BitVec,
 
-    // The number of hashes for bloom filter. We use double hashing and mix the result
+    // The number of hashes for the bloom filter. We use double hashing and mix the result
     // to achieve k hashes. The value doesn't really mean the number of hashing we actually compute.
     // For more details, see this paper: http://www.eecs.harvard.edu/~michaelm/postscripts/rsa2008.pdf
     num_hashes: usize,
 
     version: IndexSchemaVersion,
 
-    // The seeding for hash function. For now we use Seahash lib, that needs 4 seeds.
-    seeds: [u64; 4],
+    // The seeding for hash function. For now we use CityHash64, that needs only one seed.
+    seed: u64,
 }
 
 impl BloomFilter {
     /// Create a bloom filter instance with estimated number of items and expected false positive rate.
-    pub fn with_rate(num_items: u64, false_positive_rate: f64, seeds: [u64; 4]) -> Self {
+    pub fn with_rate(num_items: u64, false_positive_rate: f64, seed: u64) -> Self {
         let num_bits = Self::optimal_num_bits(num_items, false_positive_rate);
         let num_hashes = Self::optimal_num_hashes(num_items, num_bits as u64);
 
-        Self::with_size(num_bits, num_hashes, seeds)
+        Self::with_size(num_bits, num_hashes, seed)
     }
 
     /// Create a bloom filter instance with estimated number of items, expected false positive rate,
@@ -290,21 +291,21 @@ impl BloomFilter {
         num_items: u64,
         false_positive_rate: f64,
         max_num_bits: usize,
-        seeds: [u64; 4],
+        seed: u64,
     ) -> Self {
         let mut num_bits = Self::optimal_num_bits(num_items, false_positive_rate);
         let num_hashes = Self::optimal_num_hashes(num_items, num_bits as u64);
 
         num_bits = std::cmp::min(num_bits, max_num_bits);
 
-        Self::with_size(num_bits, num_hashes, seeds)
+        Self::with_size(num_bits, num_hashes, seed)
     }
 
     /// Create a bloom filter instance with specified bitmap length and number of hashes
-    pub fn with_size(num_bits: usize, num_hashes: usize, seeds: [u64; 4]) -> Self {
+    pub fn with_size(num_bits: usize, num_hashes: usize, seed: u64) -> Self {
         Self {
             container: BitVec::from_elem(num_bits, false),
-            seeds,
+            seed,
             num_hashes,
             version: IndexSchemaVersion::V1,
         }
@@ -370,7 +371,7 @@ impl BloomFilter {
     /// All bits are set to false/zero, e.g. the hashed bits are not cloned.
     #[must_use]
     pub fn clone_empty(&self) -> Self {
-        Self::with_size(self.num_bits(), self.num_hashes(), self.seeds)
+        Self::with_size(self.num_bits(), self.num_hashes(), self.seed)
     }
 
     /// Returns whether the data type is supported by bloom filter.
@@ -384,7 +385,9 @@ impl BloomFilter {
     /// Nulls are not added to the Bloom
     /// filter, so any null related filter requires reading the data file. "
     pub fn is_supported_type(data_type: &DataTypePtr) -> bool {
-        let data_type_id = data_type.data_type_id();
+        // we support nullable column but Nulls are not added into the bloom filter.
+        let inner_type = remove_nullable(data_type);
+        let data_type_id = inner_type.data_type_id();
         matches!(
             data_type_id,
             TypeID::UInt8
@@ -412,14 +415,6 @@ impl BloomFilter {
         Self::is_supported_type(&value.data_type()) && !value.is_null()
     }
 
-    // Create hasher for bloom. Use seahash for now, may change to city hash.
-    #[inline(always)]
-    fn create_hasher(&self) -> DFHasher {
-        let hasher =
-            SeaHasher::with_seeds(self.seeds[0], self.seeds[1], self.seeds[2], self.seeds[3]);
-        DFHasher::SeaHasher64(hasher, self.seeds)
-    }
-
     #[inline(always)]
     // Set bits for bloom filter, ported from Clickhouse.
     // https://github.com/ClickHouse/ClickHouse/blob/1bf375e2b761db5b99b0f403b90c412a530f4d5c/src/Interpreters/BloomFilter.cpp#L67
@@ -435,47 +430,94 @@ impl BloomFilter {
         }
     }
 
+    fn compute_city_hash(seed: u64, column: &ColumnRef) -> Result<ColumnRef> {
+        let input_column = "input"; // create a dummy column name
+        let input_field = DataField::new(input_column, column.data_type());
+        let input_schema = Arc::new(DataSchema::new(vec![input_field]));
+        let args = vec![
+            Expression::Column(String::from(input_column)),
+            Expression::create_literal(DataValue::UInt64(seed)),
+        ];
+
+        let output_column = "output";
+        let output_data_type = if column.is_nullable() {
+            wrap_nullable(&UInt64Type::arc())
+        } else {
+            UInt64Type::arc()
+        };
+        let output_field = DataField::new(output_column, output_data_type);
+        let output_schema = DataSchemaRefExt::create(vec![output_field]);
+
+        let expr: Expression = Expression::Alias(
+            String::from(output_column),
+            Box::new(Expression::create_scalar_function("city64WithSeed", args)),
+        );
+        let expr_executor = ExpressionExecutor::try_create(
+            "calculate cityhash64",
+            input_schema.clone(),
+            output_schema,
+            vec![expr],
+            true,
+        )?;
+
+        let data_block = DataBlock::create(input_schema, vec![column.clone()]);
+        let executor = Arc::new(expr_executor);
+        let output = executor.execute(&data_block)?;
+        Ok(output.column(0).clone())
+    }
+
+    fn compute_double_hashes(&self, column: &ColumnRef) -> Result<(ColumnRef, ColumnRef)> {
+        let hash1_column: ColumnRef = Self::compute_city_hash(self.seed, column)?;
+
+        let seed1 = std::num::Wrapping(self.seed);
+        let gen1 = std::num::Wrapping(BLOOM_FILTER_SEED_GEN_A);
+        let gen2 = std::num::Wrapping(BLOOM_FILTER_SEED_GEN_B);
+        let seed2 = seed1 * gen1 + gen2;
+        let hash2_column: ColumnRef = Self::compute_city_hash(seed2.0, column)?;
+
+        Ok((hash1_column, hash2_column))
+    }
+
     /// Add the column data into bloom filter, Nulls are skipped and not added.
     ///
-    /// The design of skipping Nulls are arguably correct. For now we do the same as databricks.
+    /// The design of skipping Nulls is arguably correct. For now we do the same as databricks.
     /// See the design of databricks https://docs.databricks.com/delta/optimizations/bloom-filters.html
     pub fn add(&mut self, column: &ColumnRef) -> Result<()> {
         if !Self::is_supported_type(&column.data_type()) {
             return Err(ErrorCode::BadArguments(format!(
                 "Unsupported data type: {} ",
-                column.data_type()
+                column.data_type_id()
             )));
         }
 
-        let series = column.to_minimal_array()?;
-
-        let hasher1 = self.create_hasher();
-        let hash1_arr = series.vec_hash(hasher1)?;
-
-        let hasher2 = self.create_hasher();
-        let hash2_arr = series.vec_hash(hasher2)?;
-
-        let validity = series.validity();
-        let no_null = validity == None || series.null_count() == 0;
-        let all_null = series.len() == series.null_count();
-
-        if all_null {
+        let (is_all_null, validity) = column.validity();
+        if is_all_null {
             return Ok(());
         }
 
-        if no_null {
-            hash1_arr
-                .into_no_null_iter()
-                .zip(hash2_arr.into_no_null_iter())
-                .for_each(|(h1, h2)| {
-                    self.set_bits(h1, h2);
-                });
+        let (hash1_column, hash2_column) = self.compute_double_hashes(column)?;
+
+        // If the input is not nullable, we say all hashed values should be valid and we put them into bloom filter without checking validity.
+        if !column.is_nullable() {
+            let column1: &UInt64Column = Series::check_get(&hash1_column)?;
+            let column2: &UInt64Column = Series::check_get(&hash2_column)?;
+
+            column1.iter().zip(column2.iter()).for_each(|(h1, h2)| {
+                self.set_bits(h1, h2);
+            });
         } else {
             let bitmap = validity.unwrap();
+
+            let column1 = Series::remove_nullable(&hash1_column);
+            let column1: &UInt64Column = Series::check_get(&column1)?;
+
+            let column2 = Series::remove_nullable(&hash2_column);
+            let column2: &UInt64Column = Series::check_get(&column2)?;
+
             bitmap
                 .into_iter()
-                .zip(hash1_arr.into_no_null_iter())
-                .zip(hash2_arr.into_no_null_iter())
+                .zip(column1.iter())
+                .zip(column2.iter())
                 .for_each(|((valid, h1), h2)| {
                     if valid {
                         self.set_bits(h1, h2);
@@ -505,16 +547,12 @@ impl BloomFilter {
             )));
         }
 
-        let col = ColumnRef::Constant(val, 1);
-        let series = col.to_minimal_array()?;
+        let data_type = val.data_type();
+        let column = val.as_const_column(&data_type, 1)?;
 
-        let hasher1 = self.create_hasher();
-        let hash1_arr = series.vec_hash(hasher1)?;
-        let hash1 = hash1_arr.inner().value(0);
-
-        let hasher2 = self.create_hasher();
-        let hash2_arr = series.vec_hash(hasher2)?;
-        let hash2 = hash2_arr.inner().value(0);
+        let (hash1_column, hash2_column) = self.compute_double_hashes(&column)?;
+        let hash1 = hash1_column.get_u64(0)?;
+        let hash2 = hash2_column.get_u64(0)?;
 
         let h1 = std::num::Wrapping(hash1);
         let h2 = std::num::Wrapping(hash2);
