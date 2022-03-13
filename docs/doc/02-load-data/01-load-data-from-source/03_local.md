@@ -9,7 +9,7 @@ Using HTTP API `v1/streaming_load` to load data from local file into Databend.
 
 ### Prerequisites
 
-* **Databend :** Make sure Databend is running and accessible, please see [How to deploy Databend](/doc/category/deploy-databend).
+* **Databend :** Make sure Databend is running and accessible, please see [How to deploy Databend](/doc/category/deploy).
 
 ### Part 1: Preparing books.csv
 

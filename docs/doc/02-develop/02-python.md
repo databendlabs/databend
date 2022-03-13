@@ -7,7 +7,7 @@ description:
 
 ### Prerequisites
 
-* **Databend :** Make sure Databend is running and accessible, please see [How to deploy Databend](/doc/category/deploy-databend).
+* **Databend :** Make sure Databend is running and accessible, please see [How to deploy Databend](/doc/category/deploy).
 
 
 ### Golang
