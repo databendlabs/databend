@@ -63,6 +63,12 @@ impl BlockPruner {
             return Ok(vec![]);
         };
 
+        let limit = if let Some(Extras { limit: Some(l), .. }) = push_down {
+            *l
+        } else {
+            usize::MAX
+        };
+
         let res = futures::stream::iter(segment_locs)
             .map(|seg_loc| async {
                 let reader = MetaReaders::segment_info_reader(ctx);
@@ -76,7 +82,20 @@ impl BlockPruner {
             .into_iter()
             .flatten();
 
-        Ok(res.collect())
+        let block_metas = res.collect::<Vec<_>>();
+
+        let mut result = vec![];
+        let mut counter: usize = 0;
+
+        for block_meta in block_metas {
+            counter += block_meta.row_count as usize;
+            if counter >= limit {
+                break;
+            } else {
+                result.push(block_meta);
+            }
+        }
+        Ok(result)
     }
 
     #[inline]
