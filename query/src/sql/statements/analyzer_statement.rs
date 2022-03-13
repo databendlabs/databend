@@ -163,6 +163,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::ShowTables(v) => v.analyze(ctx).await,
             DfStatement::ShowSettings(v) => v.analyze(ctx).await,
             DfStatement::ShowProcessList(v) => v.analyze(ctx).await,
+            DfStatement::ShowRoles(v) => v.analyze(ctx).await,
             DfStatement::ShowMetrics(v) => v.analyze(ctx).await,
             DfStatement::ShowGrants(v) => v.analyze(ctx).await,
             DfStatement::KillStatement(v) => v.analyze(ctx).await,

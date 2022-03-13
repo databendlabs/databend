@@ -22,6 +22,7 @@ mod engines_table;
 mod functions_table;
 mod metrics_table;
 mod query_log_table;
+mod roles_table;
 mod settings_table;
 mod tables_table;
 mod tracing_table;

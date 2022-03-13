@@ -48,6 +48,7 @@ impl SystemDatabase {
             system::WarehousesTable::create(sys_db_meta.next_id()),
             Arc::new(system::QueryLogTable::create(sys_db_meta.next_id())),
             system::EnginesTable::create(sys_db_meta.next_id()),
+            system::RolesTable::create(sys_db_meta.next_id()),
         ];
 
         for tbl in table_list.into_iter() {
