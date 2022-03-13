@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use common_datavalues::{DataSchema, DataSchemaRef};
+
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_meta_types::RenameTableReq;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]

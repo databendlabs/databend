@@ -13,13 +13,18 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use sqlparser::ast::ObjectName;
-use common_exception::{ErrorCode, Result};
+
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::DropTablePlan;
+use common_planners::PlanNode;
+use common_planners::RenameTablePlan;
 use common_tracing::tracing;
-use common_planners::{DropTablePlan, PlanNode, RenameTablePlan};
+use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfRenameTable {
@@ -35,20 +40,24 @@ impl AnalyzableStatement for DfRenameTable {
         let (db, table_name) = self.resolve_table(ctx.clone(), &self.name)?;
         let (new_db, new_table_name) = self.resolve_table(ctx.clone(), &self.new_name)?;
 
-        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::RenameTable(
-            RenameTablePlan {
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::RenameTable(RenameTablePlan {
                 tenant,
                 db,
                 table_name,
                 new_db,
-                new_table_name
-            },
-        ))))
+                new_table_name,
+            }),
+        )))
     }
 }
 
 impl DfRenameTable {
-    fn resolve_table(&self, ctx: Arc<QueryContext>, table_name: &ObjectName) -> Result<(String, String)> {
+    fn resolve_table(
+        &self,
+        ctx: Arc<QueryContext>,
+        table_name: &ObjectName,
+    ) -> Result<(String, String)> {
         let idents = &table_name.0;
         match idents.len() {
             0 => Err(ErrorCode::SyntaxException("Rename table name is empty")),

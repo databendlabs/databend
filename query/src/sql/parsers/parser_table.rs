@@ -104,10 +104,7 @@ impl<'a> DfParser<'a> {
         self.parser.expect_keyword(Keyword::TO)?;
         let new_name = self.parser.parse_object_name()?;
 
-        let rename = DfRenameTable {
-            name,
-            new_name
-        };
+        let rename = DfRenameTable { name, new_name };
 
         Ok(DfStatement::RenameTable(rename))
     }

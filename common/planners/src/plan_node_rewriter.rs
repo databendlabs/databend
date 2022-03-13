@@ -23,7 +23,7 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::{AdminUseTenantPlan, RenameTablePlan};
+use crate::AdminUseTenantPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
@@ -63,6 +63,7 @@ use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
+use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;

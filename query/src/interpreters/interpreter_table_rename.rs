@@ -13,12 +13,17 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use common_planners::RenameTablePlan;
+
 use common_exception::Result;
-use common_meta_types::{GrantObject, UserPrivilegeType};
-use common_streams::{DataBlockStream, SendableDataBlockStream};
+use common_meta_types::GrantObject;
+use common_meta_types::UserPrivilegeType;
+use common_planners::RenameTablePlan;
+use common_streams::DataBlockStream;
+use common_streams::SendableDataBlockStream;
+
 use crate::catalogs::Catalog;
-use crate::interpreters::{Interpreter, InterpreterPtr};
+use crate::interpreters::Interpreter;
+use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 pub struct RenameTableInterpreter {
@@ -38,7 +43,10 @@ impl Interpreter for RenameTableInterpreter {
         "RenameTableInterpreter"
     }
 
-    async fn execute(&self, _input_stream: Option<SendableDataBlockStream>) -> Result<SendableDataBlockStream> {
+    async fn execute(
+        &self,
+        _input_stream: Option<SendableDataBlockStream>,
+    ) -> Result<SendableDataBlockStream> {
         // TODO un-comment below code to check privileges
         // let db_name = self.plan.db.as_str();
         // let tbl_name = self.plan.table_name.as_str();

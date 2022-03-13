@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_api::MetaApi;
 use common_meta_embedded::MetaEmbedded;
-use common_meta_types::{CreateDatabaseReply, RenameTableReply, RenameTableReq};
+use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
@@ -31,6 +31,8 @@ use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::MetaId;
+use common_meta_types::RenameTableReply;
+use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -50,7 +52,8 @@ use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::StorageFactory;
 use crate::storages::Table;
-use crate::table_functions::{TableArgs, TableFunction};
+use crate::table_functions::TableArgs;
+use crate::table_functions::TableFunction;
 
 /// Catalog based on MetaStore
 /// - System Database NOT included

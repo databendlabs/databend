@@ -20,6 +20,7 @@ use common_planners::PlanNode;
 use common_planners::ShowPlan;
 
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
+use crate::interpreters::interpreter_table_rename::RenameTableInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::AlterUserUDFInterpreter;
 use crate::interpreters::CallInterpreter;
@@ -40,7 +41,6 @@ use crate::interpreters::GrantPrivilegeInterpreter;
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::InterceptorInterpreter;
 use crate::interpreters::Interpreter;
-use crate::interpreters::interpreter_table_rename::RenameTableInterpreter;
 use crate::interpreters::KillInterpreter;
 use crate::interpreters::OptimizeTableInterpreter;
 use crate::interpreters::RevokePrivilegeInterpreter;
