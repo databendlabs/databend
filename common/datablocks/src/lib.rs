@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![feature(hash_raw_entry)]
+#![feature(generic_associated_types)]
 
 mod data_block;
 mod data_block_debug;

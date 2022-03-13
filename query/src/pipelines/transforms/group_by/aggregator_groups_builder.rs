@@ -37,7 +37,7 @@ where T: PrimitiveType
 impl<T> FixedKeysGroupColumnsBuilder<T>
 where
     T: PrimitiveType,
-    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
+    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
 {
     pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
         Self {
@@ -50,7 +50,7 @@ where
 impl<T> GroupColumnsBuilder<T> for FixedKeysGroupColumnsBuilder<T>
 where
     T: PrimitiveType,
-    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
+    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
 {
     #[inline]
     fn append_value(&mut self, v: &T) {
