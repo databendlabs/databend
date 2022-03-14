@@ -39,8 +39,7 @@ echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 
 ## Copy from named internal stage
 echo "CREATE STAGE named_internal_stage;" | $MYSQL_CLIENT_CONNECT
-echo "copy into ontime200 from '@named_internal_stage/admin/data/' PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = 'PARQUET');
-" | $MYSQL_CLIENT_CONNECT
+echo "copy into ontime200 from '@named_internal_stage/admin/data/' PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = 'PARQUET');" | $MYSQL_CLIENT_CONNECT
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
 echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 
