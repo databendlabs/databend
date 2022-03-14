@@ -278,12 +278,13 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => self.parse_desc_table(),
                 Keyword::STAGE => self.parse_desc_stage(),
-                _ => self.expected("keyword TABLE or Stage", Token::Word(w)),
+
+                _ => {
+                    self.parser.prev_token();
+                    self.parse_desc_table()
+                }
             },
-            _ => {
-                self.parser.prev_token();
-                self.parse_desc_table()
-            }
+            _ => self.expected("describe statement", unexpected),
         }
     }
 
