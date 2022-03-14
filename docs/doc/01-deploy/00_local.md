@@ -2,7 +2,7 @@
 title: Deploy Databend With Local Disk
 sidebar_label: With Local Disk
 description:
-   How to deploy Databend with local disk
+  How to deploy Databend with Local Disk
 ---
 
 :::tip
@@ -22,7 +22,7 @@ This guideline will deploy databend(standalone) with local disk step by step.
 You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page.
 
 ```shell
-mkdir databend & cd databend
+mkdir databend && cd databend
 ```
 
 import Tabs from '@theme/Tabs';
@@ -32,14 +32,14 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Linux">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.88-nightly/databend-v0.6.88-nightly-x86_64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.90-nightly/databend-v0.6.90-nightly-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.88-nightly/databend-v0.6.88-nightly-aarch64-apple-darwin.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.90-nightly/databend-v0.6.90-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -47,7 +47,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.88-nig
 <TabItem value="arm" label="Arm">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.88-nightly/databend-v0.6.88-nightly-aarch64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.90-nightly/databend-v0.6.90-nightly-aarch64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
@@ -57,14 +57,14 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.88-nig
 <TabItem value="linux" label="Linux">
 
 ```shell
-tar xzvf databend-v0.6.88-nightly-x86_64-unknown-linux-gnu.tar.gz
+tar xzvf databend-v0.6.90-nightly-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-tar xzvf databend-v0.6.88-nightly-aarch64-apple-darwin.tar.gz
+tar xzvf databend-v0.6.90-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -72,7 +72,7 @@ tar xzvf databend-v0.6.88-nightly-aarch64-apple-darwin.tar.gz
 <TabItem value="arm" label="Arm">
 
 ```shell
-tar xzvf databend-v0.6.88-nightly-aarch64-unknown-linux-gnu.tar.gz
+tar xzvf databend-v0.6.90-nightly-aarch64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
@@ -173,18 +173,22 @@ Check the response is `HTTP/1.1 200 OK`.
 ## 4. Play
 
 ```shell
-mysql -uroot -P3307 -h127.0.0.1
+mysql -h127.0.0.1 -uroot -P3307 
 ```
 
-```shell
-mysql -uroot -P3307 -h127.0.0.1
-Server version: 8.0.26-0.1.0-7bbafdc-simd(1.61.0-nightly-2022-03-09T16:28:17.590103545+00:00) 0
+```shell title="mysql>"
+create table t1(a int);
+```
 
-mysql> create table t1(a int);
+```shell title="mysql>"
+insert into t1 values(1), (2);
+```
 
-mysql> insert into t1 values(1), (2);
+```shell title="mysql>"
+select * from t1
+```
 
-mysql> select * from t1;
+```shell"
 +------+
 | a    |
 +------+
