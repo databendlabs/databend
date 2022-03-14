@@ -1,5 +1,6 @@
 ---
-title: subtractYEARS/MONTHS/DAYS/HOURS/MINUTES/SECONDS
+title: Subtract time interval
+description: Subtract time interval function
 ---
 
 Subtract time interval from a date or datetime, return the result of date or datetime type.

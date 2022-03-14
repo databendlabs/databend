@@ -27,13 +27,13 @@ use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::scalar_unary_op;
 use crate::scalars::CastFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionAdapter;
 use crate::scalars::Monotonicity;
 use crate::scalars::RoundFunction;
-use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone, Debug)]
 pub struct NumberFunction<T, R> {
@@ -359,31 +359,30 @@ where
 
         let number_array= match type_id {
             TypeID::Date16 => {
-                let unary = ScalarUnaryExpression::<u16, R, _>::new(|v: u16, _ctx: &mut EvalContext| {
+                let func = |v: u16, _ctx: &mut EvalContext| {
                     let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
                     T::to_number(date_time)
-                });
-                let col = unary.eval(columns[0].column(), &mut EvalContext::default())?;
+                };
+                let col = scalar_unary_op::<u16, R, _>(columns[0].column(), func, &mut EvalContext::default())?;
                 Ok(col.arc())
 
             },
             TypeID::Date32 => {
-                let unary = ScalarUnaryExpression::<i32, R, _>::new(|v:i32, _ctx: &mut EvalContext| {
+                let func = |v:i32, _ctx: &mut EvalContext| {
                     let date_time = Utc.timestamp(v as i64 * 24 * 3600, 0_u32);
                     T::to_number(date_time)
-                });
-                let col = unary.eval(columns[0].column(), &mut EvalContext::default())?;
+                };
+                let col = scalar_unary_op::<i32, R, _>(columns[0].column(), func, &mut EvalContext::default())?;
                 Ok(col.arc())
             },
             TypeID::DateTime32 => {
-                let unary = ScalarUnaryExpression::<u32, R, _>::new(|v:u32, _ctx: &mut EvalContext| {
+                let func = |v:u32, _ctx: &mut EvalContext| {
                     let date_time = Utc.timestamp(v as i64 , 0_u32);
                     T::to_number(date_time)
-                });
-                let col = unary.eval(columns[0].column(), &mut EvalContext::default())?;
+                };
+                let col = scalar_unary_op::<u32, R, _>(columns[0].column(), func, &mut EvalContext::default())?;
                 Ok(col.arc())
-
-                },
+            },
             other => Result::Err(ErrorCode::IllegalDataType(format!(
                 "Illegal type {:?} of argument of function {}.Should be a date16/data32 or a dateTime32",
                 other,

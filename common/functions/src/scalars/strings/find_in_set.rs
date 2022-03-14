@@ -19,10 +19,10 @@ use common_exception::Result;
 
 use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
-use crate::scalars::ScalarBinaryExpression;
 
 #[derive(Clone)]
 pub struct FindInSetFunction {
@@ -54,10 +54,10 @@ impl Function for FindInSetFunction {
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        let binary = ScalarBinaryExpression::<Vu8, Vu8, u64, _>::new(find_in_set);
-        let col = binary.eval(
+        let col = scalar_binary_op::<Vu8, Vu8, u64, _>(
             columns[0].column(),
             columns[1].column(),
+            find_in_set,
             &mut EvalContext::default(),
         )?;
         Ok(col.arc())

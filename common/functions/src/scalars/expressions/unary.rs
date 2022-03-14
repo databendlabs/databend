@@ -12,57 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
+use std::simd::LaneCount;
+use std::simd::Simd;
+use std::simd::SimdElement;
+use std::simd::SupportedLaneCount;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
+use super::from_incomplete_chunk;
 use super::EvalContext;
 
-pub trait ScalarUnaryFunction<L: Scalar, O: Scalar> {
-    fn eval(&self, l: L::RefType<'_>, _ctx: &mut EvalContext) -> O;
-}
-
-/// Blanket implementation for all binary expression functions
-impl<L: Scalar, O: Scalar, F> ScalarUnaryFunction<L, O> for F
-where F: Fn(L::RefType<'_>, &mut EvalContext) -> O
-{
-    fn eval(&self, i1: L::RefType<'_>, ctx: &mut EvalContext) -> O {
-        self(i1, ctx)
-    }
-}
-
-/// A common struct to caculate Unary expression scalar op.
-#[derive(Clone)]
-pub struct ScalarUnaryExpression<L: Scalar, O: Scalar, F> {
+pub fn scalar_unary_op<L: Scalar, O: Scalar, F>(
+    l: &ColumnRef,
     f: F,
-    _phantom: PhantomData<(L, O)>,
+    ctx: &mut EvalContext,
+) -> Result<<O as Scalar>::ColumnType>
+where
+    F: Fn(L::RefType<'_>, &mut EvalContext) -> O,
+{
+    let left = Series::check_get_scalar::<L>(l)?;
+    let it = left.scalar_iter().map(|a| f(a, ctx));
+    let result = <O as Scalar>::ColumnType::from_owned_iterator(it);
+
+    if let Some(error) = ctx.error.take() {
+        return Err(error);
+    }
+    Ok(result)
 }
 
-impl<'a, L: Scalar, O: Scalar, F> ScalarUnaryExpression<L, O, F>
-where F: ScalarUnaryFunction<L, O>
+pub fn unary_simd_op<L, O, F, const N: usize>(l: &ColumnRef, op: F) -> Result<PrimitiveColumn<O>>
+where
+    L: PrimitiveType + SimdElement,
+    O: PrimitiveType + SimdElement,
+    F: Fn(Simd<L, N>) -> Simd<O, N>,
+    LaneCount<N>: SupportedLaneCount,
 {
-    /// Create a Unary expression from generic columns  and a lambda function.
-    pub fn new(f: F) -> Self {
-        Self {
-            f,
-            _phantom: PhantomData,
-        }
-    }
+    let left: &PrimitiveColumn<L> = Series::check_get(l)?;
+    let lhs_chunks = left.values().chunks_exact(N);
+    let lhs_remainder = lhs_chunks.remainder();
 
-    /// Evaluate the expression with the given array.
-    pub fn eval(
-        &self,
-        l: &'a ColumnRef,
-        ctx: &mut EvalContext,
-    ) -> Result<<O as Scalar>::ColumnType> {
-        let left = Series::check_get_scalar::<L>(l)?;
-        let it = left.scalar_iter().map(|a| (self.f).eval(a, ctx));
-        let result = <O as Scalar>::ColumnType::from_owned_iterator(it);
+    let mut values = Vec::<O>::with_capacity(l.len());
+    lhs_chunks.for_each(|lhs| {
+        let res = op(Simd::from_slice(lhs));
+        values.extend_from_slice(res.as_array())
+    });
 
-        if let Some(error) = ctx.error.take() {
-            return Err(error);
-        }
-        Ok(result)
-    }
+    if !lhs_remainder.is_empty() {
+        let lhs = from_incomplete_chunk(lhs_remainder, L::default());
+        let res = op(lhs);
+        values.extend_from_slice(&res.as_array()[0..lhs_remainder.len()])
+    };
+
+    Ok(PrimitiveColumn::<O>::new_from_vec(values))
 }

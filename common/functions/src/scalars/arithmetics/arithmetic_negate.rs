@@ -26,33 +26,16 @@ use crate::scalars::ArithmeticDescription;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
-use crate::scalars::ScalarUnaryFunction;
 use crate::scalars::UnaryArithmeticFunction;
 
-#[derive(Clone, Debug, Default)]
-struct NegFunction {}
-
-impl<L, O> ScalarUnaryFunction<L, O> for NegFunction
-where
-    L: PrimitiveType + AsPrimitive<O>,
-    O: PrimitiveType + Neg<Output = O>,
-{
-    fn eval(&self, l: L::RefType<'_>, _ctx: &mut EvalContext) -> O {
-        -l.to_owned_scalar().as_()
-    }
+fn neg<O>(l: impl AsPrimitive<O>, _ctx: &mut EvalContext) -> O
+where O: PrimitiveType + Neg<Output = O> {
+    -l.as_()
 }
 
-#[derive(Clone, Debug, Default)]
-struct WrappingNegFunction {}
-
-impl<L, O> ScalarUnaryFunction<L, O> for WrappingNegFunction
-where
-    L: PrimitiveType + AsPrimitive<O>,
-    O: IntegerType + WrappingNeg,
-{
-    fn eval(&self, l: L::RefType<'_>, _ctx: &mut EvalContext) -> O {
-        l.to_owned_scalar().as_().wrapping_neg()
-    }
+fn wrapping_neg<O>(l: impl AsPrimitive<O>, _ctx: &mut EvalContext) -> O
+where O: IntegerType + WrappingNeg {
+    l.as_().wrapping_neg()
 }
 
 pub struct ArithmeticNegateFunction;
@@ -70,27 +53,27 @@ impl ArithmeticNegateFunction {
                 TypeID::Int64 => UnaryArithmeticFunction::<$T, i64, _>::try_create_func(
                     op,
                     result_type,
-                    WrappingNegFunction::default(),
+                    wrapping_neg,
                 ),
                 TypeID::Int32 => UnaryArithmeticFunction::<$T, i32, _>::try_create_func(
                     op,
                     result_type,
-                    WrappingNegFunction::default(),
+                    wrapping_neg,
                 ),
                 TypeID::Int16 => UnaryArithmeticFunction::<$T, i16, _>::try_create_func(
                     op,
                     result_type,
-                    WrappingNegFunction::default(),
+                    wrapping_neg,
                 ),
                 TypeID::Int8 => UnaryArithmeticFunction::<$T, i8, _>::try_create_func(
                     op,
                     result_type,
-                    WrappingNegFunction::default(),
+                    wrapping_neg,
                 ),
                 _ => UnaryArithmeticFunction::<$T, <$T as ResultTypeOfUnary>::Negate, _>::try_create_func(
                     op,
                     result_type,
-                    NegFunction::default(),
+                    neg,
                 ),
             }
         })

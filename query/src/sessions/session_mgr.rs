@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::tokio;
+use common_base::Runtime;
 use common_base::SignalStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -58,6 +59,7 @@ pub struct SessionManager {
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
     pub(in crate::sessions) storage_cache_manager: RwLock<Arc<CacheManager>>,
     storage_operator: RwLock<Operator>,
+    storage_runtime: Runtime,
 }
 
 impl SessionManager {
@@ -68,6 +70,14 @@ impl SessionManager {
 
         // Cluster discovery.
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
+
+        let storage_runtime = {
+            let mut storage_num_cpus = conf.storage.storage_num_cpus as usize;
+            if storage_num_cpus == 0 {
+                storage_num_cpus = std::cmp::max(1, num_cpus::get() / 2)
+            }
+            Runtime::with_worker_threads(storage_num_cpus, Some("IO-worker".to_owned()))?
+        };
 
         // User manager and init the default users.
         let user = UserApiProvider::create_global(conf.clone()).await?;
@@ -87,6 +97,7 @@ impl SessionManager {
             auth_manager: RwLock::new(auth_manager),
             storage_cache_manager: RwLock::new(storage_cache_manager),
             storage_operator: RwLock::new(storage_accessor),
+            storage_runtime,
         }))
     }
 
@@ -121,6 +132,10 @@ impl SessionManager {
 
     pub fn get_storage_cache_manager(&self) -> Arc<CacheManager> {
         self.storage_cache_manager.read().clone()
+    }
+
+    pub fn get_storage_runtime<'a>(self: &'a Arc<Self>) -> &'a Runtime {
+        &self.storage_runtime
     }
 
     pub async fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {

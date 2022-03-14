@@ -1,5 +1,5 @@
 ---
-title: Vectorized engine performance
+title: Vectorized Engine Performance
 ---
 
 :::tip

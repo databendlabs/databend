@@ -1,5 +1,6 @@
 ---
 title: COS
+description: COS(x) function
 ---
 
 Returns the cosine of x, where x is given in radians.

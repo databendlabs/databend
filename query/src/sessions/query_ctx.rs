@@ -22,6 +22,7 @@ use std::sync::Arc;
 use common_base::tokio::task::JoinHandle;
 use common_base::Progress;
 use common_base::ProgressValues;
+use common_base::Runtime;
 use common_base::TrySpawn;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
@@ -56,6 +57,8 @@ use crate::sessions::Settings;
 use crate::storages::cache::CacheManager;
 use crate::storages::S3ExternalTable;
 use crate::storages::Table;
+use crate::users::auth::auth_mgr::AuthMgr;
+use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
 
 pub struct QueryContext {
@@ -285,8 +288,16 @@ impl QueryContext {
     }
 
     // Get user manager api.
-    pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
-        self.shared.session.get_user_manager()
+    pub fn get_user_manager(&self) -> Arc<UserApiProvider> {
+        self.shared.get_user_manager()
+    }
+
+    pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
+        self.shared.get_auth_manager()
+    }
+
+    pub fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {
+        self.shared.get_role_cache_manager()
     }
 
     // Get the current session.
@@ -340,6 +351,10 @@ impl QueryContext {
 
     pub fn get_dal_context(&self) -> &DalContext {
         self.shared.dal_ctx.as_ref()
+    }
+
+    pub fn get_storage_runtime(&self) -> &Runtime {
+        self.shared.session.session_mgr.get_storage_runtime()
     }
 
     pub async fn reload_config(&self) -> Result<()> {

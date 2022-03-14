@@ -22,11 +22,11 @@ use num_traits::AsPrimitive;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::scalar_binary_op;
+use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
-use crate::scalars::ScalarBinaryExpression;
-use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
 pub struct TrigonometricFunction {
@@ -86,40 +86,40 @@ impl Function for TrigonometricFunction {
                 with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
                    match self.t {
                         Trigonometric::COS => {
-                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext|  AsPrimitive::<f64>::as_(v).cos());
-                           let col = unary.eval(columns[0].column(), &mut ctx)?;
-                           Ok(Arc::new(col))
+                            let func = |v: $S, _ctx: &mut EvalContext|  AsPrimitive::<f64>::as_(v).cos();
+                            let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), func, &mut ctx)?;
+                            Ok(Arc::new(col))
                         },
                         Trigonometric::SIN => {
-                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext|  AsPrimitive::<f64>::as_(v).sin());
-                           let col = unary.eval(columns[0].column(), &mut ctx)?;
-                           Ok(Arc::new(col))
+                            let func = |v: $S, _ctx: &mut EvalContext|  AsPrimitive::<f64>::as_(v).sin();
+                            let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), func, &mut ctx)?;
+                            Ok(Arc::new(col))
                         },
                         Trigonometric::COT => {
-                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext| 1.0 /  AsPrimitive::<f64>::as_(v).tan());
-                           let col = unary.eval(columns[0].column(), &mut ctx)?;
-                           Ok(Arc::new(col))
+                            let func = |v: $S, _ctx: &mut EvalContext| 1.0 /  AsPrimitive::<f64>::as_(v).tan();
+                            let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), func, &mut ctx)?;
+                            Ok(Arc::new(col))
                         },
                         Trigonometric::TAN => {
-                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).tan());
-                           let col = unary.eval(columns[0].column(), &mut ctx)?;
-                           Ok(Arc::new(col))
+                            let func = |v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).tan();
+                            let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), func, &mut ctx)?;
+                            Ok(Arc::new(col))
                         },
                         // the range [0, pi] or NaN if the number is outside the range
                         Trigonometric::ACOS => {
-                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).acos());
-                           let col = unary.eval(columns[0].column(), &mut ctx)?;
-                           Ok(Arc::new(col))
+                            let func = |v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).acos();
+                            let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), func, &mut ctx)?;
+                            Ok(Arc::new(col))
                         },
                         Trigonometric::ASIN => {
-                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).asin());
-                           let col = unary.eval(columns[0].column(), &mut ctx)?;
+                            let func = |v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).asin();
+                           let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), func, &mut ctx)?;
                            Ok(Arc::new(col))
                         },
                         Trigonometric::ATAN => {
-                           let unary =  ScalarUnaryExpression::<$S, f64, _>::new(|v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).atan());
-                           let col = unary.eval(columns[0].column(), &mut ctx)?;
-                           Ok(Arc::new(col))
+                            let func = |v: $S, _ctx: &mut EvalContext| AsPrimitive::<f64>::as_(v).atan();
+                            let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), func, &mut ctx)?;
+                            Ok(Arc::new(col))
                         },
                         _ => unreachable!(),
                     }
@@ -132,8 +132,7 @@ impl Function for TrigonometricFunction {
             _ => {
                 with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
                     with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$T| {
-                        let binary = ScalarBinaryExpression::<$S, $T, f64, _>::new(scalar_atan2);
-                        let col = binary.eval(columns[0].column(), columns[1].column(), &mut EvalContext::default())?;
+                        let col = scalar_binary_op::<$S, $T, f64, _>(columns[0].column(), columns[1].column(), scalar_atan2,&mut EvalContext::default())?;
                         Ok(Arc::new(col))
                     }, {
                         unreachable!()

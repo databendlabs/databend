@@ -35,7 +35,8 @@ impl MySQLConnection {
         MySQLConnection::attach_session(&session, &blocking_stream)?;
 
         let non_blocking_stream = TcpStream::from_std(blocking_stream)?;
-        let query_executor = Runtime::with_worker_threads(1)?;
+        let query_executor =
+            Runtime::with_worker_threads(1, Some("mysql-query-executor".to_string()))?;
         Thread::spawn(move || {
             let join_handle = query_executor.spawn(async move {
                 let client_addr = non_blocking_stream.peer_addr().unwrap().to_string();

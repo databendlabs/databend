@@ -1,5 +1,6 @@
 ---
 title: FLOOR
+description: FLOOR(x) function
 ---
 
 Returns the largest integer value not greater than x.

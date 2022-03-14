@@ -67,11 +67,15 @@ pub fn verified_query(sql: &str) -> Result<Box<DfQueryStatement>> {
     Err(ParserError::ParserError("Expect query statement".to_string()).into())
 }
 
-pub fn make_column_def(name: impl Into<String>, data_type: DataType) -> ColumnDef {
+pub fn make_column_def(
+    name: impl Into<String>,
+    quote_style: Option<char>,
+    data_type: DataType,
+) -> ColumnDef {
     ColumnDef {
         name: Ident {
             value: name.into(),
-            quote_style: None,
+            quote_style,
         },
         data_type,
         collation: None,

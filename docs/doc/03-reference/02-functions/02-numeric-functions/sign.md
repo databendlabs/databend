@@ -1,5 +1,6 @@
 ---
 title: SIGN
+description: SIGN(x) function
 ---
 
 Returns the sign of the argument as -1, 0, or 1, depending on whether X is negative, zero, or positive or NULL if the argument was NULL.

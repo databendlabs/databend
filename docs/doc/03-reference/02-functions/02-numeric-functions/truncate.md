@@ -1,5 +1,6 @@
 ---
 title: TRUNCATE
+description: TRUNCATE(x, d) function
 ---
 
 Returns the number X, truncated to D decimal places.

@@ -106,7 +106,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
     }
 
     #[inline(always)]
-    fn lookup_key(&self, keys: Vec<Method::HashKey>, state: &mut Method::State) {
+    fn lookup_key(&self, keys: Vec<Method::HashKey<'_>>, state: &mut Method::State) {
         let mut inserted = true;
         for key in keys.iter() {
             state.entity(key, &mut inserted);
@@ -115,7 +115,11 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> Aggregator<Method> {
 
     /// Allocate aggregation function state for each key(the same key can always get the same state)
     #[inline(always)]
-    fn lookup_state(&self, keys: Vec<Method::HashKey>, state: &mut Method::State) -> StateAddrs {
+    fn lookup_state(
+        &self,
+        keys: Vec<Method::HashKey<'_>>,
+        state: &mut Method::State,
+    ) -> StateAddrs {
         let mut places = Vec::with_capacity(keys.len());
 
         let mut inserted = true;

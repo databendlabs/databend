@@ -1,5 +1,6 @@
 ---
 title: SQRT
+description: SQRT(x) function
 ---
 
 Returns the square root of a nonnegative number x.

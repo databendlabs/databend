@@ -1,5 +1,6 @@
 ---
 title: Integer Numbers
+description: Basic Integer Numbers data types
 ---
 | Data Type        | Size      | Min Value              | Max Value   |
 | -----------------| --------- | ---------------------- | ----------- |

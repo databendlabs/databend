@@ -1,5 +1,6 @@
 ---
-title: addYEARS/MONTHS/DAYS/HOURS/MINUTES/SECONDS
+title: Add time interval
+description: Add time interval function
 ---
 
 Add time interval to a date or datetime, return the result of date or datetime type.

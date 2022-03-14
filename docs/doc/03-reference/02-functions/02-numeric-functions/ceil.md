@@ -1,5 +1,6 @@
 ---
 title: CEIL
+description: CEIL() function
 ---
 
 CEIL() is a synonym for CEILING().

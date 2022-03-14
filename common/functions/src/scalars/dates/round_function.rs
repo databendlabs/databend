@@ -18,10 +18,10 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
-use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
 pub struct RoundFunction {
@@ -73,10 +73,9 @@ impl Function for RoundFunction {
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        let unary = ScalarUnaryExpression::<u32, _, _>::new(|val: u32, _ctx: &mut EvalContext| {
-            self.execute(val)
-        });
-        let col = unary.eval(columns[0].column(), &mut EvalContext::default())?;
+        let func = |val: u32, _ctx: &mut EvalContext| self.execute(val);
+        let col =
+            scalar_unary_op::<u32, _, _>(columns[0].column(), func, &mut EvalContext::default())?;
         Ok(col.arc())
     }
 
