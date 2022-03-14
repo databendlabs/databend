@@ -28,7 +28,7 @@ async fn test_runtime() -> Result<()> {
         let rt1 = Runtime::with_default_worker_threads().unwrap();
         let rt1_counter = Arc::clone(&runtime_counter);
         let rt1_header = rt1.spawn(async move {
-            let rt2 = Runtime::with_worker_threads(1).unwrap();
+            let rt2 = Runtime::with_worker_threads(1, None).unwrap();
             let rt2_counter = Arc::clone(&rt1_counter);
             let rt2_header = rt2.spawn(async move {
                 let rt3 = Runtime::with_default_worker_threads().unwrap();

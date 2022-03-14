@@ -242,6 +242,9 @@ impl Processor for GroupByFinalTransform {
                     HashMethodKind::Serializer(hash_method) => {
                         apply! { hash_method,  &StringColumn, RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>>}
                     }
+                    HashMethodKind::SingleString(hash_method) => {
+                        apply! { hash_method, &StringColumn, RwLock<HashMap<Vec<u8>, usize, ahash::RandomState>>}
+                    }
                     HashMethodKind::KeysU8(hash_method) => {
                         apply! { hash_method , &UInt8Column, RwLock<HashMap<u8, usize, ahash::RandomState>> }
                     }

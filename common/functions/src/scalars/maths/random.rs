@@ -23,10 +23,10 @@ use rand::prelude::*;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
-use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
 pub struct RandomFunction {
@@ -70,8 +70,7 @@ impl Function for RandomFunction {
             _ => {
                 let mut ctx = EvalContext::default();
                 with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$T| {
-                      let unary = ScalarUnaryExpression::<$T, f64, _>::new(rand_seed);
-                    let col = unary.eval(columns[0].column(), &mut ctx)?;
+                    let col = scalar_unary_op::<$T, f64, _>(columns[0].column(), rand_seed, &mut ctx)?;
                     Ok(Arc::new(col))
                 },{
                     unreachable!()

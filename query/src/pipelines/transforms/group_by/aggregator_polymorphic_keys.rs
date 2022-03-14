@@ -19,6 +19,7 @@ use common_datablocks::HashMethodKeysU32;
 use common_datablocks::HashMethodKeysU64;
 use common_datablocks::HashMethodKeysU8;
 use common_datablocks::HashMethodSerializer;
+use common_datablocks::HashMethodSingleString;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
@@ -207,6 +208,38 @@ impl PolymorphicKeysHelper<HashMethodKeysU64> for HashMethodKeysU64 {
         params: &AggregatorParams,
     ) -> Self::GroupColumnsBuilder {
         FixedKeysGroupColumnsBuilder::<u64>::create(capacity, params)
+    }
+}
+
+impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
+    type State = SerializedKeysAggregatorState;
+    fn aggregate_state(&self) -> Self::State {
+        SerializedKeysAggregatorState {
+            keys_area: Bump::new(),
+            state_area: Bump::new(),
+            data_state_map: HashTable::create(),
+        }
+    }
+
+    type ColumnBuilder = SerializedKeysColumnBuilder;
+    fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder {
+        SerializedKeysColumnBuilder {
+            inner_builder: MutableStringColumn::with_capacity(capacity),
+        }
+    }
+
+    type KeysColumnIter = SerializedKeysColumnIter;
+    fn keys_iter_from_column(&self, column: &ColumnRef) -> Result<Self::KeysColumnIter> {
+        SerializedKeysColumnIter::create(Series::check_get::<StringColumn>(column)?)
+    }
+
+    type GroupColumnsBuilder = SerializedKeysGroupColumnsBuilder;
+    fn group_columns_builder(
+        &self,
+        capacity: usize,
+        params: &AggregatorParams,
+    ) -> Self::GroupColumnsBuilder {
+        SerializedKeysGroupColumnsBuilder::create(capacity, params)
     }
 }
 

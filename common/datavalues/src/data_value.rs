@@ -81,7 +81,8 @@ impl DataValue {
             DataValue::Struct(_) => ValueType::Struct,
         }
     }
-    // convert to minialized data type
+
+    /// Get the minimal memory sized data type.
     pub fn data_type(&self) -> DataTypePtr {
         match self {
             DataValue::Null => Arc::new(NullType {}),
@@ -128,7 +129,7 @@ impl DataValue {
         }
     }
 
-    // convert to maxialized data type
+    /// Get the maximum memory sized data type
     pub fn max_data_type(&self) -> DataTypePtr {
         match self {
             DataValue::Null => Arc::new(NullType {}),

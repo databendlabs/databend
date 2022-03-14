@@ -22,6 +22,7 @@ use serde::Serialize;
 use crate::configs::Config;
 
 pub const STORAGE_TYPE: &str = "STORAGE_TYPE";
+pub const STORAGE_NUM_CPUS: &str = "STORAGE_NUM_CPUS";
 
 // Disk Storage env.
 pub const DISK_STORAGE_DATA_PATH: &str = "DISK_STORAGE_DATA_PATH";
@@ -183,6 +184,9 @@ pub struct StorageConfig {
     #[clap(long, env = STORAGE_TYPE, default_value = "disk")]
     pub storage_type: String,
 
+    #[clap(long, env = STORAGE_NUM_CPUS, default_value = "0")]
+    pub storage_num_cpus: u64,
+
     // Disk storage backend config.
     #[clap(flatten)]
     pub disk: DiskStorageConfig,
@@ -203,6 +207,7 @@ impl Default for StorageConfig {
             disk: DiskStorageConfig::default(),
             s3: S3StorageConfig::default(),
             azure_storage_blob: AzureStorageBlobConfig::default(),
+            storage_num_cpus: 0,
         }
     }
 }
@@ -210,6 +215,7 @@ impl Default for StorageConfig {
 impl StorageConfig {
     pub fn load_from_env(mut_config: &mut Config) {
         env_helper!(mut_config, storage, storage_type, String, STORAGE_TYPE);
+        env_helper!(mut_config, storage, storage_num_cpus, u64, STORAGE_NUM_CPUS);
 
         // DISK.
         env_helper!(

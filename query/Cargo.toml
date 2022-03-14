@@ -65,6 +65,7 @@ async-stream = "0.3.2"
 async-trait = "0.1.52"
 backoff = "0.4.0"
 base64 = "0.13.0"
+bit-vec = { version = "0.6.3", features = ["serde_std"] }
 bumpalo = "3.9.1"
 byteorder = "1.4.3"
 bytes = "1.1.0"

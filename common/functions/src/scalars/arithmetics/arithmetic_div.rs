@@ -26,12 +26,9 @@ use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 
-fn div_scalar<L, R>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> f64
-where
-    L: PrimitiveType + AsPrimitive<f64>,
-    R: PrimitiveType + AsPrimitive<f64>,
-{
-    l.to_owned_scalar().as_() / r.to_owned_scalar().as_()
+#[inline]
+fn div_scalar(l: impl AsPrimitive<f64>, r: impl AsPrimitive<f64>, _ctx: &mut EvalContext) -> f64 {
+    l.as_() / r.as_()
 }
 
 pub struct ArithmeticDivFunction;
@@ -46,7 +43,7 @@ impl ArithmeticDivFunction {
                 BinaryArithmeticFunction::<$T, $D, f64, _>::try_create_func(
                     DataValueBinaryOperator::Div,
                     Float64Type::arc(),
-                    div_scalar::<$T, $D>
+                    div_scalar
                 )
             })
         })

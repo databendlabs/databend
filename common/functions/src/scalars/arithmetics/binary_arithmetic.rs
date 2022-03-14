@@ -13,12 +13,14 @@
 // limitations under the License.
 
 use std::fmt;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::scalars::scalar_binary_op;
 use crate::scalars::ArithmeticDivFunction;
 use crate::scalars::ArithmeticMinusFunction;
 use crate::scalars::ArithmeticMulFunction;
@@ -26,14 +28,13 @@ use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
-use crate::scalars::ScalarBinaryExpression;
-use crate::scalars::ScalarBinaryFunction;
 
 #[derive(Clone)]
 pub struct BinaryArithmeticFunction<L: Scalar, R: Scalar, O: Scalar, F> {
     op: DataValueBinaryOperator,
     result_type: DataTypePtr,
-    binary: ScalarBinaryExpression<L, R, O, F>,
+    func: F,
+    _phantom: PhantomData<(L, R, O)>,
 }
 
 impl<L, R, O, F> BinaryArithmeticFunction<L, R, O, F>
@@ -41,18 +42,18 @@ where
     L: Scalar + Send + Sync + Clone,
     R: Scalar + Send + Sync + Clone,
     O: Scalar + Send + Sync + Clone,
-    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone + 'static,
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O + Send + Sync + Clone + 'static,
 {
     pub fn try_create_func(
         op: DataValueBinaryOperator,
         result_type: DataTypePtr,
         func: F,
     ) -> Result<Box<dyn Function>> {
-        let binary = ScalarBinaryExpression::<L, R, O, _>::new(func);
         Ok(Box::new(Self {
             op,
             result_type,
-            binary,
+            func,
+            _phantom: PhantomData,
         }))
     }
 }
@@ -62,7 +63,7 @@ where
     L: Scalar + Send + Sync + Clone,
     R: Scalar + Send + Sync + Clone,
     O: Scalar + Send + Sync + Clone,
-    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone,
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O + Send + Sync + Clone,
 {
     fn name(&self) -> &str {
         "BinaryArithmeticFunction"
@@ -73,9 +74,10 @@ where
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        let col = self.binary.eval(
+        let col = scalar_binary_op(
             columns[0].column(),
             columns[1].column(),
+            self.func.clone(),
             &mut EvalContext::default(),
         )?;
         Ok(Arc::new(col))
@@ -104,7 +106,7 @@ where
     L: Scalar + Send + Sync + Clone,
     R: Scalar + Send + Sync + Clone,
     O: Scalar + Send + Sync + Clone,
-    F: ScalarBinaryFunction<L, R, O> + Send + Sync + Clone,
+    F: Fn(L::RefType<'_>, R::RefType<'_>, &mut EvalContext) -> O + Send + Sync + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.op)

@@ -1,19 +1,19 @@
 ---
 title: Analyzing OnTime Datasets with Databend on AWS EC2 and S3
-sidebar_label: Analyzing OnTime datasets
+sidebar_label: Analyzing OnTime Datasets
 ---
 
 Analyzing `OnTime` datasets on AWS EC2 and S3 with Databend step by step.
 
-## Step 1. Deploy
+## Step 1. Deploy Databend
 
 Install databend, see [deploy Databend with AWS S3](../01-deploy/01_s3.md).
 
-## Step 2. Load OnTime datasets
+## Step 2. Load OnTime Datasets
 
-### 2.1 Create OnTime table
+### 2.1 Create OnTime Table
 
-```shell
+```sql
 CREATE TABLE ontime
 (
     Year                            UInt16,
@@ -128,25 +128,38 @@ CREATE TABLE ontime
 ) ENGINE = FUSE;
 ```
 
-### 2.2 Load Data into OnTime table
+### 2.2 Load Data Into OnTime Table
 
-```shell
+```shell title='t_ontime.csv.zip'
 wget --no-check-certificate https://repo.databend.rs/t_ontime/t_ontime.csv.zip
-
-unzip t_ontime.csv.zip
-
-ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -H \"skip_header:0\" -H \"field_delimiter:'\t'\"  -F  \"upload=@{}\"  -XPUT http://localhost:8001/v1/streaming_load |bash
-
 ```
+
+```shell title='Unzip'
+unzip t_ontime.csv.zip
+```
+
+```shell title='Load CSV files into Databend'
+ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -H \"skip_header:0\" -H \"field_delimiter:'\t'\"  -F  \"upload=@{}\"  -XPUT http://127.0.0.1:8081/v1/streaming_load |bash
+```
+
+:::tip
+
+* http://127.0.0.1:8081/v1/streaming_load
+    * `127.0.0.1` is `http_handler_host` value in your *databend-query.toml*
+    * `8081` is `http_handler_port` value in your *databend-query.toml*
+:::
+
+
 
 ## Step 3. Queries
 
-Execute Query and set settings:
+Execute Queries:
 
-```shell
-mysql -h 127.0.0.1 -P3307 -uroot 
-mysql>select count(*) from ontime;
-mysql>select Year, count(*) from ontime group by Year;
+```shell title='mysql'
+mysql -h127.0.0.1 -P3307 -uroot 
+```
+```shell 
+select Year, count(*) from ontime group by Year;
 ```
 
 All Queries:

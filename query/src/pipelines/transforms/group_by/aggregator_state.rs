@@ -19,6 +19,7 @@ use bumpalo::Bump;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodSerializer;
+use common_datablocks::HashMethodSingleString;
 use common_datavalues::prelude::*;
 use common_functions::aggregates::StateAddr;
 
@@ -51,11 +52,31 @@ pub trait AggregatorState<Method: HashMethod>: Sync + Send {
 
     fn iter(&self) -> Self::Iterator;
 
-    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr;
+    fn alloc_place(&self, layout: Layout) -> StateAddr;
 
-    fn alloc_layout2(&self, params: &NewAggregatorParams) -> StateAddr;
+    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr {
+        let place: StateAddr = self.alloc_place(params.layout);
 
-    fn entity(&mut self, key: &Method::HashKey, inserted: &mut bool) -> *mut Self::Entity;
+        for idx in 0..params.offsets_aggregate_states.len() {
+            let aggr_state = params.offsets_aggregate_states[idx];
+            let aggr_state_place = place.next(aggr_state);
+            params.aggregate_functions[idx].init_state(aggr_state_place);
+        }
+        place
+    }
+
+    fn alloc_layout2(&self, params: &NewAggregatorParams) -> StateAddr {
+        let place: StateAddr = self.alloc_place(params.layout);
+
+        for idx in 0..params.offsets_aggregate_states.len() {
+            let aggr_state = params.offsets_aggregate_states[idx];
+            let aggr_state_place = place.next(aggr_state);
+            params.aggregate_functions[idx].init_state(aggr_state_place);
+        }
+        place
+    }
+
+    fn entity(&mut self, key: &Method::HashKey<'_>, inserted: &mut bool) -> *mut Self::Entity;
 
     fn entity_by_key(&mut self, key: &Self::Key, inserted: &mut bool) -> *mut Self::Entity;
 }
@@ -111,8 +132,8 @@ impl<T: ShortFixedKeyable> Drop for ShortFixedKeysAggregatorState<T> {
 impl<T> AggregatorState<HashMethodFixedKeys<T>> for ShortFixedKeysAggregatorState<T>
 where
     T: PrimitiveType + ShortFixedKeyable,
-    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
-    <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
+    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
+    for<'a> <HashMethodFixedKeys<T> as HashMethod>::HashKey<'a>: HashTableKeyable,
 {
     type Key = T;
     type Entity = ShortFixedKeysStateEntity<T>;
@@ -129,28 +150,8 @@ where
     }
 
     #[inline(always)]
-    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr {
-        let place: StateAddr = self.area.alloc_layout(params.layout).into();
-
-        for idx in 0..params.offsets_aggregate_states.len() {
-            let aggr_state = params.offsets_aggregate_states[idx];
-            let aggr_state_place = place.next(aggr_state);
-            params.aggregate_functions[idx].init_state(aggr_state_place);
-        }
-
-        place
-    }
-
-    fn alloc_layout2(&self, params: &NewAggregatorParams) -> StateAddr {
-        let place: StateAddr = self.area.alloc_layout(params.layout).into();
-
-        for idx in 0..params.offsets_aggregate_states.len() {
-            let aggr_state = params.offsets_aggregate_states[idx];
-            let aggr_state_place = place.next(aggr_state);
-            params.aggregate_functions[idx].init_state(aggr_state_place);
-        }
-
-        place
+    fn alloc_place(&self, layout: Layout) -> StateAddr {
+        self.area.alloc_layout(layout).into()
     }
 
     #[inline(always)]
@@ -197,8 +198,8 @@ unsafe impl<T: HashTableKeyable + Sync> Sync for LongerFixedKeysAggregatorState<
 impl<T> AggregatorState<HashMethodFixedKeys<T>> for LongerFixedKeysAggregatorState<T>
 where
     T: PrimitiveType,
-    HashMethodFixedKeys<T>: HashMethod<HashKey = T>,
-    <HashMethodFixedKeys<T> as HashMethod>::HashKey: HashTableKeyable,
+    for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey<'a> = T>,
+    for<'a> <HashMethodFixedKeys<T> as HashMethod>::HashKey<'a>: HashTableKeyable,
 {
     type Key = T;
     type Entity = KeyValueEntity<T, usize>;
@@ -215,28 +216,8 @@ where
     }
 
     #[inline(always)]
-    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr {
-        let place: StateAddr = self.area.alloc_layout(params.layout).into();
-
-        for idx in 0..params.offsets_aggregate_states.len() {
-            let aggr_state = params.offsets_aggregate_states[idx];
-            let aggr_state_place = place.next(aggr_state);
-            params.aggregate_functions[idx].init_state(aggr_state_place);
-        }
-
-        place
-    }
-
-    fn alloc_layout2(&self, params: &NewAggregatorParams) -> StateAddr {
-        let place: StateAddr = self.area.alloc_layout(params.layout).into();
-
-        for idx in 0..params.offsets_aggregate_states.len() {
-            let aggr_state = params.offsets_aggregate_states[idx];
-            let aggr_state_place = place.next(aggr_state);
-            params.aggregate_functions[idx].init_state(aggr_state_place);
-        }
-
-        place
+    fn alloc_place(&self, layout: Layout) -> StateAddr {
+        self.area.alloc_layout(layout).into()
     }
 
     #[inline(always)]
@@ -281,32 +262,71 @@ impl AggregatorState<HashMethodSerializer> for SerializedKeysAggregatorState {
     }
 
     #[inline(always)]
-    fn alloc_layout(&self, params: &AggregatorParams) -> StateAddr {
-        let place: StateAddr = self.state_area.alloc_layout(params.layout).into();
-
-        for idx in 0..params.offsets_aggregate_states.len() {
-            let aggr_state = params.offsets_aggregate_states[idx];
-            let aggr_state_place = place.next(aggr_state);
-            params.aggregate_functions[idx].init_state(aggr_state_place);
-        }
-
-        place
-    }
-
-    fn alloc_layout2(&self, params: &NewAggregatorParams) -> StateAddr {
-        let place: StateAddr = self.state_area.alloc_layout(params.layout).into();
-
-        for idx in 0..params.offsets_aggregate_states.len() {
-            let aggr_state = params.offsets_aggregate_states[idx];
-            let aggr_state_place = place.next(aggr_state);
-            params.aggregate_functions[idx].init_state(aggr_state_place);
-        }
-
-        place
+    fn alloc_place(&self, layout: Layout) -> StateAddr {
+        self.state_area.alloc_layout(layout).into()
     }
 
     #[inline(always)]
     fn entity(&mut self, keys: &SmallVu8, inserted: &mut bool) -> *mut Self::Entity {
+        let mut keys_ref = KeysRef::create(keys.as_ptr() as usize, keys.len());
+        let state_entity = self.data_state_map.insert_key(&keys_ref, inserted);
+
+        if *inserted {
+            unsafe {
+                // Keys will be destroyed after call we need copy the keys to the memory pool.
+                let global_keys = self.keys_area.alloc_slice_copy(keys);
+                let inserted_hash = state_entity.get_hash();
+                keys_ref.address = global_keys.as_ptr() as usize;
+                // TODO: maybe need set key method.
+                state_entity.set_key_and_hash(&keys_ref, inserted_hash)
+            }
+        }
+
+        state_entity
+    }
+
+    #[inline(always)]
+    fn entity_by_key(&mut self, keys_ref: &KeysRef, inserted: &mut bool) -> *mut Self::Entity {
+        let state_entity = self.data_state_map.insert_key(keys_ref, inserted);
+
+        if *inserted {
+            unsafe {
+                // Keys will be destroyed after call we need copy the keys to the memory pool.
+                let data_ptr = keys_ref.address as *mut u8;
+                let keys = std::slice::from_raw_parts_mut(data_ptr, keys_ref.length);
+                let global_keys = self.keys_area.alloc_slice_copy(keys);
+                let inserted_hash = state_entity.get_hash();
+                let address = global_keys.as_ptr() as usize;
+                let new_keys_ref = KeysRef::create(address, keys_ref.length);
+                state_entity.set_key_and_hash(&new_keys_ref, inserted_hash)
+            }
+        }
+
+        state_entity
+    }
+}
+
+impl AggregatorState<HashMethodSingleString> for SerializedKeysAggregatorState {
+    type Key = KeysRef;
+    type Entity = KeyValueEntity<KeysRef, usize>;
+    type Iterator = HashMapIterator<KeysRef, usize>;
+
+    fn len(&self) -> usize {
+        self.data_state_map.len()
+    }
+
+    fn iter(&self) -> Self::Iterator {
+        self.data_state_map.iter()
+    }
+
+    #[inline(always)]
+    fn alloc_place(&self, layout: Layout) -> StateAddr {
+        self.state_area.alloc_layout(layout).into()
+    }
+
+    #[inline(always)]
+    fn entity(&mut self, keys: &&[u8], inserted: &mut bool) -> *mut Self::Entity {
+        let keys = *keys;
         let mut keys_ref = KeysRef::create(keys.as_ptr() as usize, keys.len());
         let state_entity = self.data_state_map.insert_key(&keys_ref, inserted);
 

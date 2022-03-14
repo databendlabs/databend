@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::num::Wrapping;
 use std::sync::Arc;
 
 use bincode;
@@ -23,6 +24,7 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_tracing::tracing;
 
+use crate::pipelines::transforms::ExpressionExecutor;
 use crate::storages::index::IndexSchemaVersion;
 
 /// BloomFilterExprEvalResult represents the evaluation result of an expression by bloom filter.
@@ -44,25 +46,31 @@ pub enum BloomFilterExprEvalResult {
 /// are not applicable for a bloom filter, we skip the creation.
 /// That is to say, it is legal to have a BloomFilterBlock with zero columns.
 ///
-/// For example, for the data block as follows:
+/// For example, for the source data block as follows:
 ///```
 ///         +---name--+--age--+
 ///         | "Alice" |  20   |
 ///         | "Bob"   |  30   |
 ///         +---------+-------+
 /// ```
-/// We will create bloom filter files
+/// We will create bloom filter table as follows:
 ///```
 ///         +---Bloom(name)--+--Bloom(age)--+
 ///         |  123456789abcd |  ac2345bcd   |
 ///         +----------------+--------------+
 /// ```
 pub struct BloomFilterIndexer {
-    pub inner: DataBlock,
+    // The schema of the source table/block, which the bloom filter work for.
+    pub source_schema: DataSchemaRef,
+
+    // The bloom block contains bloom filters;
+    pub bloom_block: DataBlock,
 }
 
 const BLOOM_FILTER_MAX_NUM_BITS: usize = 20480; // 2.5KB, maybe too big?
 const BLOOM_FILTER_DEFAULT_FALSE_POSITIVE_RATE: f64 = 0.05;
+const BLOOM_FILTER_SEED_GEN_A: u64 = 845897321;
+const BLOOM_FILTER_SEED_GEN_B: u64 = 217728422;
 
 impl BloomFilterIndexer {
     /// For every applicable column, we will create a bloom filter.
@@ -72,30 +80,40 @@ impl BloomFilterIndexer {
     }
 
     #[inline(always)]
-    fn create_seeds() -> [u64; 4] {
-        let seed0: u64 = rand::random();
-        let seed1: u64 = rand::random();
-        let seed2: u64 = rand::random();
-        let seed3: u64 = rand::random();
-        [seed0, seed1, seed2, seed3]
+    fn create_seed() -> u64 {
+        let seed: u64 = rand::random();
+        seed
     }
 
-    /// Create a bloom filter block from input data.
+    /// Load a bloom filter directly from the source table's schema and the corresponding bloom parquet file.
+    pub fn from_bloom_block(
+        source_table_schema: DataSchemaRef,
+        bloom_block: DataBlock,
+    ) -> Result<Self> {
+        Ok(Self {
+            source_schema: source_table_schema,
+            bloom_block,
+        })
+    }
+
+    /// Create a bloom filter block from source data.
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
     #[allow(dead_code)]
-    pub fn from_data(blocks: &[DataBlock]) -> Result<Self> {
-        let seeds = Self::create_seeds();
-        Self::from_data_and_seeds(blocks, seeds)
+    pub fn try_create(source_data_blocks: &[DataBlock]) -> Result<Self> {
+        let seed = Self::create_seed();
+        Self::try_create_with_seed(source_data_blocks, seed)
     }
 
-    /// Create a bloom filter block from input data blocks and seeds.
+    /// Create a bloom filter block from source data blocks and seed(s).
     ///
     /// All input blocks should be belong to a Parquet file, e.g. the block array represents the parquet file in memory.
-    pub fn from_data_and_seeds(blocks: &[DataBlock], seeds: [u64; 4]) -> Result<Self> {
+    pub fn try_create_with_seed(blocks: &[DataBlock], seed: u64) -> Result<Self> {
         if blocks.is_empty() {
             return Err(ErrorCode::BadArguments("data blocks is empty"));
         }
+
+        let source_schema = blocks[0].schema().clone();
 
         let total_num_rows = blocks.iter().map(|block| block.num_rows() as u64).sum();
 
@@ -105,7 +123,7 @@ impl BloomFilterIndexer {
         let fields = blocks[0].schema().fields();
         for (i, field) in fields.iter().enumerate() {
             if BloomFilter::is_supported_type(field.data_type()) {
-                // create field
+                // create field for applicable ones
                 let bloom_column_name = Self::to_bloom_column_name(field.name());
                 let bloom_field = DataField::new(&bloom_column_name, Vu8::to_data_type());
                 bloom_fields.push(bloom_field);
@@ -115,7 +133,7 @@ impl BloomFilterIndexer {
                     total_num_rows,
                     BLOOM_FILTER_DEFAULT_FALSE_POSITIVE_RATE,
                     BLOOM_FILTER_MAX_NUM_BITS,
-                    seeds,
+                    seed,
                 );
 
                 // ingest the same column data from all blocks
@@ -126,30 +144,39 @@ impl BloomFilterIndexer {
 
                 // create bloom filter column
                 let serialized_bytes = bloom_filter.to_vec()?;
-                let bloom_column =
-                    ColumnRef::Constant(DataValue::String(Some(serialized_bytes)), 1);
+                let bloom_value = DataValue::String(serialized_bytes);
+                let bloom_column: ColumnRef = bloom_value.as_const_column(&StringType::arc(), 1)?;
                 bloom_columns.push(bloom_column);
             }
         }
 
-        let schema = Arc::new(DataSchema::new(bloom_fields));
-        let block = DataBlock::create(schema, bloom_columns);
-        Ok(Self { inner: block })
+        let bloom_schema = Arc::new(DataSchema::new(bloom_fields));
+        let bloom_block = DataBlock::create(bloom_schema, bloom_columns);
+        Ok(Self {
+            source_schema,
+            bloom_block,
+        })
     }
 
-    fn find(&self, column_name: &str, target: DataValue) -> Result<BloomFilterExprEvalResult> {
+    fn find(
+        &self,
+        column_name: &str,
+        target: DataValue,
+        typ: DataTypePtr,
+    ) -> Result<BloomFilterExprEvalResult> {
         let bloom_column = Self::to_bloom_column_name(column_name);
-        if !self.inner.schema().has_field(&bloom_column)
-            || !BloomFilter::is_supported_value(&target)
+        if !self.bloom_block.schema().has_field(&bloom_column)
+            || !BloomFilter::is_supported_type(&typ)
+            || target.is_null()
         {
             // The column doesn't have bloom filter bitmap
             return Ok(BloomFilterExprEvalResult::NotApplicable);
         }
 
-        let val = self.inner.first(&bloom_column)?;
-        let bloom_bytes = val.as_string()?;
+        let bloom_bytes = self.bloom_block.first(&bloom_column)?.as_string()?;
         let bloom_filter = BloomFilter::from_vec(bloom_bytes.as_ref())?;
-        if bloom_filter.find(target)? {
+
+        if bloom_filter.find(target, typ)? {
             Ok(BloomFilterExprEvalResult::Unknown)
         } else {
             Ok(BloomFilterExprEvalResult::False)
@@ -188,12 +215,24 @@ impl BloomFilterIndexer {
         left: &Expression,
         right: &Expression,
     ) -> Result<BloomFilterExprEvalResult> {
+        let schema: &DataSchemaRef = &self.source_schema;
+
         // For now only support single column like "name = 'Alice'"
         match (left, right) {
             // match the expression of 'column_name = literal constant'
             (Expression::Column(column), Expression::Literal { value, .. })
             | (Expression::Literal { value, .. }, Expression::Column(column)) => {
-                self.find(column, value.clone())
+                // find the corresponding column from source table
+                match schema.column_with_name(column) {
+                    Some((_index, data_field)) => {
+                        let data_type = data_field.data_type();
+                        self.find(column, value.clone(), data_type.clone())
+                    }
+                    None => Err(ErrorCode::BadArguments(format!(
+                        "Column '{}' not found in schema",
+                        column
+                    ))),
+                }
             }
             _ => Ok(BloomFilterExprEvalResult::NotApplicable),
         }
@@ -248,7 +287,7 @@ impl BloomFilterIndexer {
     /// Find and returns the bloom filter by name
     pub fn try_get_bloom(&self, column_name: &str) -> Result<BloomFilter> {
         let bloom_column = Self::to_bloom_column_name(column_name);
-        let val = self.inner.first(&bloom_column)?;
+        let val = self.bloom_block.first(&bloom_column)?;
         let bloom_bytes = val.as_string()?;
         let bloom_filter = BloomFilter::from_vec(bloom_bytes.as_ref())?;
         Ok(bloom_filter)
@@ -264,24 +303,24 @@ pub struct BloomFilter {
     // Container for bitmap
     container: BitVec,
 
-    // The number of hashes for bloom filter. We use double hashing and mix the result
+    // The number of hashes for the bloom filter. We use double hashing and mix the result
     // to achieve k hashes. The value doesn't really mean the number of hashing we actually compute.
     // For more details, see this paper: http://www.eecs.harvard.edu/~michaelm/postscripts/rsa2008.pdf
     num_hashes: usize,
 
     version: IndexSchemaVersion,
 
-    // The seeding for hash function. For now we use Seahash lib, that needs 4 seeds.
-    seeds: [u64; 4],
+    // The seeding for hash function. For now we use CityHash64, that needs only one seed.
+    seed: u64,
 }
 
 impl BloomFilter {
     /// Create a bloom filter instance with estimated number of items and expected false positive rate.
-    pub fn with_rate(num_items: u64, false_positive_rate: f64, seeds: [u64; 4]) -> Self {
+    pub fn with_rate(num_items: u64, false_positive_rate: f64, seed: u64) -> Self {
         let num_bits = Self::optimal_num_bits(num_items, false_positive_rate);
         let num_hashes = Self::optimal_num_hashes(num_items, num_bits as u64);
 
-        Self::with_size(num_bits, num_hashes, seeds)
+        Self::with_size(num_bits, num_hashes, seed)
     }
 
     /// Create a bloom filter instance with estimated number of items, expected false positive rate,
@@ -290,21 +329,21 @@ impl BloomFilter {
         num_items: u64,
         false_positive_rate: f64,
         max_num_bits: usize,
-        seeds: [u64; 4],
+        seed: u64,
     ) -> Self {
         let mut num_bits = Self::optimal_num_bits(num_items, false_positive_rate);
         let num_hashes = Self::optimal_num_hashes(num_items, num_bits as u64);
 
         num_bits = std::cmp::min(num_bits, max_num_bits);
 
-        Self::with_size(num_bits, num_hashes, seeds)
+        Self::with_size(num_bits, num_hashes, seed)
     }
 
     /// Create a bloom filter instance with specified bitmap length and number of hashes
-    pub fn with_size(num_bits: usize, num_hashes: usize, seeds: [u64; 4]) -> Self {
+    pub fn with_size(num_bits: usize, num_hashes: usize, seed: u64) -> Self {
         Self {
             container: BitVec::from_elem(num_bits, false),
-            seeds,
+            seed,
             num_hashes,
             version: IndexSchemaVersion::V1,
         }
@@ -370,7 +409,7 @@ impl BloomFilter {
     /// All bits are set to false/zero, e.g. the hashed bits are not cloned.
     #[must_use]
     pub fn clone_empty(&self) -> Self {
-        Self::with_size(self.num_bits(), self.num_hashes(), self.seeds)
+        Self::with_size(self.num_bits(), self.num_hashes(), self.seed)
     }
 
     /// Returns whether the data type is supported by bloom filter.
@@ -384,7 +423,9 @@ impl BloomFilter {
     /// Nulls are not added to the Bloom
     /// filter, so any null related filter requires reading the data file. "
     pub fn is_supported_type(data_type: &DataTypePtr) -> bool {
-        let data_type_id = data_type.data_type_id();
+        // we support nullable column but Nulls are not added into the bloom filter.
+        let inner_type = remove_nullable(data_type);
+        let data_type_id = inner_type.data_type_id();
         matches!(
             data_type_id,
             TypeID::UInt8
@@ -406,76 +447,119 @@ impl BloomFilter {
         )
     }
 
-    /// Return whether the data value is supported by bloom filter.
-    /// Nulls are not supported.
-    pub fn is_supported_value(value: &DataValue) -> bool {
-        Self::is_supported_type(&value.data_type()) && !value.is_null()
-    }
-
-    // Create hasher for bloom. Use seahash for now, may change to city hash.
     #[inline(always)]
-    fn create_hasher(&self) -> DFHasher {
-        let hasher =
-            SeaHasher::with_seeds(self.seeds[0], self.seeds[1], self.seeds[2], self.seeds[3]);
-        DFHasher::SeaHasher64(hasher, self.seeds)
+    fn compute_hash_bit_pos(&self, index: usize, h1: Wrapping<u64>, h2: Wrapping<u64>) -> usize {
+        let i = Wrapping(index as u64);
+        let hash = (h1 + i * h2 + i * i).0;
+        (hash % self.container.len() as u64) as usize
     }
 
     #[inline(always)]
     // Set bits for bloom filter, ported from Clickhouse.
     // https://github.com/ClickHouse/ClickHouse/blob/1bf375e2b761db5b99b0f403b90c412a530f4d5c/src/Interpreters/BloomFilter.cpp#L67
     fn set_bits(&mut self, hash1: &u64, hash2: &u64) {
-        let h1 = std::num::Wrapping(*hash1);
-        let h2 = std::num::Wrapping(*hash2);
+        let h1 = Wrapping(*hash1);
+        let h2 = Wrapping(*hash2);
 
         for i in 0..self.num_hashes {
-            let index = std::num::Wrapping(i as u64);
-            let res = (h1 + index * h2 + index * index).0;
-            let bit_pos = (res % self.container.len() as u64) as usize;
+            let bit_pos = self.compute_hash_bit_pos(i, h1, h2);
             self.container.set(bit_pos, true);
         }
     }
 
+    #[inline(always)]
+    fn generate_seed_2(&self) -> u64 {
+        let seed1 = std::num::Wrapping(self.seed);
+        let gen1 = std::num::Wrapping(BLOOM_FILTER_SEED_GEN_A);
+        let gen2 = std::num::Wrapping(BLOOM_FILTER_SEED_GEN_B);
+        let seed2 = seed1 * gen1 + gen2;
+        seed2.0
+    }
+
+    fn compute_column_city_hash(seed: u64, column: &ColumnRef) -> Result<ColumnRef> {
+        let input_column = "input"; // create a dummy column name
+        let input_field = DataField::new(input_column, column.data_type());
+        let input_schema = Arc::new(DataSchema::new(vec![input_field]));
+        let args = vec![
+            Expression::Column(String::from(input_column)),
+            Expression::create_literal_with_type(DataValue::UInt64(seed), UInt64Type::arc()),
+        ];
+
+        let output_column = "output";
+        let output_data_type = if column.is_nullable() {
+            wrap_nullable(&UInt64Type::arc())
+        } else {
+            UInt64Type::arc()
+        };
+        let output_field = DataField::new(output_column, output_data_type);
+        let output_schema = DataSchemaRefExt::create(vec![output_field]);
+
+        let expr: Expression = Expression::Alias(
+            String::from(output_column),
+            Box::new(Expression::create_scalar_function("city64WithSeed", args)),
+        );
+        let expr_executor = ExpressionExecutor::try_create(
+            "calculate cityhash64",
+            input_schema.clone(),
+            output_schema,
+            vec![expr],
+            true,
+        )?;
+
+        let data_block = DataBlock::create(input_schema, vec![column.clone()]);
+        let executor = Arc::new(expr_executor);
+        let output = executor.execute(&data_block)?;
+        Ok(output.column(0).clone())
+    }
+
+    fn compute_column_double_hashes(&self, column: &ColumnRef) -> Result<(ColumnRef, ColumnRef)> {
+        let hash1_column: ColumnRef = Self::compute_column_city_hash(self.seed, column)?;
+        let seed2 = self.generate_seed_2();
+        let hash2_column: ColumnRef = Self::compute_column_city_hash(seed2, column)?;
+
+        Ok((hash1_column, hash2_column))
+    }
+
     /// Add the column data into bloom filter, Nulls are skipped and not added.
     ///
-    /// The design of skipping Nulls are arguably correct. For now we do the same as databricks.
+    /// The design of skipping Nulls is arguably correct. For now we do the same as databricks.
     /// See the design of databricks https://docs.databricks.com/delta/optimizations/bloom-filters.html
     pub fn add(&mut self, column: &ColumnRef) -> Result<()> {
         if !Self::is_supported_type(&column.data_type()) {
             return Err(ErrorCode::BadArguments(format!(
                 "Unsupported data type: {} ",
-                column.data_type()
+                column.data_type_id()
             )));
         }
 
-        let series = column.to_minimal_array()?;
-
-        let hasher1 = self.create_hasher();
-        let hash1_arr = series.vec_hash(hasher1)?;
-
-        let hasher2 = self.create_hasher();
-        let hash2_arr = series.vec_hash(hasher2)?;
-
-        let validity = series.validity();
-        let no_null = validity == None || series.null_count() == 0;
-        let all_null = series.len() == series.null_count();
-
-        if all_null {
+        let (is_all_null, validity) = column.validity();
+        if is_all_null {
             return Ok(());
         }
 
-        if no_null {
-            hash1_arr
-                .into_no_null_iter()
-                .zip(hash2_arr.into_no_null_iter())
-                .for_each(|(h1, h2)| {
-                    self.set_bits(h1, h2);
-                });
+        let (hash1_column, hash2_column) = self.compute_column_double_hashes(column)?;
+
+        // If the input is not nullable, we say all hashed values should be valid and we put them into bloom filter without checking validity.
+        if !column.is_nullable() {
+            let column1: &UInt64Column = Series::check_get(&hash1_column)?;
+            let column2: &UInt64Column = Series::check_get(&hash2_column)?;
+
+            column1.iter().zip(column2.iter()).for_each(|(h1, h2)| {
+                self.set_bits(h1, h2);
+            });
         } else {
             let bitmap = validity.unwrap();
+
+            let column1 = Series::remove_nullable(&hash1_column);
+            let column1: &UInt64Column = Series::check_get(&column1)?;
+
+            let column2 = Series::remove_nullable(&hash2_column);
+            let column2: &UInt64Column = Series::check_get(&column2)?;
+
             bitmap
                 .into_iter()
-                .zip(hash1_arr.into_no_null_iter())
-                .zip(hash2_arr.into_no_null_iter())
+                .zip(column1.iter())
+                .zip(column2.iter())
                 .for_each(|((valid, h1), h2)| {
                     if valid {
                         self.set_bits(h1, h2);
@@ -485,45 +569,61 @@ impl BloomFilter {
         Ok(())
     }
 
+    fn compute_data_value_double_hashes(
+        &self,
+        data_value: DataValue,
+        data_type: DataTypePtr,
+    ) -> Result<(u64, u64)> {
+        let col = data_value.as_const_column(&data_type, 1)?;
+
+        let hash1_column = Self::compute_column_city_hash(self.seed, &col)?;
+        let h1 = hash1_column.get_u64(0)?;
+
+        let seed2 = self.generate_seed_2();
+        let hash2_column = Self::compute_column_city_hash(seed2, &col)?;
+        let h2 = hash2_column.get_u64(0)?;
+
+        Ok((h1, h2))
+    }
+
     /// Check the existence of the data. The data value should not be Null.
-    /// Use BloomFilter::is_supported_value to check before using this method.
+    /// Use BloomFilter::is_supported_type to check before using this method.
     ///
+    /// The data_type is necessary here because hash(12_u8) is not always the same with hash(12_u64)
+    /// for some hash functions.
+    ///
+    /// The data_value doesn't carry enough type information, which actually makes
+    /// sense. For example, the where clause '<expr> = 12', value 12 is hard to tell the type unless we have
+    /// type of <expr>.
     ///
     /// Notice: false positive may exist, e.g. return true doesn't guarantee the value exists.
     /// But returning false guarantees that it never ever showed up.
     ///
     /// Example:
     /// ```
-    ///     let not_exist = BloomFilter::is_supported_value(data_value) && !bloom.find(data_value)?;
+    ///     let not_exist = BloomFilter::is_supported_type(data_type) && !bloom.find(data_value, data_type)?;
     ///
     /// ```
-    pub fn find(&self, val: DataValue) -> Result<bool> {
-        if !Self::is_supported_value(&val) {
+    pub fn find(&self, val: DataValue, typ: DataTypePtr) -> Result<bool> {
+        if !Self::is_supported_type(&typ) {
             return Err(ErrorCode::BadArguments(format!(
-                "Unsupported data value: {} ",
-                val
+                "Unsupported data type: {:?} ",
+                typ
             )));
         }
 
-        let col = ColumnRef::Constant(val, 1);
-        let series = col.to_minimal_array()?;
+        if val.is_null() {
+            return Err(ErrorCode::BadArguments("Null value is not supported"));
+        }
 
-        let hasher1 = self.create_hasher();
-        let hash1_arr = series.vec_hash(hasher1)?;
-        let hash1 = hash1_arr.inner().value(0);
-
-        let hasher2 = self.create_hasher();
-        let hash2_arr = series.vec_hash(hasher2)?;
-        let hash2 = hash2_arr.inner().value(0);
-
-        let h1 = std::num::Wrapping(hash1);
-        let h2 = std::num::Wrapping(hash2);
+        let (hash1, hash2) = self.compute_data_value_double_hashes(val, typ)?;
+        let h1 = Wrapping(hash1);
+        let h2 = Wrapping(hash2);
         for i in 0..self.num_hashes {
-            let index = std::num::Wrapping(i as u64);
-            let res = (h1 + index * h2 + index * index).0;
-            let bit_pos = (res % self.container.len() as u64) as usize;
+            let bit_pos = self.compute_hash_bit_pos(i, h1, h2);
+
             // If any bit is not 1 in bloom filter, it means the data never ever showed up before.
-            // unwrap should be fine because 'bit_pos' was mod by container.len()
+            // The 'unwrap' should be fine because 'bit_pos' was mod by container.len().
             let is_bit_set = self.container.get(bit_pos).unwrap();
             if !is_bit_set {
                 return Ok(false);

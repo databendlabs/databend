@@ -21,23 +21,18 @@ use databend_query::storages::index::BloomFilterExprEvalResult;
 use databend_query::storages::index::BloomFilterIndexer;
 use pretty_assertions::assert_eq;
 
-fn create_seeds() -> [u64; 4] {
-    [
-        0x16f11fe89b0d677c,
-        0xb480a793d8e6c86c,
-        0x6fe2e5aaf078ebc9,
-        0x14f994a4c5259381,
-    ]
+fn create_seed() -> u64 {
+    0x16f11fe89b0d677c
 }
 
 #[test]
 fn test_num_bits_hashes() -> Result<()> {
     // use this website for verification: https://hur.st/bloomfilter/
-    let bloom = BloomFilter::with_rate(100000, 0.01, create_seeds());
+    let bloom = BloomFilter::with_rate(100000, 0.01, create_seed());
     assert_eq!(bloom.num_bits(), 958506);
     assert_eq!(bloom.num_hashes(), 7);
 
-    let bloom = BloomFilter::with_rate(4000, 0.02, create_seeds());
+    let bloom = BloomFilter::with_rate(4000, 0.02, create_seed());
     assert_eq!(bloom.num_bits(), 32570);
     assert_eq!(bloom.num_hashes(), 6);
     Ok(())
@@ -48,23 +43,24 @@ fn test_bloom_add_find_string() -> Result<()> {
     let schema =
         DataSchemaRefExt::create(vec![DataField::new_nullable("name", Vu8::to_data_type())]);
     let block = DataBlock::create(schema, vec![Series::from_data(vec![
-        "Alice", "Bob", "Batman", "Superman",
+        "Alice", "Bob", "Batman", "Superman", "123",
     ])]);
 
     let col = block.column(0);
 
-    let mut bloom = BloomFilter::with_rate(4, 0.000001, create_seeds());
+    let mut bloom = BloomFilter::with_rate(4, 0.000001, create_seed());
 
     bloom.add(col)?;
-    assert!(bloom.find(DataValue::String(Some(b"Alice".to_vec())))?);
-    assert!(bloom.find(DataValue::String(Some(b"Bob".to_vec())))?);
-    assert!(bloom.find(DataValue::String(Some(b"Batman".to_vec())))?);
-    assert!(bloom.find(DataValue::String(Some(b"Superman".to_vec())))?);
+    assert!(bloom.find(DataValue::String(b"Alice".to_vec()), StringType::arc())?);
+    assert!(bloom.find(DataValue::String(b"Bob".to_vec()), StringType::arc())?);
+    assert!(bloom.find(DataValue::String(b"Batman".to_vec()), StringType::arc())?);
+    assert!(bloom.find(DataValue::String(b"Superman".to_vec()), StringType::arc())?);
+    assert!(bloom.find(DataValue::UInt64(123), StringType::arc())?); // cast will happen to convert 123 to "123"
 
     // this case no false positive
-    assert!(!bloom.find(DataValue::String(Some(b"alice1".to_vec())))?);
-    assert!(!bloom.find(DataValue::String(Some(b"alice2".to_vec())))?);
-    assert!(!bloom.find(DataValue::String(Some(b"alice3".to_vec())))?);
+    assert!(!bloom.find(DataValue::String(b"alice1".to_vec()), StringType::arc())?);
+    assert!(!bloom.find(DataValue::String(b"alice2".to_vec()), StringType::arc())?);
+    assert!(!bloom.find(DataValue::String(b"alice3".to_vec()), StringType::arc())?);
 
     Ok(())
 }
@@ -72,9 +68,8 @@ fn test_bloom_add_find_string() -> Result<()> {
 #[test]
 fn test_bloom_interval() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new(
-        "Interval",
-        DataType::Interval(IntervalUnit::DayTime),
-        true,
+        "Nullable(Interval)",
+        wrap_nullable(&IntervalType::arc(IntervalKind::Second)),
     )]);
 
     let block = DataBlock::create(schema, vec![Series::from_data([
@@ -88,19 +83,58 @@ fn test_bloom_interval() -> Result<()> {
 
     let col = block.column(0);
 
-    let mut bloom = BloomFilter::with_rate(6, 0.000001, create_seeds());
+    let mut bloom = BloomFilter::with_rate(6, 0.000001, create_seed());
 
     // this case false positive not exist
     bloom.add(col)?;
-    assert!(bloom.find(DataValue::Int64(1234_i64))?);
-    assert!(bloom.find(DataValue::Int64(-4321_i64))?);
+    assert!(bloom.find(
+        DataValue::Int64(1234_i64),
+        IntervalType::arc(IntervalKind::Second)
+    )?);
+    assert!(bloom.find(
+        DataValue::Int64(-4321_i64),
+        IntervalType::arc(IntervalKind::Second)
+    )?);
+    Ok(())
+}
+
+#[test]
+fn test_bloom_u8() -> Result<()> {
+    let schema = DataSchemaRefExt::create(vec![DataField::new(
+        "UInt8",
+        wrap_nullable(&UInt8Type::arc()),
+    )]);
+
+    let block = DataBlock::create(schema, vec![Series::from_data([
+        None,
+        None,
+        None,
+        None,
+        Some(5_u8),
+    ])]);
+
+    let col = block.column(0);
+
+    let mut bloom = BloomFilter::with_rate(10, 0.000001, create_seed());
+    bloom.add(col)?;
+
+    let buf = bloom.to_vec()?;
+    let bloom = BloomFilter::from_vec(buf.as_slice())?;
+
+    assert!(bloom.find(DataValue::UInt64(5), UInt8Type::arc())?);
+
+    // Although the same value, different data type will result in different hashes.
+    assert!(!bloom.find(DataValue::UInt64(5), UInt16Type::arc())?);
+
     Ok(())
 }
 
 #[test]
 fn test_bloom_f64_serialization() -> Result<()> {
-    let schema =
-        DataSchemaRefExt::create(vec![DataField::new("Float64", f64::to_data_type(), true)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new(
+        "Float64",
+        wrap_nullable(&Float64Type::arc()),
+    )]);
 
     let block = DataBlock::create(schema, vec![Series::from_data([
         None,
@@ -114,84 +148,33 @@ fn test_bloom_f64_serialization() -> Result<()> {
 
     let col = block.column(0);
 
-    let mut bloom = BloomFilter::with_rate(10, 0.000001, create_seeds());
+    let mut bloom = BloomFilter::with_rate(10, 0.000001, create_seed());
     bloom.add(col)?;
 
     let buf = bloom.to_vec()?;
     let bloom = BloomFilter::from_vec(buf.as_slice())?;
 
-    assert!(bloom.find(DataValue::Float64(Some(1234.1234_f64)))?);
-    assert!(bloom.find(DataValue::Float64(Some(-4321.4321_f64)))?);
-    assert!(bloom.find(DataValue::Float64(Some(88.88_f64)))?);
+    assert!(bloom.find(DataValue::Float64(1234.1234_f64), Float64Type::arc())?);
+    assert!(bloom.find(DataValue::Float64(-4321.4321_f64), Float64Type::arc())?);
+    assert!(bloom.find(DataValue::Float64(88.88_f64), Float64Type::arc())?);
 
     // a random number not exist
-    assert!(!bloom.find(DataValue::Float64(Some(88.88001_f64)))?);
+    assert!(!bloom.find(DataValue::Float64(88.88001_f64), Float64Type::arc())?);
     Ok(())
 }
 
 // A helper function to create a bloom filter, with the same bits and hashes as other.
-fn create_bloom(data_type: DataType, series: Series, other: &BloomFilter) -> Result<BloomFilter> {
+fn create_bloom(
+    data_type: DataTypePtr,
+    column: ColumnRef,
+    other: &BloomFilter,
+) -> Result<BloomFilter> {
     let mut bloom = other.clone_empty();
-    let schema = DataSchemaRefExt::create(vec![DataField::new("num", data_type, true)]);
-    let block = DataBlock::create(schema, vec![series]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("num", data_type)]);
+    let block = DataBlock::create(schema, vec![column]);
     let col = block.column(0);
     bloom.add(col)?;
     Ok(bloom)
-}
-
-#[test]
-fn test_bloom_uint8_existence() -> Result<()> {
-    // Build the table and bloom filters, get the bloom filter for column 'ColumnUInt8'
-    let table = create_blocks();
-    let indexer = BloomFilterIndexer::from_data_and_seeds(table.as_ref(), create_seeds())?;
-    let bloom = indexer.try_get_bloom("ColumnUInt8")?;
-
-    // Existence case: numbers 1, 3, 5, 7, 9, 11, 13, 15 should exist in the bloom filter.
-    for num in [1_u8, 3, 5, 7, 9, 11, 13, 15] {
-        let single_value_bloom =
-            create_bloom(u8::to_data_type(), Series::from_data(vec![num]), &bloom)?;
-
-        assert!(bloom.contains(&single_value_bloom));
-    }
-    Ok(())
-}
-
-#[test]
-fn test_bloom_f64_existence() -> Result<()> {
-    // Build the table and bloom filters, get the bloom filter for column 'ColumnUInt8'
-    let table = create_blocks();
-    let indexer = BloomFilterIndexer::from_data_and_seeds(table.as_ref(), create_seeds())?;
-    let bloom = indexer.try_get_bloom("ColumnFloat64")?;
-
-    // Existence case: numbers 1, 3, 5, 7, 9, 11, 13, 15 should exist in the bloom filter.
-    for num in [1.0_f64, 3.0, 5.0, 7.0, 9.0, 11.0, 13.0, 15.0] {
-        let single_value_bloom =
-            create_bloom(f64::to_data_type(), Series::from_data(vec![num]), &bloom)?;
-
-        assert!(bloom.contains(&single_value_bloom));
-    }
-    Ok(())
-}
-
-#[test]
-fn test_bloom_hash_collision() -> Result<()> {
-    // Build the table and bloom filters, get the bloom filter for column 'ColumnUInt8'
-    let table = create_blocks();
-    let indexer = BloomFilterIndexer::from_data_and_seeds(table.as_ref(), create_seeds())?;
-    let bloom = indexer.try_get_bloom("ColumnUInt8")?;
-
-    // Values [2, 4, 6, 8] doesn't exist and doesn't cause collision, so bloom.contains should return false
-    for num in [2_u8, 4, 6, 8] {
-        let single_value_bloom =
-            create_bloom(u8::to_data_type(), Series::from_data(vec![num]), &bloom)?;
-        assert!(!bloom.contains(&single_value_bloom), "{}", num);
-    }
-
-    // When hash collision happens, although number 32 doesn't exist in data_blocks, the hash bits say yes.
-    let single_value_bloom =
-        create_bloom(u8::to_data_type(), Series::from_data(vec![32_u8]), &bloom)?;
-    assert!(bloom.contains(&single_value_bloom));
-    Ok(())
 }
 
 // create test data, all numerics are odd number, even numbers are reserved for testing.
@@ -210,11 +193,8 @@ fn create_blocks() -> Vec<DataBlock> {
         DataField::new_nullable("ColumnDate16", Date16Type::arc()),
         DataField::new_nullable("ColumnDate32", Date32Type::arc()),
         DataField::new_nullable("ColumnDateTime32", DateTime32Type::arc(None)),
-        DataField::new_nullable("ColumnDateTime64", DateTime64Type::arc(None)),
-        DataField::new_nullable(
-            "ColumnIntervalDayTime",
-            IntervalType::arc(IntervalUnit::DayTime),
-        ),
+        DataField::new_nullable("ColumnDateTime64", DateTime64Type::arc(3, None)),
+        DataField::new_nullable("ColumnIntervalDays", IntervalType::arc(IntervalKind::Day)),
         DataField::new_nullable("ColumnString", Vu8::to_data_type()),
     ]);
 
@@ -259,6 +239,63 @@ fn create_blocks() -> Vec<DataBlock> {
     vec![block1, block2]
 }
 
+fn create_bloom_indexer() -> Result<BloomFilterIndexer> {
+    let blocks = create_blocks();
+    BloomFilterIndexer::try_create_with_seed(blocks.as_slice(), create_seed())
+}
+
+#[test]
+fn test_bloom_uint8_existence() -> Result<()> {
+    // Build the table and bloom filters, get the bloom filter for column 'ColumnUInt8'
+    let indexer = create_bloom_indexer()?;
+    let bloom = indexer.try_get_bloom("ColumnUInt8")?;
+
+    // Existence case: numbers 1, 3, 5, 7, 9, 11, 13, 15 should exist in the bloom filter.
+    for num in [1_u8, 3, 5, 7, 9, 11, 13, 15] {
+        let single_value_bloom =
+            create_bloom(u8::to_data_type(), Series::from_data(vec![num]), &bloom)?;
+
+        assert!(bloom.contains(&single_value_bloom));
+    }
+    Ok(())
+}
+
+#[test]
+fn test_bloom_f64_existence() -> Result<()> {
+    // Build the table and bloom filters, get the bloom filter for column 'ColumnUInt8'
+    let indexer = create_bloom_indexer()?;
+    let bloom = indexer.try_get_bloom("ColumnFloat64")?;
+
+    // Existence case: numbers 1, 3, 5, 7, 9, 11, 13, 15 should exist in the bloom filter.
+    for num in [1.0_f64, 3.0, 5.0, 7.0, 9.0, 11.0, 13.0, 15.0] {
+        let single_value_bloom =
+            create_bloom(f64::to_data_type(), Series::from_data(vec![num]), &bloom)?;
+
+        assert!(bloom.contains(&single_value_bloom));
+    }
+    Ok(())
+}
+
+#[test]
+fn test_bloom_hash_collision() -> Result<()> {
+    // Build the table and bloom filters, get the bloom filter for column 'ColumnUInt8'
+    let indexer = create_bloom_indexer()?;
+    let bloom = indexer.try_get_bloom("ColumnUInt8")?;
+
+    // Values [2, 4, 6, 8] doesn't exist and doesn't cause collision, so bloom.contains should return false
+    for num in [2_u8, 4, 6, 8] {
+        let single_value_bloom =
+            create_bloom(u8::to_data_type(), Series::from_data(vec![num]), &bloom)?;
+        assert!(!bloom.contains(&single_value_bloom), "{}", num);
+    }
+
+    // When hash collision happens, although number 34 doesn't exist in data_blocks, the hash bits say yes.
+    let single_value_bloom =
+        create_bloom(u8::to_data_type(), Series::from_data(vec![34_u8]), &bloom)?;
+    assert!(bloom.contains(&single_value_bloom));
+    Ok(())
+}
+
 #[test]
 fn test_bloom_indexer_single_column_prune() -> Result<()> {
     struct Test {
@@ -269,8 +306,8 @@ fn test_bloom_indexer_single_column_prune() -> Result<()> {
 
     let tests: Vec<Test> = vec![
         Test {
-            name: "ColumnUInt8 = 34",
-            expr: col("ColumnUInt8").eq(lit(34u8)),
+            name: "ColumnUInt8 = 32",
+            expr: col("ColumnUInt8").eq(lit(32u8)),
             expected_eval_result: BloomFilterExprEvalResult::False,
         },
         Test {
@@ -279,8 +316,8 @@ fn test_bloom_indexer_single_column_prune() -> Result<()> {
             expected_eval_result: BloomFilterExprEvalResult::False,
         },
         Test {
-            name: "ColumnUInt32 = 12134",
-            expr: col("ColumnUInt32").eq(lit(12134u32)),
+            name: "ColumnUInt32 = 1213",
+            expr: col("ColumnUInt32").eq(lit(1213u32)),
             expected_eval_result: BloomFilterExprEvalResult::False,
         },
         Test {
@@ -295,8 +332,7 @@ fn test_bloom_indexer_single_column_prune() -> Result<()> {
         },
     ];
 
-    let data_blocks = create_blocks();
-    let indexer = BloomFilterIndexer::from_data_and_seeds(data_blocks.as_ref(), create_seeds())?;
+    let indexer = create_bloom_indexer()?;
 
     for test in tests {
         let res = indexer.eval(&test.expr)?;
@@ -340,8 +376,7 @@ fn test_bloom_indexer_logical_and_prune() -> Result<()> {
         },
     ];
 
-    let data_blocks = create_blocks();
-    let indexer = BloomFilterIndexer::from_data_and_seeds(data_blocks.as_ref(), create_seeds())?;
+    let indexer = create_bloom_indexer()?;
 
     for test in tests {
         let res = indexer.eval(&test.expr)?;
@@ -361,10 +396,10 @@ fn test_bloom_indexer_logical_or_prune() -> Result<()> {
     let tests: Vec<Test> = vec![
         Test {
             // Neither value exists in the data block, should return false;
-            name: "ColumnDate32 = 2 or ColumnString = 'not-exist'",
+            name: "ColumnDate32 = 1234 or ColumnString = 'nonexistence'",
             expr: col("ColumnDate32")
-                .eq(lit(2_u32))
-                .or(col("ColumnString").eq(lit("not-exist".as_bytes()))),
+                .eq(lit(1234_u32))
+                .or(col("ColumnString").eq(lit("nonexistence".as_bytes()))),
             expected_eval_result: BloomFilterExprEvalResult::False,
         },
         Test {
@@ -393,8 +428,7 @@ fn test_bloom_indexer_logical_or_prune() -> Result<()> {
         },
     ];
 
-    let data_blocks = create_blocks();
-    let indexer = BloomFilterIndexer::from_data_and_seeds(data_blocks.as_ref(), create_seeds())?;
+    let indexer = create_bloom_indexer()?;
 
     for test in tests {
         let res = indexer.eval(&test.expr)?;
