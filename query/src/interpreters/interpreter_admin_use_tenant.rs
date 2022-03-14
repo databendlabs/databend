@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchema;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AdminUseTenantPlan;
 use common_streams::DataBlockStream;
@@ -47,6 +48,14 @@ impl Interpreter for UseTenantInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         tracing::info!("SUDO USE tenant:{}", self.plan.tenant);
+
+        let user = self.ctx.get_current_session().get_current_user()?;
+
+        if !user.is_superuser {
+            return Err(ErrorCode::PermissionDenied(
+                "Permission denied, requires superuser",
+            ));
+        }
 
         self.ctx
             .set_current_tenant(self.plan.tenant.clone())
