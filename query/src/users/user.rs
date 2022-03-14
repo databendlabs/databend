@@ -45,6 +45,7 @@ impl From<&User> for UserInfo {
             auth_info: user.auth_data.clone(),
             grants,
             quota,
+            is_superuser: false,
         }
     }
 }

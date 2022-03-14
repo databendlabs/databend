@@ -56,11 +56,15 @@ impl AuthMgr {
     pub async fn auth(&self, credential: &Credential) -> Result<UserInfo> {
         match credential {
             Credential::Jwt { token: t } => {
-                let user_name = match &self.jwt {
+                let (user_name, is_supper) = match &self.jwt {
                     Some(j) => j.get_user(t.as_str())?,
                     None => return Err(ErrorCode::AuthenticateFailure("jwt auth not configured.")),
                 };
-                self.users.get_user(&self.tenant, &user_name, "%").await
+                if is_supper {
+                    Ok(UserInfo::new_super(user_name))
+                } else {
+                    self.users.get_user(&self.tenant, &user_name, "%").await
+                }
             }
             Credential::Password {
                 name: n,

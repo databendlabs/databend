@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use jwt_simple::algorithms::RS256PublicKey;
 use jwt_simple::algorithms::RSAPublicKeyLike;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::configs::Config;
 use crate::users::auth::jwt::jwk;
@@ -32,8 +32,10 @@ pub struct JwtAuthenticator {
     key_store: jwk::JwkKeyStore,
 }
 
-// to use user specified (in config) fields
-type CustomClaims = HashMap<String, serde_json::Value>;
+#[derive(Deserialize, Serialize, Debug)]
+struct CustomClaims {
+    is_superuser: Option<bool>,
+}
 
 impl JwtAuthenticator {
     pub async fn try_create(cfg: Config) -> Result<Option<Self>> {
@@ -44,15 +46,18 @@ impl JwtAuthenticator {
         Ok(Some(JwtAuthenticator { key_store }))
     }
 
-    pub fn get_user(&self, token: &str) -> Result<String> {
+    pub fn get_user(&self, token: &str) -> Result<(String, bool)> {
         let pub_key = self.key_store.get_key(None)?;
         match &pub_key {
             PubKey::RSA256(pk) => match pk.verify_token::<CustomClaims>(token, None) {
                 Ok(c) => match c.subject {
                     None => Err(ErrorCode::AuthenticateFailure(
-                        "missing  field `subject` in jwt",
+                        "missing field `subject` in jwt",
                     )),
-                    Some(subject) => Ok(subject),
+                    Some(subject) => {
+                        let is_superuser = c.custom.is_superuser.unwrap_or(false);
+                        Ok((subject, is_superuser))
+                    }
                 },
                 Err(err) => Err(ErrorCode::AuthenticateFailure(err.to_string())),
             },

@@ -36,6 +36,8 @@ pub struct UserInfo {
     pub grants: UserGrantSet,
 
     pub quota: UserQuota,
+
+    pub is_superuser: bool,
 }
 
 impl UserInfo {
@@ -50,6 +52,18 @@ impl UserInfo {
             auth_info,
             grants,
             quota,
+            is_superuser: false,
+        }
+    }
+
+    pub fn new_super(name: String) -> Self {
+        UserInfo {
+            name,
+            hostname: "".to_string(),
+            auth_info: AuthInfo::JWT,
+            grants: UserGrantSet::empty(),
+            quota: UserQuota::no_limit(),
+            is_superuser: true,
         }
     }
 
