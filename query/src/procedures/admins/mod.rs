@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod admins;
-mod context_function;
-mod function;
-mod function_factory;
-pub mod systems;
+mod admin;
+pub mod reload_config;
+mod warehouse_metadata;
 
-pub use context_function::ContextFunction;
-pub use function::Function;
-pub use function_factory::FunctionDescription;
-pub use function_factory::FunctionFactory;
-pub use function_factory::FunctionFeatures;
+pub use admin::AdminProcedure;
+pub use warehouse_metadata::CreateWarehouseMetaProcedure;
+pub use warehouse_metadata::DropWarehouseMetaProcedure;
+pub use warehouse_metadata::GetWarehouseMetaFunction;
+pub use warehouse_metadata::ListWarehouseMetaProcedure;
+pub use warehouse_metadata::UpdateWarehouseSizeProcedure;

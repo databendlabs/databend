@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::functions::systems::FuseHistoryFunction;
-use crate::functions::FunctionFactory;
+use std::sync::Arc;
 
-pub struct SystemFunction;
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchema;
+use common_exception::Result;
 
-impl SystemFunction {
-    pub fn register(factory: &mut FunctionFactory) {
-        factory.register("system$fuse_history", FuseHistoryFunction::desc());
-    }
+use crate::sessions::QueryContext;
+
+#[async_trait::async_trait]
+pub trait Procedure: Sync + Send {
+    async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock>;
+
+    fn schema(&self) -> Arc<DataSchema>;
 }

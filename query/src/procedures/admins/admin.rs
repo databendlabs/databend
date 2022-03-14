@@ -12,33 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::functions::admins::CreateWarehouseMetaFunction;
-use crate::functions::admins::DropWarehouseMetaFunction;
-use crate::functions::admins::GetWarehouseMetaFunction;
-use crate::functions::admins::ListWarehouseMetaFunction;
-use crate::functions::admins::UpdateWarehouseSizeFunction;
-use crate::functions::FunctionFactory;
+use crate::procedures::admins::reload_config::ReloadConfigProcedure;
+use crate::procedures::admins::CreateWarehouseMetaProcedure;
+use crate::procedures::admins::DropWarehouseMetaProcedure;
+use crate::procedures::admins::GetWarehouseMetaFunction;
+use crate::procedures::admins::ListWarehouseMetaProcedure;
+use crate::procedures::admins::UpdateWarehouseSizeProcedure;
+use crate::procedures::ProcedureFactory;
 
-pub struct AdminFunction;
+pub struct AdminProcedure;
 
-impl AdminFunction {
-    pub fn register(factory: &mut FunctionFactory) {
+impl AdminProcedure {
+    pub fn register(factory: &mut ProcedureFactory) {
         factory.register(
             "admin$create_warehouse_meta",
-            CreateWarehouseMetaFunction::desc(),
+            CreateWarehouseMetaProcedure::desc(),
         );
         factory.register(
             "admin$update_warehouse_meta_size",
-            UpdateWarehouseSizeFunction::desc(),
+            UpdateWarehouseSizeProcedure::desc(),
         );
         factory.register("admin$get_warehouse_meta", GetWarehouseMetaFunction::desc());
         factory.register(
             "admin$list_warehouse_meta",
-            ListWarehouseMetaFunction::desc(),
+            ListWarehouseMetaProcedure::desc(),
         );
         factory.register(
             "admin$drop_warehouse_meta",
-            DropWarehouseMetaFunction::desc(),
-        )
+            DropWarehouseMetaProcedure::desc(),
+        );
+        factory.register("admin$reload_config", ReloadConfigProcedure::desc());
     }
 }

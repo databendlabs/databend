@@ -81,7 +81,6 @@ async fn test_session_context() -> Result<()> {
         let sessions = SessionManagerBuilder::create().build()?;
         let dummy_session = sessions.create_session("TestSession").await?;
         let shared = QueryContextShared::try_create(
-            sessions.get_conf().clone(),
             Arc::new(dummy_session.as_ref().clone()),
             Cluster::empty(),
         )
@@ -89,10 +88,10 @@ async fn test_session_context() -> Result<()> {
 
         session_ctx.set_query_context_shared(Some(shared.clone()));
         let val = session_ctx.get_query_context_shared();
-        assert_eq!(shared.conf, val.unwrap().conf);
+        assert_eq!(shared.get_config(), val.unwrap().get_config());
 
         let val = session_ctx.take_query_context_shared();
-        assert_eq!(shared.conf, val.unwrap().conf);
+        assert_eq!(shared.get_config(), val.unwrap().get_config());
 
         let val = session_ctx.get_query_context_shared();
         assert!(val.is_none());

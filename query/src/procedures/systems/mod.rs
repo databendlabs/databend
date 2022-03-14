@@ -12,17 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+mod fuse_history;
+mod system;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
-use common_exception::Result;
-
-use crate::sessions::QueryContext;
-
-#[async_trait::async_trait]
-pub trait Function: Sync + Send {
-    async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock>;
-
-    fn schema(&self) -> Arc<DataSchema>;
-}
+pub use fuse_history::FuseHistoryProcedure;
+pub use system::SystemProcedure;

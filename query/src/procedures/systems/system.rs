@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod admin;
-mod warehouse_metadata;
+use crate::procedures::systems::FuseHistoryProcedure;
+use crate::procedures::ProcedureFactory;
 
-pub use admin::AdminFunction;
-pub use warehouse_metadata::CreateWarehouseMetaFunction;
-pub use warehouse_metadata::DropWarehouseMetaFunction;
-pub use warehouse_metadata::GetWarehouseMetaFunction;
-pub use warehouse_metadata::ListWarehouseMetaFunction;
-pub use warehouse_metadata::UpdateWarehouseSizeFunction;
+pub struct SystemProcedure;
+
+impl SystemProcedure {
+    pub fn register(factory: &mut ProcedureFactory) {
+        factory.register("system$fuse_history", FuseHistoryProcedure::desc());
+    }
+}
