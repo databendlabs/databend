@@ -13,8 +13,13 @@ select a+b from t2;
 
 create table t2(a int,b int) engine=NotExists; -- {ErrorCode 2302}
 
+create table t3(`a` int) ENGINE = Null;
+create table t4('a' int) ENGINE = Null;
+
 DROP TABLE IF EXISTS t;
 DROP TABLE IF EXISTS t2;
+DROP TABLE IF EXISTS t3;
+DROP TABLE IF EXISTS t4;
 
 -- prepare test databases for testing 'create table like' and 'as select' statements.
 CREATE DATABASE db1;

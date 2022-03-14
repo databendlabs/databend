@@ -30,8 +30,15 @@ pub type ComparisonLtFunction = ComparisonFunctionCreator<ComparisonLtImpl>;
 pub struct ComparisonLtImpl;
 
 impl ComparisonImpl for ComparisonLtImpl {
-    type PrimitiveSimd = PrimitiveSimdLt;
     type BooleanSimd = BooleanSimdLt;
+
+    fn eval_simd<T>(l: T::Simd, r: T::Simd) -> u8
+    where
+        T: PrimitiveType + Simd8,
+        T::Simd: Simd8PartialOrd,
+    {
+        l.lt(r)
+    }
 
     fn eval_primitive<L, R, M>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> bool
     where
@@ -48,45 +55,16 @@ impl ComparisonImpl for ComparisonLtImpl {
 }
 
 #[derive(Clone)]
-pub struct PrimitiveSimdLt;
-
-impl PrimitiveSimdImpl for PrimitiveSimdLt {
-    fn vector_vector<T>(lhs: &PrimitiveColumn<T>, rhs: &PrimitiveColumn<T>) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialOrd,
-    {
-        CommonPrimitiveImpl::compare_op(lhs, rhs, |a, b| a.lt(b))
-    }
-
-    fn vector_const<T>(lhs: &PrimitiveColumn<T>, rhs: T) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialOrd,
-    {
-        CommonPrimitiveImpl::compare_op_scalar(lhs, rhs, |a, b| a.lt(b))
-    }
-
-    fn const_vector<T>(lhs: T, rhs: &PrimitiveColumn<T>) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialOrd,
-    {
-        CommonPrimitiveImpl::compare_op_scalar(rhs, lhs, |a, b| a.gt(b))
-    }
-}
-
-#[derive(Clone)]
 pub struct BooleanSimdLt;
 
 impl BooleanSimdImpl for BooleanSimdLt {
     fn vector_vector(lhs: &BooleanColumn, rhs: &BooleanColumn) -> BooleanColumn {
-        CommonBooleanImpl::compare_op(lhs, rhs, |a, b| !a & b)
+        CommonBooleanOp::compare_op(lhs, rhs, |a, b| !a & b)
     }
 
     fn vector_const(lhs: &BooleanColumn, rhs: bool) -> BooleanColumn {
         if rhs {
-            CommonBooleanImpl::compare_op_scalar(lhs, rhs, |a, _| !a)
+            CommonBooleanOp::compare_op_scalar(lhs, rhs, |a, _| !a)
         } else {
             BooleanColumn::from_arrow_data(Bitmap::new_zeroed(lhs.len()))
         }

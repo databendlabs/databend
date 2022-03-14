@@ -131,7 +131,10 @@ impl Server for MySQLHandler {
         match self.abort_registration.take() {
             None => Err(ErrorCode::LogicalError("MySQLHandler already running.")),
             Some(registration) => {
-                let rejected_rt = Arc::new(Runtime::with_worker_threads(1)?);
+                let rejected_rt = Arc::new(Runtime::with_worker_threads(
+                    1,
+                    Some("mysql-handler".to_string()),
+                )?);
                 let (stream, listener) = Self::listener_tcp(listening).await?;
                 let stream = Abortable::new(stream, registration);
                 self.join_handle = Some(tokio::spawn(self.listen_loop(stream, rejected_rt)));

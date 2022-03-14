@@ -91,6 +91,7 @@ rpc_tls_meta_service_domain_name = \"localhost\"
 
 [storage]
 storage_type = \"disk\"
+storage_num_cpus = 0
 
 [storage.disk]
 data_path = \"_data\"

@@ -23,7 +23,7 @@ use crate::functions::admins::AdminFunction;
 use crate::functions::systems::SystemFunction;
 use crate::functions::Function;
 
-pub type Factory2Creator = Box<dyn Fn() -> Result<Box<dyn Function>> + Send + Sync>;
+pub type FactoryCreator = Box<dyn Fn() -> Result<Box<dyn Function>> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct FunctionFeatures {
@@ -55,11 +55,11 @@ impl FunctionFeatures {
 
 pub struct FunctionDescription {
     features: FunctionFeatures,
-    function_creator: Factory2Creator,
+    function_creator: FactoryCreator,
 }
 
 impl FunctionDescription {
-    pub fn creator(creator: Factory2Creator) -> FunctionDescription {
+    pub fn creator(creator: FactoryCreator) -> FunctionDescription {
         FunctionDescription {
             function_creator: creator,
             features: FunctionFeatures::default(),

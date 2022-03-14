@@ -31,7 +31,31 @@ fn create_table() -> Result<()> {
     let expected = DfStatement::CreateTable(DfCreateTable {
         if_not_exists: false,
         name: ObjectName(vec![Ident::new("t")]),
-        columns: vec![make_column_def("c1", DataType::Int(None))],
+        columns: vec![make_column_def("c1", None, DataType::Int(None))],
+        engine: "Fuse".to_string(),
+        options: maplit::hashmap! {"location".into() => "/data/33.csv".into()},
+        like: None,
+        query: None,
+    });
+    expect_parse_ok(sql, expected)?;
+
+    let sql = "CREATE TABLE t(`c1` int) ENGINE = Fuse location = '/data/33.csv' ";
+    let expected = DfStatement::CreateTable(DfCreateTable {
+        if_not_exists: false,
+        name: ObjectName(vec![Ident::new("t")]),
+        columns: vec![make_column_def("c1", Some('`'), DataType::Int(None))],
+        engine: "Fuse".to_string(),
+        options: maplit::hashmap! {"location".into() => "/data/33.csv".into()},
+        like: None,
+        query: None,
+    });
+    expect_parse_ok(sql, expected)?;
+
+    let sql = "CREATE TABLE t('c1' int) ENGINE = Fuse location = '/data/33.csv' ";
+    let expected = DfStatement::CreateTable(DfCreateTable {
+        if_not_exists: false,
+        name: ObjectName(vec![Ident::new("t")]),
+        columns: vec![make_column_def("c1", Some('\''), DataType::Int(None))],
         engine: "Fuse".to_string(),
         options: maplit::hashmap! {"location".into() => "/data/33.csv".into()},
         like: None,
@@ -45,9 +69,9 @@ fn create_table() -> Result<()> {
         if_not_exists: false,
         name: ObjectName(vec![Ident::new("t")]),
         columns: vec![
-            make_column_def("c1", DataType::Int(None)),
-            make_column_def("c2", DataType::BigInt(None)),
-            make_column_def("c3", DataType::Varchar(Some(255))),
+            make_column_def("c1", None, DataType::Int(None)),
+            make_column_def("c2", None, DataType::BigInt(None)),
+            make_column_def("c3", None, DataType::Varchar(Some(255))),
         ],
         engine: "Fuse".to_string(),
 
@@ -80,8 +104,8 @@ fn create_table() -> Result<()> {
         if_not_exists: false,
         name: ObjectName(vec![Ident::new("db1"), Ident::new("test1")]),
         columns: vec![
-            make_column_def("c1", DataType::Int(None)),
-            make_column_def("c2", DataType::Varchar(Some(255))),
+            make_column_def("c1", None, DataType::Int(None)),
+            make_column_def("c2", None, DataType::Varchar(Some(255))),
         ],
         engine: "Parquet".to_string(),
 
@@ -107,7 +131,6 @@ fn create_table() -> Result<()> {
         })),
     });
     expect_parse_ok(sql, expected)?;
-
     Ok(())
 }
 
@@ -131,7 +154,7 @@ fn create_table_select() -> Result<()> {
         DfStatement::CreateTable(DfCreateTable {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("foo")]),
-            columns: vec![make_column_def("a", DataType::Int(None))],
+            columns: vec![make_column_def("a", None, DataType::Int(None))],
             engine: "FUSE".to_string(),
             options: maplit::hashmap! {},
             like: None,
