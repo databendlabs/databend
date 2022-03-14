@@ -212,12 +212,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-task"
-version = "4.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e91831deabf0d6d7ec49552e489aed63b7456a7a3c46cff62adad428110b0af0"
-
-[[package]]
 name = "async-trait"
 version = "0.1.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -236,12 +230,6 @@ checksum = "67cd4b51d303cf3501c301e8125df442128d3c6d7c69f71b27833d253de47e77"
 dependencies = [
  "crossbeam-utils",
 ]
-
-[[package]]
-name = "atomic-waker"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "065374052e7df7ee4047b1160cca5e1467a12351a40b3da123c870ba0b8eda2a"
 
 [[package]]
 name = "atty"
@@ -726,20 +714,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1d36a02058e76b040de25a4464ba1c80935655595b661505c8b39b664828b95"
 dependencies = [
  "generic-array",
-]
-
-[[package]]
-name = "blocking"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "046e47d4b2d391b1f6f8b407b1deb8dee56c1852ccd868becf2710f601b5f427"
-dependencies = [
- "async-channel",
- "async-task",
- "atomic-waker",
- "fastrand",
- "futures-lite",
- "once_cell",
 ]
 
 [[package]]
@@ -1588,6 +1562,7 @@ dependencies = [
  "tracing-appender",
  "tracing-bunyan-formatter",
  "tracing-futures",
+ "tracing-log",
  "tracing-opentelemetry",
  "tracing-subscriber",
 ]
@@ -4154,11 +4129,12 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.2.0"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "704b149654ed7a9b5c58a1927982244b4d6420f72ad1b86b6ff0e7fe50569838"
+checksum = "23027fcf2fc984aa61e3926269fd0358da7c2f665cd8283a8502ebb953717890"
 dependencies = [
  "anyhow",
+ "async-compat",
  "async-trait",
  "aws-config",
  "aws-endpoint",
@@ -4170,15 +4146,17 @@ dependencies = [
  "aws-smithy-http",
  "aws-smithy-http-tower",
  "aws-types",
- "blocking",
  "bytes",
  "futures",
  "http",
  "hyper",
+ "log",
+ "metrics",
  "once_cell",
  "pin-project",
  "reqwest",
  "thiserror",
+ "tokio",
  "tower",
 ]
 
