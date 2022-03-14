@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod admin;
+pub mod reload_config;
 mod warehouse_metadata;
 
 pub use admin::AdminProcedure;

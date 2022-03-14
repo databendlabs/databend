@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::procedures::admins::reload_config::ReloadConfigProcedure;
 use crate::procedures::admins::CreateWarehouseMetaProcedure;
 use crate::procedures::admins::DropWarehouseMetaProcedure;
 use crate::procedures::admins::GetWarehouseMetaFunction;
@@ -39,6 +40,7 @@ impl AdminProcedure {
         factory.register(
             "admin$drop_warehouse_meta",
             DropWarehouseMetaProcedure::desc(),
-        )
+        );
+        factory.register("admin$reload_config", ReloadConfigProcedure::desc());
     }
 }
