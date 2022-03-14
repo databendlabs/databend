@@ -42,6 +42,10 @@ const config = {
                     changefreq: 'daily',
                     priority: 0.5,
                 },
+                gtag: {
+                  trackingID: 'G-WBQPTTG4ZG',
+                  anonymizeIP: true,
+                },
             }),
         ],
     ],
