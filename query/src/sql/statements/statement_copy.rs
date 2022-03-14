@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::get_abs_path;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileFormatType;
@@ -163,10 +164,19 @@ impl DfCopy {
         let names: Vec<&str> = s[1].splitn(2, "/").collect();
         let mut stage = mgr.get_stage(&ctx.get_tenant(), names[0]).await?;
 
-        let path = names[1];
+        let path = if names.len() > 1 { names[1] } else { "/" };
         // Set Path
         match &mut stage.stage_params.storage {
-            StageStorage::S3(v) => v.path = path.to_string(),
+            StageStorage::S3(v) => match stage.stage_type {
+                // It's internal, so we already have an op which has the root path
+                StageType::Internal => {
+                    v.path = path.to_string();
+                }
+                // It's  external, so we need to join the root path
+                StageType::External => {
+                    v.path = get_abs_path(v.path.as_str(), path);
+                }
+            },
         }
 
         Ok(stage)
