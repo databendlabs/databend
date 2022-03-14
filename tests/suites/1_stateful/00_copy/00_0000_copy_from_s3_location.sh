@@ -37,6 +37,20 @@ echo "copy into ontime200 from 's3://testbucket/admin/data/' credentials=(aws_ke
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
 echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 
+## Copy from named internal stage
+echo "CREATE STAGE named_internal_stage;" | $MYSQL_CLIENT_CONNECT
+echo "copy into ontime200 from '@named_internal_stage' PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = 'PARQUET')
+" | $MYSQL_CLIENT_CONNECT
+echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
+echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
+
+
+## Copy from named external stage
+echo "CREATE STAGE named_external_stage uri = 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin');" | $MYSQL_CLIENT_CONNECT
+echo "copy into ontime200 from '@named_internal_stage'  PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = 'PARQUET')
+" | $MYSQL_CLIENT_CONNECT
+echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
+echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 
 
 ## Drop table.

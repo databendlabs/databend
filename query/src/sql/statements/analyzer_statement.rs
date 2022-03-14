@@ -184,6 +184,9 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::CreateRole(v) => v.analyze(ctx).await,
             DfStatement::DropRole(v) => v.analyze(ctx).await,
             DfStatement::ShowEngines(v) => v.analyze(ctx).await,
+            DfStatement::CreateStage(v) => v.analyze(ctx).await,
+            DfStatement::DropStage(v) => v.analyze(ctx).await,
+            DfStatement::DescribeStage(v) => v.analyze(ctx).await,
         }
     }
 }

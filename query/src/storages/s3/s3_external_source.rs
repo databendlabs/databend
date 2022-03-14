@@ -22,11 +22,13 @@ use common_exception::Result;
 use common_io::prelude::S3File;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageStorage;
+use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_planners::S3ExternalTableInfo;
 use common_streams::CsvSourceBuilder;
 use common_streams::ParquetSourceBuilder;
 use common_streams::Source;
+use opendal::Operator;
 use opendal::Reader;
 
 use crate::pipelines::new::processors::port::OutputPort;
@@ -120,23 +122,39 @@ impl ExternalSource {
         Ok(Box::new(builder.build(reader)?))
     }
 
+    pub async fn get_op(
+        ctx: &Arc<QueryContext>,
+        table_info: &S3ExternalTableInfo,
+    ) -> Result<Operator> {
+        let stage = &table_info.stage_info;
+
+        if stage.stage_type == StageType::Internal {
+            ctx.get_storage_operator().await
+        } else {
+            // Get the dal file reader.
+            match &stage.stage_params.storage {
+                StageStorage::S3(s3) => {
+                    let endpoint = &ctx.get_config().storage.s3.endpoint_url;
+                    let bucket = &s3.bucket;
+
+                    let key_id = &s3.credentials_aws_key_id;
+                    let secret_key = &s3.credentials_aws_secret_key;
+
+                    S3File::open(endpoint, bucket, key_id, secret_key).await
+                }
+            }
+        }
+    }
+
     async fn initialize(&mut self) -> Result<()> {
         let ctx = self.ctx.clone();
         let file_name = self.table_info.file_name.clone();
         let stage = &self.table_info.stage_info;
         let file_format = stage.file_format_options.format.clone();
 
-        // Get the dal file reader.
-        let file_reader = match &stage.stage_params.storage {
-            StageStorage::S3(s3) => {
-                let endpoint = &ctx.get_config().storage.s3.endpoint_url;
-                let bucket = &s3.bucket;
-
-                let key_id = &s3.credentials_aws_key_id;
-                let secret_key = &s3.credentials_aws_secret_key;
-                S3File::read(file_name, endpoint, bucket, key_id, secret_key).await
-            }
-        }?;
+        let op = Self::get_op(&self.ctx, &self.table_info).await?;
+        let path = file_name.unwrap_or_else(|| "".to_string());
+        let file_reader = op.object(&path).reader();
 
         // Get the format(CSV, Parquet) source stream.
         let source = match &file_format {

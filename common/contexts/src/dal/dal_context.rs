@@ -17,6 +17,7 @@ use std::time::Instant;
 use async_trait::async_trait;
 use opendal::error::Result as DalResult;
 use opendal::ops::OpDelete;
+use opendal::ops::OpList;
 use opendal::ops::OpRead;
 use opendal::ops::OpStat;
 use opendal::ops::OpWrite;
@@ -26,6 +27,7 @@ use opendal::Accessor;
 use opendal::BoxedAsyncReader;
 use opendal::Layer;
 use opendal::Metadata;
+use opendal::Object;
 
 use crate::DalMetrics;
 
@@ -56,6 +58,8 @@ impl Layer for DalContext {
         })
     }
 }
+
+pub type BoxedObjectStream = Box<dyn futures::Stream<Item = DalResult<Object>> + Unpin + Send>;
 
 #[async_trait]
 impl Accessor for DalContext {
@@ -101,5 +105,9 @@ impl Accessor for DalContext {
 
     async fn delete(&self, args: &OpDelete) -> DalResult<()> {
         self.inner.as_ref().unwrap().delete(args).await
+    }
+
+    async fn list(&self, args: &OpList) -> DalResult<BoxedObjectStream> {
+        self.inner.as_ref().unwrap().list(args).await
     }
 }

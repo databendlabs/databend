@@ -82,10 +82,15 @@ impl AnalyzableStatement for DfCopy {
 
         // Stage info.
         let mut stage_info = if self.location.starts_with('@') {
-            self.analyze_internal().await?
+            self.analyze_named(&ctx).await?
         } else {
-            self.analyze_external().await?
+            self.analyze_location().await?
         };
+
+        if !self.file_format_options.is_empty() {
+            stage_info.file_format_options =
+                parse_copy_file_format_options(&self.file_format_options)?;
+        }
 
         // Copy options.
         {
@@ -148,15 +153,23 @@ impl AnalyzableStatement for DfCopy {
 }
 
 impl DfCopy {
-    // Internal stage(start with `@`):
+    // Named stage(start with `@`):
     // copy into mytable from @my_ext_stage
     // file_format = (type = csv);
-    async fn analyze_internal(&self) -> Result<UserStageInfo> {
-        // TODO(bohu): get stage info from metasrv by stage name.
-        Ok(UserStageInfo {
-            stage_type: StageType::Internal,
-            ..Default::default()
-        })
+    async fn analyze_named(&self, ctx: &Arc<QueryContext>) -> Result<UserStageInfo> {
+        let mgr = ctx.get_user_manager();
+        let s: Vec<&str> = self.location.split('@').collect();
+        // @my_ext_stage/abc
+        let names: Vec<&str> = s[1].splitn(2, "/").collect();
+        let mut stage = mgr.get_stage(&ctx.get_tenant(), names[0]).await?;
+
+        let path = names[1];
+        // Set Path
+        match &mut stage.stage_params.storage {
+            StageStorage::S3(v) => v.path = path.to_string(),
+        }
+
+        Ok(stage)
     }
 
     // External stage(location starts without `@`):
@@ -164,114 +177,120 @@ impl DfCopy {
     // credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
     // encryption=(master_key = 'my_master_key')
     // file_format = (type = csv field_delimiter = '|' skip_header = 1)"
-    async fn analyze_external(&self) -> Result<UserStageInfo> {
-        // File format type.
-        let format = self
-            .file_format_options
-            .get("type")
-            .ok_or_else(|| ErrorCode::SyntaxException("File format type must be specified"))?;
-        let file_format = StageFileFormatType::from_str(format)
-            .map_err(|e| ErrorCode::SyntaxException(format!("File format type error:{:?}", e)))?;
-
-        // Skip header.
-        let skip_header = self
-            .file_format_options
-            .get("skip_header")
-            .unwrap_or(&"0".to_string())
-            .parse::<i32>()?;
-
-        // Field delimiter.
-        let field_delimiter = self
-            .file_format_options
-            .get("field_delimiter")
-            .unwrap_or(&"".to_string())
-            .clone();
-
-        // Record delimiter.
-        let record_delimiter = self
-            .file_format_options
-            .get("record_delimiter")
-            .unwrap_or(&"".to_string())
-            .clone();
-
-        let file_format_options = FileFormatOptions {
-            format: file_format,
-            skip_header,
-            field_delimiter,
-            record_delimiter,
-            compression: Default::default(),
-        };
-
-        // Parse uri.
-        // 's3://<bucket>[/<path>]'
-        let uri = self.location.as_str().parse::<http::Uri>().map_err(|_e| {
-            ErrorCode::SyntaxException(
-                "File location uri must be specified, for example: 's3://<bucket>[/<path>]'",
-            )
-        })?;
-        let bucket = uri
-            .host()
-            .ok_or_else(|| {
-                ErrorCode::SyntaxException(
-                    "File location uri must be specified, for example: 's3://<bucket>[/<path>]'",
-                )
-            })?
-            .to_string();
-        // Path maybe a dir or a file.
-        let path = uri.path().to_string();
-
-        // File storage plan.
-        let stage_storage = match uri.scheme_str() {
-            None => Err(ErrorCode::SyntaxException(
-                "File location scheme must be specified",
-            )),
-            Some(v) => match v {
-                // AWS s3 plan.
-                "s3" => {
-                    let credentials_aws_key_id = self
-                        .credential_options
-                        .get("aws_key_id")
-                        .unwrap_or(&"".to_string())
-                        .clone();
-                    let credentials_aws_secret_key = self
-                        .credential_options
-                        .get("aws_secret_key")
-                        .unwrap_or(&"".to_string())
-                        .clone();
-                    let encryption_master_key = self
-                        .encryption_options
-                        .get("master_key")
-                        .unwrap_or(&"".to_string())
-                        .clone();
-
-                    Ok(StageStorage::S3(StageS3Storage {
-                        bucket,
-                        path,
-                        credentials_aws_key_id,
-                        credentials_aws_secret_key,
-                        encryption_master_key,
-                    }))
-                }
-
-                // Others.
-                _ => Err(ErrorCode::SyntaxException(
-                    "File location uri unsupported, must be one of [s3, @stage]",
-                )),
-            },
-        }?;
-
+    async fn analyze_location(&self) -> Result<UserStageInfo> {
+        let stage_storage = parse_stage_storage(
+            &self.location,
+            &self.credential_options,
+            &self.encryption_options,
+        )?;
         // Stage params.
         let stage_params = StageParams {
             storage: stage_storage,
         };
-
         // Stage info.
         Ok(UserStageInfo {
             stage_name: self.location.clone(),
             stage_type: StageType::External,
             stage_params,
-            file_format_options,
             ..Default::default()
         })
     }
+}
+
+pub fn parse_stage_storage(
+    location: &str,
+    credential_options: &HashMap<String, String>,
+    encryption_options: &HashMap<String, String>,
+) -> Result<StageStorage> {
+    // Parse uri.
+    // 's3://<bucket>[/<path>]'
+    let uri = location.parse::<http::Uri>().map_err(|_e| {
+        ErrorCode::SyntaxException(
+            "File location uri must be specified, for example: 's3://<bucket>[/<path>]'",
+        )
+    })?;
+    let bucket = uri
+        .host()
+        .ok_or_else(|| {
+            ErrorCode::SyntaxException(
+                "File location uri must be specified, for example: 's3://<bucket>[/<path>]'",
+            )
+        })?
+        .to_string();
+    // Path maybe a dir or a file.
+    let path = uri.path().to_string();
+
+    // File storage plan.
+    match uri.scheme_str() {
+        None => Err(ErrorCode::SyntaxException(
+            "File location scheme must be specified",
+        )),
+        Some(v) => match v {
+            // AWS s3 plan.
+            "s3" => {
+                let credentials_aws_key_id = credential_options
+                    .get("aws_key_id")
+                    .unwrap_or(&"".to_string())
+                    .clone();
+                let credentials_aws_secret_key = credential_options
+                    .get("aws_secret_key")
+                    .unwrap_or(&"".to_string())
+                    .clone();
+                let encryption_master_key = encryption_options
+                    .get("master_key")
+                    .unwrap_or(&"".to_string())
+                    .clone();
+
+                Ok(StageStorage::S3(StageS3Storage {
+                    bucket,
+                    path,
+                    credentials_aws_key_id,
+                    credentials_aws_secret_key,
+                    encryption_master_key,
+                }))
+            }
+
+            // Others.
+            _ => Err(ErrorCode::SyntaxException(
+                "File location uri unsupported, must be one of [s3, @stage]",
+            )),
+        },
+    }
+}
+
+pub fn parse_copy_file_format_options(
+    file_format_options: &HashMap<String, String>,
+) -> Result<FileFormatOptions> {
+    // File format type.
+    let format = file_format_options
+        .get("type")
+        .ok_or_else(|| ErrorCode::SyntaxException("File format type must be specified"))?;
+    let file_format = StageFileFormatType::from_str(format)
+        .map_err(|e| ErrorCode::SyntaxException(format!("File format type error:{:?}", e)))?;
+
+    // Skip header.
+    let skip_header = file_format_options
+        .get("skip_header")
+        .unwrap_or(&"0".to_string())
+        .parse::<i32>()?;
+
+    // Field delimiter.
+    let field_delimiter = file_format_options
+        .get("field_delimiter")
+        .unwrap_or(&"".to_string())
+        .clone();
+
+    // Record delimiter.
+    let record_delimiter = file_format_options
+        .get("record_delimiter")
+        .unwrap_or(&"".to_string())
+        .clone();
+
+    Ok(FileFormatOptions {
+        format: file_format,
+        skip_header,
+        field_delimiter,
+        record_delimiter,
+        compression: Default::default(),
+    })
 }

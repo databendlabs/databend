@@ -274,11 +274,17 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_describe(&mut self) -> Result<DfStatement, ParserError> {
-        self.consume_token("table");
-        self.parse_desc_table()
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TABLE => self.parse_desc_table(),
+                Keyword::STAGE => self.parse_desc_stage(),
+                _ => self.expected("keyword TABLE or Stage", Token::Word(w)),
+            },
+            unexpected => self.expected("describe statement", unexpected),
+        }
     }
 
-    /// Drop database/table.
+    /// Drop database/table/stage.
     fn parse_drop(&mut self) -> Result<DfStatement, ParserError> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
@@ -287,6 +293,7 @@ impl<'a> DfParser<'a> {
                 Keyword::USER => self.parse_drop_user(),
                 Keyword::ROLE => self.parse_drop_role(),
                 Keyword::FUNCTION => self.parse_drop_udf(),
+                Keyword::STAGE => self.parse_drop_stage(),
                 _ => self.expected("drop statement", Token::Word(w)),
             },
             unexpected => self.expected("drop statement", unexpected),

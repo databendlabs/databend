@@ -10,4 +10,5 @@ test = false
 
 [dependencies]
 async-trait = "0.1.52"
+futures = { version = "0.3", features = ["alloc"] }
 opendal = "0.2.0"

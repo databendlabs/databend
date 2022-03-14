@@ -29,7 +29,6 @@ use crate::parser_err;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfAuthOption;
 use crate::sql::statements::DfCreateRole;
-use crate::sql::statements::DfCreateStage;
 use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDropRole;
 use crate::sql::statements::DfDropUser;
@@ -306,33 +305,5 @@ impl<'a> DfParser<'a> {
             }
         }
         Ok(privileges)
-    }
-
-    fn parse_create_stage(&mut self) -> Result<DfStatement, ParserError> {
-        let if_not_exists =
-            self.parser
-                .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let name = self.parser.parse_literal_string()?;
-
-        // file format
-        let file_format = self.parse_stage_file_format()?;
-
-        // COPY_OPTIONS
-        let comments = if self.consume_token("COMMENTS") {
-            self.parser.expect_token(&Token::Eq)?;
-            self.parser.parse_literal_string()?
-        } else {
-            String::from("")
-        };
-
-        let create = DfCreateStage {
-            if_not_exists,
-            stage_name: name,
-            stage_params,
-            file_format,
-            comments,
-        };
-
-        Ok(DfStatement::CreateStage(create))
     }
 }

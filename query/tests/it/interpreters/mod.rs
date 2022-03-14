@@ -43,6 +43,7 @@ mod interpreter_user_create;
 mod interpreter_user_drop;
 mod interpreter_user_previlege_revoke;
 mod interpreter_user_privilege_grant;
+mod interpreter_user_stage;
 mod interpreter_user_udf_alter;
 mod interpreter_user_udf_create;
 mod interpreter_user_udf_drop;
