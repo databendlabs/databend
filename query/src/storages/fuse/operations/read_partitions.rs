@@ -21,6 +21,7 @@ use common_planners::Extras;
 use common_planners::PartInfoPtr;
 use common_planners::Partitions;
 use common_planners::Statistics;
+use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::fuse_part::ColumnMeta;
@@ -36,6 +37,7 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
+        tracing::info!("hi, I am here");
         let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
         match snapshot {
             Some(snapshot) => {
@@ -72,14 +74,16 @@ impl FuseTable {
         push_downs: Option<Extras>,
     ) -> (Statistics, Partitions) {
         let (mut statistics, partitions) = match &push_downs {
-            None => Self::all_columns_partitions(blocks_metas),
+            None => Self::all_columns_partitions(blocks_metas, &None),
             Some(extras) => match &extras.projection {
-                None => Self::all_columns_partitions(blocks_metas),
-                Some(projection) => Self::projection_partitions(blocks_metas, projection),
+                None => Self::all_columns_partitions(blocks_metas, &extras.limit),
+                Some(projection) => {
+                    Self::projection_partitions(blocks_metas, projection, &extras.limit)
+                }
             },
         };
 
-        statistics.is_exact = Self::is_exact(&push_downs);
+        statistics.is_exact = statistics.is_exact && Self::is_exact(&push_downs);
         (statistics, partitions)
     }
 
@@ -91,31 +95,84 @@ impl FuseTable {
         }
     }
 
-    fn all_columns_partitions(metas: &[BlockMeta]) -> (Statistics, Partitions) {
+    fn all_columns_partitions(
+        metas: &[BlockMeta],
+        limit: &Option<usize>,
+    ) -> (Statistics, Partitions) {
         let mut statistics = Statistics::default();
         let mut partitions = Partitions::default();
 
-        for block_meta in metas {
-            partitions.push(Self::all_columns_part(block_meta));
-            statistics.read_rows += block_meta.row_count as usize;
-            statistics.read_bytes += block_meta.block_size as usize;
+        let mut remaining = limit.unwrap_or(usize::MAX);
+
+        use common_tracing::tracing;
+        tracing::info!("remaining {:?}", remaining);
+
+        if remaining == 0 {
+            return (statistics, partitions);
         }
 
+        for block_meta in metas {
+            let rows = block_meta.row_count as usize;
+            partitions.push(Self::all_columns_part(block_meta));
+            statistics.read_rows += rows;
+            statistics.read_bytes += block_meta.block_size as usize;
+
+            if remaining > rows {
+                remaining -= rows;
+                tracing::info!("after read rows remaining {:?}", remaining);
+            } else {
+                // the last block we shall take
+                if remaining != rows {
+                    tracing::info!("exact false {:?}", remaining);
+                    statistics.is_exact = false;
+                }
+                break;
+            }
+        }
+
+        tracing::info!("statistics {:?}", statistics);
         (statistics, partitions)
     }
 
-    fn projection_partitions(metas: &[BlockMeta], indices: &[usize]) -> (Statistics, Partitions) {
+    fn projection_partitions(
+        metas: &[BlockMeta],
+        indices: &[usize],
+        limit: &Option<usize>,
+    ) -> (Statistics, Partitions) {
         let mut statistics = Statistics::default();
+        statistics.is_exact = true;
+
         let mut partitions = Partitions::default();
+
+        let mut remaining = limit.unwrap_or(usize::MAX);
+
+        if remaining == 0 {
+            return (statistics, partitions);
+        }
+
+        use common_tracing::tracing;
+        tracing::info!("remaining {:?}", remaining);
 
         for block_meta in metas {
             partitions.push(Self::projection_part(block_meta, indices));
 
-            statistics.read_rows += block_meta.row_count as usize;
+            let rows = block_meta.row_count as usize;
+
+            statistics.read_rows += rows;
             for projection_index in indices {
                 let column_stats = &block_meta.col_stats;
                 let column_stats = &column_stats[&(*projection_index as u32)];
                 statistics.read_bytes += column_stats.in_memory_size as usize;
+            }
+
+            if remaining > rows {
+                remaining -= rows;
+            } else {
+                // the last block we shall take
+                if remaining != rows {
+                    statistics.is_exact = false;
+                }
+                break;
             }
         }
 
