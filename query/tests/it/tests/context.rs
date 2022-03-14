@@ -56,7 +56,6 @@ pub async fn create_query_context() -> Result<Arc<QueryContext>> {
     dummy_session.set_current_user(user_info);
 
     let context = QueryContext::create_from_shared(QueryContextShared::try_create(
-        sessions.get_conf().clone(),
         Arc::new(dummy_session.as_ref().clone()),
         Cluster::empty(),
     )?);
@@ -86,7 +85,6 @@ pub async fn create_query_context_with_config(config: Config) -> Result<Arc<Quer
     dummy_session.set_current_user(user_info);
 
     let context = QueryContext::create_from_shared(QueryContextShared::try_create(
-        config,
         Arc::new(dummy_session.as_ref().clone()),
         Cluster::empty(),
     )?);
@@ -165,7 +163,6 @@ pub async fn create_query_context_with_cluster(
     let nodes = desc.cluster_nodes_list;
 
     let context = QueryContext::create_from_shared(QueryContextShared::try_create(
-        sessions.get_conf().clone(),
         Arc::new(dummy_session.as_ref().clone()),
         Cluster::create(nodes, local_id),
     )?);

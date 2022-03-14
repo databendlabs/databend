@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::procedures::systems::reload_config::ReloadConfigProcedure;
 use crate::procedures::systems::FuseHistoryProcedure;
 use crate::procedures::ProcedureFactory;
-use crate::procedures::systems::reload_config::ReloadConfigProcedure;
 
 pub struct SystemProcedure;
 

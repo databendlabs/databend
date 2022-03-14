@@ -16,16 +16,12 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::catalogs::Catalog;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureDescription;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
-use crate::storages::fuse::FuseHistory;
-use crate::storages::fuse::FuseTable;
 
 pub struct ReloadConfigProcedure {}
 
@@ -44,7 +40,7 @@ impl ReloadConfigProcedure {
 impl Procedure for ReloadConfigProcedure {
     async fn eval(&self, ctx: Arc<QueryContext>, _: Vec<String>) -> Result<DataBlock> {
         // TODO: check permissions
-        ctx.reload_config()?;
+        ctx.reload_config().await?;
         Ok(DataBlock::empty())
     }
 

@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod context_function;
 mod hashtable;
 mod meta;
 pub mod service;
-pub mod context_function;
 
 pub use hashtable::*;
 pub use meta::MetaClientProvider;

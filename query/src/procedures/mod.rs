@@ -17,8 +17,9 @@ mod procedure;
 mod procedure_factory;
 pub mod systems;
 
-pub use crate::common::context_function::ContextFunction;
 pub use procedure::Procedure;
 pub use procedure_factory::ProcedureDescription;
 pub use procedure_factory::ProcedureFactory;
 pub use procedure_factory::ProcedureFeatures;
+
+pub use crate::common::context_function::ContextFunction;

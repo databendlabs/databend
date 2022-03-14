@@ -13,8 +13,8 @@
 // limitations under the License.
 
 mod fuse_history;
-mod system;
 mod reload_config;
+mod system;
 
 pub use fuse_history::FuseHistoryProcedure;
 pub use system::SystemProcedure;

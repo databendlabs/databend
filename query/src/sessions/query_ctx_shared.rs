@@ -50,7 +50,6 @@ type DatabaseAndTable = (String, String);
 ///     FROM table_name_4;
 /// For each subquery, they will share a runtime, session, progress, init_query_id
 pub struct QueryContextShared {
-    pub conf: Config,
     /// scan_progress for scan metrics of datablocks (uncompressed)
     pub(in crate::sessions) scan_progress: Arc<Progress>,
     /// write_progress for write/commit metrics of datablocks (uncompressed)
@@ -73,12 +72,10 @@ pub struct QueryContextShared {
 
 impl QueryContextShared {
     pub fn try_create(
-        conf: Config,
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
-            conf,
             session,
             cluster_cache,
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
@@ -215,8 +212,12 @@ impl QueryContextShared {
         sources_abort_handle.push(handle);
     }
 
-    pub fn reload_config(&self) -> Result<()> {
-        self.session.session_mgr.reload_config()
+    pub fn get_config(&self) -> Config {
+        self.session.get_config()
+    }
+
+    pub async fn reload_config(&self) -> Result<()> {
+        self.session.session_mgr.reload_config().await
     }
 }
 

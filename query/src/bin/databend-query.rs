@@ -41,7 +41,9 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     // Reload configs from the file.
     if !conf.config_file.is_empty() {
         tracing::info!("Config reload from {:?}", conf.config_file);
-        conf = Config::load_from_toml(conf.config_file.as_str())?;
+        let config_file = conf.config_file;
+        conf = Config::load_from_toml(config_file.as_str())?;
+        conf.config_file = config_file;
     }
 
     // Prefer to use env variable in cloud native deployment
