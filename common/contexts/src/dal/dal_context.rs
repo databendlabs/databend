@@ -25,9 +25,9 @@ use opendal::readers::ObserveReader;
 use opendal::readers::ReadEvent;
 use opendal::Accessor;
 use opendal::BoxedAsyncReader;
+use opendal::BoxedObjectStream;
 use opendal::Layer;
 use opendal::Metadata;
-use opendal::Object;
 
 use crate::DalMetrics;
 
@@ -58,8 +58,6 @@ impl Layer for DalContext {
         })
     }
 }
-
-pub type BoxedObjectStream = Box<dyn futures::Stream<Item = DalResult<Object>> + Unpin + Send>;
 
 #[async_trait]
 impl Accessor for DalContext {

@@ -1164,7 +1164,6 @@ name = "common-contexts"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "futures",
  "opendal",
 ]
 
@@ -4130,9 +4129,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23027fcf2fc984aa61e3926269fd0358da7c2f665cd8283a8502ebb953717890"
+checksum = "c582a0421468c2061d3487f3a6049e3d2ba1407841041839b72546c8a1700b19"
 dependencies = [
  "anyhow",
  "async-compat",

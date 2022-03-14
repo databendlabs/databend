@@ -161,7 +161,7 @@ impl DfCopy {
         let mgr = ctx.get_user_manager();
         let s: Vec<&str> = self.location.split('@').collect();
         // @my_ext_stage/abc
-        let names: Vec<&str> = s[1].splitn(2, "/").collect();
+        let names: Vec<&str> = s[1].splitn(2, '/').collect();
         let mut stage = mgr.get_stage(&ctx.get_tenant(), names[0]).await?;
 
         let path = if names.len() > 1 { names[1] } else { "/" };
