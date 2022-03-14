@@ -14,31 +14,9 @@
 
 use common_arrow::arrow::bitmap::binary;
 use common_arrow::arrow::bitmap::unary;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::compute::comparison::Simd8;
-use common_arrow::arrow::compute::comparison::Simd8Lanes;
-use common_arrow::arrow::compute::comparison::Simd8PartialEq;
-use common_arrow::arrow::compute::comparison::Simd8PartialOrd;
 use common_datavalues::prelude::*;
 
-pub trait PrimitiveSimdImpl {
-    fn vector_vector<T>(lhs: &PrimitiveColumn<T>, rhs: &PrimitiveColumn<T>) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialEq + Simd8PartialOrd;
-
-    fn vector_const<T>(lhs: &PrimitiveColumn<T>, rhs: T) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialEq + Simd8PartialOrd;
-
-    fn const_vector<T>(lhs: T, rhs: &PrimitiveColumn<T>) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialEq + Simd8PartialOrd;
-}
-
-pub trait BooleanSimdImpl {
+pub trait BooleanSimdImpl: Sync + Send + Clone + 'static {
     fn vector_vector(lhs: &BooleanColumn, rhs: &BooleanColumn) -> BooleanColumn;
 
     fn vector_const(lhs: &BooleanColumn, rhs: bool) -> BooleanColumn;
@@ -46,7 +24,7 @@ pub trait BooleanSimdImpl {
     fn const_vector(lhs: bool, rhs: &BooleanColumn) -> BooleanColumn;
 }
 
-pub trait StringSearchImpl {
+pub trait StringSearchImpl: Sync + Send + Clone + 'static {
     fn vector_vector(
         lhs: &StringColumn,
         rhs: &StringColumn,
@@ -56,91 +34,9 @@ pub trait StringSearchImpl {
     fn vector_const(lhs: &StringColumn, rhs: &[u8], op: impl Fn(bool) -> bool) -> BooleanColumn;
 }
 
-pub(crate) struct CommonPrimitiveImpl;
+pub(crate) struct CommonBooleanOp;
 
-impl CommonPrimitiveImpl {
-    /// QUOTE: (From common_arrow::arrow::compute::comparison::primitive)
-    pub(crate) fn compare_op<T, F>(
-        lhs: &PrimitiveColumn<T>,
-        rhs: &PrimitiveColumn<T>,
-        op: F,
-    ) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        F: Fn(T::Simd, T::Simd) -> u8,
-    {
-        let values = Self::compare_values_op(lhs.values(), rhs.values(), op);
-
-        BooleanColumn::from_arrow_data(values.into())
-    }
-
-    pub(crate) fn compare_op_scalar<T, F>(lhs: &PrimitiveColumn<T>, rhs: T, op: F) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        F: Fn(T::Simd, T::Simd) -> u8,
-    {
-        let values = Self::compare_values_op_scalar(lhs.values(), rhs, op);
-
-        BooleanColumn::from_arrow_data(values.into())
-    }
-
-    fn compare_values_op<T, F>(lhs: &[T], rhs: &[T], op: F) -> MutableBitmap
-    where
-        T: PrimitiveType + Simd8,
-        F: Fn(T::Simd, T::Simd) -> u8,
-    {
-        assert_eq!(lhs.len(), rhs.len());
-
-        let lhs_chunks_iter = lhs.chunks_exact(8);
-        let lhs_remainder = lhs_chunks_iter.remainder();
-        let rhs_chunks_iter = rhs.chunks_exact(8);
-        let rhs_remainder = rhs_chunks_iter.remainder();
-
-        let mut values = Vec::with_capacity((lhs.len() + 7) / 8);
-        let iterator = lhs_chunks_iter.zip(rhs_chunks_iter).map(|(lhs, rhs)| {
-            let lhs = T::Simd::from_chunk(lhs);
-            let rhs = T::Simd::from_chunk(rhs);
-            op(lhs, rhs)
-        });
-        values.extend(iterator);
-
-        if !lhs_remainder.is_empty() {
-            let lhs = T::Simd::from_incomplete_chunk(lhs_remainder, T::default());
-            let rhs = T::Simd::from_incomplete_chunk(rhs_remainder, T::default());
-            values.push(op(lhs, rhs))
-        };
-        MutableBitmap::from_vec(values, lhs.len())
-    }
-
-    fn compare_values_op_scalar<T, F>(lhs: &[T], rhs: T, op: F) -> MutableBitmap
-    where
-        T: PrimitiveType + Simd8,
-        F: Fn(T::Simd, T::Simd) -> u8,
-    {
-        let rhs = T::Simd::from_chunk(&[rhs; 8]);
-
-        let lhs_chunks_iter = lhs.chunks_exact(8);
-        let lhs_remainder = lhs_chunks_iter.remainder();
-
-        let mut values = Vec::with_capacity((lhs.len() + 7) / 8);
-        let iterator = lhs_chunks_iter.map(|lhs| {
-            let lhs = T::Simd::from_chunk(lhs);
-            op(lhs, rhs)
-        });
-        values.extend(iterator);
-
-        if !lhs_remainder.is_empty() {
-            let lhs = T::Simd::from_incomplete_chunk(lhs_remainder, T::default());
-            values.push(op(lhs, rhs))
-        };
-
-        MutableBitmap::from_vec(values, lhs.len())
-    }
-}
-
-pub(crate) struct CommonBooleanImpl;
-
-impl CommonBooleanImpl {
+impl CommonBooleanOp {
     /// QUOTE: (From common_arrow::arrow::compute::comparison::boolean)
     pub(crate) fn compare_op<F>(lhs: &BooleanColumn, rhs: &BooleanColumn, op: F) -> BooleanColumn
     where F: Fn(u64, u64) -> u64 {

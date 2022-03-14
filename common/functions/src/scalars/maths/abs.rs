@@ -22,9 +22,9 @@ use crate::scalars::function::Function;
 use crate::scalars::function_common::assert_numeric;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Monotonicity;
-use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
 pub struct AbsFunction {
@@ -50,19 +50,22 @@ impl AbsFunction {
 
 macro_rules! impl_abs_function {
     ($column:expr, $type:ident, $super:ident, $target:ident) => {{
-        let unary =
-            ScalarUnaryExpression::<$type, $target, _>::new(|v: $type, ctx: &mut EvalContext| {
-                let s = v as $super;
-                if s == $super::MIN {
-                    ctx.set_error(ErrorCode::Overflow(format!(
-                        "Overflow on abs signed number {}",
-                        v
-                    )));
-                    return $target::default();
-                }
-                $super::abs(s) as $target
-            });
-        let col = unary.eval($column.column(), &mut EvalContext::default())?;
+        let func = |v: $type, ctx: &mut EvalContext| {
+            let s = v as $super;
+            if s == $super::MIN {
+                ctx.set_error(ErrorCode::Overflow(format!(
+                    "Overflow on abs signed number {}",
+                    v
+                )));
+                return $target::default();
+            }
+            $super::abs(s) as $target
+        };
+        let col = scalar_unary_op::<$type, $target, _>(
+            $column.column(),
+            func,
+            &mut EvalContext::default(),
+        )?;
         Ok(col.arc())
     }};
 }

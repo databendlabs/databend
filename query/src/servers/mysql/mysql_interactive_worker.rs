@@ -213,10 +213,10 @@ impl<W: std::io::Write + Send + Sync> AsyncMysqlShim<W> for InteractiveWorker<W>
 impl<W: std::io::Write> InteractiveWorkerBase<W> {
     async fn authenticate(&self, salt: &[u8], info: CertifiedInfo) -> Result<bool> {
         let user_name = &info.user_name;
-        let user_manager = self.session.get_user_manager();
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
 
         let ctx = self.session.create_query_context().await?;
+        let user_manager = ctx.get_user_manager();
         let user_info = user_manager
             .get_user_with_client_ip(&ctx.get_tenant(), user_name, client_ip)
             .await?;

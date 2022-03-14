@@ -21,10 +21,10 @@ use itertools::izip;
 
 use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
-use crate::scalars::ScalarBinaryExpression;
 
 #[derive(Clone)]
 pub struct StrcmpFunction {
@@ -57,10 +57,10 @@ impl Function for StrcmpFunction {
     }
 
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
-        let binary = ScalarBinaryExpression::<Vu8, Vu8, i8, _>::new(strcmp);
-        let col = binary.eval(
+        let col = scalar_binary_op::<Vu8, Vu8, i8, _>(
             columns[0].column(),
             columns[1].column(),
+            strcmp,
             &mut EvalContext::default(),
         )?;
         Ok(col.arc())
