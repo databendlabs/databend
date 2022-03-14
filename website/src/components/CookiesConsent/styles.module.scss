@@ -41,6 +41,30 @@
     color: #fff;
     cursor: pointer;
     margin-left: 10px;
+    padding: 2px;
+  }
+
+  @include media{
+    padding: mpx(16);
+    flex-direction: column;
+    p{
+      font-size: mpx(14);
+      padding-right: mpx(16);
+    }
+    .button{
+      margin-top: mpx(20);
+      font-size: mpx(13);
+      border-radius: mpx(8);
+    }
+    .close{
+      position: absolute;
+      right: mpx(5);
+      top: mpx(5);
+      margin-left: 0;
+      padding: mpx(2) mpx(10);
+      font-size: mpx(20);
+      
+    }
   }
 }
 
