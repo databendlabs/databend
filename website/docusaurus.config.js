@@ -91,11 +91,16 @@ const config = {
                     src: 'img/favicon.svg',
                 },
                 items: [
-                    {
-                        href: 'https://github.com/datafuselabs/databend',
-                        label: 'GitHub',
-                        position: 'right',
-                    },
+                  {
+                    to: '/doc',
+                    label: 'Documentation',
+                    position: 'left',
+                  },
+                  {
+                      href: 'https://github.com/datafuselabs/databend',
+                      label: 'GitHub',
+                      position: 'right',
+                  },
                 ],
             },
             footer: {
