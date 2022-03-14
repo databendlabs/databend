@@ -280,7 +280,7 @@ impl<'a> DfParser<'a> {
                 Keyword::STAGE => self.parse_desc_stage(),
                 _ => self.expected("keyword TABLE or Stage", Token::Word(w)),
             },
-            unexpected => self.expected("describe statement", unexpected),
+            _ => self.parse_desc_table(),
         }
     }
 
