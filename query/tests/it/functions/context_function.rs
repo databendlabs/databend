@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_exception::Result;
 use databend_query::functions::ContextFunction;
 
-#[test]
-fn test_context_function_build_arg_from_ctx() -> Result<()> {
+#[tokio::test]
+async fn test_context_function_build_arg_from_ctx() -> Result<()> {
     use pretty_assertions::assert_eq;
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
 
     // Ok.
     {

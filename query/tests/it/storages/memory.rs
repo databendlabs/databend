@@ -27,7 +27,7 @@ use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_memorytable() -> Result<()> {
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", u32::to_data_type()),
         DataField::new("b", u64::to_data_type()),

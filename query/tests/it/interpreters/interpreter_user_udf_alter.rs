@@ -23,7 +23,7 @@ use pretty_assertions::assert_eq;
 async fn test_alter_udf_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
     let tenant = ctx.get_tenant();
 
     {

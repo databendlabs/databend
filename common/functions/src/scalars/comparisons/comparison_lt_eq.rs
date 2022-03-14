@@ -29,8 +29,15 @@ pub type ComparisonLtEqFunction = ComparisonFunctionCreator<ComparisonLtEqImpl>;
 pub struct ComparisonLtEqImpl;
 
 impl ComparisonImpl for ComparisonLtEqImpl {
-    type PrimitiveSimd = PrimitiveSimdLtEq;
     type BooleanSimd = BooleanSimdLtEq;
+
+    fn eval_simd<T>(l: T::Simd, r: T::Simd) -> u8
+    where
+        T: PrimitiveType + Simd8,
+        T::Simd: Simd8PartialOrd,
+    {
+        l.lt_eq(r)
+    }
 
     fn eval_primitive<L, R, M>(l: L::RefType<'_>, r: R::RefType<'_>, _ctx: &mut EvalContext) -> bool
     where
@@ -47,48 +54,19 @@ impl ComparisonImpl for ComparisonLtEqImpl {
 }
 
 #[derive(Clone)]
-pub struct PrimitiveSimdLtEq;
-
-impl PrimitiveSimdImpl for PrimitiveSimdLtEq {
-    fn vector_vector<T>(lhs: &PrimitiveColumn<T>, rhs: &PrimitiveColumn<T>) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialOrd,
-    {
-        CommonPrimitiveImpl::compare_op(lhs, rhs, |a, b| a.lt_eq(b))
-    }
-
-    fn vector_const<T>(lhs: &PrimitiveColumn<T>, rhs: T) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialOrd,
-    {
-        CommonPrimitiveImpl::compare_op_scalar(lhs, rhs, |a, b| a.lt_eq(b))
-    }
-
-    fn const_vector<T>(lhs: T, rhs: &PrimitiveColumn<T>) -> BooleanColumn
-    where
-        T: PrimitiveType + Simd8,
-        T::Simd: Simd8PartialOrd,
-    {
-        CommonPrimitiveImpl::compare_op_scalar(rhs, lhs, |a, b| a.gt_eq(b))
-    }
-}
-
-#[derive(Clone)]
 pub struct BooleanSimdLtEq;
 
 impl BooleanSimdImpl for BooleanSimdLtEq {
     fn vector_vector(lhs: &BooleanColumn, rhs: &BooleanColumn) -> BooleanColumn {
-        CommonBooleanImpl::compare_op(lhs, rhs, |a, b| !a | b)
+        CommonBooleanOp::compare_op(lhs, rhs, |a, b| !a | b)
     }
 
     fn vector_const(lhs: &BooleanColumn, rhs: bool) -> BooleanColumn {
         if rhs {
             let all_ones = !0;
-            CommonBooleanImpl::compare_op_scalar(lhs, rhs, |_, _| all_ones)
+            CommonBooleanOp::compare_op_scalar(lhs, rhs, |_, _| all_ones)
         } else {
-            CommonBooleanImpl::compare_op_scalar(lhs, rhs, |a, _| !a)
+            CommonBooleanOp::compare_op_scalar(lhs, rhs, |a, _| !a)
         }
     }
 

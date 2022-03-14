@@ -106,26 +106,38 @@ impl ClickHouseSession for InteractiveWorker {
             password: Some(password.to_owned()),
             hostname: Some(client_ip.to_string()),
         };
-        let user_info_auth = self
-            .session
-            .get_session_manager()
-            .get_auth_manager()
-            .auth(&credential)
-            .await;
-        match user_info_auth {
-            Ok(user_info) => {
-                self.session.set_current_user(user_info);
-                true
+        let ctx = self.session.create_query_context().await;
+        match ctx {
+            Ok(c) => {
+                let user_info_auth = c.get_auth_manager().auth(&credential).await;
+                match user_info_auth {
+                    Ok(user_info) => {
+                        self.session.set_current_user(user_info);
+                        true
+                    }
+                    Err(failure) => {
+                        tracing::error!(
+                            "ClickHouse handler authenticate failed, \
+                             user: {}, \
+                             client_address: {}, \
+                             cause: {:?}",
+                            user,
+                            client_addr,
+                            failure
+                        );
+                        false
+                    }
+                }
             }
-            Err(failure) => {
+            Err(e) => {
                 tracing::error!(
                     "ClickHouse handler authenticate failed, \
-                        user: {}, \
-                        client_address: {}, \
-                        cause: {:?}",
+                     user: {}, \
+                     client_address: {}, \
+                     cause: {:?}",
                     user,
                     client_addr,
-                    failure
+                    e
                 );
                 false
             }

@@ -30,6 +30,7 @@ use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
+use super::statements::DfShowRoles;
 use crate::sql::statements::DfShowEngines;
 use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
@@ -156,29 +157,7 @@ impl<'a> DfParser<'a> {
                     }
                     Keyword::SHOW => {
                         self.parser.next_token();
-                        if self.consume_token("TABLES") {
-                            self.parse_show_tables()
-                        } else if self.consume_token("DATABASES") {
-                            self.parse_show_databases()
-                        } else if self.consume_token("SETTINGS") {
-                            Ok(DfStatement::ShowSettings(DfShowSettings))
-                        } else if self.consume_token("CREATE") {
-                            self.parse_show_create()
-                        } else if self.consume_token("PROCESSLIST") {
-                            Ok(DfStatement::ShowProcessList(DfShowProcessList))
-                        } else if self.consume_token("METRICS") {
-                            Ok(DfStatement::ShowMetrics(DfShowMetrics))
-                        } else if self.consume_token("USERS") {
-                            Ok(DfStatement::ShowUsers(DfShowUsers))
-                        } else if self.consume_token("GRANTS") {
-                            self.parse_show_grants()
-                        } else if self.consume_token("FUNCTIONS") {
-                            self.parse_show_functions()
-                        } else if self.consume_token("ENGINES") {
-                            Ok(DfStatement::ShowEngines(DfShowEngines))
-                        } else {
-                            self.expected("tables or settings", self.parser.peek_token())
-                        }
+                        self.parse_show()
                     }
                     Keyword::TRUNCATE => self.parse_truncate(),
                     Keyword::SET => self.parse_set(),
@@ -310,6 +289,34 @@ impl<'a> DfParser<'a> {
                 _ => self.expected("drop statement", Token::Word(w)),
             },
             unexpected => self.expected("drop statement", unexpected),
+        }
+    }
+
+    fn parse_show(&mut self) -> Result<DfStatement, ParserError> {
+        if self.consume_token("TABLES") {
+            self.parse_show_tables()
+        } else if self.consume_token("DATABASES") {
+            self.parse_show_databases()
+        } else if self.consume_token("SETTINGS") {
+            Ok(DfStatement::ShowSettings(DfShowSettings))
+        } else if self.consume_token("CREATE") {
+            self.parse_show_create()
+        } else if self.consume_token("PROCESSLIST") {
+            Ok(DfStatement::ShowProcessList(DfShowProcessList))
+        } else if self.consume_token("METRICS") {
+            Ok(DfStatement::ShowMetrics(DfShowMetrics))
+        } else if self.consume_token("USERS") {
+            Ok(DfStatement::ShowUsers(DfShowUsers))
+        } else if self.consume_token("ROLES") {
+            Ok(DfStatement::ShowRoles(DfShowRoles))
+        } else if self.consume_token("GRANTS") {
+            self.parse_show_grants()
+        } else if self.consume_token("FUNCTIONS") {
+            self.parse_show_functions()
+        } else if self.consume_token("ENGINES") {
+            Ok(DfStatement::ShowEngines(DfShowEngines))
+        } else {
+            self.expected("show statement", self.parser.peek_token())
         }
     }
 

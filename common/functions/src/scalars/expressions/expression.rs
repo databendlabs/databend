@@ -13,7 +13,7 @@
 // limitations under the License.
 use common_exception::Result;
 
-use crate::scalars::function_factory::Factory2Creator;
+use crate::scalars::function_factory::FactoryCreator;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::function_factory::FunctionFeatures;
@@ -37,7 +37,7 @@ impl ToCastFunction {
             _ => features.num_arguments(1),
         };
 
-        let function_creator: Factory2Creator =
+        let function_creator: FactoryCreator =
             Box::new(move |display_name| CastFunction::create(display_name, type_name));
 
         Ok(FunctionDescription::creator(function_creator).features(features))

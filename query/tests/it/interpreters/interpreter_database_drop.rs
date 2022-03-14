@@ -21,7 +21,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test]
 async fn test_drop_database_interpreter() -> Result<()> {
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
 
     let plan = PlanParser::parse(ctx.clone(), "drop database default").await?;
     let executor = InterpreterFactory::get(ctx, plan.clone())?;

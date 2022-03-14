@@ -80,33 +80,31 @@ impl MySQLHandler {
     }
 
     fn accept_socket(sessions: Arc<SessionManager>, executor: Arc<Runtime>, socket: TcpStream) {
-        match sessions.create_session("MySQL") {
-            Err(error) => Self::reject_session(socket, executor, error),
-            Ok(session) => {
-                tracing::info!("MySQL connection coming: {:?}", socket.peer_addr());
-                if let Err(error) = MySQLConnection::run_on_stream(session, socket) {
-                    tracing::error!("Unexpected error occurred during query: {:?}", error);
-                };
-            }
-        }
-    }
-
-    fn reject_session(stream: TcpStream, executor: Arc<Runtime>, error: ErrorCode) {
         executor.spawn(async move {
-            let (kind, message) = match error.code() {
-                41 => (ErrorKind::ER_TOO_MANY_USER_CONNECTIONS, error.message()),
-                _ => (ErrorKind::ER_INTERNAL_ERROR, error.message()),
-            };
-
-            if let Err(error) =
-                RejectConnection::reject_mysql_connection(stream, kind, message).await
-            {
-                tracing::error!(
-                    "Unexpected error occurred during reject connection: {:?}",
-                    error
-                );
+            match sessions.create_session("MySQL").await {
+                Err(error) => Self::reject_session(socket, error).await,
+                Ok(session) => {
+                    tracing::info!("MySQL connection coming: {:?}", socket.peer_addr());
+                    if let Err(error) = MySQLConnection::run_on_stream(session, socket) {
+                        tracing::error!("Unexpected error occurred during query: {:?}", error);
+                    };
+                }
             }
         });
+    }
+
+    async fn reject_session(stream: TcpStream, error: ErrorCode) {
+        let (kind, message) = match error.code() {
+            41 => (ErrorKind::ER_TOO_MANY_USER_CONNECTIONS, error.message()),
+            _ => (ErrorKind::ER_INTERNAL_ERROR, error.message()),
+        };
+
+        if let Err(error) = RejectConnection::reject_mysql_connection(stream, kind, message).await {
+            tracing::error!(
+                "Unexpected error occurred during reject connection: {:?}",
+                error
+            );
+        }
     }
 }
 
@@ -133,7 +131,10 @@ impl Server for MySQLHandler {
         match self.abort_registration.take() {
             None => Err(ErrorCode::LogicalError("MySQLHandler already running.")),
             Some(registration) => {
-                let rejected_rt = Arc::new(Runtime::with_worker_threads(1)?);
+                let rejected_rt = Arc::new(Runtime::with_worker_threads(
+                    1,
+                    Some("mysql-handler".to_string()),
+                )?);
                 let (stream, listener) = Self::listener_tcp(listening).await?;
                 let stream = Abortable::new(stream, registration);
                 self.join_handle = Some(tokio::spawn(self.listen_loop(stream, rejected_rt)));

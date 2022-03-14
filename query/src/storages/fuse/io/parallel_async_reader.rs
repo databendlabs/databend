@@ -30,6 +30,7 @@ pub struct ParallelAsyncReader<T: ?Sized> {
 }
 
 impl<T: Sized> ParallelAsyncReader<T> {
+    #[allow(dead_code)]
     pub fn new(permit: OwnedSemaphorePermit, value: T) -> Self {
         ParallelAsyncReader {
             _permit: permit,

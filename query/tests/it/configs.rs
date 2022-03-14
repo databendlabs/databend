@@ -48,7 +48,7 @@ http_handler_host = \"127.0.0.1\"
 http_handler_port = 8000
 http_handler_result_timeout_millis = 10000
 flight_api_address = \"127.0.0.1:9090\"
-http_api_address = \"127.0.0.1:8080\"
+admin_api_address = \"127.0.0.1:8080\"
 metric_api_address = \"127.0.0.1:7070\"
 http_handler_tls_server_cert = \"\"
 http_handler_tls_server_key = \"\"
@@ -91,6 +91,7 @@ rpc_tls_meta_service_domain_name = \"localhost\"
 
 [storage]
 storage_type = \"disk\"
+storage_num_cpus = 0
 
 [storage.disk]
 data_path = \"_data\"
@@ -128,7 +129,7 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("QUERY_CLICKHOUSE_HANDLER_HOST", "1.2.3.4");
     std::env::set_var("QUERY_CLICKHOUSE_HANDLER_PORT", "9000");
     std::env::set_var("QUERY_FLIGHT_API_ADDRESS", "1.2.3.4:9091");
-    std::env::set_var("QUERY_HTTP_API_ADDRESS", "1.2.3.4:8081");
+    std::env::set_var("QUERY_ADMIN_API_ADDRESS", "1.2.3.4:8081");
     std::env::set_var("QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");
     std::env::set_var("QUERY_TABLE_CACHE_ENABLED", "true");
     std::env::set_var("QUERY_TABLE_MEMORY_CACHE_MB_SIZE", "512");
@@ -161,7 +162,7 @@ fn test_env_config() -> Result<()> {
     assert_eq!(9000, configured.query.clickhouse_handler_port);
 
     assert_eq!("1.2.3.4:9091", configured.query.flight_api_address);
-    assert_eq!("1.2.3.4:8081", configured.query.http_api_address);
+    assert_eq!("1.2.3.4:8081", configured.query.admin_api_address);
     assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
 
     assert_eq!("s3", configured.storage.storage_type);
@@ -196,7 +197,7 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_PORT");
     std::env::remove_var("QUERY_CLICKHOUSE_HANDLER_THREAD_NUM");
     std::env::remove_var("QUERY_FLIGHT_API_ADDRESS");
-    std::env::remove_var("QUERY_HTTP_API_ADDRESS");
+    std::env::remove_var("QUERY_ADMIN_API_ADDRESS");
     std::env::remove_var("QUERY_METRIC_API_ADDRESS");
     std::env::remove_var("QUERY_TABLE_CACHE_ENABLED");
     std::env::remove_var("QUERY_TABLE_MEMORY_CACHE_MB_SIZE");

@@ -16,6 +16,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::UserInfo;
 use databend_query::clusters::Cluster;
@@ -25,8 +26,8 @@ use databend_query::sessions::SessionContext;
 
 use crate::tests::SessionManagerBuilder;
 
-#[test]
-fn test_session_context() -> Result<()> {
+#[tokio::test]
+async fn test_session_context() -> Result<()> {
     let conf = Config::load_from_args();
     let session_ctx = SessionContext::try_create(conf)?;
 
@@ -78,12 +79,13 @@ fn test_session_context() -> Result<()> {
     // context shared.
     {
         let sessions = SessionManagerBuilder::create().build()?;
-        let dummy_session = sessions.create_session("TestSession")?;
+        let dummy_session = sessions.create_session("TestSession").await?;
         let shared = QueryContextShared::try_create(
             sessions.get_conf().clone(),
             Arc::new(dummy_session.as_ref().clone()),
             Cluster::empty(),
-        )?;
+        )
+        .await?;
 
         session_ctx.set_query_context_shared(Some(shared.clone()));
         let val = session_ctx.get_query_context_shared();

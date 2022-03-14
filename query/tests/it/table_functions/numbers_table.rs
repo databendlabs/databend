@@ -26,7 +26,7 @@ use futures::TryStreamExt;
 #[tokio::test]
 async fn test_number_table() -> Result<()> {
     let tbl_args = Some(vec![Expression::create_literal(DataValue::UInt64(8))]);
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
     let table = NumbersTable::create("system", "numbers_mt", 1, tbl_args)?;
 
     let source_plan = table
@@ -107,7 +107,7 @@ async fn test_limit_push_down() -> Result<()> {
     ];
 
     for test in tests {
-        let ctx = crate::tests::create_query_context()?;
+        let ctx = crate::tests::create_query_context().await?;
         let plan = PlanParser::parse(ctx.clone(), test.query).await?;
         let actual = format!("{:?}", plan);
         assert_eq!(test.expect, actual, "{:#?}", test.name);

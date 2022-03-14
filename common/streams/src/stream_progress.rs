@@ -53,8 +53,8 @@ impl Stream for ProgressStream {
                 Some(result) => match result {
                     Ok(block) => {
                         let progress_values = ProgressValues {
-                            read_rows: block.num_rows(),
-                            read_bytes: block.memory_size(),
+                            rows: block.num_rows(),
+                            bytes: block.memory_size(),
                         };
                         this.progress.incr(&progress_values);
                         Poll::Ready(Some(Ok(block)))

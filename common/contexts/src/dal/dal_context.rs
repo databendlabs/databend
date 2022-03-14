@@ -86,8 +86,11 @@ impl Accessor for DalContext {
     }
 
     async fn write(&self, r: BoxedAsyncReader, args: &OpWrite) -> DalResult<usize> {
+        let now = Instant::now();
         self.inner.as_ref().unwrap().write(r, args).await.map(|n| {
             self.metrics.inc_write_bytes(n);
+            self.metrics
+                .inc_write_bytes_cost(now.elapsed().as_millis() as u64);
             n
         })
     }

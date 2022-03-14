@@ -33,9 +33,9 @@ use databend_query::storages::StorageFactory;
 
 use crate::tests::SessionManagerBuilder;
 
-pub fn create_query_context() -> Result<Arc<QueryContext>> {
+pub async fn create_query_context() -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
-    let dummy_session = sessions.create_session("TestSession")?;
+    let dummy_session = sessions.create_session("TestSession").await?;
 
     // Set user with all privileges
     let mut user_info = UserInfo::new(
@@ -55,19 +55,22 @@ pub fn create_query_context() -> Result<Arc<QueryContext>> {
 
     dummy_session.set_current_user(user_info);
 
-    let context = QueryContext::create_from_shared(QueryContextShared::try_create(
-        sessions.get_conf().clone(),
-        Arc::new(dummy_session.as_ref().clone()),
-        Cluster::empty(),
-    )?);
+    let context = QueryContext::create_from_shared(
+        QueryContextShared::try_create(
+            sessions.get_conf().clone(),
+            Arc::new(dummy_session.as_ref().clone()),
+            Cluster::empty(),
+        )
+        .await?,
+    );
 
     context.get_settings().set_max_threads(8)?;
     Ok(context)
 }
 
-pub fn create_query_context_with_config(config: Config) -> Result<Arc<QueryContext>> {
+pub async fn create_query_context_with_config(config: Config) -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create_with_conf(config.clone()).build()?;
-    let dummy_session = sessions.create_session("TestSession")?;
+    let dummy_session = sessions.create_session("TestSession").await?;
 
     let mut user_info = UserInfo::new(
         "root".to_string(),
@@ -85,11 +88,14 @@ pub fn create_query_context_with_config(config: Config) -> Result<Arc<QueryConte
     );
     dummy_session.set_current_user(user_info);
 
-    let context = QueryContext::create_from_shared(QueryContextShared::try_create(
-        config,
-        Arc::new(dummy_session.as_ref().clone()),
-        Cluster::empty(),
-    )?);
+    let context = QueryContext::create_from_shared(
+        QueryContextShared::try_create(
+            config,
+            Arc::new(dummy_session.as_ref().clone()),
+            Cluster::empty(),
+        )
+        .await?,
+    );
 
     context.get_settings().set_max_threads(8)?;
     Ok(context)
@@ -155,18 +161,23 @@ impl Default for ClusterDescriptor {
     }
 }
 
-pub fn create_query_context_with_cluster(desc: ClusterDescriptor) -> Result<Arc<QueryContext>> {
+pub async fn create_query_context_with_cluster(
+    desc: ClusterDescriptor,
+) -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
-    let dummy_session = sessions.create_session("TestSession")?;
+    let dummy_session = sessions.create_session("TestSession").await?;
 
     let local_id = desc.local_node_id;
     let nodes = desc.cluster_nodes_list;
 
-    let context = QueryContext::create_from_shared(QueryContextShared::try_create(
-        sessions.get_conf().clone(),
-        Arc::new(dummy_session.as_ref().clone()),
-        Cluster::create(nodes, local_id),
-    )?);
+    let context = QueryContext::create_from_shared(
+        QueryContextShared::try_create(
+            sessions.get_conf().clone(),
+            Arc::new(dummy_session.as_ref().clone()),
+            Cluster::create(nodes, local_id),
+        )
+        .await?,
+    );
 
     context.get_settings().set_max_threads(8)?;
     Ok(context)

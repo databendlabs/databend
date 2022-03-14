@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry::Occupied;
-use std::collections::hash_map::Entry::Vacant;
 use std::collections::HashMap;
+use std::env;
 use std::future::Future;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::tokio;
+use common_base::Runtime;
 use common_base::SignalStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -45,7 +45,6 @@ use crate::sessions::session_ref::SessionRef;
 use crate::sessions::ProcessInfo;
 use crate::storages::cache::CacheManager;
 use crate::users::auth::auth_mgr::AuthMgr;
-use crate::users::RoleCacheMgr;
 use crate::users::UserApiProvider;
 
 pub struct SessionManager {
@@ -54,13 +53,13 @@ pub struct SessionManager {
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
     pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
-    pub(in crate::sessions) role_cache_manager: Arc<RoleCacheMgr>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
     pub(in crate::sessions) storage_cache_manager: Arc<CacheManager>,
     storage_operator: Operator,
+    storage_runtime: Runtime,
 }
 
 impl SessionManager {
@@ -72,11 +71,18 @@ impl SessionManager {
         // Cluster discovery.
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
 
+        let storage_runtime = {
+            let mut storage_num_cpus = conf.storage.storage_num_cpus as usize;
+            if storage_num_cpus == 0 {
+                storage_num_cpus = std::cmp::max(1, num_cpus::get() / 2)
+            }
+            Runtime::with_worker_threads(storage_num_cpus, Some("IO-worker".to_owned()))?
+        };
+
         // User manager and init the default users.
         let user = UserApiProvider::create_global(conf.clone()).await?;
         let auth_manager = Arc::new(AuthMgr::create(conf.clone(), user.clone()).await?);
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
-        let role_cache_manager = Arc::new(RoleCacheMgr::new(user.clone()));
         let max_sessions = conf.query.max_active_sessions as usize;
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
 
@@ -84,7 +90,6 @@ impl SessionManager {
             catalog,
             conf,
             discovery,
-            role_cache_manager,
             user_manager: user,
             http_query_manager,
             auth_manager,
@@ -92,6 +97,7 @@ impl SessionManager {
             active_sessions,
             storage_cache_manager,
             storage_operator: storage_accessor,
+            storage_runtime,
         }))
     }
 
@@ -111,10 +117,6 @@ impl SessionManager {
         self.auth_manager.clone()
     }
 
-    pub fn get_role_cache_manager(self: &Arc<Self>) -> Arc<RoleCacheMgr> {
-        self.role_cache_manager.clone()
-    }
-
     /// Get the user api provider.
     pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
         self.user_manager.clone()
@@ -132,61 +134,88 @@ impl SessionManager {
         self.storage_cache_manager.as_ref()
     }
 
-    pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
-        let mut sessions = self.active_sessions.write();
-        match sessions.len() == self.max_sessions {
-            true => Err(ErrorCode::TooManyUserConnections(
-                "The current accept connection has exceeded mysql_handler_thread_num config",
-            )),
-            false => {
-                let session = Session::try_create(
-                    self.conf.clone(),
-                    uuid::Uuid::new_v4().to_string(),
-                    typ.into(),
-                    self.clone(),
-                )?;
+    pub fn get_storage_runtime<'a>(self: &'a Arc<Self>) -> &'a Runtime {
+        &self.storage_runtime
+    }
 
-                label_counter(
-                    super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
-                    &self.conf.query.tenant_id,
-                    &self.conf.query.cluster_id,
-                );
-
-                sessions.insert(session.get_id(), session.clone());
-                Ok(SessionRef::create(session))
+    pub async fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
+        {
+            let sessions = self.active_sessions.read();
+            if sessions.len() == self.max_sessions {
+                return Err(ErrorCode::TooManyUserConnections(
+                    "The current accept connection has exceeded mysql_handler_thread_num config",
+                ));
             }
+        }
+        let session = Session::try_create(
+            self.conf.clone(),
+            uuid::Uuid::new_v4().to_string(),
+            typ.into(),
+            self.clone(),
+        )
+        .await?;
+
+        let mut sessions = self.active_sessions.write();
+        if sessions.len() < self.max_sessions {
+            label_counter(
+                super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
+                &self.conf.query.tenant_id,
+                &self.conf.query.cluster_id,
+            );
+
+            sessions.insert(session.get_id(), session.clone());
+
+            Ok(SessionRef::create(session))
+        } else {
+            Err(ErrorCode::TooManyUserConnections(
+                "The current accept connection has exceeded mysql_handler_thread_num config",
+            ))
         }
     }
 
-    pub fn create_rpc_session(self: &Arc<Self>, id: String, aborted: bool) -> Result<SessionRef> {
-        let mut sessions = self.active_sessions.write();
-
-        let session = match sessions.entry(id) {
-            Occupied(entry) => entry.get().clone(),
-            Vacant(_) if aborted => return Err(ErrorCode::AbortedSession("Aborting server.")),
-            Vacant(entry) => {
-                let session = Session::try_create(
-                    self.conf.clone(),
-                    entry.key().clone(),
-                    String::from("RPCSession"),
-                    self.clone(),
-                )?;
-
-                label_counter(
-                    super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
-                    &self.conf.query.tenant_id,
-                    &self.conf.query.cluster_id,
-                );
-
-                entry.insert(session).clone()
+    pub async fn create_rpc_session(
+        self: &Arc<Self>,
+        id: String,
+        aborted: bool,
+    ) -> Result<SessionRef> {
+        {
+            let sessions = self.active_sessions.read();
+            let v = sessions.get(&id);
+            if v.is_some() {
+                return Ok(SessionRef::create(v.unwrap().clone()));
             }
-        };
+        }
 
-        Ok(SessionRef::create(session))
+        let session = Session::try_create(
+            self.conf.clone(),
+            id.clone(),
+            String::from("RPCSession"),
+            self.clone(),
+        )
+        .await?;
+
+        let mut sessions = self.active_sessions.write();
+        let v = sessions.get(&id);
+        if v.is_none() {
+            if aborted {
+                return Err(ErrorCode::AbortedSession("Aborting server."));
+            }
+
+            label_counter(
+                super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
+                &self.conf.query.tenant_id,
+                &self.conf.query.cluster_id,
+            );
+
+            sessions.insert(id, session.clone());
+            Ok(SessionRef::create(session))
+        } else {
+            Ok(SessionRef::create(v.unwrap().clone()))
+        }
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
+    pub async fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
         let sessions = self.active_sessions.read();
         sessions
             .get(id)
@@ -201,7 +230,8 @@ impl SessionManager {
             &self.conf.query.cluster_id,
         );
 
-        self.active_sessions.write().remove(session_id);
+        let mut sessions = self.active_sessions.write();
+        sessions.remove(session_id);
     }
 
     pub fn graceful_shutdown(
@@ -217,7 +247,7 @@ impl SessionManager {
             let mut signal = Box::pin(signal.next());
 
             for _index in 0..timeout_secs {
-                if SessionManager::destroy_idle_sessions(&active_sessions) {
+                if SessionManager::destroy_idle_sessions(&active_sessions).await {
                     return;
                 }
 
@@ -237,15 +267,15 @@ impl SessionManager {
         }
     }
 
-    pub fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
-        self.active_sessions
-            .read()
+    pub async fn processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        let sessions = self.active_sessions.read();
+        sessions
             .values()
             .map(Session::process_info)
             .collect::<Vec<_>>()
     }
 
-    fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Arc<Session>>>>) -> bool {
+    async fn destroy_idle_sessions(sessions: &Arc<RwLock<HashMap<String, Arc<Session>>>>) -> bool {
         // Read lock does not support reentrant
         // https://github.com/Amanieu/parking_lot/blob/lock_api-0.4.4/lock_api/src/rwlock.rs#L422
         let active_sessions_read_guard = sessions.read();
@@ -308,11 +338,18 @@ impl SessionManager {
             DalSchema::Azblob => {
                 todo!()
             }
-            DalSchema::Fs => fs::Backend::build()
-                .root(&storage_conf.disk.data_path)
-                .finish()
-                .await
-                .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?,
+            DalSchema::Fs => {
+                let mut path = storage_conf.disk.data_path.clone();
+                if !path.starts_with('/') {
+                    path = env::current_dir().unwrap().join(path).display().to_string();
+                }
+
+                fs::Backend::build()
+                    .root(&path)
+                    .finish()
+                    .await
+                    .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?
+            }
         };
 
         Ok(Operator::new(accessor))

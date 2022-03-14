@@ -9,7 +9,6 @@
 
 # Rust
 target/
-cli/e2e/bendctl
 .cargo/config.toml
 
 # OS related

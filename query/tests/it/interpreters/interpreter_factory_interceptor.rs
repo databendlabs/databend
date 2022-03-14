@@ -22,7 +22,7 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_interpreter_interceptor() -> Result<()> {
     common_tracing::init_default_ut_tracing();
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
     {
         let query = "select number from numbers_mt(100) where number > 90";
         ctx.attach_query_str(query);
@@ -80,7 +80,7 @@ async fn test_interpreter_interceptor() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_interpreter_interceptor_for_insert() -> Result<()> {
     common_tracing::init_default_ut_tracing();
-    let ctx = crate::tests::create_query_context()?;
+    let ctx = crate::tests::create_query_context().await?;
     {
         let query = "create table t as select number from numbers_mt(1)";
         ctx.attach_query_str(query);
@@ -106,10 +106,9 @@ async fn test_interpreter_interceptor_for_insert() -> Result<()> {
             "| log_type | handler_type | cpu_usage | scan_rows | scan_bytes | scan_partitions | written_rows | written_bytes | result_rows | result_bytes | query_kind      | query_text                                         | sql_user | sql_user_quota                                                            |",
             "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+---------------------------------------------------------------------------+",
             "| 1        | TestSession  | 8         | 0         | 0          | 0               | 0            | 0             | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
-            "| 2        | TestSession  | 8         | 1         | 8          | 0               | 1            | 1338          | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
+            "| 2        | TestSession  | 8         | 1         | 8          | 0               | 1            | 8             | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | root     | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
             "+----------+--------------+-----------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+----------+---------------------------------------------------------------------------+",
         ];
-
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 

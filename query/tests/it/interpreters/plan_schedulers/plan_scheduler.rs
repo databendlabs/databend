@@ -331,4 +331,5 @@ async fn create_env() -> Result<Arc<QueryContext>> {
             .with_node("dummy", "github.com:9090")
             .with_local_id("dummy_local"),
     )
+    .await
 }

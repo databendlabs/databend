@@ -33,7 +33,6 @@ use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManager;
 use crate::sessions::Settings;
-use crate::users::UserApiProvider;
 
 #[derive(Clone, MallocSizeOf)]
 pub struct Session {
@@ -50,15 +49,15 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn try_create(
+    pub async fn try_create(
         conf: Config,
         id: String,
         typ: String,
         session_mgr: Arc<SessionManager>,
     ) -> Result<Arc<Session>> {
-        let user_api = session_mgr.get_user_manager();
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
-        let session_settings = Settings::try_create(&conf, session_ctx.clone(), user_api)?;
+        let session_settings =
+            Settings::try_create(&conf, session_ctx.clone(), session_mgr.get_user_manager())?;
         let ref_count = Arc::new(AtomicUsize::new(0));
 
         Ok(Arc::new(Session {
@@ -115,25 +114,30 @@ impl Session {
     /// For a query, execution environment(e.g cluster) should be immutable.
     /// We can bind the environment to the context in create_context method.
     pub async fn create_query_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
-        let query_ctx = self.session_ctx.get_query_context_shared();
+        let shared = self.get_shared_query_context().await?;
 
-        Ok(match query_ctx.as_ref() {
-            Some(shared) => QueryContext::create_from_shared(shared.clone()),
+        Ok(QueryContext::create_from_shared(shared))
+    }
+
+    pub async fn get_shared_query_context(self: &Arc<Self>) -> Result<Arc<QueryContextShared>> {
+        let query_ctx_shared = self.session_ctx.get_query_context_shared();
+        Ok(match query_ctx_shared.as_ref() {
+            Some(shared) => shared.clone(),
             None => {
                 let config = self.conf.clone();
                 let discovery = self.session_mgr.get_cluster_discovery();
 
                 let session = self.clone();
                 let cluster = discovery.discover().await?;
-                let shared = QueryContextShared::try_create(config, session, cluster)?;
+                let shared = QueryContextShared::try_create(config, session, cluster).await?;
 
                 let query_ctx = self.session_ctx.get_query_context_shared();
                 match query_ctx.as_ref() {
-                    Some(shared) => QueryContext::create_from_shared(shared.clone()),
+                    Some(shared) => shared.clone(),
                     None => {
                         self.session_ctx
                             .set_query_context_shared(Some(shared.clone()));
-                        QueryContext::create_from_shared(shared)
+                        shared
                     }
                 }
             }
@@ -192,7 +196,10 @@ impl Session {
         }
 
         let tenant = self.get_current_tenant();
-        let role_cache = self.session_mgr.get_role_cache_manager();
+        let role_cache = self
+            .get_shared_query_context()
+            .await?
+            .get_role_cache_manager();
         let role_verified = role_cache
             .verify_privilege(&tenant, &current_user.grants.roles(), object, privilege)
             .await?;
@@ -216,10 +223,6 @@ impl Session {
 
     pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
         self.session_mgr.get_catalog()
-    }
-
-    pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
-        self.session_mgr.get_user_manager()
     }
 
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {

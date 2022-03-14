@@ -25,6 +25,7 @@ pub use block_stream_writer::BlockStreamWriter;
 pub use block_stream_writer::SegmentInfoStream;
 pub use locations::TableMetaLocationGenerator;
 pub use meta_readers::BlockMetaCache;
+pub use meta_readers::BlockMetaReader;
 pub use meta_readers::MetaReaders;
 pub use meta_readers::SegmentInfoCache;
 pub use meta_readers::SegmentInfoReader;

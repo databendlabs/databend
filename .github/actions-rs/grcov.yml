@@ -18,4 +18,3 @@ ignore:
   - "*/tracing/*"
   - "*/api/http/debug/*"
   - "*/datasources/example/*"
-  - "cli/**/*"

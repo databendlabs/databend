@@ -23,10 +23,10 @@ use num_traits::AsPrimitive;
 use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::scalar_binary_op_ref;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
-use crate::scalars::ScalarBinaryExpression;
 
 pub type LeftFunction = LeftRightFunction<true>;
 pub type RightFunction = LeftRightFunction<false>;
@@ -84,8 +84,7 @@ impl<const IS_LEFT: bool> Function for LeftRightFunction<IS_LEFT> {
         match IS_LEFT {
             true => {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$S| {
-                    let binary = ScalarBinaryExpression::<Vu8, $S, Vu8, _>::new_ref(left);
-                    let col = binary.eval_ref(columns[0].column(), columns[1].column(), &mut EvalContext::default())?;
+                    let col = scalar_binary_op_ref::<Vu8, $S, Vu8, _>(columns[0].column(), columns[1].column(), left, &mut EvalContext::default())?;
                     Ok(Arc::new(col))
                 },{
                     unreachable!()
@@ -93,8 +92,7 @@ impl<const IS_LEFT: bool> Function for LeftRightFunction<IS_LEFT> {
             }
             false => {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$S| {
-                    let binary = ScalarBinaryExpression::<Vu8, $S, Vu8, _>::new_ref(right);
-                    let col = binary.eval_ref(columns[0].column(), columns[1].column(), &mut EvalContext::default())?;
+                    let col = scalar_binary_op_ref::<Vu8, $S, Vu8, _>(columns[0].column(), columns[1].column(), right, &mut EvalContext::default())?;
                     Ok(Arc::new(col))
                 },{
                     unreachable!()

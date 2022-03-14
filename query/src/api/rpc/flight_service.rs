@@ -151,7 +151,7 @@ impl FlightService for DatabendQueryFlightService {
             FlightAction::CancelAction(action) => {
                 // We only destroy when session is exist
                 let session_id = action.query_id.clone();
-                if let Some(session) = self.sessions.get_session_by_id(&session_id) {
+                if let Some(session) = self.sessions.get_session_by_id(&session_id).await {
                     // TODO: remove streams
                     session.force_kill_session();
                 }
@@ -161,7 +161,10 @@ impl FlightService for DatabendQueryFlightService {
             FlightAction::BroadcastAction(action) => {
                 let session_id = action.query_id.clone();
                 let is_aborted = self.dispatcher.is_aborted();
-                let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
+                let session = self
+                    .sessions
+                    .create_rpc_session(session_id, is_aborted)
+                    .await?;
 
                 self.dispatcher
                     .broadcast_action(session, flight_action)
@@ -171,7 +174,10 @@ impl FlightService for DatabendQueryFlightService {
             FlightAction::PrepareShuffleAction(action) => {
                 let session_id = action.query_id.clone();
                 let is_aborted = self.dispatcher.is_aborted();
-                let session = self.sessions.create_rpc_session(session_id, is_aborted)?;
+                let session = self
+                    .sessions
+                    .create_rpc_session(session_id, is_aborted)
+                    .await?;
 
                 self.dispatcher
                     .shuffle_action(session, flight_action)

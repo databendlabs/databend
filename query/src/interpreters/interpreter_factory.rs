@@ -52,6 +52,7 @@ use crate::interpreters::ShowFunctionsInterpreter;
 use crate::interpreters::ShowGrantsInterpreter;
 use crate::interpreters::ShowMetricsInterpreter;
 use crate::interpreters::ShowProcessListInterpreter;
+use crate::interpreters::ShowRolesInterpreter;
 use crate::interpreters::ShowSettingsInterpreter;
 use crate::interpreters::ShowTablesInterpreter;
 use crate::interpreters::ShowUsersInterpreter;
@@ -108,6 +109,9 @@ impl InterpreterFactory {
             }
             PlanNode::Show(ShowPlan::ShowUsers(v)) => {
                 ShowUsersInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::Show(ShowPlan::ShowRoles(v)) => {
+                ShowRolesInterpreter::try_create(ctx_clone, v)
             }
 
             // Database.
