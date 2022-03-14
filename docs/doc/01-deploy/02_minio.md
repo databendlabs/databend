@@ -30,9 +30,9 @@ docker run -d -p 9900:9000 --name minio \
   minio/minio server /data
 ```
 
-We recommend using [aws cli](https://aws.amazon.com/cli/) to create a bucket:
+We recommend using [aws cli](https://aws.amazon.com/cli/) to create a new MinIO bucket:
 
-```shell title='Create a new bucket'
+```shell
 export AWS_ACCESS_KEY_ID=minioadmin
 export AWS_SECRET_ACCESS_KEY=minioadmin
 export AWS_EC2_METADATA_DISABLED=true
