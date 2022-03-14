@@ -284,7 +284,7 @@ impl<'a> DfParser<'a> {
                     self.parse_desc_table()
                 }
             },
-            _ => self.expected("describe statement", unexpected),
+            unexpected => self.expected("describe statement", unexpected),
         }
     }
 
