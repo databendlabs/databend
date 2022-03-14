@@ -35,9 +35,6 @@ members = [
     # Meta
     "metasrv",
 
-    # CLI
-    "cli",
-
     # Tools
     "tools/benchmark",
     "tools/fuzz",
