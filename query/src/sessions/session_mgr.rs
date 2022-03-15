@@ -44,6 +44,7 @@ use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 use crate::sessions::ProcessInfo;
 use crate::sessions::SessionType;
+use crate::sessions::Status;
 use crate::storages::cache::CacheManager;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::UserApiProvider;
@@ -59,6 +60,7 @@ pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
     pub(in crate::sessions) storage_cache_manager: RwLock<Arc<CacheManager>>,
+    pub status: Arc<RwLock<Status>>,
     storage_operator: RwLock<Operator>,
     storage_runtime: Runtime,
 }
@@ -86,6 +88,7 @@ impl SessionManager {
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
         let max_sessions = conf.query.max_active_sessions as usize;
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
+        let status = Arc::new(RwLock::new(Default::default()));
 
         Ok(Arc::new(SessionManager {
             conf: RwLock::new(conf),
@@ -99,6 +102,7 @@ impl SessionManager {
             storage_cache_manager: RwLock::new(storage_cache_manager),
             storage_operator: RwLock::new(storage_accessor),
             storage_runtime,
+            status,
         }))
     }
 

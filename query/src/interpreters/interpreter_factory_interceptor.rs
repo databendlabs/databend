@@ -68,7 +68,7 @@ impl Interpreter for InterceptorInterpreter {
     async fn start(&self) -> Result<()> {
         let session = self.ctx.get_current_session();
         let now = SystemTime::now();
-        if session.is_user_session() {
+        if session.get_type().is_user_session() {
             session
                 .get_session_manager()
                 .status
@@ -81,7 +81,7 @@ impl Interpreter for InterceptorInterpreter {
     async fn finish(&self) -> Result<()> {
         let session = self.ctx.get_current_session();
         let now = SystemTime::now();
-        if session.is_user_session() {
+        if session.get_type().is_user_session() {
             session
                 .get_session_manager()
                 .status

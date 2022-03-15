@@ -34,3 +34,4 @@ pub use session_mgr::SessionManager;
 pub use session_ref::SessionRef;
 pub use session_settings::Settings;
 pub use session_type::SessionType;
+pub use status::Status;
