@@ -12,7 +12,6 @@ doctest = false
 test = false
 
 [dependencies]
-common-exception = { path = "../../exception" }
 common-meta-types = { path = "../types" }
 common-tracing = { path = "../../tracing" }
 
