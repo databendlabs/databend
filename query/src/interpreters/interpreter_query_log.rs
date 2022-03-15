@@ -176,7 +176,7 @@ impl InterpreterQueryLog {
 
     pub async fn log_start(&self) -> Result<()> {
         // User.
-        let handler_type = self.ctx.get_current_session().get_type();
+        let handler_type = self.ctx.get_current_session().get_type().to_string();
         let tenant_id = self.ctx.get_tenant();
         let cluster_id = self.ctx.get_config().query.cluster_id;
         let user = self.ctx.get_current_user()?;
@@ -277,7 +277,7 @@ impl InterpreterQueryLog {
 
     pub async fn log_finish(&self) -> Result<()> {
         // User.
-        let handler_type = self.ctx.get_current_session().get_type();
+        let handler_type = self.ctx.get_current_session().get_type().to_string();
         let tenant_id = self.ctx.get_config().query.tenant_id;
         let cluster_id = self.ctx.get_config().query.cluster_id;
         let user = self.ctx.get_current_user()?;

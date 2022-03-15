@@ -22,6 +22,8 @@ mod session_info;
 mod session_mgr;
 mod session_ref;
 mod session_settings;
+mod session_type;
+mod status;
 
 pub use query_ctx::QueryContext;
 pub use query_ctx_shared::QueryContextShared;
@@ -31,3 +33,4 @@ pub use session_info::ProcessInfo;
 pub use session_mgr::SessionManager;
 pub use session_ref::SessionRef;
 pub use session_settings::Settings;
+pub use session_type::SessionType;

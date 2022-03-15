@@ -19,6 +19,7 @@ use criterion::Criterion;
 use databend_query::configs::Config;
 use databend_query::interpreters::SelectInterpreter;
 use databend_query::sessions::SessionManager;
+use databend_query::sessions::SessionType;
 use databend_query::sql::PlanParser;
 use futures::StreamExt;
 
@@ -29,7 +30,7 @@ pub mod bench_sort_query_sql;
 
 pub async fn select_executor(sql: &str) -> Result<()> {
     let sessions = SessionManager::from_conf(Config::default()).await?;
-    let executor_session = sessions.create_session("Benches").await?;
+    let executor_session = sessions.create_session(SessionType::Test).await?;
     let ctx = executor_session.create_query_context().await?;
 
     if let PlanNode::Select(plan) = PlanParser::parse(ctx.clone(), sql).await? {

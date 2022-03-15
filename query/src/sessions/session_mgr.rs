@@ -43,6 +43,7 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 use crate::sessions::ProcessInfo;
+use crate::sessions::SessionType;
 use crate::storages::cache::CacheManager;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::UserApiProvider;
@@ -138,7 +139,7 @@ impl SessionManager {
         &self.storage_runtime
     }
 
-    pub async fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
+    pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<SessionRef> {
         // TODO: maybe deadlock
         let config = self.get_config();
         {
@@ -152,7 +153,7 @@ impl SessionManager {
         let session = Session::try_create(
             config.clone(),
             uuid::Uuid::new_v4().to_string(),
-            typ.into(),
+            typ,
             self.clone(),
         )
         .await?;
@@ -193,7 +194,7 @@ impl SessionManager {
         let session = Session::try_create(
             config.clone(),
             id.clone(),
-            String::from("RPCSession"),
+            SessionType::FlightRPC,
             self.clone(),
         )
         .await?;

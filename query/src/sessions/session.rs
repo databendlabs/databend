@@ -32,12 +32,14 @@ use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 use crate::sessions::Settings;
 
 #[derive(Clone, MallocSizeOf)]
 pub struct Session {
     pub(in crate::sessions) id: String,
-    pub(in crate::sessions) typ: String,
+    #[ignore_malloc_size_of = "insignificant"]
+    pub(in crate::sessions) typ: SessionType,
     #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) session_mgr: Arc<SessionManager>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
@@ -50,7 +52,7 @@ impl Session {
     pub async fn try_create(
         conf: Config,
         id: String,
-        typ: String,
+        typ: SessionType,
         session_mgr: Arc<SessionManager>,
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
@@ -72,7 +74,7 @@ impl Session {
         self.id.clone()
     }
 
-    pub fn get_type(self: &Arc<Self>) -> String {
+    pub fn get_type(self: &Arc<Self>) -> SessionType {
         self.typ.clone()
     }
 
