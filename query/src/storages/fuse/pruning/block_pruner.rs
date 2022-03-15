@@ -71,14 +71,23 @@ impl BlockPruner {
             usize::MAX
         };
 
-        let rows = AtomicUsize::new(0);
+        // Segments and blocks are accumulated concurrently, thus an atomic counter is used
+        // to **try** collecting as less blocks as possible. But concurrency is preferred than
+        // the "accuracy". In [FuseTable::do_read_partitions], there "limit" will be treated
+        // precisely.
 
+        let accumulated_rows = AtomicUsize::new(0);
         let stream = futures::stream::iter(segment_locs)
             .map(|seg_loc| async {
-                if rows.load(Ordering::Acquire) < limit {
+                if accumulated_rows.load(Ordering::Acquire) < limit {
                     let reader = MetaReaders::segment_info_reader(ctx);
                     let segment_info = reader.read(seg_loc).await?;
-                    Self::filter_segment(segment_info.as_ref(), &block_pred, &rows, limit)
+                    Self::filter_segment(
+                        segment_info.as_ref(),
+                        &block_pred,
+                        &accumulated_rows,
+                        limit,
+                    )
                 } else {
                     Ok(vec![])
                 }
@@ -97,7 +106,7 @@ impl BlockPruner {
     fn filter_segment(
         segment_info: &SegmentInfo,
         pred: &Pred,
-        rows: &AtomicUsize,
+        accumulated_rows: &AtomicUsize,
         limit: usize,
     ) -> Result<Vec<BlockMeta>> {
         if pred(&segment_info.summary.col_stats)? {
@@ -105,9 +114,9 @@ impl BlockPruner {
             let mut acc = Vec::with_capacity(block_num);
             for block_meta in &segment_info.blocks {
                 if pred(&block_meta.col_stats)? {
-                    acc.push(block_meta.clone());
-                    if rows.fetch_add(block_meta.row_count as usize, Ordering::Release) >= limit {
-                        return Ok(acc);
+                    let num_rows = block_meta.row_count as usize;
+                    if accumulated_rows.fetch_add(num_rows, Ordering::Release) >= limit {
+                        acc.push(block_meta.clone());
                     }
                 }
             }
