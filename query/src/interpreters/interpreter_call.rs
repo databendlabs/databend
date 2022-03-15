@@ -25,7 +25,7 @@ use common_tracing::tracing;
 
 use super::Interpreter;
 use super::InterpreterPtr;
-use crate::functions::FunctionFactory;
+use crate::procedures::ProcedureFactory;
 use crate::sessions::QueryContext;
 
 pub struct CallInterpreter {
@@ -43,7 +43,7 @@ impl CallInterpreter {
     fn validate(&self) -> Result<()> {
         let plan = &self.plan;
         let name = plan.name.clone();
-        let features = FunctionFactory::instance().get_features(&name)?;
+        let features = ProcedureFactory::instance().get_features(&name)?;
         validate_function_arg(
             &name,
             plan.args.len(),
@@ -73,7 +73,7 @@ impl Interpreter for CallInterpreter {
             .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super)
             .await?;
         let name = plan.name.clone();
-        let func = FunctionFactory::instance().get(name)?;
+        let func = ProcedureFactory::instance().get(name)?;
         let blocks = func.eval(self.ctx.clone(), plan.args.clone()).await?;
         Ok(Box::pin(DataBlockStream::create(
             self.schema(),

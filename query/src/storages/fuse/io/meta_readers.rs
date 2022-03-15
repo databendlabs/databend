@@ -208,7 +208,7 @@ impl HasTenantLabel for Arc<QueryContext> {
 fn ctx_tenant_label(ctx: &QueryContext) -> TenantLabel {
     let mgr = ctx.get_storage_cache_manager();
     TenantLabel {
-        tenant_id: mgr.get_tenant_id(),
-        cluster_id: mgr.get_cluster_id(),
+        tenant_id: mgr.get_tenant_id().to_owned(),
+        cluster_id: mgr.get_cluster_id().to_owned(),
     }
 }

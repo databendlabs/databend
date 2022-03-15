@@ -27,6 +27,7 @@ use tracing_appender::rolling::RollingFileAppender;
 use tracing_appender::rolling::Rotation;
 use tracing_bunyan_formatter::BunyanFormattingLayer;
 use tracing_bunyan_formatter::JsonStorageLayer;
+use tracing_log::LogTracer;
 use tracing_subscriber::fmt;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
@@ -69,6 +70,9 @@ static GLOBAL_UT_LOG_GUARD: Lazy<Arc<Mutex<Option<Vec<WorkerGuard>>>>> =
 // TODO(xp): use DATABEND_JAEGER to assign jaeger server address.
 pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> Vec<WorkerGuard> {
     let mut guards = vec![];
+
+    // Enable log compatible layer to convert log record to tracing span.
+    LogTracer::init().expect("log tracer must be valid");
 
     // Stdout layer.
     let (stdout_writer, stdout_guard) = tracing_appender::non_blocking(std::io::stdout());

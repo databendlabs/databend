@@ -5,9 +5,9 @@ description:
    How to Work with Databend in Python
 ---
 
-### Prerequisites
+### Before you begin
 
-* **Databend :** Make sure Databend is running and accessible, please see [How to deploy Databend](/doc/category/deploy).
+* Make sure you have already [How to installed Databend](/doc/category/deploy).
 
 
 ### Golang

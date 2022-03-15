@@ -81,7 +81,7 @@ impl RpcService {
         let mut builder = if conf.tls_rpc_server_enabled() {
             tracing::info!("databend query tls rpc enabled");
             builder
-                .tls_config(Self::server_tls_config(conf).await.map_err(|e| {
+                .tls_config(Self::server_tls_config(&conf).await.map_err(|e| {
                     ErrorCode::TLSConfigurationFailure(format!(
                         "failed to load server tls config: {e}",
                     ))

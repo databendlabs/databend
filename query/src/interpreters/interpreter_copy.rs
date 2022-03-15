@@ -37,6 +37,7 @@ use crate::interpreters::InterpreterPtr;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::pipelines::new::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
+use crate::storages::ExternalSource;
 
 pub struct CopyInterpreter {
     ctx: Arc<QueryContext>,
@@ -61,7 +62,6 @@ impl CopyInterpreter {
                 match &storage {
                     StageStorage::S3(s3) => {
                         let path = &s3.path;
-
                         // Here we add the path to the file: /path/to/path/file1.
                         if !self.plan.files.is_empty() {
                             let mut files_with_path = vec![];
@@ -71,13 +71,8 @@ impl CopyInterpreter {
                             }
                             Ok(files_with_path)
                         } else {
-                            let endpoint = &self.ctx.get_config().storage.s3.endpoint_url;
-                            let bucket = &s3.bucket;
-
-                            let key_id = &s3.credentials_aws_key_id;
-                            let secret_key = &s3.credentials_aws_secret_key;
-
-                            S3File::list(endpoint, bucket, path, key_id, secret_key).await
+                            let op = ExternalSource::get_op(&self.ctx, table_info).await?;
+                            S3File::list(&op, path).await
                         }
                     }
                 }

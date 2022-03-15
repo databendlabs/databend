@@ -21,17 +21,20 @@ use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
 use common_exception::Result;
 use common_planners::PlanNode;
+use common_tracing::tracing;
+use serde::Serialize;
+use serde_json;
 
 use crate::sessions::QueryContext;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize)]
 pub enum LogType {
     Start = 1,
     Finish = 2,
     Error = 3,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct LogEvent {
     // Type.
     pub log_type: LogType,
@@ -42,6 +45,7 @@ pub struct LogEvent {
     pub cluster_id: String,
     pub sql_user: String,
     pub sql_user_quota: String,
+    #[serde(skip_serializing)]
     pub sql_user_privileges: String,
 
     // Query.
@@ -85,6 +89,10 @@ pub struct LogEvent {
 
     // Server.
     pub server_version: String,
+
+    // Session settings
+    #[serde(skip_serializing)]
+    pub session_settings: String,
 
     // Extra.
     pub extra: String,
@@ -150,6 +158,8 @@ impl InterpreterQueryLog {
             Series::from_data(vec![event.stack_trace.as_str()]),
             // Server.
             Series::from_data(vec![event.server_version.as_str()]),
+            // Session settings
+            Series::from_data(vec![event.session_settings.as_str()]),
             // Extra.
             Series::from_data(vec![event.extra.as_str()]),
         ]);
@@ -158,6 +168,8 @@ impl InterpreterQueryLog {
         let _ = query_log
             .append_data(self.ctx.clone(), Box::pin(input_stream))
             .await?;
+
+        tracing::info!("Query: {}", serde_json::to_string(&event)?);
 
         Ok(())
     }
@@ -203,7 +215,19 @@ impl InterpreterQueryLog {
         let memory_usage = self.ctx.get_current_session().get_memory_usage() as u64;
 
         // Client.
-        let client_address = format!("{:?}", self.ctx.get_client_address());
+        let client_address = match self.ctx.get_client_address() {
+            Some(addr) => format!("{:?}", addr),
+            None => "".to_string(),
+        };
+
+        // Session settings
+        let session_settings = format!(
+            "{:?}",
+            self.ctx
+                .get_current_session()
+                .get_settings()
+                .get_setting_values()
+        );
 
         let log_event = LogEvent {
             log_type: LogType::Start,
@@ -244,6 +268,7 @@ impl InterpreterQueryLog {
             exception: "".to_string(),
             stack_trace: "".to_string(),
             server_version: "".to_string(),
+            session_settings,
             extra: "".to_string(),
         };
 
@@ -294,10 +319,22 @@ impl InterpreterQueryLog {
         let result_bytes = self.ctx.get_result_progress_value().bytes as u64;
 
         // Client.
-        let client_address = format!("{:?}", self.ctx.get_client_address());
+        let client_address = match self.ctx.get_client_address() {
+            Some(addr) => format!("{:?}", addr),
+            None => "".to_string(),
+        };
 
         // Schema.
         let current_database = self.ctx.get_current_database();
+
+        // Session settings
+        let session_settings = format!(
+            "{:?}",
+            self.ctx
+                .get_current_session()
+                .get_settings()
+                .get_setting_values()
+        );
 
         let log_event = LogEvent {
             log_type: LogType::Finish,
@@ -338,6 +375,7 @@ impl InterpreterQueryLog {
             exception: "".to_string(),
             stack_trace: "".to_string(),
             server_version: "".to_string(),
+            session_settings,
             extra: "".to_string(),
         };
 

@@ -19,6 +19,9 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::ShowPlan;
 
+use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
+use super::interpreter_user_stage_drop::DropUserStageInterpreter;
+use super::CreateUserStageInterpreter;
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
 use crate::interpreters::interpreter_table_rename::RenameTableInterpreter;
 use crate::interpreters::AlterUserInterpreter;
@@ -146,6 +149,13 @@ impl InterpreterFactory {
             PlanNode::CreateUserUDF(v) => CreateUserUDFInterpreter::try_create(ctx_clone, v),
             PlanNode::DropUserUDF(v) => DropUserUDFInterpreter::try_create(ctx_clone, v),
             PlanNode::AlterUserUDF(v) => AlterUserUDFInterpreter::try_create(ctx_clone, v),
+
+            // Stage
+            PlanNode::CreateUserStage(v) => CreateUserStageInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropUserStage(v) => DropUserStageInterpreter::try_create(ctx_clone, v),
+            PlanNode::DescribeUserStage(v) => {
+                DescribeUserStageInterpreter::try_create(ctx_clone, v)
+            }
 
             // Use.
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx_clone, v),

@@ -21,6 +21,9 @@ use nom::IResult;
 
 use super::statements::DfCall;
 use super::statements::DfCopy;
+use super::statements::DfCreateUserStage;
+use super::statements::DfDescribeUserStage;
+use super::statements::DfDropUserStage;
 use crate::sql::statements::DfAlterUDF;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCreateDatabase;
@@ -118,6 +121,11 @@ pub enum DfStatement {
 
     // Copy
     Copy(DfCopy),
+
+    // Stage
+    CreateStage(DfCreateUserStage),
+    DropStage(DfDropUserStage),
+    DescribeStage(DfDescribeUserStage),
 
     // Call
     Call(DfCall),

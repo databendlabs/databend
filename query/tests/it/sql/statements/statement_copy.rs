@@ -149,8 +149,8 @@ async fn test_statement_copy() -> Result<()> {
             query: "copy into system.configs
         from '@mystage'
         file_format = (type = csv field_delimiter = '|' skip_header = 1)",
-            expect: r#"Copy into system.configs, ReadDataSourcePlan { source_info: S3ExternalSource(UserStageInfo { stage_name: "", stage_type: Internal, stage_params: StageParams { storage: S3(StageS3Storage { bucket: "", path: "", credentials_aws_key_id: "", credentials_aws_secret_key: "", encryption_master_key: "" }) }, file_format_options: FileFormatOptions { format: Csv, skip_header: 0, field_delimiter: ",", record_delimiter: "\n", compression: None }, copy_options: CopyOptions { on_error: None, size_limit: 0 }, comment: "" }), scan_fields: None, parts: [], statistics: Statistics { read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0, is_exact: false }, description: "", tbl_args: None, push_downs: None } ,validation_mode:None"#,
-            err: "",
+            expect: r#""#,
+            err: "Code: 2501, displayText = Unknown stage mystage.",
         },
     ];
 

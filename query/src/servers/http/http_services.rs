@@ -91,7 +91,8 @@ curl --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' -
     async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         tracing::info!("Http Handler TLS enabled");
 
-        let tls_config = Self::build_tls(self.session_manager.get_conf())?;
+        let config = self.session_manager.get_conf();
+        let tls_config = Self::build_tls(&config)?;
         self.shutdown_handler
             .start_service(listening, Some(tls_config), self.build_router(listening))
             .await
