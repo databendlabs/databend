@@ -1,8 +1,33 @@
 Projection: c:Nullable(Int32)
-  ReadDataSource: scan schema: [c:Int32;N], statistics: [read_rows: 2, read_bytes: 8, partitions_scanned: 2, partitions_total: 2], push_downs: [projections: [0]]
+  ReadDataSource: scan schema: [c:Int32;N], statistics: [read_rows: 4, read_bytes: 16, partitions_scanned: 2, partitions_total: 2], push_downs: [projections: [0]]
 Limit: 1
   Projection: c:Nullable(Int32)
-    ReadDataSource: scan schema: [c:Int32;N], statistics: [read_rows: 1, read_bytes: 4, partitions_scanned: 1, partitions_total: 2], push_downs: [projections: [0], limit: 1]
+    ReadDataSource: scan schema: [c:Int32;N], statistics: [read_rows: 2, read_bytes: 8, partitions_scanned: 1, partitions_total: 2], push_downs: [projections: [0], limit: 1]
+Limit: 2
+  Projection: c:Nullable(Int32)
+    ReadDataSource: scan schema: [c:Int32;N], statistics: [read_rows: 2, read_bytes: 8, partitions_scanned: 1, partitions_total: 2], push_downs: [projections: [0], limit: 2]
+Limit: 3
+  Projection: c:Nullable(Int32)
+    ReadDataSource: scan schema: [c:Int32;N], statistics: [read_rows: 4, read_bytes: 16, partitions_scanned: 2, partitions_total: 2], push_downs: [projections: [0], limit: 3]
+Limit: 4
+  Projection: c:Nullable(Int32)
+    ReadDataSource: scan schema: [c:Int32;N], statistics: [read_rows: 4, read_bytes: 16, partitions_scanned: 2, partitions_total: 2], push_downs: [projections: [0], limit: 4]
+zhaobr@home-dev:~/workspace/fuse-query/tests/suites/0_stateless/09_fuse_engine$ ./09_0012_pushdown_limit.sh
+Projection: c:Nullable(Int32)
+  ReadDataSource: scan schema: [c:Int32;N], statistics: [read_rows: 4, read_bytes: 16, partitions_scanned: 2, partitions_total: 2], push_downs: [projections: [0]]
+Limit: 1
+  Projection: c:Nullable(Int32)
+    ReadDataSource: scan schema: [c:Int32;N], statistics: [read_rows: 2, read_bytes: 8, partitions_scanned: 1, partitions_total: 2], push_downs: [projections: [0], limit: 1]
+Limit: 2
+  Projection: c:Nullable(Int32)
+    ReadDataSource: scan schema: [c:Int32;N], statistics: [read_rows: 2, read_bytes: 8, partitions_scanned: 1, partitions_total: 2], push_downs: [projections: [0], limit: 2]
+Limit: 3
+  Projection: c:Nullable(Int32)
+    ReadDataSource: scan schema: [c:Int32;N], statistics: [read_rows: 4, read_bytes: 16, partitions_scanned: 2, partitions_total: 2], push_downs: [projections: [0], limit: 3]
+Limit: 4
+  Projection: c:Nullable(Int32)
+    ReadDataSource: scan schema: [c:Int32;N], statistics: [read_rows: 4, read_bytes: 16, partitions_scanned: 2, partitions_total: 2], push_downs: [projections: [0], limit: 4]
 Limit: 0
   Projection: c:Nullable(Int32)
     ReadDataSource: scan schema: [c:Int32;N], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], limit: 0]
+
