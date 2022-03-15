@@ -26,7 +26,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_metrics::label_counter;
+use common_tracing::init_query_logger;
 use common_tracing::tracing;
+use common_tracing::tracing_appender::non_blocking::WorkerGuard;
 use futures::future::Either;
 use futures::StreamExt;
 use opendal::credential::Credential;
@@ -60,9 +62,11 @@ pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
     pub(in crate::sessions) storage_cache_manager: RwLock<Arc<CacheManager>>,
+    pub(in crate::sessions) query_logger: RwLock<Arc<dyn tracing::Subscriber + Send + Sync>>,
     pub status: Arc<RwLock<Status>>,
     storage_operator: RwLock<Operator>,
     storage_runtime: Runtime,
+    _guards: Vec<WorkerGuard>,
 }
 
 impl SessionManager {
@@ -90,6 +94,10 @@ impl SessionManager {
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
         let status = Arc::new(RwLock::new(Default::default()));
 
+        let query_log_name = format!("query-detail-{}", conf.query.cluster_id,);
+        let (_guards, query_logger) =
+            init_query_logger(query_log_name.as_str(), conf.log.log_dir.as_str());
+
         Ok(Arc::new(SessionManager {
             conf: RwLock::new(conf),
             catalog: RwLock::new(catalog),
@@ -100,9 +108,11 @@ impl SessionManager {
             active_sessions,
             auth_manager: RwLock::new(auth_manager),
             storage_cache_manager: RwLock::new(storage_cache_manager),
+            query_logger: RwLock::new(query_logger),
+            status,
             storage_operator: RwLock::new(storage_accessor),
             storage_runtime,
-            status,
+            _guards,
         }))
     }
 
@@ -406,5 +416,9 @@ impl SessionManager {
         *self.auth_manager.write() = Arc::new(auth_mgr);
 
         Ok(())
+    }
+
+    pub fn get_query_logger(&self) -> Arc<dyn tracing::Subscriber + Send + Sync> {
+        self.query_logger.write().to_owned()
     }
 }
