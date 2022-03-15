@@ -15,45 +15,53 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::DropRolePlan;
+use common_meta_types::RenameTableReq;
+use common_planners::RenameTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
+use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
-#[derive(Debug)]
-pub struct DropRoleInterpreter {
+pub struct RenameTableInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropRolePlan,
+    plan: RenameTablePlan,
 }
 
-impl DropRoleInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropRolePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropRoleInterpreter { ctx, plan }))
+impl RenameTableInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: RenameTablePlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(RenameTableInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DropRoleInterpreter {
+impl Interpreter for RenameTableInterpreter {
     fn name(&self) -> &str {
-        "DropRoleInterpreter"
+        "RenameTableInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        // TODO: add privilege check about DROP role
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
-        user_mgr
-            .drop_role(&tenant, plan.role_identity, plan.if_exists)
-            .await?;
+        // TODO check privileges
+        // You must have ALTER and DROP privileges for the original table,
+        // and CREATE and INSERT privileges for the new table.
+        let catalog = self.ctx.get_catalog();
+        for entity in &self.plan.entities {
+            let tenant = self.plan.tenant.clone();
+            catalog
+                .rename_table(RenameTableReq {
+                    tenant,
+                    db: entity.db.clone(),
+                    table_name: entity.table_name.clone(),
+                    new_db: entity.new_db.clone(),
+                    new_table_name: entity.new_table_name.clone(),
+                })
+                .await?;
+        }
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
