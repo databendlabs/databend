@@ -23,6 +23,7 @@ use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::CreateUserStageInterpreter;
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
+use crate::interpreters::interpreter_table_rename::RenameTableInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::AlterUserUDFInterpreter;
 use crate::interpreters::CallInterpreter;
@@ -127,6 +128,7 @@ impl InterpreterFactory {
             // Table.
             PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DropTable(v) => DropTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::RenameTable(v) => RenameTableInterpreter::try_create(ctx_clone, v),
             PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::OptimizeTable(v) => OptimizeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),

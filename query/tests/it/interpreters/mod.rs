@@ -35,6 +35,7 @@ mod interpreter_show_users;
 mod interpreter_table_create;
 mod interpreter_table_describe;
 mod interpreter_table_drop;
+mod interpreter_table_rename;
 mod interpreter_table_show_create;
 mod interpreter_table_truncate;
 mod interpreter_use_database;

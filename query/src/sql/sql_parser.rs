@@ -160,6 +160,7 @@ impl<'a> DfParser<'a> {
                         self.parse_show()
                     }
                     Keyword::TRUNCATE => self.parse_truncate(),
+                    Keyword::RENAME => self.parse_rename(),
                     Keyword::SET => self.parse_set(),
                     Keyword::INSERT => self.parse_insert(),
                     Keyword::SELECT | Keyword::WITH | Keyword::VALUES => self.parse_query(),
@@ -286,6 +287,11 @@ impl<'a> DfParser<'a> {
             },
             unexpected => self.expected("describe statement", unexpected),
         }
+    }
+
+    fn parse_rename(&mut self) -> Result<DfStatement, ParserError> {
+        self.parser.next_token();
+        self.parse_rename_table()
     }
 
     /// Drop database/table/stage.

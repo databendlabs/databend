@@ -43,6 +43,7 @@ use crate::sql::statements::DfInsertStatement;
 use crate::sql::statements::DfKillStatement;
 use crate::sql::statements::DfOptimizeTable;
 use crate::sql::statements::DfQueryStatement;
+use crate::sql::statements::DfRenameTable;
 use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfSetVariable;
 use crate::sql::statements::DfShowCreateDatabase;
@@ -84,6 +85,7 @@ pub enum DfStatement {
     DropTable(DfDropTable),
     TruncateTable(DfTruncateTable),
     OptimizeTable(DfOptimizeTable),
+    RenameTable(DfRenameTable),
 
     // Settings.
     ShowSettings(DfShowSettings),
