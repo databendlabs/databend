@@ -90,6 +90,10 @@ pub struct LogEvent {
     // Server.
     pub server_version: String,
 
+    // Session settings
+    #[serde(skip_serializing)]
+    pub session_settings: String,
+
     // Extra.
     pub extra: String,
 }
@@ -154,6 +158,8 @@ impl InterpreterQueryLog {
             Series::from_data(vec![event.stack_trace.as_str()]),
             // Server.
             Series::from_data(vec![event.server_version.as_str()]),
+            // Session settings
+            Series::from_data(vec![event.session_settings.as_str()]),
             // Extra.
             Series::from_data(vec![event.extra.as_str()]),
         ]);
@@ -214,6 +220,15 @@ impl InterpreterQueryLog {
             None => "".to_string(),
         };
 
+        // Session settings
+        let session_settings = format!(
+            "{:?}",
+            self.ctx
+                .get_current_session()
+                .get_settings()
+                .get_setting_values()
+        );
+
         let log_event = LogEvent {
             log_type: LogType::Start,
             handler_type,
@@ -253,6 +268,7 @@ impl InterpreterQueryLog {
             exception: "".to_string(),
             stack_trace: "".to_string(),
             server_version: "".to_string(),
+            session_settings,
             extra: "".to_string(),
         };
 
@@ -311,6 +327,15 @@ impl InterpreterQueryLog {
         // Schema.
         let current_database = self.ctx.get_current_database();
 
+        // Session settings
+        let session_settings = format!(
+            "{:?}",
+            self.ctx
+                .get_current_session()
+                .get_settings()
+                .get_setting_values()
+        );
+
         let log_event = LogEvent {
             log_type: LogType::Finish,
             handler_type,
@@ -350,6 +375,7 @@ impl InterpreterQueryLog {
             exception: "".to_string(),
             stack_trace: "".to_string(),
             server_version: "".to_string(),
+            session_settings,
             extra: "".to_string(),
         };
 

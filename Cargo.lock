@@ -2069,6 +2069,7 @@ dependencies = [
  "headers",
  "http",
  "hyper",
+ "itertools",
  "jwt-simple",
  "maplit",
  "metrics",
