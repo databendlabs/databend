@@ -28,6 +28,7 @@ use databend_query::configs::Config;
 use databend_query::databases::DatabaseFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::QueryContextShared;
+use databend_query::sessions::SessionType;
 use databend_query::storages::StorageContext;
 use databend_query::storages::StorageFactory;
 
@@ -35,7 +36,7 @@ use crate::tests::SessionManagerBuilder;
 
 pub async fn create_query_context() -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
-    let dummy_session = sessions.create_session("TestSession").await?;
+    let dummy_session = sessions.create_session(SessionType::Test).await?;
 
     // Set user with all privileges
     let mut user_info = UserInfo::new(
@@ -66,7 +67,7 @@ pub async fn create_query_context() -> Result<Arc<QueryContext>> {
 
 pub async fn create_query_context_with_config(config: Config) -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create_with_conf(config.clone()).build()?;
-    let dummy_session = sessions.create_session("TestSession").await?;
+    let dummy_session = sessions.create_session(SessionType::Test).await?;
 
     let mut user_info = UserInfo::new(
         "root".to_string(),
@@ -157,7 +158,7 @@ pub async fn create_query_context_with_cluster(
     desc: ClusterDescriptor,
 ) -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
-    let dummy_session = sessions.create_session("TestSession").await?;
+    let dummy_session = sessions.create_session(SessionType::Test).await?;
 
     let local_id = desc.local_node_id;
     let nodes = desc.cluster_nodes_list;
