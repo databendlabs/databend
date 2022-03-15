@@ -21,17 +21,20 @@ use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
 use common_exception::Result;
 use common_planners::PlanNode;
+use common_tracing::tracing;
+use serde::Serialize;
+use serde_json;
 
 use crate::sessions::QueryContext;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize)]
 pub enum LogType {
     Start = 1,
     Finish = 2,
     Error = 3,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct LogEvent {
     // Type.
     pub log_type: LogType,
@@ -158,6 +161,8 @@ impl InterpreterQueryLog {
         let _ = query_log
             .append_data(self.ctx.clone(), Box::pin(input_stream))
             .await?;
+
+        tracing::info!("Query: {}", serde_json::to_string(&event)?);
 
         Ok(())
     }
