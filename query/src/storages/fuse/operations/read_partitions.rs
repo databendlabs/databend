@@ -21,7 +21,6 @@ use common_planners::Extras;
 use common_planners::PartInfoPtr;
 use common_planners::Partitions;
 use common_planners::Statistics;
-use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::fuse_part::ColumnMeta;
@@ -37,7 +36,6 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        tracing::info!("hi, I am here");
         let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
         match snapshot {
             Some(snapshot) => {
@@ -99,13 +97,10 @@ impl FuseTable {
         metas: &[BlockMeta],
         limit: &Option<usize>,
     ) -> (Statistics, Partitions) {
-        let mut statistics = Statistics::default();
+        let mut statistics = Statistics::default_exact();
         let mut partitions = Partitions::default();
 
         let mut remaining = limit.unwrap_or(usize::MAX);
-
-        use common_tracing::tracing;
-        tracing::info!("remaining {:?}", remaining);
 
         if remaining == 0 {
             return (statistics, partitions);
@@ -119,18 +114,15 @@ impl FuseTable {
 
             if remaining > rows {
                 remaining -= rows;
-                tracing::info!("after read rows remaining {:?}", remaining);
             } else {
                 // the last block we shall take
                 if remaining != rows {
-                    tracing::info!("exact false {:?}", remaining);
                     statistics.is_exact = false;
                 }
                 break;
             }
         }
 
-        tracing::info!("statistics {:?}", statistics);
         (statistics, partitions)
     }
 
@@ -139,9 +131,7 @@ impl FuseTable {
         indices: &[usize],
         limit: &Option<usize>,
     ) -> (Statistics, Partitions) {
-        let mut statistics = Statistics::default();
-        statistics.is_exact = true;
-
+        let mut statistics = Statistics::default_exact();
         let mut partitions = Partitions::default();
 
         let mut remaining = limit.unwrap_or(usize::MAX);
@@ -149,9 +139,6 @@ impl FuseTable {
         if remaining == 0 {
             return (statistics, partitions);
         }
-
-        use common_tracing::tracing;
-        tracing::info!("remaining {:?}", remaining);
 
         for block_meta in metas {
             partitions.push(Self::projection_part(block_meta, indices));
