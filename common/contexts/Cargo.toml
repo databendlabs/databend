@@ -10,4 +10,4 @@ test = false
 
 [dependencies]
 async-trait = "0.1.52"
-opendal = "0.2.2"
+opendal = "0.2.3"

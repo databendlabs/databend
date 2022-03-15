@@ -18,7 +18,6 @@ use futures::StreamExt;
 use opendal::credential::Credential;
 use opendal::ObjectMode;
 use opendal::Operator;
-use opendal::Reader;
 
 pub struct S3File {}
 
@@ -51,31 +50,9 @@ impl S3File {
         Ok(opendal::Operator::new(accessor))
     }
 
-    // Read a file, returns the reader.
-    // file_name is the Some(/path/to/path/xx.csv)
-    pub async fn read(
-        file_name: Option<String>,
-        s3_endpoint: &str,
-        s3_bucket: &str,
-        aws_key_id: &str,
-        aws_secret_key: &str,
-    ) -> Result<Reader> {
-        let operator = Self::open(s3_endpoint, s3_bucket, aws_key_id, aws_secret_key).await?;
-        let path = file_name.unwrap_or_else(|| "".to_string());
-        Ok(operator.object(&path).reader())
-    }
-
     // Get the files in the path.
-    pub async fn list(
-        s3_endpoint: &str,
-        s3_bucket: &str,
-        path: &str,
-        aws_key_id: &str,
-        aws_secret_key: &str,
-    ) -> Result<Vec<String>> {
+    pub async fn list(operator: &Operator, path: &str) -> Result<Vec<String>> {
         let mut list: Vec<String> = vec![];
-        let operator = Self::open(s3_endpoint, s3_bucket, aws_key_id, aws_secret_key).await?;
-
         // Check the path object mode is DIR or FILE.
         let mode = operator.object(path).metadata().await?.mode();
         match mode {
