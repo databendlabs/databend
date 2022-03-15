@@ -13,13 +13,13 @@ test = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-arrow = { path = "../arrow" }
-common-clickhouse-srv = { path = "../clickhouse-srv" }
 common-exception = { path = "../exception" }
 common-io = { path = "../io" }
 common-macros = { path = "../macros" }
 common-mem-allocator = { path = "../mem-allocator" }
 
 # Github dependencies
+common-clickhouse-srv = { git = "https://github.com/datafuselabs/opensrv", rev = "9690be9", package = "opensrv-clickhouse" }
 
 # Crates.io dependencies
 chrono = "0.4.19"

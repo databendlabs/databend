@@ -44,6 +44,8 @@ where T: PrimitiveType
         + HasSqlType
         + std::convert::Into<common_clickhouse_srv::types::Value>
         + std::convert::From<common_clickhouse_srv::types::Value>
+        + common_clickhouse_srv::io::Marshal
+        + common_clickhouse_srv::io::Unmarshal<T>
 {
     fn serialize_value(&self, value: &DataValue) -> Result<String> {
         Ok(format!("{:?}", value))

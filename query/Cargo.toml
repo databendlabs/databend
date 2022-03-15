@@ -28,7 +28,6 @@ common-arrow = { path = "../common/arrow" }
 common-ast = { path = "../common/ast" }
 common-base = { path = "../common/base" }
 common-cache = { path = "../common/cache" }
-common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 common-contexts = { path = "../common/contexts" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
@@ -54,7 +53,8 @@ common-tracing = { path = "../common/tracing" }
 # Github dependencies
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
 cargo-license = { git = "https://github.com/datafuse-extras/cargo-license", rev = "f1ce4a2" }
-msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "af29f7b" }
+common-clickhouse-srv = { git = "https://github.com/datafuselabs/opensrv", rev = "9690be9", package = "opensrv-clickhouse" }
+msql-srv = { git = "https://github.com/datafuselabs/opensrv", rev = "9690be9", package = "opensrv-mysql" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "64795ad" }
 
 # Crates.io dependencies
