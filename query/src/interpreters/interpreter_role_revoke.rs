@@ -15,7 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::DropRolePlan;
+use common_meta_types::PrincipalIdentity;
+use common_planners::RevokeRolePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -25,21 +26,21 @@ use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
-pub struct DropRoleInterpreter {
+pub struct RevokeRoleInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropRolePlan,
+    plan: RevokeRolePlan,
 }
 
-impl DropRoleInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropRolePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropRoleInterpreter { ctx, plan }))
+impl RevokeRoleInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: RevokeRolePlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(RevokeRoleInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DropRoleInterpreter {
+impl Interpreter for RevokeRoleInterpreter {
     fn name(&self) -> &str {
-        "DropRoleInterpreter"
+        "RevokeRoleInterpreter"
     }
 
     #[tracing::instrument(level = "debug", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
@@ -47,13 +48,21 @@ impl Interpreter for DropRoleInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        // TODO: add privilege check about DROP role
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
-        user_mgr
-            .drop_role(&tenant, plan.role_identity, plan.if_exists)
-            .await?;
+        match plan.principal {
+            PrincipalIdentity::User(user) => {
+                user_mgr
+                    .revoke_role_from_user(&tenant, &user.username, &user.hostname, plan.role)
+                    .await?;
+            }
+            PrincipalIdentity::Role(role) => {
+                user_mgr
+                    .revoke_role_from_role(&tenant, role.clone(), plan.role)
+                    .await?;
+            }
+        }
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

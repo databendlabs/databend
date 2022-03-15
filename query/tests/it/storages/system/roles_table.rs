@@ -33,9 +33,9 @@ async fn test_roles_table() -> Result<()> {
 
     {
         let mut role_info = RoleInfo::new("test1".to_string());
-        role_info.grants.grant_role(RoleIdentity {
-            name: "test".to_string(),
-        });
+        role_info
+            .grants
+            .grant_role(RoleIdentity::new("test".to_string()));
         ctx.get_user_manager().add_role(&tenant, role_info).await?;
     }
 

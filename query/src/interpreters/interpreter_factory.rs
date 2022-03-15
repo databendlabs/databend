@@ -41,12 +41,14 @@ use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::DropUserUDFInterpreter;
 use crate::interpreters::ExplainInterpreter;
 use crate::interpreters::GrantPrivilegeInterpreter;
+use crate::interpreters::GrantRoleInterpreter;
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::InterceptorInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::KillInterpreter;
 use crate::interpreters::OptimizeTableInterpreter;
 use crate::interpreters::RevokePrivilegeInterpreter;
+use crate::interpreters::RevokeRoleInterpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SettingInterpreter;
 use crate::interpreters::ShowCreateDatabaseInterpreter;
@@ -138,8 +140,14 @@ impl InterpreterFactory {
             PlanNode::CreateUser(v) => CreateUserInterpreter::try_create(ctx_clone, v),
             PlanNode::AlterUser(v) => AlterUserInterpreter::try_create(ctx_clone, v),
             PlanNode::DropUser(v) => DropUserInterpreter::try_create(ctx_clone, v),
+
+            // Grant.
             PlanNode::GrantPrivilege(v) => GrantPrivilegeInterpreter::try_create(ctx_clone, v),
+            PlanNode::GrantRole(v) => GrantRoleInterpreter::try_create(ctx_clone, v),
+
+            // Revoke.
             PlanNode::RevokePrivilege(v) => RevokePrivilegeInterpreter::try_create(ctx_clone, v),
+            PlanNode::RevokeRole(v) => RevokeRoleInterpreter::try_create(ctx_clone, v),
 
             // Role
             PlanNode::CreateRole(v) => CreateRoleInterpreter::try_create(ctx_clone, v),
