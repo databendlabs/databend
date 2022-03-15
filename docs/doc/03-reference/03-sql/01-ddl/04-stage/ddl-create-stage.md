@@ -6,8 +6,6 @@ Create a user stage.
 
 ## Syntax
 
-- Create Internal Stage
-
 ```sql
 -- Internal stage
 CREATE STAGE [ IF NOT EXISTS ] <internal_stage_name>
@@ -25,7 +23,7 @@ CREATE STAGE [ IF NOT EXISTS ] <external_stage_name>
 
 Where:
 
-**externalStageParams (for Amazon S3)**
+### externalStageParams (for Amazon S3)
 ```
 externalLocation (for Amazon S3) ::=
   URL = 's3://<bucket>[/<path>]'
@@ -38,7 +36,7 @@ externalLocation (for Amazon S3) ::=
 | `[ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]' ]`  | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. |  Optional |
 | `[ ENDPOINT_URL = '<endpoint_url>' ]`  | S3-compatible endpoint URL like MinIO, default is `https://s3.amazonaws.com` |  Optional |
 
-**formatTypeOptions**
+### formatTypeOptions
 ```
 formatTypeOptions ::=
   RECORD_DELIMITER = '<character>' 
@@ -52,7 +50,7 @@ formatTypeOptions ::=
 | `FIELD_DELIMITER = '<character>'`  | One characters that separate fields in an input file. Default `','` | Optional |
 | `SKIP_HEADER = <integer>`  | Number of lines at the start of the file to skip. Default `0` | Optional |
 
-**copyOptions**
+### copyOptions
 ```
 copyOptions ::=
   [ SIZE_LIMIT = <num> ]

@@ -1,11 +1,14 @@
 ---
 title: COPY INTO table
+sidebar_label: COPY INTO
+description:
+  Load Data into table using COPY
 ---
 
 Loads data from staged files to a table. The files must be staged in one of the following locations:
 
-* Named internal stage. (TODO)
-* External location (Amazon S3, Google Cloud Storage, or Microsoft Azure).
+* Internal stage.
+* External location (Amazon S3).
 
 ## Syntax
 
@@ -21,7 +24,7 @@ FROM { externalLocation }
 
 Where:
 
-**externalLocation (for Amazon S3)**
+### externalLocation (for Amazon S3)
 ```
 externalLocation (for Amazon S3) ::=
   's3://<bucket>[/<path>]'
@@ -34,15 +37,15 @@ externalLocation (for Amazon S3) ::=
 | `[ { CREDENTIALS = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]' ]`  | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. |  Optional |
 | `[ ENDPOINT_URL = '<endpoint_url>' ]`  | S3-compatible endpoint URL like MinIO, default is `https://s3.amazonaws.com` |  Optional |
 
-**FILES = ( 'file_name' [ , 'file_name' ... ] )**
+### FILES = ( 'file_name' [ , 'file_name' ... ] )
 
 Specifies a list of one or more files names (separated by commas) to be loaded.
 
-**PATTERN = 'regex_pattern'**
+### PATTERN = 'regex_pattern'
 
 A regular expression pattern string, enclosed in single quotes, specifying the file names to match.
 
-**formatTypeOptions**
+### formatTypeOptions
 ```
 formatTypeOptions ::=
   RECORD_DELIMITER = '<character>' 
@@ -56,7 +59,7 @@ formatTypeOptions ::=
 | `FIELD_DELIMITER = '<character>'`  | One characters that separate fields in an input file. Default `','` | Optional |
 | `SKIP_HEADER = <integer>`  | Number of lines at the start of the file to skip. Default `0` | Optional |
 
-**copyOptions**
+### copyOptions
 ```
 copyOptions ::=
   [ SIZE_LIMIT = <num> ]
