@@ -74,11 +74,16 @@ async fn test_status() -> Result<()> {
         .at("/v1/status", get(status_handler))
         .data(sessions.clone());
 
-    assert_eq!(get_status(&ep).await, Status {
-        running_queries_count: 0,
-        last_query_started_at: None,
-        last_query_finished_at: None
-    });
+    let status = get_status(&ep).await;
+    assert_eq!(
+        (
+            status.running_queries_count,
+            status.last_query_started_at.is_some(),
+            status.last_query_finished_at.is_some(),
+        ),
+        (0, false, false),
+        "before running"
+    );
 
     let interpreter = run_query(sessions.clone()).await?;
     let _ = interpreter.start().await?;

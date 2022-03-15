@@ -30,6 +30,8 @@ pub struct Status {
     pub last_query_started_at: Option<u64>,
     // secs since epoch
     pub last_query_finished_at: Option<u64>,
+    // secs since epoch
+    instance_started_at: u64,
 }
 
 fn secs_since_epoch(t: SystemTime) -> u64 {
@@ -52,6 +54,7 @@ pub async fn status_handler(
         running_queries_count: status.running_queries_count,
         last_query_started_at: status.last_query_started_at.map(secs_since_epoch),
         last_query_finished_at: status.last_query_finished_at.map(secs_since_epoch),
+        instance_started_at: secs_since_epoch(status.instance_started_at),
     };
     Ok(Json(status))
 }

@@ -14,11 +14,12 @@
 
 use std::time::SystemTime;
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Status {
     pub running_queries_count: u64,
     pub last_query_started_at: Option<SystemTime>,
     pub last_query_finished_at: Option<SystemTime>,
+    pub instance_started_at: SystemTime,
 }
 
 impl Status {
@@ -31,6 +32,17 @@ impl Status {
         self.running_queries_count -= 1;
         if self.running_queries_count == 0 {
             self.last_query_finished_at = Some(now)
+        }
+    }
+}
+
+impl Default for Status {
+    fn default() -> Self {
+        Status {
+            running_queries_count: 0,
+            last_query_started_at: None,
+            last_query_finished_at: None,
+            instance_started_at: SystemTime::now(),
         }
     }
 }
