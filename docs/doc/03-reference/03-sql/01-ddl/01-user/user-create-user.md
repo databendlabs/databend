@@ -22,7 +22,9 @@ auth_type default is sha256_password
 
 ## Examples
 
-```sql
-mysql> CREATE USER 'user-a'@'%' IDENTIFIED BY 'password';
-mysql> CREATE USER 'user-b'@'localhost' IDENTIFIED WITH sha256_password BY 'password';
+```sql title='mysql>'
+CREATE USER 'user-a'@'%' IDENTIFIED BY 'password';
+```
+```sql title='mysql>'
+> CREATE USER 'user-b'@'localhost' IDENTIFIED WITH sha256_password BY 'password';
 ```
