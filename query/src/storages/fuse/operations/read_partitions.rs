@@ -71,13 +71,15 @@ impl FuseTable {
         blocks_metas: &[BlockMeta],
         push_downs: Option<Extras>,
     ) -> (Statistics, Partitions) {
+        let limit = push_downs
+            .as_ref()
+            .and_then(|p| p.limit)
+            .unwrap_or(usize::MAX);
         let (mut statistics, partitions) = match &push_downs {
-            None => Self::all_columns_partitions(blocks_metas, &None),
+            None => Self::all_columns_partitions(blocks_metas, limit),
             Some(extras) => match &extras.projection {
-                None => Self::all_columns_partitions(blocks_metas, &extras.limit),
-                Some(projection) => {
-                    Self::projection_partitions(blocks_metas, projection, &extras.limit)
-                }
+                None => Self::all_columns_partitions(blocks_metas, limit),
+                Some(projection) => Self::projection_partitions(blocks_metas, projection, limit),
             },
         };
 
@@ -93,18 +95,15 @@ impl FuseTable {
         }
     }
 
-    fn all_columns_partitions(
-        metas: &[BlockMeta],
-        limit: &Option<usize>,
-    ) -> (Statistics, Partitions) {
+    fn all_columns_partitions(metas: &[BlockMeta], limit: usize) -> (Statistics, Partitions) {
         let mut statistics = Statistics::default_exact();
         let mut partitions = Partitions::default();
 
-        let mut remaining = limit.unwrap_or(usize::MAX);
-
-        if remaining == 0 {
+        if limit == 0 {
             return (statistics, partitions);
         }
+
+        let mut remaining = limit;
 
         for block_meta in metas {
             let rows = block_meta.row_count as usize;
@@ -129,16 +128,16 @@ impl FuseTable {
     fn projection_partitions(
         metas: &[BlockMeta],
         indices: &[usize],
-        limit: &Option<usize>,
+        limit: usize,
     ) -> (Statistics, Partitions) {
         let mut statistics = Statistics::default_exact();
         let mut partitions = Partitions::default();
 
-        let mut remaining = limit.unwrap_or(usize::MAX);
-
-        if remaining == 0 {
+        if limit == 0 {
             return (statistics, partitions);
         }
+
+        let mut remaining = limit;
 
         for block_meta in metas {
             partitions.push(Self::projection_part(block_meta, indices));

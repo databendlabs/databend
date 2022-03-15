@@ -115,7 +115,7 @@ impl BlockPruner {
             for block_meta in &segment_info.blocks {
                 if pred(&block_meta.col_stats)? {
                     let num_rows = block_meta.row_count as usize;
-                    if accumulated_rows.fetch_add(num_rows, Ordering::Release) >= limit {
+                    if accumulated_rows.fetch_add(num_rows, Ordering::Release) < limit {
                         acc.push(block_meta.clone());
                     }
                 }
