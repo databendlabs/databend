@@ -1,5 +1,6 @@
 -- No data when Engine is Null
 DROP TABLE IF EXISTS t0;
+DROP TABLE IF EXISTS t1;
 
 CREATE TABLE t0(a int) ENGINE = Null;
 INSERT INTO TABLE t0 values(1);
@@ -14,6 +15,7 @@ DROP TABLE IF EXISTS t1;
 
 -- No data after rename when Engine is Memory
 DROP TABLE IF EXISTS t0;
+DROP TABLE IF EXISTS t1;
 
 CREATE TABLE t0(a int) ENGINE = Memory;
 INSERT INTO TABLE t0 values(1);
@@ -28,6 +30,7 @@ DROP TABLE IF EXISTS t1;
 
 -- Data exists before and after rename
 DROP TABLE IF EXISTS t0;
+DROP TABLE IF EXISTS t1;
 
 CREATE TABLE t0(a int);
 INSERT INTO TABLE t0 values(1);
