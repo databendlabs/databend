@@ -51,6 +51,11 @@ impl Interpreter for GrantRoleInterpreter {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
+
+        // TODO: check privileges
+
+        // Check if the grant role exists.
+        user_mgr.get_role(&tenant, plan.role.clone()).await?;
         match plan.principal {
             PrincipalIdentity::User(user) => {
                 user_mgr

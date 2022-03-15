@@ -28,6 +28,21 @@ async fn test_grant_role_interpreter() -> Result<()> {
     let tenant = ctx.get_tenant();
     let user_mgr = ctx.get_user_manager();
 
+    // Grant a unknown role
+    {
+        let query = "GRANT ROLE 'test' TO 'test_user'";
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "GrantRoleInterpreter");
+        let res = executor.execute(None).await;
+        assert!(res.is_err());
+        assert_eq!(res.err().unwrap().code(), ErrorCode::UnknownRole("").code())
+    }
+
+    user_mgr
+        .add_role(&tenant, RoleInfo::new("test".to_string()))
+        .await?;
+
     // Grant role to unknown user.
     {
         let query = "GRANT ROLE 'test' TO 'test_user'";
@@ -35,7 +50,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "GrantRoleInterpreter");
         let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), true);
+        assert!(res.is_err());
         assert_eq!(res.err().unwrap().code(), ErrorCode::UnknownUser("").code())
     }
 
@@ -68,7 +83,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "GrantRoleInterpreter");
         let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), true);
+        assert!(res.is_err());
         assert_eq!(res.err().unwrap().code(), ErrorCode::UnknownRole("").code())
     }
 

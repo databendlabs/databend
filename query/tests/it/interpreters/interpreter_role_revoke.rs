@@ -35,7 +35,7 @@ async fn test_revoke_role_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "RevokeRoleInterpreter");
         let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), true);
+        assert!(res.is_err());
         assert_eq!(res.err().unwrap().code(), ErrorCode::UnknownUser("").code())
     }
 
@@ -78,7 +78,7 @@ async fn test_revoke_role_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "RevokeRoleInterpreter");
         let res = executor.execute(None).await;
-        assert_eq!(res.is_err(), true);
+        assert!(res.is_err());
         assert_eq!(res.err().unwrap().code(), ErrorCode::UnknownRole("").code())
     }
 
