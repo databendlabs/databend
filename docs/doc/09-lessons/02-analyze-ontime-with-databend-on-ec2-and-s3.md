@@ -180,3 +180,8 @@ All Queries:
 | Q12  |SELECT OriginCityName, DestCityName, count(*) AS c FROM ontime GROUP BY OriginCityName, DestCityName ORDER BY c DESC LIMIT 10;     |
 | Q13  |SELECT OriginCityName, count(*) AS c FROM ontime GROUP BY OriginCityName ORDER BY c DESC LIMIT 10;      |
 | Q14  |SELECT count(*) FROM ontime;     |
+
+
+## Reference
+
+[Databend Ontime Datasets Benchmark Report](../07-performance/02_ec2-s3-performance.md)
