@@ -208,7 +208,10 @@ impl InterpreterQueryLog {
         let memory_usage = self.ctx.get_current_session().get_memory_usage() as u64;
 
         // Client.
-        let client_address = format!("{:?}", self.ctx.get_client_address());
+        let client_address = match self.ctx.get_client_address() {
+            Some(addr) => format!("{:?}", addr),
+            None => "".to_string(),
+        };
 
         let log_event = LogEvent {
             log_type: LogType::Start,
@@ -299,7 +302,10 @@ impl InterpreterQueryLog {
         let result_bytes = self.ctx.get_result_progress_value().bytes as u64;
 
         // Client.
-        let client_address = format!("{:?}", self.ctx.get_client_address());
+        let client_address = match self.ctx.get_client_address() {
+            Some(addr) => format!("{:?}", addr),
+            None => "".to_string(),
+        };
 
         // Schema.
         let current_database = self.ctx.get_current_database();
