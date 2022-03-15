@@ -126,11 +126,11 @@ where
         let n_retry = 3;
 
         for i in 0..n_retry {
-            tracing::info!("build new item of key: {:?}", key);
+            tracing::debug!("build new item of key: {:?}", key);
 
             let new_item = self.manager.build(key).await;
 
-            tracing::info!("build new item of key res: {:?}", new_item);
+            tracing::debug!("build new item of key res: {:?}", new_item);
 
             match new_item {
                 Ok(x) => {
