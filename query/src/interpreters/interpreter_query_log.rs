@@ -45,6 +45,7 @@ pub struct LogEvent {
     pub cluster_id: String,
     pub sql_user: String,
     pub sql_user_quota: String,
+    #[serde(skip_serializing)]
     pub sql_user_privileges: String,
 
     // Query.
