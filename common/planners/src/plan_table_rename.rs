@@ -20,11 +20,11 @@ use common_datavalues::DataSchemaRef;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct RenameTablePlan {
     pub tenant: String,
-    pub maps: Vec<RenameTableMap>,
+    pub entities: Vec<RenameTableEntity>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct RenameTableMap {
+pub struct RenameTableEntity {
     pub db: String,
     pub table_name: String,
     pub new_db: String,

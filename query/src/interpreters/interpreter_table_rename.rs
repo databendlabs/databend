@@ -50,15 +50,15 @@ impl Interpreter for RenameTableInterpreter {
         // You must have ALTER and DROP privileges for the original table,
         // and CREATE and INSERT privileges for the new table.
         let catalog = self.ctx.get_catalog();
-        for map in &self.plan.maps {
+        for entity in &self.plan.entities {
             let tenant = self.plan.tenant.clone();
             catalog
                 .rename_table(RenameTableReq {
                     tenant,
-                    db: map.db.clone(),
-                    table_name: map.table_name.clone(),
-                    new_db: map.new_db.clone(),
-                    new_table_name: map.new_table_name.clone(),
+                    db: entity.db.clone(),
+                    table_name: entity.table_name.clone(),
+                    new_db: entity.new_db.clone(),
+                    new_table_name: entity.new_table_name.clone(),
                 })
                 .await?;
         }

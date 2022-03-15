@@ -278,14 +278,20 @@ impl Catalog for DatabaseCatalog {
         }
         tracing::info!("Rename table from req:{:?}", req);
 
-        // TODO we also need to check new_db.
         if self
             .immutable_catalog
             .exists_database(&req.tenant, &req.db)
             .await?
+            || self
+                .immutable_catalog
+                .exists_database(&req.tenant, &req.new_db)
+                .await?
         {
-            return self.immutable_catalog.rename_table(req).await;
+            return Err(ErrorCode::UnImplement(
+                "Cannot rename table from(to) system databases",
+            ));
         }
+
         self.mutable_catalog.rename_table(req).await
     }
 

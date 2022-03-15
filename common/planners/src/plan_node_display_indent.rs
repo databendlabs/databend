@@ -308,14 +308,14 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
     fn format_rename_table(f: &mut Formatter, plan: &RenameTablePlan) -> fmt::Result {
         write!(f, "Rename table,")?;
         write!(f, " [")?;
-        for (i, map) in plan.maps.iter().enumerate() {
+        for (i, entity) in plan.entities.iter().enumerate() {
             write!(
                 f,
                 "{:}.{:} to {:}.{:}",
-                map.db, map.table_name, map.new_db, map.new_table_name
+                entity.db, entity.table_name, entity.new_db, entity.new_table_name
             )?;
 
-            if i + 1 != plan.maps.len() {
+            if i + 1 != plan.entities.len() {
                 write!(f, ", ")?;
             }
         }

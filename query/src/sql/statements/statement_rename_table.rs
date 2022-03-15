@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
-use common_planners::RenameTableMap;
+use common_planners::RenameTableEntity;
 use common_planners::RenameTablePlan;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
@@ -37,11 +37,11 @@ impl AnalyzableStatement for DfRenameTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let tenant = ctx.get_tenant();
-        let mut maps = Vec::new();
+        let mut entities = Vec::new();
         for (k, v) in &self.name_map {
             let (db, table_name) = self.resolve_table(ctx.clone(), k)?;
             let (new_db, new_table_name) = self.resolve_table(ctx.clone(), v)?;
-            maps.push(RenameTableMap {
+            entities.push(RenameTableEntity {
                 db,
                 table_name,
                 new_db,
@@ -50,7 +50,7 @@ impl AnalyzableStatement for DfRenameTable {
         }
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::RenameTable(RenameTablePlan { tenant, maps }),
+            PlanNode::RenameTable(RenameTablePlan { tenant, entities }),
         )))
     }
 }
