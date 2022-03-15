@@ -12,13 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::functions::systems::FuseHistoryFunction;
-use crate::functions::FunctionFactory;
+mod fuse_history;
+mod system;
 
-pub struct SystemFunction;
-
-impl SystemFunction {
-    pub fn register(factory: &mut FunctionFactory) {
-        factory.register("system$fuse_history", FuseHistoryFunction::desc());
-    }
-}
+pub use fuse_history::FuseHistoryProcedure;
+pub use system::SystemProcedure;

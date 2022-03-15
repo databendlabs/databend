@@ -11,3 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use std::sync::Arc;
+
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchema;
+use common_exception::Result;
+
+use crate::sessions::QueryContext;
+
+#[async_trait::async_trait]
+pub trait Procedure: Sync + Send {
+    async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock>;
+
+    fn schema(&self) -> Arc<DataSchema>;
+}

@@ -56,12 +56,8 @@ pub async fn create_query_context() -> Result<Arc<QueryContext>> {
     dummy_session.set_current_user(user_info);
 
     let context = QueryContext::create_from_shared(
-        QueryContextShared::try_create(
-            sessions.get_conf().clone(),
-            Arc::new(dummy_session.as_ref().clone()),
-            Cluster::empty(),
-        )
-        .await?,
+        QueryContextShared::try_create(Arc::new(dummy_session.as_ref().clone()), Cluster::empty())
+            .await?,
     );
 
     context.get_settings().set_max_threads(8)?;
@@ -89,12 +85,8 @@ pub async fn create_query_context_with_config(config: Config) -> Result<Arc<Quer
     dummy_session.set_current_user(user_info);
 
     let context = QueryContext::create_from_shared(
-        QueryContextShared::try_create(
-            config,
-            Arc::new(dummy_session.as_ref().clone()),
-            Cluster::empty(),
-        )
-        .await?,
+        QueryContextShared::try_create(Arc::new(dummy_session.as_ref().clone()), Cluster::empty())
+            .await?,
     );
 
     context.get_settings().set_max_threads(8)?;
@@ -172,7 +164,6 @@ pub async fn create_query_context_with_cluster(
 
     let context = QueryContext::create_from_shared(
         QueryContextShared::try_create(
-            sessions.get_conf().clone(),
             Arc::new(dummy_session.as_ref().clone()),
             Cluster::create(nodes, local_id),
         )

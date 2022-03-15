@@ -19,14 +19,14 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
-use crate::functions::admins::AdminFunction;
-use crate::functions::systems::SystemFunction;
-use crate::functions::Function;
+use crate::procedures::admins::AdminProcedure;
+use crate::procedures::systems::SystemProcedure;
+use crate::procedures::Procedure;
 
-pub type FactoryCreator = Box<dyn Fn() -> Result<Box<dyn Function>> + Send + Sync>;
+pub type Factory2Creator = Box<dyn Fn() -> Result<Box<dyn Procedure>> + Send + Sync>;
 
 #[derive(Clone)]
-pub struct FunctionFeatures {
+pub struct ProcedureFeatures {
     // The number of arguments the function accepts.
     pub num_arguments: usize,
     // (1, 2) means we only accept [1, 2] arguments
@@ -34,73 +34,73 @@ pub struct FunctionFeatures {
     pub variadic_arguments: Option<(usize, usize)>,
 }
 
-impl FunctionFeatures {
-    pub fn default() -> FunctionFeatures {
-        FunctionFeatures {
+impl ProcedureFeatures {
+    pub fn default() -> ProcedureFeatures {
+        ProcedureFeatures {
             num_arguments: 0,
             variadic_arguments: None,
         }
     }
 
-    pub fn num_arguments(mut self, num_arguments: usize) -> FunctionFeatures {
+    pub fn num_arguments(mut self, num_arguments: usize) -> ProcedureFeatures {
         self.num_arguments = num_arguments;
         self
     }
 
-    pub fn variadic_arguments(mut self, min: usize, max: usize) -> FunctionFeatures {
+    pub fn variadic_arguments(mut self, min: usize, max: usize) -> ProcedureFeatures {
         self.variadic_arguments = Some((min, max));
         self
     }
 }
 
-pub struct FunctionDescription {
-    features: FunctionFeatures,
-    function_creator: FactoryCreator,
+pub struct ProcedureDescription {
+    features: ProcedureFeatures,
+    procedure_creator: Factory2Creator,
 }
 
-impl FunctionDescription {
-    pub fn creator(creator: FactoryCreator) -> FunctionDescription {
-        FunctionDescription {
-            function_creator: creator,
-            features: FunctionFeatures::default(),
+impl ProcedureDescription {
+    pub fn creator(creator: Factory2Creator) -> ProcedureDescription {
+        ProcedureDescription {
+            procedure_creator: creator,
+            features: ProcedureFeatures::default(),
         }
     }
 
     #[must_use]
-    pub fn features(mut self, features: FunctionFeatures) -> FunctionDescription {
+    pub fn features(mut self, features: ProcedureFeatures) -> ProcedureDescription {
         self.features = features;
         self
     }
 }
 
-pub struct FunctionFactory {
-    descs: HashMap<String, FunctionDescription>,
+pub struct ProcedureFactory {
+    descs: HashMap<String, ProcedureDescription>,
 }
 
-static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
-    let mut factory = FunctionFactory::create();
-    SystemFunction::register(&mut factory);
-    AdminFunction::register(&mut factory);
+static FUNCTION_FACTORY: Lazy<Arc<ProcedureFactory>> = Lazy::new(|| {
+    let mut factory = ProcedureFactory::create();
+    SystemProcedure::register(&mut factory);
+    AdminProcedure::register(&mut factory);
     Arc::new(factory)
 });
 
-impl FunctionFactory {
-    pub fn create() -> FunctionFactory {
-        FunctionFactory {
+impl ProcedureFactory {
+    pub fn create() -> ProcedureFactory {
+        ProcedureFactory {
             descs: Default::default(),
         }
     }
 
-    pub fn instance() -> &'static FunctionFactory {
+    pub fn instance() -> &'static ProcedureFactory {
         FUNCTION_FACTORY.as_ref()
     }
 
-    pub fn register(&mut self, name: &str, desc: FunctionDescription) {
+    pub fn register(&mut self, name: &str, desc: ProcedureDescription) {
         let descs = &mut self.descs;
         descs.insert(name.to_lowercase(), desc);
     }
 
-    pub fn get_features(&self, name: impl AsRef<str>) -> Result<FunctionFeatures> {
+    pub fn get_features(&self, name: impl AsRef<str>) -> Result<ProcedureFeatures> {
         let origin_name = name.as_ref();
         let name = origin_name.to_lowercase();
         match self.descs.get(&name) {
@@ -112,12 +112,12 @@ impl FunctionFactory {
         }
     }
 
-    pub fn get(&self, name: impl AsRef<str>) -> Result<Box<dyn Function>> {
+    pub fn get(&self, name: impl AsRef<str>) -> Result<Box<dyn Procedure>> {
         let origin_name = name.as_ref();
         let name = origin_name.to_lowercase();
         match self.descs.get(&name) {
             Some(desc) => {
-                let inner = (desc.function_creator)()?;
+                let inner = (desc.procedure_creator)()?;
                 Ok(inner)
             }
             None => Err(ErrorCode::UnknownFunction(format!(

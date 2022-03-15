@@ -54,7 +54,7 @@ async fn test_session() -> Result<()> {
     // Malloc size.
     {
         let session_size = malloc_size(&session);
-        assert!(session_size > 2500);
+        assert!(session_size > 1500);
         assert_eq!(session_size, session.get_memory_usage());
     }
 

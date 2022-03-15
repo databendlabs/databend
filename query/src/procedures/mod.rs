@@ -13,13 +13,13 @@
 // limitations under the License.
 
 pub mod admins;
-mod context_function;
-mod function;
-mod function_factory;
+mod procedure;
+mod procedure_factory;
 pub mod systems;
 
-pub use context_function::ContextFunction;
-pub use function::Function;
-pub use function_factory::FunctionDescription;
-pub use function_factory::FunctionFactory;
-pub use function_factory::FunctionFeatures;
+pub use procedure::Procedure;
+pub use procedure_factory::ProcedureDescription;
+pub use procedure_factory::ProcedureFactory;
+pub use procedure_factory::ProcedureFeatures;
+
+pub use crate::common::context_function::ContextFunction;

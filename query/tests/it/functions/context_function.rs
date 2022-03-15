@@ -14,7 +14,7 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use databend_query::functions::ContextFunction;
+use databend_query::procedures::ContextFunction;
 
 #[tokio::test]
 async fn test_context_function_build_arg_from_ctx() -> Result<()> {

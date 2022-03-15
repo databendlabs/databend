@@ -1,8 +1,8 @@
 ---
-title: Deploy Databend With AWS S3
-sidebar_label: With AWS S3
+title: Deploy Databend With MinIO
+sidebar_label: With MinIO
 description:
-  How to deploy Databend with AWS S3
+  How to deploy Databend with MinIO
 ---
 
 :::tip
@@ -11,19 +11,42 @@ Expected deployment time: ** 5 minutes ⏱ **
 
 :::
 
-This guideline will deploy databend(standalone) with AWS S3 step by step.
+This guideline will deploy databend(standalone) with MinIO step by step.
 
 <p align="center">
-<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-s3-standalone.png" width="300"/>
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-minio-standalone.png" width="300"/>
 </p>
 
-## 1. Download
+
+## 1. Deploy MinIO
+
+Run a standalone MinIO server via Docker:
+```shell
+docker run -d -p 9900:9000 --name minio \
+  -e "MINIO_ACCESS_KEY=minioadmin" \
+  -e "MINIO_SECRET_KEY=minioadmin" \
+  -v /tmp/data:/data \
+  -v /tmp/config:/root/.minio \
+  minio/minio server /data
+```
+
+We recommend using [aws cli](https://aws.amazon.com/cli/) to create a new MinIO bucket:
+
+```shell
+export AWS_ACCESS_KEY_ID=minioadmin
+export AWS_SECRET_ACCESS_KEY=minioadmin
+export AWS_EC2_METADATA_DISABLED=true
+aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://databend
+```
+
+## 2. Download
 
 You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page.
 
 ```shell
 mkdir databend && cd databend
 ```
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
@@ -32,6 +55,21 @@ import TabItem from '@theme/TabItem';
 
 ```shell
 curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.90-nightly/databend-v0.6.90-nightly-x86_64-unknown-linux-gnu.tar.gz
+```
+
+</TabItem>
+<TabItem value="mac" label="MacOS">
+
+```shell
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.90-nightly/databend-v0.6.90-nightly-aarch64-apple-darwin.tar.gz
+```
+
+</TabItem>
+
+<TabItem value="arm" label="Arm">
+
+```shell
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.90-nightly/databend-v0.6.90-nightly-aarch64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
@@ -45,13 +83,28 @@ tar xzvf databend-v0.6.90-nightly-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
+<TabItem value="mac" label="MacOS">
+
+```shell
+tar xzvf databend-v0.6.90-nightly-aarch64-apple-darwin.tar.gz
+```
+
+</TabItem>
+
+<TabItem value="arm" label="Arm">
+
+```shell
+tar xzvf databend-v0.6.90-nightly-aarch64-unknown-linux-gnu.tar.gz
+```
+
+</TabItem>
 </Tabs>
 
-## 2. Deploy databend-meta (standalone)
+## 3. Deploy databend-meta (standalone)
 
 databend-meta is a global service for the meta data(such as user, table schema etc.).
 
-### 2.1 Create databend-meta.toml
+### 3.1 Create databend-meta.toml
 
 ```shell title="databend-meta.toml"
 log_dir = "metadata/_logs"
@@ -64,13 +117,13 @@ single = true
 raft_dir = "metadata/datas"
 ```
 
-### 2.2 Start the databend-meta service
+### 3.2 Start the databend-meta service
 
 ```shell
 ./databend-meta -c ./databend-meta.toml 2>&1 > meta.log&
 ```
 
-### 2.3 Check databend-meta status
+### 3.3 Check databend-meta status
 
 ```shell
 curl -I  http://127.0.0.1:8101/v1/health
@@ -79,9 +132,9 @@ curl -I  http://127.0.0.1:8101/v1/health
 Check the response is `HTTP/1.1 200 OK`.
 
 
-## 3. Deploy databend-query (standalone)
+## 4. Deploy databend-query (standalone)
 
-### 3.1 Create databend-query.toml
+### 4.1 Create databend-query.toml
 
 ```shell title="databend-query.toml"
 [log]
@@ -108,9 +161,11 @@ tenant_id = "tenant1"
 cluster_id = "cluster1"
 
 [meta]
+# databend-meta grpc api address. 
 meta_address = "0.0.0.0:9101"
 meta_username = "root"
 meta_password = "root"
+
 
 [storage]
 # disk|s3
@@ -120,21 +175,19 @@ storage_type = "s3"
 
 [storage.s3]
 bucket="databend"
-region="<your-s3-region>"
-endpoint_url="https://s3.amazonaws.com"
-access_key_id="<your-key-id>"
-secret_access_key="<your-access-key>"
-
-[storage.azure_storage_blob]
+region="us-east-1"
+endpoint_url="http://127.0.0.1:9900"
+access_key_id="minioadmin"
+secret_access_key="minioadmin"
 ```
 
-### 3.2 Start databend-query
+### 4.2 Start databend-query
 
 ```shell
 ./databend-query -c ./databend-query.toml 2>&1 > query.log&
 ```
 
-### 3.3 Check databend-query status
+### 4.3 Check databend-query status
 
 ```shell
 curl -I  http://127.0.0.1:8001/v1/health
@@ -142,7 +195,7 @@ curl -I  http://127.0.0.1:8001/v1/health
 
 Check the response is `HTTP/1.1 200 OK`.
 
-## 4. Play
+## 5. Play
 
 ```shell
 mysql -h127.0.0.1 -uroot -P3307 
