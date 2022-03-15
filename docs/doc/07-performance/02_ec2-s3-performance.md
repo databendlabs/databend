@@ -653,3 +653,6 @@ databend :) SELECT count(*) FROM ontime;
 │       ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1] │
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+Reference:
+* [Analyzing OnTime Datasets with Databend on AWS EC2 and S3](../09-lessons/02-analyze-ontime-with-databend-on-ec2-and-s3.md)

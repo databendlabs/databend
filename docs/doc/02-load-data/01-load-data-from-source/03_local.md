@@ -7,7 +7,7 @@ description:
 
 Using HTTP API `v1/streaming_load` to load data from local file into Databend.
 
-### Prerequisites
+### Before you begin
 
 * **Databend :** Make sure Databend is running and accessible, please see [How to deploy Databend](/doc/category/deploy).
 

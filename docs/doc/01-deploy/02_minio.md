@@ -11,7 +11,7 @@ Expected deployment time: ** 5 minutes ⏱ **
 
 :::
 
-This guideline will deploy databend(standalone) with MinIO step by step.
+This guideline will deploy Databend(standalone) with MinIO step by step.
 
 <p align="center">
 <img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-minio-standalone.png" width="300"/>
@@ -108,8 +108,8 @@ databend-meta is a global service for the meta data(such as user, table schema e
 
 ```shell title="databend-meta.toml"
 log_dir = "metadata/_logs"
-admin_api_address = "0.0.0.0:8101"
-grpc_api_address = "0.0.0.0:9101"
+admin_api_address = "127.0.0.1:8101"
+grpc_api_address = "127.0.0.1:9101"
 
 [raft_config]
 id = 1
@@ -143,18 +143,24 @@ log_dir = "benddata/_logs"
 
 [query]
 # For admin RESET API.
-admin_api_address = "0.0.0.0:8001"
+admin_api_address = "127.0.0.1:8001"
+
+# Metrics.
+metric_api_address = "127.0.0.1:7071"
+
+# Cluster flight RPC.
+flight_api_address = "127.0.0.1:9091"
 
 # Query MySQL Handler.
-mysql_handler_host = "0.0.0.0"
+mysql_handler_host = "127.0.0.1"
 mysql_handler_port = 3307
 
 # Query ClickHouse Handler.
-clickhouse_handler_host = "0.0.0.0"
+clickhouse_handler_host = "127.0.0.1"
 clickhouse_handler_port = 9001
 
 # Query HTTP Handler.
-http_handler_host = "0.0.0.0"
+http_handler_host = "127.0.0.1"
 http_handler_port = 8081
 
 tenant_id = "tenant1"
@@ -162,7 +168,7 @@ cluster_id = "cluster1"
 
 [meta]
 # databend-meta grpc api address. 
-meta_address = "0.0.0.0:9101"
+meta_address = "127.0.0.1:9101"
 meta_username = "root"
 meta_password = "root"
 

@@ -7,7 +7,7 @@ Analyzing `OnTime` datasets on AWS EC2 and S3 with Databend step by step.
 
 ## Step 1. Deploy Databend
 
-Install databend, see [deploy Databend with AWS S3](../01-deploy/01_s3.md).
+Install databend, see [How to Deploy Databend with AWS S3](../01-deploy/01_s3.md).
 
 ## Step 2. Load OnTime Datasets
 
