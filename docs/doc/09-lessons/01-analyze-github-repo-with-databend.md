@@ -5,7 +5,7 @@ sidebar_label: Analyzing Github Repository
 
 # Analyzing Github Repository with Databend
 
-Use Databend analyzing Github repo step by step.
+Use Databend analyzing Github repository step by step.
 
 ## Step 1 
 
@@ -13,18 +13,26 @@ Install Databend, see [How to deploy Databend with local disk](../01-deploy/00_l
 
 ## Step 2
 
-```
+```sql title='mysql>'
 mysql -h 127.0.0.1 -P 3307 -uroot
+```
 
-mysql> create database datafuselabs engine=github(token='<your-github-personal-access-token>');
-Query OK, 0 rows affected (1.21 sec)
+```sql title='mysql>'
+create database datafuselabs engine=github(token='<your-github-personal-access-token>');
+```
+:::tip
+* [Creating a personal github access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token)
+:::
 
-mysql> use datafuselabs;
-Reading table information for completion of table and column names
-You can turn off this feature to get a quicker startup with -A
+```sql title='mysql>'
+use datafuselabs;
+```
 
-Database changed
-mysql> show tables;
+```sql title='mysql>'
+show tables;
+```
+
+```sql
 +-------------------------------+---------------------------------+
 | created_on                    | name                            |
 +-------------------------------+---------------------------------+
@@ -65,9 +73,13 @@ mysql> show tables;
 | 2021-12-19 11:20:37.817 +0000 | weekly_issues                   |
 | 2021-12-19 11:20:37.818 +0000 | weekly_prs                      |
 +-------------------------------+---------------------------------+
-36 rows in set (0.01 sec)
+```
 
-mysql> show create table databend_issues;
+```sql title='mysql>'
+show create table databend_issues;
+```
+
+```sql
 +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Table           | Create Table                                                                                                                                                                                                                                                          |
 +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -84,13 +96,15 @@ mysql> show create table databend_issues;
   `closed_at` DateTime32,
 ) ENGINE=GITHUB |
 +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-1 row in set (0.01 sec)
 ```
-
 
 Q1: Query the total number of issues
+
+```sql title='mysql>'
+select count(*) from databend_issues;
 ```
-mysql> select count(*) from databend_issues;
+
+```sql
 +----------+
 | count(0) |
 +----------+
@@ -100,8 +114,12 @@ mysql> select count(*) from databend_issues;
 ```
 
 Q2: Get the top 10 users who submitted issues
+
+```sql title='mysql>'
+select user, count(*) as c from databend_issues group by user order by c desc limit 10;
 ```
-mysql> select user, count(*) as c from databend_issues group by user order by c desc limit 10;
+
+```sql
 +-----------------+------+
 | user            | c    |
 +-----------------+------+
@@ -121,8 +139,11 @@ mysql> select user, count(*) as c from databend_issues group by user order by c 
 
 Q3:  Get the number of issue per month in 2021
 
+```sql title='mysql>'
+select tomonth(created_at) as m ,count(*) as c from databend_issues where  created_at>='2021-01-01 00:00:00' and created_at<'2022-01-01 00:00:00' group by m order by m;
 ```
-mysql> select tomonth(created_at) as m ,count(*) as c from databend_issues where  created_at>='2021-01-01 00:00:00' and created_at<'2022-01-01 00:00:00' group by m order by m;
+
+```sql
 +------+------+
 | m    | c    |
 +------+------+
@@ -144,8 +165,11 @@ mysql> select tomonth(created_at) as m ,count(*) as c from databend_issues where
 
 Q4: Finding Comments in all Issue/Pull Request using regular expressions:
 
+```sql title='mysql>'
+select * from databend_comments where body like '%expression%';
 ```
-mysql> select * from databend_comments where body like '%expression%';
+
+```sql
 +------------+-----------+--------------------------------------------------------------------------------------------------------------------+
 | comment_id | user      | body                                                                                                               |
 +------------+-----------+--------------------------------------------------------------------------------------------------------------------+
@@ -155,5 +179,4 @@ mysql> select * from databend_comments where body like '%expression%';
 |  998761335 | sundy-li  | We need support lambda expression at first...                                                                      |
 +------------+-----------+--------------------------------------------------------------------------------------------------------------------+
 ```
-
 **Enjoy your journey.** 
