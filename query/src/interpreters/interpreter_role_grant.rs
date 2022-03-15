@@ -16,32 +16,31 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::PrincipalIdentity;
-use common_planners::RevokePrivilegePlan;
+use common_planners::GrantRolePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::interpreters::interpreter_common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
-pub struct RevokePrivilegeInterpreter {
+pub struct GrantRoleInterpreter {
     ctx: Arc<QueryContext>,
-    plan: RevokePrivilegePlan,
+    plan: GrantRolePlan,
 }
 
-impl RevokePrivilegeInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: RevokePrivilegePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(RevokePrivilegeInterpreter { ctx, plan }))
+impl GrantRoleInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: GrantRolePlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(GrantRoleInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for RevokePrivilegeInterpreter {
+impl Interpreter for GrantRoleInterpreter {
     fn name(&self) -> &str {
-        "RevokePrivilegeInterpreter"
+        "GrantRoleInterpreter"
     }
 
     #[tracing::instrument(level = "debug", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
@@ -50,30 +49,17 @@ impl Interpreter for RevokePrivilegeInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
-
-        validate_grant_object_exists(&self.ctx, &plan.on).await?;
-
-        // TODO: check user existence
-        // TODO: check privilege on granting on the grant object
-
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
-
         match plan.principal {
             PrincipalIdentity::User(user) => {
                 user_mgr
-                    .revoke_user_privileges(
-                        &tenant,
-                        &user.username,
-                        &user.hostname,
-                        plan.on,
-                        plan.priv_types,
-                    )
+                    .grant_role_to_user(&tenant, &user.username, &user.hostname, plan.role)
                     .await?;
             }
             PrincipalIdentity::Role(role) => {
                 user_mgr
-                    .revoke_role_privileges(&tenant, &role, plan.on, plan.priv_types)
+                    .grant_role_to_role(&tenant, role, plan.role)
                     .await?;
             }
         }

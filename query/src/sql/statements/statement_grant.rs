@@ -17,8 +17,10 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::PrincipalIdentity;
+use common_meta_types::RoleIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_planners::GrantPrivilegePlan;
+use common_planners::GrantRolePlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 
@@ -79,5 +81,24 @@ impl AnalyzableStatement for DfGrantPrivilegeStatement {
                 priv_types,
             }),
         )))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DfGrantRoleStatement {
+    pub role: RoleIdentity,
+    pub principal: PrincipalIdentity,
+}
+
+#[async_trait::async_trait]
+impl AnalyzableStatement for DfGrantRoleStatement {
+    #[tracing::instrument(level = "debug", skip(self, _ctx), fields(_ctx.id = _ctx.get_id().as_str()))]
+    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::GrantRole(
+            GrantRolePlan {
+                principal: self.principal.clone(),
+                role: self.role.clone(),
+            },
+        ))))
     }
 }

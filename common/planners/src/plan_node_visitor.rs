@@ -43,6 +43,7 @@ use crate::Expression;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::GrantPrivilegePlan;
+use crate::GrantRolePlan;
 use crate::HavingPlan;
 use crate::InsertPlan;
 use crate::KillPlan;
@@ -55,6 +56,7 @@ use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
 use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
+use crate::RevokeRolePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
@@ -164,8 +166,14 @@ pub trait PlanVisitor {
             PlanNode::CreateUser(plan) => self.visit_create_user(plan),
             PlanNode::AlterUser(plan) => self.visit_alter_user(plan),
             PlanNode::DropUser(plan) => self.visit_drop_user(plan),
+
+            // Grant
             PlanNode::GrantPrivilege(plan) => self.visit_grant_privilege(plan),
+            PlanNode::GrantRole(plan) => self.visit_grant_role(plan),
+
+            // Revoke
             PlanNode::RevokePrivilege(plan) => self.visit_revoke_privilege(plan),
+            PlanNode::RevokeRole(plan) => self.visit_revoke_role(plan),
 
             // Role.
             PlanNode::CreateRole(plan) => self.visit_create_role(plan),
@@ -327,7 +335,15 @@ pub trait PlanVisitor {
         Ok(())
     }
 
+    fn visit_grant_role(&mut self, _: &GrantRolePlan) -> Result<()> {
+        Ok(())
+    }
+
     fn visit_revoke_privilege(&mut self, _: &RevokePrivilegePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_revoke_role(&mut self, _: &RevokeRolePlan) -> Result<()> {
         Ok(())
     }
 

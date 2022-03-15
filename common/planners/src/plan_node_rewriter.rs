@@ -52,6 +52,7 @@ use crate::ExpressionRewriter;
 use crate::Expressions;
 use crate::FilterPlan;
 use crate::GrantPrivilegePlan;
+use crate::GrantRolePlan;
 use crate::HavingPlan;
 use crate::InsertPlan;
 use crate::KillPlan;
@@ -65,6 +66,7 @@ use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
 use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
+use crate::RevokeRolePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
@@ -152,8 +154,14 @@ pub trait PlanRewriter: Sized {
             PlanNode::CreateUser(plan) => self.create_user(plan),
             PlanNode::AlterUser(plan) => self.alter_user(plan),
             PlanNode::DropUser(plan) => self.drop_user(plan),
+
+            // Grant.
             PlanNode::GrantPrivilege(plan) => self.grant_privilege(plan),
+            PlanNode::GrantRole(plan) => self.grant_role(plan),
+
+            // Revoke.
             PlanNode::RevokePrivilege(plan) => self.revoke_privilege(plan),
+            PlanNode::RevokeRole(plan) => self.revoke_role(plan),
 
             // Role.
             PlanNode::CreateRole(plan) => self.rewrite_create_role(plan),
@@ -426,8 +434,16 @@ pub trait PlanRewriter: Sized {
         Ok(PlanNode::GrantPrivilege(plan.clone()))
     }
 
+    fn grant_role(&mut self, plan: &GrantRolePlan) -> Result<PlanNode> {
+        Ok(PlanNode::GrantRole(plan.clone()))
+    }
+
     fn revoke_privilege(&mut self, plan: &RevokePrivilegePlan) -> Result<PlanNode> {
         Ok(PlanNode::RevokePrivilege(plan.clone()))
+    }
+
+    fn revoke_role(&mut self, plan: &RevokeRolePlan) -> Result<PlanNode> {
+        Ok(PlanNode::RevokeRole(plan.clone()))
     }
 
     fn rewrite_create_user_stage(&mut self, plan: &CreateUserStagePlan) -> Result<PlanNode> {

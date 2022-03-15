@@ -701,7 +701,7 @@ mod set_user_privileges {
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::create(kv, "tenant1")?;
 
-        let res = user_mgr.grant_user_privileges(
+        let res = user_mgr.grant_privileges(
             test_user_name.to_string(),
             test_hostname.to_string(),
             GrantObject::Global,

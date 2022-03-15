@@ -166,7 +166,7 @@ impl<'a> DfParser<'a> {
                     Keyword::SELECT | Keyword::WITH | Keyword::VALUES => self.parse_query(),
                     Keyword::GRANT => {
                         self.parser.next_token();
-                        self.parse_grant_privilege()
+                        self.parse_grant()
                     }
                     Keyword::REVOKE => {
                         self.parser.next_token();
