@@ -10,7 +10,7 @@ description:
 * Make sure you have already [How to installed Databend](/doc/category/deploy).
 
 
-### Golang
+### Python
 
 This guideline show how to connect and query to Databend using Python.
 
