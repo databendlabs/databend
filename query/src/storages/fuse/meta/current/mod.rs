@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+//! Exports meta of current version here
+
 pub use v1::block::BlockLocation;
 pub use v1::block::BlockMeta;
 pub use v1::segment::SegmentInfo;

@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
@@ -63,12 +65,31 @@ impl BlockPruner {
             return Ok(vec![]);
         };
 
-        let res = futures::stream::iter(segment_locs)
-            .map(|(seg_loc, _v)| async {
-                let reader = MetaReaders::segment_info_reader(ctx);
-                // TODO version pls
-                let segment_info = reader.read(seg_loc, None, 1).await?;
-                Self::filter_segment(segment_info.as_ref(), &block_pred)
+        let limit = if let Some(Extras { limit: Some(l), .. }) = push_down {
+            *l
+        } else {
+            usize::MAX
+        };
+
+        // Segments and blocks are accumulated concurrently, thus an atomic counter is used
+        // to **try** collecting as less blocks as possible. But concurrency is preferred to
+        // "accuracy". In [FuseTable::do_read_partitions], the "limit" will be treated precisely.
+
+        let accumulated_rows = AtomicUsize::new(0);
+        let stream = futures::stream::iter(segment_locs)
+            .map(|(seg_loc, v)| async {
+                if accumulated_rows.load(Ordering::Acquire) < limit {
+                    let reader = MetaReaders::segment_info_reader(ctx);
+                    let segment_info = reader.read(seg_loc, None, 1).await?;
+                    Self::filter_segment(
+                        segment_info.as_ref(),
+                        &block_pred,
+                        &accumulated_rows,
+                        limit,
+                    )
+                } else {
+                    Ok(vec![])
+                }
             })
             // configuration of the max size of buffered futures
             .buffered(std::cmp::min(10, segment_num))
@@ -77,22 +98,28 @@ impl BlockPruner {
             .into_iter()
             .flatten();
 
-        Ok(res.collect())
+        Ok(stream.collect::<Vec<_>>())
     }
 
     #[inline]
-    fn filter_segment(segment_info: &SegmentInfo, pred: &Pred) -> Result<Vec<BlockMeta>> {
+    fn filter_segment(
+        segment_info: &SegmentInfo,
+        pred: &Pred,
+        accumulated_rows: &AtomicUsize,
+        limit: usize,
+    ) -> Result<Vec<BlockMeta>> {
         if pred(&segment_info.summary.col_stats)? {
             let block_num = segment_info.blocks.len();
-            segment_info.blocks.iter().try_fold(
-                Vec::with_capacity(block_num),
-                |mut acc, block_meta| {
-                    if pred(&block_meta.col_stats)? {
-                        acc.push(block_meta.clone())
+            let mut acc = Vec::with_capacity(block_num);
+            for block_meta in &segment_info.blocks {
+                if pred(&block_meta.col_stats)? {
+                    let num_rows = block_meta.row_count as usize;
+                    if accumulated_rows.fetch_add(num_rows, Ordering::Release) < limit {
+                        acc.push(block_meta.clone());
                     }
-                    Ok(acc)
-                },
-            )
+                }
+            }
+            Ok(acc)
         } else {
             Ok(vec![])
         }

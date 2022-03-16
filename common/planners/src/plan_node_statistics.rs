@@ -57,6 +57,13 @@ impl Statistics {
         }
     }
 
+    pub fn default_exact() -> Self {
+        Self {
+            is_exact: true,
+            ..Default::default()
+        }
+    }
+
     pub fn clear(&mut self) {
         *self = Self::default();
     }

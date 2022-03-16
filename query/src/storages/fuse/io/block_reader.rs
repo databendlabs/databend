@@ -55,10 +55,10 @@ pub struct BlockReader {
 
 impl BlockReader {
     pub fn create(
+        ctx: Arc<QueryContext>,
         operator: Operator,
         schema: DataSchemaRef,
         projection: Vec<usize>,
-        ctx: Arc<QueryContext>,
     ) -> Result<Arc<BlockReader>> {
         let projected_schema = DataSchemaRef::new(schema.project(projection.clone()));
 
