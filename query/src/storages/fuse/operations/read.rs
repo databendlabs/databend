@@ -46,7 +46,6 @@ impl FuseTable {
         let block_reader = self.create_block_reader(&ctx, push_downs)?;
 
         let bite_size = ctx.get_settings().get_parallel_read_threads()?;
-        // let ctx_clone = ctx.clone();
         let iter = std::iter::from_fn(move || match ctx.clone().try_get_partitions(bite_size) {
             Err(_) => None,
             Ok(parts) if parts.is_empty() => None,
