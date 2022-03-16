@@ -36,6 +36,7 @@ use serde::Serialize;
 
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 use crate::sql::PlanParser;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -55,7 +56,7 @@ pub async fn streaming_load(
 ) -> PoemResult<Json<LoadResponse>> {
     let session_manager = sessions_extension.0;
     let session = session_manager
-        .create_session("Streaming load")
+        .create_session(SessionType::HTTPStreamingLoad)
         .await
         .map_err(InternalServerError)?;
 

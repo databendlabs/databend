@@ -18,7 +18,6 @@ common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
 common-functions = { path = "../functions" }
-common-io = { path = "../io" }
 common-tracing = { path = "../tracing" }
 
 # Github dependencies
@@ -30,7 +29,6 @@ csv-async = "1.2.4"
 futures = "0.3.21"
 pin-project-lite = "0.2.8"
 tempfile = "3.3.0"
-tokio-stream = { version = "0.1.8", features = ["net"] }
 
 [dev-dependencies]
 opendal = "0.2.3"

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use common_exception::Result;
 use common_planners::PlanNode;
@@ -65,10 +66,28 @@ impl Interpreter for InterceptorInterpreter {
     }
 
     async fn start(&self) -> Result<()> {
-        self.query_log.log_start().await
+        let session = self.ctx.get_current_session();
+        let now = SystemTime::now();
+        if session.get_type().is_user_session() {
+            session
+                .get_session_manager()
+                .status
+                .write()
+                .query_start(now);
+        }
+        self.query_log.log_start(now).await
     }
 
     async fn finish(&self) -> Result<()> {
-        self.query_log.log_finish().await
+        let session = self.ctx.get_current_session();
+        let now = SystemTime::now();
+        if session.get_type().is_user_session() {
+            session
+                .get_session_manager()
+                .status
+                .write()
+                .query_finish(now)
+        }
+        self.query_log.log_finish(now).await
     }
 }

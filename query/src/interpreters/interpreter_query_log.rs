@@ -174,9 +174,9 @@ impl InterpreterQueryLog {
         Ok(())
     }
 
-    pub async fn log_start(&self) -> Result<()> {
+    pub async fn log_start(&self, now: SystemTime) -> Result<()> {
         // User.
-        let handler_type = self.ctx.get_current_session().get_type();
+        let handler_type = self.ctx.get_current_session().get_type().to_string();
         let tenant_id = self.ctx.get_tenant();
         let cluster_id = self.ctx.get_config().query.cluster_id;
         let user = self.ctx.get_current_user()?;
@@ -192,7 +192,6 @@ impl InterpreterQueryLog {
         let current_database = self.ctx.get_current_database();
 
         // Stats.
-        let now = SystemTime::now();
         let event_time = now
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
@@ -275,9 +274,9 @@ impl InterpreterQueryLog {
         self.write_log(&log_event).await
     }
 
-    pub async fn log_finish(&self) -> Result<()> {
+    pub async fn log_finish(&self, now: SystemTime) -> Result<()> {
         // User.
-        let handler_type = self.ctx.get_current_session().get_type();
+        let handler_type = self.ctx.get_current_session().get_type().to_string();
         let tenant_id = self.ctx.get_config().query.tenant_id;
         let cluster_id = self.ctx.get_config().query.cluster_id;
         let user = self.ctx.get_current_user()?;
@@ -291,7 +290,6 @@ impl InterpreterQueryLog {
         let query_text = self.ctx.get_query_str();
 
         // Stats.
-        let now = SystemTime::now();
         let event_time = now
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")

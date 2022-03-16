@@ -16,6 +16,7 @@ use common_base::tokio;
 use common_exception::Result;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
+use databend_query::sessions::SessionType;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_setting() -> Result<()> {
@@ -26,7 +27,7 @@ async fn test_session_setting() -> Result<()> {
     let session = Session::try_create(
         conf.clone(),
         String::from("test-001"),
-        String::from("test-type"),
+        SessionType::Test,
         session_manager,
     )
     .await?;
