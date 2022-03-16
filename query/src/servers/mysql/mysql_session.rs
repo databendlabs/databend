@@ -22,7 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_tracing::tracing;
-use msql_srv::AsyncMysqlIntermediary;
+use opensrv_mysql::AsyncMysqlIntermediary;
 
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
 use crate::sessions::SessionRef;

@@ -60,6 +60,7 @@ async fn test_configs_table() -> Result<()> {
         "| jwt_key_file                         |                          | query   |             |",
         "| log_dir                              | ./_logs                  | log     |             |",
         "| log_level                            | INFO                     | log     |             |",
+        "| log_query_enabled                    | false                    | log     |             |",
         "| management_mode                      | false                    | query   |             |",
         "| max_active_sessions                  | 256                      | query   |             |",
         "| max_query_log_size                   | 10000                    | query   |             |",

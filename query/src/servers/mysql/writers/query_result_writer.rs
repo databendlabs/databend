@@ -27,7 +27,7 @@ use common_exception::Result;
 use common_exception::ABORT_QUERY;
 use common_exception::ABORT_SESSION;
 use common_tracing::tracing;
-use msql_srv::*;
+use opensrv_mysql::*;
 
 pub struct DFQueryResultWriter<'a, W: std::io::Write> {
     inner: Option<QueryResultWriter<'a, W>>,
