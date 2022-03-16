@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 
-use crate::storages::fuse::meta::BlockMeta;
+use super::block::BlockMeta;
 use crate::storages::fuse::meta::Statistics;
 
 /// A segment comprised of one or more blocks

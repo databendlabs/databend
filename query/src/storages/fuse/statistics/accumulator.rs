@@ -20,10 +20,10 @@ use common_datavalues::prelude::*;
 use common_datavalues::DataSchema;
 use common_functions::aggregates::eval_aggr;
 
-use crate::storages::fuse::meta::v0::ColumnMeta;
 use crate::storages::fuse::meta::BlockLocation;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::ColumnId;
+use crate::storages::fuse::meta::ColumnMeta;
 use crate::storages::index::BlockStatistics;
 use crate::storages::index::ColumnStatistics;
 
@@ -124,10 +124,7 @@ impl PartiallyAccumulated {
         stats.file_size += file_size;
         let block_meta = BlockMeta {
             format_version: BlockMeta::current_version(),
-            location: BlockLocation {
-                path: location,
-                meta_size: 0,
-            },
+            location: BlockLocation { path: location },
             row_count: self.block_row_count,
             block_size: self.block_size,
             file_size,

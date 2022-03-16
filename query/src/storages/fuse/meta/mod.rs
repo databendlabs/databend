@@ -13,9 +13,8 @@
 //  limitations under the License.
 //
 
-// TODO refine mod scopes!
 mod current;
-pub mod v0;
+mod v0;
 mod v1;
 mod versions;
 

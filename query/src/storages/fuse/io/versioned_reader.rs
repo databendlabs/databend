@@ -28,13 +28,13 @@ use crate::storages::fuse::meta::Versioned;
 
 #[async_trait::async_trait]
 pub trait VersionedLoader<T> {
-    async fn vload<R>(&self, read: R) -> Result<T>
+    async fn load<R>(&self, read: R) -> Result<T>
     where R: AsyncRead + Unpin + Send;
 }
 
 #[async_trait::async_trait]
 impl VersionedLoader<TableSnapshot> for SnapshotVersions {
-    async fn vload<R>(&self, reader: R) -> Result<TableSnapshot>
+    async fn load<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
             SnapshotVersions::V1(v) => do_load(reader, v).await?,
@@ -46,7 +46,7 @@ impl VersionedLoader<TableSnapshot> for SnapshotVersions {
 
 #[async_trait::async_trait]
 impl VersionedLoader<SegmentInfo> for SegmentInfoVersions {
-    async fn vload<R>(&self, reader: R) -> Result<SegmentInfo>
+    async fn load<R>(&self, reader: R) -> Result<SegmentInfo>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
             SegmentInfoVersions::V1(v) => do_load(reader, v).await?,

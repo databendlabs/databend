@@ -29,8 +29,8 @@ use parquet_format_async_temp::FileMetaData;
 
 use crate::storages::fuse::io::block_writer;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
-use crate::storages::fuse::meta::v0::ColumnMeta;
 use crate::storages::fuse::meta::ColumnId;
+use crate::storages::fuse::meta::ColumnMeta;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
@@ -133,8 +133,8 @@ impl BlockStreamWriter {
         let (file_size, file_meta_data) =
             block_writer::write_block(&schema, block, self.data_accessor.clone(), &location)
                 .await?;
-        let col_offsets = Self::column_metas(&file_meta_data)?;
-        acc = partial_acc.end(file_size, location, col_offsets);
+        let col_metas = Self::column_metas(&file_meta_data)?;
+        acc = partial_acc.end(file_size, location, col_metas);
         self.number_of_blocks_accumulated += 1;
         if self.number_of_blocks_accumulated >= self.num_block_threshold {
             let summary = acc.summary(self.data_schema.as_ref())?;

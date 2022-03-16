@@ -50,6 +50,7 @@ impl<'a> FuseHistory<'a> {
         let len = snapshots.len();
         let mut snapshot_ids: Vec<Vec<u8>> = Vec::with_capacity(len);
         let mut prev_snapshot_ids: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
+        let mut prev_snapshot_formats: Vec<u64> = Vec::with_capacity(len);
         let mut segment_count: Vec<u64> = Vec::with_capacity(len);
         let mut block_count: Vec<u64> = Vec::with_capacity(len);
         let mut row_count: Vec<u64> = Vec::with_capacity(len);
@@ -57,10 +58,12 @@ impl<'a> FuseHistory<'a> {
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
         for s in snapshots {
             snapshot_ids.push(s.snapshot_id.to_simple().to_string().into_bytes());
-            prev_snapshot_ids.push(
-                s.prev_snapshot_id
-                    .map(|(id, _v)| id.to_simple().to_string().into_bytes()),
-            );
+            let (id, ver) = match s.prev_snapshot_id {
+                Some((id, v)) => (Some(id.to_simple().to_string().into_bytes()), v),
+                None => (None, 0),
+            };
+            prev_snapshot_ids.push(id);
+            prev_snapshot_formats.push(ver);
             segment_count.push(s.segments.len() as u64);
             block_count.push(s.summary.block_count);
             row_count.push(s.summary.row_count);
@@ -71,6 +74,7 @@ impl<'a> FuseHistory<'a> {
         DataBlock::create(FuseHistory::schema(), vec![
             Series::from_data(snapshot_ids),
             Series::from_data(prev_snapshot_ids),
+            Series::from_data(prev_snapshot_formats),
             Series::from_data(segment_count),
             Series::from_data(block_count),
             Series::from_data(row_count),
@@ -83,6 +87,7 @@ impl<'a> FuseHistory<'a> {
         DataSchemaRefExt::create(vec![
             DataField::new("snapshot_id", Vu8::to_data_type()),
             DataField::new_nullable("prev_snapshot_id", Vu8::to_data_type()),
+            DataField::new("prev_snapshot_format", u64::to_data_type()),
             DataField::new("segment_count", u64::to_data_type()),
             DataField::new("block_count", u64::to_data_type()),
             DataField::new("row_count", u64::to_data_type()),

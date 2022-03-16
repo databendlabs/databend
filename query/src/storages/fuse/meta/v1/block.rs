@@ -41,6 +41,21 @@ impl BlockMeta {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BlockLocation {
     pub path: String,
-    // for parquet, this filed can be used to fetch the meta data without seeking around
-    pub meta_size: u64,
+}
+
+use super::super::v0::block::BlockMeta as BlockMetaV0;
+impl From<BlockMetaV0> for BlockMeta {
+    fn from(s: BlockMetaV0) -> Self {
+        Self {
+            format_version: 1,
+            row_count: s.row_count,
+            block_size: s.block_size,
+            file_size: s.file_size,
+            col_stats: s.col_stats,
+            col_metas: s.col_metas,
+            location: BlockLocation {
+                path: s.location.path,
+            },
+        }
+    }
 }

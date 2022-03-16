@@ -23,6 +23,7 @@ use common_base::ProgressValues;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::MatchSeq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::UpsertTableOptionReply;
@@ -40,6 +41,7 @@ use crate::storages::fuse::operations::TableOperationLog;
 use crate::storages::fuse::statistics;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
+use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_VER;
 use crate::storages::Table;
 
 impl FuseTable {
@@ -219,18 +221,23 @@ impl FuseTable {
         new_snapshot_location: String,
     ) -> Result<UpsertTableOptionReply> {
         let table_id = tbl_id.table_id;
-        let table_version = tbl_id.version;
         let catalog = ctx.get_catalog();
-        catalog
-            .upsert_table_option(UpsertTableOptionReq::new(
-                &TableIdent {
-                    table_id,
-                    version: table_version,
-                },
-                FUSE_OPT_KEY_SNAPSHOT_LOC,
-                new_snapshot_location,
-            ))
-            .await
+
+        let req = UpsertTableOptionReq {
+            table_id,
+            seq: MatchSeq::Exact(tbl_id.version),
+            options: [
+                (
+                    FUSE_OPT_KEY_SNAPSHOT_LOC.to_owned(),
+                    Some(new_snapshot_location),
+                ),
+                (FUSE_OPT_KEY_SNAPSHOT_VER.to_owned(), Some("1".to_owned())),
+            ]
+            .into_iter()
+            .collect(),
+        };
+
+        catalog.upsert_table_option(req).await
     }
 
     pub fn merge_append_operations(

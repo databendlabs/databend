@@ -16,7 +16,7 @@
 use crate::storages::fuse::meta::v0::snapshot::Statistics;
 use crate::storages::fuse::meta::BlockMeta;
 
-/// A segment comprised of one or more blocks
+/// A segment comprises one or more blocks
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct SegmentInfo {
     /// format version
@@ -27,12 +27,12 @@ pub struct SegmentInfo {
     pub summary: Statistics,
 }
 
-use super::super::v0::segment::SegmentInfo as V0;
-impl From<V0> for SegmentInfo {
-    fn from(s: V0) -> Self {
+use super::super::v0::segment::SegmentInfo as SegmentInfoV0;
+impl From<SegmentInfoV0> for SegmentInfo {
+    fn from(s: SegmentInfoV0) -> Self {
         Self {
             format_version: 1,
-            blocks: s.blocks,
+            blocks: s.blocks.into_iter().map(|b| b.into()).collect::<_>(),
             summary: s.summary,
         }
     }

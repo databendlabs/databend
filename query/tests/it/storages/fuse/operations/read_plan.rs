@@ -65,7 +65,6 @@ fn test_to_partitions() -> Result<()> {
         col_metas: cols_metas,
         location: BlockLocation {
             path: "".to_string(),
-            meta_size: 0,
         },
     };
 
