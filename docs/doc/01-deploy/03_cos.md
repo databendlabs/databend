@@ -1,8 +1,8 @@
 ---
-title: Deploy Databend With MinIO
-sidebar_label: With MinIO
+title: Deploy Databend With Tencent Cloud COS
+sidebar_label: With COS
 description:
-  How to deploy Databend with MinIO
+  How to deploy Databend with Tencent Cloud(腾讯云) COS
 ---
 
 :::tip
@@ -11,42 +11,26 @@ Expected deployment time: ** 5 minutes ⏱ **
 
 :::
 
-This guideline will deploy Databend(standalone) with MinIO step by step.
+This guideline will deploy Databend(standalone) with Tencent Cloud(腾讯云) COS step by step.
 
 <p align="center">
-<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-minio-standalone.png" width="300"/>
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-cos-standalone.png" width="300"/>
 </p>
 
 
-## 1. Deploy MinIO
+### Before you begin
 
-Run a standalone MinIO server via Docker:
-```shell
-docker run -d -p 9900:9000 --name minio \
-  -e "MINIO_ACCESS_KEY=minioadmin" \
-  -e "MINIO_SECRET_KEY=minioadmin" \
-  -v /tmp/data:/data \
-  -v /tmp/config:/root/.minio \
-  minio/minio server /data
-```
+* **COS:** Tencent Cloud COS is a S3-like object storage.
+  * [How to create COS bucket](https://cloud.tencent.com/document/product/436/13309)
+  * [How to get COS access_key_id and secret_access_key](https://cloud.tencent.com/document/product/436/68282)
 
-We recommend using [aws cli](https://aws.amazon.com/cli/) to create a new MinIO bucket:
-
-```shell
-export AWS_ACCESS_KEY_ID=minioadmin
-export AWS_SECRET_ACCESS_KEY=minioadmin
-export AWS_EC2_METADATA_DISABLED=true
-aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://databend
-```
-
-## 2. Download
+## 1. Download
 
 You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page.
 
 ```shell
 mkdir databend && cd databend
 ```
-
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
@@ -55,21 +39,6 @@ import TabItem from '@theme/TabItem';
 
 ```shell
 curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.90-nightly/databend-v0.6.90-nightly-x86_64-unknown-linux-gnu.tar.gz
-```
-
-</TabItem>
-<TabItem value="mac" label="MacOS">
-
-```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.90-nightly/databend-v0.6.90-nightly-aarch64-apple-darwin.tar.gz
-```
-
-</TabItem>
-
-<TabItem value="arm" label="Arm">
-
-```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.90-nightly/databend-v0.6.90-nightly-aarch64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
@@ -83,28 +52,13 @@ tar xzvf databend-v0.6.90-nightly-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
-<TabItem value="mac" label="MacOS">
-
-```shell
-tar xzvf databend-v0.6.90-nightly-aarch64-apple-darwin.tar.gz
-```
-
-</TabItem>
-
-<TabItem value="arm" label="Arm">
-
-```shell
-tar xzvf databend-v0.6.90-nightly-aarch64-unknown-linux-gnu.tar.gz
-```
-
-</TabItem>
 </Tabs>
 
-## 3. Deploy databend-meta (standalone)
+## 2. Deploy databend-meta (standalone)
 
 databend-meta is a global service for the meta data(such as user, table schema etc.).
 
-### 3.1 Create databend-meta.toml
+### 2.1 Create databend-meta.toml
 
 ```shell title="databend-meta.toml"
 log_dir = "metadata/_logs"
@@ -117,13 +71,13 @@ single = true
 raft_dir = "metadata/datas"
 ```
 
-### 3.2 Start the databend-meta service
+### 2.2 Start the databend-meta service
 
 ```shell
 ./databend-meta -c ./databend-meta.toml 2>&1 > meta.log&
 ```
 
-### 3.3 Check databend-meta status
+### 2.3 Check databend-meta status
 
 ```shell
 curl -I  http://127.0.0.1:8101/v1/health
@@ -132,9 +86,9 @@ curl -I  http://127.0.0.1:8101/v1/health
 Check the response is `HTTP/1.1 200 OK`.
 
 
-## 4. Deploy databend-query (standalone)
+## 3. Deploy databend-query (standalone)
 
-### 4.1 Create databend-query.toml
+### 3.1 Create databend-query.toml
 
 ```shell title="databend-query.toml"
 [log]
@@ -167,11 +121,9 @@ tenant_id = "tenant1"
 cluster_id = "cluster1"
 
 [meta]
-# databend-meta grpc api address. 
 meta_address = "127.0.0.1:9101"
 meta_username = "root"
 meta_password = "root"
-
 
 [storage]
 # disk|s3
@@ -180,20 +132,36 @@ storage_type = "s3"
 [storage.disk]
 
 [storage.s3]
-bucket = "databend"
+# How to create a bucket:
+# https://cloud.tencent.com/document/product/436/13309
 // highlight-next-line
-endpoint_url = "http://127.0.0.1:9900"
-access_key_id = "minioadmin"
-secret_access_key = "minioadmin"
+bucket = "databend-1253727613"
+
+# You can get the URL from the bucket detail page.
+// highlight-next-line
+endpoint_url = "https://cos.ap-beijing.myqcloud.com"
+
+# How to get access_key_id and secret_access_key:
+# https://cloud.tencent.com/document/product/436/68282
+// highlight-next-line
+access_key_id = "<your-key-id>"
+// highlight-next-line
+secret_access_key = "<your-access-key>"
+
+[storage.azure_storage_blob]
 ```
 
-### 4.2 Start databend-query
+:::tip
+In this example COS region is beijing.
+:::
+
+### 3.2 Start databend-query
 
 ```shell
 ./databend-query -c ./databend-query.toml 2>&1 > query.log&
 ```
 
-### 4.3 Check databend-query status
+### 3.3 Check databend-query status
 
 ```shell
 curl -I  http://127.0.0.1:8001/v1/health
@@ -201,7 +169,7 @@ curl -I  http://127.0.0.1:8001/v1/health
 
 Check the response is `HTTP/1.1 200 OK`.
 
-## 5. Play
+## 4. Play
 
 ```shell
 mysql -h127.0.0.1 -uroot -P3307 
