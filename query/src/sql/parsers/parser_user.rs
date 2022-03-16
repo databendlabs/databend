@@ -34,7 +34,9 @@ use crate::sql::statements::DfDropRole;
 use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfGrantObject;
 use crate::sql::statements::DfGrantPrivilegeStatement;
-use crate::sql::statements::DfRevokeStatement;
+use crate::sql::statements::DfGrantRoleStatement;
+use crate::sql::statements::DfRevokePrivilegeStatement;
+use crate::sql::statements::DfRevokeRoleStatement;
 use crate::sql::statements::DfShowGrants;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
@@ -114,6 +116,13 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::DropRole(drop))
     }
 
+    pub(crate) fn parse_grant(&mut self) -> Result<DfStatement, ParserError> {
+        if self.consume_token("ROLE") {
+            return self.parse_grant_role();
+        }
+        self.parse_grant_privilege()
+    }
+
     /// GRANT privs TO [USER] 'name'@'host'
     /// GRANT privs TO ROLE 'name'
     pub(crate) fn parse_grant_privilege(&mut self) -> Result<DfStatement, ParserError> {
@@ -134,8 +143,29 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::GrantPrivilege(grant))
     }
 
+    /// GRANT ROLE <name> TO { ROLE <parent_role_name> | USER <user_name> }
+    pub(crate) fn parse_grant_role(&mut self) -> Result<DfStatement, ParserError> {
+        let name = self.parser.parse_literal_string()?;
+        self.parser.expect_keyword(Keyword::TO)?;
+        let principal = self.parse_principal_identity()?;
+        let grant = DfGrantRoleStatement {
+            principal,
+            role: RoleIdentity { name },
+        };
+        Ok(DfStatement::GrantRole(grant))
+    }
+
     // Revoke.
     pub(crate) fn parse_revoke(&mut self) -> Result<DfStatement, ParserError> {
+        if self.consume_token("ROLE") {
+            return self.parse_revoke_role();
+        }
+        self.parse_revoke_privilege()
+    }
+
+    /// REVOKE privs ON * FROM [USER] 'name'@'host'
+    /// REVOKE privs ON * FROM ROLE 'name'
+    pub fn parse_revoke_privilege(&mut self) -> Result<DfStatement, ParserError> {
         let privileges = self.parse_privileges()?;
         if !self.parser.parse_keyword(Keyword::ON) {
             return self.expected("keyword ON", self.parser.peek_token());
@@ -145,12 +175,24 @@ impl<'a> DfParser<'a> {
             return self.expected("keyword FROM", self.parser.peek_token());
         }
         let principal = self.parse_principal_identity()?;
-        let revoke = DfRevokeStatement {
+        let revoke = DfRevokePrivilegeStatement {
             principal,
             on,
             priv_types: privileges,
         };
         Ok(DfStatement::RevokePrivilege(revoke))
+    }
+
+    /// REVOKE ROLE <name> FROM { ROLE <parent_role_name> | USER <user_name> }
+    pub fn parse_revoke_role(&mut self) -> Result<DfStatement, ParserError> {
+        let name = self.parser.parse_literal_string()?;
+        self.parser.expect_keyword(Keyword::FROM)?;
+        let prinicpal = self.parse_principal_identity()?;
+        let revoke = DfRevokeRoleStatement {
+            principal: prinicpal,
+            role: RoleIdentity { name },
+        };
+        Ok(DfStatement::RevokeRole(revoke))
     }
 
     // Show grants.

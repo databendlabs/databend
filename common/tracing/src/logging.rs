@@ -27,6 +27,7 @@ use tracing_appender::rolling::RollingFileAppender;
 use tracing_appender::rolling::Rotation;
 use tracing_bunyan_formatter::BunyanFormattingLayer;
 use tracing_bunyan_formatter::JsonStorageLayer;
+use tracing_log::LogTracer;
 use tracing_subscriber::fmt;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
@@ -70,6 +71,9 @@ static GLOBAL_UT_LOG_GUARD: Lazy<Arc<Mutex<Option<Vec<WorkerGuard>>>>> =
 pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> Vec<WorkerGuard> {
     let mut guards = vec![];
 
+    // Enable log compatible layer to convert log record to tracing span.
+    LogTracer::init().expect("log tracer must be valid");
+
     // Stdout layer.
     let (stdout_writer, stdout_guard) = tracing_appender::non_blocking(std::io::stdout());
     let stdout_logging_layer = Layer::new().with_writer(stdout_writer);
@@ -107,6 +111,29 @@ pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> Vec<Worker
         .expect("error setting global tracing subscriber");
 
     guards
+}
+
+pub fn init_query_logger(
+    log_name: &str,
+    dir: &str,
+) -> (Vec<WorkerGuard>, Arc<dyn Subscriber + Send + Sync>) {
+    let mut guards = vec![];
+
+    let rolling_appender = RollingFileAppender::new(Rotation::HOURLY, dir, log_name);
+    let (rolling_writer, rolling_writer_guard) = tracing_appender::non_blocking(rolling_appender);
+    let format = tracing_subscriber::fmt::format()
+        .without_time()
+        .with_target(false)
+        .with_level(false)
+        .compact();
+    guards.push(rolling_writer_guard);
+
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(rolling_writer)
+        .event_format(format)
+        .finish();
+
+    (guards, Arc::new(subscriber))
 }
 
 /// Initialize unit test tracing for metasrv

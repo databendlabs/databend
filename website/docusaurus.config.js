@@ -110,7 +110,7 @@ const config = {
                         title: 'Resources',
                         items: [
                             {
-                                label: 'Developer',
+                                label: 'Develop',
                                 to: '/doc/category/develop'
                             },
                             {

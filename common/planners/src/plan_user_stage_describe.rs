@@ -21,12 +21,12 @@ pub struct DescribeUserStagePlan {
 impl DescribeUserStagePlan {
     pub fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("parent_properties", Vu8::to_data_type()),
-            DataField::new("properties", Vu8::to_data_type()),
-            DataField::new("property_types", Vu8::to_data_type()),
-            DataField::new("property_values", Vu8::to_data_type()),
-            DataField::new("property_defaults", Vu8::to_data_type()),
-            DataField::new("property_changed", bool::to_data_type()),
+            DataField::new("name", Vu8::to_data_type()),
+            DataField::new("stage_type", Vu8::to_data_type()),
+            DataField::new("stage_params", Vu8::to_data_type()),
+            DataField::new("copy_options", Vu8::to_data_type()),
+            DataField::new("file_format_options", Vu8::to_data_type()),
+            DataField::new("comment", Vu8::to_data_type()),
         ])
     }
 }

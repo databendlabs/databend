@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::UserSetting;
+use itertools::Itertools;
 
 use crate::configs::Config;
 use crate::sessions::SessionContext;
@@ -274,7 +275,7 @@ impl Settings {
         let settings = self.settings.read();
 
         let mut result = vec![];
-        for (k, v) in settings.iter() {
+        for (k, v) in settings.iter().sorted_by_key(|&(k, _)| k) {
             let res = DataValue::Struct(vec![
                 // Name.
                 DataValue::String(k.as_bytes().to_vec()),

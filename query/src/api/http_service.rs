@@ -47,6 +47,7 @@ impl HttpService {
             .at("/v1/health", get(super::http::v1::health::health_handler))
             .at("/v1/config", get(super::http::v1::config::config_handler))
             .at("/v1/logs", get(super::http::v1::logs::logs_handler))
+            .at("/v1/status", get(super::http::v1::status::status_handler))
             .at(
                 "/v1/cluster/list",
                 get(super::http::v1::cluster::cluster_list_handler),
@@ -60,7 +61,7 @@ impl HttpService {
                 get(super::http::debug::pprof::debug_pprof_handler),
             )
             .data(self.sessions.clone())
-            .data(self.sessions.get_conf().clone())
+            .data(self.sessions.get_conf())
     }
 
     fn build_tls(config: &Config) -> Result<RustlsConfig> {
@@ -78,7 +79,7 @@ impl HttpService {
     async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         tracing::info!("Http API TLS enabled");
 
-        let tls_config = Self::build_tls(self.sessions.get_conf())?;
+        let tls_config = Self::build_tls(&self.sessions.get_conf())?;
         let addr = self
             .shutdown_handler
             .start_service(listening, Some(tls_config), self.build_router())

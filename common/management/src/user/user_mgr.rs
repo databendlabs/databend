@@ -26,6 +26,7 @@ use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
+use common_meta_types::RoleIdentity;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UserInfo;
@@ -185,7 +186,7 @@ impl UserApi for UserMgr {
         }
     }
 
-    async fn grant_user_privileges(
+    async fn grant_privileges(
         &self,
         username: String,
         hostname: String,
@@ -202,7 +203,7 @@ impl UserApi for UserMgr {
         Ok(Some(seq))
     }
 
-    async fn revoke_user_privileges(
+    async fn revoke_privileges(
         &self,
         username: String,
         hostname: String,
@@ -213,6 +214,34 @@ impl UserApi for UserMgr {
         let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
         let mut user_info = user_val_seq.await?.data;
         user_info.grants.revoke_privileges(&object, privileges);
+        let seq = self.upsert_user_info(&user_info, seq).await?;
+        Ok(Some(seq))
+    }
+
+    async fn grant_role(
+        &self,
+        username: String,
+        hostname: String,
+        grant_role: RoleIdentity,
+        seq: Option<u64>,
+    ) -> Result<Option<u64>> {
+        let user_val_seq = self.get_user(username, hostname, seq);
+        let mut user_info = user_val_seq.await?.data;
+        user_info.grants.grant_role(grant_role);
+        let seq = self.upsert_user_info(&user_info, seq).await?;
+        Ok(Some(seq))
+    }
+
+    async fn revoke_role(
+        &self,
+        username: String,
+        hostname: String,
+        revoke_role: RoleIdentity,
+        seq: Option<u64>,
+    ) -> Result<Option<u64>> {
+        let user_val_seq = self.get_user(username, hostname, seq);
+        let mut user_info = user_val_seq.await?.data;
+        user_info.grants.revoke_role(&revoke_role);
         let seq = self.upsert_user_info(&user_info, seq).await?;
         Ok(Some(seq))
     }

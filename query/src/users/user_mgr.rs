@@ -16,6 +16,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
+use common_meta_types::RoleIdentity;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
 
@@ -100,7 +101,7 @@ impl UserApiProvider {
         }
     }
 
-    pub async fn grant_user_privileges(
+    pub async fn grant_privileges_to_user(
         &self,
         tenant: &str,
         username: &str,
@@ -110,7 +111,7 @@ impl UserApiProvider {
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
         client
-            .grant_user_privileges(
+            .grant_privileges(
                 username.to_string(),
                 hostname.to_string(),
                 object,
@@ -121,7 +122,7 @@ impl UserApiProvider {
             .map_err(|e| e.add_message_back("(while set user privileges)"))
     }
 
-    pub async fn revoke_user_privileges(
+    pub async fn revoke_privileges_from_user(
         &self,
         tenant: &str,
         username: &str,
@@ -131,7 +132,7 @@ impl UserApiProvider {
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
         client
-            .revoke_user_privileges(
+            .revoke_privileges(
                 username.to_string(),
                 hostname.to_string(),
                 object,
@@ -140,6 +141,44 @@ impl UserApiProvider {
             )
             .await
             .map_err(|e| e.add_message_back("(while revoke user privileges)"))
+    }
+
+    pub async fn grant_role_to_user(
+        &self,
+        tenant: &str,
+        username: &str,
+        hostname: &str,
+        grant_role: RoleIdentity,
+    ) -> Result<Option<u64>> {
+        let client = self.get_user_api_client(tenant)?;
+        client
+            .grant_role(
+                username.to_string(),
+                hostname.to_string(),
+                grant_role.clone(),
+                None,
+            )
+            .await
+            .map_err(|e| e.add_message_back("(while grant role to user)"))
+    }
+
+    pub async fn revoke_role_from_user(
+        &self,
+        tenant: &str,
+        username: &str,
+        hostname: &str,
+        revoke_role: RoleIdentity,
+    ) -> Result<Option<u64>> {
+        let client = self.get_user_api_client(tenant)?;
+        client
+            .revoke_role(
+                username.to_string(),
+                hostname.to_string(),
+                revoke_role.clone(),
+                None,
+            )
+            .await
+            .map_err(|e| e.add_message_back("(while revoke role from user)"))
     }
 
     // Drop a user by name and hostname.

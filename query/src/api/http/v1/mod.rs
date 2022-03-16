@@ -16,3 +16,4 @@ pub mod cluster;
 pub mod config;
 pub mod health;
 pub mod logs;
+pub mod status;

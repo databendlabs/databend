@@ -35,6 +35,7 @@ use crate::servers::clickhouse::reject_connection::RejectCHConnection;
 use crate::servers::server::ListeningStream;
 use crate::servers::server::Server;
 use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 
 pub struct ClickHouseHandler {
     sessions: Arc<SessionManager>,
@@ -88,7 +89,7 @@ impl ClickHouseHandler {
 
     fn accept_socket(sessions: Arc<SessionManager>, executor: Arc<Runtime>, socket: TcpStream) {
         executor.spawn(async move {
-            match sessions.create_session("ClickHouseSession").await {
+            match sessions.create_session(SessionType::Clickhouse).await {
                 Err(error) => Self::reject_connection(socket, error).await,
                 Ok(session) => {
                     tracing::info!("ClickHouse connection coming: {:?}", socket.peer_addr());

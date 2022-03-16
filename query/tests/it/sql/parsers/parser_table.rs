@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_exception::Result;
 use databend_query::sql::statements::DfCreateTable;
 use databend_query::sql::statements::DfDescribeTable;
 use databend_query::sql::statements::DfDropTable;
 use databend_query::sql::statements::DfQueryStatement;
+use databend_query::sql::statements::DfRenameTable;
 use databend_query::sql::statements::DfShowCreateTable;
 use databend_query::sql::statements::DfTruncateTable;
 use databend_query::sql::*;
@@ -182,6 +185,22 @@ fn drop_table() -> Result<()> {
             if_exists: true,
             name: ObjectName(vec![Ident::new("t1")]),
         });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn rename_table() -> Result<()> {
+    {
+        let sql = "RENAME TABLE t1 TO t2";
+        let mut name_map = HashMap::new();
+        name_map.insert(
+            ObjectName(vec![Ident::new("t1")]),
+            ObjectName(vec![Ident::new("t2")]),
+        );
+        let expected = DfStatement::RenameTable(DfRenameTable { name_map });
         expect_parse_ok(sql, expected)?;
     }
 

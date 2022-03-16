@@ -21,6 +21,7 @@ use common_meta_types::UserStageInfo;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateUserStagePlan {
     pub if_not_exists: bool,
+    pub tenant: String,
     pub user_stage_info: UserStageInfo,
 }
 

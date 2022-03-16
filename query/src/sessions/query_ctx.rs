@@ -275,7 +275,7 @@ impl QueryContext {
     }
 
     pub fn get_config(&self) -> Config {
-        self.shared.conf.clone()
+        self.shared.get_config()
     }
 
     pub fn get_tenant(&self) -> String {
@@ -339,7 +339,7 @@ impl QueryContext {
     }
 
     /// Get the storage cache manager
-    pub fn get_storage_cache_manager(&self) -> &CacheManager {
+    pub fn get_storage_cache_manager(&self) -> Arc<CacheManager> {
         self.shared.session.session_mgr.get_storage_cache_manager()
     }
 
@@ -355,6 +355,14 @@ impl QueryContext {
 
     pub fn get_storage_runtime(&self) -> &Runtime {
         self.shared.session.session_mgr.get_storage_runtime()
+    }
+
+    pub async fn reload_config(&self) -> Result<()> {
+        self.shared.reload_config().await
+    }
+
+    pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
+        self.shared.session.session_mgr.get_query_logger()
     }
 }
 

@@ -26,7 +26,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_metrics::label_counter;
+use common_tracing::init_query_logger;
 use common_tracing::tracing;
+use common_tracing::tracing_appender::non_blocking::WorkerGuard;
 use futures::future::Either;
 use futures::StreamExt;
 use opendal::credential::Credential;
@@ -43,23 +45,29 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 use crate::sessions::ProcessInfo;
+use crate::sessions::SessionType;
+use crate::sessions::Status;
 use crate::storages::cache::CacheManager;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::UserApiProvider;
 
 pub struct SessionManager {
-    pub(in crate::sessions) conf: Config,
-    pub(in crate::sessions) discovery: Arc<ClusterDiscovery>,
-    pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
-    pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
-    pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
+    pub(in crate::sessions) conf: RwLock<Config>,
+    pub(in crate::sessions) discovery: RwLock<Arc<ClusterDiscovery>>,
+    pub(in crate::sessions) catalog: RwLock<Arc<DatabaseCatalog>>,
+    pub(in crate::sessions) user_manager: RwLock<Arc<UserApiProvider>>,
+    pub(in crate::sessions) auth_manager: RwLock<Arc<AuthMgr>>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
-    pub(in crate::sessions) storage_cache_manager: Arc<CacheManager>,
-    storage_operator: Operator,
+    pub(in crate::sessions) storage_cache_manager: RwLock<Arc<CacheManager>>,
+    pub(in crate::sessions) query_logger:
+        RwLock<Option<Arc<dyn tracing::Subscriber + Send + Sync>>>,
+    pub status: Arc<RwLock<Status>>,
+    storage_operator: RwLock<Operator>,
     storage_runtime: Runtime,
+    _guards: Vec<WorkerGuard>,
 }
 
 impl SessionManager {
@@ -85,28 +93,40 @@ impl SessionManager {
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
         let max_sessions = conf.query.max_active_sessions as usize;
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
+        let status = Arc::new(RwLock::new(Default::default()));
+
+        let (_guards, query_logger) = if conf.log.log_query_enabled {
+            let (_guards, query_logger) =
+                init_query_logger("query-detail", conf.log.log_dir.as_str());
+            (_guards, Some(query_logger))
+        } else {
+            (Vec::new(), None)
+        };
 
         Ok(Arc::new(SessionManager {
-            catalog,
-            conf,
-            discovery,
-            user_manager: user,
+            conf: RwLock::new(conf),
+            catalog: RwLock::new(catalog),
+            discovery: RwLock::new(discovery),
+            user_manager: RwLock::new(user),
             http_query_manager,
-            auth_manager,
             max_sessions,
             active_sessions,
-            storage_cache_manager,
-            storage_operator: storage_accessor,
+            auth_manager: RwLock::new(auth_manager),
+            storage_cache_manager: RwLock::new(storage_cache_manager),
+            query_logger: RwLock::new(query_logger),
+            status,
+            storage_operator: RwLock::new(storage_accessor),
             storage_runtime,
+            _guards,
         }))
     }
 
-    pub fn get_conf(&self) -> &Config {
-        &self.conf
+    pub fn get_conf(&self) -> Config {
+        self.conf.read().clone()
     }
 
     pub fn get_cluster_discovery(self: &Arc<Self>) -> Arc<ClusterDiscovery> {
-        self.discovery.clone()
+        self.discovery.read().clone()
     }
 
     pub fn get_http_query_manager(self: &Arc<Self>) -> Arc<HttpQueryManager> {
@@ -114,31 +134,33 @@ impl SessionManager {
     }
 
     pub fn get_auth_manager(self: &Arc<Self>) -> Arc<AuthMgr> {
-        self.auth_manager.clone()
+        self.auth_manager.read().clone()
     }
 
     /// Get the user api provider.
     pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
-        self.user_manager.clone()
+        self.user_manager.read().clone()
     }
 
     pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
-        self.catalog.clone()
+        self.catalog.read().clone()
     }
 
     pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
-        self.storage_operator.clone()
+        self.storage_operator.read().clone()
     }
 
-    pub fn get_storage_cache_manager(&self) -> &CacheManager {
-        self.storage_cache_manager.as_ref()
+    pub fn get_storage_cache_manager(&self) -> Arc<CacheManager> {
+        self.storage_cache_manager.read().clone()
     }
 
     pub fn get_storage_runtime<'a>(self: &'a Arc<Self>) -> &'a Runtime {
         &self.storage_runtime
     }
 
-    pub async fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
+    pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<SessionRef> {
+        // TODO: maybe deadlock
+        let config = self.get_config();
         {
             let sessions = self.active_sessions.read();
             if sessions.len() == self.max_sessions {
@@ -148,9 +170,9 @@ impl SessionManager {
             }
         }
         let session = Session::try_create(
-            self.conf.clone(),
+            config.clone(),
             uuid::Uuid::new_v4().to_string(),
-            typ.into(),
+            typ,
             self.clone(),
         )
         .await?;
@@ -159,8 +181,8 @@ impl SessionManager {
         if sessions.len() < self.max_sessions {
             label_counter(
                 super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
-                &self.conf.query.tenant_id,
-                &self.conf.query.cluster_id,
+                &config.query.tenant_id,
+                &config.query.cluster_id,
             );
 
             sessions.insert(session.get_id(), session.clone());
@@ -178,6 +200,8 @@ impl SessionManager {
         id: String,
         aborted: bool,
     ) -> Result<SessionRef> {
+        // TODO: maybe deadlock?
+        let config = self.get_config();
         {
             let sessions = self.active_sessions.read();
             let v = sessions.get(&id);
@@ -187,9 +211,9 @@ impl SessionManager {
         }
 
         let session = Session::try_create(
-            self.conf.clone(),
+            config.clone(),
             id.clone(),
-            String::from("RPCSession"),
+            SessionType::FlightRPC,
             self.clone(),
         )
         .await?;
@@ -203,8 +227,8 @@ impl SessionManager {
 
             label_counter(
                 super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
-                &self.conf.query.tenant_id,
-                &self.conf.query.cluster_id,
+                &config.query.tenant_id,
+                &config.query.cluster_id,
             );
 
             sessions.insert(id, session.clone());
@@ -224,10 +248,11 @@ impl SessionManager {
 
     #[allow(clippy::ptr_arg)]
     pub fn destroy_session(self: &Arc<Self>, session_id: &String) {
+        let config = self.get_config();
         label_counter(
             super::metrics::METRIC_SESSION_CLOSE_NUMBERS,
-            &self.conf.query.tenant_id,
-            &self.conf.query.cluster_id,
+            &config.query.tenant_id,
+            &config.query.cluster_id,
         );
 
         let mut sessions = self.active_sessions.write();
@@ -353,5 +378,52 @@ impl SessionManager {
         };
 
         Ok(Operator::new(accessor))
+    }
+
+    pub fn get_config(&self) -> Config {
+        self.conf.read().clone()
+    }
+
+    pub async fn reload_config(&self) -> Result<()> {
+        let config = {
+            let mut config = self.conf.write();
+            let config_file = config.config_file.clone();
+            *config = Config::load_from_toml(&config_file)?;
+            config.config_file = config_file;
+            config.clone()
+        };
+
+        {
+            let catalog = DatabaseCatalog::try_create_with_config(config.clone()).await?;
+            *self.catalog.write() = Arc::new(catalog);
+        }
+
+        *self.storage_cache_manager.write() = Arc::new(CacheManager::init(&config.query));
+
+        {
+            let operator = Self::init_storage_operator(&config).await?;
+            *self.storage_operator.write() = operator;
+        }
+
+        {
+            let discovery = ClusterDiscovery::create_global(config.clone()).await?;
+            *self.discovery.write() = discovery;
+        }
+
+        // User manager and init the default users.
+        let user = {
+            let user = UserApiProvider::create_global(config.clone()).await?;
+            *self.user_manager.write() = user.clone();
+            user
+        };
+
+        let auth_mgr = AuthMgr::create(config.clone(), user).await?;
+        *self.auth_manager.write() = Arc::new(auth_mgr);
+
+        Ok(())
+    }
+
+    pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
+        self.query_logger.write().to_owned()
     }
 }

@@ -36,7 +36,7 @@ use sqlparser::ast::Query;
 use sqlparser::ast::UnaryOperator;
 use sqlparser::ast::Value;
 
-use crate::functions::ContextFunction;
+use crate::procedures::ContextFunction;
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_value_expr::ValueExprAnalyzer;
 use crate::sql::statements::AnalyzableStatement;

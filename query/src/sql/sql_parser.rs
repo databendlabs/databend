@@ -160,12 +160,13 @@ impl<'a> DfParser<'a> {
                         self.parse_show()
                     }
                     Keyword::TRUNCATE => self.parse_truncate(),
+                    Keyword::RENAME => self.parse_rename(),
                     Keyword::SET => self.parse_set(),
                     Keyword::INSERT => self.parse_insert(),
                     Keyword::SELECT | Keyword::WITH | Keyword::VALUES => self.parse_query(),
                     Keyword::GRANT => {
                         self.parser.next_token();
-                        self.parse_grant_privilege()
+                        self.parse_grant()
                     }
                     Keyword::REVOKE => {
                         self.parser.next_token();
@@ -205,6 +206,7 @@ impl<'a> DfParser<'a> {
                     Keyword::USER => self.parse_create_user(),
                     Keyword::ROLE => self.parse_create_role(),
                     Keyword::FUNCTION => self.parse_create_udf(),
+                    Keyword::STAGE => self.parse_create_stage(),
                     _ => self.expected("create statement", Token::Word(w)),
                 }
             }
@@ -273,11 +275,26 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_describe(&mut self) -> Result<DfStatement, ParserError> {
-        self.consume_token("table");
-        self.parse_desc_table()
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TABLE => self.parse_desc_table(),
+                Keyword::STAGE => self.parse_desc_stage(),
+
+                _ => {
+                    self.parser.prev_token();
+                    self.parse_desc_table()
+                }
+            },
+            unexpected => self.expected("describe statement", unexpected),
+        }
     }
 
-    /// Drop database/table.
+    fn parse_rename(&mut self) -> Result<DfStatement, ParserError> {
+        self.parser.next_token();
+        self.parse_rename_table()
+    }
+
+    /// Drop database/table/stage.
     fn parse_drop(&mut self) -> Result<DfStatement, ParserError> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
@@ -286,6 +303,7 @@ impl<'a> DfParser<'a> {
                 Keyword::USER => self.parse_drop_user(),
                 Keyword::ROLE => self.parse_drop_role(),
                 Keyword::FUNCTION => self.parse_drop_udf(),
+                Keyword::STAGE => self.parse_drop_stage(),
                 _ => self.expected("drop statement", Token::Word(w)),
             },
             unexpected => self.expected("drop statement", unexpected),

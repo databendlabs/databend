@@ -21,22 +21,22 @@ const CACHE_READ_BYTES_FROM_LOCAL: &str = "cache_read_bytes_from_local";
 const CACHE_ACCESS_COUNT: &str = "cache_access_count";
 const CACHE_ACCESS_HIT_COUNT: &str = "cache_access_hit_count";
 
-pub struct TenantLabel<'a> {
-    pub tenant_id: &'a str,
-    pub cluster_id: &'a str,
+pub struct TenantLabel {
+    pub tenant_id: String,
+    pub cluster_id: String,
 }
 
-pub struct CacheDeferMetrics<'a> {
-    pub tenant_label: TenantLabel<'a>,
+pub struct CacheDeferMetrics {
+    pub tenant_label: TenantLabel,
     pub cache_hit: bool,
     pub read_bytes: u64,
 }
 
-impl Drop for CacheDeferMetrics<'_> {
+impl Drop for CacheDeferMetrics {
     fn drop(&mut self) {
         let label = &self.tenant_label;
-        let tenant_id = label.tenant_id;
-        let cluster_id = label.cluster_id;
+        let tenant_id = &label.tenant_id;
+        let cluster_id = &label.cluster_id;
 
         label_counter(CACHE_ACCESS_COUNT, tenant_id, cluster_id);
         if self.cache_hit {

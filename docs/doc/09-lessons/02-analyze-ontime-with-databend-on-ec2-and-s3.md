@@ -7,7 +7,7 @@ Analyzing `OnTime` datasets on AWS EC2 and S3 with Databend step by step.
 
 ## Step 1. Deploy Databend
 
-Install databend, see [deploy Databend with AWS S3](../01-deploy/01_s3.md).
+Install databend, see [How to Deploy Databend with AWS S3](../01-deploy/01_s3.md).
 
 ## Step 2. Load OnTime Datasets
 
@@ -180,3 +180,8 @@ All Queries:
 | Q12  |SELECT OriginCityName, DestCityName, count(*) AS c FROM ontime GROUP BY OriginCityName, DestCityName ORDER BY c DESC LIMIT 10;     |
 | Q13  |SELECT OriginCityName, count(*) AS c FROM ontime GROUP BY OriginCityName ORDER BY c DESC LIMIT 10;      |
 | Q14  |SELECT count(*) FROM ontime;     |
+
+
+## Reference
+
+[Databend Ontime Datasets Benchmark Report](../07-performance/02_ec2-s3-performance.md)

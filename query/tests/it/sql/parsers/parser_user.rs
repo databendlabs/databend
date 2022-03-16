@@ -26,7 +26,8 @@ use databend_query::sql::statements::DfDropRole;
 use databend_query::sql::statements::DfDropUser;
 use databend_query::sql::statements::DfGrantObject;
 use databend_query::sql::statements::DfGrantPrivilegeStatement;
-use databend_query::sql::statements::DfRevokeStatement;
+use databend_query::sql::statements::DfGrantRoleStatement;
+use databend_query::sql::statements::DfRevokePrivilegeStatement;
 use databend_query::sql::statements::DfShowGrants;
 use databend_query::sql::*;
 
@@ -436,7 +437,7 @@ fn grant_privilege_test() -> Result<()> {
 fn revoke_privilege_test() -> Result<()> {
     expect_parse_ok(
         "REVOKE ALL ON * FROM 'test'@'localhost'",
-        DfStatement::RevokePrivilege(DfRevokeStatement {
+        DfStatement::RevokePrivilege(DfRevokePrivilegeStatement {
             principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
             on: DfGrantObject::Database(None),
             priv_types: UserPrivilegeSet::all_privileges(),
@@ -496,6 +497,49 @@ fn drop_role_test() -> Result<()> {
                 name: String::from("test"),
             },
         }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn grant_role_test() -> Result<()> {
+    // grant role to user without hostname
+    expect_parse_ok(
+        "GRANT ROLE 'test' TO 'test'",
+        DfStatement::GrantRole(DfGrantRoleStatement {
+            principal: PrincipalIdentity::user("test".to_string(), "%".to_string()),
+            role: RoleIdentity {
+                name: String::from("test"),
+            },
+        }),
+    )?;
+    //
+    // grant role to user
+    expect_parse_ok(
+        "GRANT ROLE 'test' TO USER 'test'@'localhost'",
+        DfStatement::GrantRole(DfGrantRoleStatement {
+            principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
+            role: RoleIdentity {
+                name: String::from("test"),
+            },
+        }),
+    )?;
+
+    // grant role to role
+    expect_parse_ok(
+        "GRANT ROLE 'test' TO ROLE 'test'",
+        DfStatement::GrantRole(DfGrantRoleStatement {
+            principal: PrincipalIdentity::role("test".to_string()),
+            role: RoleIdentity {
+                name: String::from("test"),
+            },
+        }),
+    )?;
+
+    expect_parse_err(
+        "GRANT ROLE 'test' TO ROLE 'test'@'localhost'",
+        String::from("sql parser error: Expected end of statement, found: @"),
     )?;
 
     Ok(())

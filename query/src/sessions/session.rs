@@ -32,14 +32,14 @@ use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 use crate::sessions::Settings;
 
 #[derive(Clone, MallocSizeOf)]
 pub struct Session {
     pub(in crate::sessions) id: String,
-    pub(in crate::sessions) typ: String,
     #[ignore_malloc_size_of = "insignificant"]
-    pub(in crate::sessions) conf: Config,
+    pub(in crate::sessions) typ: SessionType,
     #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) session_mgr: Arc<SessionManager>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
@@ -52,7 +52,7 @@ impl Session {
     pub async fn try_create(
         conf: Config,
         id: String,
-        typ: String,
+        typ: SessionType,
         session_mgr: Arc<SessionManager>,
     ) -> Result<Arc<Session>> {
         let session_ctx = Arc::new(SessionContext::try_create(conf.clone())?);
@@ -63,7 +63,6 @@ impl Session {
         Ok(Arc::new(Session {
             id,
             typ,
-            conf,
             session_mgr,
             ref_count,
             session_ctx,
@@ -75,7 +74,7 @@ impl Session {
         self.id.clone()
     }
 
-    pub fn get_type(self: &Arc<Self>) -> String {
+    pub fn get_type(self: &Arc<Self>) -> SessionType {
         self.typ.clone()
     }
 
@@ -124,12 +123,11 @@ impl Session {
         Ok(match query_ctx_shared.as_ref() {
             Some(shared) => shared.clone(),
             None => {
-                let config = self.conf.clone();
                 let discovery = self.session_mgr.get_cluster_discovery();
 
                 let session = self.clone();
                 let cluster = discovery.discover().await?;
-                let shared = QueryContextShared::try_create(config, session, cluster).await?;
+                let shared = QueryContextShared::try_create(session, cluster).await?;
 
                 let query_ctx = self.session_ctx.get_query_context_shared();
                 match query_ctx.as_ref() {
@@ -231,5 +229,9 @@ impl Session {
 
     pub fn get_storage_operator(self: &Arc<Self>) -> Operator {
         self.session_mgr.get_storage_operator()
+    }
+
+    pub fn get_config(&self) -> Config {
+        self.session_mgr.get_config()
     }
 }

@@ -212,12 +212,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-task"
-version = "4.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e91831deabf0d6d7ec49552e489aed63b7456a7a3c46cff62adad428110b0af0"
-
-[[package]]
 name = "async-trait"
 version = "0.1.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -236,12 +230,6 @@ checksum = "67cd4b51d303cf3501c301e8125df442128d3c6d7c69f71b27833d253de47e77"
 dependencies = [
  "crossbeam-utils",
 ]
-
-[[package]]
-name = "atomic-waker"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "065374052e7df7ee4047b1160cca5e1467a12351a40b3da123c870ba0b8eda2a"
 
 [[package]]
 name = "atty"
@@ -729,20 +717,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "blocking"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "046e47d4b2d391b1f6f8b407b1deb8dee56c1852ccd868becf2710f601b5f427"
-dependencies = [
- "async-channel",
- "async-task",
- "atomic-waker",
- "fastrand",
- "futures-lite",
- "once_cell",
-]
-
-[[package]]
 name = "bstr"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1097,7 +1071,6 @@ dependencies = [
  "logos",
  "nom",
  "nom-rule",
- "once_cell",
  "pratt",
  "pretty_assertions",
  "sqlparser",
@@ -1132,7 +1105,6 @@ dependencies = [
 name = "common-cache"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "common-exception",
  "common-tracing",
  "filetime",
@@ -1140,39 +1112,6 @@ dependencies = [
  "ritelinked",
  "tempfile",
  "walkdir",
-]
-
-[[package]]
-name = "common-clickhouse-srv"
-version = "0.3.2"
-dependencies = [
- "async-trait",
- "byteorder",
- "bytes",
- "chrono",
- "chrono-tz",
- "combine",
- "common-io",
- "common-tracing",
- "futures",
- "futures-core",
- "futures-sink",
- "futures-util",
- "hostname",
- "log",
- "lz4",
- "naive-cityhash",
- "native-tls",
- "once_cell",
- "pin-project",
- "rand 0.8.5",
- "thiserror",
- "tokio",
- "tokio-native-tls",
- "tokio-stream",
- "tokio-util 0.7.0",
- "url",
- "uuid",
 ]
 
 [[package]]
@@ -1203,10 +1142,8 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-infallible",
- "common-io",
  "pretty_assertions",
  "regex",
- "smallvec",
 ]
 
 [[package]]
@@ -1216,7 +1153,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "common-arrow",
- "common-clickhouse-srv",
  "common-exception",
  "common-io",
  "common-macros",
@@ -1227,6 +1163,7 @@ dependencies = [
  "lexical-core",
  "num",
  "once_cell",
+ "opensrv-clickhouse",
  "ordered-float 2.10.0",
  "paste",
  "pretty_assertions",
@@ -1282,16 +1219,13 @@ dependencies = [
  "num-traits",
  "once_cell",
  "ordered-float 2.10.0",
- "paste",
  "pretty_assertions",
  "rand 0.8.5",
  "regex",
  "serde",
- "serde_json",
  "sha1",
  "sha2 0.10.2",
  "simdutf8",
- "sqlparser",
  "strength_reduce",
  "twox-hash",
  "uuid",
@@ -1302,20 +1236,14 @@ name = "common-grpc"
 version = "0.1.0"
 dependencies = [
  "anyerror",
- "async-trait",
- "common-arrow",
  "common-base",
  "common-exception",
  "common-tracing",
- "futures",
  "hyper",
  "jwt-simple",
  "once_cell",
- "prost",
  "serde",
- "serde_json",
  "thiserror",
- "tokio-stream",
  "tonic",
  "trust-dns-resolver",
 ]
@@ -1363,11 +1291,8 @@ dependencies = [
  "common-meta-api",
  "common-meta-embedded",
  "common-meta-types",
- "common-tracing",
  "mockall",
- "serde",
  "serde_json",
- "tempfile",
 ]
 
 [[package]]
@@ -1392,7 +1317,6 @@ dependencies = [
  "common-exception",
  "common-meta-types",
  "common-tracing",
- "futures",
  "maplit",
 ]
 
@@ -1402,7 +1326,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "common-arrow",
  "common-base",
  "common-exception",
  "common-meta-api",
@@ -1410,8 +1333,6 @@ dependencies = [
  "common-meta-sled-store",
  "common-meta-types",
  "common-tracing",
- "derive_more",
- "futures",
  "once_cell",
  "tempfile",
 ]
@@ -1434,8 +1355,6 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "tempfile",
- "thiserror",
  "tonic",
 ]
 
@@ -1447,7 +1366,6 @@ dependencies = [
  "async-trait",
  "bytes",
  "clap 3.1.3",
- "common-arrow",
  "common-base",
  "common-exception",
  "common-grpc",
@@ -1457,18 +1375,14 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "derive_more",
- "futures",
  "hostname",
  "maplit",
  "once_cell",
  "pretty_assertions",
- "prost",
  "rand 0.8.5",
  "serde",
  "serde_json",
  "tempfile",
- "thiserror",
- "tonic",
 ]
 
 [[package]]
@@ -1478,7 +1392,6 @@ dependencies = [
  "anyhow",
  "byteorder",
  "common-base",
- "common-exception",
  "common-meta-types",
  "common-tracing",
  "once_cell",
@@ -1501,7 +1414,6 @@ dependencies = [
  "derive_more",
  "enumflags2",
  "hex",
- "lazy_static",
  "maplit",
  "nanoid",
  "once_cell",
@@ -1542,9 +1454,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-infallible",
  "common-meta-types",
- "futures",
  "once_cell",
  "pretty_assertions",
  "serde",
@@ -1564,14 +1474,12 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-io",
  "common-tracing",
  "csv-async",
  "futures",
  "opendal",
  "pin-project-lite",
  "tempfile",
- "tokio-stream",
 ]
 
 [[package]]
@@ -1588,6 +1496,7 @@ dependencies = [
  "tracing-appender",
  "tracing-bunyan-formatter",
  "tracing-futures",
+ "tracing-log",
  "tracing-opentelemetry",
  "tracing-subscriber",
 ]
@@ -1978,16 +1887,12 @@ dependencies = [
  "anyerror",
  "anyhow",
  "async-trait",
- "backtrace",
- "byteorder",
  "clap 3.1.3",
  "common-arrow",
  "common-base",
- "common-building",
  "common-containers",
  "common-exception",
  "common-grpc",
- "common-infallible",
  "common-macros",
  "common-meta-api",
  "common-meta-grpc",
@@ -1996,32 +1901,22 @@ dependencies = [
  "common-meta-types",
  "common-metrics",
  "common-tracing",
- "derive_more",
  "futures",
  "maplit",
  "metrics",
- "metrics-exporter-prometheus",
  "num",
- "num_cpus",
  "poem",
  "pretty_assertions",
  "prost",
- "rand 0.8.5",
  "regex",
  "reqwest",
  "serde",
  "serde_json",
- "sha2 0.10.2",
  "sled",
  "tempfile",
- "thiserror",
- "threadpool",
  "tokio-stream",
- "tokio-util 0.7.0",
  "toml",
  "tonic",
- "tonic-build",
- "uuid",
 ]
 
 [[package]]
@@ -2066,7 +1961,6 @@ dependencies = [
  "common-base",
  "common-building",
  "common-cache",
- "common-clickhouse-srv",
  "common-contexts",
  "common-datablocks",
  "common-datavalues",
@@ -2094,10 +1988,10 @@ dependencies = [
  "headers",
  "http",
  "hyper",
+ "itertools",
  "jwt-simple",
  "maplit",
  "metrics",
- "msql-srv",
  "mysql_async",
  "nom",
  "num",
@@ -2105,6 +1999,8 @@ dependencies = [
  "octocrab",
  "once_cell",
  "opendal",
+ "opensrv-clickhouse",
+ "opensrv-mysql",
  "parquet-format-async-temp",
  "paste",
  "petgraph",
@@ -3488,7 +3384,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
 dependencies = [
  "cfg-if",
- "serde",
 ]
 
 [[package]]
@@ -3754,19 +3649,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "msql-srv"
-version = "0.9.6"
-source = "git+https://github.com/datafuse-extras/msql-srv?rev=af29f7b#af29f7b4a3bb7d738b91afa7a00c9dd5673f0c0a"
-dependencies = [
- "async-trait",
- "byteorder",
- "chrono",
- "mysql_common",
- "nom",
- "tokio",
 ]
 
 [[package]]
@@ -4154,11 +4036,12 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.2.0"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "704b149654ed7a9b5c58a1927982244b4d6420f72ad1b86b6ff0e7fe50569838"
+checksum = "c582a0421468c2061d3487f3a6049e3d2ba1407841041839b72546c8a1700b19"
 dependencies = [
  "anyhow",
+ "async-compat",
  "async-trait",
  "aws-config",
  "aws-endpoint",
@@ -4170,15 +4053,17 @@ dependencies = [
  "aws-smithy-http",
  "aws-smithy-http-tower",
  "aws-types",
- "blocking",
  "bytes",
  "futures",
  "http",
  "hyper",
+ "log",
+ "metrics",
  "once_cell",
  "pin-project",
  "reqwest",
  "thiserror",
+ "tokio",
  "tower",
 ]
 
@@ -4202,6 +4087,46 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-futures",
+]
+
+[[package]]
+name = "opensrv-clickhouse"
+version = "0.1.0"
+source = "git+https://github.com/datafuselabs/opensrv?rev=9690be9#9690be9ff965c0e86e1ff599897c2019b0a379bd"
+dependencies = [
+ "async-trait",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "chrono-tz",
+ "combine",
+ "futures",
+ "futures-core",
+ "futures-sink",
+ "futures-util",
+ "hostname",
+ "lz4",
+ "naive-cityhash",
+ "once_cell",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "opensrv-mysql"
+version = "0.1.0"
+source = "git+https://github.com/datafuselabs/opensrv?rev=9690be9#9690be9ff965c0e86e1ff599897c2019b0a379bd"
+dependencies = [
+ "async-trait",
+ "byteorder",
+ "chrono",
+ "mysql_common",
+ "nom",
+ "tokio",
 ]
 
 [[package]]
@@ -5637,7 +5562,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=472f5b6#472f5b694b4f8e369dabdf9aa6767dde2a47cbdc"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=64795ad#64795ad8157bfab18c6e325c10076700bc24204b"
 dependencies = [
  "log",
 ]
@@ -6047,12 +5972,9 @@ checksum = "64910e1b9c1901aaf5375561e35b9c057d95ff41a44ede043a03e09279eabaf1"
 dependencies = [
  "bytes",
  "futures-core",
- "futures-io",
  "futures-sink",
- "futures-util",
  "log",
  "pin-project-lite",
- "slab",
  "tokio",
 ]
 

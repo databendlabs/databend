@@ -12,6 +12,6 @@ CREATE DATABASE <database_name>
 
 ## Examples
 
-```sql
-mysql> CREATE DATABASE test;
+```sql title='msyql>'
+CREATE DATABASE test;
 ```
