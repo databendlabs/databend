@@ -98,47 +98,60 @@ impl FuseTable {
     ) -> Result<()> {
         let block_reader = self.create_block_reader(&ctx, &plan.push_downs)?;
 
+        let parts_len = plan.parts.len();
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = std::cmp::min(parts_len, max_threads);
+
         let mut source_builder = SourcePipeBuilder::create();
-        for part in &plan.parts {
+
+        for _index in 0..std::cmp::max(1, max_threads) {
             let output = OutputPort::create();
             source_builder.add_source(
                 output.clone(),
-                FuseTableSource::create(output, block_reader.clone(), part.clone())?,
+                FuseTableSource::create(ctx.clone(), output, block_reader.clone())?,
             );
         }
 
         pipeline.add_pipe(source_builder.finalize());
-        pipeline.resize(ctx.get_settings().get_max_threads()? as usize)?;
         Ok(())
     }
 }
 
 enum State {
-    ReadData,
-    Deserialize(Vec<Vec<u8>>),
-    Generated(DataBlock),
+    ReadData(PartInfoPtr),
+    Deserialize(PartInfoPtr, Vec<Vec<u8>>),
+    Generated(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
 
 struct FuseTableSource {
     state: State,
-    part: PartInfoPtr,
+    ctx: Arc<QueryContext>,
     block_reader: Arc<BlockReader>,
     output: Arc<OutputPort>,
 }
 
 impl FuseTableSource {
     pub fn create(
+        ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
-        part: PartInfoPtr,
     ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(FuseTableSource {
-            state: State::ReadData,
-            part,
-            block_reader,
-            output,
-        })))
+        let mut partitions = ctx.try_get_partitions(1)?;
+        match partitions.is_empty() {
+            true => Ok(ProcessorPtr::create(Box::new(FuseTableSource {
+                ctx,
+                output,
+                block_reader,
+                state: State::Finish,
+            }))),
+            false => Ok(ProcessorPtr::create(Box::new(FuseTableSource {
+                ctx,
+                output,
+                block_reader,
+                state: State::ReadData(partitions.remove(0)),
+            }))),
+        }
     }
 }
 
@@ -162,10 +175,13 @@ impl Processor for FuseTableSource {
             return Ok(Event::NeedConsume);
         }
 
-        if matches!(self.state, State::Generated(_)) {
-            println!("Generated");
-            if let Generated(data_block) = std::mem::replace(&mut self.state, State::Finish) {
-                println!("Generated {:?}", data_block);
+        if matches!(self.state, State::Generated(_, _)) {
+            if let Generated(part, data_block) = std::mem::replace(&mut self.state, State::Finish) {
+                self.state = match part {
+                    None => State::Finish,
+                    Some(part) => State::ReadData(part),
+                };
+
                 self.output.push_data(Ok(data_block));
                 return Ok(Event::NeedConsume);
             }
@@ -173,27 +189,36 @@ impl Processor for FuseTableSource {
 
         match self.state {
             State::Finish => Ok(Event::Finished),
-            State::ReadData => Ok(Event::Async),
-            State::Deserialize(_) => Ok(Event::Sync),
-            State::Generated(_) => Err(ErrorCode::LogicalError("It's a bug.")),
+            State::ReadData(_) => Ok(Event::Async),
+            State::Deserialize(_, _) => Ok(Event::Sync),
+            State::Generated(_, _) => Err(ErrorCode::LogicalError("It's a bug.")),
         }
     }
 
     fn process(&mut self) -> Result<()> {
-        if let State::Deserialize(chunks) = std::mem::replace(&mut self.state, State::ReadData) {
-            let part = self.part.clone();
-            self.state = State::Generated(self.block_reader.deserialize(part, chunks)?);
-        }
+        match std::mem::replace(&mut self.state, State::Finish) {
+            State::Deserialize(part, chunks) => {
+                let data_block = self.block_reader.deserialize(part, chunks)?;
+                let mut partitions = self.ctx.try_get_partitions(1)?;
 
-        Ok(())
+                self.state = match partitions.is_empty() {
+                    true => State::Generated(None, data_block),
+                    false => State::Generated(Some(partitions.remove(0)), data_block),
+                };
+                Ok(())
+            }
+            _ => Err(ErrorCode::LogicalError("It's a bug.")),
+        }
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        if let State::ReadData = self.state {
-            let part = self.part.clone();
-            self.state = State::Deserialize(self.block_reader.read_columns_data(part).await?);
+        match std::mem::replace(&mut self.state, State::Finish) {
+            State::ReadData(part) => {
+                let chunks = self.block_reader.read_columns_data(part.clone()).await?;
+                self.state = State::Deserialize(part, chunks);
+                Ok(())
+            }
+            _ => Err(ErrorCode::LogicalError("It's a bug.")),
         }
-
-        Ok(())
     }
 }
