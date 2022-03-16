@@ -55,7 +55,7 @@ common-tracing = { path = "../common/tracing" }
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
 cargo-license = { git = "https://github.com/datafuse-extras/cargo-license", rev = "f1ce4a2" }
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "af29f7b" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "64795ad" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "0b1b0d7" }
 
 # Crates.io dependencies
 ahash = "0.7.6"

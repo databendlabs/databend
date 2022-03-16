@@ -48,6 +48,7 @@ use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
+use crate::ListPlan;
 use crate::OptimizeTablePlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
@@ -173,6 +174,7 @@ pub trait PlanVisitor {
             PlanNode::CreateUserStage(plan) => self.visit_create_user_stage(plan),
             PlanNode::DropUserStage(plan) => self.visit_drop_user_stage(plan),
             PlanNode::DescribeUserStage(plan) => self.visit_describe_user_stage(plan),
+            PlanNode::List(plan) => self.visit_list(plan),
 
             // UDF.
             PlanNode::CreateUserUDF(plan) => self.visit_create_user_udf(plan),
@@ -346,6 +348,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_describe_user_stage(&mut self, _: &DescribeUserStagePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_list(&mut self, _: &ListPlan) -> Result<()> {
         Ok(())
     }
 

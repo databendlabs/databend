@@ -48,6 +48,7 @@ use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
+use crate::ListPlan;
 use crate::OptimizeTablePlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
@@ -100,6 +101,9 @@ pub enum PlanNode {
 
     // Call.
     Call(CallPlan),
+
+    // List
+    List(ListPlan),
 
     // Show.
     Show(ShowPlan),
@@ -220,6 +224,9 @@ impl PlanNode {
             PlanNode::DropUserStage(v) => v.schema(),
             PlanNode::DescribeUserStage(v) => v.schema(),
 
+            // List
+            PlanNode::List(v) => v.schema(),
+
             // UDF.
             PlanNode::CreateUserUDF(v) => v.schema(),
             PlanNode::DropUserUDF(v) => v.schema(),
@@ -305,6 +312,9 @@ impl PlanNode {
             PlanNode::CreateUserStage(_) => "CreateUserStagePlan",
             PlanNode::DropUserStage(_) => "DropUserStagePlan",
             PlanNode::DescribeUserStage(_) => "DescribeUserStagePlan",
+
+            // List
+            PlanNode::List(_) => "ListPlan",
 
             // UDF.
             PlanNode::CreateUserUDF(_) => "CreateUserUDFPlan",

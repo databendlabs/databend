@@ -23,7 +23,7 @@ use metrics::histogram;
 use sqlparser::ast::Value;
 use sqlparser::dialect::keywords::Keyword;
 use sqlparser::dialect::Dialect;
-use sqlparser::dialect::GenericDialect;
+use sqlparser::dialect::SnowflakeDialect;
 use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
@@ -55,7 +55,7 @@ pub struct DfParser<'a> {
 impl<'a> DfParser<'a> {
     /// Parse the specified tokens
     pub fn new(sql: &str) -> Result<Self, ParserError> {
-        let dialect = &GenericDialect {};
+        let dialect = &SnowflakeDialect {};
         DfParser::new_with_dialect(sql, dialect)
     }
 
@@ -71,7 +71,7 @@ impl<'a> DfParser<'a> {
 
     /// Parse a SQL statement and produce a set of statements with dialect
     pub fn parse_sql(sql: &str) -> Result<(Vec<DfStatement>, Vec<DfHint>), ErrorCode> {
-        let dialect = &GenericDialect {};
+        let dialect = &SnowflakeDialect {};
         let start = Instant::now();
         let result = DfParser::parse_sql_with_dialect(sql, dialect)?;
         histogram!(super::metrics::METRIC_PARSER_USEDTIME, start.elapsed());
@@ -178,6 +178,11 @@ impl<'a> DfParser<'a> {
                     Keyword::CALL => {
                         self.parser.next_token();
                         self.parse_call()
+                    }
+
+                    Keyword::LIST => {
+                        self.parser.next_token();
+                        self.parse_list_cmd()
                     }
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database

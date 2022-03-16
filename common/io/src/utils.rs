@@ -105,3 +105,14 @@ pub fn get_abs_path(root: &str, path: &str) -> String {
 
     PathBuf::from(root).join(path).to_string_lossy().to_string()
 }
+
+// todo(xuanwo): opendal support meta name (https://github.com/datafuselabs/opendal/issues/150)
+#[inline]
+pub fn get_file_name(path: &str) -> String {
+    let path = path
+        .split('/')
+        .filter(|v| !v.is_empty())
+        .collect::<Vec<&str>>();
+
+    path[path.len() - 1].to_string()
+}

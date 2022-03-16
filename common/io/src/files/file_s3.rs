@@ -28,6 +28,7 @@ impl S3File {
         s3_bucket: &str,
         aws_key_id: &str,
         aws_secret_key: &str,
+        root: &str,
     ) -> Result<Operator> {
         let mut builder = opendal::services::s3::Backend::build();
 
@@ -36,6 +37,7 @@ impl S3File {
 
         // Bucket.
         builder.bucket(s3_bucket);
+        builder.root(root);
 
         // Credentials.
         if !aws_key_id.is_empty() {
@@ -50,10 +52,9 @@ impl S3File {
         Ok(opendal::Operator::new(accessor))
     }
 
-    // Get the files in the path.
+    // Get the files in the path, if the path is not exist, return an empty list.
     pub async fn list(operator: &Operator, path: &str) -> Result<Vec<String>> {
         let mut list: Vec<String> = vec![];
-        // Check the path object mode is DIR or FILE.
         let mode = operator.object(path).metadata().await?.mode();
         match mode {
             ObjectMode::FILE => {
@@ -64,7 +65,9 @@ impl S3File {
                 while let Some(object) = objects.next().await {
                     let mut object = object?;
                     let meta = object.metadata_cached().await?;
-                    list.push(meta.path().to_string());
+                    if meta.mode() == ObjectMode::FILE {
+                        list.push(meta.path().to_string());
+                    }
                 }
             }
             other => {

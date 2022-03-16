@@ -22,6 +22,7 @@ use common_planners::ShowPlan;
 use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::CreateUserStageInterpreter;
+use super::ListInterpreter;
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::AlterUserUDFInterpreter;
@@ -154,6 +155,8 @@ impl InterpreterFactory {
             PlanNode::DescribeUserStage(v) => {
                 DescribeUserStageInterpreter::try_create(ctx_clone, v)
             }
+
+            PlanNode::List(v) => ListInterpreter::try_create(ctx_clone, v),
 
             // Use.
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx_clone, v),

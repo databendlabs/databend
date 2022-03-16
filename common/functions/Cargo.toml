@@ -19,7 +19,7 @@ common-exception = { path = "../exception" }
 common-io = { path = "../io" }
 
 # Github dependencies
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "64795ad" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "0b1b0d7" }
 
 # Crates.io dependencies
 base64 = "0.13.0"

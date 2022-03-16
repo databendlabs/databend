@@ -24,6 +24,7 @@ use super::statements::DfCopy;
 use super::statements::DfCreateUserStage;
 use super::statements::DfDescribeUserStage;
 use super::statements::DfDropUserStage;
+use super::statements::DfList;
 use crate::sql::statements::DfAlterUDF;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCreateDatabase;
@@ -124,6 +125,7 @@ pub enum DfStatement {
     CreateStage(DfCreateUserStage),
     DropStage(DfDropUserStage),
     DescribeStage(DfDescribeUserStage),
+    List(DfList),
 
     // Call
     Call(DfCall),

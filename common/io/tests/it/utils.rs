@@ -24,3 +24,10 @@ fn convert_test() {
     assert_eq!(convert_number_size(1022_f64), "1.02 thousand");
     assert_eq!(convert_number_size(10222_f64), "10.22 thousand");
 }
+
+#[test]
+fn path_test() {
+    assert_eq!(get_abs_path("ab/c", "d"), "ab/c/d".to_string());
+    assert_eq!(get_abs_path("/ab/c", "d"), "/ab/c/d".to_string());
+    assert_eq!(get_abs_path("/ab/c", "/d/e"), "/ab/c/d/e".to_string());
+}
