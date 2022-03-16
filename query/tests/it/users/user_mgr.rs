@@ -102,7 +102,7 @@ async fn test_user_manager() -> Result<()> {
         let mut add_priv = UserPrivilegeSet::empty();
         add_priv.set_privilege(UserPrivilegeType::Set);
         user_mgr
-            .grant_user_privileges(tenant, user, hostname, GrantObject::Global, add_priv)
+            .grant_privileges_to_user(tenant, user, hostname, GrantObject::Global, add_priv)
             .await?;
         let new_user = user_mgr.get_user(tenant, user, hostname).await?;
         assert!(new_user
@@ -119,7 +119,7 @@ async fn test_user_manager() -> Result<()> {
         let user_info = User::new(user, hostname, auth_info.clone());
         user_mgr.add_user(tenant, user_info.into()).await?;
         user_mgr
-            .grant_user_privileges(
+            .grant_privileges_to_user(
                 tenant,
                 user,
                 hostname,
@@ -131,7 +131,7 @@ async fn test_user_manager() -> Result<()> {
         assert_eq!(user_info.grants.entries().len(), 1);
 
         user_mgr
-            .revoke_user_privileges(
+            .revoke_privileges_from_user(
                 tenant,
                 user,
                 hostname,

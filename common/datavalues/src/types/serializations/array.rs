@@ -68,7 +68,7 @@ impl TypeSerializer for ArraySerializer {
     fn serialize_clickhouse_format(
         &self,
         _column: &ColumnRef,
-    ) -> Result<common_clickhouse_srv::types::column::ArcColumnData> {
+    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
         todo!()
     }
 }

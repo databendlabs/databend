@@ -43,6 +43,7 @@ table_disk_cache_mb_size = 10240
 [log]
 log_level = "ERROR"
 log_dir = "./_logs"
+log_query_enabled = false
 
 [meta]
 # To enable embedded meta-store, set meta_address to ""

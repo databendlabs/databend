@@ -43,6 +43,7 @@ use crate::ExplainPlan;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::GrantPrivilegePlan;
+use crate::GrantRolePlan;
 use crate::HavingPlan;
 use crate::InsertPlan;
 use crate::KillPlan;
@@ -53,7 +54,9 @@ use crate::OptimizeTablePlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
+use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
+use crate::RevokeRolePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
@@ -116,6 +119,7 @@ pub enum PlanNode {
     // Table.
     CreateTable(CreateTablePlan),
     DropTable(DropTablePlan),
+    RenameTable(RenameTablePlan),
     TruncateTable(TruncateTablePlan),
     OptimizeTable(OptimizeTablePlan),
     DescribeTable(DescribeTablePlan),
@@ -125,8 +129,14 @@ pub enum PlanNode {
     CreateUser(CreateUserPlan),
     AlterUser(AlterUserPlan),
     DropUser(DropUserPlan),
+
+    // Grant.
     GrantPrivilege(GrantPrivilegePlan),
+    GrantRole(GrantRolePlan),
+
+    // Revoke.
     RevokePrivilege(RevokePrivilegePlan),
+    RevokeRole(RevokeRolePlan),
 
     // Role.
     CreateRole(CreateRolePlan),
@@ -203,6 +213,7 @@ impl PlanNode {
             // Table.
             PlanNode::CreateTable(v) => v.schema(),
             PlanNode::DropTable(v) => v.schema(),
+            PlanNode::RenameTable(v) => v.schema(),
             PlanNode::TruncateTable(v) => v.schema(),
             PlanNode::OptimizeTable(v) => v.schema(),
             PlanNode::DescribeTable(v) => v.schema(),
@@ -212,8 +223,14 @@ impl PlanNode {
             PlanNode::CreateUser(v) => v.schema(),
             PlanNode::AlterUser(v) => v.schema(),
             PlanNode::DropUser(v) => v.schema(),
+
+            // Grant.
             PlanNode::GrantPrivilege(v) => v.schema(),
+            PlanNode::GrantRole(v) => v.schema(),
+
+            // Revoke.
             PlanNode::RevokePrivilege(v) => v.schema(),
+            PlanNode::RevokeRole(v) => v.schema(),
 
             // Role.
             PlanNode::CreateRole(v) => v.schema(),
@@ -292,6 +309,7 @@ impl PlanNode {
             // Table.
             PlanNode::CreateTable(_) => "CreateTablePlan",
             PlanNode::DropTable(_) => "DropTablePlan",
+            PlanNode::RenameTable(_) => "RenameTablePlan",
             PlanNode::TruncateTable(_) => "TruncateTablePlan",
             PlanNode::OptimizeTable(_) => "OptimizeTablePlan",
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
@@ -301,8 +319,14 @@ impl PlanNode {
             PlanNode::CreateUser(_) => "CreateUser",
             PlanNode::AlterUser(_) => "AlterUser",
             PlanNode::DropUser(_) => "DropUser",
+
+            // Grant.
             PlanNode::GrantPrivilege(_) => "GrantPrivilegePlan",
+            PlanNode::GrantRole(_) => "GrantRolePlan",
+
+            // Revoke.
             PlanNode::RevokePrivilege(_) => "RevokePrivilegePlan",
+            PlanNode::RevokeRole(_) => "RevokeRolePlan",
 
             // Role.
             PlanNode::CreateRole(_) => "CreateRole",

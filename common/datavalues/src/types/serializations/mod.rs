@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_clickhouse_srv::types::column::ArcColumnData;
 use common_exception::Result;
+use opensrv_clickhouse::types::column::ArcColumnData;
 use serde_json::Value;
 
 use crate::prelude::*;

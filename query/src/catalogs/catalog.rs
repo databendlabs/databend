@@ -23,6 +23,8 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
+use common_meta_types::RenameTableReply;
+use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -89,6 +91,8 @@ pub trait Catalog: DynClone + Send + Sync {
     async fn create_table(&self, req: CreateTableReq) -> Result<()>;
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply>;
+
+    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply>;
 
     // Check a db.table is exists or not.
     async fn exists_table(&self, tenant: &str, db_name: &str, table_name: &str) -> Result<bool> {

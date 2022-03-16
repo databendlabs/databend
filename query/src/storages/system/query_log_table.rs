@@ -95,6 +95,8 @@ impl QueryLogTable {
             DataField::new("stack_trace", Vu8::to_data_type()),
             // Server.
             DataField::new("server_version", Vu8::to_data_type()),
+            // Session settings
+            DataField::new("session_settings", Vu8::to_data_type()),
             // Extra.
             DataField::new("extra", Vu8::to_data_type()),
         ]);

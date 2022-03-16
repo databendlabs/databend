@@ -88,6 +88,18 @@ async fn test_plan_parser() -> Result<()> {
             error: "",
         },
         Test {
+            name: "rename-table-passed",
+            sql: "RENAME TABLE t1 TO t2",
+            expect: "Rename table, [default.t1 to default.t2]",
+            error: "",
+        },
+        Test {
+            name: "rename-table-passed",
+            sql: "RENAME TABLE db1.t1 TO db1.t2",
+            expect: "Rename table, [db1.t1 to db1.t2]",
+            error: "",
+        },
+        Test {
             name: "drop-table-if-exists-passed",
             sql: "DROP TABLE IF EXISTS db1.t1",
             expect: "Drop table db1.t1, if_exists:true",

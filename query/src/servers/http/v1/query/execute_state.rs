@@ -38,6 +38,7 @@ use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionRef;
+use crate::sessions::SessionType;
 use crate::sql::PlanParser;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
@@ -142,7 +143,9 @@ impl ExecuteState {
     ) -> Result<(Arc<RwLock<Executor>>, DataSchemaRef)> {
         let sql = &request.sql;
         let start_time = Instant::now();
-        let session = session_manager.create_session("http-statement").await?;
+        let session = session_manager
+            .create_session(SessionType::HTTPQuery)
+            .await?;
         let ctx = session.create_query_context().await?;
         if let Some(db) = &request.session.database {
             ctx.set_current_database(db.clone()).await?;

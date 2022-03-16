@@ -52,6 +52,7 @@ use crate::ExpressionRewriter;
 use crate::Expressions;
 use crate::FilterPlan;
 use crate::GrantPrivilegePlan;
+use crate::GrantRolePlan;
 use crate::HavingPlan;
 use crate::InsertPlan;
 use crate::KillPlan;
@@ -64,7 +65,9 @@ use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
+use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
+use crate::RevokeRolePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
@@ -142,6 +145,7 @@ pub trait PlanRewriter: Sized {
             // Table.
             PlanNode::CreateTable(plan) => self.rewrite_create_table(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
+            PlanNode::RenameTable(plan) => self.rewrite_rename_table(plan),
             PlanNode::TruncateTable(plan) => self.rewrite_truncate_table(plan),
             PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
             PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
@@ -151,8 +155,14 @@ pub trait PlanRewriter: Sized {
             PlanNode::CreateUser(plan) => self.create_user(plan),
             PlanNode::AlterUser(plan) => self.alter_user(plan),
             PlanNode::DropUser(plan) => self.drop_user(plan),
+
+            // Grant.
             PlanNode::GrantPrivilege(plan) => self.grant_privilege(plan),
+            PlanNode::GrantRole(plan) => self.grant_role(plan),
+
+            // Revoke.
             PlanNode::RevokePrivilege(plan) => self.revoke_privilege(plan),
+            PlanNode::RevokeRole(plan) => self.revoke_role(plan),
 
             // Role.
             PlanNode::CreateRole(plan) => self.rewrite_create_role(plan),
@@ -338,6 +348,10 @@ pub trait PlanRewriter: Sized {
         Ok(PlanNode::CreateTable(plan.clone()))
     }
 
+    fn rewrite_rename_table(&mut self, plan: &RenameTablePlan) -> Result<PlanNode> {
+        Ok(PlanNode::RenameTable(plan.clone()))
+    }
+
     fn rewrite_optimize_table(&mut self, plan: &OptimizeTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::OptimizeTable(plan.clone()))
     }
@@ -426,8 +440,16 @@ pub trait PlanRewriter: Sized {
         Ok(PlanNode::GrantPrivilege(plan.clone()))
     }
 
+    fn grant_role(&mut self, plan: &GrantRolePlan) -> Result<PlanNode> {
+        Ok(PlanNode::GrantRole(plan.clone()))
+    }
+
     fn revoke_privilege(&mut self, plan: &RevokePrivilegePlan) -> Result<PlanNode> {
         Ok(PlanNode::RevokePrivilege(plan.clone()))
+    }
+
+    fn revoke_role(&mut self, plan: &RevokeRolePlan) -> Result<PlanNode> {
+        Ok(PlanNode::RevokeRole(plan.clone()))
     }
 
     fn rewrite_create_user_stage(&mut self, plan: &CreateUserStagePlan) -> Result<PlanNode> {

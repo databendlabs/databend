@@ -1,8 +1,8 @@
 ---
-title: DROP Stage
+title: DROP STAGE
 ---
 
-Drop a stage.
+Drop a user stage.
 
 ## Syntax
 
@@ -12,6 +12,6 @@ DROP STAGE [ IF EXISTS ] <stage_name>;
 
 ## Examples
 
-```sql
-mysql> drop stage if exists test_stage;
+```sql title='mysql>'
+drop stage if exists test_stage;
 ```

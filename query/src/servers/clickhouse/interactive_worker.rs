@@ -15,11 +15,11 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_clickhouse_srv::connection::Connection;
-use common_clickhouse_srv::CHContext;
-use common_clickhouse_srv::ClickHouseSession;
 use common_tracing::tracing;
 use metrics::histogram;
+use opensrv_clickhouse::connection::Connection;
+use opensrv_clickhouse::CHContext;
+use opensrv_clickhouse::ClickHouseSession;
 
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
 use crate::servers::clickhouse::writers::to_clickhouse_err;
@@ -43,7 +43,7 @@ impl ClickHouseSession for InteractiveWorker {
         &self,
         ctx: &mut CHContext,
         conn: &mut Connection,
-    ) -> common_clickhouse_srv::errors::Result<()> {
+    ) -> opensrv_clickhouse::errors::Result<()> {
         let start = Instant::now();
 
         let mut query_writer = QueryWriter::create(ctx.client_revision, conn);
@@ -145,7 +145,7 @@ impl ClickHouseSession for InteractiveWorker {
     }
 
     // TODO: remove it
-    fn get_progress(&self) -> common_clickhouse_srv::types::Progress {
+    fn get_progress(&self) -> opensrv_clickhouse::types::Progress {
         unimplemented!()
     }
 }

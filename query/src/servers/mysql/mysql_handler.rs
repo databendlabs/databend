@@ -28,7 +28,7 @@ use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
 use futures::future::Abortable;
 use futures::StreamExt;
-use msql_srv::*;
+use opensrv_mysql::*;
 use tokio_stream::wrappers::TcpListenerStream;
 
 use crate::servers::mysql::mysql_session::MySQLConnection;
@@ -36,6 +36,7 @@ use crate::servers::mysql::reject_connection::RejectConnection;
 use crate::servers::server::ListeningStream;
 use crate::servers::server::Server;
 use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 
 pub struct MySQLHandler {
     sessions: Arc<SessionManager>,
@@ -81,7 +82,7 @@ impl MySQLHandler {
 
     fn accept_socket(sessions: Arc<SessionManager>, executor: Arc<Runtime>, socket: TcpStream) {
         executor.spawn(async move {
-            match sessions.create_session("MySQL").await {
+            match sessions.create_session(SessionType::MySQL).await {
                 Err(error) => Self::reject_session(socket, error).await,
                 Ok(session) => {
                     tracing::info!("MySQL connection coming: {:?}", socket.peer_addr());
