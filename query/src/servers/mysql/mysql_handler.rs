@@ -28,7 +28,7 @@ use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
 use futures::future::Abortable;
 use futures::StreamExt;
-use msql_srv::*;
+use opensrv_mysql::*;
 use tokio_stream::wrappers::TcpListenerStream;
 
 use crate::servers::mysql::mysql_session::MySQLConnection;

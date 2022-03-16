@@ -5,7 +5,6 @@ members = [
     "common/base",
     "common/building",
     "common/cache",
-    "common/clickhouse-srv",
     "common/containers",
     "common/contexts",
     "common/datablocks",

@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_clickhouse_srv::types::column::ArcColumnData;
-use common_clickhouse_srv::types::column::TupleColumnData;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::izip;
+use opensrv_clickhouse::types::column::ArcColumnData;
+use opensrv_clickhouse::types::column::TupleColumnData;
 use serde_json::Value;
 
 use crate::prelude::*;

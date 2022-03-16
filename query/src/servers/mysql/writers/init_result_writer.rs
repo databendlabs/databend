@@ -15,7 +15,7 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
-use msql_srv::*;
+use opensrv_mysql::*;
 
 pub struct DFInitResultWriter<'a, W: std::io::Write> {
     inner: Option<InitWriter<'a, W>>,
