@@ -11,7 +11,7 @@ Our goal is to make contributing to the Databend project easy and transparent.
 
 Thank you.
 
-:::note Notes
+:::tip
 Once the code been merged, your name will be stoned in the `system.contributors` table forever.
 
 `SELECT * FROM system.contributors`

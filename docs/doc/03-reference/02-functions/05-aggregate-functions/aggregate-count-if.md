@@ -13,7 +13,7 @@ countIf(column, cond)
 
 ## Examples
 
-:::note
+:::tip
 numbers_mt(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
 :::
 

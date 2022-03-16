@@ -43,6 +43,7 @@ use crate::Expression;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::GrantPrivilegePlan;
+use crate::GrantRolePlan;
 use crate::HavingPlan;
 use crate::InsertPlan;
 use crate::KillPlan;
@@ -53,7 +54,9 @@ use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
+use crate::RenameTablePlan;
 use crate::RevokePrivilegePlan;
+use crate::RevokeRolePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
@@ -153,6 +156,7 @@ pub trait PlanVisitor {
             // Table.
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
             PlanNode::DropTable(plan) => self.visit_drop_table(plan),
+            PlanNode::RenameTable(plan) => self.visit_rename_table(plan),
             PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
             PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
             PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
@@ -162,8 +166,14 @@ pub trait PlanVisitor {
             PlanNode::CreateUser(plan) => self.visit_create_user(plan),
             PlanNode::AlterUser(plan) => self.visit_alter_user(plan),
             PlanNode::DropUser(plan) => self.visit_drop_user(plan),
+
+            // Grant
             PlanNode::GrantPrivilege(plan) => self.visit_grant_privilege(plan),
+            PlanNode::GrantRole(plan) => self.visit_grant_role(plan),
+
+            // Revoke
             PlanNode::RevokePrivilege(plan) => self.visit_revoke_privilege(plan),
+            PlanNode::RevokeRole(plan) => self.visit_revoke_role(plan),
 
             // Role.
             PlanNode::CreateRole(plan) => self.visit_create_role(plan),
@@ -325,7 +335,15 @@ pub trait PlanVisitor {
         Ok(())
     }
 
+    fn visit_grant_role(&mut self, _: &GrantRolePlan) -> Result<()> {
+        Ok(())
+    }
+
     fn visit_revoke_privilege(&mut self, _: &RevokePrivilegePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_revoke_role(&mut self, _: &RevokeRolePlan) -> Result<()> {
         Ok(())
     }
 
@@ -338,6 +356,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_describe_table(&mut self, _: &DescribeTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_rename_table(&mut self, _: &RenameTablePlan) -> Result<()> {
         Ok(())
     }
 

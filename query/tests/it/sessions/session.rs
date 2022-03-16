@@ -17,6 +17,7 @@ use common_exception::Result;
 use common_mem_allocator::malloc_size;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
+use databend_query::sessions::SessionType;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session() -> Result<()> {
@@ -27,7 +28,7 @@ async fn test_session() -> Result<()> {
     let session = Session::try_create(
         conf.clone(),
         String::from("test-001"),
-        String::from("test-type"),
+        SessionType::Test,
         session_manager,
     )
     .await?;
@@ -54,7 +55,7 @@ async fn test_session() -> Result<()> {
     // Malloc size.
     {
         let session_size = malloc_size(&session);
-        assert!(session_size > 2500);
+        assert!(session_size > 1500);
         assert_eq!(session_size, session.get_memory_usage());
     }
 
@@ -72,7 +73,7 @@ async fn test_session_in_management_mode() -> Result<()> {
     let session = Session::try_create(
         conf.clone(),
         String::from("test-001"),
-        String::from("test-type"),
+        SessionType::Test,
         session_manager,
     )
     .await?;

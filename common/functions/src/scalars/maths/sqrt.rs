@@ -22,9 +22,9 @@ use num::cast::AsPrimitive;
 use crate::scalars::function_common::assert_numeric;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
-use crate::scalars::ScalarUnaryExpression;
 
 #[derive(Clone)]
 pub struct SqrtFunction {
@@ -62,8 +62,7 @@ impl Function for SqrtFunction {
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
         let mut ctx = EvalContext::default();
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
-             let unary = ScalarUnaryExpression::<$S, f64, _>::new(sqrt::<$S>);
-             let col = unary.eval(columns[0].column(), &mut ctx)?;
+             let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), sqrt::<$S>, &mut ctx)?;
              Ok(col.arc())
         },{
             unreachable!()

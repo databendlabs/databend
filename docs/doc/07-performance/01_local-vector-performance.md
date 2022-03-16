@@ -1,5 +1,8 @@
 ---
-title: Vectorized engine performance
+title: Databend Vectorized Engine Performance
+sidebar_label: Vectorized Engine Performance
+description:
+  Ultra-fast analytics experience.
 ---
 
 :::tip

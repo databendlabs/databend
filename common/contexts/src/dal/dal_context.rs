@@ -17,6 +17,7 @@ use std::time::Instant;
 use async_trait::async_trait;
 use opendal::error::Result as DalResult;
 use opendal::ops::OpDelete;
+use opendal::ops::OpList;
 use opendal::ops::OpRead;
 use opendal::ops::OpStat;
 use opendal::ops::OpWrite;
@@ -24,6 +25,7 @@ use opendal::readers::ObserveReader;
 use opendal::readers::ReadEvent;
 use opendal::Accessor;
 use opendal::BoxedAsyncReader;
+use opendal::BoxedObjectStream;
 use opendal::Layer;
 use opendal::Metadata;
 
@@ -101,5 +103,9 @@ impl Accessor for DalContext {
 
     async fn delete(&self, args: &OpDelete) -> DalResult<()> {
         self.inner.as_ref().unwrap().delete(args).await
+    }
+
+    async fn list(&self, args: &OpList) -> DalResult<BoxedObjectStream> {
+        self.inner.as_ref().unwrap().list(args).await
     }
 }

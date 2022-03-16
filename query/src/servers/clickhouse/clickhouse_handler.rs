@@ -35,6 +35,7 @@ use crate::servers::clickhouse::reject_connection::RejectCHConnection;
 use crate::servers::server::ListeningStream;
 use crate::servers::server::Server;
 use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 
 pub struct ClickHouseHandler {
     sessions: Arc<SessionManager>,
@@ -88,7 +89,7 @@ impl ClickHouseHandler {
 
     fn accept_socket(sessions: Arc<SessionManager>, executor: Arc<Runtime>, socket: TcpStream) {
         executor.spawn(async move {
-            match sessions.create_session("ClickHouseSession").await {
+            match sessions.create_session(SessionType::Clickhouse).await {
                 Err(error) => Self::reject_connection(socket, error).await,
                 Ok(session) => {
                     tracing::info!("ClickHouse connection coming: {:?}", socket.peer_addr());
@@ -125,7 +126,10 @@ impl Server for ClickHouseHandler {
                 "ClickHouseHandler already running.",
             )),
             Some(registration) => {
-                let rejected_rt = Arc::new(Runtime::with_worker_threads(1)?);
+                let rejected_rt = Arc::new(Runtime::with_worker_threads(
+                    1,
+                    Some("clickhouse-handler".to_string()),
+                )?);
                 let (stream, listener) = Self::listener_tcp(listening).await?;
                 let stream = Abortable::new(stream, registration);
                 self.join_handle = Some(tokio::spawn(self.listen_loop(stream, rejected_rt)));

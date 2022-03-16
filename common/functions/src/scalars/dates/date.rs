@@ -40,7 +40,7 @@ use super::ToYYYYMMFunction;
 use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
-use crate::scalars::function_factory::Factory2Creator;
+use crate::scalars::function_factory::FactoryCreator;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
@@ -51,7 +51,7 @@ pub struct DateFunction {}
 
 impl DateFunction {
     fn round_function_creator(round: u32) -> FunctionDescription {
-        let creator: Factory2Creator = Box::new(move |display_name| -> Result<Box<dyn Function>> {
+        let creator: FactoryCreator = Box::new(move |display_name| -> Result<Box<dyn Function>> {
             RoundFunction::try_create(display_name, round)
         });
 

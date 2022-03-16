@@ -51,7 +51,10 @@ impl PipelineExecutor {
                 graph,
                 workers_notify,
                 global_tasks_queue,
-                async_runtime: Runtime::with_worker_threads(workers)?,
+                async_runtime: Runtime::with_worker_threads(
+                    workers,
+                    Some("pipeline-executor".to_owned()),
+                )?,
             }))
         }
     }

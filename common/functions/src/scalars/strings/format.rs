@@ -25,10 +25,10 @@ use num_traits::AsPrimitive;
 use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
-use crate::scalars::ScalarBinaryExpression;
 
 const FORMAT_MAX_DECIMALS: i64 = 30;
 
@@ -73,8 +73,7 @@ impl Function for FormatFunction {
     fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
         with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$F| {
                 with_match_primitive_type_id!(columns[1].data_type().data_type_id(), |$N| {
-                    let binary = ScalarBinaryExpression::<$F, $N, Vu8, _>::new(format_en_us);
-                    let col = binary.eval(columns[0].column(), columns[1].column(), &mut EvalContext::default())?;
+                    let col = scalar_binary_op::<$F, $N, Vu8, _>(columns[0].column(), columns[1].column(), format_en_us,&mut EvalContext::default())?;
                     Ok(col.arc())
                 },{
                     unreachable!()

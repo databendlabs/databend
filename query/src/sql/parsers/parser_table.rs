@@ -15,6 +15,8 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
+use std::collections::HashMap;
+
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOptionDef;
 use sqlparser::ast::TableConstraint;
@@ -28,6 +30,7 @@ use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropTable;
 use crate::sql::statements::DfQueryStatement;
+use crate::sql::statements::DfRenameTable;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::DfParser;
@@ -95,6 +98,27 @@ impl<'a> DfParser<'a> {
         };
 
         Ok(DfStatement::DropTable(drop))
+    }
+
+    // Rename table.
+    pub(crate) fn parse_rename_table(&mut self) -> Result<DfStatement, ParserError> {
+        let mut name_map = HashMap::new();
+        self.parser.expect_keyword(Keyword::TABLE)?;
+        let name = self.parser.parse_object_name()?;
+        self.parser.expect_keyword(Keyword::TO)?;
+        let new_name = self.parser.parse_object_name()?;
+        name_map.insert(name, new_name);
+
+        while self.parser.consume_token(&Token::Comma) {
+            let name = self.parser.parse_object_name()?;
+            self.parser.expect_keyword(Keyword::TO)?;
+            let new_name = self.parser.parse_object_name()?;
+            name_map.insert(name, new_name);
+        }
+
+        let rename = DfRenameTable { name_map };
+
+        Ok(DfStatement::RenameTable(rename))
     }
 
     // Truncate table.
@@ -167,14 +191,16 @@ impl<'a> DfParser<'a> {
         loop {
             if let Some(constraint) = self.parser.parse_optional_table_constraint()? {
                 constraints.push(constraint);
-            } else if let Token::Word(_) = self.parser.peek_token() {
-                let column_def = self.parse_column_def()?;
-                columns.push(column_def);
             } else {
-                return self.expected(
-                    "column name or constraint definition",
-                    self.parser.peek_token(),
-                );
+                match self.parser.peek_token() {
+                    Token::Word(_) | Token::SingleQuotedString(_) | Token::BackQuotedString(_) => {
+                        let column_def = self.parse_column_def()?;
+                        columns.push(column_def);
+                    }
+                    unexpected => {
+                        return self.expected("column name or constraint definition", unexpected);
+                    }
+                }
             }
             let comma = self.parser.consume_token(&Token::Comma);
             if self.parser.consume_token(&Token::RParen) {

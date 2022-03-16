@@ -155,6 +155,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::CreateTable(v) => v.analyze(ctx).await,
             DfStatement::DescribeTable(v) => v.analyze(ctx).await,
             DfStatement::DropTable(v) => v.analyze(ctx).await,
+            DfStatement::RenameTable(v) => v.analyze(ctx).await,
             DfStatement::TruncateTable(v) => v.analyze(ctx).await,
             DfStatement::OptimizeTable(v) => v.analyze(ctx).await,
             DfStatement::UseDatabase(v) => v.analyze(ctx).await,
@@ -173,7 +174,9 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::AlterUser(v) => v.analyze(ctx).await,
             DfStatement::ShowUsers(v) => v.analyze(ctx).await,
             DfStatement::GrantPrivilege(v) => v.analyze(ctx).await,
+            DfStatement::GrantRole(v) => v.analyze(ctx).await,
             DfStatement::RevokePrivilege(v) => v.analyze(ctx).await,
+            DfStatement::RevokeRole(v) => v.analyze(ctx).await,
             DfStatement::DropUser(v) => v.analyze(ctx).await,
             DfStatement::Copy(v) => v.analyze(ctx).await,
             DfStatement::Call(v) => v.analyze(ctx).await,
@@ -184,6 +187,9 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::CreateRole(v) => v.analyze(ctx).await,
             DfStatement::DropRole(v) => v.analyze(ctx).await,
             DfStatement::ShowEngines(v) => v.analyze(ctx).await,
+            DfStatement::CreateStage(v) => v.analyze(ctx).await,
+            DfStatement::DropStage(v) => v.analyze(ctx).await,
+            DfStatement::DescribeStage(v) => v.analyze(ctx).await,
         }
     }
 }

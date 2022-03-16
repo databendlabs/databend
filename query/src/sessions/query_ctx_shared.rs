@@ -37,6 +37,9 @@ use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::Session;
 use crate::sessions::Settings;
 use crate::storages::Table;
+use crate::users::auth::auth_mgr::AuthMgr;
+use crate::users::RoleCacheMgr;
+use crate::users::UserApiProvider;
 
 type DatabaseAndTable = (String, String);
 
@@ -50,7 +53,6 @@ type DatabaseAndTable = (String, String);
 ///     FROM table_name_4;
 /// For each subquery, they will share a runtime, session, progress, init_query_id
 pub struct QueryContextShared {
-    pub conf: Config,
     /// scan_progress for scan metrics of datablocks (uncompressed)
     pub(in crate::sessions) scan_progress: Arc<Progress>,
     /// write_progress for write/commit metrics of datablocks (uncompressed)
@@ -69,16 +71,19 @@ pub struct QueryContextShared {
     pub(in crate::sessions) running_plan: Arc<RwLock<Option<PlanNode>>>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
     pub(in crate::sessions) dal_ctx: Arc<DalContext>,
+    pub(in crate::sessions) user_manager: Arc<UserApiProvider>,
+    pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
+    pub(in crate::sessions) role_cache_manager: Arc<RoleCacheMgr>,
 }
 
 impl QueryContextShared {
-    pub fn try_create(
-        conf: Config,
+    pub async fn try_create(
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
+        let conf = session.get_config();
+        let user_manager = UserApiProvider::create_global(conf.clone()).await?;
         Ok(Arc::new(QueryContextShared {
-            conf,
             session,
             cluster_cache,
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
@@ -94,6 +99,9 @@ impl QueryContextShared {
             running_plan: Arc::new(RwLock::new(None)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             dal_ctx: Arc::new(Default::default()),
+            user_manager: user_manager.clone(),
+            auth_manager: Arc::new(AuthMgr::create(conf, user_manager.clone()).await?),
+            role_cache_manager: Arc::new(RoleCacheMgr::new(user_manager)),
         }))
     }
 
@@ -134,6 +142,18 @@ impl QueryContextShared {
 
     pub fn get_tenant(&self) -> String {
         self.session.get_current_tenant()
+    }
+
+    pub fn get_user_manager(&self) -> Arc<UserApiProvider> {
+        self.user_manager.clone()
+    }
+
+    pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
+        self.auth_manager.clone()
+    }
+
+    pub fn get_role_cache_manager(&self) -> Arc<RoleCacheMgr> {
+        self.role_cache_manager.clone()
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
@@ -183,7 +203,10 @@ impl QueryContextShared {
             None => {
                 let settings = self.get_settings();
                 let max_threads = settings.get_max_threads()? as usize;
-                let runtime = Arc::new(Runtime::with_worker_threads(max_threads)?);
+                let runtime = Arc::new(Runtime::with_worker_threads(
+                    max_threads,
+                    Some("query-ctx".to_string()),
+                )?);
                 *query_runtime = Some(runtime.clone());
                 Ok(runtime)
             }
@@ -213,6 +236,14 @@ impl QueryContextShared {
     pub fn add_source_abort_handle(&self, handle: AbortHandle) {
         let mut sources_abort_handle = self.sources_abort_handle.write();
         sources_abort_handle.push(handle);
+    }
+
+    pub fn get_config(&self) -> Config {
+        self.session.get_config()
+    }
+
+    pub async fn reload_config(&self) -> Result<()> {
+        self.session.session_mgr.reload_config().await
     }
 }
 

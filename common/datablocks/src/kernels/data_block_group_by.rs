@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_datavalues::remove_nullable;
+use common_datavalues::TypeID;
 use common_exception::Result;
 
 use crate::kernels::HashMethodKeysU16;
@@ -23,12 +24,22 @@ use crate::kernels::HashMethodKind;
 use crate::kernels::HashMethodSerializer;
 use crate::DataBlock;
 use crate::HashMethod;
+use crate::HashMethodSingleString;
 
 impl DataBlock {
     pub fn choose_hash_method(
         block: &DataBlock,
         column_names: &[String],
     ) -> Result<HashMethodKind> {
+        if column_names.len() == 1 {
+            let typ = block.try_column_by_name(&column_names[0])?;
+            if typ.data_type_id() == TypeID::String {
+                return Ok(HashMethodKind::SingleString(
+                    HashMethodSingleString::default(),
+                ));
+            }
+        }
+
         let mut group_key_len = 0;
         for col in column_names {
             let column = block.try_column_by_name(col)?;
@@ -67,6 +78,16 @@ impl DataBlock {
                     .collect();
                 blocks
             }
+
+            HashMethodKind::SingleString(s) => {
+                let blocks = s
+                    .group_by(block, column_names)?
+                    .iter()
+                    .map(|(_, _, b)| b.clone())
+                    .collect();
+                blocks
+            }
+
             HashMethodKind::KeysU8(s) => {
                 let blocks = s
                     .group_by(block, column_names)?

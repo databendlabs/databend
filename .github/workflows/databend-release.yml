@@ -47,7 +47,6 @@ jobs:
                   objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-benchmark
                   objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-meta
                   objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-metactl
-                  objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/bendctl
               fi
           fi
       - name: Get the version
@@ -60,11 +59,9 @@ jobs:
             brew install gnu-tar
             sudo /usr/sbin/purge
             gtar -C ./target/${{ matrix.config.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-query databend-meta
-            gtar -C ./target/${{ matrix.config.target }}/release -czvf bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz bendctl
             gtar -C ./target/${{ matrix.config.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-benchmark databend-metactl
           else
             tar -C ./target/${{ matrix.config.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-query databend-meta
-            tar -C ./target/${{ matrix.config.target }}/release -czvf bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz bendctl
             tar -C ./target/${{ matrix.config.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-benchmark databend-metactl
           fi
 
@@ -74,17 +71,6 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.*
           asset_name: databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}
-          tag: ${{ github.ref }}
-          file_glob: true
-          overwrite: true
-          body: ${{ steps.changelog_reader.outputs.log_entry }}
-
-      - name: Release bendctl
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.*
-          asset_name: bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}
           tag: ${{ github.ref }}
           file_glob: true
           overwrite: true
@@ -110,7 +96,7 @@ jobs:
       - name: Sync release to S3
         run: |
           aws s3 cp databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz s3://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz
-          aws s3 cp bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz s3://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz
+          aws s3 cp databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz s3://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz
           curl https://api.github.com/repos/datafuselabs/databend/tags > tags.json
           cat tags.json
           aws s3 cp ./tags.json s3://repo.databend.rs/databend/tags.json
@@ -142,24 +128,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push
-        id: docker_build
-        uses: docker/build-push-action@v2
-        with:
-          push: true
-          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend:${{ steps.get_version.outputs.VERSION }}
-          platforms: linux/amd64
-          context: .
-          file: ./docker/release/Dockerfile
-          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
-
       - name: Download binaries for usage
         id: download_binaries
         run: |
           wget https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
           wget https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-aarch64-unknown-linux-gnu.tar.gz
+          mkdir -p ./target/release
           mkdir -p ./target/x86_64-unknown-linux-gnu/release
           mkdir -p ./target/aarch64-unknown-linux-gnu/release
+          tar xC ./target/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
           tar xC ./target/x86_64-unknown-linux-gnu/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
           tar xC ./target/aarch64-unknown-linux-gnu/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-aarch64-unknown-linux-gnu.tar.gz
           mkdir -p ./distro/linux/amd64
@@ -168,6 +145,17 @@ jobs:
           cp ./target/x86_64-unknown-linux-gnu/release/databend-query ./distro/linux/amd64
           cp ./target/aarch64-unknown-linux-gnu/release/databend-meta ./distro/linux/arm64
           cp ./target/aarch64-unknown-linux-gnu/release/databend-query ./distro/linux/arm64
+
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend:${{ steps.get_version.outputs.VERSION }}
+          platforms: linux/amd64
+          context: .
+          file: ./docker/Dockerfile
+          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
 
       - name: push meta service
         id: push_meta_service

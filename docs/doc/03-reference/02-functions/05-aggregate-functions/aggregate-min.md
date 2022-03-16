@@ -24,7 +24,7 @@ The minimum value, in the type of the value.
 
 ## Examples
 
-:::note
+:::tip
 numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
 :::
 

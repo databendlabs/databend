@@ -23,6 +23,7 @@ use databend_query::clusters::Cluster;
 use databend_query::configs::Config;
 use databend_query::sessions::QueryContextShared;
 use databend_query::sessions::SessionContext;
+use databend_query::sessions::SessionType;
 
 use crate::tests::SessionManagerBuilder;
 
@@ -79,19 +80,19 @@ async fn test_session_context() -> Result<()> {
     // context shared.
     {
         let sessions = SessionManagerBuilder::create().build()?;
-        let dummy_session = sessions.create_session("TestSession").await?;
+        let dummy_session = sessions.create_session(SessionType::Test).await?;
         let shared = QueryContextShared::try_create(
-            sessions.get_conf().clone(),
             Arc::new(dummy_session.as_ref().clone()),
             Cluster::empty(),
-        )?;
+        )
+        .await?;
 
         session_ctx.set_query_context_shared(Some(shared.clone()));
         let val = session_ctx.get_query_context_shared();
-        assert_eq!(shared.conf, val.unwrap().conf);
+        assert_eq!(shared.get_config(), val.unwrap().get_config());
 
         let val = session_ctx.take_query_context_shared();
-        assert_eq!(shared.conf, val.unwrap().conf);
+        assert_eq!(shared.get_config(), val.unwrap().get_config());
 
         let val = session_ctx.get_query_context_shared();
         assert!(val.is_none());

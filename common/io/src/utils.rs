@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp;
+use std::path::PathBuf;
 
 use bincode::Options;
 use bytes::BufMut;
@@ -90,4 +91,17 @@ pub fn deserialize_from_slice<T: serde::de::DeserializeOwned>(slice: &mut &[u8])
         .deserialize_from(slice)?;
 
     Ok(value)
+}
+
+#[inline]
+pub fn get_abs_path(root: &str, path: &str) -> String {
+    // Joining an absolute path replaces the existing path, we need to
+    // normalize it before.
+    let path = path
+        .split('/')
+        .filter(|v| !v.is_empty())
+        .collect::<Vec<&str>>()
+        .join("/");
+
+    PathBuf::from(root).join(path).to_string_lossy().to_string()
 }

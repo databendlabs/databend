@@ -24,6 +24,8 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
+use common_meta_types::RenameTableReply;
+use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -266,6 +268,31 @@ impl Catalog for DatabaseCatalog {
             return self.immutable_catalog.drop_table(req).await;
         }
         self.mutable_catalog.drop_table(req).await
+    }
+
+    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
+        if req.tenant.is_empty() {
+            return Err(ErrorCode::TenantIsEmpty(
+                "Tenant can not empty(while rename table)",
+            ));
+        }
+        tracing::info!("Rename table from req:{:?}", req);
+
+        if self
+            .immutable_catalog
+            .exists_database(&req.tenant, &req.db)
+            .await?
+            || self
+                .immutable_catalog
+                .exists_database(&req.tenant, &req.new_db)
+                .await?
+        {
+            return Err(ErrorCode::UnImplement(
+                "Cannot rename table from(to) system databases",
+            ));
+        }
+
+        self.mutable_catalog.rename_table(req).await
     }
 
     async fn upsert_table_option(

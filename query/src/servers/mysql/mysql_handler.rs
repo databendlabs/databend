@@ -36,6 +36,7 @@ use crate::servers::mysql::reject_connection::RejectConnection;
 use crate::servers::server::ListeningStream;
 use crate::servers::server::Server;
 use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 
 pub struct MySQLHandler {
     sessions: Arc<SessionManager>,
@@ -81,7 +82,7 @@ impl MySQLHandler {
 
     fn accept_socket(sessions: Arc<SessionManager>, executor: Arc<Runtime>, socket: TcpStream) {
         executor.spawn(async move {
-            match sessions.create_session("MySQL").await {
+            match sessions.create_session(SessionType::MySQL).await {
                 Err(error) => Self::reject_session(socket, error).await,
                 Ok(session) => {
                     tracing::info!("MySQL connection coming: {:?}", socket.peer_addr());
@@ -131,7 +132,10 @@ impl Server for MySQLHandler {
         match self.abort_registration.take() {
             None => Err(ErrorCode::LogicalError("MySQLHandler already running.")),
             Some(registration) => {
-                let rejected_rt = Arc::new(Runtime::with_worker_threads(1)?);
+                let rejected_rt = Arc::new(Runtime::with_worker_threads(
+                    1,
+                    Some("mysql-handler".to_string()),
+                )?);
                 let (stream, listener) = Self::listener_tcp(listening).await?;
                 let stream = Abortable::new(stream, registration);
                 self.join_handle = Some(tokio::spawn(self.listen_loop(stream, rejected_rt)));

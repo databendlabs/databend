@@ -51,7 +51,7 @@ Take [Deploy](../docs/user/index.md) for example. Visit [Docusaurus - Tabs](http
 ### Admonitions
 
 ```markdown
-:::note
+:::tip
 
 Some **content** with _markdown_ `syntax`.
 

@@ -19,7 +19,11 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::ShowPlan;
 
+use super::interpreter_user_stage_describe::DescribeUserStageInterpreter;
+use super::interpreter_user_stage_drop::DropUserStageInterpreter;
+use super::CreateUserStageInterpreter;
 use crate::interpreters::interpreter_show_engines::ShowEnginesInterpreter;
+use crate::interpreters::interpreter_table_rename::RenameTableInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::AlterUserUDFInterpreter;
 use crate::interpreters::CallInterpreter;
@@ -37,12 +41,14 @@ use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::DropUserUDFInterpreter;
 use crate::interpreters::ExplainInterpreter;
 use crate::interpreters::GrantPrivilegeInterpreter;
+use crate::interpreters::GrantRoleInterpreter;
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::InterceptorInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::KillInterpreter;
 use crate::interpreters::OptimizeTableInterpreter;
 use crate::interpreters::RevokePrivilegeInterpreter;
+use crate::interpreters::RevokeRoleInterpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SettingInterpreter;
 use crate::interpreters::ShowCreateDatabaseInterpreter;
@@ -124,6 +130,7 @@ impl InterpreterFactory {
             // Table.
             PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DropTable(v) => DropTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::RenameTable(v) => RenameTableInterpreter::try_create(ctx_clone, v),
             PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::OptimizeTable(v) => OptimizeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
@@ -133,8 +140,14 @@ impl InterpreterFactory {
             PlanNode::CreateUser(v) => CreateUserInterpreter::try_create(ctx_clone, v),
             PlanNode::AlterUser(v) => AlterUserInterpreter::try_create(ctx_clone, v),
             PlanNode::DropUser(v) => DropUserInterpreter::try_create(ctx_clone, v),
+
+            // Grant.
             PlanNode::GrantPrivilege(v) => GrantPrivilegeInterpreter::try_create(ctx_clone, v),
+            PlanNode::GrantRole(v) => GrantRoleInterpreter::try_create(ctx_clone, v),
+
+            // Revoke.
             PlanNode::RevokePrivilege(v) => RevokePrivilegeInterpreter::try_create(ctx_clone, v),
+            PlanNode::RevokeRole(v) => RevokeRoleInterpreter::try_create(ctx_clone, v),
 
             // Role
             PlanNode::CreateRole(v) => CreateRoleInterpreter::try_create(ctx_clone, v),
@@ -144,6 +157,13 @@ impl InterpreterFactory {
             PlanNode::CreateUserUDF(v) => CreateUserUDFInterpreter::try_create(ctx_clone, v),
             PlanNode::DropUserUDF(v) => DropUserUDFInterpreter::try_create(ctx_clone, v),
             PlanNode::AlterUserUDF(v) => AlterUserUDFInterpreter::try_create(ctx_clone, v),
+
+            // Stage
+            PlanNode::CreateUserStage(v) => CreateUserStageInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropUserStage(v) => DropUserStageInterpreter::try_create(ctx_clone, v),
+            PlanNode::DescribeUserStage(v) => {
+                DescribeUserStageInterpreter::try_create(ctx_clone, v)
+            }
 
             // Use.
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx_clone, v),
