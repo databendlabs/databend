@@ -21,6 +21,7 @@ use common_meta_types::UserInfo;
 
 use crate::sessions::Session;
 use crate::sessions::SessionContext;
+use crate::sessions::SessionType;
 use crate::sessions::Settings;
 
 pub struct ProcessInfo {
@@ -56,7 +57,7 @@ impl Session {
 
         ProcessInfo {
             id: self.id.clone(),
-            typ: self.typ.clone(),
+            typ: self.typ.clone().to_string(),
             state: self.process_state(status),
             database: status.get_current_database(),
             user: status.get_current_user(),
@@ -78,8 +79,8 @@ impl Session {
     }
 
     fn process_extra_info(self: &Arc<Self>, status: &SessionContext) -> Option<String> {
-        match self.typ.as_str() {
-            "RPCSession" => Session::rpc_extra_info(status),
+        match self.typ {
+            SessionType::FlightRPC => Session::rpc_extra_info(status),
             _ => Session::query_extra_info(status),
         }
     }

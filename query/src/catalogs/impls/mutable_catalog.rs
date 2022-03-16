@@ -31,6 +31,8 @@ use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::MetaId;
+use common_meta_types::RenameTableReply;
+use common_meta_types::RenameTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -233,6 +235,11 @@ impl Catalog for MutableCatalog {
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
         let res = self.ctx.meta.drop_table(req).await?;
+        Ok(res)
+    }
+
+    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
+        let res = self.ctx.meta.rename_table(req).await?;
         Ok(res)
     }
 

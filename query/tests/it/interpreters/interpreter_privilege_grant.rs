@@ -147,7 +147,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
                 .await?;
             assert_eq!(user_info.grants, tt.expected_grants.unwrap())
         } else if let Some(PrincipalIdentity::Role(role)) = tt.principal_identity {
-            let role_info = user_mgr.get_role(&tenant, &role).await?;
+            let role_info = user_mgr.get_role(&tenant, role).await?;
             assert_eq!(role_info.grants, tt.expected_grants.unwrap())
         }
     }
