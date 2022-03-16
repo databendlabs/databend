@@ -14,12 +14,12 @@
 
 use std::marker::PhantomData;
 
-use common_clickhouse_srv::types::column::ArcColumnWrapper;
-use common_clickhouse_srv::types::column::ColumnFrom;
-use common_clickhouse_srv::types::HasSqlType;
 use common_exception::Result;
 use common_io::prelude::Marshal;
 use common_io::prelude::Unmarshal;
+use opensrv_clickhouse::types::column::ArcColumnWrapper;
+use opensrv_clickhouse::types::column::ColumnFrom;
+use opensrv_clickhouse::types::HasSqlType;
 use serde_json::Value;
 
 use crate::prelude::*;
@@ -38,14 +38,14 @@ impl<T: PrimitiveType> Default for NumberSerializer<T> {
 
 impl<T> TypeSerializer for NumberSerializer<T>
 where T: PrimitiveType
-        + common_clickhouse_srv::types::StatBuffer
+        + opensrv_clickhouse::types::StatBuffer
         + Marshal
         + Unmarshal<T>
         + HasSqlType
-        + std::convert::Into<common_clickhouse_srv::types::Value>
-        + std::convert::From<common_clickhouse_srv::types::Value>
-        + common_clickhouse_srv::io::Marshal
-        + common_clickhouse_srv::io::Unmarshal<T>
+        + std::convert::Into<opensrv_clickhouse::types::Value>
+        + std::convert::From<opensrv_clickhouse::types::Value>
+        + opensrv_clickhouse::io::Marshal
+        + opensrv_clickhouse::io::Unmarshal<T>
 {
     fn serialize_value(&self, value: &DataValue) -> Result<String> {
         Ok(format!("{:?}", value))
@@ -69,7 +69,7 @@ where T: PrimitiveType
     fn serialize_clickhouse_format(
         &self,
         column: &ColumnRef,
-    ) -> Result<common_clickhouse_srv::types::column::ArcColumnData> {
+    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
         let col: &PrimitiveColumn<T> = Series::check_get(column)?;
         let values: Vec<T> = col.iter().map(|c| c.to_owned()).collect();
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
