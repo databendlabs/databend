@@ -79,6 +79,7 @@ jwt_key_file = \"\"
 [log]
 log_level = \"INFO\"
 log_dir = \"./_logs\"
+log_query_enabled = false
 
 [meta]
 meta_embedded_dir = \"./_meta_embedded\"

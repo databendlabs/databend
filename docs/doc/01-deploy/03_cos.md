@@ -1,8 +1,8 @@
 ---
-title: Deploy Databend With AWS S3
-sidebar_label: With AWS S3
+title: Deploy Databend With Tencent Cloud COS
+sidebar_label: With COS
 description:
-  How to deploy Databend with AWS S3
+  How to deploy Databend with Tencent Cloud(腾讯云) COS
 ---
 
 :::tip
@@ -11,11 +11,18 @@ Expected deployment time: ** 5 minutes ⏱ **
 
 :::
 
-This guideline will deploy Databend(standalone) with AWS S3 step by step.
+This guideline will deploy Databend(standalone) with Tencent Cloud(腾讯云) COS step by step.
 
 <p align="center">
-<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-s3-standalone.png" width="300"/>
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-cos-standalone.png" width="300"/>
 </p>
+
+
+### Before you begin
+
+* **COS:** Tencent Cloud COS is a S3-like object storage.
+  * [How to create COS bucket](https://cloud.tencent.com/document/product/436/13309)
+  * [How to get COS access_key_id and secret_access_key](https://cloud.tencent.com/document/product/436/68282)
 
 ## 1. Download
 
@@ -125,8 +132,17 @@ storage_type = "s3"
 [storage.disk]
 
 [storage.s3]
-bucket = "databend"
-endpoint_url = "https://s3.amazonaws.com"
+# How to create a bucket:
+# https://cloud.tencent.com/document/product/436/13309
+// highlight-next-line
+bucket = "databend-1253727613"
+
+# You can get the URL from the bucket detail page.
+// highlight-next-line
+endpoint_url = "https://cos.ap-beijing.myqcloud.com"
+
+# How to get access_key_id and secret_access_key:
+# https://cloud.tencent.com/document/product/436/68282
 // highlight-next-line
 access_key_id = "<your-key-id>"
 // highlight-next-line
@@ -134,6 +150,10 @@ secret_access_key = "<your-access-key>"
 
 [storage.azure_storage_blob]
 ```
+
+:::tip
+In this example COS region is beijing.
+:::
 
 ### 3.2 Start databend-query
 

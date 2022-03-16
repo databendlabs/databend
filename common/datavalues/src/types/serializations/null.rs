@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_clickhouse_srv::types::column::ArcColumnWrapper;
-use common_clickhouse_srv::types::column::ColumnFrom;
-use common_clickhouse_srv::types::column::NullableColumnData;
 use common_exception::Result;
+use opensrv_clickhouse::types::column::ArcColumnWrapper;
+use opensrv_clickhouse::types::column::ColumnFrom;
+use opensrv_clickhouse::types::column::NullableColumnData;
 use serde_json::Value;
 
 use crate::prelude::DataValue;
@@ -48,7 +48,7 @@ impl TypeSerializer for NullSerializer {
     fn serialize_clickhouse_format(
         &self,
         column: &ColumnRef,
-    ) -> Result<common_clickhouse_srv::types::column::ArcColumnData> {
+    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
         let nulls = vec![1u8; column.len()];
         let inner = Vec::column_from::<ArcColumnWrapper>(vec![1u8; column.len()]);
         let data = NullableColumnData { nulls, inner };
