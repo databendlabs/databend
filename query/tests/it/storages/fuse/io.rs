@@ -23,7 +23,7 @@ use common_exception::Result;
 use databend_query::storages::fuse::io::BlockCompactor;
 use databend_query::storages::fuse::io::BlockStreamWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
-use databend_query::storages::fuse::DEFAULT_CHUNK_BLOCK_NUM;
+use databend_query::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use num::Integer;
@@ -56,7 +56,7 @@ async fn test_fuse_table_block_appender() {
         local_fs.clone(),
         Box::pin(block_stream),
         schema.clone(),
-        DEFAULT_CHUNK_BLOCK_NUM,
+        DEFAULT_BLOCK_PER_SEGMENT,
         0,
         locs.clone(),
     )
@@ -103,7 +103,7 @@ async fn test_fuse_table_block_appender() {
         local_fs,
         Box::pin(block_stream),
         schema,
-        DEFAULT_CHUNK_BLOCK_NUM,
+        DEFAULT_BLOCK_PER_SEGMENT,
         0,
         locs,
     )

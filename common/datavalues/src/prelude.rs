@@ -42,4 +42,3 @@ pub type LargeBinaryArray = BinaryArray<i64>;
 
 pub type SmallVu8 = SmallVec<[u8; 16]>;
 pub type Vu8 = Vec<u8>;
-pub type Vu32 = Vec<u32>;

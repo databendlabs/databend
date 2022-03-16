@@ -166,8 +166,11 @@ impl FuseTable {
     }
 
     pub fn snapshot_format_version(&self) -> Result<u64> {
-        let result = self
-            .table_info
+        Self::parse_snaphost_format_version(&self.table_info)
+    }
+
+    pub fn parse_snaphost_format_version(table_info: &TableInfo) -> Result<u64> {
+        table_info
             .options()
             .get(FUSE_OPT_KEY_SNAPSHOT_VER)
             .map(|ver_str| {
@@ -179,8 +182,7 @@ impl FuseTable {
                 })
             })
             .transpose()
-            .map(|opt| opt.unwrap_or(0)); // TODO make 0 a constant
-        result
+            .map(|opt| opt.unwrap_or(0))
     }
 
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
