@@ -21,6 +21,7 @@ use crate::configs::Config;
 // Log env.
 pub const LOG_LEVEL: &str = "LOG_LEVEL";
 pub const LOG_DIR: &str = "LOG_DIR";
+pub const ENABLE_QUERY_LOG: &str = "ENABLE_QUERY_LOG";
 
 /// Log config group.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
@@ -34,6 +35,10 @@ pub struct LogConfig {
     /// Log file dir
     #[clap(required = false, long, env = LOG_DIR, default_value = "./_logs")]
     pub log_dir: String,
+
+    /// Log file dir
+    #[clap(long, env = ENABLE_QUERY_LOG)]
+    pub enable_query_log: bool,
 }
 
 impl Default for LogConfig {
@@ -41,6 +46,7 @@ impl Default for LogConfig {
         Self {
             log_level: "INFO".to_string(),
             log_dir: "./_logs".to_string(),
+            enable_query_log: false,
         }
     }
 }
@@ -49,5 +55,6 @@ impl LogConfig {
     pub fn load_from_env(mut_config: &mut Config) {
         env_helper!(mut_config, log, log_level, String, LOG_LEVEL);
         env_helper!(mut_config, log, log_dir, String, LOG_DIR);
+        env_helper!(mut_config, log, enable_query_log, bool, ENABLE_QUERY_LOG);
     }
 }

@@ -62,7 +62,8 @@ pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
     pub(in crate::sessions) storage_cache_manager: RwLock<Arc<CacheManager>>,
-    pub(in crate::sessions) query_logger: RwLock<Arc<dyn tracing::Subscriber + Send + Sync>>,
+    pub(in crate::sessions) query_logger:
+        RwLock<Option<Arc<dyn tracing::Subscriber + Send + Sync>>>,
     pub status: Arc<RwLock<Status>>,
     storage_operator: RwLock<Operator>,
     storage_runtime: Runtime,
@@ -94,9 +95,14 @@ impl SessionManager {
         let active_sessions = Arc::new(RwLock::new(HashMap::with_capacity(max_sessions)));
         let status = Arc::new(RwLock::new(Default::default()));
 
-        let query_log_name = format!("query-detail-{}", conf.query.cluster_id,);
-        let (_guards, query_logger) =
-            init_query_logger(query_log_name.as_str(), conf.log.log_dir.as_str());
+        let (_guards, query_logger) = if conf.log.enable_query_log {
+            let query_log_name = format!("query-detail-{}", conf.query.cluster_id,);
+            let (_guards, query_logger) =
+                init_query_logger(query_log_name.as_str(), conf.log.log_dir.as_str());
+            (_guards, Some(query_logger))
+        } else {
+            (Vec::new(), None)
+        };
 
         Ok(Arc::new(SessionManager {
             conf: RwLock::new(conf),
@@ -418,7 +424,7 @@ impl SessionManager {
         Ok(())
     }
 
-    pub fn get_query_logger(&self) -> Arc<dyn tracing::Subscriber + Send + Sync> {
+    pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
         self.query_logger.write().to_owned()
     }
 }

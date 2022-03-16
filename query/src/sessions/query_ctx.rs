@@ -361,7 +361,7 @@ impl QueryContext {
         self.shared.reload_config().await
     }
 
-    pub fn get_query_logger(&self) -> Arc<dyn tracing::Subscriber + Send + Sync> {
+    pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
         self.shared.session.session_mgr.get_query_logger()
     }
 }

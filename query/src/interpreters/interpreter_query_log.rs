@@ -169,11 +169,15 @@ impl InterpreterQueryLog {
             .append_data(self.ctx.clone(), Box::pin(input_stream))
             .await?;
 
-        let logger = self.ctx.get_query_logger();
-        let event_str = serde_json::to_string(event)?;
-        tracing::subscriber::with_default(logger, || {
-            tracing::info!("Query: {}", event_str);
-        });
+        match self.ctx.get_query_logger() {
+            Some(logger) => {
+                let event_str = serde_json::to_string(event)?;
+                tracing::subscriber::with_default(logger, || {
+                    tracing::info!("Query: {}", event_str);
+                });
+            }
+            None => {}
+        }
 
         Ok(())
     }
