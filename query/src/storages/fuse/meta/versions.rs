@@ -56,7 +56,7 @@ mod converters {
                 0 => Ok(SnapshotVersions::V0(Versioned::new())),
                 1 => Ok(SnapshotVersions::V1(Versioned::new())),
                 _ => Err(ErrorCode::LogicalError(format!(
-                    "unknown snapshot version {value}"
+                    "unknown snapshot version {value}, versions supported: 0, 1"
                 ))),
             }
         }
@@ -69,7 +69,7 @@ mod converters {
                 0 => Ok(SegmentInfoVersions::V0(Versioned::new())),
                 1 => Ok(SegmentInfoVersions::V1(Versioned::new())),
                 _ => Err(ErrorCode::LogicalError(format!(
-                    "unknown segment version {value}"
+                    "unknown segment version {value}, versions supported: 0, 1"
                 ))),
             }
         }

@@ -88,10 +88,6 @@ impl FuseTable {
         // 1. remove blocks
         for x in block_delta {
             self.remove_location(accessor.clone(), x).await?;
-            if let Some(c) = ctx.get_storage_cache_manager().get_block_meta_cache() {
-                let cache = &mut *c.write().await;
-                cache.pop(x.as_str());
-            }
         }
 
         // 2. remove the segments

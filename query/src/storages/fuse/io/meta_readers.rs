@@ -14,12 +14,8 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow::io::parquet::read::read_metadata_async;
-use common_arrow::arrow::io::parquet::read::schema::FileMetaData as ParquetFileMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing::debug_span;
-use common_tracing::tracing::Instrument;
 use futures::io::BufReader;
 use opendal::error::Kind as DalErrorKind;
 use opendal::Reader;
@@ -46,28 +42,12 @@ pub trait BufReaderProvider {
     async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<Reader>>;
 }
 
-/// A Newtype of [FileMetaData].
-///
-/// To avoid implementation (of trait [Loader]) conflicts
-pub struct FileMetaData(ParquetFileMetaData);
-
-impl FileMetaData {
-    pub fn inner(&self) -> &ParquetFileMetaData {
-        &self.0
-    }
-}
-
 pub type SegmentInfoCache = MemoryCache<SegmentInfo>;
 pub type TableSnapshotCache = MemoryCache<TableSnapshot>;
-pub type BlockMetaCache = MemoryCache<FileMetaData>;
 
 pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, &'a QueryContext>;
 pub type TableSnapshotReader<'a> = CachedReader<TableSnapshot, &'a QueryContext>;
 
-/// A sugar type of BlockMeta reader
-pub type BlockMetaReader = CachedReader<FileMetaData, Arc<QueryContext>>;
-
-/// Aux struct, factory of common readers
 pub struct MetaReaders;
 
 impl MetaReaders {
@@ -84,14 +64,6 @@ impl MetaReaders {
             ctx.get_storage_cache_manager().get_table_snapshot_cache(),
             ctx,
             "SNAPSHOT_CACHE".to_owned(),
-        )
-    }
-
-    pub fn block_meta_reader(ctx: Arc<QueryContext>) -> BlockMetaReader {
-        BlockMetaReader::new(
-            ctx.get_storage_cache_manager().get_block_meta_cache(),
-            ctx,
-            "BLOCK_META_CACHE".to_owned(),
         )
     }
 }
@@ -153,25 +125,6 @@ where T: BufReaderProvider + Sync
 }
 
 #[async_trait::async_trait]
-impl<T> Loader<FileMetaData> for T
-where T: BufReaderProvider + Sync
-{
-    async fn load(
-        &self,
-        key: &str,
-        length_hint: Option<u64>,
-        _version: u64,
-    ) -> Result<FileMetaData> {
-        let mut reader = self.buf_reader(key, length_hint).await?;
-        let meta = read_metadata_async(&mut reader)
-            .instrument(debug_span!("parquet_source_read_meta"))
-            .await
-            .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-        Ok(FileMetaData(meta))
-    }
-}
-
-#[async_trait::async_trait]
 impl BufReaderProvider for &QueryContext {
     async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<Reader>> {
         let operator = self.get_storage_operator().await?;
@@ -192,13 +145,6 @@ impl BufReaderProvider for &QueryContext {
         let reader = object.limited_reader(len);
         let read_buffer_size = self.get_settings().get_storage_read_buffer_size()?;
         Ok(BufReader::with_capacity(read_buffer_size as usize, reader))
-    }
-}
-
-#[async_trait::async_trait]
-impl BufReaderProvider for Arc<QueryContext> {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<Reader>> {
-        self.as_ref().buf_reader(path, len).await
     }
 }
 

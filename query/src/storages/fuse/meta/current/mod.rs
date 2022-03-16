@@ -20,5 +20,6 @@ pub use v1::snapshot::Location;
 pub use v1::snapshot::SnapshotId;
 pub use v1::snapshot::TableSnapshot;
 
+pub use super::v0::ColumnMeta;
 pub use super::v0::Statistics;
 use super::v1;
