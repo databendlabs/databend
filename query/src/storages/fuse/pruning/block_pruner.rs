@@ -83,9 +83,8 @@ impl BlockPruner {
         // See https://github.com/rust-lang/rust/issues/81653
         let segment_locs = segment_locs.into_iter().map(|(s, v)| (s, NonCopy(v)));
         let stream = futures::stream::iter(segment_locs)
-            .map(|(seg_loc, u): (String, NonCopy)| async {
-                let i = u;
-                let v = i.0;
+            .map(|(seg_loc, u)| async {
+                let v = { u }.0;
                 if accumulated_rows.load(Ordering::Acquire) < limit {
                     let reader = MetaReaders::segment_info_reader(ctx);
                     let segment_info = reader.read(seg_loc, None, v).await?;
