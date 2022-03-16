@@ -76,11 +76,19 @@ impl BlockPruner {
         // "accuracy". In [FuseTable::do_read_partitions], the "limit" will be treated precisely.
 
         let accumulated_rows = AtomicUsize::new(0);
+
+        struct NonCopy(u64);
+        // convert u64 (which is Copy) into NonCopy( struct which not mark with Copy)
+        // so that "async move" can be avoided in the latter async block
+        // See https://github.com/rust-lang/rust/issues/81653
+        let segment_locs = segment_locs.into_iter().map(|(s, v)| (s, NonCopy(v)));
         let stream = futures::stream::iter(segment_locs)
-            .map(|(seg_loc, v)| async {
+            .map(|(seg_loc, u): (String, NonCopy)| async {
+                let i = u;
+                let v = i.0;
                 if accumulated_rows.load(Ordering::Acquire) < limit {
                     let reader = MetaReaders::segment_info_reader(ctx);
-                    let segment_info = reader.read(seg_loc, None, 1).await?;
+                    let segment_info = reader.read(seg_loc, None, v).await?;
                     Self::filter_segment(
                         segment_info.as_ref(),
                         &block_pred,
