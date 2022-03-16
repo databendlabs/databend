@@ -96,9 +96,8 @@ impl SessionManager {
         let status = Arc::new(RwLock::new(Default::default()));
 
         let (_guards, query_logger) = if conf.log.log_query_enabled {
-            let query_log_name = format!("query-detail-{}", conf.query.cluster_id,);
             let (_guards, query_logger) =
-                init_query_logger(query_log_name.as_str(), conf.log.log_dir.as_str());
+                init_query_logger("query-detail", conf.log.log_dir.as_str());
             (_guards, Some(query_logger))
         } else {
             (Vec::new(), None)
