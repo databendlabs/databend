@@ -14,6 +14,17 @@
 
 use std::string::FromUtf8Error;
 
+/// Function that escapes special characters in a string.
+///
+/// All characters except digit, alphabet and '_' are treated as special characters.
+/// A special character will be converted into "%num" where num is the hexadecimal form of the character.
+///
+/// # Example
+/// ```
+/// let key = "data_bend!!";
+/// let new_key = escape_for_key(&key);
+/// assert_eq!(Ok("data_bend%21%21".to_string()), new_key);
+/// ```
 pub fn escape_for_key(key: &str) -> Result<String, FromUtf8Error> {
     let mut new_key = Vec::with_capacity(key.len());
 
@@ -40,6 +51,14 @@ pub fn escape_for_key(key: &str) -> Result<String, FromUtf8Error> {
     String::from_utf8(new_key)
 }
 
+/// The reverse function of escape_for_key.
+///
+/// # Example
+/// ```
+/// let key = "data_bend%21%21";
+/// let original_key = unescape_for_key(&key);
+/// assert_eq!(Ok("data_bend!!".to_string()), original_key);
+/// ```
 pub fn unescape_for_key(key: &str) -> Result<String, FromUtf8Error> {
     let mut new_key = Vec::with_capacity(key.len());
 
@@ -57,6 +76,7 @@ pub fn unescape_for_key(key: &str) -> Result<String, FromUtf8Error> {
     while index < bytes.len() {
         match bytes[index] {
             b'%' => {
+                // The last byte of the string won't be '%'
                 let mut num = unhex(bytes[index + 1]) * 16;
                 num += unhex(bytes[index + 2]);
                 new_key.push(num);
