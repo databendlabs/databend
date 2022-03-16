@@ -173,11 +173,11 @@ impl InterpreterQueryLog {
             Some(logger) => {
                 let event_str = serde_json::to_string(event)?;
                 tracing::subscriber::with_default(logger, || {
-                    tracing::info!("Query: {}", event_str);
+                    tracing::info!("{}", event_str);
                 });
             }
             None => {}
-        }
+        };
 
         Ok(())
     }

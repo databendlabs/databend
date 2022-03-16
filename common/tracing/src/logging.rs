@@ -121,10 +121,16 @@ pub fn init_query_logger(
 
     let rolling_appender = RollingFileAppender::new(Rotation::HOURLY, dir, log_name);
     let (rolling_writer, rolling_writer_guard) = tracing_appender::non_blocking(rolling_appender);
+    let format = tracing_subscriber::fmt::format()
+        .without_time()
+        .with_target(false)
+        .with_level(false)
+        .compact();
     guards.push(rolling_writer_guard);
 
     let subscriber = tracing_subscriber::fmt()
         .with_writer(rolling_writer)
+        .event_format(format)
         .finish();
 
     (guards, Arc::new(subscriber))
