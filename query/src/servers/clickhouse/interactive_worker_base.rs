@@ -23,8 +23,6 @@ use common_base::tokio::sync::mpsc::channel;
 use common_base::tokio::time::interval;
 use common_base::ProgressValues;
 use common_base::TrySpawn;
-use common_clickhouse_srv::types::Block as ClickHouseBlock;
-use common_clickhouse_srv::CHContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -37,6 +35,8 @@ use futures::channel::mpsc::Receiver;
 use futures::SinkExt;
 use futures::StreamExt;
 use metrics::histogram;
+use opensrv_clickhouse::types::Block as ClickHouseBlock;
+use opensrv_clickhouse::CHContext;
 use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::wrappers::ReceiverStream;
 

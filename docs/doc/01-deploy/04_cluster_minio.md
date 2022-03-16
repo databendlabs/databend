@@ -61,14 +61,13 @@ clickhouse_handler_port = 9002
 http_handler_host = "127.0.0.1"
 http_handler_port = 8082
 
-# tenant_id should be same for the cluster.
+// highlight-next-line
 tenant_id = "tenant1"
-
-# cluster_id should be same for the cluster.
+// highlight-next-line
 cluster_id = "cluster1"
 
-# The meta should be same for the cluster.
 [meta]
+// highlight-next-line
 meta_address = "127.0.0.1:9101"
 meta_username = "root"
 meta_password = "root"
@@ -82,11 +81,10 @@ storage_type = "s3"
 
 # The storage should be same for the cluster.
 [storage.s3]
-bucket="databend"
-region="us-east-1"
-endpoint_url="http://127.0.0.1:9900"
-access_key_id="minioadmin"
-secret_access_key="minioadmin"
+bucket = "databend"
+endpoint_url = "http://127.0.0.1:9900"
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
 ```
 
 ### 2.2 Start new databend-query node

@@ -16,7 +16,7 @@ use common_base::tokio::io::AsyncReadExt;
 use common_base::tokio::io::AsyncWriteExt;
 use common_base::tokio::net::TcpStream;
 use common_exception::Result;
-use msql_srv::ErrorKind;
+use opensrv_mysql::ErrorKind;
 
 pub struct RejectConnection;
 
@@ -45,7 +45,7 @@ impl RejectConnection {
     }
 
     async fn send_handshake(stream: &mut TcpStream) -> Result<()> {
-        // Send handshake, packet from msql-srv. Packet[seq = 0]
+        // Send handshake, packet from opensrv-mysql. Packet[seq = 0]
         stream
             .write_all(&[
                 69, 00, 00, 00, 10, 53, 46, 49, 46, 49, 48, 45, 97, 108, 112, 104, 97, 45, 109,

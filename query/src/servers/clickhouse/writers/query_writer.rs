@@ -15,14 +15,6 @@
 use std::borrow::Cow;
 
 use common_base::ProgressValues;
-use common_clickhouse_srv::connection::Connection;
-use common_clickhouse_srv::errors::Error as CHError;
-use common_clickhouse_srv::errors::Result as CHResult;
-use common_clickhouse_srv::errors::ServerError;
-use common_clickhouse_srv::types::column::{self};
-use common_clickhouse_srv::types::Block;
-use common_clickhouse_srv::types::DateTimeType;
-use common_clickhouse_srv::types::SqlType;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -30,6 +22,14 @@ use common_exception::Result;
 use common_tracing::tracing;
 use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
+use opensrv_clickhouse::connection::Connection;
+use opensrv_clickhouse::errors::Error as CHError;
+use opensrv_clickhouse::errors::Result as CHResult;
+use opensrv_clickhouse::errors::ServerError;
+use opensrv_clickhouse::types::column::{self};
+use opensrv_clickhouse::types::Block;
+use opensrv_clickhouse::types::DateTimeType;
+use opensrv_clickhouse::types::SqlType;
 
 use crate::servers::clickhouse::interactive_worker_base::BlockItem;
 
@@ -57,7 +57,7 @@ impl<'a> QueryWriter<'a> {
     }
 
     async fn write_progress(&mut self, values: ProgressValues) -> Result<()> {
-        let progress = common_clickhouse_srv::types::Progress {
+        let progress = opensrv_clickhouse::types::Progress {
             rows: values.rows as u64,
             bytes: values.bytes as u64,
             total_rows: 0,
@@ -119,8 +119,8 @@ impl<'a> QueryWriter<'a> {
     }
 }
 
-pub fn to_clickhouse_err(res: ErrorCode) -> common_clickhouse_srv::errors::Error {
-    common_clickhouse_srv::errors::Error::Server(ServerError {
+pub fn to_clickhouse_err(res: ErrorCode) -> opensrv_clickhouse::errors::Error {
+    opensrv_clickhouse::errors::Error::Server(ServerError {
         code: res.code() as u32,
         name: "DB:Exception".to_string(),
         message: res.message(),
@@ -128,7 +128,7 @@ pub fn to_clickhouse_err(res: ErrorCode) -> common_clickhouse_srv::errors::Error
     })
 }
 
-pub fn from_clickhouse_err(res: common_clickhouse_srv::errors::Error) -> ErrorCode {
+pub fn from_clickhouse_err(res: opensrv_clickhouse::errors::Error) -> ErrorCode {
     ErrorCode::LogicalError(format!("clickhouse-srv expception: {:?}", res))
 }
 
