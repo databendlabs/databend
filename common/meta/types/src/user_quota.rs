@@ -15,7 +15,7 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Default, Eq, PartialEq)]
 #[serde(default)]
 pub struct UserQuota {
     // The max cpu can be used (0 is no limited).
@@ -35,5 +35,15 @@ impl UserQuota {
             max_memory_in_bytes: 0,
             max_storage_in_bytes: 0,
         }
+    }
+}
+
+impl std::fmt::Debug for UserQuota {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "UserQuota<cpu:{},mem:{},store:{}>",
+            self.max_cpu, self.max_memory_in_bytes, self.max_storage_in_bytes
+        )
     }
 }

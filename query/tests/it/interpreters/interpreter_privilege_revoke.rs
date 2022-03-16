@@ -86,7 +86,7 @@ async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
     while let Some(_block) = stream.next().await {}
 
     let role = user_mgr
-        .get_role(&tenant, &RoleIdentity::new("role1".to_string()))
+        .get_role(&tenant, RoleIdentity::new("role1".to_string()))
         .await?;
     assert!(!role
         .grants

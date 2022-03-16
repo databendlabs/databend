@@ -15,6 +15,7 @@
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
+use common_meta_types::RoleIdentity;
 use common_meta_types::SeqV;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
@@ -40,7 +41,7 @@ pub trait UserApi: Sync + Send {
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 
-    async fn grant_user_privileges(
+    async fn grant_privileges(
         &self,
         username: String,
         hostname: String,
@@ -49,12 +50,28 @@ pub trait UserApi: Sync + Send {
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 
-    async fn revoke_user_privileges(
+    async fn revoke_privileges(
         &self,
         username: String,
         hostname: String,
         object: GrantObject,
         privileges: UserPrivilegeSet,
+        seq: Option<u64>,
+    ) -> Result<Option<u64>>;
+
+    async fn grant_role(
+        &self,
+        username: String,
+        hostname: String,
+        grant_role: RoleIdentity,
+        seq: Option<u64>,
+    ) -> Result<Option<u64>>;
+
+    async fn revoke_role(
+        &self,
+        username: String,
+        hostname: String,
+        revoke_role: RoleIdentity,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 

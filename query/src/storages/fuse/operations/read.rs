@@ -85,8 +85,7 @@ impl FuseTable {
 
         let operator = ctx.get_storage_operator()?;
         let table_schema = self.table_info.schema();
-        let block_reader = BlockReader::create(operator, table_schema, projection, ctx.clone())?;
-        Ok(block_reader)
+        BlockReader::create(ctx.clone(), operator, table_schema, projection)
     }
 
     #[inline]

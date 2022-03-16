@@ -15,10 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::GrantObject;
 use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserPrivilegeSet;
-use common_planners::GrantPrivilegePlan;
+use common_planners::RevokePrivilegePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -29,21 +27,21 @@ use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
-pub struct GrantPrivilegeInterpreter {
+pub struct RevokePrivilegeInterpreter {
     ctx: Arc<QueryContext>,
-    plan: GrantPrivilegePlan,
+    plan: RevokePrivilegePlan,
 }
 
-impl GrantPrivilegeInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: GrantPrivilegePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(GrantPrivilegeInterpreter { ctx, plan }))
+impl RevokePrivilegeInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: RevokePrivilegePlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(RevokePrivilegeInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for GrantPrivilegeInterpreter {
+impl Interpreter for RevokePrivilegeInterpreter {
     fn name(&self) -> &str {
-        "GrantPrivilegeInterpreter"
+        "RevokePrivilegeInterpreter"
     }
 
     #[tracing::instrument(level = "debug", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
@@ -53,7 +51,6 @@ impl Interpreter for GrantPrivilegeInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
 
-        validate_grant_privileges(&plan.on, plan.priv_types)?;
         validate_grant_object_exists(&self.ctx, &plan.on).await?;
 
         // TODO: check user existence
@@ -61,10 +58,11 @@ impl Interpreter for GrantPrivilegeInterpreter {
 
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
-        match &plan.principal {
+
+        match plan.principal {
             PrincipalIdentity::User(user) => {
                 user_mgr
-                    .grant_user_privileges(
+                    .revoke_privileges_from_user(
                         &tenant,
                         &user.username,
                         &user.hostname,
@@ -75,7 +73,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
             }
             PrincipalIdentity::Role(role) => {
                 user_mgr
-                    .grant_role_privileges(&tenant, role, plan.on, plan.priv_types)
+                    .revoke_privileges_from_role(&tenant, role, plan.on, plan.priv_types)
                     .await?;
             }
         }
@@ -86,18 +84,4 @@ impl Interpreter for GrantPrivilegeInterpreter {
             vec![],
         )))
     }
-}
-
-/// Check if there's any privilege which can not be granted to this GrantObject.
-/// Some global privileges can not be granted to a database or table, for example,
-/// a KILL statement is meaningless for a table.
-pub fn validate_grant_privileges(object: &GrantObject, privileges: UserPrivilegeSet) -> Result<()> {
-    let available_privileges = object.available_privileges();
-    let ok = privileges
-        .iter()
-        .all(|p| available_privileges.has_privilege(p));
-    if !ok {
-        return Err(common_exception::ErrorCode::IllegalGrant("Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used"));
-    }
-    Ok(())
 }

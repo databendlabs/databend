@@ -38,7 +38,7 @@ async fn test_role_manager() -> Result<()> {
 
     // get role
     {
-        let role = role_mgr.get_role(tenant, &role_identity).await?;
+        let role = role_mgr.get_role(tenant, role_identity.clone()).await?;
         assert_eq!(role.name, "test-role1");
     }
 
@@ -52,14 +52,14 @@ async fn test_role_manager() -> Result<()> {
     // grant and verify privilege to role
     {
         role_mgr
-            .grant_role_privileges(
+            .grant_privileges_to_role(
                 tenant,
-                &role_identity,
+                role_identity.clone(),
                 GrantObject::Global,
                 UserPrivilegeSet::all_privileges(),
             )
             .await?;
-        let role = role_mgr.get_role(tenant, &role_identity).await?;
+        let role = role_mgr.get_role(tenant, role_identity.clone()).await?;
         assert!(role
             .grants
             .verify_privilege(&GrantObject::Global, UserPrivilegeType::Alter));
@@ -68,15 +68,15 @@ async fn test_role_manager() -> Result<()> {
     // revoke privilege from role
     {
         role_mgr
-            .revoke_role_privileges(
+            .revoke_privileges_from_role(
                 tenant,
-                &role_identity,
+                role_identity.clone(),
                 GrantObject::Global,
                 UserPrivilegeSet::all_privileges(),
             )
             .await?;
 
-        let role = role_mgr.get_role(tenant, &role_identity).await?;
+        let role = role_mgr.get_role(tenant, role_identity.clone()).await?;
         assert_eq!(role.grants.entries().len(), 0);
     }
 

@@ -16,7 +16,6 @@ common-arrow = { path = "../arrow" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
 common-infallible = { path = "../infallible" }
-common-io = { path = "../io" }
 
 # Github dependencies
 
@@ -24,7 +23,6 @@ common-io = { path = "../io" }
 ahash = "0.7.6"
 comfy-table = "5.0.1"
 regex = "1.5.5"
-smallvec = "1.8.0"
 
 [dev-dependencies]
 pretty_assertions = "1.1.0"
