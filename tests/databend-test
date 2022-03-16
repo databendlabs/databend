@@ -198,6 +198,7 @@ def run_tests_array(all_tests_with_params):
     failures_total = 0
     failures = 0
     failures_chain = 0
+    failure_cases = []
 
     client_options = get_additional_client_options(args)
 
@@ -281,6 +282,7 @@ def run_tests_array(all_tests_with_params):
                                 raise
 
                         failures += 1
+                        failure_cases.append(case_file_full_path)
                         status += MSG_FAIL
                         status += print_test_time(total_time)
                         status += " - Timeout!\n"
@@ -299,6 +301,7 @@ def run_tests_array(all_tests_with_params):
 
                         if proc.returncode != 0:
                             failures += 1
+                            failure_cases.append(case_file_full_path)
                             failures_chain += 1
                             status += MSG_FAIL
                             status += print_test_time(total_time)
@@ -328,6 +331,7 @@ def run_tests_array(all_tests_with_params):
 
                         elif stderr:
                             failures += 1
+                            failure_cases.append(case_file_full_path)
                             failures_chain += 1
                             status += MSG_FAIL
                             status += print_test_time(total_time)
@@ -335,6 +339,7 @@ def run_tests_array(all_tests_with_params):
                                 '\n'.join(stderr.split('\n')[:100]))
                         elif 'Exception' in stdout:
                             failures += 1
+                            failure_cases.append(case_file_full_path)
                             failures_chain += 1
                             status += MSG_FAIL
                             status += print_test_time(total_time)
@@ -358,6 +363,7 @@ def run_tests_array(all_tests_with_params):
                                     stdout=PIPE,
                                     universal_newlines=True).communicate()[0]
                                 failures += 1
+                                failure_cases.append(case_file_full_path)
                                 status += MSG_FAIL
                                 status += print_test_time(total_time)
                                 status += " - result differs with:\n{}\n"\
@@ -384,6 +390,7 @@ def run_tests_array(all_tests_with_params):
         except Exception:
             exc_type, exc_value, tb = sys.exc_info()
             failures += 1
+            failure_cases.append("Test internal error")
             print("{0} - Test internal error: {1}\n{2}\n{3}".format(
                 MSG_FAIL, exc_type.__name__, exc_value,
                 "\n".join(traceback.format_tb(tb, 10))))
@@ -404,6 +411,19 @@ def run_tests_array(all_tests_with_params):
                 args,
                 "red",
                 attrs=["bold"]))
+        print(
+            colored(
+                "The failure tests:",
+                args,
+                "red",
+                attrs=["bold"]))
+        for case in failure_cases:
+            print(
+                colored(
+                    "    {case}".format(case=case),
+                    args,
+                    "red",
+                    attrs=["bold"]))
         exit_code = 1
     else:
         print(
