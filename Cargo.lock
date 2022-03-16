@@ -1115,35 +1115,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-clickhouse-srv"
-version = "0.3.2"
-dependencies = [
- "async-trait",
- "byteorder",
- "bytes",
- "chrono",
- "chrono-tz",
- "combine",
- "common-io",
- "common-tracing",
- "futures",
- "futures-util",
- "hostname",
- "log",
- "lz4",
- "naive-cityhash",
- "native-tls",
- "once_cell",
- "rand 0.8.5",
- "thiserror",
- "tokio",
- "tokio-native-tls",
- "tokio-stream",
- "url",
- "uuid",
-]
-
-[[package]]
 name = "common-containers"
 version = "0.1.0"
 dependencies = [
@@ -1182,7 +1153,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "common-arrow",
- "common-clickhouse-srv",
  "common-exception",
  "common-io",
  "common-macros",
@@ -1193,6 +1163,7 @@ dependencies = [
  "lexical-core",
  "num",
  "once_cell",
+ "opensrv-clickhouse",
  "ordered-float 2.10.0",
  "paste",
  "pretty_assertions",
@@ -1990,7 +1961,6 @@ dependencies = [
  "common-base",
  "common-building",
  "common-cache",
- "common-clickhouse-srv",
  "common-contexts",
  "common-datablocks",
  "common-datavalues",
@@ -2022,7 +1992,6 @@ dependencies = [
  "jwt-simple",
  "maplit",
  "metrics",
- "msql-srv",
  "mysql_async",
  "nom",
  "num",
@@ -2030,6 +1999,8 @@ dependencies = [
  "octocrab",
  "once_cell",
  "opendal",
+ "opensrv-clickhouse",
+ "opensrv-mysql",
  "parquet-format-async-temp",
  "paste",
  "petgraph",
@@ -3413,7 +3384,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
 dependencies = [
  "cfg-if",
- "serde",
 ]
 
 [[package]]
@@ -3679,19 +3649,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "msql-srv"
-version = "0.9.6"
-source = "git+https://github.com/datafuse-extras/msql-srv?rev=af29f7b#af29f7b4a3bb7d738b91afa7a00c9dd5673f0c0a"
-dependencies = [
- "async-trait",
- "byteorder",
- "chrono",
- "mysql_common",
- "nom",
- "tokio",
 ]
 
 [[package]]
@@ -4130,6 +4087,46 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-futures",
+]
+
+[[package]]
+name = "opensrv-clickhouse"
+version = "0.1.0"
+source = "git+https://github.com/datafuselabs/opensrv?rev=9690be9#9690be9ff965c0e86e1ff599897c2019b0a379bd"
+dependencies = [
+ "async-trait",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "chrono-tz",
+ "combine",
+ "futures",
+ "futures-core",
+ "futures-sink",
+ "futures-util",
+ "hostname",
+ "lz4",
+ "naive-cityhash",
+ "once_cell",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "opensrv-mysql"
+version = "0.1.0"
+source = "git+https://github.com/datafuselabs/opensrv?rev=9690be9#9690be9ff965c0e86e1ff599897c2019b0a379bd"
+dependencies = [
+ "async-trait",
+ "byteorder",
+ "chrono",
+ "mysql_common",
+ "nom",
+ "tokio",
 ]
 
 [[package]]

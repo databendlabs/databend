@@ -19,10 +19,10 @@ use chrono::Date;
 use chrono::Duration;
 use chrono::NaiveDate;
 use chrono_tz::Tz;
-use common_clickhouse_srv::types::column::ArcColumnWrapper;
-use common_clickhouse_srv::types::column::ColumnFrom;
 use common_exception::*;
 use num::cast::AsPrimitive;
+use opensrv_clickhouse::types::column::ArcColumnWrapper;
+use opensrv_clickhouse::types::column::ColumnFrom;
 use serde_json::Value;
 
 use crate::prelude::*;
@@ -82,7 +82,7 @@ impl<T: PrimitiveType + AsPrimitive<i64>> TypeSerializer for DateSerializer<T> {
     fn serialize_clickhouse_format(
         &self,
         column: &ColumnRef,
-    ) -> Result<common_clickhouse_srv::types::column::ArcColumnData> {
+    ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
         let array: &PrimitiveColumn<T> = Series::check_get(column)?;
         let tz: Tz = "UTC".parse().unwrap();
 
