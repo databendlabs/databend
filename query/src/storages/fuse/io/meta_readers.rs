@@ -73,26 +73,35 @@ impl<'a> TableSnapshotReader<'a> {
         &self,
         latest_snapshot_location: Option<&String>,
         format_version: u64,
-        meta_locs: TableMetaLocationGenerator,
+        location_gen: TableMetaLocationGenerator,
     ) -> Result<Vec<Arc<TableSnapshot>>> {
         let mut snapshots = vec![];
-        let mut current_snapshot_location = latest_snapshot_location.cloned();
-        let current_format_version = format_version;
-        while let Some(loc) = current_snapshot_location {
-            let r = self.read(loc, None, current_format_version).await;
-            let snapshot = match r {
-                Ok(s) => s,
-                Err(e) if e.code() == ErrorCode::dal_path_not_found_code() => {
+        if let Some(loc) = latest_snapshot_location {
+            let mut ver = format_version;
+            let mut loc = loc.to_string();
+            // TODO refine this
+            loop {
+                let snapshot = match self.read(loc, None, ver).await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        if e.code() == ErrorCode::dal_path_not_found_code() {
+                            break;
+                        } else {
+                            return Err(e);
+                        }
+                    }
+                };
+                if let Some((id, v)) = snapshot.prev_snapshot_id {
+                    ver = v;
+                    loc = location_gen.snapshot_location_from_uuid(&id);
+                    snapshots.push(snapshot);
+                } else {
+                    snapshots.push(snapshot);
                     break;
                 }
-                Err(e) => return Err(e),
-            };
-            let prev = snapshot.prev_snapshot_id;
-            snapshots.push(snapshot);
-            // TODO buggy, set the current ver
-            current_snapshot_location =
-                prev.map(|(id, _)| meta_locs.snapshot_location_from_uuid(&id));
+            }
         }
+
         Ok(snapshots)
     }
 }
