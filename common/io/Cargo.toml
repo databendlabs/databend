@@ -15,6 +15,7 @@ test = false
 [dependencies]
 # Workspace dependencies
 common-exception = { path = "../exception" }
+common-base = {path = "../base"}
 
 # Github dependencies
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }

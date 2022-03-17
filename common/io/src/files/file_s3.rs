@@ -28,8 +28,11 @@ impl S3File {
         s3_bucket: &str,
         aws_key_id: &str,
         aws_secret_key: &str,
+        runtime: &common_base::Runtime,
     ) -> Result<Operator> {
         let mut builder = opendal::services::s3::Backend::build();
+
+        builder.runtime(runtime.inner());
 
         // Endpoint url.
         builder.endpoint(s3_endpoint);

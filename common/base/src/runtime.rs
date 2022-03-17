@@ -93,6 +93,7 @@ impl Runtime {
 
         // Block the runtime to shutdown.
         let _ = thread::spawn(move || {
+            warn!("runtime {:?} started", &name);
             runtime.block_on(recv_stop);
             warn!("runtime {:?} dropped", name);
         });
@@ -132,14 +133,14 @@ impl Runtime {
     pub fn with_worker_threads(workers: usize, thread_name: Option<String>) -> Result<Self> {
         let tracker = RuntimeTracker::create();
         let mut runtime_builder = Self::tracker_builder(tracker.clone());
-        let name = thread_name.clone().unwrap_or_default();
-        if let Some(v) = thread_name {
-            if v == "IO-worker" {
-                warn!("creating IO runtime")
-            }
+        if let Some(v) = thread_name.as_ref() {
             runtime_builder.thread_name(v);
         }
-        Self::create(name, tracker, runtime_builder.worker_threads(workers))
+        Self::create(
+            thread_name.unwrap_or_default(),
+            tracker,
+            runtime_builder.worker_threads(workers),
+        )
     }
 
     pub fn inner(&self) -> tokio::runtime::Handle {

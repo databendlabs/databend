@@ -26,6 +26,7 @@ use common_base::Runtime;
 use common_base::TrySpawn;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
+use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -42,6 +43,7 @@ use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use common_tracing::tracing::warn;
 use opendal::Operator;
 
 use crate::catalogs::Catalog;
@@ -346,7 +348,18 @@ impl QueryContext {
     // Get the storage data accessor operator from the session manager.
     pub fn get_storage_operator(&self) -> Result<Operator> {
         let operator = self.shared.session.get_storage_operator();
-        Ok(operator.layer(self.shared.dal_ctx.as_ref().clone()))
+        // TODO(xuanwo): Create at session mgr instead could be better.
+        let runtime = DalRuntime::new(
+            self.shared
+                .session
+                .session_mgr
+                .get_storage_runtime()
+                .inner(),
+        );
+
+        Ok(operator
+            .layer(self.shared.dal_ctx.as_ref().clone())
+            .layer(runtime))
     }
 
     pub fn get_dal_context(&self) -> &DalContext {
@@ -394,7 +407,7 @@ impl QueryContextShared {
     pub(in crate::sessions) fn destroy_context_ref(&self) {
         if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Acquire);
-            tracing::debug!("Destroy QueryContext");
+            tracing::warn!("Destroy QueryContext");
             self.session.destroy_context_shared();
         }
     }

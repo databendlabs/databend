@@ -139,8 +139,8 @@ impl ExternalSource {
 
                     let key_id = &s3.credentials_aws_key_id;
                     let secret_key = &s3.credentials_aws_secret_key;
-
-                    S3File::open(endpoint, bucket, key_id, secret_key).await
+                    let runtime = ctx.get_storage_runtime();
+                    S3File::open(endpoint, bucket, key_id, secret_key, runtime).await
                 }
             }
         }
