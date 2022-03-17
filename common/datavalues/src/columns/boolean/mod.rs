@@ -110,7 +110,7 @@ impl Column for BooleanColumn {
         let mut bitmap = MutableBitmap::with_capacity(selected);
         let mut chunks = self.values().chunks::<u64>();
         let mut filter_chunks = filter.values().chunks::<u64>();
-        
+
         chunks
             .by_ref()
             .zip(filter_chunks.by_ref())
