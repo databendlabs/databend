@@ -42,14 +42,19 @@ impl FuseTable {
         &self,
         ctx: Arc<QueryContext>,
         push_downs: &Option<Extras>,
+        num_parts: usize,
     ) -> Result<SendableDataBlockStream> {
         let block_reader = self.create_block_reader(&ctx, push_downs)?;
 
-        let bite_size = ctx.get_settings().get_parallel_read_threads()?;
-        let iter = std::iter::from_fn(move || match ctx.clone().try_get_partitions(bite_size) {
-            Err(_) => None,
-            Ok(parts) if parts.is_empty() => None,
-            Ok(parts) => Some(parts),
+        let max_threads = ctx.get_settings().get_max_threads()?;
+        let current_block_reading = num::Integer::div_ceil(&(num_parts as u64), &max_threads);
+        let current_block_reading = std::cmp::max(1, current_block_reading);
+        let iter = std::iter::from_fn(move || {
+            match ctx.clone().try_get_partitions(current_block_reading) {
+                Err(_) => None,
+                Ok(parts) if parts.is_empty() => None,
+                Ok(parts) => Some(parts),
+            }
         })
         .flatten();
 
@@ -60,7 +65,7 @@ impl FuseTable {
                 let block_reader = block_reader.clone();
                 async move { block_reader.read(part).await }
             })
-            .buffer_unordered(bite_size as usize)
+            .buffer_unordered(current_block_reading as usize)
             .instrument(common_tracing::tracing::Span::current());
         Ok(Box::pin(stream))
     }
