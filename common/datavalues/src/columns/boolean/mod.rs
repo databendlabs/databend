@@ -103,17 +103,37 @@ impl Column for BooleanColumn {
     }
 
     fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
-        if filter.values().null_count() == 0 {
+        let selected = filter.values().len() - filter.values().null_count();
+        if selected == self.len() {
             return Arc::new(self.clone());
         }
-        let iter = self
-            .values()
-            .iter()
-            .zip(filter.values().iter())
-            .filter(|(_, b)| *b)
-            .map(|(a, _)| a);
+        let mut bitmap = MutableBitmap::with_capacity(selected);
+        let mut chunks = self.values().chunks::<u64>();
+        let mut filter_chunks = filter.values().chunks::<u64>();
+        
+        chunks
+            .by_ref()
+            .zip(filter_chunks.by_ref())
+            .for_each(|(chunk, mut mask)| {
+                while mask != 0 {
+                    let n = mask.trailing_zeros() as usize;
+                    let value: bool = chunk & (1 << n) != 0;
+                    bitmap.push(value);
+                    mask = mask & (mask - 1);
+                }
+            });
 
-        let col = Self::from_iterator(iter);
+        let chunk = chunks.remainder();
+        let mut mask = filter_chunks.remainder();
+        while mask != 0 {
+            let n = mask.trailing_zeros() as usize;
+            let value: bool = chunk & (1 << n) != 0;
+            bitmap.push(value);
+            mask = mask & (mask - 1);
+        }
+        let col = BooleanColumn {
+            values: bitmap.into(),
+        };
         Arc::new(col)
     }
 

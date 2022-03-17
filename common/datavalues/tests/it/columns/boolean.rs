@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datavalues::prelude::*;
 
 #[test]
@@ -48,4 +50,51 @@ fn test_boolean_column() {
     assert!(data_column.get(4).as_bool().unwrap());
     let slice = data_column.slice(0, N / 2);
     assert!(slice.len() == N / 2);
+}
+
+#[test]
+fn test_filter_column() {
+    const N: usize = 1000;
+    let data_column =
+        BooleanColumn::from_iterator((0..N).map(|e| if e % 2 == 0 { true } else { false }));
+
+    struct Test {
+        filter: BooleanColumn,
+        expect: Vec<bool>,
+    }
+
+    let tests: Vec<Test> = vec![
+        Test {
+            filter: BooleanColumn::from_iterator((0..N).map(|_| true)),
+            expect: (0..N)
+                .map(|e| if e % 2 == 0 { true } else { false })
+                .collect(),
+        },
+        Test {
+            filter: BooleanColumn::from_iterator((0..N).map(|_| false)),
+            expect: vec![],
+        },
+        Test {
+            filter: BooleanColumn::from_iterator((0..N).map(|i| i % 3 == 0)),
+            expect: (0..N)
+                .map(|e| if e % 2 == 0 { true } else { false })
+                .enumerate()
+                .filter(|(i, _)| i % 3 == 0)
+                .map(|(_, e)| e)
+                .collect(),
+        },
+    ];
+
+    for test in tests {
+        let res = data_column.filter(&test.filter);
+        let iter = test.expect.into_iter();
+        let bitmap: Bitmap = MutableBitmap::from_iter(iter).into();
+        assert_eq!(
+            res.as_any()
+                .downcast_ref::<BooleanColumn>()
+                .unwrap()
+                .values(),
+            &bitmap
+        );
+    }
 }
