@@ -33,7 +33,7 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         keep_last_snapshot: bool,
     ) -> Result<()> {
-        let accessor = ctx.get_storage_operator().await?;
+        let accessor = ctx.get_storage_operator()?;
         let tbl_info = self.get_table_info();
         let snapshot_loc = tbl_info.meta.options.get(FUSE_OPT_KEY_SNAPSHOT_LOC);
         let reader = MetaReaders::table_snapshot_reader(ctx.as_ref());

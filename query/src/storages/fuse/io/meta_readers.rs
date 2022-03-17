@@ -165,7 +165,7 @@ where T: BufReaderProvider + Sync
 #[async_trait::async_trait]
 impl BufReaderProvider for &QueryContext {
     async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<Reader>> {
-        let operator = self.get_storage_operator().await?;
+        let operator = self.get_storage_operator()?;
         let object = operator.object(path);
 
         let len = match len {

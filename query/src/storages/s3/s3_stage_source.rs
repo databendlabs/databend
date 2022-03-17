@@ -124,7 +124,7 @@ impl StageSource {
 
     pub async fn get_op(ctx: &Arc<QueryContext>, stage: &UserStageInfo) -> Result<Operator> {
         if stage.stage_type == StageType::Internal {
-            ctx.get_storage_operator().await
+            ctx.get_storage_operator()
         } else {
             // Get the dal file reader.
             match &stage.stage_params.storage {
