@@ -124,7 +124,7 @@ impl BlockReader {
             }
             .instrument(debug_span!("read_col_chunk"));
             tracing::debug!("issuing io task, {:?}", std::thread::current());
-            let fut = self.ctx.get_storage_runtime().try_spawn(fut)?;
+            // let fut = self.ctx.get_storage_runtime().try_spawn(fut)?;
             tracing::debug!("io task issued, {:?}", std::thread::current());
             column_chunk_futs.push(fut);
             col_idx.push(index);
@@ -137,8 +137,7 @@ impl BlockReader {
             .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 
         let mut columns_array_iter = Vec::with_capacity(num_cols);
-        for (i, chunk) in chunks.into_iter().enumerate() {
-            let column_chunk = chunk?;
+        for (i, column_chunk) in chunks.into_iter().enumerate() {
             let idx = *col_idx[i];
             let field = self.arrow_schema.fields[idx].clone();
             let column_descriptor = self.parquet_schema_descriptor.column(idx);

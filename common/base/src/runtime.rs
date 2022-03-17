@@ -18,6 +18,7 @@ use std::thread;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing::debug;
 use common_tracing::tracing::warn;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
@@ -77,7 +78,11 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    fn create(tracker: Arc<RuntimeTracker>, builder: &mut tokio::runtime::Builder) -> Result<Self> {
+    fn create(
+        name: String,
+        tracker: Arc<RuntimeTracker>,
+        builder: &mut tokio::runtime::Builder,
+    ) -> Result<Self> {
         let runtime = builder
             .build()
             .map_err(|tokio_error| ErrorCode::TokioError(format!("{}", tokio_error)))?;
@@ -87,7 +92,10 @@ impl Runtime {
         let handle = runtime.handle().clone();
 
         // Block the runtime to shutdown.
-        let _ = thread::spawn(move || runtime.block_on(recv_stop));
+        let _ = thread::spawn(move || {
+            runtime.block_on(recv_stop);
+            warn!("runtime {:?} dropped", name);
+        });
 
         Ok(Runtime {
             handle,
@@ -118,16 +126,20 @@ impl Runtime {
     pub fn with_default_worker_threads() -> Result<Self> {
         let tracker = RuntimeTracker::create();
         let mut runtime_builder = Self::tracker_builder(tracker.clone());
-        Self::create(tracker, &mut runtime_builder)
+        Self::create("".to_string(), tracker, &mut runtime_builder)
     }
 
     pub fn with_worker_threads(workers: usize, thread_name: Option<String>) -> Result<Self> {
         let tracker = RuntimeTracker::create();
         let mut runtime_builder = Self::tracker_builder(tracker.clone());
+        let name = thread_name.clone().unwrap_or_default();
         if let Some(v) = thread_name {
+            if v == "IO-worker" {
+                warn!("creating IO runtime")
+            }
             runtime_builder.thread_name(v);
         }
-        Self::create(tracker, runtime_builder.worker_threads(workers))
+        Self::create(name, tracker, runtime_builder.worker_threads(workers))
     }
 
     pub fn inner(&self) -> tokio::runtime::Handle {
@@ -157,7 +169,6 @@ pub struct Dropper {
 impl Drop for Dropper {
     fn drop(&mut self) {
         // Send a signal to say i am dropping.
-        warn!("IO Runtime has been dropped");
         self.close.take().map(|v| v.send(()));
     }
 }
