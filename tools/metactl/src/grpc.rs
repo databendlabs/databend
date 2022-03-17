@@ -25,15 +25,12 @@ pub async fn export_meta(addr: &str) -> anyhow::Result<()> {
 
     let mut stream = exported.into_inner();
 
-    let mut lines = vec![];
     while let Some(chunk_res) = stream.next().await {
         let chunk = chunk_res?;
 
-        lines.extend_from_slice(&chunk.data);
-    }
-
-    for line in lines {
-        println!("{}", line);
+        for line in &chunk.data {
+            println!("{}", line);
+        }
     }
 
     Ok(())
