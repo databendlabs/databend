@@ -53,7 +53,7 @@ impl Interpreter for CreateUserStageInterpreter {
         let user_stage = plan.user_stage_info;
 
         if user_stage.stage_type == StageType::Internal {
-            let prefix = format!("/{}/stage/", self.ctx.get_tenant());
+            let prefix = format!("stage/{}", user_stage.stage_name);
             let op = self.ctx.get_storage_operator().await?;
             let obj = op.object(&prefix);
 

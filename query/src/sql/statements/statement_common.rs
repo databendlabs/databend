@@ -44,7 +44,7 @@ pub async fn location_to_stage_path(
         // It's internal, so we already have an op which has the root path
         // need to inject a tenant path
         StageType::Internal => {
-            let prefix = format!("{}/stage/", ctx.get_tenant());
+            let prefix = format!("stage/{}", stage.stage_name);
             related_path = get_abs_path(prefix.as_str(), path);
         }
         // It's  external, so we need to join the root path
