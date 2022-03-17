@@ -16,3 +16,14 @@ cat $meta_json \
 ./target/debug/databend-metactl --export --raft-dir "$meta_dir" > $exported
 
 diff $meta_json $exported
+
+# test export from grpc
+chmod +x ./target/debug/databend-meta
+./target/debug/databend-meta --single &
+METASRV_PID=$!
+echo $METASRV_PID
+sleep 0.5
+
+./target/debug/databend-metactl --export
+
+kill $METASRV_PID
