@@ -26,6 +26,7 @@ mod nullable;
 mod number;
 mod string;
 mod struct_;
+mod variant;
 
 pub use array::*;
 pub use boolean::*;
@@ -36,6 +37,7 @@ pub use nullable::*;
 pub use number::*;
 pub use string::*;
 pub use struct_::*;
+pub use variant::*;
 
 pub trait TypeSerializer: Send + Sync {
     fn serialize_value(&self, value: &DataValue) -> Result<String>;

@@ -1223,6 +1223,7 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "serde",
+ "serde_json",
  "sha1",
  "sha2 0.10.2",
  "simdutf8",

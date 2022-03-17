@@ -123,9 +123,9 @@ macro_rules! impl_numeric {
             fn typetag_deserialize(&self) {}
         }
 
-         paste::paste!{
-                pub type [<$tname Type>] = PrimitiveDataType<$ty>;
-         }
+        paste::paste!{
+            pub type [<$tname Type>] = PrimitiveDataType<$ty>;
+        }
 
         typetag::inventory::submit! {
             <dyn DataType> ::typetag_register(concat!($name, "Type"),(|deserializer|std::result::Result::Ok(std::boxed::Box::new(typetag::erased_serde::deserialize:: <PrimitiveDataType<$ty>>(deserializer)?),))as typetag::DeserializeFn<<dyn DataType as typetag::Strictest> ::Object> ,)
