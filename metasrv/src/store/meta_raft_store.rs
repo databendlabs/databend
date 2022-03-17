@@ -362,19 +362,19 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
 
         // TODO(xp): add test of small chunk snapshot transfer and installation
 
-        // TODO(xp): disallow to install a snapshot with smaller last_applied_log
-
         // 1. Take a serialized snapshot
 
-        let (view, last_applied_log, snapshot_id) = self
+        let (snap, last_applied_log, snapshot_id) = self
             .state_machine
             .write()
             .await
-            .snapshot()
+            .build_snapshot()
             .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)?;
 
-        let data = StateMachine::serialize_snapshot(view)
+        let data = serde_json::to_vec(&snap)
+            .map_err(MetaStorageError::from)
             .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)?;
+
         let snapshot_size = data.len();
 
         let snap_meta = SnapshotMeta {
@@ -424,7 +424,7 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
             data: snapshot.into_inner(),
         };
 
-        tracing::debug!("SNAP META:{:?}", meta);
+        tracing::debug!("snapshot meta: {:?}", meta);
 
         // Replace state machine with the new one
         let res = self.install_snapshot(&new_snapshot.data).await;
