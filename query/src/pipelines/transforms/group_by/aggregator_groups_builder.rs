@@ -16,7 +16,10 @@ use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataField;
+use common_datavalues::MutableColumn;
+use common_datavalues::MutableStringColumn;
 use common_datavalues::PrimitiveType;
+use common_datavalues::ScalarColumnBuilder;
 use common_exception::Result;
 
 use crate::pipelines::new::processors::AggregatorParams;
@@ -106,5 +109,34 @@ impl GroupColumnsBuilder<KeysRef> for SerializedKeysGroupColumnsBuilder {
         }
 
         Ok(res)
+    }
+}
+
+pub struct SingleStringGroupColumnsBuilder {
+    inner_builder: MutableStringColumn,
+}
+
+impl SingleStringGroupColumnsBuilder {
+    pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
+        assert_eq!(params.group_data_fields.len(), 1);
+
+        Self {
+            inner_builder: MutableStringColumn::with_capacity(capacity),
+        }
+    }
+}
+
+impl GroupColumnsBuilder<KeysRef> for SingleStringGroupColumnsBuilder {
+    fn append_value(&mut self, v: &KeysRef) {
+        unsafe {
+            let value = std::slice::from_raw_parts(v.address as *const u8, v.length);
+            self.inner_builder.push(value);
+        }
+    }
+
+    fn finish(self) -> Result<Vec<ColumnRef>> {
+        let mut builder = self.inner_builder;
+        let col = builder.to_column();
+        Ok(vec![col])
     }
 }
