@@ -61,7 +61,7 @@ impl Interpreter for CreateUserStageInterpreter {
             // TODO(xuanwo), opendal support mkdir (https://github.com/datafuselabs/opendal/issues/151)
             if obj.metadata().await.is_err() {
                 let rand_file = uuid::Uuid::new_v4().to_string();
-                let file = format!("{}{}", prefix, rand_file);
+                let file = format!("{}/{}", prefix, rand_file);
                 let file_obj = op.object(&file);
 
                 let writer = file_obj.writer();
