@@ -46,7 +46,6 @@ aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontim
 aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.parquet s3://testbucket/admin/stage/s1/ontime_200.parquet  > /dev/null 2>&1
 
 
-## Copy from named internal stage, skipped for now
 echo "CREATE STAGE s1;" | $MYSQL_CLIENT_CONNECT
 echo "list @s1 PATTERN = 'ontime.*'" | $MYSQL_CLIENT_CONNECT
 echo "copy into ontime200 from '@s1' PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = 'PARQUET');" | $MYSQL_CLIENT_CONNECT
