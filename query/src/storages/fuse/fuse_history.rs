@@ -39,7 +39,7 @@ impl<'a> FuseHistory<'a> {
         let tbl = &self.table;
         let tbl_info = tbl.get_table_info();
         let location = tbl_info.meta.options.get(FUSE_OPT_KEY_SNAPSHOT_LOC);
-        let version = FuseTable::parse_snaphost_format_version(&tbl_info)?;
+        let version = FuseTable::parse_snaphost_format_version(tbl_info)?;
         let reader = MetaReaders::table_snapshot_reader(self.ctx.as_ref()); //
         let snapshots = reader
             .read_snapshot_history(location, version, tbl.meta_locations().clone())
