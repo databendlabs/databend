@@ -112,7 +112,7 @@ impl Table for FuseTable {
         ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        self.do_read(ctx, &plan.push_downs, plan.parts.len()).await
+        self.do_read(ctx, &plan.push_downs).await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_read2", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
