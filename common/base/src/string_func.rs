@@ -65,7 +65,7 @@ pub fn unescape_for_key(key: &str) -> Result<String, FromUtf8Error> {
     fn unhex(num: u8) -> u8 {
         match num {
             b'0'..=b'9' => num - b'0',
-            b'a'..=b'f' => num - b'a',
+            b'a'..=b'f' => num - b'a' + 10,
             unreachable => unreachable!("Unreachable branch num = {}", unreachable),
         }
     }

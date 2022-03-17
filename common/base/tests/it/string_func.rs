@@ -17,9 +17,9 @@ use common_exception::Result;
 
 #[test]
 fn test_progress() -> Result<()> {
-    let original_key = "data_bend!!";
+    let original_key = "databend/test_user123!!";
     let new_key = escape_for_key(original_key);
-    assert_eq!(Ok("data_bend%21%21".to_string()), new_key);
+    assert_eq!(Ok("databend%2ftest_user123%21%21".to_string()), new_key);
     assert_eq!(
         Ok(original_key.to_string()),
         unescape_for_key(new_key.unwrap().as_str())
