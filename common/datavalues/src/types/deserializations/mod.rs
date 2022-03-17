@@ -23,6 +23,7 @@ mod null;
 mod nullable;
 mod number;
 mod string;
+mod variant;
 
 pub use boolean::*;
 pub use date::*;
@@ -31,6 +32,7 @@ pub use null::*;
 pub use nullable::*;
 pub use number::*;
 pub use string::*;
+pub use variant::*;
 
 pub trait TypeDeserializer: Send + Sync {
     fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()>;

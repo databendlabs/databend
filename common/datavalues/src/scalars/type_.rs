@@ -15,6 +15,7 @@
 use std::any::Any;
 
 use common_exception::Result;
+use serde_json::Value as JsonValue;
 
 use super::column::ScalarColumn;
 use crate::prelude::*;
@@ -146,5 +147,32 @@ impl<'a> ScalarRef<'a> for &'a [u8] {
     #[inline]
     fn to_owned_scalar(&self) -> Vec<u8> {
         self.to_vec()
+    }
+}
+
+impl Scalar for JsonValue {
+    type ColumnType = ObjectColumn<JsonValue>;
+    type RefType<'a> = &'a JsonValue;
+    type Viewer<'a> = ObjectViewer<'a, JsonValue>;
+
+    #[inline]
+    fn as_scalar_ref(&self) -> &JsonValue {
+        self
+    }
+
+    #[allow(clippy::needless_lifetimes)]
+    #[inline]
+    fn upcast_gat<'short, 'long: 'short>(long: &'long JsonValue) -> &'short JsonValue {
+        long
+    }
+}
+
+impl<'a> ScalarRef<'a> for &'a JsonValue {
+    type ColumnType = ObjectColumn<JsonValue>;
+    type ScalarType = JsonValue;
+
+    #[inline]
+    fn to_owned_scalar(&self) -> JsonValue {
+        (*self).clone()
     }
 }

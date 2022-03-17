@@ -12,8 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod s3_external_source;
-mod s3_external_table;
+mod s3_stage_source;
+mod s3_stage_table;
 
-pub use s3_external_source::ExternalSource;
-pub use s3_external_table::S3ExternalTable;
+pub use s3_stage_source::StageSource;
+pub use s3_stage_table::S3StageTable;

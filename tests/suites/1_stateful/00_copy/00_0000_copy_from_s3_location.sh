@@ -36,16 +36,26 @@ echo "copy into ontime200 from 's3://testbucket/admin/data/' credentials=(aws_ke
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
 echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 
-## Copy from named internal stage, skipped for now
 
-# echo "CREATE STAGE named_internal_stage;" | $MYSQL_CLIENT_CONNECT
-# echo "copy into ontime200 from '@named_internal_stage/admin/data/' PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = 'PARQUET');" | $MYSQL_CLIENT_CONNECT
-# echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
-# echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
+
+export AWS_ACCESS_KEY_ID=minioadmin
+export AWS_SECRET_ACCESS_KEY=minioadmin
+export AWS_EC2_METADATA_DISABLED=true
+
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv s3://testbucket/admin/stage/s1/ontime_200.csv > /dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.parquet s3://testbucket/admin/stage/s1/ontime_200.parquet  > /dev/null 2>&1
+
+
+echo "CREATE STAGE s1;" | $MYSQL_CLIENT_CONNECT
+echo "list @s1 PATTERN = 'ontime.*'" | $MYSQL_CLIENT_CONNECT
+echo "copy into ontime200 from '@s1' PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = 'PARQUET');" | $MYSQL_CLIENT_CONNECT
+echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
+echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 
 
 ## Copy from named external stage
 echo "CREATE STAGE named_external_stage url = 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin');" | $MYSQL_CLIENT_CONNECT
+echo "list @named_external_stage PATTERN = 'ontime.*parquet'" | $MYSQL_CLIENT_CONNECT
 echo "copy into ontime200 from '@named_external_stage'  PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = 'PARQUET')" | $MYSQL_CLIENT_CONNECT
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
 echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
@@ -54,4 +64,4 @@ echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 ## Drop table.
 echo "drop table ontime200" | $MYSQL_CLIENT_CONNECT
 echo "drop stage if exists named_external_stage" | $MYSQL_CLIENT_CONNECT
-echo "drop stage if exists named_internal_stage" | $MYSQL_CLIENT_CONNECT
+echo "drop stage if exists s1" | $MYSQL_CLIENT_CONNECT

@@ -110,3 +110,35 @@ impl<'a> ExactSizeIterator for StringViewer<'a> {
 }
 
 unsafe impl<'a> TrustedLen for StringViewer<'a> {}
+
+impl<'a, T> Iterator for ObjectViewer<'a, T>
+where T: Scalar<Viewer<'a> = Self> + ObjectType
+{
+    type Item = T::RefType<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pos >= self.size {
+            return None;
+        }
+
+        let old = self.pos;
+        self.pos += 1;
+
+        let value = &self.values[old & self.non_const_mask];
+        Some(value.as_scalar_ref())
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.size - self.pos, Some(self.size - self.pos))
+    }
+}
+
+impl<'a, T> ExactSizeIterator for ObjectViewer<'a, T>
+where T: Scalar<Viewer<'a> = Self> + ObjectType
+{
+    fn len(&self) -> usize {
+        self.size - self.pos
+    }
+}
+
+unsafe impl<'a, T> TrustedLen for ObjectViewer<'a, T> where T: Scalar<Viewer<'a> = Self> + ObjectType
+{}

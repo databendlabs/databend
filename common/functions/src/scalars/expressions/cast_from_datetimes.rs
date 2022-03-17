@@ -29,6 +29,7 @@ const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
 pub fn cast_from_date16(
     column: &ColumnRef,
+    from_type: &DataTypePtr,
     data_type: &DataTypePtr,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
@@ -59,12 +60,13 @@ pub fn cast_from_date16(
             Ok((result, None))
         }
 
-        _ => arrow_cast_compute(column, data_type, cast_options),
+        _ => arrow_cast_compute(column, from_type, data_type, cast_options),
     }
 }
 
 pub fn cast_from_date32(
     column: &ColumnRef,
+    from_type: &DataTypePtr,
     data_type: &DataTypePtr,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
@@ -95,12 +97,13 @@ pub fn cast_from_date32(
             Ok((result, None))
         }
 
-        _ => arrow_cast_compute(column, data_type, cast_options),
+        _ => arrow_cast_compute(column, from_type, data_type, cast_options),
     }
 }
 
 pub fn cast_from_datetime32(
     column: &ColumnRef,
+    from_type: &DataTypePtr,
     data_type: &DataTypePtr,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
@@ -137,7 +140,7 @@ pub fn cast_from_datetime32(
             Ok((result, None))
         }
 
-        _ => arrow_cast_compute(column, data_type, cast_options),
+        _ => arrow_cast_compute(column, from_type, data_type, cast_options),
     }
 }
 
@@ -188,7 +191,7 @@ pub fn cast_from_datetime64(
             Ok((result, None))
         }
 
-        _ => arrow_cast_compute(column, data_type, cast_options),
+        _ => arrow_cast_compute(column, from_type, data_type, cast_options),
     }
 }
 

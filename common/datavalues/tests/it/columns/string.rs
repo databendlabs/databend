@@ -15,7 +15,7 @@
 use common_datavalues::prelude::*;
 
 #[test]
-fn test_empty_boolean_column() {
+fn test_empty_string_column() {
     let mut builder = MutableStringColumn::with_values_capacity(16, 16);
     let data_column: StringColumn = builder.finish();
     let mut iter = data_column.iter();
@@ -33,7 +33,7 @@ fn test_new_from_slice() {
 }
 
 #[test]
-fn test_boolean_column() {
+fn test_string_column() {
     const N: usize = 1024;
     let it = (0..N).map(|i| if i % 2 == 0 { "你好" } else { "hello" });
     let data_column: StringColumn = NewColumn::new_from_iter(it);

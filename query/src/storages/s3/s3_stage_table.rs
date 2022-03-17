@@ -21,7 +21,7 @@ use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
-use common_planners::S3ExternalTableInfo;
+use common_planners::S3StageTableInfo;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
@@ -30,19 +30,19 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
-use crate::storages::ExternalSource;
+use crate::storages::StageSource;
 use crate::storages::Table;
 
-pub struct S3ExternalTable {
-    table_info: S3ExternalTableInfo,
+pub struct S3StageTable {
+    table_info: S3StageTableInfo,
     // This is no used but a placeholder.
     // But the Table trait need it:
     // fn get_table_info(&self) -> &TableInfo).
     table_info_placeholder: TableInfo,
 }
 
-impl S3ExternalTable {
-    pub fn try_create(table_info: S3ExternalTableInfo) -> Result<Arc<dyn Table>> {
+impl S3StageTable {
+    pub fn try_create(table_info: S3StageTableInfo) -> Result<Arc<dyn Table>> {
         let table_info_placeholder = TableInfo::default();
         Ok(Arc::new(Self {
             table_info,
@@ -52,7 +52,7 @@ impl S3ExternalTable {
 }
 
 #[async_trait::async_trait]
-impl Table for S3ExternalTable {
+impl Table for S3StageTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -91,12 +91,12 @@ impl Table for S3ExternalTable {
         let table_info = &self.table_info;
         let schema = table_info.schema.clone();
 
-        // Add ExternalSource Pipe to the pipeline.
+        // Add StageSource Pipe to the pipeline.
         let output = OutputPort::create();
         pipeline.add_pipe(NewPipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
-            processors: vec![ExternalSource::try_create(
+            processors: vec![StageSource::try_create(
                 ctx,
                 output,
                 schema,
