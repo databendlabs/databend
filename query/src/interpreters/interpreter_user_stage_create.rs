@@ -54,7 +54,7 @@ impl Interpreter for CreateUserStageInterpreter {
 
         if user_stage.stage_type == StageType::Internal {
             let prefix = format!("stage/{}", user_stage.stage_name);
-            let op = self.ctx.get_storage_operator().await?;
+            let op = self.ctx.get_storage_operator()?;
             let obj = op.object(&prefix);
 
             // Write file then delete file ensure the directory is created
