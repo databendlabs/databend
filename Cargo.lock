@@ -1854,25 +1854,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
 
 [[package]]
-name = "databend-benchmark"
-version = "0.1.0"
-dependencies = [
- "clap 3.1.3",
- "clickhouse-driver",
- "common-base",
- "common-exception",
- "common-infallible",
- "common-macros",
- "common-tracing",
- "crossbeam-queue",
- "ctrlc",
- "futures",
- "quantiles",
- "rand 0.8.5",
- "serde",
-]
-
-[[package]]
 name = "databend-fuzz"
 version = "0.1.0"
 dependencies = [
@@ -4788,12 +4769,6 @@ dependencies = [
  "web-sys",
  "winapi",
 ]
-
-[[package]]
-name = "quantiles"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c10fa813fb26fb6c321a6f3085b5ade4cb4730d08d0b9e70a3759136940957f2"
 
 [[package]]
 name = "quick-error"
