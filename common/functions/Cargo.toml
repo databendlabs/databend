@@ -18,8 +18,6 @@ common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
 common-io = { path = "../io" }
 
-# Github dependencies
-
 # Crates.io dependencies
 base64 = "0.13.0"
 blake3 = "1.3.1"

@@ -101,7 +101,7 @@ impl DfCreateUserStage {
     }
 
     async fn analyze_external(&self) -> Result<UserStageInfo> {
-        let stage_storage = parse_stage_storage(
+        let (stage_storage, _) = parse_stage_storage(
             &self.location,
             &self.credential_options,
             &self.encryption_options,

@@ -19,7 +19,6 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::S3File;
-use common_meta_types::StageStorage;
 use common_planners::CopyPlan;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
@@ -37,7 +36,7 @@ use crate::interpreters::InterpreterPtr;
 use crate::pipelines::new::executor::PipelinePullingExecutor;
 use crate::pipelines::new::QueryPipelineBuilder;
 use crate::sessions::QueryContext;
-use crate::storages::ExternalSource;
+use crate::storages::StageSource;
 
 pub struct CopyInterpreter {
     ctx: Arc<QueryContext>,
@@ -57,25 +56,22 @@ impl CopyInterpreter {
     //     2.2 If the path is a folder, S3File::list() will return all the files in it.
     async fn list_files(&self) -> Result<Vec<String>> {
         let files = match &self.plan.from.source_info {
-            SourceInfo::S3ExternalSource(table_info) => {
-                let storage = &table_info.stage_info.stage_params.storage;
-                match &storage {
-                    StageStorage::S3(s3) => {
-                        let path = &s3.path;
-                        // Here we add the path to the file: /path/to/path/file1.
-                        if !self.plan.files.is_empty() {
-                            let mut files_with_path = vec![];
-                            for file in &self.plan.files {
-                                let new_path = Path::new(path).join(file);
-                                files_with_path.push(new_path.to_string_lossy().to_string());
-                            }
-                            Ok(files_with_path)
-                        } else {
-                            let op = ExternalSource::get_op(&self.ctx, table_info).await?;
-                            S3File::list(&op, path).await
-                        }
+            SourceInfo::S3StageSource(table_info) => {
+                let path = &table_info.path;
+                // Here we add the path to the file: /path/to/path/file1.
+                let files_with_path = if !self.plan.files.is_empty() {
+                    let mut files_with_path = vec![];
+                    for file in &self.plan.files {
+                        let new_path = Path::new(path).join(file);
+                        files_with_path.push(new_path.to_string_lossy().to_string());
                     }
-                }
+                    files_with_path
+                } else {
+                    let op = StageSource::get_op(&self.ctx, &table_info.stage_info).await?;
+                    S3File::list(&op, path).await?
+                };
+
+                Ok(files_with_path)
             }
             other => Err(ErrorCode::LogicalError(format!(
                 "Cannot list files for the source info: {:?}",
@@ -86,12 +82,12 @@ impl CopyInterpreter {
         files
     }
 
-    // Rewrite the ReadDataSourcePlan.S3ExternalSource.file_name to new file name.
+    // Rewrite the ReadDataSourcePlan.S3StageSource.file_name to new file name.
     fn rewrite_read_plan_file_name(
         mut plan: ReadDataSourcePlan,
         file_name: Option<String>,
     ) -> ReadDataSourcePlan {
-        if let SourceInfo::S3ExternalSource(ref mut s3) = plan.source_info {
+        if let SourceInfo::S3StageSource(ref mut s3) = plan.source_info {
             s3.file_name = file_name;
         }
         plan
