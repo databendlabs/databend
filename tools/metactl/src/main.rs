@@ -18,6 +18,7 @@ mod grpc;
 
 use std::collections::BTreeMap;
 use std::io;
+use std::net::SocketAddr;
 
 use clap::Parser;
 use common_base::tokio;
@@ -79,12 +80,23 @@ async fn main() -> anyhow::Result<()> {
 
     eprintln!("raft_config: {}", pretty(raft_config)?);
 
-    // export from grpc api if raft is running
-    let addr = raft_config.raft_api_addr().await?.to_string();
-    if config.export && service_is_running(&addr).await? {
-        eprintln!("export meta from: {}", &config.grpc_api_address);
-        grpc::export_meta(&config.grpc_api_address).await?;
-        return Ok(());
+    // export from grpc api if metasrv is running
+    if config.export && !config.grpc_api_address.is_empty() {
+        let grpc_api_addr = match config.grpc_api_address.parse() {
+            Ok(addr) => addr,
+            Err(e) => {
+                eprintln!(
+                    "ERROR: grpc api address is invalid: {}",
+                    &config.grpc_api_address
+                );
+                return Err(e)?;
+            }
+        };
+        if service_is_running(grpc_api_addr).await? {
+            eprintln!("export meta from: {}", &config.grpc_api_address);
+            grpc::export_meta(&config.grpc_api_address).await?;
+            return Ok(());
+        }
     }
 
     init_sled_db(raft_config.raft_dir.clone());
@@ -186,8 +198,7 @@ fn print_meta() -> anyhow::Result<()> {
 }
 
 // if port is open, service is running
-async fn service_is_running(addr: &str) -> anyhow::Result<bool> {
-    let addr = addr.parse()?;
+async fn service_is_running(addr: SocketAddr) -> Result<bool, io::Error> {
     let socket = TcpSocket::new_v4()?;
     let stream = socket.connect(addr).await;
 
