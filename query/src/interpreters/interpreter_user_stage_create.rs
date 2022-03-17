@@ -53,20 +53,18 @@ impl Interpreter for CreateUserStageInterpreter {
         let user_stage = plan.user_stage_info;
 
         if user_stage.stage_type == StageType::Internal {
-            let prefix = format!("stage/{}", user_stage.stage_name);
+            let prefix = format!("stage/{}/", user_stage.stage_name);
             let op = self.ctx.get_storage_operator()?;
             let obj = op.object(&prefix);
 
             // Write file then delete file ensure the directory is created
             // TODO(xuanwo), opendal support mkdir (https://github.com/datafuselabs/opendal/issues/151)
-            if obj.metadata().await.is_err() {
-                let rand_file = uuid::Uuid::new_v4().to_string();
-                let file = format!("{}/{}", prefix, rand_file);
-                let file_obj = op.object(&file);
-
+            // This is not compatible in fs
+            let meta = obj.metadata().await;
+            if meta.is_err() {
+                let file_obj = op.object(&prefix);
                 let writer = file_obj.writer();
-                writer.write_bytes("opendaldir".as_bytes().to_vec()).await?;
-                file_obj.delete().await?;
+                writer.write_bytes(vec![]).await?;
             }
         }
 
