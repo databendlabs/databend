@@ -99,7 +99,7 @@ impl FuseTable {
             }
         }
 
-        let locs = self.meta_locations();
+        let locs = self.meta_location_generator();
         // 3. remove the snapshots
         for x in snapshots.iter().rev() {
             let loc = locs.snapshot_location_from_uuid(&x.snapshot_id);

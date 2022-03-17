@@ -199,7 +199,7 @@ impl FuseTable {
         }
     }
 
-    pub fn meta_locations(&self) -> &TableMetaLocationGenerator {
+    pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
         &self.meta_location_generator
     }
 

@@ -41,7 +41,7 @@ impl FuseTable {
                 summary: Default::default(),
                 segments: vec![],
             };
-            let loc = self.meta_locations();
+            let loc = self.meta_location_generator();
             let new_snapshot_loc = loc.snapshot_location_from_uuid(&new_snapshot.snapshot_id);
             let operator = ctx.get_storage_operator().await?;
             let bytes = serde_json::to_vec(&new_snapshot)?;
