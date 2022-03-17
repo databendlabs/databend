@@ -129,7 +129,7 @@ impl ExternalSource {
         let stage = &table_info.stage_info;
 
         if stage.stage_type == StageType::Internal {
-            ctx.get_storage_operator().await
+            ctx.get_storage_operator()
         } else {
             // Get the dal file reader.
             match &stage.stage_params.storage {

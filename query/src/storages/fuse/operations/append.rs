@@ -46,7 +46,7 @@ impl FuseTable {
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
-        let da = ctx.get_storage_operator().await?;
+        let da = ctx.get_storage_operator()?;
 
         let mut segment_stream = BlockStreamWriter::write_block_stream(
             da.clone(),

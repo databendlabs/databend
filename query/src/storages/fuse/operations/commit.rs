@@ -171,7 +171,7 @@ impl FuseTable {
             .meta_location_generator()
             .snapshot_location_from_uuid(&uuid);
         let bytes = serde_json::to_vec(&new_snapshot)?;
-        let operator = ctx.get_storage_operator().await?;
+        let operator = ctx.get_storage_operator()?;
         operator
             .object(&snapshot_loc)
             .writer()
