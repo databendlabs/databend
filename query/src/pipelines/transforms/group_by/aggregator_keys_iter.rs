@@ -62,7 +62,7 @@ impl SerializedKeysColumnIter {
         for index in 0..(offsets.len() - 1) {
             let offset = offsets[index] as usize;
             let offset_1 = offsets[index + 1] as usize;
-            let address = values[offset] as *mut u8 as usize;
+            let address = unsafe { values.as_ptr().add(offset) as usize };
             inner.push(KeysRef::create(address, offset_1 - offset));
         }
 

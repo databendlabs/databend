@@ -23,6 +23,7 @@ use common_datablocks::HashMethodSingleString;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
+use super::aggregator_groups_builder::SingleStringGroupColumnsBuilder;
 use crate::common::HashTable;
 use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::transforms::group_by::aggregator_groups_builder::FixedKeysGroupColumnsBuilder;
@@ -233,13 +234,13 @@ impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
         SerializedKeysColumnIter::create(Series::check_get::<StringColumn>(column)?)
     }
 
-    type GroupColumnsBuilder = SerializedKeysGroupColumnsBuilder;
+    type GroupColumnsBuilder = SingleStringGroupColumnsBuilder;
     fn group_columns_builder(
         &self,
         capacity: usize,
         params: &AggregatorParams,
     ) -> Self::GroupColumnsBuilder {
-        SerializedKeysGroupColumnsBuilder::create(capacity, params)
+        SingleStringGroupColumnsBuilder::create(capacity, params)
     }
 }
 
