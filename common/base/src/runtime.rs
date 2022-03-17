@@ -18,6 +18,7 @@ use std::thread;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing::warn;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -129,6 +130,10 @@ impl Runtime {
         Self::create(tracker, runtime_builder.worker_threads(workers))
     }
 
+    pub fn inner(&self) -> tokio::runtime::Handle {
+        self.handle.clone()
+    }
+
     pub fn block_on<F: Future>(&self, future: F) -> F::Output {
         self.handle.block_on(future)
     }
@@ -152,6 +157,7 @@ pub struct Dropper {
 impl Drop for Dropper {
     fn drop(&mut self) {
         // Send a signal to say i am dropping.
+        warn!("IO Runtime has been dropped");
         self.close.take().map(|v| v.send(()));
     }
 }

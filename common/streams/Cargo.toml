@@ -31,4 +31,4 @@ pin-project-lite = "0.2.8"
 tempfile = "3.3.0"
 
 [dev-dependencies]
-opendal = { git = "https://github.com/datafuselabs/opendal", rev="598b35c"}
+opendal = { git = "https://github.com/datafuselabs/opendal", rev = "d9cf0dd" }

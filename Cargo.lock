@@ -779,6 +779,7 @@ dependencies = [
  "common-tracing",
  "ctrlc",
  "futures",
+ "hyper",
  "poem",
  "pprof",
  "serde",
@@ -3752,7 +3753,7 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 [[package]]
 name = "opendal"
 version = "0.2.3"
-source = "git+https://github.com/datafuselabs/opendal?rev=598b35c#598b35c59b0293ac1b99a2b9350f8406437e7840"
+source = "git+https://github.com/datafuselabs/opendal?rev=d9cf0dd#d9cf0ddf9131cb828c8e329acfcb2a10b82c324f"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -3762,6 +3763,7 @@ dependencies = [
  "futures",
  "http",
  "hyper",
+ "hyper-tls",
  "log",
  "metrics",
  "once_cell",

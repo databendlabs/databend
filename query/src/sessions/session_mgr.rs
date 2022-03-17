@@ -74,7 +74,6 @@ impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
         let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
-        let storage_accessor = Self::init_storage_operator(&conf).await?;
 
         // Cluster discovery.
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
@@ -86,6 +85,8 @@ impl SessionManager {
             }
             Runtime::with_worker_threads(storage_num_cpus, Some("IO-worker".to_owned()))?
         };
+
+        let storage_accessor = Self::init_storage_operator(&conf, &storage_runtime).await?;
 
         // User manager and init the default users.
         let user = UserApiProvider::create_global(conf.clone()).await?;
@@ -319,7 +320,7 @@ impl SessionManager {
     }
 
     // Init the storage operator by config.
-    async fn init_storage_operator(conf: &Config) -> Result<Operator> {
+    async fn init_storage_operator(conf: &Config, runtime: &Runtime) -> Result<Operator> {
         let storage_conf = &conf.storage;
         let schema_name = &storage_conf.storage_type;
         let schema = DalSchema::from_str(schema_name)
@@ -329,6 +330,10 @@ impl SessionManager {
             DalSchema::S3 => {
                 let s3_conf = &storage_conf.s3;
                 let mut builder = s3::Backend::build();
+                // Runtime.
+                {
+                    builder.runtime(runtime.inner());
+                }
 
                 // Endpoint.
                 {
@@ -401,7 +406,7 @@ impl SessionManager {
         *self.storage_cache_manager.write() = Arc::new(CacheManager::init(&config.query));
 
         {
-            let operator = Self::init_storage_operator(&config).await?;
+            let operator = Self::init_storage_operator(&config, &self.storage_runtime).await?;
             *self.storage_operator.write() = operator;
         }
 
