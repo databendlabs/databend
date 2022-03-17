@@ -20,9 +20,7 @@ use std::time::UNIX_EPOCH;
 use common_base::tokio;
 use common_meta_api::KVApi;
 use common_meta_raft_store::state_machine::testing::pretty_snapshot;
-use common_meta_raft_store::state_machine::testing::pretty_snapshot_iter;
 use common_meta_raft_store::state_machine::testing::snapshot_logs;
-use common_meta_raft_store::state_machine::SerializableSnapshot;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::openraft;
 use common_meta_types::AppError;
@@ -727,34 +725,20 @@ async fn test_state_machine_snapshot() -> anyhow::Result<()> {
     let sm = StateMachine::open(&tc.raft_config, 0).await?;
 
     let (logs, want) = snapshot_logs();
-    // TODO(xp): following logs are not saving to sled yet:
-    //           database
-    //           table
-    //           slots
-    //           replication
 
     for l in logs.iter() {
         sm.apply(l).await?;
     }
 
-    let (it, last, id) = sm.snapshot()?;
-
-    assert_eq!(LogId { term: 1, index: 9 }, last);
-    assert!(id.starts_with(&format!("{}-{}-", 1, 9)));
-
-    let res = pretty_snapshot_iter(it);
-    assert_eq!(want, res);
-
-    // test serialized snapshot
+    // take snapshot and check it
 
     {
-        let (it, _last, _id) = sm.snapshot()?;
+        let (snap, last_applied, id) = sm.build_snapshot()?;
 
-        let data = StateMachine::serialize_snapshot(it)?;
+        assert_eq!(LogId { term: 1, index: 9 }, last_applied);
+        assert!(id.starts_with(&format!("{}-{}-", 1, 9)));
 
-        let d: SerializableSnapshot = serde_json::from_slice(&data)?;
-        let res = pretty_snapshot(&d.kvs);
-
+        let res = pretty_snapshot(&snap.kvs);
         assert_eq!(want, res);
     }
 
