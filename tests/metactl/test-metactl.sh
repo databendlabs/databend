@@ -7,6 +7,7 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 meta_dir="$SCRIPT_PATH/_meta_dir"
 meta_json="$SCRIPT_PATH/meta.json"
 exported="$SCRIPT_PATH/exported"
+grpc_exported="$SCRIPT_PATH/exported"
 
 chmod +x ./target/debug/databend-metactl
 
@@ -24,6 +25,7 @@ METASRV_PID=$!
 echo $METASRV_PID
 sleep 0.5
 
-./target/debug/databend-metactl --export
+./target/debug/databend-metactl --export > $grpc_exported
+grep -Fxq '["raft_state",{"RaftStateKV":{"key":"Id","value":{"NodeId":0}}}]' $grpc_exported
 
 kill $METASRV_PID
