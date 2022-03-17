@@ -44,7 +44,6 @@ jobs:
               cargo build --release --target=${{ matrix.config.target }}
               if [ ${{ matrix.config.os }} = "ubuntu-latest" ]; then
                   objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-query
-                  objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-benchmark
                   objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-meta
                   objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-metactl
               fi
@@ -59,10 +58,10 @@ jobs:
             brew install gnu-tar
             sudo /usr/sbin/purge
             gtar -C ./target/${{ matrix.config.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-query databend-meta
-            gtar -C ./target/${{ matrix.config.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-benchmark databend-metactl
+            gtar -C ./target/${{ matrix.config.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-metactl
           else
             tar -C ./target/${{ matrix.config.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-query databend-meta
-            tar -C ./target/${{ matrix.config.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-benchmark databend-metactl
+            tar -C ./target/${{ matrix.config.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-metactl
           fi
 
       - name: Release databend
