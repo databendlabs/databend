@@ -36,7 +36,7 @@ INSERT INTO `books` VALUES ('Transaction Processing','Jim Gray','1992'),('Readin
 INSERT INTO `books` VALUES ('Transaction Processing','Jim Gray','1992'),('Readings in Database Systems','Michael Stonebraker','2004');
 ```
 
-### Step 2. Load data into Databend from the sql file
+### Step 2. Load Data into Databend from the sql File
 
 ```sql
 mysql -uroot -h127.0.0.1 -proot -P3307 < dumpbook.sql
