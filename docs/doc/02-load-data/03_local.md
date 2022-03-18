@@ -6,6 +6,7 @@ description:
 ---
 
 Using HTTP API `v1/streaming_load` to load data from local file into Databend.
+Currently, we only support Csv and Parquet format.
 
 ### Before you begin
 
@@ -24,7 +25,7 @@ This CSV file field delimiter is `,` and the record delimiter is `\n`.
 ### Step 2. Create Database and Table
 
 ```shell
-mysql -h127.0.0.1 -uroot -P3307 
+mysql -h127.0.0.1 -uroot -P3307
 ```
 
 ```sql title='mysql>'
@@ -71,7 +72,7 @@ echo curl -H \"insert_sql:insert into book_db.books format CSV\"\
   * `8081` is `http_handler_port` value in your *databend-query.toml*
 
 * -F  \"upload=@./books.csv\"
-  * Your books.csv file location 
+  * Your books.csv file location
 :::
 
 
