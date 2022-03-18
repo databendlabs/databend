@@ -15,3 +15,4 @@
 mod progress;
 mod runtime;
 mod stoppable;
+mod string_func;

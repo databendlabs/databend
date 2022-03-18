@@ -136,6 +136,10 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
 
             Arc::new(StructType::create(names, types))
         }
+        ArrowType::Extension(custom_name, _, _) => match custom_name.as_str() {
+            "Variant" => Arc::new(VariantType::default()),
+            _ => unimplemented!("data_type: {:?}", dt),
+        },
 
         // this is safe, because we define the datatype firstly
         _ => {
@@ -161,6 +165,7 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
                 None => return DateTime64Type::arc(3, None),
             },
             "Interval" => return IntervalType::arc(metadata.unwrap().into()),
+            "Variant" => return VariantType::arc(),
             _ => {}
         }
     }

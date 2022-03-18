@@ -16,6 +16,7 @@ use common_arrow::arrow::compute::arithmetics::basic::NativeArithmetics;
 use num::NumCast;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde_json::Value as JsonValue;
 
 use crate::DFTryFrom;
 use crate::DataTypePtr;
@@ -25,6 +26,7 @@ use crate::Date32Type;
 use crate::DateTime32Type;
 use crate::DateTime64Type;
 use crate::Scalar;
+use crate::VariantType;
 
 pub trait PrimitiveType:
     NativeArithmetics
@@ -117,5 +119,27 @@ impl ToDateType for u32 {
 impl ToDateType for i64 {
     fn to_date_type() -> DataTypePtr {
         DateTime64Type::arc(0, None)
+    }
+}
+
+pub trait ObjectType:
+    std::fmt::Display
+    + Clone
+    + std::marker::Sync
+    + std::marker::Send
+    + DFTryFrom<DataValue>
+    + Into<DataValue>
+    + core::str::FromStr
+    + DeserializeOwned
+    + Serialize
+    + Default
+    + Scalar
+{
+    fn data_type() -> DataTypePtr;
+}
+
+impl ObjectType for JsonValue {
+    fn data_type() -> DataTypePtr {
+        VariantType::arc()
     }
 }

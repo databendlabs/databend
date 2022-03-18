@@ -25,6 +25,7 @@ use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Route;
 
+use super::v1::upload_to_stage;
 use crate::common::service::HttpShutdownHandler;
 use crate::configs::Config;
 use crate::servers::http::v1::middleware::HTTPSessionMiddleware;
@@ -66,6 +67,7 @@ curl --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' -
             .nest("/v1/statement", statement_router())
             .nest("/v1/query", query_route())
             .at("/v1/streaming_load", put(streaming_load))
+            .at("/v1/upload_to_stage", put(upload_to_stage))
             .with(HTTPSessionMiddleware {
                 session_manager: self.session_manager.clone(),
             })

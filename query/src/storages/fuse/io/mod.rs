@@ -18,7 +18,6 @@ mod block_writer;
 mod cached_reader;
 mod locations;
 mod meta_readers;
-mod parallel_async_reader;
 mod versioned_reader;
 
 pub use block_reader::BlockReader;

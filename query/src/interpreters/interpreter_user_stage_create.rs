@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::StageType;
 use common_planners::CreateUserStagePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -50,6 +51,23 @@ impl Interpreter for CreateUserStageInterpreter {
         let plan = self.plan.clone();
         let user_mgr = self.ctx.get_user_manager();
         let user_stage = plan.user_stage_info;
+
+        if user_stage.stage_type == StageType::Internal {
+            let prefix = format!("stage/{}/", user_stage.stage_name);
+            let op = self.ctx.get_storage_operator()?;
+            let obj = op.object(&prefix);
+
+            // Write file then delete file ensure the directory is created
+            // TODO(xuanwo), opendal support mkdir (https://github.com/datafuselabs/opendal/issues/151)
+            // This is not compatible in fs
+            let meta = obj.metadata().await;
+            if meta.is_err() {
+                let file_obj = op.object(&prefix);
+                let writer = file_obj.writer();
+                writer.write_bytes(vec![]).await?;
+            }
+        }
+
         let _create_stage = user_mgr
             .add_stage(&plan.tenant, user_stage, plan.if_not_exists)
             .await?;

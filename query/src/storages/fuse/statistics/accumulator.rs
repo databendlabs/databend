@@ -75,16 +75,19 @@ impl StatisticsAccumulator {
             let mut min = DataValue::Null;
             let mut max = DataValue::Null;
 
-            let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
-            let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
+            // TODO(b41sh): support max/min aggregate functions for variant
+            let nonull_data_type = remove_nullable(field.data_type());
+            if nonull_data_type.data_type_id() != TypeID::Variant {
+                let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
+                let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
 
-            if mins.len() > 0 {
-                min = mins.get(0);
+                if mins.len() > 0 {
+                    min = mins.get(0);
+                }
+                if maxs.len() > 0 {
+                    max = maxs.get(0);
+                }
             }
-            if maxs.len() > 0 {
-                max = maxs.get(0);
-            }
-
             let (is_all_null, bitmap) = col.validity();
             let null_count = match (is_all_null, bitmap) {
                 (true, _) => rows,

@@ -58,6 +58,7 @@ use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
+use crate::ListPlan;
 use crate::OptimizeTablePlan;
 use crate::PlanBuilder;
 use crate::PlanNode;
@@ -171,6 +172,7 @@ pub trait PlanRewriter: Sized {
             PlanNode::CreateUserStage(plan) => self.rewrite_create_user_stage(plan),
             PlanNode::DropUserStage(plan) => self.rewrite_drop_user_stage(plan),
             PlanNode::DescribeUserStage(plan) => self.rewrite_describe_user_stage(plan),
+            PlanNode::List(plan) => self.rewrite_list(plan),
 
             // UDF.
             PlanNode::CreateUserUDF(plan) => self.rewrite_create_user_udf(plan),
@@ -376,6 +378,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_describe_user_stage(&mut self, plan: &DescribeUserStagePlan) -> Result<PlanNode> {
         Ok(PlanNode::DescribeUserStage(plan.clone()))
+    }
+
+    fn rewrite_list(&mut self, plan: &ListPlan) -> Result<PlanNode> {
+        Ok(PlanNode::List(plan.clone()))
     }
 
     fn rewrite_drop_table(&mut self, plan: &DropTablePlan) -> Result<PlanNode> {

@@ -14,5 +14,6 @@
 
 mod boolean;
 mod builder;
+mod object;
 mod primitive;
 mod string;
