@@ -98,6 +98,11 @@ impl Function for FunctionAdapter {
         let inner = self.inner.as_ref().unwrap();
 
         if self.passthrough_null {
+            let has_null = args.iter().any(|v| v.is_null());
+            if has_null {
+                return Ok(NullType::arc());
+            }
+
             let has_nullable = args.iter().any(|v| v.is_nullable());
             let types = args.iter().map(|v| remove_nullable(v)).collect::<Vec<_>>();
             let types = types.iter().collect::<Vec<_>>();
@@ -123,56 +128,65 @@ impl Function for FunctionAdapter {
             return inner.eval(columns, input_rows);
         }
 
-        // unwrap nullable
-        if self.passthrough_null && columns.iter().any(|v| v.data_type().is_nullable()) {
-            let mut validity: Option<Bitmap> = None;
-            let mut has_all_null = false;
-
-            let columns = columns
+        // nullable or null
+        if self.passthrough_null {
+            if columns
                 .iter()
-                .map(|v| {
-                    let (is_all_null, valid) = v.column().validity();
-                    if is_all_null {
-                        has_all_null = true;
-                        let mut v = MutableBitmap::with_capacity(input_rows);
-                        v.extend_constant(input_rows, false);
-                        validity = Some(v.into());
-                    } else if !has_all_null {
-                        validity = combine_validities_2(validity.clone(), valid.cloned());
-                    }
-
-                    let ty = remove_nullable(v.data_type());
-                    let f = v.field();
-                    let col = Series::remove_nullable(v.column());
-                    ColumnWithField::new(col, DataField::new(f.name(), ty))
-                })
-                .collect::<Vec<_>>();
-
-            let col = self.eval(&columns, input_rows)?;
-
-            // The'try' series functions always return Null when they failed the try.
-            // For example, try_inet_aton("helloworld") will return Null because it failed to parse "helloworld" to a valid IP address.
-            // The same thing may happen on other 'try' functions. So we need to merge the validity.
-            if col.is_nullable() {
-                let (_, bitmap) = col.validity();
-                validity = validity.map_or(combine_validities(bitmap, None), |v| {
-                    combine_validities(bitmap, Some(&v))
-                })
+                .any(|v| v.data_type().data_type_id() == TypeID::Null)
+            {
+                return Ok(Arc::new(NullColumn::new(input_rows)));
             }
 
-            let validity = validity.unwrap_or({
-                let mut v = MutableBitmap::with_capacity(input_rows);
-                v.extend_constant(input_rows, true);
-                v.into()
-            });
+            if columns.iter().any(|v| v.data_type().is_nullable()) {
+                let mut validity: Option<Bitmap> = None;
+                let mut has_all_null = false;
 
-            let col = if col.is_nullable() {
-                let nullable_column: &NullableColumn = unsafe { Series::static_cast(&col) };
-                NullableColumn::new(nullable_column.inner().clone(), validity)
-            } else {
-                NullableColumn::new(col, validity)
-            };
-            return Ok(Arc::new(col));
+                let columns = columns
+                    .iter()
+                    .map(|v| {
+                        let (is_all_null, valid) = v.column().validity();
+                        if is_all_null {
+                            has_all_null = true;
+                            let mut v = MutableBitmap::with_capacity(input_rows);
+                            v.extend_constant(input_rows, false);
+                            validity = Some(v.into());
+                        } else if !has_all_null {
+                            validity = combine_validities_2(validity.clone(), valid.cloned());
+                        }
+
+                        let ty = remove_nullable(v.data_type());
+                        let f = v.field();
+                        let col = Series::remove_nullable(v.column());
+                        ColumnWithField::new(col, DataField::new(f.name(), ty))
+                    })
+                    .collect::<Vec<_>>();
+
+                let col = self.eval(&columns, input_rows)?;
+
+                // The'try' series functions always return Null when they failed the try.
+                // For example, try_inet_aton("helloworld") will return Null because it failed to parse "helloworld" to a valid IP address.
+                // The same thing may happen on other 'try' functions. So we need to merge the validity.
+                if col.is_nullable() {
+                    let (_, bitmap) = col.validity();
+                    validity = validity.map_or(combine_validities(bitmap, None), |v| {
+                        combine_validities(bitmap, Some(&v))
+                    })
+                }
+
+                let validity = validity.unwrap_or({
+                    let mut v = MutableBitmap::with_capacity(input_rows);
+                    v.extend_constant(input_rows, true);
+                    v.into()
+                });
+
+                let col = if col.is_nullable() {
+                    let nullable_column: &NullableColumn = unsafe { Series::static_cast(&col) };
+                    NullableColumn::new(nullable_column.inner().clone(), validity)
+                } else {
+                    NullableColumn::new(col, validity)
+                };
+                return Ok(Arc::new(col));
+            }
         }
 
         // is there nullable constant? Did not consider this case
