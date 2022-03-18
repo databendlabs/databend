@@ -58,7 +58,7 @@ impl Session {
     pub fn destroy_session_ref(self: &Arc<Self>) {
         if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Acquire);
-            tracing::warn!("Destroy session {}", self.id);
+            tracing::debug!("Destroy session {}", self.id);
             self.session_mgr.destroy_session(&self.id);
         }
     }

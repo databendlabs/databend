@@ -407,7 +407,11 @@ impl SessionManager {
         *self.storage_cache_manager.write() = Arc::new(CacheManager::init(&config.query));
 
         {
-            let operator = Self::init_storage_operator(&config).await?;
+            // NOTE: Magic happens here. We will add a layer upon original storage operator
+            // so that all underlying storage operations will send to storage runtime.
+            let operator = Self::init_storage_operator(&config)
+                .await?
+                .layer(DalRuntime::new(self.storage_runtime.inner()));
             *self.storage_operator.write() = operator;
         }
 

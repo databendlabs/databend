@@ -267,9 +267,9 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         expr.is_match(query)
     }
 
-    // #[tracing::instrument(level = "debug", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
-        // tracing::debug!("{}", query);
+        tracing::debug!("{}", query);
 
         if self.federated_server_setup_set_or_jdbc_command(query) {
             Ok((vec![DataBlock::empty()], String::from("")))
@@ -305,7 +305,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         }
     }
 
-    // #[tracing::instrument(level = "debug", skip(plan, context))]
+    #[tracing::instrument(level = "debug", skip(plan, context))]
     async fn exec_query(
         plan: Result<PlanNode>,
         context: &Arc<QueryContext>,
