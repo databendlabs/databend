@@ -26,6 +26,14 @@ use opendal::BoxedObjectStream;
 use opendal::Layer;
 use opendal::Metadata;
 
+/// # TODO
+///
+/// DalRuntime is used to make sure all IO task are running in the same runtime.
+/// So that we will not bothered by `dispatch dropped` panic.
+///
+/// However, the new processor framework will make sure that all async task running
+/// in the same, global, separate, IO only async runtime, so we can remove `DalRuntime`
+/// after new processor framework finished.
 #[derive(Clone, Debug)]
 pub struct DalRuntime {
     inner: Option<Arc<dyn Accessor>>,
