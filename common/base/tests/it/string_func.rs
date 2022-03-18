@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod progress;
-mod runtime;
-mod stoppable;
-mod string_func;
+use common_base::*;
+use common_exception::Result;
+
+#[test]
+fn test_progress() -> Result<()> {
+    let original_key = "databend/test_user123!!";
+    let new_key = escape_for_key(original_key);
+    assert_eq!(Ok("databend%2ftest_user123%21%21".to_string()), new_key);
+    assert_eq!(
+        Ok(original_key.to_string()),
+        unescape_for_key(new_key.unwrap().as_str())
+    );
+    Ok(())
+}
