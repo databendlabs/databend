@@ -34,180 +34,36 @@ use common_datavalues::Series;
 use common_datavalues::TypeID;
 use common_exception::Result;
 
-use super::ArithmeticDescription;
 use super::Function;
 use super::Monotonicity;
+use super::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct FunctionAdapter {
-    inner: Box<dyn Function>,
+    inner: Option<Box<dyn Function>>,
     passthrough_null: bool,
 }
 
 impl FunctionAdapter {
     pub fn create(inner: Box<dyn Function>, passthrough_null: bool) -> Box<dyn Function> {
         Box::new(Self {
-            inner,
+            inner: Some(inner),
             passthrough_null,
         })
     }
-}
-impl Function for FunctionAdapter {
-    fn name(&self) -> &str {
-        self.inner.name()
-    }
 
-    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
-        if self.passthrough_null {
-            // one is null, result is null
-            if args.iter().any(|v| v.data_type_id() == TypeID::Null) {
-                return Ok(NullType::arc());
-            }
-            let has_nullable = args.iter().any(|v| v.is_nullable());
-            let types = args.iter().map(|v| remove_nullable(v)).collect::<Vec<_>>();
-            let types = types.iter().collect::<Vec<_>>();
-            let typ = self.inner.return_type(&types)?;
-
-            if has_nullable {
-                Ok(wrap_nullable(&typ))
-            } else {
-                Ok(typ)
-            }
-        } else {
-            self.inner.return_type(args)
-        }
-    }
-
-    fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
-        if columns.is_empty() {
-            return self.inner.eval(columns, input_rows);
-        }
-
-        // unwrap nullable
-        if self.passthrough_null {
-            // one is null, result is null
-            if columns
-                .iter()
-                .any(|v| v.data_type().data_type_id() == TypeID::Null)
-            {
-                return Ok(Arc::new(NullColumn::new(input_rows)));
-            }
-
-            if columns.iter().any(|v| v.data_type().is_nullable()) {
-                let mut validity: Option<Bitmap> = None;
-                let mut has_all_null = false;
-
-                let columns = columns
-                    .iter()
-                    .map(|v| {
-                        let (is_all_null, valid) = v.column().validity();
-                        if is_all_null {
-                            has_all_null = true;
-                            let mut v = MutableBitmap::with_capacity(input_rows);
-                            v.extend_constant(input_rows, false);
-                            validity = Some(v.into());
-                        } else if !has_all_null {
-                            validity = combine_validities_2(validity.clone(), valid.cloned());
-                        }
-
-                        let ty = remove_nullable(v.data_type());
-                        let f = v.field();
-                        let col = Series::remove_nullable(v.column());
-                        ColumnWithField::new(col, DataField::new(f.name(), ty))
-                    })
-                    .collect::<Vec<_>>();
-
-                let col = self.eval(&columns, input_rows)?;
-
-                // The'try' series functions always return Null when they failed the try.
-                // For example, try_inet_aton("helloworld") will return Null because it failed to parse "helloworld" to a valid IP address.
-                // The same thing may happen on other 'try' functions. So we need to merge the validity.
-                if col.is_nullable() {
-                    let (_, bitmap) = col.validity();
-                    validity = match validity {
-                        Some(v) => combine_validities(bitmap, Some(&v)),
-                        None => combine_validities(bitmap, None),
-                    };
-                }
-
-                let validity = match validity {
-                    Some(v) => v,
-                    None => {
-                        let mut v = MutableBitmap::with_capacity(input_rows);
-                        v.extend_constant(input_rows, true);
-                        v.into()
-                    }
-                };
-
-                let col = if col.is_nullable() {
-                    let nullable_column: &NullableColumn = unsafe { Series::static_cast(&col) };
-                    NullableColumn::new(nullable_column.inner().clone(), validity)
-                } else {
-                    NullableColumn::new(col, validity)
-                };
-                return Ok(Arc::new(col));
-            }
-        }
-
-        // is there nullable constant? Did not consider this case
-        // unwrap constant
-        if self.passthrough_constant() && columns.iter().all(|v| v.column().is_const()) {
-            let columns = columns
-                .iter()
-                .map(|v| {
-                    let c = v.column();
-                    let c: &ConstColumn = unsafe { Series::static_cast(c) };
-
-                    ColumnWithField::new(c.inner().clone(), v.field().clone())
-                })
-                .collect::<Vec<_>>();
-
-            let col = self.eval(&columns, 1)?;
-            let col = if col.is_const() && col.len() == 1 {
-                col.replicate(&[input_rows])
-            } else if col.is_null() {
-                NullColumn::new(input_rows).arc()
-            } else {
-                ConstColumn::new(col, input_rows).arc()
-            };
-
-            return Ok(col);
-        }
-
-        self.inner.eval(columns, input_rows)
-    }
-
-    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
-        self.inner.get_monotonicity(args)
-    }
-
-    fn passthrough_constant(&self) -> bool {
-        self.inner.passthrough_constant()
-    }
-}
-
-impl std::fmt::Display for FunctionAdapter {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.inner)
-    }
-}
-
-#[derive(Clone)]
-pub struct ArithmeticAdapter {
-    inner: Option<Box<dyn Function>>,
-    passthrough_null: bool,
-}
-
-impl ArithmeticAdapter {
-    pub fn create(inner: Option<Box<dyn Function>>, passthrough_null: bool) -> Box<dyn Function> {
+    pub fn create_some(
+        inner: Option<Box<dyn Function>>,
+        passthrough_null: bool,
+    ) -> Box<dyn Function> {
         Box::new(Self {
             inner,
             passthrough_null,
         })
     }
 
-    pub fn try_create(
-        desc: &ArithmeticDescription,
+    pub fn try_create_by_typed(
+        desc: &TypedFunctionDescription,
         name: &str,
         args: &[&DataTypePtr],
     ) -> Result<Box<dyn Function>> {
@@ -216,20 +72,20 @@ impl ArithmeticAdapter {
         let inner = if passthrough_null {
             // one is null, result is null
             if args.iter().any(|v| v.data_type_id() == TypeID::Null) {
-                return Ok(Self::create(None, true));
+                return Ok(Self::create_some(None, true));
             }
             let types = args.iter().map(|v| remove_nullable(v)).collect::<Vec<_>>();
             let types = types.iter().collect::<Vec<_>>();
-            (desc.arithmetic_creator)(name, &types)?
+            (desc.typed_function_creator)(name, &types)?
         } else {
-            (desc.arithmetic_creator)(name, args)?
+            (desc.typed_function_creator)(name, args)?
         };
 
-        Ok(Self::create(Some(inner), passthrough_null))
+        Ok(Self::create(inner, passthrough_null))
     }
 }
 
-impl Function for ArithmeticAdapter {
+impl Function for FunctionAdapter {
     fn name(&self) -> &str {
         self.inner.as_ref().map_or("null", |v| v.name())
     }
@@ -362,7 +218,7 @@ impl Function for ArithmeticAdapter {
     }
 }
 
-impl std::fmt::Display for ArithmeticAdapter {
+impl std::fmt::Display for FunctionAdapter {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if let Some(inner) = &self.inner {
             write!(f, "{}", inner.name())

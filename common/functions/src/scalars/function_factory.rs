@@ -21,7 +21,6 @@ use common_exception::Result;
 use once_cell::sync::Lazy;
 
 use super::function::Function;
-use super::ArithmeticAdapter;
 use super::ArithmeticFunction;
 use super::ComparisonFunction;
 use super::ConditionalFunction;
@@ -40,8 +39,7 @@ use crate::scalars::UUIDFunction;
 
 pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send + Sync>;
 
-// Temporary adaptation for arithmetic.
-pub type ArithmeticCreator =
+pub type FactoryCreatorWithTypes =
     Box<dyn Fn(&str, &[&DataTypePtr]) -> Result<Box<dyn Function>> + Send + Sync>;
 
 #[derive(Clone)]
@@ -144,21 +142,21 @@ impl FunctionDescription {
     }
 }
 
-pub struct ArithmeticDescription {
+pub struct TypedFunctionDescription {
     pub features: FunctionFeatures,
-    pub arithmetic_creator: ArithmeticCreator,
+    pub typed_function_creator: FactoryCreatorWithTypes,
 }
 
-impl ArithmeticDescription {
-    pub fn creator(creator: ArithmeticCreator) -> ArithmeticDescription {
-        ArithmeticDescription {
-            arithmetic_creator: creator,
+impl TypedFunctionDescription {
+    pub fn creator(creator: FactoryCreatorWithTypes) -> TypedFunctionDescription {
+        TypedFunctionDescription {
+            typed_function_creator: creator,
             features: FunctionFeatures::default(),
         }
     }
 
     #[must_use]
-    pub fn features(mut self, features: FunctionFeatures) -> ArithmeticDescription {
+    pub fn features(mut self, features: FunctionFeatures) -> TypedFunctionDescription {
         self.features = features;
         self
     }
@@ -166,7 +164,7 @@ impl ArithmeticDescription {
 
 pub struct FunctionFactory {
     case_insensitive_desc: HashMap<String, FunctionDescription>,
-    case_insensitive_arithmetic_desc: HashMap<String, ArithmeticDescription>,
+    case_insensitive_typed_desc: HashMap<String, TypedFunctionDescription>,
 }
 
 static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
@@ -194,7 +192,7 @@ impl FunctionFactory {
     pub(in crate::scalars::function_factory) fn create() -> FunctionFactory {
         FunctionFactory {
             case_insensitive_desc: Default::default(),
-            case_insensitive_arithmetic_desc: Default::default(),
+            case_insensitive_typed_desc: Default::default(),
         }
     }
 
@@ -207,9 +205,9 @@ impl FunctionFactory {
         case_insensitive_desc.insert(name.to_lowercase(), desc);
     }
 
-    pub fn register_arithmetic(&mut self, name: &str, desc: ArithmeticDescription) {
-        let case_insensitive_arithmetic_desc = &mut self.case_insensitive_arithmetic_desc;
-        case_insensitive_arithmetic_desc.insert(name.to_lowercase(), desc);
+    pub fn register_typed(&mut self, name: &str, desc: TypedFunctionDescription) {
+        let case_insensitive_typed_desc = &mut self.case_insensitive_typed_desc;
+        case_insensitive_typed_desc.insert(name.to_lowercase(), desc);
     }
 
     pub fn get(&self, name: impl AsRef<str>, args: &[&DataTypePtr]) -> Result<Box<dyn Function>> {
@@ -218,12 +216,12 @@ impl FunctionFactory {
 
         match self.case_insensitive_desc.get(&lowercase_name) {
             // TODO(Winter): we should write similar function names into error message if function name is not found.
-            None => match self.case_insensitive_arithmetic_desc.get(&lowercase_name) {
+            None => match self.case_insensitive_typed_desc.get(&lowercase_name) {
                 None => Err(ErrorCode::UnknownFunction(format!(
                     "Unsupported Function: {}",
                     origin_name
                 ))),
-                Some(desc) => ArithmeticAdapter::try_create(desc, origin_name, args),
+                Some(desc) => FunctionAdapter::try_create_by_typed(desc, origin_name, args),
             },
             Some(desc) => {
                 let inner = (desc.function_creator)(origin_name)?;
@@ -241,7 +239,7 @@ impl FunctionFactory {
 
         match self.case_insensitive_desc.get(&lowercase_name) {
             // TODO(Winter): we should write similar function names into error message if function name is not found.
-            None => match self.case_insensitive_arithmetic_desc.get(&lowercase_name) {
+            None => match self.case_insensitive_typed_desc.get(&lowercase_name) {
                 None => Err(ErrorCode::UnknownFunction(format!(
                     "Unsupported Function: {}",
                     origin_name
@@ -259,14 +257,14 @@ impl FunctionFactory {
         if self.case_insensitive_desc.contains_key(&lowercase_name) {
             return true;
         }
-        self.case_insensitive_arithmetic_desc
+        self.case_insensitive_typed_desc
             .contains_key(&lowercase_name)
     }
 
     pub fn registered_names(&self) -> Vec<String> {
         self.case_insensitive_desc
             .keys()
-            .chain(self.case_insensitive_arithmetic_desc.keys())
+            .chain(self.case_insensitive_typed_desc.keys())
             .cloned()
             .collect::<Vec<_>>()
     }
