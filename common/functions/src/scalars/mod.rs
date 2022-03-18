@@ -38,7 +38,6 @@ pub use conditionals::*;
 pub use dates::*;
 pub use expressions::*;
 pub use function::*;
-pub use function_adapter::ArithmeticAdapter;
 pub use function_adapter::FunctionAdapter;
 pub use function_common::*;
 pub use function_factory::*;

@@ -1223,6 +1223,7 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "serde",
+ "serde_json",
  "sha1",
  "sha2 0.10.2",
  "simdutf8",
@@ -5567,7 +5568,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=64795ad#64795ad8157bfab18c6e325c10076700bc24204b"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=0b1b0d7#0b1b0d7bccbdc15116df4cb1e4ed8b4a2e854a7b"
 dependencies = [
  "log",
 ]

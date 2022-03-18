@@ -293,3 +293,6 @@ impl GroupHash for StringColumn {
         Ok(())
     }
 }
+
+// TODO(b41sh): implement GroupHash for JsonColumn
+impl GroupHash for JsonColumn {}

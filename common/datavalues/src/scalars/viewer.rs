@@ -220,6 +220,63 @@ impl<'a> ScalarViewer<'a> for StringViewer<'a> {
     }
 }
 
+#[derive(Clone)]
+pub struct ObjectViewer<'a, T: ObjectType> {
+    pub(crate) values: &'a [T],
+    pub(crate) null_mask: usize,
+    pub(crate) non_const_mask: usize,
+    pub(crate) size: usize,
+    pub(crate) pos: usize,
+    pub(crate) validity: Bitmap,
+}
+
+impl<'a, T> ScalarViewer<'a> for ObjectViewer<'a, T>
+where T: Scalar<Viewer<'a> = Self> + ObjectType
+{
+    type ScalarItem = T;
+    type Iterator = Self;
+
+    fn try_create(column: &'a ColumnRef) -> Result<Self> {
+        let (inner, validity) = try_extract_inner(column)?;
+        let col: &ObjectColumn<T> = Series::check_get(inner)?;
+        let values = col.values();
+
+        let null_mask = get_null_mask(column);
+        let non_const_mask = non_const_mask(column);
+        let size = column.len();
+
+        Ok(Self {
+            values,
+            null_mask,
+            non_const_mask,
+            validity,
+            size,
+            pos: 0,
+        })
+    }
+
+    #[inline]
+    fn value_at(&self, index: usize) -> <Self::ScalarItem as Scalar>::RefType<'a> {
+        self.values[index & self.non_const_mask].as_scalar_ref()
+    }
+
+    #[inline]
+    fn valid_at(&self, i: usize) -> bool {
+        unsafe { self.validity.get_bit_unchecked(i & self.null_mask) }
+    }
+
+    #[inline]
+    fn size(&self) -> usize {
+        self.size
+    }
+
+    fn iter(&self) -> Self {
+        let mut res = self.clone();
+        res.pos = 0;
+        res
+    }
+}
+
 #[inline]
 fn try_extract_inner(column: &ColumnRef) -> Result<(&ColumnRef, Bitmap)> {
     let (column, validity) = if column.is_const() {

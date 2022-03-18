@@ -30,6 +30,7 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::StreamExt;
 
+use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
@@ -112,6 +113,16 @@ impl Table for FuseTable {
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         self.do_read(ctx, &plan.push_downs).await
+    }
+
+    #[tracing::instrument(level = "debug", name = "fuse_table_read2", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
+    fn read2(
+        &self,
+        ctx: Arc<QueryContext>,
+        plan: &ReadDataSourcePlan,
+        pipeline: &mut NewPipeline,
+    ) -> Result<()> {
+        self.do_read2(ctx, plan, pipeline)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_append_data", skip(self, ctx, stream), fields(ctx.id = ctx.get_id().as_str()))]

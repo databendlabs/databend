@@ -19,24 +19,22 @@ use std::sync::Arc;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::get_abs_path;
-use common_meta_types::FileFormatOptions;
 use common_meta_types::OnErrorMode;
-use common_meta_types::StageFileFormatType;
 use common_meta_types::StageParams;
-use common_meta_types::StageS3Storage;
-use common_meta_types::StageStorage;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_planners::CopyPlan;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
-use common_planners::S3ExternalTableInfo;
+use common_planners::S3StageTableInfo;
 use common_planners::SourceInfo;
 use common_planners::ValidationMode;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 
+use super::location_to_stage_path;
+use super::parse_copy_file_format_options;
+use super::parse_stage_storage;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -82,7 +80,7 @@ impl AnalyzableStatement for DfCopy {
         }
 
         // Stage info.
-        let mut stage_info = if self.location.starts_with('@') {
+        let (mut stage_info, path) = if self.location.starts_with('@') {
             self.analyze_named(&ctx).await?
         } else {
             self.analyze_location().await?
@@ -119,10 +117,11 @@ impl AnalyzableStatement for DfCopy {
 
         // Read source plan.
         let from = ReadDataSourcePlan {
-            source_info: SourceInfo::S3ExternalSource(S3ExternalTableInfo {
+            source_info: SourceInfo::S3StageSource(S3StageTableInfo {
                 schema: schema.clone(),
                 file_name: None,
                 stage_info,
+                path,
             }),
             scan_fields: None,
             parts: vec![],
@@ -157,29 +156,8 @@ impl DfCopy {
     // Named stage(start with `@`):
     // copy into mytable from @my_ext_stage
     // file_format = (type = csv);
-    async fn analyze_named(&self, ctx: &Arc<QueryContext>) -> Result<UserStageInfo> {
-        let mgr = ctx.get_user_manager();
-        let s: Vec<&str> = self.location.split('@').collect();
-        // @my_ext_stage/abc
-        let names: Vec<&str> = s[1].splitn(2, '/').collect();
-        let mut stage = mgr.get_stage(&ctx.get_tenant(), names[0]).await?;
-
-        let path = if names.len() > 1 { names[1] } else { "/" };
-        // Set Path
-        match &mut stage.stage_params.storage {
-            StageStorage::S3(v) => match stage.stage_type {
-                // It's internal, so we already have an op which has the root path
-                StageType::Internal => {
-                    v.path = path.to_string();
-                }
-                // It's  external, so we need to join the root path
-                StageType::External => {
-                    v.path = get_abs_path(v.path.as_str(), path);
-                }
-            },
-        }
-
-        Ok(stage)
+    async fn analyze_named(&self, ctx: &Arc<QueryContext>) -> Result<(UserStageInfo, String)> {
+        location_to_stage_path(self.location.as_str(), ctx).await
     }
 
     // External stage(location starts without `@`):
@@ -187,8 +165,8 @@ impl DfCopy {
     // credentials=(aws_key_id='my_key_id' aws_secret_key='my_secret_key')
     // encryption=(master_key = 'my_master_key')
     // file_format = (type = csv field_delimiter = '|' skip_header = 1)"
-    async fn analyze_location(&self) -> Result<UserStageInfo> {
-        let stage_storage = parse_stage_storage(
+    async fn analyze_location(&self) -> Result<(UserStageInfo, String)> {
+        let (stage_storage, path) = parse_stage_storage(
             &self.location,
             &self.credential_options,
             &self.encryption_options,
@@ -198,109 +176,12 @@ impl DfCopy {
             storage: stage_storage,
         };
         // Stage info.
-        Ok(UserStageInfo {
+        let stage = UserStageInfo {
             stage_name: self.location.clone(),
             stage_type: StageType::External,
             stage_params,
             ..Default::default()
-        })
+        };
+        Ok((stage, path))
     }
-}
-
-pub fn parse_stage_storage(
-    location: &str,
-    credential_options: &HashMap<String, String>,
-    encryption_options: &HashMap<String, String>,
-) -> Result<StageStorage> {
-    // Parse uri.
-    // 's3://<bucket>[/<path>]'
-    let uri = location.parse::<http::Uri>().map_err(|_e| {
-        ErrorCode::SyntaxException(
-            "File location uri must be specified, for example: 's3://<bucket>[/<path>]'",
-        )
-    })?;
-    let bucket = uri
-        .host()
-        .ok_or_else(|| {
-            ErrorCode::SyntaxException(
-                "File location uri must be specified, for example: 's3://<bucket>[/<path>]'",
-            )
-        })?
-        .to_string();
-    // Path maybe a dir or a file.
-    let path = uri.path().to_string();
-
-    // File storage plan.
-    match uri.scheme_str() {
-        None => Err(ErrorCode::SyntaxException(
-            "File location scheme must be specified",
-        )),
-        Some(v) => match v {
-            // AWS s3 plan.
-            "s3" => {
-                let credentials_aws_key_id = credential_options
-                    .get("aws_key_id")
-                    .unwrap_or(&"".to_string())
-                    .clone();
-                let credentials_aws_secret_key = credential_options
-                    .get("aws_secret_key")
-                    .unwrap_or(&"".to_string())
-                    .clone();
-                let encryption_master_key = encryption_options
-                    .get("master_key")
-                    .unwrap_or(&"".to_string())
-                    .clone();
-
-                Ok(StageStorage::S3(StageS3Storage {
-                    bucket,
-                    path,
-                    credentials_aws_key_id,
-                    credentials_aws_secret_key,
-                    encryption_master_key,
-                }))
-            }
-
-            // Others.
-            _ => Err(ErrorCode::SyntaxException(
-                "File location uri unsupported, must be one of [s3, @stage]",
-            )),
-        },
-    }
-}
-
-pub fn parse_copy_file_format_options(
-    file_format_options: &HashMap<String, String>,
-) -> Result<FileFormatOptions> {
-    // File format type.
-    let format = file_format_options
-        .get("type")
-        .ok_or_else(|| ErrorCode::SyntaxException("File format type must be specified"))?;
-    let file_format = StageFileFormatType::from_str(format)
-        .map_err(|e| ErrorCode::SyntaxException(format!("File format type error:{:?}", e)))?;
-
-    // Skip header.
-    let skip_header = file_format_options
-        .get("skip_header")
-        .unwrap_or(&"0".to_string())
-        .parse::<i32>()?;
-
-    // Field delimiter.
-    let field_delimiter = file_format_options
-        .get("field_delimiter")
-        .unwrap_or(&"".to_string())
-        .clone();
-
-    // Record delimiter.
-    let record_delimiter = file_format_options
-        .get("record_delimiter")
-        .unwrap_or(&"".to_string())
-        .clone();
-
-    Ok(FileFormatOptions {
-        format: file_format,
-        skip_header,
-        field_delimiter,
-        record_delimiter,
-        compression: Default::default(),
-    })
 }

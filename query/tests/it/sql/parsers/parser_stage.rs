@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use common_exception::Result;
 use databend_query::sql::statements::DfCreateUserStage;
+use databend_query::sql::statements::DfList;
 use databend_query::sql::*;
 
 use crate::sql::sql_parser::*;
@@ -65,6 +66,14 @@ fn create_stage_test() -> Result<()> {
                 ("record_delimiter".to_string(), ",".to_string()),
             ]),
           ..Default::default()}),
+    )?;
+
+    expect_parse_ok(
+        "list @abc pattern = '*.csv'",
+        DfStatement::List(DfList {
+            location: "@abc".to_string(),
+            pattern: "*.csv".to_string(),
+        }),
     )?;
     Ok(())
 }

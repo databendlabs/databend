@@ -411,19 +411,13 @@ def run_tests_array(all_tests_with_params):
                 args,
                 "red",
                 attrs=["bold"]))
-        print(
-            colored(
-                "The failure tests:",
-                args,
-                "red",
-                attrs=["bold"]))
+        print(colored("The failure tests:", args, "red", attrs=["bold"]))
         for case in failure_cases:
             print(
-                colored(
-                    "    {case}".format(case=case),
-                    args,
-                    "red",
-                    attrs=["bold"]))
+                colored("    {case}".format(case=case),
+                        args,
+                        "red",
+                        attrs=["bold"]))
         exit_code = 1
     else:
         print(

@@ -74,6 +74,8 @@ impl ManagementModeAccess {
                 | PlanNode::DropUserStage(_)
                 | PlanNode::DescribeUserStage(_)
 
+                | PlanNode::List(_)
+
                 // UDF.
                 | PlanNode::CreateUserUDF(_)
                 | PlanNode::DropUserUDF(_)

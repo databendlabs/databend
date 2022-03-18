@@ -28,6 +28,7 @@ pub mod type_primitive;
 pub mod type_string;
 pub mod type_struct;
 pub mod type_traits;
+pub mod type_variant;
 
 pub mod eq;
 pub mod type_id;
@@ -59,3 +60,4 @@ pub use type_primitive::*;
 pub use type_string::*;
 pub use type_struct::*;
 pub use type_traits::*;
+pub use type_variant::*;

@@ -11,7 +11,6 @@ echo "*************************************"
 export STORAGE_TYPE=s3
 export S3_STORAGE_BUCKET=testbucket
 export S3_STORAGE_ROOT=admin
-export S3_STORAGE_REGION=us-east-1
 export S3_STORAGE_ENDPOINT_URL=http://127.0.0.1:9900
 export S3_STORAGE_ACCESS_KEY_ID=minioadmin
 export S3_STORAGE_SECRET_ACCESS_KEY=minioadmin

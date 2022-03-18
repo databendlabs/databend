@@ -26,6 +26,7 @@ use super::cast_with_type::CastOptions;
 
 pub fn cast_from_string(
     column: &ColumnRef,
+    from_type: &DataTypePtr,
     data_type: &DataTypePtr,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
@@ -89,7 +90,7 @@ pub fn cast_from_string(
             Ok((builder.build(size), Some(bitmap.into())))
         }
         TypeID::Interval => todo!(),
-        _ => arrow_cast_compute(column, data_type, cast_options),
+        _ => arrow_cast_compute(column, from_type, data_type, cast_options),
     }
 }
 

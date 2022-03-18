@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::escape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::KVApi;
@@ -45,7 +46,7 @@ impl StageMgr {
 
         Ok(StageMgr {
             kv_api,
-            stage_prefix: format!("{}/{}", USER_STAGE_API_KEY_PREFIX, tenant),
+            stage_prefix: format!("{}/{}", USER_STAGE_API_KEY_PREFIX, escape_for_key(tenant)?),
         })
     }
 }
@@ -55,7 +56,11 @@ impl StageApi for StageMgr {
     async fn add_stage(&self, info: UserStageInfo) -> Result<u64> {
         let seq = MatchSeq::Exact(0);
         let val = Operation::Update(serde_json::to_vec(&info)?);
-        let key = format!("{}/{}", self.stage_prefix, info.stage_name);
+        let key = format!(
+            "{}/{}",
+            self.stage_prefix,
+            escape_for_key(&info.stage_name)?
+        );
         let upsert_info = self
             .kv_api
             .upsert_kv(UpsertKVAction::new(&key, seq, val, None));
@@ -72,7 +77,7 @@ impl StageApi for StageMgr {
     }
 
     async fn get_stage(&self, name: &str, seq: Option<u64>) -> Result<SeqV<UserStageInfo>> {
-        let key = format!("{}/{}", self.stage_prefix, name);
+        let key = format!("{}/{}", self.stage_prefix, escape_for_key(name)?);
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
@@ -97,7 +102,7 @@ impl StageApi for StageMgr {
     }
 
     async fn drop_stage(&self, name: &str, seq: Option<u64>) -> Result<()> {
-        let key = format!("{}/{}", self.stage_prefix, name);
+        let key = format!("{}/{}", self.stage_prefix, escape_for_key(name)?);
         let kv_api = self.kv_api.clone();
         let upsert_kv = async move {
             kv_api

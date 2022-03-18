@@ -88,14 +88,16 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
 
 impl<T: Transform> Transformer<T> {
     fn pull_data(&mut self) -> Result<Event> {
-        match self.input.is_finished() {
-            true => self.finish_output(),
-            false if !self.input.has_data() => self.need_data(),
-            false => self.receive_input_data(),
+        if self.input.has_data() {
+            self.input_data = Some(self.input.pull_data().unwrap()?);
+            return Ok(Event::Sync);
         }
-    }
 
-    fn need_data(&mut self) -> Result<Event> {
+        if self.input.is_finished() {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
         self.input.set_need_data();
         Ok(Event::NeedData)
     }
@@ -108,15 +110,5 @@ impl<T: Transform> Transformer<T> {
     fn finish_input(&mut self) -> Result<Event> {
         self.input.finish();
         Ok(Event::Finished)
-    }
-
-    fn finish_output(&mut self) -> Result<Event> {
-        self.output.finish();
-        Ok(Event::Finished)
-    }
-
-    fn receive_input_data(&mut self) -> Result<Event> {
-        self.input_data = Some(self.input.pull_data().unwrap()?);
-        Ok(Event::Sync)
     }
 }
