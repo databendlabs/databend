@@ -25,7 +25,6 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageIterator;
-use common_base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -40,7 +39,6 @@ use futures::TryStreamExt;
 use opendal::Operator;
 use opendal::Reader;
 
-use crate::sessions::QueryContext;
 use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;
 
@@ -51,12 +49,10 @@ pub struct BlockReader {
     arrow_schema: Arc<Schema>,
     projected_schema: DataSchemaRef,
     parquet_schema_descriptor: SchemaDescriptor,
-    ctx: Arc<QueryContext>,
 }
 
 impl BlockReader {
     pub fn create(
-        ctx: Arc<QueryContext>,
         operator: Operator,
         schema: DataSchemaRef,
         projection: Vec<usize>,
@@ -71,7 +67,6 @@ impl BlockReader {
             projected_schema,
             parquet_schema_descriptor,
             arrow_schema: Arc::new(arrow_schema),
-            ctx,
         }))
     }
 
@@ -115,17 +110,14 @@ impl BlockReader {
                 .operator
                 .object(&part.location)
                 .range_reader(column_meta.offset, column_meta.length);
-            let mut column_chunk = vec![0; column_meta.length as usize];
             let fut = async move {
-                tracing::debug!("read_exact | Begin, {:?}", std::thread::current());
+                // NOTE: move chunk inside future so that alloc only
+                // happen when future is ready to go.
+                let mut column_chunk = vec![0; column_meta.length as usize];
                 column_reader.read_exact(&mut column_chunk).await?;
-                tracing::debug!("read_exact | End, {:?}", std::thread::current());
                 Ok::<_, ErrorCode>(column_chunk)
             }
             .instrument(debug_span!("read_col_chunk"));
-            tracing::debug!("issuing io task, {:?}", std::thread::current());
-            // let fut = self.ctx.get_storage_runtime().try_spawn(fut)?;
-            tracing::debug!("io task issued, {:?}", std::thread::current());
             column_chunk_futs.push(fut);
             col_idx.push(index);
         }

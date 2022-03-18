@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use std::sync::Arc;
-use std::time::Instant;
 
 use async_trait::async_trait;
 use opendal::error::Result as DalResult;
@@ -21,8 +20,6 @@ use opendal::ops::OpList;
 use opendal::ops::OpRead;
 use opendal::ops::OpStat;
 use opendal::ops::OpWrite;
-use opendal::readers::ObserveReader;
-use opendal::readers::ReadEvent;
 use opendal::Accessor;
 use opendal::BoxedAsyncReader;
 use opendal::BoxedObjectStream;

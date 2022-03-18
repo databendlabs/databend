@@ -18,8 +18,6 @@ use std::thread;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing::debug;
-use common_tracing::tracing::warn;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -78,11 +76,7 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    fn create(
-        name: String,
-        tracker: Arc<RuntimeTracker>,
-        builder: &mut tokio::runtime::Builder,
-    ) -> Result<Self> {
+    fn create(tracker: Arc<RuntimeTracker>, builder: &mut tokio::runtime::Builder) -> Result<Self> {
         let runtime = builder
             .build()
             .map_err(|tokio_error| ErrorCode::TokioError(format!("{}", tokio_error)))?;
@@ -92,11 +86,7 @@ impl Runtime {
         let handle = runtime.handle().clone();
 
         // Block the runtime to shutdown.
-        let _ = thread::spawn(move || {
-            warn!("runtime {:?} started", &name);
-            runtime.block_on(recv_stop);
-            warn!("runtime {:?} dropped", name);
-        });
+        let _ = thread::spawn(move || runtime.block_on(recv_stop));
 
         Ok(Runtime {
             handle,
@@ -127,20 +117,16 @@ impl Runtime {
     pub fn with_default_worker_threads() -> Result<Self> {
         let tracker = RuntimeTracker::create();
         let mut runtime_builder = Self::tracker_builder(tracker.clone());
-        Self::create("".to_string(), tracker, &mut runtime_builder)
+        Self::create(tracker, &mut runtime_builder)
     }
 
     pub fn with_worker_threads(workers: usize, thread_name: Option<String>) -> Result<Self> {
         let tracker = RuntimeTracker::create();
         let mut runtime_builder = Self::tracker_builder(tracker.clone());
-        if let Some(v) = thread_name.as_ref() {
+        if let Some(v) = thread_name {
             runtime_builder.thread_name(v);
         }
-        Self::create(
-            thread_name.unwrap_or_default(),
-            tracker,
-            runtime_builder.worker_threads(workers),
-        )
+        Self::create(tracker, runtime_builder.worker_threads(workers))
     }
 
     pub fn inner(&self) -> tokio::runtime::Handle {
