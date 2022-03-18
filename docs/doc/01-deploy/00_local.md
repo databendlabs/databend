@@ -78,7 +78,7 @@ tar xzvf databend-v0.6.94-nightly-aarch64-unknown-linux-gnu.tar.gz
 </TabItem>
 </Tabs>
 
-## 2. Deploy databend-meta (standalone)
+## 2. Deploy databend-meta
 
 databend-meta is a global service for the meta data(such as user, table schema etc.).
 
@@ -95,13 +95,13 @@ single = true
 raft_dir = "metadata/datas"
 ```
 
-### 2.2 Start the databend-meta service
+### 2.2 Start the databend-meta
 
 ```shell
 ./databend-meta -c ./databend-meta.toml 2>&1 > meta.log&
 ```
 
-### 2.3 Check databend-meta status
+### 2.3 Check databend-meta
 
 ```shell
 curl -I  http://127.0.0.1:8101/v1/health
@@ -170,7 +170,7 @@ data_path = "bendata/datas"
 ./databend-query -c ./databend-query.toml 2>&1 > query.log&
 ```
 
-### 3.3 Check databend-query status
+### 3.3 Check databend-query 
 
 ```shell
 curl -I  http://127.0.0.1:8001/v1/health

@@ -10,7 +10,7 @@ description:
 
 * **Databend :** Make sure Databend is running and accessible, please see [Deploy Databend With MinIO](/doc/deploy/minio).
 
-### Step 1. Create stage object
+### Step 1. Create Stage Object
 
 Execute [CREATE STAGE](/doc/reference/sql/ddl/stage/ddl-create-stage) to create a named internal stage.
 
