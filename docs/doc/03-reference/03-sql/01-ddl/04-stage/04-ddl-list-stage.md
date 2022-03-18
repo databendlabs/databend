@@ -14,5 +14,13 @@ LIST { internalStage | externalStage } [ PATTERN = '<regex_pattern>' ]
 ## Examples
 
 ```sql title='mysql>'
-drop stage if exists test_stage;
+list @my_int_stage;
+```
+
+```text
++-----------+
+| file_name |
++-----------+
+| books.csv |
++-----------+
 ```
