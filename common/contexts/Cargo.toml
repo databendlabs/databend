@@ -10,6 +10,6 @@ test = false
 
 [dependencies]
 async-trait = "0.1.52"
-opendal = { git = "https://github.com/datafuselabs/opendal", rev = "c220042" }
+opendal = "0.2.4"
 time = "0.3.7"
 tokio = "1.17"
