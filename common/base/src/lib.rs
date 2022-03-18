@@ -23,6 +23,7 @@ mod runtime_tracker;
 mod shutdown_signal;
 mod stop_handle;
 mod stoppable;
+mod string_func;
 mod thread;
 mod uniq_id;
 
@@ -43,6 +44,8 @@ pub use shutdown_signal::SignalStream;
 pub use shutdown_signal::SignalType;
 pub use stop_handle::StopHandle;
 pub use stoppable::Stoppable;
+pub use string_func::escape_for_key;
+pub use string_func::unescape_for_key;
 pub use thread::Thread;
 pub use tokio;
 pub use uniq_id::GlobalSequence;

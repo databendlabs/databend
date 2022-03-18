@@ -24,7 +24,7 @@ use common_meta_types::StageFileFormatType;
 use common_meta_types::StageStorage;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
-use common_planners::S3ExternalTableInfo;
+use common_planners::S3StageTableInfo;
 use common_streams::CsvSourceBuilder;
 use common_streams::ParquetSourceBuilder;
 use common_streams::Source;
@@ -37,22 +37,22 @@ use crate::pipelines::new::processors::AsyncSource;
 use crate::pipelines::new::processors::AsyncSourcer;
 use crate::sessions::QueryContext;
 
-pub struct ExternalSource {
+pub struct StageSource {
     ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
-    table_info: S3ExternalTableInfo,
+    table_info: S3StageTableInfo,
     initialized: bool,
     source: Option<Box<dyn Source>>,
 }
 
-impl ExternalSource {
+impl StageSource {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
-        table_info: S3ExternalTableInfo,
+        table_info: S3StageTableInfo,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(output, ExternalSource {
+        AsyncSourcer::create(output, StageSource {
             ctx,
             schema,
             table_info,
@@ -122,12 +122,7 @@ impl ExternalSource {
         Ok(Box::new(builder.build(reader)?))
     }
 
-    pub async fn get_op(
-        ctx: &Arc<QueryContext>,
-        table_info: &S3ExternalTableInfo,
-    ) -> Result<Operator> {
-        let stage = &table_info.stage_info;
-
+    pub async fn get_op(ctx: &Arc<QueryContext>, stage: &UserStageInfo) -> Result<Operator> {
         if stage.stage_type == StageType::Internal {
             ctx.get_storage_operator()
         } else {
@@ -139,7 +134,8 @@ impl ExternalSource {
 
                     let key_id = &s3.credentials_aws_key_id;
                     let secret_key = &s3.credentials_aws_secret_key;
-                    S3File::open(endpoint, bucket, key_id, secret_key).await
+
+                    S3File::open(endpoint, bucket, key_id, secret_key, "/").await
                 }
             }
         }
@@ -151,7 +147,7 @@ impl ExternalSource {
         let stage = &self.table_info.stage_info;
         let file_format = stage.file_format_options.format.clone();
 
-        let op = Self::get_op(&self.ctx, &self.table_info).await?;
+        let op = Self::get_op(&self.ctx, &self.table_info.stage_info).await?;
         let path = file_name.unwrap_or_else(|| "".to_string());
         let file_reader = op.object(&path).reader();
 
@@ -178,8 +174,8 @@ impl ExternalSource {
     }
 }
 
-impl AsyncSource for ExternalSource {
-    const NAME: &'static str = "ExternalSource";
+impl AsyncSource for StageSource {
+    const NAME: &'static str = "StageSource";
 
     type BlockFuture<'a>
     where Self: 'a

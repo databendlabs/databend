@@ -21,11 +21,13 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_macros::MallocSizeOf;
+use serde_json::json;
+use serde_json::Value as JsonValue;
 
 use crate::prelude::*;
 
 /// A specific value of a data type.
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, MallocSizeOf)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum DataValue {
     /// Base type.
     Null,
@@ -38,6 +40,9 @@ pub enum DataValue {
     // Container struct.
     Array(Vec<DataValue>),
     Struct(Vec<DataValue>),
+
+    // Custom type.
+    Json(JsonValue),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, MallocSizeOf)]
@@ -50,6 +55,7 @@ pub enum ValueType {
     String,
     Array,
     Struct,
+    Json,
 }
 
 pub type DataValueRef = Arc<DataValue>;
@@ -79,6 +85,7 @@ impl DataValue {
             DataValue::String(_) => ValueType::String,
             DataValue::Array(_) => ValueType::Array,
             DataValue::Struct(_) => ValueType::Struct,
+            DataValue::Json(_) => ValueType::Json,
         }
     }
 
@@ -126,6 +133,7 @@ impl DataValue {
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
                 Arc::new(StructType::create(names, types))
             }
+            DataValue::Json(_) => VariantType::arc(),
         }
     }
 
@@ -151,6 +159,7 @@ impl DataValue {
                 let types = x.iter().map(|v| v.data_type()).collect::<Vec<_>>();
                 Arc::new(StructType::create(names, types))
             }
+            DataValue::Json(_) => VariantType::arc(),
         }
     }
 
@@ -219,6 +228,7 @@ impl DataValue {
             DataValue::UInt64(v) => Ok(Vec::<u8>::from((*v).to_string())),
             DataValue::Float64(v) => Ok(Vec::<u8>::from((*v).to_string())),
             DataValue::String(v) => Ok(v.to_owned()),
+            DataValue::Json(v) => Ok(v.to_string().into_bytes()),
             other => Result::Err(ErrorCode::BadDataValueType(format!(
                 "Unexpected type:{:?} to get string",
                 other.value_type()
@@ -264,6 +274,38 @@ impl DFTryFrom<DataValue> for Vec<u8> {
                 value,
                 std::any::type_name::<Self>()
             ))),
+        }
+    }
+}
+
+impl DFTryFrom<DataValue> for JsonValue {
+    fn try_from(value: DataValue) -> Result<Self> {
+        match value {
+            DataValue::Null => Ok(JsonValue::Null),
+            DataValue::Boolean(v) => Ok(v.into()),
+            DataValue::Int64(v) => Ok(v.into()),
+            DataValue::UInt64(v) => Ok(v.into()),
+            DataValue::Float64(v) => Ok(v.into()),
+            DataValue::String(v) => Ok(v.into()),
+            DataValue::Array(v) => Ok(json!(v)),
+            DataValue::Struct(v) => Ok(json!(v)),
+            DataValue::Json(v) => Ok(v),
+        }
+    }
+}
+
+impl DFTryFrom<&DataValue> for JsonValue {
+    fn try_from(value: &DataValue) -> Result<Self> {
+        match value {
+            DataValue::Null => Ok(JsonValue::Null),
+            DataValue::Boolean(v) => Ok((*v as bool).into()),
+            DataValue::Int64(v) => Ok((*v as i64).into()),
+            DataValue::UInt64(v) => Ok((*v as u64).into()),
+            DataValue::Float64(v) => Ok((*v as f64).into()),
+            DataValue::String(v) => Ok(String::from_utf8(v.to_vec()).unwrap().into()),
+            DataValue::Array(v) => Ok(json!(*v)),
+            DataValue::Struct(v) => Ok(json!(*v)),
+            DataValue::Json(v) => Ok(v.to_owned()),
         }
     }
 }
@@ -322,6 +364,12 @@ impl From<Option<Vec<u8>>> for DataValue {
     }
 }
 
+impl From<JsonValue> for DataValue {
+    fn from(x: JsonValue) -> Self {
+        DataValue::Json(x)
+    }
+}
+
 impl fmt::Display for DataValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -350,6 +398,7 @@ impl fmt::Display for DataValue {
                 )
             }
             DataValue::Struct(v) => write!(f, "{:?}", v),
+            DataValue::Json(v) => write!(f, "{:#}", v),
         }
     }
 }
@@ -365,6 +414,7 @@ impl fmt::Debug for DataValue {
             DataValue::String(_) => write!(f, "{}", self),
             DataValue::Array(_) => write!(f, "{}", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
+            DataValue::Json(v) => write!(f, "{:#?}", v),
         }
     }
 }

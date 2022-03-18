@@ -45,8 +45,7 @@ impl FuseTable {
     ) -> Result<SendableDataBlockStream> {
         let block_reader = self.create_block_reader(&ctx, push_downs)?;
 
-        let bite_size = ctx.get_settings().get_parallel_read_threads()?;
-        let iter = std::iter::from_fn(move || match ctx.clone().try_get_partitions(bite_size) {
+        let iter = std::iter::from_fn(move || match ctx.clone().try_get_partitions(1) {
             Err(_) => None,
             Ok(parts) if parts.is_empty() => None,
             Ok(parts) => Some(parts),
@@ -56,12 +55,12 @@ impl FuseTable {
         let part_stream = futures::stream::iter(iter);
 
         let stream = part_stream
-            .map(move |part| {
+            .then(move |part| {
                 let block_reader = block_reader.clone();
                 async move { block_reader.read(part).await }
             })
-            .buffer_unordered(bite_size as usize)
             .instrument(common_tracing::tracing::Span::current());
+
         Ok(Box::pin(stream))
     }
 

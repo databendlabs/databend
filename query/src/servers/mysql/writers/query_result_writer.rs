@@ -84,6 +84,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 TypeID::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
                 TypeID::Interval => Ok(ColumnType::MYSQL_TYPE_LONG),
                 TypeID::Struct => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+                TypeID::Variant => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 _ => Err(ErrorCode::UnImplement(format!(
                     "Unsupported column type:{:?}",
                     field.data_type()
@@ -160,6 +161,10 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     row_writer.write_col(v)?
                                 }
                                 (TypeID::Struct, DataValue::Struct(_)) => {
+                                    let serializer = data_type.create_serializer();
+                                    row_writer.write_col(serializer.serialize_value(&val)?)?
+                                }
+                                (TypeID::Variant, DataValue::Json(_)) => {
                                     let serializer = data_type.create_serializer();
                                     row_writer.write_col(serializer.serialize_value(&val)?)?
                                 }

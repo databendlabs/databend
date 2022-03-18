@@ -28,7 +28,8 @@ macro_rules! for_all_scalar_types {
             { f32 },
             { f64 },
             { bool },
-            { Vu8 }
+            { Vu8 },
+            { JsonValue }
         }
     };
 }
@@ -75,6 +76,7 @@ macro_rules! for_all_primitive_boolean_types{
 #[macro_export]
 macro_rules! for_all_scalar_varints{
     ($macro:tt $(, $x:tt)*) => {
+        use serde_json::Value as JsonValue;
         $macro! {
             [$($x),*],
             { i8, Int8 },
@@ -88,7 +90,8 @@ macro_rules! for_all_scalar_varints{
             { f32, Float32 },
             { f64, Float64 },
             { bool, Boolean },
-            { Vu8, String }
+            { Vu8, String },
+            { JsonValue, Variant }
         }
     };
 }
@@ -200,9 +203,9 @@ macro_rules! with_match_scalar_types_error {(
     type C = Vec<u8>;
     match $key_type {
         PhysicalTypeID::Boolean => __with_ty__! { bool },
-       	PhysicalTypeID::String => __with_ty__! { C },
+        PhysicalTypeID::String => __with_ty__! { C },
 
-       	PhysicalTypeID::Int8 => __with_ty__! { i8 },
+        PhysicalTypeID::Int8 => __with_ty__! { i8 },
         PhysicalTypeID::Int16 => __with_ty__! { i16 },
         PhysicalTypeID::Int32 => __with_ty__! { i32 },
         PhysicalTypeID::Int64 => __with_ty__! { i64 },

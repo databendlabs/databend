@@ -17,6 +17,7 @@ mod http_query_handlers;
 mod load;
 pub mod middleware;
 mod query;
+mod stage;
 mod statement;
 
 pub(crate) use block_to_json::block_to_json;
@@ -33,5 +34,7 @@ pub use load::LoadResponse;
 pub use query::ExecuteStateName;
 pub use query::HttpQueryHandle;
 pub use query::HttpQueryManager;
+pub use stage::upload_to_stage;
+pub use stage::UploadToStageResponse;
 pub use statement::statement_handler;
 pub use statement::statement_router;

@@ -19,6 +19,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::compute::concatenate;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use serde_json::Value as JsonValue;
 
 use crate::prelude::*;
 use crate::Column;
@@ -187,6 +188,12 @@ impl SeriesFrom<Vec<String>, Vec<String>> for Series {
     fn from_data(v: Vec<String>) -> ColumnRef {
         let iter = v.as_slice().iter().map(|v| v.as_bytes());
         StringColumn::from_iterator(iter).arc()
+    }
+}
+
+impl SeriesFrom<Vec<JsonValue>, Vec<JsonValue>> for Series {
+    fn from_data(v: Vec<JsonValue>) -> ColumnRef {
+        JsonColumn::new_from_vec(v).arc()
     }
 }
 
