@@ -959,7 +959,6 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "bytes",
- "common-base",
  "common-exception",
  "futures",
  "opendal",
