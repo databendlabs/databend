@@ -30,7 +30,7 @@ The new databend-query node only needs to register itself to the databend-meta w
 
 Install Databend with standalone mode, please see [Install Databend with MinIO](02_minio.md).
 
-## Step 2. Scale new databend-query node to the cluster
+## Step 2. Scale new databend-query Node to the Cluster
 
 ### 2.1 Create databend-query-node2.toml
 
@@ -87,13 +87,13 @@ access_key_id = "minioadmin"
 secret_access_key = "minioadmin"
 ```
 
-### 2.2 Start new databend-query node
+### 2.2 Start new databend-query Node
 
 ```shell
 ./databend-query -c ./databend-query-node2.toml 2>&1 > query.node2.log&
 ```
 
-### 2.3 Check new databend-query node status
+### 2.3 Check new databend-query Node Status
 
 ```shell
 curl -I  http://127.0.0.1:8002/v1/health
@@ -101,7 +101,7 @@ curl -I  http://127.0.0.1:8002/v1/health
 
 Check the response is `HTTP/1.1 200 OK`.
 
-### 2.4 Check the cluster information
+### 2.4 Check the Cluster Information
 
 ```shell
 mysql -h127.0.0.1 -uroot -P3308
