@@ -5,7 +5,6 @@ description:
   Load Data from Databend Stages
 ---
 
-Using HTTP API `v1/streaming_load` to load data from local file into Databend.
 
 ### Before you begin
 
