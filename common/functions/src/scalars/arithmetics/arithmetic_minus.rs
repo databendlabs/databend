@@ -24,12 +24,12 @@ use num::traits::AsPrimitive;
 use num_traits::WrappingSub;
 
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionFactory;
 use crate::scalars::Monotonicity;
+use crate::scalars::TypedFunctionDescription;
 
 #[inline]
 fn sub_scalar<O>(l: impl AsPrimitive<O>, r: impl AsPrimitive<O>, _ctx: &mut EvalContext) -> O
@@ -118,8 +118,8 @@ impl ArithmeticMinusFunction {
         })
     }
 
-    pub fn desc() -> ArithmeticDescription {
-        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()
