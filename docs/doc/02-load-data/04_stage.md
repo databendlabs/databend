@@ -13,7 +13,7 @@ Using HTTP API `v1/streaming_load` to load data from local file into Databend.
 
 ### Step 1. Create stage object
 
-Execute [CREATE STAGE](doc/reference/sql/ddl/stage/ddl-create-stage) to create a named internal stage.
+Execute [CREATE STAGE](/doc/reference/sql/ddl/stage/ddl-create-stage) to create a named internal stage.
 
 ```shell
 mysql -h127.0.0.1 -uroot -P3307 
