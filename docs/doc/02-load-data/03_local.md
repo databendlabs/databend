@@ -8,7 +8,7 @@ description:
 Using HTTP API `v1/streaming_load` to load data from local file into Databend.
 Currently, we only support Csv and Parquet format.
 
-### Before you begin
+### Before You Begin
 
 * **Databend :** Make sure Databend is running and accessible, please see [How to deploy Databend](/doc/category/deploy).
 
@@ -27,14 +27,13 @@ import TabItem from '@theme/TabItem';
 
 <TabItem value="csv" label="CSV">
 
-[Download books.csv](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv)
-* This CSV file field delimiter is `,` and the record delimiter is `\n`.
+Download [books.csv](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv)
 
 </TabItem>
 
 <TabItem value="parquet" label="Parquet">
 
-[Download books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet)
+Download [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet)
 
 </TabItem>
 
@@ -90,6 +89,7 @@ echo curl -H \"insert_sql:insert into book_db.books format CSV\" -H \"skip_heade
   * `127.0.0.1` is `http_handler_host` value in your *databend-query.toml*
   * `8081` is `http_handler_port` value in your *databend-query.toml*
 
+* skip_header: Number of lines at the start of the file to skip
 * field_delimiter: One character that separate fields 
 * record_delimiter: One character that separate records
 * -F  \"upload=@./books.csv\"
