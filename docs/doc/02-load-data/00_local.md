@@ -5,6 +5,10 @@ description:
   Load Data from Local File System
 ---
 
+<p align="center">
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/load/load-data-from-local-fs.png" width="550"/>
+</p>
+
 Using HTTP API `v1/streaming_load` to load data from local file into Databend.
 Currently, we only support CSV and Parquet file format.
 
