@@ -7,7 +7,7 @@ description:
 
 ### Before You Begin
 
-* **Databend :** Make sure Databend is running and accessible, please see [Deploy Databend With MinIO](/doc/deploy/minio).
+* **Databend :** Make sure Databend is running and accessible, see [Deploy Databend With MinIO](/doc/deploy/minio).
 
 ### Step 1. Create Stage Object
 

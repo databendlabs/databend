@@ -1,16 +1,16 @@
 ---
-title: Load Data from Local File
-sidebar_label: Load Data from Local File
+title: Load Data from Local File System
+sidebar_label: Load Data from Local File System
 description:
-  Load Data from Local File
+  Load Data from Local File System
 ---
 
 Using HTTP API `v1/streaming_load` to load data from local file into Databend.
-Currently, we only support Csv and Parquet format.
+Currently, we only support CSV and Parquet file format.
 
 ### Before You Begin
 
-* **Databend :** Make sure Databend is running and accessible, please see [How to deploy Databend](/doc/category/deploy).
+* **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](/doc/category/deploy).
 
 ### Step 1. Data Files for Loading
 
