@@ -120,7 +120,7 @@ raft_dir = "metadata/datas"
 ### 3.2 Start the databend-meta
 
 ```shell
-./databend-meta -c ./databend-meta.toml 2>&1 > meta.log&
+./databend-meta -c ./databend-meta.toml > meta.log 2>&1 &
 ```
 
 ### 3.3 Check databend-meta
@@ -190,7 +190,7 @@ secret_access_key = "minioadmin"
 ### 4.2 Start databend-query
 
 ```shell
-./databend-query -c ./databend-query.toml 2>&1 > query.log&
+./databend-query -c ./databend-query.toml > query.log 2>&1 &
 ```
 
 ### 4.3 Check databend-query 
