@@ -18,7 +18,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::assert_string;
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;

@@ -22,7 +22,7 @@ use num_traits::AsPrimitive;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 

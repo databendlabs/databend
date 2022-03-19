@@ -21,6 +21,7 @@ use super::BaseHashFunction;
 use crate::scalars::Blake3HashFunction;
 use crate::scalars::City64WithSeedFunction;
 use crate::scalars::FunctionFactory;
+use crate::scalars::FunctionFactoryLayer;
 use crate::scalars::Md5HashFunction;
 use crate::scalars::Sha1HashFunction;
 use crate::scalars::Sha2HashFunction;
@@ -34,6 +35,8 @@ pub type SipHash64Function = BaseHashFunction<DefaultHasher, u64>;
 
 impl HashesFunction {
     pub fn register(factory: &mut FunctionFactory) {
+        let mut factory = FunctionFactoryLayer::with_layer(factory).category("Hash");
+
         factory.register("md5", Md5HashFunction::desc());
         factory.register("sha", Sha1HashFunction::desc());
         factory.register("sha1", Sha1HashFunction::desc());

@@ -30,7 +30,7 @@ use crate::define_date_add_year_months;
 use crate::define_datetime32_add_year_months;
 use crate::define_datetime64_add_year_months;
 use crate::impl_interval_year_month;
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::FactoryCreatorWithTypes;

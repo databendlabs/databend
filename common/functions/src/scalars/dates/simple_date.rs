@@ -24,7 +24,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone, Debug)]

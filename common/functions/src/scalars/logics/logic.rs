@@ -25,6 +25,7 @@ use super::LogicOrFunction;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
 use crate::scalars::FunctionFactory;
+use crate::scalars::FunctionFactoryLayer;
 
 #[derive(Clone)]
 pub struct LogicFunction {
@@ -45,6 +46,8 @@ impl LogicFunction {
     }
 
     pub fn register(factory: &mut FunctionFactory) {
+        let mut factory = FunctionFactoryLayer::with_layer(factory).category("Logic");
+
         factory.register("and", LogicAndFunction::desc());
         factory.register("or", LogicOrFunction::desc());
         factory.register("not", LogicNotFunction::desc());

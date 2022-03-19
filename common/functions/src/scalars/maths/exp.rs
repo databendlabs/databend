@@ -21,7 +21,7 @@ use num::cast::AsPrimitive;
 
 use crate::scalars::function_common::assert_numeric;
 use crate::scalars::function_factory::FunctionDescription;
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;

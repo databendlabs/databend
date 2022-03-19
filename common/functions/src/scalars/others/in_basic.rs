@@ -22,7 +22,7 @@ use common_exception::Result;
 use ordered_float::OrderedFloat;
 
 use crate::scalars::cast_column_field;
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 

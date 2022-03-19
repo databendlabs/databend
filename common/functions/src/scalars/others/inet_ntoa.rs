@@ -22,7 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::cast_with_type;
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::CastOptions;
 use crate::scalars::ExceptionMode;
 use crate::scalars::Function;

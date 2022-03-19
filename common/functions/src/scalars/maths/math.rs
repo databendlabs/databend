@@ -23,6 +23,7 @@ use crate::scalars::DegressFunction;
 use crate::scalars::ExpFunction;
 use crate::scalars::FloorFunction;
 use crate::scalars::FunctionFactory;
+use crate::scalars::FunctionFactoryLayer;
 use crate::scalars::LnFunction;
 use crate::scalars::Log10Function;
 use crate::scalars::Log2Function;
@@ -48,6 +49,8 @@ pub struct MathsFunction;
 
 impl MathsFunction {
     pub fn register(factory: &mut FunctionFactory) {
+        let mut factory = FunctionFactoryLayer::with_layer(factory).category("Math");
+
         factory.register("abs", AbsFunction::desc());
         factory.register("sign", SignFunction::desc());
         factory.register("pi", PiFunction::desc());

@@ -17,9 +17,9 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
 pub struct IsNullFunction {
@@ -40,7 +40,12 @@ impl IsNullFunction {
                 .negative_function("isnotnull")
                 .bool_function()
                 .disable_passthrough_null()
-                .num_arguments(1),
+                .num_arguments(1)
+                .description("Checks whether a value is not NULL.")
+                .definition("isNotNull(x)")
+                .add_arg("x", "A value with non-compound data type.")
+                .return_type("If x is NULL, ISNULL() returns true, otherwise it returns false.")
+                .example("select isNull(3)"),
         )
     }
 }

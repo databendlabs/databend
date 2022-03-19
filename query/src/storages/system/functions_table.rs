@@ -48,6 +48,9 @@ impl AsyncSystemTable for FunctionsTable {
         let aggr_func_names = aggregate_function_factory.registered_names();
         let udfs = FunctionsTable::get_udfs(ctx).await?;
 
+        let func_features = function_factory.registered_features();
+        let aggr_func_features = aggregate_function_factory.registered_features();
+
         let names: Vec<&[u8]> = func_names
             .iter()
             .chain(aggr_func_names.iter())
@@ -64,10 +67,37 @@ impl AsyncSystemTable for FunctionsTable {
             .map(|i| i >= func_names.len() && i < builtin_func_len)
             .collect::<Vec<bool>>();
 
+        let categorys = (0..names.len())
+            .map(|i| {
+                if i < func_names.len() {
+                    func_features[i].category
+                } else if i < builtin_func_len {
+                    "Aggregate"
+                } else {
+                    "UDF"
+                }
+            })
+            .collect::<Vec<&str>>();
+
+        let descriptions = (0..names.len())
+            .map(|i| {
+                if i < func_names.len() {
+                    func_features[i].description
+                } else if i < builtin_func_len {
+                    aggr_func_features[i - func_names.len()].description
+                } else {
+                    udfs.get(i - builtin_func_len)
+                        .map_or("", |udf| udf.description.as_str())
+                }
+            })
+            .collect::<Vec<&str>>();
+
         let definitions = (0..names.len())
             .map(|i| {
-                if i < builtin_func_len {
-                    ""
+                if i < func_names.len() {
+                    func_features[i].definition
+                } else if i < builtin_func_len {
+                    aggr_func_features[i - func_names.len()].definition
                 } else {
                     udfs.get(i - builtin_func_len)
                         .map_or("", |udf| udf.definition.as_str())
@@ -75,13 +105,14 @@ impl AsyncSystemTable for FunctionsTable {
             })
             .collect::<Vec<&str>>();
 
-        let descriptions = (0..names.len())
+        let examples = (0..names.len())
             .map(|i| {
-                if i < builtin_func_len {
-                    ""
+                if i < func_names.len() {
+                    func_features[i].example
+                } else if i < builtin_func_len {
+                    aggr_func_features[i - func_names.len()].example
                 } else {
-                    udfs.get(i - builtin_func_len)
-                        .map_or("", |udf| udf.description.as_str())
+                    ""
                 }
             })
             .collect::<Vec<&str>>();
@@ -90,8 +121,10 @@ impl AsyncSystemTable for FunctionsTable {
             Series::from_data(names),
             Series::from_data(is_builtin),
             Series::from_data(is_aggregate),
-            Series::from_data(definitions),
+            Series::from_data(categorys),
             Series::from_data(descriptions),
+            Series::from_data(definitions),
+            Series::from_data(examples),
         ]))
     }
 }
@@ -102,8 +135,10 @@ impl FunctionsTable {
             DataField::new("name", Vu8::to_data_type()),
             DataField::new("is_builtin", bool::to_data_type()),
             DataField::new("is_aggregate", bool::to_data_type()),
-            DataField::new("definition", Vu8::to_data_type()),
+            DataField::new("category", Vu8::to_data_type()),
             DataField::new("description", Vu8::to_data_type()),
+            DataField::new("definition", Vu8::to_data_type()),
+            DataField::new("example", Vu8::to_data_type()),
         ]);
 
         let table_info = TableInfo {

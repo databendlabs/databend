@@ -22,7 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 // use common_tracing::tracing;
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 

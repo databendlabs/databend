@@ -17,11 +17,14 @@ use super::uuid_creator::UUIDv4Function;
 use super::uuid_verifier::UUIDIsEmptyFunction;
 use super::uuid_verifier::UUIDIsNotEmptyFunction;
 use crate::scalars::FunctionFactory;
+use crate::scalars::FunctionFactoryLayer;
 
 pub struct UUIDFunction;
 
 impl UUIDFunction {
     pub fn register(factory: &mut FunctionFactory) {
+        let mut factory = FunctionFactoryLayer::with_layer(factory).category("UUID");
+
         factory.register("generateUUIDv4", UUIDv4Function::desc());
         factory.register("zeroUUID", UUIDZeroFunction::desc());
         factory.register("isemptyUUID", UUIDIsEmptyFunction::desc());

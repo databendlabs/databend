@@ -21,7 +21,7 @@ use common_exception::Result;
 use num::traits::AsPrimitive;
 use num_traits::WrappingNeg;
 
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;

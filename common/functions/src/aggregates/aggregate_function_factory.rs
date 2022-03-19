@@ -48,35 +48,45 @@ static FACTORY: Lazy<Arc<AggregateFunctionFactory>> = Lazy::new(|| {
 
 pub struct AggregateFunctionDescription {
     pub(crate) aggregate_function_creator: AggregateFunctionCreator,
-    pub(crate) properties: AggregateFunctionProperties,
+    pub(crate) features: AggregateFunctionFeatures,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct AggregateFunctionProperties {
+#[derive(Debug, Clone, Default)]
+pub struct AggregateFunctionFeatures {
     /** When the function is wrapped with Null combinator,
      * should we return Nullable type with NULL when no values were aggregated
      * or we should return non-Nullable type with default value (example: count, countDistinct).
      */
     pub(crate) returns_default_when_only_null: bool,
+
+    // Function Category
+    pub category: &'static str,
+    // Introduce the function in brief.
+    pub description: &'static str,
+    // The definition of the function.
+    pub definition: &'static str,
+    // Example SQL of the function that can be run directly in query.
+    pub example: &'static str,
 }
 
 impl AggregateFunctionDescription {
     pub fn creator(creator: AggregateFunctionCreator) -> AggregateFunctionDescription {
         AggregateFunctionDescription {
             aggregate_function_creator: creator,
-            properties: AggregateFunctionProperties {
+            features: AggregateFunctionFeatures {
                 returns_default_when_only_null: false,
+                ..Default::default()
             },
         }
     }
 
-    pub fn creator_with_properties(
+    pub fn creator_with_features(
         creator: AggregateFunctionCreator,
-        properties: AggregateFunctionProperties,
+        features: AggregateFunctionFeatures,
     ) -> AggregateFunctionDescription {
         AggregateFunctionDescription {
             aggregate_function_creator: creator,
-            properties,
+            features,
         }
     }
 }
@@ -137,7 +147,7 @@ impl AggregateFunctionFactory {
         arguments: Vec<DataField>,
     ) -> Result<AggregateFunctionRef> {
         let name = name.as_ref();
-        let mut properties = AggregateFunctionProperties::default();
+        let mut features = AggregateFunctionFeatures::default();
 
         if !arguments.is_empty()
             && arguments
@@ -147,14 +157,14 @@ impl AggregateFunctionFactory {
             let new_params = AggregateFunctionCombinatorNull::transform_params(&params)?;
             let new_arguments = AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
 
-            let nested = self.get_impl(name, new_params, new_arguments, &mut properties)?;
+            let nested = self.get_impl(name, new_params, new_arguments, &mut features)?;
             let agg = AggregateFunctionCombinatorNull::try_create(
-                name, params, arguments, nested, properties,
+                name, params, arguments, nested, features,
             )?;
             return Ok(AggregateFunctionBasicAdaptor::create(agg));
         }
 
-        let agg = self.get_impl(name, params, arguments, &mut properties)?;
+        let agg = self.get_impl(name, params, arguments, &mut features)?;
         Ok(AggregateFunctionBasicAdaptor::create(agg))
     }
 
@@ -163,12 +173,12 @@ impl AggregateFunctionFactory {
         name: &str,
         params: Vec<DataValue>,
         arguments: Vec<DataField>,
-        properties: &mut AggregateFunctionProperties,
+        features: &mut AggregateFunctionFeatures,
     ) -> Result<AggregateFunctionRef> {
         let lowercase_name = name.to_lowercase();
         let aggregate_functions_map = &self.case_insensitive_desc;
         if let Some(desc) = aggregate_functions_map.get(&lowercase_name) {
-            *properties = desc.properties;
+            *features = desc.features.clone();
             return (desc.aggregate_function_creator)(name, params, arguments);
         }
 
@@ -182,7 +192,7 @@ impl AggregateFunctionFactory {
                         break;
                     }
                     Some(nested_desc) => {
-                        *properties = nested_desc.properties;
+                        *features = nested_desc.features.clone();
                         return (desc.creator)(
                             nested_name,
                             params,
@@ -222,5 +232,14 @@ impl AggregateFunctionFactory {
 
     pub fn registered_names(&self) -> Vec<String> {
         self.case_insensitive_desc.keys().cloned().collect()
+    }
+
+    pub fn registered_features(&self) -> Vec<AggregateFunctionFeatures> {
+        self.case_insensitive_desc
+            .values()
+            .into_iter()
+            .map(|v| &v.features)
+            .cloned()
+            .collect::<Vec<_>>()
     }
 }

@@ -13,10 +13,8 @@
 // limitations under the License.
 
 use std::fmt;
-use std::sync::Arc;
 
-use common_datavalues::StructColumn;
-use common_datavalues::StructType;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::Function;
@@ -24,14 +22,14 @@ use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
-pub struct TupleFunction {
+pub struct IsNotNullFunction {
     _display_name: String,
 }
 
-impl TupleFunction {
+impl IsNotNullFunction {
     pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(TupleFunction {
-            _display_name: "tuple".to_string(),
+        Ok(Box::new(IsNotNullFunction {
+            _display_name: "isNotNull".to_string(),
         }))
     }
 
@@ -39,55 +37,50 @@ impl TupleFunction {
         FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
+                .negative_function("isnull")
+                .bool_function()
                 .disable_passthrough_null()
-                .variadic_arguments(1, usize::MAX),
+                .num_arguments(1)
+                .description("Checks whether a value is NULL.")
+                .definition("isNull(x)")
+                .add_arg("x", "A value with non-compound data type.")
+                .return_type("If x is NULL, returns false, otherwise it returns true.")
+                .example("select isNotNull(3)"),
         )
     }
 }
 
-impl Function for TupleFunction {
+impl Function for IsNotNullFunction {
     fn name(&self) -> &str {
-        "TupleFunction"
+        "IsNotNullFunction"
     }
 
     fn return_type(
         &self,
-        args: &[&common_datavalues::DataTypePtr],
+        _args: &[&common_datavalues::DataTypePtr],
     ) -> Result<common_datavalues::DataTypePtr> {
-        let names = (0..args.len())
-            .map(|i| format!("item_{}", i))
-            .collect::<Vec<_>>();
-        let types = args.iter().map(|x| (*x).clone()).collect::<Vec<_>>();
-        let t = Arc::new(StructType::create(names, types));
-        Ok(t)
+        Ok(bool::to_data_type())
     }
 
     fn eval(
         &self,
         columns: &common_datavalues::ColumnsWithField,
-        _input_rows: usize,
+        input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        let mut cols = vec![];
-        let mut types = vec![];
-
-        let names = (0..columns.len())
-            .map(|i| format!("item_{}", i))
-            .collect::<Vec<_>>();
-
-        for c in columns {
-            cols.push(c.column().clone());
-            types.push(c.data_type().clone());
+        let (all_null, validity) = columns[0].column().validity();
+        if all_null {
+            return Ok(ConstColumn::new(Series::from_data(vec![false]), input_rows).arc());
         }
 
-        let t = Arc::new(StructType::create(names, types));
-
-        let arr: StructColumn = StructColumn::from_data(cols, t);
-        Ok(Arc::new(arr))
+        match validity {
+            Some(validity) => Ok(BooleanColumn::from_arrow_data(validity.clone()).arc()),
+            None => Ok(ConstColumn::new(Series::from_data(vec![true]), input_rows).arc()),
+        }
     }
 }
 
-impl std::fmt::Display for TupleFunction {
+impl std::fmt::Display for IsNotNullFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "TUPLE")
+        write!(f, "isNotNull")
     }
 }

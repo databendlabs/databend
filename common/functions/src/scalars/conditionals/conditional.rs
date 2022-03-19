@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::scalars::FunctionFactory;
+use crate::scalars::FunctionFactoryLayer;
 use crate::scalars::IfFunction;
 
 #[derive(Clone)]
@@ -20,6 +21,8 @@ pub struct ConditionalFunction;
 
 impl ConditionalFunction {
     pub fn register(factory: &mut FunctionFactory) {
+        let mut factory = FunctionFactoryLayer::with_layer(factory).category("Conditional");
+
         factory.register("if", IfFunction::desc());
     }
 }

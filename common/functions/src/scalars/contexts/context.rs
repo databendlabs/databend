@@ -12,16 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::scalars::CurrentUserFunction;
+use crate::scalars::DatabaseFunction;
 use crate::scalars::FunctionFactory;
-use crate::scalars::IsNotNullFunction;
-use crate::scalars::IsNullFunction;
+use crate::scalars::FunctionFactoryLayer;
+use crate::scalars::VersionFunction;
 
 #[derive(Clone)]
-pub struct NullableFunction;
+pub struct ContextFunction;
 
-impl NullableFunction {
+impl ContextFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("isnull", IsNullFunction::desc());
-        factory.register("isnotnull", IsNotNullFunction::desc());
+        let mut factory = FunctionFactoryLayer::with_layer(factory).category("Context");
+
+        factory.register("database", DatabaseFunction::desc());
+        factory.register("version", VersionFunction::desc());
+        factory.register("current_user", CurrentUserFunction::desc());
     }
 }

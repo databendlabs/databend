@@ -19,7 +19,7 @@ use common_exception::Result;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::default_column_cast;
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 

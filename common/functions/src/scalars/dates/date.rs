@@ -41,10 +41,11 @@ use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
 use crate::scalars::function_factory::FactoryCreator;
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFactory;
+use crate::scalars::FunctionFactoryLayer;
 
 #[derive(Clone)]
 pub struct DateFunction {}
@@ -64,6 +65,8 @@ impl DateFunction {
     }
 
     pub fn register(factory: &mut FunctionFactory) {
+        let mut factory = FunctionFactoryLayer::with_layer(factory).category("Date");
+
         factory.register("today", TodayFunction::desc());
         factory.register("yesterday", YesterdayFunction::desc());
         factory.register("tomorrow", TomorrowFunction::desc());

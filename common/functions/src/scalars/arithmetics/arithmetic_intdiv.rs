@@ -19,7 +19,7 @@ use common_exception::Result;
 use num::Zero;
 use num_traits::AsPrimitive;
 
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;

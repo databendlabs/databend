@@ -21,9 +21,9 @@ use common_datavalues::with_match_scalar_type;
 use common_exception::Result;
 
 use crate::scalars::cast_column_field;
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone, Debug)]
 pub struct IfFunction {
@@ -42,7 +42,17 @@ impl IfFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .disable_passthrough_null()
-                .num_arguments(3),
+                .num_arguments(3)
+                .description("If expr1 is TRUE, IF() returns expr2. Otherwise, it returns expr3.")
+                .definition("IF(expr1,expr2,expr3)")
+                .add_arg(
+                    "expr1",
+                    "The condition for evaluation that can be true or false.",
+                )
+                .add_arg("expr2", "The expression to return if condition is met.")
+                .add_arg("expr3", "The expression to return if condition is not met.")
+                .return_type("The return type is determined by expr2 and expr3, they must have the lowest common type.")
+                .example("select if(number=0, true, false) from numbers(1);"),
         )
     }
 

@@ -27,6 +27,7 @@ use crate::scalars::FieldFunction;
 use crate::scalars::FindInSetFunction;
 use crate::scalars::FormatFunction;
 use crate::scalars::FunctionFactory;
+use crate::scalars::FunctionFactoryLayer;
 use crate::scalars::HexFunction;
 use crate::scalars::InsertFunction;
 use crate::scalars::InstrFunction;
@@ -62,6 +63,8 @@ pub struct StringFunction;
 
 impl StringFunction {
     pub fn register(factory: &mut FunctionFactory) {
+        let mut factory = FunctionFactoryLayer::with_layer(factory).category("String");
+
         factory.register("to_base64", Base64EncodeFunction::desc());
         factory.register("from_base64", Base64DecodeFunction::desc());
         factory.register("rtrim", RTrimFunction::desc());

@@ -17,7 +17,7 @@ use std::fmt;
 use common_datavalues::StringType;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 

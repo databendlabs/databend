@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod is_not_null;
-mod is_null;
-mod nullable;
+mod context;
+mod current_user;
+mod database;
+mod version;
 
-pub use is_not_null::IsNotNullFunction;
-pub use is_null::IsNullFunction;
-pub use nullable::NullableFunction;
+pub use context::ContextFunction;
+pub use current_user::CurrentUserFunction;
+pub use database::DatabaseFunction;
+pub use version::VersionFunction;

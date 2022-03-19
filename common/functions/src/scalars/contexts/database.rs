@@ -14,57 +14,54 @@
 
 use std::fmt;
 
-use common_datavalues::BooleanType;
-use common_datavalues::DataValue;
+use common_datavalues::StringType;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 
 #[derive(Clone)]
-pub struct UdfExampleFunction {
-    display_name: String,
-}
+pub struct DatabaseFunction {}
 
-impl UdfExampleFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(UdfExampleFunction {
-            display_name: display_name.to_string(),
-        }))
+// we bind database as first argument in eval
+impl DatabaseFunction {
+    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
+        Ok(Box::new(DatabaseFunction {}))
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().bool_function())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .context_function()
+                .num_arguments(1),
+        )
     }
 }
 
-impl Function for UdfExampleFunction {
+impl Function for DatabaseFunction {
     fn name(&self) -> &str {
-        "UdfExampleFunction"
+        "DatabaseFunction"
     }
 
     fn return_type(
         &self,
         _args: &[&common_datavalues::DataTypePtr],
     ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(BooleanType::arc())
+        Ok(StringType::arc())
     }
 
     fn eval(
         &self,
-        _columns: &common_datavalues::ColumnsWithField,
-        input_rows: usize,
+        columns: &common_datavalues::ColumnsWithField,
+        _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        let value = DataValue::Boolean(true);
-        let data_type = BooleanType::arc();
-        value.as_const_column(&data_type, input_rows)
+        Ok(columns[0].column().clone())
     }
 }
 
-impl fmt::Display for UdfExampleFunction {
+impl fmt::Display for DatabaseFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}()", self.display_name)
+        write!(f, "database")
     }
 }

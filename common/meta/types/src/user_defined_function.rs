@@ -24,8 +24,9 @@ use serde::Serialize;
 pub struct UserDefinedFunction {
     pub name: String,
     pub parameters: Vec<String>,
-    pub definition: String,
+
     pub description: String,
+    pub definition: String,
 }
 
 impl UserDefinedFunction {

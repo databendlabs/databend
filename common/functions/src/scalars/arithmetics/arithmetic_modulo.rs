@@ -24,7 +24,7 @@ use common_exception::Result;
 use num_traits::AsPrimitive;
 
 use super::utils::rem_scalar;
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::TypedFunctionDescription;
 

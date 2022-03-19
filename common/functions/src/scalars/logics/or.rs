@@ -16,7 +16,7 @@ use common_exception::Result;
 
 use super::logic::LogicOperator;
 use super::LogicFunction;
-use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 
