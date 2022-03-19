@@ -12,15 +12,33 @@ Currently, we only support Csv and Parquet format.
 
 * **Databend :** Make sure Databend is running and accessible, please see [How to deploy Databend](/doc/category/deploy).
 
-### Step 1. Prepare books.csv
+### Step 1. Data Files for Loading
 
-On your local machine, create a text file with the following CSV contents and name it `books.csv`:
-
-```text title="books.csv"
+Download the sample data file(Choose CSV or Parquet), the file contains two records:
+```text
 Transaction Processing,Jim Gray,1992
 Readings in Database Systems,Michael Stonebraker,2004
 ```
-This CSV file field delimiter is `,` and the record delimiter is `\n`.
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs groupId="sample-data">
+
+<TabItem value="csv" label="CSV">
+
+[Download books.csv](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv)
+* This CSV file field delimiter is `,` and the record delimiter is `\n`.
+
+</TabItem>
+
+<TabItem value="parquet" label="Parquet">
+
+[Download books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet)
+
+</TabItem>
+
+</Tabs>
 
 ### Step 2. Create Database and Table
 
@@ -45,13 +63,14 @@ create table books
 );
 ```
 
-### Step 3. Load `books.csv` into Databend
+### Step 3. Load Data into the Target Tables
+
+<Tabs groupId="load-data">
+
+<TabItem value="csv" label="CSV">
 
 ```shell title='Request'
-echo curl -H \"insert_sql:insert into book_db.books format CSV\"\
--H \"skip_header:0\" -H \"field_delimiter:','\" -H \"record_delimiter:'\n'\"\
--F  \"upload=@./books.csv\"\
--XPUT http://127.0.0.1:8081/v1/streaming_load|bash
+echo curl -H \"insert_sql:insert into book_db.books format CSV\" -H \"skip_header:0\" -H \"field_delimiter:','\" -H \"record_delimiter:'\n'\" -F  \"upload=@./books.csv\" -XPUT http://127.0.0.1:8081/v1/streaming_load|bash
 ```
 
 ```json title='Response'
@@ -74,6 +93,27 @@ echo curl -H \"insert_sql:insert into book_db.books format CSV\"\
 * -F  \"upload=@./books.csv\"
   * Your books.csv file location
 :::
+
+</TabItem>
+
+<TabItem value="parquet" label="Parquet">
+
+```shell title='Request'
+echo curl -H \"insert_sql:insert into book_db.books format Parquet\" -H \"skip_header:1\" -F  \"upload=@./books.parquet\" -XPUT http://127.0.0.1:8081/v1/streaming_load|bash
+```
+
+:::tip
+* http://127.0.0.1:8081/v1/streaming_load
+  * `127.0.0.1` is `http_handler_host` value in your *databend-query.toml*
+  * `8081` is `http_handler_port` value in your *databend-query.toml*
+
+* -F  \"upload=@./books.parquet\"
+  * Your books.parquet file location
+:::
+
+</TabItem>
+
+</Tabs>
 
 
 ### Step 4. Verify the Loaded Data
