@@ -65,8 +65,10 @@ impl AnalyzableStatement for DfQueryStatement {
 
         let mut ir = QueryNormalizer::normalize(ctx.clone(), self).await?;
 
+        let has_aggregation = !find_aggregate_exprs(&ir.projection_expressions).is_empty();
+
         QualifiedRewriter::rewrite(&joined_schema, ctx.clone(), &mut ir)?;
-        QueryCollectPushDowns::collect_extras(&mut ir, &mut joined_schema)?;
+        QueryCollectPushDowns::collect_extras(&mut ir, &mut joined_schema, has_aggregation)?;
         let analyze_state = self.analyze_query(ir).await?;
         self.check_and_finalize(joined_schema, analyze_state, ctx)
             .await
