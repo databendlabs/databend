@@ -90,6 +90,8 @@ echo curl -H \"insert_sql:insert into book_db.books format CSV\" -H \"skip_heade
   * `127.0.0.1` is `http_handler_host` value in your *databend-query.toml*
   * `8081` is `http_handler_port` value in your *databend-query.toml*
 
+* field_delimiter: One character that separate fields 
+* record_delimiter: One character that separate records
 * -F  \"upload=@./books.csv\"
   * Your books.csv file location
 :::
@@ -99,7 +101,19 @@ echo curl -H \"insert_sql:insert into book_db.books format CSV\" -H \"skip_heade
 <TabItem value="parquet" label="Parquet">
 
 ```shell title='Request'
-echo curl -H \"insert_sql:insert into book_db.books format Parquet\" -H \"skip_header:1\" -F  \"upload=@./books.parquet\" -XPUT http://127.0.0.1:8081/v1/streaming_load|bash
+echo curl -H \"insert_sql:insert into book_db.books format Parquet\" -F  \"upload=@./books.parquet\" -XPUT http://127.0.0.1:8081/v1/streaming_load|bash
+```
+
+```json title='Response'
+{
+  "id": "f4c557d3-f798-4cea-960a-0ba021dd4646",
+  "state": "SUCCESS",
+  "stats": {
+    "rows": 2,
+    "bytes": 157
+  },
+  "error": null
+}
 ```
 
 :::tip
