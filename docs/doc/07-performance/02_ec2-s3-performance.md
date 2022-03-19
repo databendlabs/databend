@@ -1,8 +1,8 @@
 ---
-title: Databend On AWS S3 Performance
-sidebar_label: On AWS S3 Performance
+title: Databend On Amazon S3 Performance
+sidebar_label: On Amazon S3 Performance
 description:
-  Sub-second analytics on S3 experience.
+  Sub-second analytics on Amazon S3 experience.
 ---
 
 :::tip
@@ -11,7 +11,7 @@ description:
 * Dataset: [ontime](https://transtats.bts.gov/PREZIP/), 60.8 GB Raw CSV Data, 202687654 records
 * Databend: 2fe1e36-simd(1.61.0-nightly-2022-03-13) 
 * No Local Disk Caching
-* [Analyzing OnTime Datasets with Databend on AWS EC2 and S3](../09-lessons/02-analyze-ontime-with-databend-on-ec2-and-s3.md)
+* [Analyzing OnTime Datasets with Databend on AWS EC2 and S3](../09-learn/02-analyze-ontime-with-databend-on-ec2-and-s3.md)
 :::
 
 ## Q1 (0.150 sec., 407.86 million rows/sec., 1.22 GB/sec)

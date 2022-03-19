@@ -1,6 +1,6 @@
 ---
 title: Load Data from Databend Stages
-sidebar_label: Load Data from Stages
+sidebar_label: From Stages
 description:
   Load Data from Databend Stages
 ---

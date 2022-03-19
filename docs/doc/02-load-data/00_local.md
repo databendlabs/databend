@@ -1,6 +1,6 @@
 ---
 title: Load Data from Local File System
-sidebar_label: Load Data from Local File System
+sidebar_label: From Local File System
 description:
   Load Data from Local File System
 ---
