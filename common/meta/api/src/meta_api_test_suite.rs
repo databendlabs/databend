@@ -279,7 +279,7 @@ impl MetaApiTestSuite {
             let err = ErrorCode::from(res);
 
             assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
-            assert_eq!("db2".to_string(), err.message());
+            assert_eq!("Unknown database 'db2'".to_string(), err.message());
         }
 
         tracing::info!("--- drop db2");
@@ -535,7 +535,10 @@ impl MetaApiTestSuite {
                 let err_code = ErrorCode::from(status);
 
                 assert_eq!(
-                    format!("Code: 2302, displayText = table exists: {}.", tbl_name),
+                    format!(
+                        "Code: 2302, displayText = Table '{}' already exists.",
+                        tbl_name
+                    ),
                     err_code.to_string()
                 );
 
