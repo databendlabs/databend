@@ -64,14 +64,21 @@ impl Interpreter for CreateTableInterpreter {
 
         let engine = self.plan.engine();
 
-        if !self
+        if self
             .ctx
             .get_catalog()
-            .get_table_engines()
+            .list_tables(&*self.plan.tenant, &*self.plan.db)
+            .await?
             .iter()
-            .any(|desc| {
-                desc.engine_name.to_string().to_lowercase() == engine.to_string().to_lowercase()
-            })
+            .all(|table| table.name() != self.plan.table.as_str())
+            && self
+                .ctx
+                .get_catalog()
+                .get_table_engines()
+                .iter()
+                .all(|desc| {
+                    desc.engine_name.to_string().to_lowercase() != engine.to_string().to_lowercase()
+                })
         {
             return Err(ErrorCode::UnknownTableEngine(format!(
                 "Unknown table engine {}",
