@@ -5,10 +5,9 @@ description:
    How to Work with Databend in Golang
 ---
 
+### Before You Begin
 
-### Before you begin
-
-* Make sure you have already [How to installed Databend](/doc/category/deploy).
+* **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](/doc/category/deploy).
 
 ### Golang
 
