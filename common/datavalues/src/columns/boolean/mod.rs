@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::bitmap::utils::BitChunkIterExact;
+use common_arrow::arrow::bitmap::utils::BitChunksExact;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -108,12 +110,15 @@ impl Column for BooleanColumn {
             return Arc::new(self.clone());
         }
         let mut bitmap = MutableBitmap::with_capacity(selected);
-        let mut chunks = self.values().chunks::<u64>();
-        let mut filter_chunks = filter.values().chunks::<u64>();
+        let (value_slice, _, value_length) = self.values().as_slice();
+        let (slice, _, length) = filter.values().as_slice();
+
+        let mut chunks = BitChunksExact::<u64>::new(value_slice, value_length);
+        let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
 
         chunks
             .by_ref()
-            .zip(filter_chunks.by_ref())
+            .zip(mask_chunks.by_ref())
             .for_each(|(chunk, mut mask)| {
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
@@ -123,14 +128,15 @@ impl Column for BooleanColumn {
                 }
             });
 
-        let chunk = chunks.remainder();
-        let mut mask = filter_chunks.remainder();
-        while mask != 0 {
-            let n = mask.trailing_zeros() as usize;
-            let value: bool = chunk & (1 << n) != 0;
-            bitmap.push(value);
-            mask = mask & (mask - 1);
-        }
+        chunks
+            .remainder_iter()
+            .zip(mask_chunks.remainder_iter())
+            .for_each(|(value, is_selected)| {
+                if is_selected {
+                    bitmap.push(value);
+                }
+            });
+
         let col = BooleanColumn {
             values: bitmap.into(),
         };

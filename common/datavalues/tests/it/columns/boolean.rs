@@ -55,8 +55,7 @@ fn test_boolean_column() {
 #[test]
 fn test_filter_column() {
     const N: usize = 1000;
-    let data_column =
-        BooleanColumn::from_iterator((0..N).map(|e| if e % 2 == 0 { true } else { false }));
+    let data_column = BooleanColumn::from_iterator((0..N).map(|e| e % 2 == 0));
 
     struct Test {
         filter: BooleanColumn,
@@ -66,9 +65,7 @@ fn test_filter_column() {
     let tests: Vec<Test> = vec![
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|_| true)),
-            expect: (0..N)
-                .map(|e| if e % 2 == 0 { true } else { false })
-                .collect(),
+            expect: (0..N).map(|e| e % 2 == 0).collect(),
         },
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|_| false)),
@@ -77,7 +74,7 @@ fn test_filter_column() {
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|i| i % 3 == 0)),
             expect: (0..N)
-                .map(|e| if e % 2 == 0 { true } else { false })
+                .map(|e| e % 2 == 0)
                 .enumerate()
                 .filter(|(i, _)| i % 3 == 0)
                 .map(|(_, e)| e)
