@@ -32,14 +32,14 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Ubuntu">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.94-nightly/databend-v0.6.94-nightly-x86_64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.95-nightly/databend-v0.6.95-nightly-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.94-nightly/databend-v0.6.94-nightly-aarch64-apple-darwin.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.95-nightly/databend-v0.6.95-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -47,7 +47,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.94-nig
 <TabItem value="arm" label="Arm">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.94-nightly/databend-v0.6.94-nightly-aarch64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.95-nightly/databend-v0.6.95-nightly-aarch64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
@@ -57,14 +57,14 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.94-nig
 <TabItem value="linux" label="Ubuntu">
 
 ```shell
-tar xzvf databend-v0.6.94-nightly-x86_64-unknown-linux-gnu.tar.gz
+tar xzvf databend-v0.6.95-nightly-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-tar xzvf databend-v0.6.94-nightly-aarch64-apple-darwin.tar.gz
+tar xzvf databend-v0.6.95-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -72,7 +72,7 @@ tar xzvf databend-v0.6.94-nightly-aarch64-apple-darwin.tar.gz
 <TabItem value="arm" label="Arm">
 
 ```shell
-tar xzvf databend-v0.6.94-nightly-aarch64-unknown-linux-gnu.tar.gz
+tar xzvf databend-v0.6.95-nightly-aarch64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
