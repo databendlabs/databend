@@ -69,8 +69,9 @@ impl Interpreter for SelectInterpreter {
 
         if settings.get_enable_new_processor_framework()? != 0 {
             if self.ctx.get_cluster().is_empty() {
+                let async_runtime = self.ctx.get_storage_runtime();
                 let new_pipeline = self.execute2().await?;
-                let executor = PipelinePullingExecutor::try_create(new_pipeline)?;
+                let executor = PipelinePullingExecutor::try_create(async_runtime, new_pipeline)?;
 
                 return Ok(Box::pin(ProcessorExecutorStream::create(executor)?));
             }

@@ -16,6 +16,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 
+use common_base::Runtime;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -67,9 +68,12 @@ impl PipelinePullingExecutor {
         Ok(rx)
     }
 
-    pub fn try_create(mut pipeline: NewPipeline) -> Result<PipelinePullingExecutor> {
+    pub fn try_create(
+        async_runtime: Arc<Runtime>,
+        mut pipeline: NewPipeline,
+    ) -> Result<PipelinePullingExecutor> {
         let receiver = Self::wrap_pipeline(&mut pipeline)?;
-        let pipeline_executor = PipelineThreadsExecutor::create(pipeline)?;
+        let pipeline_executor = PipelineThreadsExecutor::create(async_runtime, pipeline)?;
         let executor = Arc::new(Mutex::new(Executor::Inited(pipeline_executor)));
         Ok(PipelinePullingExecutor { receiver, executor })
     }

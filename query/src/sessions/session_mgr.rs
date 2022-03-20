@@ -66,7 +66,7 @@ pub struct SessionManager {
         RwLock<Option<Arc<dyn tracing::Subscriber + Send + Sync>>>,
     pub status: Arc<RwLock<Status>>,
     storage_operator: RwLock<Operator>,
-    storage_runtime: Runtime,
+    storage_runtime: Arc<Runtime>,
     _guards: Vec<WorkerGuard>,
 }
 
@@ -116,7 +116,7 @@ impl SessionManager {
             query_logger: RwLock::new(query_logger),
             status,
             storage_operator: RwLock::new(storage_accessor),
-            storage_runtime,
+            storage_runtime: Arc::new(storage_runtime),
             _guards,
         }))
     }
@@ -154,8 +154,8 @@ impl SessionManager {
         self.storage_cache_manager.read().clone()
     }
 
-    pub fn get_storage_runtime<'a>(self: &'a Arc<Self>) -> &'a Runtime {
-        &self.storage_runtime
+    pub fn get_storage_runtime(&self) -> Arc<Runtime> {
+        self.storage_runtime.clone()
     }
 
     pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<SessionRef> {

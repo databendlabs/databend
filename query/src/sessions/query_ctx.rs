@@ -353,7 +353,7 @@ impl QueryContext {
         self.shared.dal_ctx.as_ref()
     }
 
-    pub fn get_storage_runtime(&self) -> &Runtime {
+    pub fn get_storage_runtime(&self) -> Arc<Runtime> {
         self.shared.session.session_mgr.get_storage_runtime()
     }
 

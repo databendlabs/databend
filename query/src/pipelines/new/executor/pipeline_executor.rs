@@ -28,12 +28,15 @@ pub struct PipelineExecutor {
     graph: RunningGraph,
     workers_notify: Arc<WorkersNotify>,
     pub global_tasks_queue: Arc<ExecutorTasksQueue>,
-    // TODO: shutdown
-    pub async_runtime: Runtime,
+    pub async_runtime: Arc<Runtime>,
 }
 
 impl PipelineExecutor {
-    pub fn create(pipeline: NewPipeline, workers: usize) -> Result<Arc<PipelineExecutor>> {
+    pub fn create(
+        async_runtime: Arc<Runtime>,
+        pipeline: NewPipeline,
+        workers: usize,
+    ) -> Result<Arc<PipelineExecutor>> {
         unsafe {
             let workers_notify = WorkersNotify::create(workers);
             let global_tasks_queue = ExecutorTasksQueue::create(workers);
@@ -46,17 +49,12 @@ impl PipelineExecutor {
                 tasks.push_back(task);
             }
 
-            // let context = pipeline.get_context();
-            // context.get_storage_runtime();
             global_tasks_queue.init_tasks(tasks);
             Ok(Arc::new(PipelineExecutor {
                 graph,
                 workers_notify,
                 global_tasks_queue,
-                async_runtime: Runtime::with_worker_threads(
-                    workers,
-                    Some("pipeline-executor".to_owned()),
-                )?,
+                async_runtime,
             }))
         }
     }
