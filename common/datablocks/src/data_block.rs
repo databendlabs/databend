@@ -176,6 +176,18 @@ impl DataBlock {
         Ok(Self { columns, schema })
     }
 
+    #[inline]
+    pub fn convert_full_block(self) -> Result<Self> {
+        let mut columns = Vec::with_capacity(self.num_columns());
+        let schema = self.schema().clone();
+        for f in schema.fields() {
+            let column = self.try_column_by_name(f.name())?;
+            columns.push(column.convert_full_column());
+        }
+
+        Ok(Self { columns, schema })
+    }
+
     pub fn from_chunk<A: AsRef<dyn Array>>(
         schema: &DataSchemaRef,
         chuck: &Chunk<A>,
