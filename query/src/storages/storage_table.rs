@@ -91,9 +91,7 @@ pub trait Table: Sync + Send {
         _: Arc<QueryContext>,
         _: &ReadDataSourcePlan,
         _: &mut NewPipeline,
-    ) -> Result<()> {
-        Err(ErrorCode::UnImplement(""))
-    }
+    ) -> Result<()>;
 
     async fn append_data(
         &self,

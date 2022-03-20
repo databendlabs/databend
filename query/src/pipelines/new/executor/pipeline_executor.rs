@@ -62,7 +62,6 @@ impl PipelineExecutor {
     pub fn finish(&self) {
         self.global_tasks_queue.finish();
         self.workers_notify.wakeup_all();
-        // TODO: shutdown async runtime.
     }
 
     /// # Safety

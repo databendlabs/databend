@@ -176,8 +176,11 @@ impl QueryContext {
 
     // Update the context partition pool from the pipeline builder.
     pub fn try_set_partitions(&self, partitions: Partitions) -> Result<()> {
+        let mut partition_queue = self.partition_queue.write();
+
+        partition_queue.clear();
         for part in partitions {
-            self.partition_queue.write().push_back(part);
+            partition_queue.push_back(part);
         }
         Ok(())
     }

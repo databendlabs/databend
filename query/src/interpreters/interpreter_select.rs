@@ -72,6 +72,7 @@ impl Interpreter for SelectInterpreter {
                 let async_runtime = self.ctx.get_storage_runtime();
                 let new_pipeline = self.execute2().await?;
                 let executor = PipelinePullingExecutor::try_create(async_runtime, new_pipeline)?;
+                // TODO: set executor into ctx for shutdown
 
                 return Ok(Box::pin(ProcessorExecutorStream::create(executor)?));
             }
@@ -87,7 +88,12 @@ impl Interpreter for SelectInterpreter {
     async fn execute2(&self) -> Result<NewPipeline> {
         let settings = self.ctx.get_settings();
         let builder = QueryPipelineBuilder::create(self.ctx.clone());
-        let mut new_pipeline = builder.finalize(&self.select)?;
+
+        let optimized_plan = self.rewrite_plan()?;
+        let select_plan = SelectPlan {
+            input: Arc::new(optimized_plan),
+        };
+        let mut new_pipeline = builder.finalize(&select_plan)?;
         new_pipeline.set_max_threads(settings.get_max_threads()? as usize);
         Ok(new_pipeline)
     }

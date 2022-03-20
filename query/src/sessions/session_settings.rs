@@ -132,9 +132,9 @@ impl Settings {
             // enable_new_processor_framework
             SettingValue {
                 default_value: DataValue::UInt64(1),
-                user_setting: UserSetting::create("enable_new_processor_framework", DataValue::UInt64(0)),
+                user_setting: UserSetting::create("enable_new_processor_framework", DataValue::UInt64(1)),
                 level: ScopeLevel::Session,
-                desc: "Enable new processor framework if value != 0, default value: 0",
+                desc: "Enable new processor framework if value != 0, default value: 1",
             },
         ];
 
