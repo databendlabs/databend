@@ -145,7 +145,7 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
         let serializer = field.data_type().create_serializer();
         result.append_column(column::new_column(
             name,
-            serializer.serialize_clickhouse_format(column)?,
+            serializer.serialize_clickhouse_format(&column.convert_full_column())?,
         ));
     }
     Ok(result)
