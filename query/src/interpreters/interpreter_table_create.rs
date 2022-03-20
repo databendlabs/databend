@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
@@ -60,6 +61,30 @@ impl Interpreter for CreateTableInterpreter {
                 UserPrivilegeType::Create,
             )
             .await?;
+
+        let engine = self.plan.engine();
+
+        if self
+            .ctx
+            .get_catalog()
+            .list_tables(&*self.plan.tenant, &*self.plan.db)
+            .await?
+            .iter()
+            .all(|table| table.name() != self.plan.table.as_str())
+            && self
+                .ctx
+                .get_catalog()
+                .get_table_engines()
+                .iter()
+                .all(|desc| {
+                    desc.engine_name.to_string().to_lowercase() != engine.to_string().to_lowercase()
+                })
+        {
+            return Err(ErrorCode::UnknownTableEngine(format!(
+                "Unknown table engine {}",
+                engine
+            )));
+        }
 
         match &self.plan.as_select {
             Some(select_plan_node) => {

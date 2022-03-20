@@ -32,10 +32,10 @@ use crate::define_datetime64_add_year_months;
 use crate::impl_interval_year_month;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::scalar_binary_op;
-use crate::scalars::ArithmeticCreator;
-use crate::scalars::ArithmeticDescription;
 use crate::scalars::EvalContext;
+use crate::scalars::FactoryCreatorWithTypes;
 use crate::scalars::Function;
+use crate::scalars::TypedFunctionDescription;
 
 pub struct IntervalFunctionCreator<T> {
     t: PhantomData<T>,
@@ -94,11 +94,11 @@ where T: IntervalArithmeticImpl + Send + Sync + Clone + 'static
         })
     }
 
-    pub fn desc(factor: i64) -> ArithmeticDescription {
-        let function_creator: ArithmeticCreator =
+    pub fn desc(factor: i64) -> TypedFunctionDescription {
+        let function_creator: FactoryCreatorWithTypes =
             Box::new(move |display_name, args| Self::try_create_func(display_name, factor, args));
 
-        ArithmeticDescription::creator(function_creator)
+        TypedFunctionDescription::creator(function_creator)
             .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }

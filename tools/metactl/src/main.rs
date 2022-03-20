@@ -14,8 +14,11 @@
 
 #![feature(stdin_forwarders)]
 
+mod grpc;
+
 use std::collections::BTreeMap;
 use std::io;
+use std::net::SocketAddr;
 
 use clap::Parser;
 use common_base::tokio;
@@ -24,10 +27,12 @@ use common_meta_raft_store::sled_key_spaces::KeySpaceKV;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;
 use common_tracing::init_global_tracing;
+use databend_meta::configs::config::METASRV_GRPC_API_ADDRESS;
 use databend_meta::export::deserialize_to_kv_variant;
 use databend_meta::export::serialize_kv_variant;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::net::TcpSocket;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
 #[clap(about, version, author)]
@@ -40,6 +45,9 @@ struct Config {
 
     #[clap(long)]
     pub export: bool,
+
+    #[clap(long, env = METASRV_GRPC_API_ADDRESS, default_value = "127.0.0.1:9191")]
+    pub grpc_api_address: String,
 
     #[clap(flatten)]
     pub raft_config: RaftConfig,
@@ -71,6 +79,25 @@ async fn main() -> anyhow::Result<()> {
     eprintln!();
 
     eprintln!("raft_config: {}", pretty(raft_config)?);
+
+    // export from grpc api if metasrv is running
+    if config.export && !config.grpc_api_address.is_empty() {
+        let grpc_api_addr = match config.grpc_api_address.parse() {
+            Ok(addr) => addr,
+            Err(e) => {
+                eprintln!(
+                    "ERROR: grpc api address is invalid: {}",
+                    &config.grpc_api_address
+                );
+                return Err(e)?;
+            }
+        };
+        if service_is_running(grpc_api_addr).await? {
+            eprintln!("export meta from: {}", &config.grpc_api_address);
+            grpc::export_meta(&config.grpc_api_address).await?;
+            return Ok(());
+        }
+    }
 
     init_sled_db(raft_config.raft_dir.clone());
 
@@ -168,4 +195,12 @@ fn print_meta() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+// if port is open, service is running
+async fn service_is_running(addr: SocketAddr) -> Result<bool, io::Error> {
+    let socket = TcpSocket::new_v4()?;
+    let stream = socket.connect(addr).await;
+
+    Ok(stream.is_ok())
 }

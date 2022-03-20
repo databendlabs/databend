@@ -38,10 +38,6 @@ echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
 
 
 
-export AWS_ACCESS_KEY_ID=minioadmin
-export AWS_SECRET_ACCESS_KEY=minioadmin
-export AWS_EC2_METADATA_DISABLED=true
-
 aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv s3://testbucket/admin/stage/s1/ontime_200.csv > /dev/null 2>&1
 aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.parquet s3://testbucket/admin/stage/s1/ontime_200.parquet  > /dev/null 2>&1
 

@@ -42,9 +42,10 @@ pub struct ParquetSourceBuilder {
 
 impl ParquetSourceBuilder {
     pub fn create(schema: DataSchemaRef) -> Self {
+        let size = schema.fields().len();
         ParquetSourceBuilder {
             schema,
-            projection: vec![],
+            projection: (0..size).collect(),
             metadata: None,
         }
     }
