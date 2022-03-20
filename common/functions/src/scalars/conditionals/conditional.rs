@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::IsNotNullFunction;
+use super::IsNullFunction;
 use crate::scalars::FunctionFactory;
 use crate::scalars::FunctionFactoryLayer;
 use crate::scalars::IfFunction;
@@ -24,5 +26,7 @@ impl ConditionalFunction {
         let mut factory = FunctionFactoryLayer::with_layer(factory).category("Conditional");
 
         factory.register("if", IfFunction::desc());
+        factory.register("isNull", IsNullFunction::desc());
+        factory.register("isNotNull", IsNotNullFunction::desc());
     }
 }

@@ -22,11 +22,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::cast_with_type;
-use crate::scalars::FunctionFeatures;
 use crate::scalars::CastOptions;
 use crate::scalars::ExceptionMode;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::ParsingMode;
 
 #[doc(alias = "TryNumToIPv4StringFunction")]

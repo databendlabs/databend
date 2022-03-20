@@ -19,9 +19,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::cast_column_field;
-use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
 pub struct UnhexFunction {

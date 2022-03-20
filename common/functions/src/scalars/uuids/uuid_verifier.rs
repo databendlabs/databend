@@ -28,9 +28,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use uuid::Uuid;
 
-use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 pub type UUIDIsEmptyFunction = UUIDVerifierFunction<UUIDIsEmpty>;
 pub type UUIDIsNotEmptyFunction = UUIDVerifierFunction<UUIDIsNotEmpty>;

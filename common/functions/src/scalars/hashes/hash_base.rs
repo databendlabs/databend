@@ -24,11 +24,11 @@ use common_datavalues::with_match_scalar_types_error;
 use common_exception::Result;
 use num::FromPrimitive;
 
-use crate::scalars::FunctionFeatures;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 /// H ---> Hasher
 /// R ---> Result Type

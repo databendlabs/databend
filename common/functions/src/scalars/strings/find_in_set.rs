@@ -18,11 +18,11 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::assert_string;
-use crate::scalars::FunctionFeatures;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
 pub struct FindInSetFunction {

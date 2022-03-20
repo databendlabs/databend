@@ -19,9 +19,9 @@ use common_exception::Result;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::default_column_cast;
-use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
 pub struct CharFunction {

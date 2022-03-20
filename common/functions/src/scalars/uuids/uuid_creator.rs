@@ -23,9 +23,9 @@ use common_datavalues::StringType;
 use common_exception::Result;
 use uuid::Uuid;
 
-use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 pub type UUIDv4Function = UUIDCreatorFunction<UUIDv4>;
 pub type UUIDZeroFunction = UUIDCreatorFunction<UUIDZero>;

@@ -16,9 +16,9 @@ use common_exception::Result;
 use crate::scalars::function_factory::FactoryCreator;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFactory;
-use crate::scalars::FunctionFeatures;
 use crate::scalars::CastFunction;
 use crate::scalars::FunctionFactoryLayer;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
 pub struct ToCastFunction;

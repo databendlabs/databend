@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Clone)]
+use serde::Serialize;
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct FunctionFeatures {
     pub is_deterministic: bool,
     pub negative_function_name: Option<String>,

@@ -1,0 +1,35 @@
+---
+title: {{name}}
+---
+
+{{features.description}}
+
+## Syntax
+
+```sql
+{{features.definition}}
+```
+
+{{#if (gt (len features.args) 0)}}
+## Arguments
+
+| Arguments   | Description |
+| ----------- | ----------- |
+{{#each features.args}}
+| {{ this.[0] }} | {{ this.[1]}} |
+{{/each}}
+
+{{else}}
+
+{{/if}}
+
+
+## Return Type
+
+{{features.return_type}}
+
+## Examples
+
+```sql
+{{features.example}}
+```

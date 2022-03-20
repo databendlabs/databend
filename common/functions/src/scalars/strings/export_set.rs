@@ -22,9 +22,9 @@ use common_exception::Result;
 use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
 use crate::scalars::cast_with_type;
-use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::DEFAULT_CAST_OPTIONS;
 
 #[derive(Clone)]

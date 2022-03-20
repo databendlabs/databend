@@ -21,8 +21,8 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
-use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
+use crate::scalars::FunctionFeatures;
 
 // TODO: try move it to simple function?
 #[derive(Clone)]

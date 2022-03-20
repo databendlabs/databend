@@ -27,10 +27,10 @@ use common_exception::Result;
 
 use crate::scalars::assert_date_or_datetime;
 use crate::scalars::assert_numeric;
-use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionAdapter;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone, Debug)]

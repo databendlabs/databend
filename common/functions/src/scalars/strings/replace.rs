@@ -18,9 +18,9 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 
 use crate::scalars::assert_string;
-use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 #[inline]
 fn apply<'a>(str: &'a [u8], from: &'a [u8], to: &'a [u8], buf: &mut Vec<u8>) {

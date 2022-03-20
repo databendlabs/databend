@@ -19,9 +19,9 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 pub trait NumberOperator<R>: Send + Sync + Clone + Default + 'static {
     const IS_DETERMINISTIC: bool;

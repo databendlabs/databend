@@ -21,9 +21,9 @@ use num_traits::AsPrimitive;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
-use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 #[inline]
 fn apply_insert<'a, S: AsPrimitive<i64>, T: AsPrimitive<i64>>(

@@ -24,11 +24,11 @@ use num_traits::AsPrimitive;
 
 use crate::scalars::assert_numeric;
 use crate::scalars::assert_string;
-use crate::scalars::FunctionFeatures;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 const FORMAT_MAX_DECIMALS: i64 = 30;
 

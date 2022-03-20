@@ -16,3 +16,8 @@ path = "src/bin/codegen.rs"
 
 [dependencies]
 common-datavalues = { path = "../datavalues" }
+common-functions = { path = "../functions" }
+
+handlebars = "4.2.2"
+serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1.0.79"

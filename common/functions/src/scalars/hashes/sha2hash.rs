@@ -23,9 +23,9 @@ use common_exception::Result;
 use sha2::Digest;
 
 use crate::scalars::cast_column_field;
-use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
 pub struct Sha2HashFunction {

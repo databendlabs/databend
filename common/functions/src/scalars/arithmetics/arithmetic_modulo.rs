@@ -24,8 +24,8 @@ use common_exception::Result;
 use num_traits::AsPrimitive;
 
 use super::utils::rem_scalar;
-use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::TypedFunctionDescription;
 
 pub struct ArithmeticModuloFunction;

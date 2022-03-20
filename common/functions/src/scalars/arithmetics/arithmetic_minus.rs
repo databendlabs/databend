@@ -23,11 +23,11 @@ use common_exception::Result;
 use num::traits::AsPrimitive;
 use num_traits::WrappingSub;
 
-use crate::scalars::FunctionFeatures;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionFactory;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
 use crate::scalars::TypedFunctionDescription;
 

@@ -22,11 +22,11 @@ use common_datavalues::ColumnWithField;
 use common_exception::Result;
 
 use crate::scalars::function_common::assert_numeric;
-use crate::scalars::FunctionFeatures;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone)]

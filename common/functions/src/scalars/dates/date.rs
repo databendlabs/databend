@@ -41,11 +41,11 @@ use super::TodayFunction;
 use super::TomorrowFunction;
 use super::YesterdayFunction;
 use crate::scalars::function_factory::FactoryCreator;
-use crate::scalars::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFactory;
 use crate::scalars::FunctionFactoryLayer;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
 pub struct DateFunction {}
