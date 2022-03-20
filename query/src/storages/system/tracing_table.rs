@@ -141,7 +141,7 @@ impl Table for TracingTable {
         let settings = ctx.get_settings();
 
         let output = OutputPort::create();
-        let log_files = Self::log_files(ctx)?;
+        let log_files = Self::log_files(ctx.clone())?;
         let schema = self.table_info.schema();
         let max_block_size = settings.get_max_block_size()? as usize;
 
@@ -149,6 +149,7 @@ impl Table for TracingTable {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
             processors: vec![TracingSource::create(
+                ctx,
                 output,
                 max_block_size,
                 log_files,
@@ -169,12 +170,13 @@ struct TracingSource {
 
 impl TracingSource {
     pub fn create(
+        ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,
         rows: usize,
         log_files: VecDeque<String>,
         schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(output, TracingSource {
+        SyncSourcer::create(ctx, output, TracingSource {
             schema,
             rows_pre_block: rows,
             tracing_files: log_files,

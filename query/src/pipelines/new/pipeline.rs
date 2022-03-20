@@ -23,6 +23,7 @@ use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::ResizeProcessor;
+use crate::sessions::QueryContext;
 
 pub struct NewPipeline {
     max_threads: usize,
@@ -49,22 +50,8 @@ impl NewPipeline {
         }
     }
 
-    pub fn graph_size(&self) -> (usize, usize) {
-        let mut nodes_size = 0;
-        let mut edges_size = 0;
-        for pipe in &self.pipes {
-            nodes_size += match pipe {
-                NewPipe::ResizePipe { .. } => 1,
-                NewPipe::SimplePipe { processors, .. } => processors.len(),
-            };
-
-            edges_size += match pipe {
-                NewPipe::ResizePipe { inputs_port, .. } => inputs_port.len(),
-                NewPipe::SimplePipe { inputs_port, .. } => inputs_port.len(),
-            };
-        }
-
-        (nodes_size, edges_size)
+    pub fn get_context(&self) -> Arc<QueryContext> {
+        unimplemented!()
     }
 
     pub fn set_max_threads(&mut self, max_threads: usize) {

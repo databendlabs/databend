@@ -38,7 +38,6 @@ pub use sources::AsyncSourcer;
 pub use sources::SyncReceiverSource;
 pub use sources::SyncSource;
 pub use sources::SyncSourcer;
-pub use sources::TableSource;
 pub use transforms::AggregatorParams;
 pub use transforms::AggregatorTransformParams;
 pub use transforms::ExpressionTransform;

@@ -46,6 +46,8 @@ impl PipelineExecutor {
                 tasks.push_back(task);
             }
 
+            // let context = pipeline.get_context();
+            // context.get_storage_runtime();
             global_tasks_queue.init_tasks(tasks);
             Ok(Arc::new(PipelineExecutor {
                 graph,

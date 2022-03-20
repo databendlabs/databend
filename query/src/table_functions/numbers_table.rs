@@ -230,7 +230,7 @@ impl NumbersSource {
         let settings = ctx.get_settings();
         let numbers_part = NumbersPartInfo::from_part(numbers_part)?;
 
-        SyncSourcer::create(output, NumbersSource {
+        SyncSourcer::create(ctx, output, NumbersSource {
             schema,
             begin: numbers_part.part_start,
             end: numbers_part.part_end,
