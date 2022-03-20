@@ -68,6 +68,11 @@ pub trait Table: Sync + Send {
         false
     }
 
+    /// whether table has the exact number of total rows
+    fn has_exact_total_row_count(&self) -> bool {
+        false
+    }
+
     // defaults to generate one single part and empty statistics
     async fn read_partitions(
         &self,

@@ -26,6 +26,7 @@ use crate::sql::statements::QueryASTIR;
 pub struct QueryCollectPushDowns {
     require_columns: HashSet<String>,
     require_filters: Vec<Expression>,
+    aggregating: bool,
 }
 
 /// Collect the query need to push downs parts .
@@ -49,10 +50,15 @@ impl QueryASTIRVisitor<QueryCollectPushDowns> for QueryCollectPushDowns {
 }
 
 impl QueryCollectPushDowns {
-    pub fn collect_extras(ir: &mut QueryASTIR, schema: &mut JoinedSchema) -> Result<()> {
+    pub fn collect_extras(
+        ir: &mut QueryASTIR,
+        schema: &mut JoinedSchema,
+        aggregating: bool,
+    ) -> Result<()> {
         let mut push_downs_data = Self {
             require_columns: HashSet::new(),
             require_filters: vec![],
+            aggregating,
         };
         QueryCollectPushDowns::visit(ir, &mut push_downs_data)?;
         push_downs_data.collect_push_downs(ir, schema)
@@ -85,7 +91,22 @@ impl QueryCollectPushDowns {
     }
 
     fn collect_table_require_columns(&mut self, table_desc: &JoinedTableDesc) -> Vec<usize> {
+        let has_exact_total_row_count = if let JoinedTableDesc::Table { table, .. } = table_desc {
+            table.has_exact_total_row_count()
+        } else {
+            // subquery not handled yet
+            false
+        };
+
         match self.require_columns.is_empty() {
+            true if self.aggregating && has_exact_total_row_count => {
+                // This query
+                // - has aggregation expression in "projection"
+                // - requires no columns
+                // - DO have the exact number of row count
+                // thus, no need to collect the smallest column
+                vec![]
+            }
             true => Self::collect_table_smallest_column(table_desc),
             false => self.collect_table_projection_columns(table_desc),
         }

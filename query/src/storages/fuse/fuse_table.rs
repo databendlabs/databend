@@ -97,6 +97,10 @@ impl Table for FuseTable {
         true
     }
 
+    fn has_exact_total_row_count(&self) -> bool {
+        true
+    }
+
     #[tracing::instrument(level = "debug", name = "fuse_table_read_partitions", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn read_partitions(
         &self,
