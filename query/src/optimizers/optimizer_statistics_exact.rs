@@ -53,10 +53,7 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                     ..
                 }],
                 PlanNode::ReadSource(read_source_plan),
-            ) if op.to_lowercase().as_str() == "count"
-                && args.is_empty()
-                && read_source_plan.statistics.is_exact =>
-            {
+            ) if op == "count" && args.is_empty() && read_source_plan.statistics.is_exact => {
                 let db_name = "system";
                 let table_name = "one";
 
