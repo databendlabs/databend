@@ -14,6 +14,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_base::tokio::runtime::Handle;
 use opendal::error::Result as DalResult;
 use opendal::ops::OpDelete;
 use opendal::ops::OpList;
@@ -37,11 +38,11 @@ use opendal::Metadata;
 #[derive(Clone, Debug)]
 pub struct DalRuntime {
     inner: Option<Arc<dyn Accessor>>,
-    runtime: tokio::runtime::Handle,
+    runtime: Handle,
 }
 
 impl DalRuntime {
-    pub fn new(runtime: tokio::runtime::Handle) -> Self {
+    pub fn new(runtime: Handle) -> Self {
         DalRuntime {
             inner: None,
             runtime,

@@ -390,7 +390,7 @@ impl QueryContextShared {
     pub(in crate::sessions) fn destroy_context_ref(&self) {
         if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Acquire);
-            tracing::warn!("Destroy QueryContext");
+            tracing::debug!("Destroy QueryContext");
             self.session.destroy_context_shared();
         }
     }
