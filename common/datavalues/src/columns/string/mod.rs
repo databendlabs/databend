@@ -201,7 +201,7 @@ impl Column for StringColumn {
         if offset > 0 {
             let n = 8 - offset;
             start_index += n;
-            
+
             filter
                 .values()
                 .iter()
