@@ -195,7 +195,29 @@ impl Column for StringColumn {
 
         let mut builder = MutableStringColumn::with_capacity(length);
         let values = self.values();
-        let (slice, _, length) = filter.values().as_slice();
+        let (mut slice, offset, mut length) = filter.values().as_slice();
+        let mut start_index: usize = 0;
+
+        if offset > 0 {
+            let n = 8 - offset;
+            start_index += n;
+            
+            filter
+                .values()
+                .iter()
+                .enumerate()
+                .take(n)
+                .for_each(|(i, is_selected)| {
+                    if is_selected {
+                        let start = self.offsets[i] as usize;
+                        let end = self.offsets[i + 1] as usize;
+                        builder.append_value(&values[start..end]);
+                    }
+                });
+            slice = &slice[1..];
+            length -= n;
+        }
+
         let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
 
         mask_chunks
@@ -204,7 +226,7 @@ impl Column for StringColumn {
             .for_each(|(mask_index, mut mask)| {
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
-                    let i = mask_index * CHUNK_SIZE + n;
+                    let i = mask_index * CHUNK_SIZE + n + start_index;
                     let start = self.offsets[i] as usize;
                     let end = self.offsets[i + 1] as usize;
                     builder.append_value(&values[start..end]);
@@ -218,7 +240,7 @@ impl Column for StringColumn {
             .enumerate()
             .for_each(|(mask_index, is_selected)| {
                 if is_selected {
-                    let i = mask_index + remainder_start;
+                    let i = mask_index + remainder_start + start_index;
                     let start = self.offsets[i] as usize;
                     let end = self.offsets[i + 1] as usize;
                     builder.append_value(&values[start..end]);
