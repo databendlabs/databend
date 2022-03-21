@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use clap::Parser;
+use common_base::Format;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientTlsConfig;
@@ -92,17 +93,13 @@ impl Config {
         cfg
     }
 
-    /// Load configs from toml file.
-    pub fn load_from_toml(file: &str) -> Result<Self> {
+    /// Load configs from file.
+    pub fn load_from_file(file: &str) -> Result<Self> {
         let txt = std::fs::read_to_string(file)
             .map_err(|e| ErrorCode::CannotReadFile(format!("File: {}, err: {:?}", file, e)))?;
-        Self::load_from_toml_str(txt.as_str())
-    }
 
-    /// Load configs from toml str.
-    pub fn load_from_toml_str(toml_str: &str) -> Result<Self> {
-        let mut cfg = toml::from_str::<Config>(toml_str)
-            .map_err(|e| ErrorCode::BadArguments(format!("{:?}", e)))?;
+        let format = Format::from_path(file)?;
+        let mut cfg: Config = format.load_config(&txt)?;
         if cfg.query.num_cpus == 0 {
             cfg.query.num_cpus = num_cpus::get() as u64;
         }
@@ -113,7 +110,7 @@ impl Config {
     pub fn load_from_env(cfg: &Config) -> Result<Self> {
         let mut mut_config = cfg.clone();
         if std::env::var_os(CONFIG_FILE).is_some() {
-            return Config::load_from_toml(
+            return Config::load_from_file(
                 std::env::var_os(CONFIG_FILE).unwrap().to_str().unwrap(),
             );
         }

@@ -388,7 +388,7 @@ impl SessionManager {
         let config = {
             let mut config = self.conf.write();
             let config_file = config.config_file.clone();
-            *config = Config::load_from_toml(&config_file)?;
+            *config = Config::load_from_file(&config_file)?;
             config.config_file = config_file;
             config.clone()
         };
