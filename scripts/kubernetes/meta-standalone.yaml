@@ -1,0 +1,103 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: meta-service
+  labels:
+    app: meta-service
+spec:
+  serviceName: "meta-service"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: meta-service
+  template:
+    metadata:
+      labels:
+        app: meta-service
+    spec:
+      dnsConfig:
+        searches:
+          - "meta-service.databend-system.svc.cluster.local"
+      containers:
+        - name: databend-meta
+          image: datafuselabs/databend-meta:v0.6.97-nightly
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              /databend-meta --id 1 --log-dir "/mnt/data/log" \
+                                   --raft-dir "/mnt/data/raft" \
+                                  --metric-api-address ${POD_IP}:28001 \
+                                  --admin-api-address ${POD_IP}:28002 \
+                                  --grpc-api-address ${POD_IP}:9191 \
+                                  --raft-api-port 28003 \
+                                  --raft-listen-host ${POD_IP} \
+                                  --raft-advertise-host \
+              ${POD_NAME}.${POD_SERVICE_NAME}.${POD_NAMESPACE} \
+                                  --config-id 1 --single
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_SERVICE_NAME
+              value: "meta-service"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          readinessProbe:
+            httpGet:
+              path: /v1/health
+              port: 28002
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            failureThreshold: 3
+          ports:
+            - containerPort: 28001
+              name: metrics
+            - containerPort: 28002
+              name: admin
+            - containerPort: 9191
+              name: flight
+            - containerPort: 28003
+              name: raft
+          volumeMounts:
+            - name: data
+              mountPath: /mnt/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: meta-service
+  labels:
+    app: meta-service
+spec:
+  clusterIP: None
+  ports:
+    - port: 28001
+      targetPort: 28001
+      name: metrics
+    - port: 28002
+      targetPort: 28002
+      name: admin
+    - port: 9191
+      targetPort: 9191
+      name: flight
+    - port: 28003
+      targetPort: 28003
+      name: raft
+  selector:
+    app: meta-service
