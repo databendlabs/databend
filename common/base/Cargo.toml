@@ -26,10 +26,15 @@ ctrlc = { version = "3.2.1", features = ["termination"] }
 futures = "0.3.21"
 hyper = "0.14.17"
 poem = { version = "1.3.6", features = ["rustls"] }
-pprof = { version = "0.6.2", features = ["flamegraph", "protobuf"] }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = { version = "1.0.79", default-features = false, features = ["raw_value"] }
 serde_yaml = { version = "0.8.23", default-features = false }
+# Rollback to upstream after https://github.com/tikv/pprof-rs/pull/110 merged.
+pprof = { git = "https://github.com/Xuanwo/pprof-rs", rev = "c8a0a67", features = [
+    "flamegraph",
+    "protobuf-codec",
+    "protobuf",
+] }
 tokio = { version = "1.17.0", features = ["full"] }
 toml = { version = "0.5.8", default-features = false }
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
