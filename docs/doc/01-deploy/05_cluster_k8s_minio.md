@@ -72,7 +72,7 @@ To scale up or down the query cluster, please use the following command
 
 ### 3.1 Check the Cluster Information
 ***
-NOTICE: please make sure that the localhost port 3308 is available.
+NOTICE: Please make sure that the localhost port 3308 is available.
 ***
 ```shell
 nohup kubectl port-forward -n tenant1 svc/query-service 3308:3307 &
@@ -114,7 +114,7 @@ explain select max(number), sum(number) from numbers_mt(10000000000) group by nu
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 ```
 
-The distributed query works, the cluster will efficient transfer data through `flight_api_address`.
+The distributed query works, the cluster will efficiently transfer data through `flight_api_address`.
 
 ## Step 4.1. Upload the data to the cluster
 ```shell title='mysql>'
@@ -131,7 +131,7 @@ SELECT count(*) FROM t1;
 +----------+
 | count()  |
 +----------+
-| 20000000 |
+| 10000000 |
 +----------+
 1 row in set (0.02 sec)
 Read 1 rows, 1 B in 0.001 sec., 749.34 rows/sec., 749.34 B/sec.

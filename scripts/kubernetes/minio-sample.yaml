@@ -1,3 +1,4 @@
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -6,7 +7,8 @@ metadata:
   labels:
     app: minio-storage-claim
 spec:
-  # Read more about access modes here: http://kubernetes.io/docs/user-guide/persistent-volumes/#access-modes
+  # Read more about access modes here:
+  # http://kubernetes.io/docs/user-guide/persistent-volumes/#access-modes
   accessModes:
     - ReadWriteOnce
   resources:
@@ -44,7 +46,7 @@ spec:
             - "-c"
             - "mkdir -p /storage/sample-storage"
           volumeMounts:
-            - name: storage # must match the volume name, above
+            - name: storage
               mountPath: "/storage"
       containers:
         - name: minio
@@ -65,7 +67,7 @@ spec:
             - containerPort: 9000
             - containerPort: 9001
           volumeMounts:
-            - name: storage # must match the volume name, above
+            - name: storage
               mountPath: "/storage"
 ---
 apiVersion: v1

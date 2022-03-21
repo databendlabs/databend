@@ -1,3 +1,4 @@
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -21,13 +22,18 @@ spec:
       containers:
         - name: databend-meta
           image: datafuselabs/databend-meta:v0.6.97-nightly
-          command: [ "/bin/bash", "-c" ]
+          command: ["/bin/bash", "-c"]
           args:
-            -  |
-                    /databend-meta --id 1 --log-dir "/mnt/data/log" --raft-dir "/mnt/data/raft" \
-                                  --metric-api-address ${POD_IP}:28001 --admin-api-address ${POD_IP}:28002 \
-                                  --grpc-api-address ${POD_IP}:9191 --raft-api-port 28003 \
-                                  --raft-listen-host ${POD_IP} --raft-advertise-host ${POD_NAME}.${POD_SERVICE_NAME}.${POD_NAMESPACE} \
+            - |
+              /databend-meta --id 1 --log-dir "/mnt/data/log" \
+                                   --raft-dir "/mnt/data/raft" \
+                                  --metric-api-address ${POD_IP}:28001 \
+                                  --admin-api-address ${POD_IP}:28002 \
+                                  --grpc-api-address ${POD_IP}:9191 \
+                                  --raft-api-port 28003 \
+                                  --raft-listen-host ${POD_IP} \
+                                  --raft-advertise-host \
+              ${POD_NAME}.${POD_SERVICE_NAME}.${POD_NAMESPACE} \
                                   --config-id 1 --single
           env:
             - name: POD_NAME
@@ -67,7 +73,7 @@ spec:
     - metadata:
         name: data
       spec:
-        accessModes: [ "ReadWriteOnce" ]
+        accessModes: ["ReadWriteOnce"]
         resources:
           requests:
             storage: 1Gi
