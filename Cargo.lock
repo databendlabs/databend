@@ -4355,7 +4355,7 @@ dependencies = [
 [[package]]
 name = "pprof"
 version = "0.7.0"
-source = "git+https://github.com/Xuanwo/pprof-rs?rev=c8a0a67#c8a0a677b19de504f28e3d5e5485b44560bdb516"
+source = "git+https://github.com/tikv/pprof-rs?rev=666d9e2#666d9e218e336e6840002f4e502b44440a55a3be"
 dependencies = [
  "backtrace",
  "cfg-if",
