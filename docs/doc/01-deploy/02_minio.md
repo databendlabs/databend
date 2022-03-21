@@ -41,7 +41,7 @@ aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://databend
 
 ## 2. Download
 
-You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page.
+You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../06-contributing/02-building-from-source.md).
 
 ```shell
 mkdir databend && cd databend
