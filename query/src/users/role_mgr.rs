@@ -48,12 +48,23 @@ impl UserApiProvider {
     }
 
     // Add a new role info.
-    pub async fn add_role(&self, tenant: &str, role_info: RoleInfo) -> Result<u64> {
+    pub async fn add_role(
+        &self,
+        tenant: &str,
+        role_info: RoleInfo,
+        if_not_exists: bool,
+    ) -> Result<u64> {
         let client = self.get_role_api_client(tenant)?;
         let add_role = client.add_role(role_info);
         match add_role.await {
             Ok(res) => Ok(res),
-            Err(e) => Err(e.add_message_back("(while add role).")),
+            Err(e) => {
+                if if_not_exists && e.code() == ErrorCode::user_already_exists_code() {
+                    Ok(0)
+                } else {
+                    Err(e.add_message_back("(while add role)"))
+                }
+            }
         }
     }
 

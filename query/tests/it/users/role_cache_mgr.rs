@@ -38,7 +38,7 @@ async fn test_role_cache_mgr() -> Result<()> {
         &GrantObject::Database("db1".to_string()),
         UserPrivilegeSet::available_privileges_on_database(),
     );
-    user_api.add_role("tenant1", role1).await?;
+    user_api.add_role("tenant1", role1, false).await?;
 
     let role_cache_mgr = RoleCacheMgr::new(user_api);
     assert!(
