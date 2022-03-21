@@ -60,7 +60,6 @@ fn test_to_partitions() -> Result<()> {
         .collect::<HashMap<_, _>>();
 
     let block_meta = BlockMeta {
-        format_version: 1,
         row_count: 0,
         block_size: cols_stats
             .iter()
@@ -69,9 +68,7 @@ fn test_to_partitions() -> Result<()> {
         file_size: 0,
         col_stats: cols_stats.clone(),
         col_metas: cols_metas,
-        location: BlockLocation {
-            path: "".to_string(),
-        },
+        location: BlockLocation::new(""),
     };
 
     let blocks_metas = (0..num_of_block)

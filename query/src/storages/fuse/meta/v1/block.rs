@@ -22,8 +22,6 @@ use crate::storages::index::ColumnStatistics;
 /// Kept inside the [SegmentInfo]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BlockMeta {
-    /// format version
-    pub format_version: u64,
     pub row_count: u64,
     pub block_size: u64,
     pub file_size: u64,
@@ -32,22 +30,25 @@ pub struct BlockMeta {
     pub location: BlockLocation,
 }
 
-impl BlockMeta {
-    pub const fn current_version() -> u64 {
-        1
-    }
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BlockLocation {
     pub path: String,
+    pub format_version: u64,
+}
+
+impl BlockLocation {
+    pub fn new(path: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            format_version: 1,
+        }
+    }
 }
 
 use super::super::v0::block::BlockMeta as BlockMetaV0;
 impl From<BlockMetaV0> for BlockMeta {
     fn from(s: BlockMetaV0) -> Self {
         Self {
-            format_version: 1,
             row_count: s.row_count,
             block_size: s.block_size,
             file_size: s.file_size,
@@ -55,6 +56,7 @@ impl From<BlockMetaV0> for BlockMeta {
             col_metas: s.col_metas,
             location: BlockLocation {
                 path: s.location.path,
+                format_version: 1,
             },
         }
     }
