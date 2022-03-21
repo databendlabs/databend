@@ -14,6 +14,7 @@
 
 #![feature(thread_local)]
 
+mod format;
 mod http_shutdown_handlers;
 mod net;
 mod profiling;
@@ -27,6 +28,7 @@ mod string_func;
 mod thread;
 mod uniq_id;
 
+pub use format::Format;
 pub use http_shutdown_handlers::HttpShutdownHandler;
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;

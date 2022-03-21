@@ -16,3 +16,4 @@ mod dal;
 
 pub use dal::DalContext;
 pub use dal::DalMetrics;
+pub use dal::DalRuntime;

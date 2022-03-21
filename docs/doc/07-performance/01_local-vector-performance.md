@@ -1,6 +1,6 @@
 ---
 title: Databend Vectorized Engine Performance
-sidebar_label: Vectorized Engine Performance
+sidebar_label: On Memory Performance
 description:
   Ultra-fast analytics experience.
 ---

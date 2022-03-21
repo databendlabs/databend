@@ -38,7 +38,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Ubuntu">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.94-nightly/databend-v0.6.94-nightly-x86_64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.96-nightly/databend-v0.6.96-nightly-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
@@ -48,7 +48,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.94-nig
 <TabItem value="linux" label="Ubuntu">
 
 ```shell
-tar xzvf databend-v0.6.94-nightly-x86_64-unknown-linux-gnu.tar.gz
+tar xzvf databend-v0.6.96-nightly-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
@@ -74,7 +74,7 @@ raft_dir = "metadata/datas"
 ### 2.2 Start the databend-meta 
 
 ```shell
-./databend-meta -c ./databend-meta.toml 2>&1 > meta.log&
+./databend-meta -c ./databend-meta.toml > meta.log 2>&1 &
 ```
 
 ### 2.3 Check databend-meta 
@@ -158,7 +158,7 @@ In this example COS region is beijing.
 ### 3.2 Start databend-query
 
 ```shell
-./databend-query -c ./databend-query.toml 2>&1 > query.log&
+./databend-query -c ./databend-query.toml > query.log 2>&1 &
 ```
 
 ### 3.3 Check databend-query

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use clap::Parser;
+use common_base::Format;
 use common_meta_raft_store::config as raft_config;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_types::MetaError;
@@ -128,7 +129,7 @@ impl Config {
     pub fn load() -> Result<Self, MetaError> {
         let mut cfg = Config::parse();
         if !cfg.config_file.is_empty() {
-            cfg = Self::load_from_toml(cfg.config_file.as_str())?;
+            cfg = Self::load_from_file(cfg.config_file.as_str())?;
         }
 
         Self::load_from_env(&mut cfg);
@@ -137,13 +138,15 @@ impl Config {
     }
 
     /// Load configs from toml file.
-    pub fn load_from_toml(file: &str) -> Result<Self, MetaError> {
+    pub fn load_from_file(file: &str) -> Result<Self, MetaError> {
         let txt = std::fs::read_to_string(file)
             .map_err(|e| MetaError::LoadConfigError(format!("File: {}, err: {:?}", file, e)))?;
 
-        let cfg = toml::from_str::<Config>(txt.as_str())
-            .map_err(|e| MetaError::LoadConfigError(format!("{:?}", e)))?;
-
+        let format = Format::from_path(file)
+            .map_err(|e| MetaError::LoadConfigError(format!("File: {}, err: {:?}", file, e)))?;
+        let cfg: Config = format
+            .load_config(&txt)
+            .map_err(|e| MetaError::LoadConfigError(format!("File: {}, err: {:?}", file, e)))?;
         cfg.check()?;
         Ok(cfg)
     }
