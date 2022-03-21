@@ -10,7 +10,7 @@ description:
 * Storage: S3(us-east-2)
 * Dataset: [ontime](https://transtats.bts.gov/PREZIP/), 60.8 GB Raw CSV Data, 202687654 records
 * Databend: 2fe1e36-simd(1.61.0-nightly-2022-03-13) 
-* No Local Disk Caching
+* No Local Caching(Data Caching/Query Result Caching)
 * [Analyzing OnTime Datasets with Databend on AWS EC2 and S3](../09-learn/02-analyze-ontime-with-databend-on-ec2-and-s3.md)
 :::
 
