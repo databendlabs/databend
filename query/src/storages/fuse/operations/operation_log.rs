@@ -14,6 +14,7 @@
 //
 
 use std::convert::TryFrom;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
@@ -30,7 +31,7 @@ pub type TableOperationLog = Vec<AppendOperationLogEntry>;
 // to be wrapped in enum
 pub struct AppendOperationLogEntry {
     pub segment_location: String,
-    pub segment_info: SegmentInfo,
+    pub segment_info: Arc<SegmentInfo>,
 }
 
 impl AppendOperationLogEntry {
@@ -38,7 +39,7 @@ impl AppendOperationLogEntry {
         common_planners::SINK_SCHEMA.clone()
     }
 
-    pub fn new(segment_location: String, segment_info: SegmentInfo) -> Self {
+    pub fn new(segment_location: String, segment_info: Arc<SegmentInfo>) -> Self {
         Self {
             segment_location,
             segment_info,
@@ -69,7 +70,7 @@ impl TryFrom<&DataBlock> for AppendOperationLogEntry {
 
         let segment_location = Self::parse_col(0, block)?;
         let seg_info = Self::parse_col(1, block)?;
-        let segment_info: SegmentInfo = serde_json::from_str(seg_info.as_str())?;
+        let segment_info = Arc::new(serde_json::from_str(seg_info.as_str())?);
         Ok(AppendOperationLogEntry {
             segment_location,
             segment_info,
