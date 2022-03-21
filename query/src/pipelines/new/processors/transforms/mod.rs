@@ -15,6 +15,7 @@
 mod aggregator;
 mod transform;
 mod transform_aggregator;
+mod transform_create_sets;
 mod transform_dummy;
 mod transform_expression;
 mod transform_filter;

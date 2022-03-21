@@ -84,8 +84,10 @@ impl NewPipeline {
 
     pub fn resize(&mut self, new_size: usize) -> Result<()> {
         match self.pipes.last() {
-            None => Err(ErrorCode::LogicalError("")),
-            Some(pipe) if pipe.output_size() == 0 => Err(ErrorCode::LogicalError("")),
+            None => Err(ErrorCode::LogicalError("Cannot resize empty pipe.")),
+            Some(pipe) if pipe.output_size() == 0 => {
+                Err(ErrorCode::LogicalError("Cannot resize empty pipe."))
+            }
             Some(pipe) if pipe.output_size() == new_size => Ok(()),
             Some(pipe) => {
                 let processor = ResizeProcessor::create(pipe.output_size(), new_size);

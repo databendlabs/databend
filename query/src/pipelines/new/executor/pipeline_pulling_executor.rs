@@ -111,7 +111,7 @@ impl PipelinePullingExecutor {
         }
     }
 
-    pub fn finish(&mut self) -> Result<()> {
+    pub fn finish(&self) -> Result<()> {
         let mutex_guard = self.executor.lock();
         match &*mutex_guard {
             Executor::Inited(_) => Ok(()),

@@ -38,8 +38,10 @@ use common_streams::SendableDataBlockStream;
 use super::numbers_stream::NumbersStream;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::EmptySource;
 use crate::pipelines::new::processors::SyncSource;
 use crate::pipelines::new::processors::SyncSourcer;
+use crate::pipelines::new::NewPipe;
 use crate::pipelines::new::NewPipeline;
 use crate::pipelines::new::SourcePipeBuilder;
 use crate::pipelines::transforms::get_sort_descriptions;
@@ -163,6 +165,7 @@ impl Table for NumbersTable {
 
         let parts = generate_numbers_parts(0, ctx.get_settings().get_max_threads()? as u64, total);
 
+        println!("read partitions : {:?}", parts);
         Ok((statistics, parts))
     }
 
@@ -191,6 +194,18 @@ impl Table for NumbersTable {
         plan: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
+        if plan.parts.is_empty() {
+            let schema = plan.schema();
+            let output = OutputPort::create();
+            pipeline.add_pipe(NewPipe::SimplePipe {
+                inputs_port: vec![],
+                outputs_port: vec![output.clone()],
+                processors: vec![EmptySource::create(ctx, output, schema)?],
+            });
+
+            return Ok(());
+        }
+
         let mut source_builder = SourcePipeBuilder::create();
 
         for part_index in 0..plan.parts.len() {

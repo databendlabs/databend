@@ -70,11 +70,10 @@ impl Interpreter for SelectInterpreter {
         if settings.get_enable_new_processor_framework()? != 0 {
             if self.ctx.get_cluster().is_empty() {
                 let async_runtime = self.ctx.get_storage_runtime();
-                let new_pipeline = self.execute2().await?;
+                let new_pipeline = self.execute2()?;
                 let executor = PipelinePullingExecutor::try_create(async_runtime, new_pipeline)?;
-                // TODO: set executor into ctx for shutdown
-
-                return Ok(Box::pin(ProcessorExecutorStream::create(executor)?));
+                let executor_stream = Box::pin(ProcessorExecutorStream::create(executor)?);
+                return Ok(Box::pin(self.ctx.try_create_abortable(executor_stream)?));
             }
 
             let optimized_plan = self.rewrite_plan()?;
@@ -85,7 +84,7 @@ impl Interpreter for SelectInterpreter {
         }
     }
 
-    async fn execute2(&self) -> Result<NewPipeline> {
+    fn execute2(&self) -> Result<NewPipeline> {
         let settings = self.ctx.get_settings();
         let builder = QueryPipelineBuilder::create(self.ctx.clone());
 
