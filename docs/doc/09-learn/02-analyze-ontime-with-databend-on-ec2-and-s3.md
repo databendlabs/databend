@@ -125,7 +125,7 @@ CREATE TABLE ontime
     Div5LongestGTime                String NOT NULL,
     Div5WheelsOff                   String NOT NULL,
     Div5TailNum                     String NOT NULL
-) ENGINE = FUSE;
+);
 ```
 
 ### 2.2 Load Data Into OnTime Table
