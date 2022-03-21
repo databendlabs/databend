@@ -62,6 +62,8 @@ pub use anyerror;
 #[allow(clippy::all)]
 pub mod protobuf {
     tonic::include_proto!("meta");
+
+    pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("meta_descriptor");
 }
 
 pub use applied_state::AppliedState;

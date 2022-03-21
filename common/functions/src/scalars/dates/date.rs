@@ -102,17 +102,17 @@ impl DateFunction {
         factory.register("toStartOfWeek", ToStartOfWeekFunction::desc());
 
         //interval functions
-        factory.register_arithmetic("addYears", AddYearsFunction::desc(1));
-        factory.register_arithmetic("addMonths", AddMonthsFunction::desc(1));
-        factory.register_arithmetic("addDays", AddDaysFunction::desc(1));
-        factory.register_arithmetic("addHours", AddTimesFunction::desc(3600));
-        factory.register_arithmetic("addMinutes", AddTimesFunction::desc(60));
-        factory.register_arithmetic("addSeconds", AddTimesFunction::desc(1));
-        factory.register_arithmetic("subtractYears", AddYearsFunction::desc(-1));
-        factory.register_arithmetic("subtractMonths", AddMonthsFunction::desc(-1));
-        factory.register_arithmetic("subtractDays", AddDaysFunction::desc(-1));
-        factory.register_arithmetic("subtractHours", AddTimesFunction::desc(-3600));
-        factory.register_arithmetic("subtractMinutes", AddTimesFunction::desc(-60));
-        factory.register_arithmetic("subtractSeconds", AddTimesFunction::desc(-1));
+        factory.register_typed("addYears", AddYearsFunction::desc(1));
+        factory.register_typed("addMonths", AddMonthsFunction::desc(1));
+        factory.register_typed("addDays", AddDaysFunction::desc(1));
+        factory.register_typed("addHours", AddTimesFunction::desc(3600));
+        factory.register_typed("addMinutes", AddTimesFunction::desc(60));
+        factory.register_typed("addSeconds", AddTimesFunction::desc(1));
+        factory.register_typed("subtractYears", AddYearsFunction::desc(-1));
+        factory.register_typed("subtractMonths", AddMonthsFunction::desc(-1));
+        factory.register_typed("subtractDays", AddDaysFunction::desc(-1));
+        factory.register_typed("subtractHours", AddTimesFunction::desc(-3600));
+        factory.register_typed("subtractMinutes", AddTimesFunction::desc(-60));
+        factory.register_typed("subtractSeconds", AddTimesFunction::desc(-1));
     }
 }

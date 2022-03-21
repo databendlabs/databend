@@ -122,7 +122,7 @@ async fn test_statement_copy() -> Result<()> {
         encryption=(master_key = 'my_master_key')
         file_format = (type = csv field_delimiter = '|' skip_header = 1)",
             expect: "",
-            err: "Code: 1025, displayText = Unknown table: 'mytable'.",
+            err: "Code: 1025, displayText = Unknown table 'mytable'.",
         },
         TestCase {
             name: "copy-external-uri-not-found-error",

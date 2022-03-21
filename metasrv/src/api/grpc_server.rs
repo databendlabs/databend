@@ -22,6 +22,7 @@ use common_base::tokio::sync::oneshot::Sender;
 use common_base::tokio::task::JoinHandle;
 use common_base::Stoppable;
 use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
+use common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
 use common_meta_types::MetaError;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaResult;
@@ -69,6 +70,11 @@ impl GrpcServer {
         // For sending the signal when server finished shutting down.
         let (fin_tx, fin_rx) = oneshot::channel::<()>();
 
+        let reflect_srv = tonic_reflection::server::Builder::configure()
+            .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
+            .build()
+            .unwrap();
+
         let builder = Server::builder();
 
         let tls_conf = Self::tls_config(&self.conf)
@@ -100,6 +106,7 @@ impl GrpcServer {
         let j = tokio::spawn(
             async move {
                 let res = builder
+                    .add_service(reflect_srv)
                     .add_service(grpc_srv)
                     .serve_with_shutdown(addr, async move {
                         let _ = started_tx.send(());

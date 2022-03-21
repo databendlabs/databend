@@ -66,7 +66,7 @@ async fn test_create_table_interpreter() -> Result<()> {
             "CREATE TABLE default.test_b(a varchar, x int) select b, a from default.test_a";
 
         let plan = PlanParser::parse(ctx.clone(), TEST_CREATE_QUERY_SELECT).await?;
-        let interpreter = InterpreterFactory::get(ctx, plan.clone())?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let mut stream = interpreter.execute(None).await?;
         while let Some(_block) = stream.next().await {}
 
@@ -89,6 +89,15 @@ async fn test_create_table_interpreter() -> Result<()> {
             format!("{:?}", field_b),
             r#"DataField { name: "b", data_type: Int32, nullable: true }"#
         );
+    }
+
+    {
+        let query = "create table t (a UInt32)  Engine = Fuse1;";
+
+        let plan = PlanParser::parse(ctx.clone(), query).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+
+        assert!(interpreter.execute(None).await.is_err());
     }
 
     Ok(())

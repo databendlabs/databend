@@ -14,15 +14,21 @@
 //
 
 use std::collections::HashMap;
+use std::iter::Iterator;
 
+use common_base::tokio;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Extras;
+use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::storages::fuse::meta::BlockLocation;
 use databend_query::storages::fuse::meta::BlockMeta;
 use databend_query::storages::fuse::meta::ColumnMeta;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::storages::index::ColumnStatistics;
+use futures::TryStreamExt;
+
+use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[test]
 fn test_to_partitions() -> Result<()> {
@@ -104,5 +110,45 @@ fn test_to_partitions() -> Result<()> {
     });
     let (stats, _) = FuseTable::to_partitions(&blocks_metas, push_down);
     assert_eq!(expected_block_size * num_of_block, stats.read_bytes as u64);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_fuse_table_exact_statistic() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+
+    let create_table_plan = fixture.default_crate_table_plan();
+    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    interpreter.execute(None).await?;
+
+    let mut table = fixture.latest_default_table().await?;
+
+    // basic append and read
+    {
+        let num_blocks = 2;
+        let rows_per_block = 2;
+        let value_start_from = 1;
+        let stream =
+            TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
+
+        let r = table.append_data(ctx.clone(), stream).await?;
+        table
+            .commit_insertion(ctx.clone(), r.try_collect().await?, false)
+            .await?;
+
+        table = fixture.latest_default_table().await?;
+
+        let push_downs = Extras {
+            projection: Some(vec![]),
+            filters: vec![],
+            limit: None,
+            order_by: vec![],
+        };
+        let (stats, parts) = table.read_partitions(ctx.clone(), Some(push_downs)).await?;
+        assert_eq!(stats.read_rows, num_blocks * rows_per_block);
+        assert!(parts.is_empty());
+    }
+
     Ok(())
 }
