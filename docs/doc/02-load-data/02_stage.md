@@ -1,9 +1,13 @@
 ---
 title: Load Data from Databend Stages
-sidebar_label: Load Data from Stages
+sidebar_label: From Stages
 description:
   Load Data from Databend Stages
 ---
+
+<p align="center">
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/load/load-data-from-stage.png" width="550"/>
+</p>
 
 ### Before You Begin
 

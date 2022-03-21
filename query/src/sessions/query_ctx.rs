@@ -22,7 +22,6 @@ use std::sync::Arc;
 use common_base::tokio::task::JoinHandle;
 use common_base::Progress;
 use common_base::ProgressValues;
-use common_base::Runtime;
 use common_base::TrySpawn;
 use common_contexts::DalContext;
 use common_contexts::DalMetrics;
@@ -346,15 +345,12 @@ impl QueryContext {
     // Get the storage data accessor operator from the session manager.
     pub fn get_storage_operator(&self) -> Result<Operator> {
         let operator = self.shared.session.get_storage_operator();
+
         Ok(operator.layer(self.shared.dal_ctx.as_ref().clone()))
     }
 
     pub fn get_dal_context(&self) -> &DalContext {
         self.shared.dal_ctx.as_ref()
-    }
-
-    pub fn get_storage_runtime(&self) -> &Runtime {
-        self.shared.session.session_mgr.get_storage_runtime()
     }
 
     pub async fn reload_config(&self) -> Result<()> {

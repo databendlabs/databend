@@ -5,10 +5,9 @@ description:
    How to Work with Databend in Golang
 ---
 
+### Before You Begin
 
-### Before you begin
-
-* Make sure you have already [How to installed Databend](/doc/category/deploy).
+* **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](/doc/category/deploy).
 
 ### Golang
 
@@ -57,6 +56,20 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("Connected")
+
+	// Create db if do not exist
+	dbSql := "create database if not exists book_db"
+	_, err = db.Exec(dbSql)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Create database book_db success")
+
+	// Use book_db database
+	_, err = db.Exec("use book_db")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Create table.
 	sql := "create table if not exists books(title varchar(255), author varchar(255), date varchar(255))"
