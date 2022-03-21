@@ -60,7 +60,7 @@ impl Profiling {
             .pprof()
             .map_err(|e| ErrorCode::UnknownException(e.to_string()))?;
         profile
-            .encode(&mut body)
+            .write_to_vec(&mut body)
             .map_err(|e| ErrorCode::UnknownException(e.to_string()))?;
 
         Ok(body)
