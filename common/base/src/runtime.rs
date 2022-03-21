@@ -129,6 +129,10 @@ impl Runtime {
         Self::create(tracker, runtime_builder.worker_threads(workers))
     }
 
+    pub fn inner(&self) -> tokio::runtime::Handle {
+        self.handle.clone()
+    }
+
     pub fn block_on<F: Future>(&self, future: F) -> F::Output {
         self.handle.block_on(future)
     }

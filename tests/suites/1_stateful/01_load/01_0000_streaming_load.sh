@@ -7,22 +7,31 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ## create ontime table
 cat $CURDIR/../ontime/create_table.sql | sed 's/ontime/ontime_streaming_load/g' | $MYSQL_CLIENT_CONNECT
 
-
-if [ ! -f /tmp/ontime.csv ]; then
-    wget -P /tmp "https://repo.databend.rs/dataset/stateful/ontime.csv" > /dev/null 2>&1
-fi
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv /tmp/ontime_200.csv > /dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.parquet /tmp/ontime_200.parquet  > /dev/null 2>&1
 
 
 # do the Data integrity check
-echo "429c47cdd49b7d75eec9b9244c8b1288edd132506203e37d2d1e70e1ac1eccc7 /tmp/ontime.csv" | sha256sum --check > /dev/null 2>&1
+echo "33b1243ecd881e701a1c33cc8d621ecbf9817be006dce8722cfc6dd7ef0637f9 /tmp/ontime_200.csv" | sha256sum --check > /dev/null 2>&1
 if [ $? -ne 0 ]; then
-	echo "The downloaded dataset </tmp/ontime.csv> has been corrupted, please remove and fetch it again."
+	echo "The downloaded dataset has been corrupted, please remove and fetch it again."
+	exit 1
+fi
+
+echo "e90086f5a25ef8bdb2469030a90e5ae30e967e41ed38b71f386f2a1bdc24efc8 /tmp/ontime_200.parquet" | sha256sum --check > /dev/null 2>&1
+
+if [ $? -ne 0 ]; then
+	echo "The downloaded dataset has been corrupted, please remove and fetch it again."
 	exit 1
 fi
 
 
-curl -H "insert_sql:insert into ontime_streaming_load format CSV" -H "skip_header:1" -F  "upload=@/tmp/ontime.csv"  -XPUT http://localhost:8001/v1/streaming_load > /dev/null 2>&1
-
-
+curl -H "insert_sql:insert into ontime_streaming_load format Csv" -H "skip_header:1" -F  "upload=@/tmp/ontime_200.csv"  -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select count(1) ,avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
+
+
+curl -H "insert_sql:insert into ontime_streaming_load format Parquet" -H "skip_header:1" -F  "upload=@/tmp/ontime_200.parquet"  -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+echo "select count(1) ,avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
+
+
 echo "drop table ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT

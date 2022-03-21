@@ -22,6 +22,7 @@ use std::time::Duration;
 use common_base::tokio;
 use common_base::Runtime;
 use common_base::SignalStream;
+use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -74,7 +75,6 @@ impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
         let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
-        let storage_accessor = Self::init_storage_operator(&conf).await?;
 
         // Cluster discovery.
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
@@ -86,6 +86,12 @@ impl SessionManager {
             }
             Runtime::with_worker_threads(storage_num_cpus, Some("IO-worker".to_owned()))?
         };
+
+        // NOTE: Magic happens here. We will add a layer upon original storage operator
+        // so that all underlying storage operations will send to storage runtime.
+        let storage_operator = Self::init_storage_operator(&conf)
+            .await?
+            .layer(DalRuntime::new(storage_runtime.inner()));
 
         // User manager and init the default users.
         let user = UserApiProvider::create_global(conf.clone()).await?;
@@ -115,7 +121,7 @@ impl SessionManager {
             storage_cache_manager: RwLock::new(storage_cache_manager),
             query_logger: RwLock::new(query_logger),
             status,
-            storage_operator: RwLock::new(storage_accessor),
+            storage_operator: RwLock::new(storage_operator),
             storage_runtime: Arc::new(storage_runtime),
             _guards,
         }))
@@ -401,7 +407,11 @@ impl SessionManager {
         *self.storage_cache_manager.write() = Arc::new(CacheManager::init(&config.query));
 
         {
-            let operator = Self::init_storage_operator(&config).await?;
+            // NOTE: Magic happens here. We will add a layer upon original storage operator
+            // so that all underlying storage operations will send to storage runtime.
+            let operator = Self::init_storage_operator(&config)
+                .await?
+                .layer(DalRuntime::new(self.storage_runtime.inner()));
             *self.storage_operator.write() = operator;
         }
 
