@@ -1,5 +1,5 @@
 ---
-title: Start a ery Cluster on kubernetes
+title: Start a query Cluster on kubernetes
 sidebar_label: K8s Cluster
 description:
   How to Deploy a databend Query Cluster on kubernetes
