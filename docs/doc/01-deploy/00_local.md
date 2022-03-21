@@ -157,7 +157,7 @@ meta_password = "root"
 storage_type = "disk"
 
 [storage.disk]
-data_path = "bendata/datas"
+data_path = "benddata/datas"
 
 [storage.s3]
 

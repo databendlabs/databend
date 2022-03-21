@@ -25,7 +25,7 @@ cnx = mysql.connector.connect(user='root', password='',
 
 # Create database, table.
 cursor = cnx.cursor()
-cursor.execute("create daatabase if not exists book_db")
+cursor.execute("create database if not exists book_db")
 cursor.execute("use book_db")
 cursor.execute("create table if not exists books(title varchar(255), author varchar(255), date varchar(255))")
 
