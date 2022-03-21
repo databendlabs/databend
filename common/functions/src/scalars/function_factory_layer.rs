@@ -37,20 +37,20 @@ impl FunctionFactoryLayer<'_> {
     }
 
     pub fn register(&mut self, name: &str, desc: FunctionDescription) {
-        let mut features = desc.features.clone();
+        let mut docs = desc.docs.clone();
         if let Some(category) = self.category {
-            features.category = category;
+            docs.category = category;
         }
-        let desc = desc.features(features);
+        let desc = desc.docs(docs);
         self.factory.register(name, desc);
     }
 
     pub fn register_typed(&mut self, name: &str, desc: TypedFunctionDescription) {
-        let mut features = desc.features.clone();
+        let mut docs = desc.docs.clone();
         if let Some(category) = self.category {
-            features.category = category;
+            docs.category = category;
         }
-        let desc = desc.features(features);
+        let desc = desc.docs(docs);
         self.factory.register_typed(name, desc);
     }
 }

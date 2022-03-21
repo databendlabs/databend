@@ -17,6 +17,7 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
+use crate::rdoc::FunctionDocs;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFeatures;
@@ -34,19 +35,23 @@ impl IsNotNullFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .negative_function("isnull")
-                .bool_function()
-                .disable_passthrough_null()
-                .num_arguments(1)
-                .description("Checks whether a value is NULL.")
-                .definition("isNull(x)")
-                .add_arg("x", "A value with non-compound data type.")
-                .return_type("If x is NULL, returns false, otherwise it returns true.")
-                .example("select isNotNull(3)"),
-        )
+        FunctionDescription::creator(Box::new(Self::try_create_func))
+            .features(
+                FunctionFeatures::default()
+                    .deterministic()
+                    .negative_function("isnull")
+                    .bool_function()
+                    .disable_passthrough_null()
+                    .num_arguments(1),
+            )
+            .docs(
+                FunctionDocs::default()
+                    .description("Checks whether a value is NULL.")
+                    .definition("isNull(x)")
+                    .add_arg("x", "A value with non-compound data type.")
+                    .return_type("If x is NULL, returns false, otherwise it returns true.")
+                    .add_example("select isNotNull(3)"),
+            )
     }
 }
 

@@ -20,6 +20,7 @@ use common_datavalues::type_coercion::aggregate_types;
 use common_datavalues::with_match_scalar_type;
 use common_exception::Result;
 
+use crate::rdoc::FunctionDocs;
 use crate::scalars::cast_column_field;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
@@ -38,12 +39,14 @@ impl IfFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .disable_passthrough_null()
-                .num_arguments(3)
-                .description("If expr1 is TRUE, IF() returns expr2. Otherwise, it returns expr3.")
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(
+                FunctionFeatures::default()
+                    .deterministic()
+                    .disable_passthrough_null()
+                    .num_arguments(3),
+            )
+            .docs(FunctionDocs::default().description("If expr1 is TRUE, IF() returns expr2. Otherwise, it returns expr3.")
                 .definition("IF(expr1,expr2,expr3)")
                 .add_arg(
                     "expr1",
@@ -52,8 +55,7 @@ impl IfFunction {
                 .add_arg("expr2", "The expression to return if condition is met.")
                 .add_arg("expr3", "The expression to return if condition is not met.")
                 .return_type("The return type is determined by expr2 and expr3, they must have the lowest common type.")
-                .example("select if(number=0, true, false) from numbers(1);"),
-        )
+                .add_example("select if(number=0, true, false) from numbers(1);"),)
     }
 
     // handle cond is const or nullable or null column

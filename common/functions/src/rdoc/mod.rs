@@ -12,17 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(core_intrinsics)]
-#![feature(duration_checked_float)]
-#![feature(portable_simd)]
+mod function_docs;
 
-pub mod aggregates;
-pub mod rdoc;
-pub mod scalars;
-
-use aggregates::AggregateFunctionFactory;
-use scalars::FunctionFactory;
-
-pub fn is_builtin_function(name: &str) -> bool {
-    FunctionFactory::instance().check(name) || AggregateFunctionFactory::instance().check(name)
-}
+pub use function_docs::*;

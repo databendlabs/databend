@@ -37,31 +37,6 @@ pub struct FunctionFeatures {
     // (1, 2) means we only accept [1, 2] arguments
     // None means it's not variadic function.
     pub variadic_arguments: Option<(usize, usize)>,
-
-    // For Documentation
-
-    // Function Category
-    pub category: &'static str,
-    // Introduce the function in brief.
-    pub description: &'static str,
-    // The definition of the function, aka: syntax.
-    pub definition: &'static str,
-
-    pub args: Vec<(&'static str, &'static str)>,
-    pub return_type: &'static str,
-
-    // Example SQL of the function that can be run directly in query.
-    pub example: &'static str,
-}
-
-// set properties for descriptions
-macro_rules! sp {
-    ($p :ident, $type: ty) => {
-        pub fn $p(mut self, $p: $type) -> FunctionFeatures {
-            self.$p = $p;
-            self
-        }
-    };
 }
 
 impl FunctionFeatures {
@@ -75,13 +50,6 @@ impl FunctionFeatures {
             passthrough_null: true,
             num_arguments: 0,
             variadic_arguments: None,
-
-            category: "",
-            description: "",
-            definition: "",
-            args: vec![],
-            return_type: "",
-            example: "",
         }
     }
 
@@ -120,15 +88,8 @@ impl FunctionFeatures {
         self
     }
 
-    sp!(num_arguments, usize);
-    sp!(category, &'static str);
-    sp!(description, &'static str);
-    sp!(definition, &'static str);
-    sp!(return_type, &'static str);
-    sp!(example, &'static str);
-
-    pub fn add_arg(mut self, name: &'static str, description: &'static str) -> FunctionFeatures {
-        self.args.push((name, description));
+    pub fn num_arguments(mut self, num_arguments: usize) -> FunctionFeatures {
+        self.num_arguments = num_arguments;
         self
     }
 }
