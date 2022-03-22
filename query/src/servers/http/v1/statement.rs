@@ -26,6 +26,7 @@ use poem::Route;
 use serde::Deserialize;
 
 use super::query::HttpQueryRequest;
+use super::query::HttpSession;
 use super::query::HttpSessionConf;
 use super::query::PaginationConf;
 use super::QueryResponse;
@@ -48,10 +49,11 @@ pub async fn statement_handler(
     let query_id = http_query_manager.next_query_id();
     let session = HttpSessionConf {
         database: params.db.filter(|x| !x.is_empty()),
+        max_idle_time: None,
     };
     let req = HttpQueryRequest {
         sql,
-        session,
+        session: HttpSession::New(session),
         pagination: PaginationConf { wait_time_secs: -1 },
     };
     let query = http_query_manager
