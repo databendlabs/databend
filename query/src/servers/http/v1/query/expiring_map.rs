@@ -34,6 +34,17 @@ where V: Expirable
     pub value: V,
 }
 
+impl<V> MaybeExpiring<V>
+where V: Expirable
+{
+    pub fn on_expire(&mut self) {
+        if let Some(t) = self.task.take() {
+            t.abort()
+        }
+        self.value.on_expire();
+    }
+}
+
 // on insert：start task
 //   1. check V for expire
 //   2. call remove if expire
@@ -44,7 +55,7 @@ where V: Expirable
 pub struct ExpiringMap<K, V>
 where V: Expirable
 {
-    inner: Arc<RwLock<Inner<K, V>>>,
+    map: Arc<RwLock<HashMap<K, MaybeExpiring<V>>>>,
 }
 
 async fn run_check<T: Expirable>(e: &T, max_idle: Duration) -> bool {
@@ -69,54 +80,8 @@ where V: Expirable
 {
     fn default() -> Self {
         Self {
-            inner: Arc::new(RwLock::new(Inner::default())),
+            map: Arc::new(RwLock::new(HashMap::default())),
         }
-    }
-}
-
-struct Inner<K, V>
-where V: Expirable
-{
-    map: HashMap<K, MaybeExpiring<V>>,
-}
-
-impl<K, V> Default for Inner<K, V>
-where V: Expirable
-{
-    fn default() -> Self {
-        Self {
-            map: HashMap::new(),
-        }
-    }
-}
-
-impl<K, V> Inner<K, V>
-where
-    K: Hash + Eq,
-    V: Expirable,
-{
-    pub fn remove<Q: ?Sized>(&mut self, k: &Q)
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq,
-    {
-        if let Some(mut checker) = self.map.remove(k) {
-            if let Some(t) = checker.task.take() {
-                t.abort()
-            }
-            checker.value.on_expire();
-        }
-    }
-    pub fn insert(&mut self, k: K, v: MaybeExpiring<V>) {
-        self.map.insert(k, v);
-    }
-
-    pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<&V>
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq,
-    {
-        self.map.get(k).map(|i| &i.value)
     }
 }
 
@@ -130,16 +95,15 @@ where
         K: Clone + Send + Sync + 'static,
         V: Send + Sync + 'static,
     {
-        let mut inner = self.inner.write();
+        let mut map = self.map.write();
         let task = match max_idle_time {
             Some(d) => {
-                let inner = self.inner.clone();
+                let map_clone = self.map.clone();
                 let v_clone = v.clone();
                 let k_clone = k.clone();
                 let task = task::spawn(async move {
                     if run_check(&v_clone, d).await {
-                        let mut inner = inner.write();
-                        inner.remove(&k_clone);
+                        Self::remove_inner(&map_clone, &k_clone);
                     }
                 });
                 Some(task)
@@ -147,7 +111,7 @@ where
             None => None,
         };
         let i = MaybeExpiring { task, value: v };
-        inner.insert(k, i);
+        map.insert(k, i);
     }
 
     pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<V>
@@ -155,8 +119,8 @@ where
         K: Borrow<Q>,
         Q: Hash + Eq,
     {
-        let inner = self.inner.read();
-        inner.get(k).cloned()
+        let map = self.map.read();
+        map.get(k).map(|i| &i.value).cloned()
     }
 
     pub fn remove<Q: ?Sized>(&mut self, k: &Q)
@@ -164,7 +128,20 @@ where
         K: Borrow<Q>,
         Q: Hash + Eq,
     {
-        let mut map = self.inner.write();
-        map.remove(k)
+        Self::remove_inner(&self.map, k)
+    }
+
+    fn remove_inner<Q: ?Sized>(map: &Arc<RwLock<HashMap<K, MaybeExpiring<V>>>>, k: &Q)
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq,
+    {
+        let checker = {
+            let mut map = map.write();
+            map.remove(k)
+        };
+        if let Some(mut checker) = checker {
+            checker.on_expire()
+        }
     }
 }
