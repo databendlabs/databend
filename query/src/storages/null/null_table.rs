@@ -92,7 +92,7 @@ impl Table for NullTable {
 
     fn read2(
         &self,
-        _: Arc<QueryContext>,
+        ctx: Arc<QueryContext>,
         _: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
@@ -101,7 +101,7 @@ impl Table for NullTable {
         pipeline.add_pipe(NewPipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
-            processors: vec![NullSource::create(output, schema)?],
+            processors: vec![NullSource::create(ctx, output, schema)?],
         });
 
         Ok(())
@@ -138,8 +138,12 @@ struct NullSource {
 }
 
 impl NullSource {
-    pub fn create(output: Arc<OutputPort>, schema: DataSchemaRef) -> Result<ProcessorPtr> {
-        SyncSourcer::create(output, NullSource {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        output: Arc<OutputPort>,
+        schema: DataSchemaRef,
+    ) -> Result<ProcessorPtr> {
+        SyncSourcer::create(ctx, output, NullSource {
             finish: false,
             schema,
         })

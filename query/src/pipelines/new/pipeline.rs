@@ -49,24 +49,6 @@ impl NewPipeline {
         }
     }
 
-    pub fn graph_size(&self) -> (usize, usize) {
-        let mut nodes_size = 0;
-        let mut edges_size = 0;
-        for pipe in &self.pipes {
-            nodes_size += match pipe {
-                NewPipe::ResizePipe { .. } => 1,
-                NewPipe::SimplePipe { processors, .. } => processors.len(),
-            };
-
-            edges_size += match pipe {
-                NewPipe::ResizePipe { inputs_port, .. } => inputs_port.len(),
-                NewPipe::SimplePipe { inputs_port, .. } => inputs_port.len(),
-            };
-        }
-
-        (nodes_size, edges_size)
-    }
-
     pub fn set_max_threads(&mut self, max_threads: usize) {
         let mut max_pipe_size = 0;
         for pipe in &self.pipes {
@@ -97,8 +79,10 @@ impl NewPipeline {
 
     pub fn resize(&mut self, new_size: usize) -> Result<()> {
         match self.pipes.last() {
-            None => Err(ErrorCode::LogicalError("")),
-            Some(pipe) if pipe.output_size() == 0 => Err(ErrorCode::LogicalError("")),
+            None => Err(ErrorCode::LogicalError("Cannot resize empty pipe.")),
+            Some(pipe) if pipe.output_size() == 0 => {
+                Err(ErrorCode::LogicalError("Cannot resize empty pipe."))
+            }
             Some(pipe) if pipe.output_size() == new_size => Ok(()),
             Some(pipe) => {
                 let processor = ResizeProcessor::create(pipe.output_size(), new_size);

@@ -52,7 +52,7 @@ impl StageSource {
         schema: DataSchemaRef,
         table_info: S3StageTableInfo,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(output, StageSource {
+        AsyncSourcer::create(ctx.clone(), output, StageSource {
             ctx,
             schema,
             table_info,

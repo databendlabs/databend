@@ -14,39 +14,43 @@
 
 use std::sync::Arc;
 
-use common_base::tokio::sync::mpsc::Receiver;
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::sources::sync_source::SyncSource;
-use crate::pipelines::new::processors::sources::SyncSourcer;
+use crate::pipelines::new::processors::SyncSource;
+use crate::pipelines::new::processors::SyncSourcer;
 use crate::sessions::QueryContext;
 
-pub struct SyncReceiverSource {
-    receiver: Receiver<Result<DataBlock>>,
+pub struct EmptySource {
+    finish: bool,
+    schema: DataSchemaRef,
 }
 
-impl SyncReceiverSource {
+impl EmptySource {
     pub fn create(
         ctx: Arc<QueryContext>,
-        rx: Receiver<Result<DataBlock>>,
-        out: Arc<OutputPort>,
+        output: Arc<OutputPort>,
+        schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, out, SyncReceiverSource { receiver: rx })
+        SyncSourcer::create(ctx, output, EmptySource {
+            finish: false,
+            schema,
+        })
     }
 }
 
-#[async_trait::async_trait]
-impl SyncSource for SyncReceiverSource {
-    const NAME: &'static str = "SyncReceiverSource";
+impl SyncSource for EmptySource {
+    const NAME: &'static str = "EmptySource";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        match self.receiver.blocking_recv() {
-            None => Ok(None),
-            Some(Err(cause)) => Err(cause),
-            Some(Ok(data_block)) => Ok(Some(data_block)),
+        if self.finish {
+            return Ok(None);
         }
+
+        self.finish = true;
+        Ok(Some(DataBlock::empty_with_schema(self.schema.clone())))
     }
 }
