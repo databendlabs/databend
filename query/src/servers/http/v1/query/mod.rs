@@ -13,6 +13,8 @@
 // limitations under the License.
 
 mod execute_state;
+mod expirable;
+mod expiring_map;
 mod http_query;
 mod http_query_manager;
 mod result_data_manager;
@@ -24,6 +26,7 @@ pub use execute_state::HttpQueryHandle;
 pub use http_query::HttpQuery;
 pub use http_query::HttpQueryRequest;
 pub use http_query::HttpQueryResponseInternal;
+pub use http_query::HttpSession;
 pub use http_query::HttpSessionConf;
 pub use http_query::PaginationConf;
 pub use http_query::ResponseInitialState;

@@ -31,6 +31,7 @@ use databend_query::servers::http::v1::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::v1::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateName;
+use databend_query::servers::http::v1::HttpSession;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
 use headers::Header;
@@ -155,6 +156,56 @@ async fn test_async() -> Result<()> {
     let response = get_uri(&ep, &uri).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
+    Ok(())
+}
+
+#[test]
+fn test_http_session_serde() {
+    {
+        let json = r#"{"id": "abc"}"#;
+        assert_eq!(
+            serde_json::from_str::<HttpSession>(json).unwrap(),
+            HttpSession::Old {
+                id: "abc".to_string()
+            }
+        );
+    }
+
+    {
+        let json = r#"{}"#;
+        assert_eq!(
+            serde_json::from_str::<HttpSession>(json).unwrap(),
+            HttpSession::New(Default::default())
+        );
+    }
+
+    {
+        let json = r#"{"unexpected": ""}"#;
+        assert!(serde_json::from_str::<HttpSession>(json).is_err());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_http_session() -> Result<()> {
+    let ep = create_endpoint();
+    let json = serde_json::json!({"sql":  "use system", "session": {"max_idle_time": 10}});
+
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(result.error.is_none(), "{:?}", result);
+    assert_eq!(result.data.len(), 0);
+    assert_eq!(result.next_uri, None, "{:?}", result);
+    assert!(result.stats.scan_progress.is_some());
+    assert!(result.schema.is_some());
+    assert_eq!(result.state, ExecuteStateName::Succeeded);
+    let session_id = &result.session_id.unwrap();
+
+    let json = serde_json::json!({"sql": "select database()", "session": {"id": session_id}});
+    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    assert!(result.error.is_none(), "{:?}", result);
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result.data.len(), 1, "{:?}", result);
+    assert_eq!(result.data[0][0], "system",);
     Ok(())
 }
 

@@ -15,14 +15,14 @@
 use std::time::SystemTime;
 
 #[derive(Clone)]
-pub struct Status {
+pub struct SessionManagerStatus {
     pub running_queries_count: u64,
     pub last_query_started_at: Option<SystemTime>,
     pub last_query_finished_at: Option<SystemTime>,
     pub instance_started_at: SystemTime,
 }
 
-impl Status {
+impl SessionManagerStatus {
     pub(crate) fn query_start(&mut self, now: SystemTime) {
         self.running_queries_count += 1;
         self.last_query_started_at = Some(now)
@@ -36,9 +36,9 @@ impl Status {
     }
 }
 
-impl Default for Status {
+impl Default for SessionManagerStatus {
     fn default() -> Self {
-        Status {
+        SessionManagerStatus {
             running_queries_count: 0,
             last_query_started_at: None,
             last_query_finished_at: None,
