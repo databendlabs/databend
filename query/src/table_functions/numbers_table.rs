@@ -164,8 +164,6 @@ impl Table for NumbersTable {
         );
 
         let parts = generate_numbers_parts(0, ctx.get_settings().get_max_threads()? as u64, total);
-
-        println!("read partitions : {:?}", parts);
         Ok((statistics, parts))
     }
 
