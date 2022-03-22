@@ -1,0 +1,48 @@
+==parse_json==
+NULL
+true
+123
+12.34
+null
+true
+-17
+123.12
+191.2
+"Om ara pa ca na dhih"
+[-1,12,289,2188,false]
+{"x":"abc","y":false,"z":10}
+==try_parse_json==
+NULL
+true
+123
+12.34
+null
+true
+-17
+123.12
+191.2
+"Om ara pa ca na dhih"
+[-1,12,289,2188,false]
+{"x":"abc","y":false,"z":10}
+NULL
+NULL
+==parse_json from table==
+NULL	NULL
+null	null
+true	true
+123	123
+"abc"	"abc"
+[1,2,3]	[1,2,3]
+{"a":"b"}	{"a":"b"}
+==try_parse_json from table==
+NULL	NULL
+null	null
+true	true
+123	123
+"abc"	"abc"
+[1,2,3]	[1,2,3]
+{"a":"b"}	{"a":"b"}
+==parse_json from table invalid json==
+==try_parse_json from table invalid json==
+NULL	abc
+NULL	[1,
