@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_planners::CreateUserPlan;
@@ -60,8 +59,7 @@ impl AnalyzableStatement for DfCreateUser {
                 auth_info: AuthInfo::create(
                     &self.auth_options.auth_type,
                     &self.auth_options.by_value,
-                )
-                .map_err(ErrorCode::SyntaxException)?,
+                )?,
             },
         ))))
     }

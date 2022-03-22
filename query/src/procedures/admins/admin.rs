@@ -12,12 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::procedures::admins::bootstrap_tenant::BootstrapTenantProcedure;
 use crate::procedures::admins::reload_config::ReloadConfigProcedure;
-use crate::procedures::admins::CreateWarehouseMetaProcedure;
-use crate::procedures::admins::DropWarehouseMetaProcedure;
-use crate::procedures::admins::GetWarehouseMetaFunction;
-use crate::procedures::admins::ListWarehouseMetaProcedure;
-use crate::procedures::admins::UpdateWarehouseSizeProcedure;
 use crate::procedures::ProcedureFactory;
 
 pub struct AdminProcedure;
@@ -25,22 +21,12 @@ pub struct AdminProcedure;
 impl AdminProcedure {
     pub fn register(factory: &mut ProcedureFactory) {
         factory.register(
-            "admin$create_warehouse_meta",
-            CreateWarehouseMetaProcedure::desc(),
+            "admin$reload_config",
+            Box::new(ReloadConfigProcedure::try_create),
         );
         factory.register(
-            "admin$update_warehouse_meta_size",
-            UpdateWarehouseSizeProcedure::desc(),
+            "admin$bootstrap_tenant",
+            Box::new(BootstrapTenantProcedure::try_create),
         );
-        factory.register("admin$get_warehouse_meta", GetWarehouseMetaFunction::desc());
-        factory.register(
-            "admin$list_warehouse_meta",
-            ListWarehouseMetaProcedure::desc(),
-        );
-        factory.register(
-            "admin$drop_warehouse_meta",
-            DropWarehouseMetaProcedure::desc(),
-        );
-        factory.register("admin$reload_config", ReloadConfigProcedure::desc());
     }
 }

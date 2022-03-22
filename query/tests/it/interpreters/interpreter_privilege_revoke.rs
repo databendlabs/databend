@@ -45,7 +45,7 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
     let user_info = UserInfo::new(name.to_string(), hostname.to_string(), auth_info);
     assert_eq!(user_info.grants, UserGrantSet::empty());
     let user_mgr = ctx.get_user_manager();
-    user_mgr.add_user(&tenant, user_info).await?;
+    user_mgr.add_user(&tenant, user_info, false).await?;
     let query = format!("REVOKE ALL ON *.* FROM '{}'@'{}'", name, hostname);
     let plan = PlanParser::parse(ctx.clone(), &query).await?;
     let executor = InterpreterFactory::get(ctx, plan.clone())?;
@@ -76,7 +76,7 @@ async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
     assert!(role_info
         .grants
         .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create));
-    user_mgr.add_role(&tenant, role_info).await?;
+    user_mgr.add_role(&tenant, role_info, false).await?;
 
     let query = "REVOKE ALL ON *.* FROM ROLE 'role1'";
     let plan = PlanParser::parse(ctx.clone(), query).await?;

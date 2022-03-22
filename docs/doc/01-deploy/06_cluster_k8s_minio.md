@@ -14,17 +14,18 @@ Expected deployment time: ** 5 minutes ⏱ **
 This tutorial covers how to install and configure databend query cluster on kubernetes with minio storage backend.
 ## Before you begin
 
-* Make sure your cluster have enough resource for installzation (at least 4 cpus, 4GB RAM, 50GB disk)
+* Make sure your cluster have enough resource for installation (at least 4 cpus, 4GB RAM, 50GB disk)
 * Make sure you have a kubernetes cluster up and running, please take a look on [k3d](https://k3d.io/v5.3.0/), [minikube](https://minikube.sigs.k8s.io/docs/start/)
 * Databend Cluster mode only works on shared storage(AWS S3 or MinIO s3-like storage).
 * This cluster mainly used for testing purpose, it is not targeted for production use.
 
 ## Step 1. Deploy sample minio
-***
-NOTICE: this configuration is for demonstration ONLY, never use it in production, please take a look at
+
+:::caution
+This configuration is for demonstration ONLY, never use it in production, please take a look at
 https://docs.min.io/docs/deploy-minio-on-kubernetes.html
 for more information on production TLS and High Availability configurations.
-***
+:::
 
 We will bootstrap a minio server on kubernetes, with the following configurations
 
@@ -37,8 +38,7 @@ S3_STORAGE_ACCESS_KEY_ID=minio
 S3_STORAGE_SECRET_ACCESS_KEY=minio123
 ```
 
-The following configuration shall be applied to the target kubernetes cluster
-It would create a bucket named `sample-storage` with `10Gi` storage space
+The following configuration shall be applied to the target kubernetes cluster, it would create a bucket named `sample-storage` with `10Gi` storage space
 
 ```shell title="minio-server-deployment"
 kubectl create namespace minio --dry-run=client -o yaml | kubectl apply -f -
