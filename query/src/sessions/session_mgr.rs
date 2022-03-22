@@ -341,6 +341,11 @@ impl SessionManager {
                     builder.endpoint(&s3_conf.endpoint_url);
                 }
 
+                // Region
+                {
+                    builder.region(&s3_conf.region);
+                }
+
                 // Credential.
                 {
                     builder.credential(Credential::hmac(
