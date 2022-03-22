@@ -13,12 +13,7 @@
 // limitations under the License.
 
 mod admin;
+pub mod bootstrap_tenant;
 pub mod reload_config;
-mod warehouse_metadata;
 
 pub use admin::AdminProcedure;
-pub use warehouse_metadata::CreateWarehouseMetaProcedure;
-pub use warehouse_metadata::DropWarehouseMetaProcedure;
-pub use warehouse_metadata::GetWarehouseMetaFunction;
-pub use warehouse_metadata::ListWarehouseMetaProcedure;
-pub use warehouse_metadata::UpdateWarehouseSizeProcedure;
