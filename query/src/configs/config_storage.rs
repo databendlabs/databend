@@ -16,10 +16,10 @@ use std::fmt;
 use std::str::FromStr;
 
 use clap::Args;
+use common_base::mask_string;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::configs::config_utils::mask_string;
 use crate::configs::Config;
 
 pub const STORAGE_TYPE: &str = "STORAGE_TYPE";
@@ -141,12 +141,12 @@ impl fmt::Debug for S3StorageConfig {
         write!(
             f,
             "s3.storage.access_key_id: \"{}\", ",
-            mask_string(&self.access_key_id[..])
+            mask_string(&self.access_key_id[..], 3)
         )?;
         write!(
             f,
             "s3.storage.secret_access_key: \"{}\", ",
-            mask_string(&self.secret_access_key[..])
+            mask_string(&self.secret_access_key[..], 3)
         )?;
         write!(f, "}}")
     }

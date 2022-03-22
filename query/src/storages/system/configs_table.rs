@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::mask_string;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -22,7 +23,6 @@ use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use serde_json::Value;
 
-use crate::configs::config_utils::mask_string;
 use crate::sessions::QueryContext;
 use crate::storages::system::table::SyncOneBlockSystemTable;
 use crate::storages::system::table::SyncSystemTable;
@@ -80,8 +80,8 @@ impl SyncSystemTable for ConfigsTable {
             meta_config_value,
         );
 
-        let masked_access_key_id = mask_string(&config.storage.s3.access_key_id[..]);
-        let masked_secret_access_key = mask_string(&config.storage.s3.secret_access_key[..]);
+        let masked_access_key_id = mask_string(&config.storage.s3.access_key_id[..], 3);
+        let masked_secret_access_key = mask_string(&config.storage.s3.secret_access_key[..], 3);
         let mut storage_config = config.storage;
         // mask sensitive data in storage.s3
         storage_config.s3.access_key_id = masked_access_key_id;
