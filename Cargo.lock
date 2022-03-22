@@ -3797,9 +3797,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c641022d1069a46517afc3e67f9d0440a4ac887df3392d8848a1f38a219ae6d4"
+checksum = "21cf4b1d8c549b00c200a110b558f35c0517553e836a663bbfc883b828d649aa"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -3814,9 +3814,11 @@ dependencies = [
  "metrics",
  "once_cell",
  "pin-project",
+ "quick-xml",
  "reqsign",
  "reqwest",
  "roxmltree",
+ "serde",
  "thiserror",
  "time 0.3.7",
  "tokio",
@@ -4601,6 +4603,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8533f14c8382aaad0d592c812ac3b826162128b65662331e1127b45c3d18536b"
 dependencies = [
  "memchr",
+ "serde",
 ]
 
 [[package]]
