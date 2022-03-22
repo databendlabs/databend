@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_base::tokio;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::RoleIdentity;
@@ -33,7 +34,24 @@ async fn test_role_manager() -> Result<()> {
     // add role
     {
         let role_info = RoleInfo::new(role_identity.name.clone());
-        role_mgr.add_role(tenant, role_info).await?;
+        role_mgr.add_role(tenant, role_info, false).await?;
+    }
+
+    // add role again, error
+    {
+        let role_info = RoleInfo::new(role_identity.name.clone());
+        let res = role_mgr.add_role(tenant, role_info, false).await;
+        assert!(res.is_err());
+        assert_eq!(
+            res.err().unwrap().code(),
+            ErrorCode::user_already_exists_code(),
+        );
+    }
+
+    // add role
+    {
+        let role_info = RoleInfo::new(role_identity.name.clone());
+        role_mgr.add_role(tenant, role_info, true).await?;
     }
 
     // get role
