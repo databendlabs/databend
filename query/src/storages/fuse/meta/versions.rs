@@ -14,6 +14,7 @@
 
 use std::marker::PhantomData;
 
+use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 
 use crate::storages::fuse::meta::v0::segment::SegmentInfo as SegmentInfoV0;
@@ -47,6 +48,10 @@ pub enum SegmentInfoVersion {
     V1(Versioned<SegmentInfo>),
 }
 
+pub enum BlockVersion {
+    V0(Versioned<DataBlock>),
+}
+
 mod converters {
     use super::*;
     impl TryFrom<u64> for SnapshotVersion {
@@ -70,6 +75,18 @@ mod converters {
                 1 => Ok(SegmentInfoVersion::V1(Versioned::new())),
                 _ => Err(ErrorCode::LogicalError(format!(
                     "unknown segment version {value}, versions supported: 0, 1"
+                ))),
+            }
+        }
+    }
+
+    impl TryFrom<u64> for BlockVersion {
+        type Error = ErrorCode;
+        fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
+            match value {
+                0 => Ok(BlockVersion::V0(Versioned::new())),
+                _ => Err(ErrorCode::LogicalError(format!(
+                    "unknown block version {value}, versions supported: 0"
                 ))),
             }
         }

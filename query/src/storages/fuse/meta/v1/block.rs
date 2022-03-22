@@ -36,15 +36,6 @@ pub struct BlockLocation {
     pub format_version: u64,
 }
 
-impl BlockLocation {
-    pub fn new(path: impl Into<String>) -> Self {
-        Self {
-            path: path.into(),
-            format_version: 1,
-        }
-    }
-}
-
 use super::super::v0::block::BlockMeta as BlockMetaV0;
 impl From<BlockMetaV0> for BlockMeta {
     fn from(s: BlockMetaV0) -> Self {
@@ -56,7 +47,7 @@ impl From<BlockMetaV0> for BlockMeta {
             col_metas: s.col_metas,
             location: BlockLocation {
                 path: s.location.path,
-                format_version: 1,
+                format_version: 0,
             },
         }
     }

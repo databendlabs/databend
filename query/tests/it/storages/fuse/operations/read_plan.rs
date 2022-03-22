@@ -68,7 +68,10 @@ fn test_to_partitions() -> Result<()> {
         file_size: 0,
         col_stats: cols_stats.clone(),
         col_metas: cols_metas,
-        location: BlockLocation::new(""),
+        location: BlockLocation {
+            path: "".to_owned(),
+            format_version: 0,
+        },
     };
 
     let blocks_metas = (0..num_of_block)

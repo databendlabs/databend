@@ -14,6 +14,7 @@
 
 use std::io::ErrorKind;
 
+use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::AsyncRead;
@@ -27,13 +28,13 @@ use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::meta::Versioned;
 
 #[async_trait::async_trait]
-pub trait VersionedLoader<T> {
+pub trait VersionedReader<T> {
     async fn load<R>(&self, read: R) -> Result<T>
     where R: AsyncRead + Unpin + Send;
 }
 
 #[async_trait::async_trait]
-impl VersionedLoader<TableSnapshot> for SnapshotVersion {
+impl VersionedReader<TableSnapshot> for SnapshotVersion {
     async fn load<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
@@ -45,12 +46,23 @@ impl VersionedLoader<TableSnapshot> for SnapshotVersion {
 }
 
 #[async_trait::async_trait]
-impl VersionedLoader<SegmentInfo> for SegmentInfoVersion {
+impl VersionedReader<SegmentInfo> for SegmentInfoVersion {
     async fn load<R>(&self, reader: R) -> Result<SegmentInfo>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
             SegmentInfoVersion::V1(v) => do_load(reader, v).await?,
             SegmentInfoVersion::V0(v) => do_load(reader, v).await?.into(),
+        };
+        Ok(r)
+    }
+}
+
+#[async_trait::async_trait]
+impl VersionedReader<DataBlock> for DataBlockVersion {
+    async fn load<R>(&self, reader: R) -> Result<DataBlock>
+    where R: AsyncRead + Unpin + Send {
+        let r = match self {
+            DataBlockVersion::V0(v) => do_load(reader, v).await?,
         };
         Ok(r)
     }
