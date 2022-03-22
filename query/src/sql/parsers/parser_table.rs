@@ -26,6 +26,8 @@ use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Word;
 
 use crate::parser_err;
+use crate::sql::statements::AlterTableAction;
+use crate::sql::statements::DfAlterTable;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropTable;
@@ -98,6 +100,29 @@ impl<'a> DfParser<'a> {
         };
 
         Ok(DfStatement::DropTable(drop))
+    }
+
+    // Alter table
+    pub(crate) fn parse_alter_table(&mut self) -> Result<DfStatement, ParserError> {
+        let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let table_name = self.parser.parse_object_name()?;
+
+        if self.parser.parse_keywords(&[Keyword::RENAME, Keyword::TO]) {
+            let new_table_name = self.parser.parse_object_name()?;
+
+            let rename = DfAlterTable {
+                if_exists,
+                table_name,
+                new_table_name,
+                action: AlterTableAction::RenameTo,
+            };
+
+            Ok(DfStatement::AlterTable(rename))
+        } else {
+            Err(ParserError::ParserError(String::from(
+                "Alter table only support rename for now!",
+            )))
+        }
     }
 
     // Rename table.

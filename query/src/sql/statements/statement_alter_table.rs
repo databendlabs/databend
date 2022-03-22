@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -28,35 +27,50 @@ use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfRenameTable {
-    pub name_map: HashMap<ObjectName, ObjectName>,
+pub struct DfAlterTable {
+    pub if_exists: bool,
+    pub table_name: ObjectName,
+    pub action: AlterTableAction,
+
+    // for AlterTableAction
+    pub new_table_name: ObjectName,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+pub enum AlterTableAction {
+    RenameTo,
+    // TODO AddColumn etc.
 }
 
 #[async_trait::async_trait]
-impl AnalyzableStatement for DfRenameTable {
+impl AnalyzableStatement for DfAlterTable {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let tenant = ctx.get_tenant();
-        let mut entities = Vec::new();
-        for (k, v) in &self.name_map {
-            let (db, table_name) = self.resolve_table(ctx.clone(), k)?;
-            let (new_db, new_table_name) = self.resolve_table(ctx.clone(), v)?;
-            entities.push(RenameTableEntity {
-                if_exists: false,
-                db,
-                table_name,
-                new_db,
-                new_table_name,
-            })
-        }
+        let (db, table_name) = self.resolve_table(ctx.clone(), &self.table_name)?;
 
-        Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::RenameTable(RenameTablePlan { tenant, entities }),
-        )))
+        match self.action {
+            AlterTableAction::RenameTo => {
+                let mut entities = Vec::new();
+                let (new_db, new_table_name) =
+                    self.resolve_table(ctx, &self.new_table_name)?;
+                entities.push(RenameTableEntity {
+                    if_exists: self.if_exists,
+                    db,
+                    table_name,
+                    new_db,
+                    new_table_name,
+                });
+
+                Ok(AnalyzedResult::SimpleQuery(Box::new(
+                    PlanNode::RenameTable(RenameTablePlan { tenant, entities }),
+                )))
+            }
+        }
     }
 }
 
-impl DfRenameTable {
+impl DfAlterTable {
     fn resolve_table(
         &self,
         ctx: Arc<QueryContext>,

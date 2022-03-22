@@ -680,6 +680,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- rename table on unknown db");
         {
             let req = RenameTableReq {
+                if_exists: false,
                 tenant: tenant.to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
@@ -742,6 +743,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- rename table, ok");
         {
             let req = RenameTableReq {
+                if_exists: false,
                 tenant: tenant.to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
@@ -773,6 +775,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- rename table again, error");
         {
             let req = RenameTableReq {
+                if_exists: false,
                 tenant: tenant.to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
@@ -808,6 +811,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- rename table again after recreate, error");
         {
             let req = RenameTableReq {
+                if_exists: false,
                 tenant: tenant.to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
@@ -827,6 +831,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- rename table to other db, error");
         {
             let req = RenameTableReq {
+                if_exists: false,
                 tenant: tenant.to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
@@ -864,6 +869,7 @@ impl MetaApiTestSuite {
         tracing::info!("--- rename table to other db, ok");
         {
             let req = RenameTableReq {
+                if_exists: false,
                 tenant: tenant.to_string(),
                 db: db_name.to_string(),
                 table_name: tbl_name.to_string(),
