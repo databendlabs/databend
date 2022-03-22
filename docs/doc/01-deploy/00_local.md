@@ -19,7 +19,7 @@ This guideline will deploy Databend(standalone) with local disk step by step.
 
 ## 1. Download
 
-You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page.
+You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../06-contributing/02-building-from-source.md).
 
 ```shell
 mkdir databend && cd databend

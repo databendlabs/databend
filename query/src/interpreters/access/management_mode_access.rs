@@ -84,6 +84,9 @@ impl ManagementModeAccess {
                 // USE.
                 | PlanNode::UseDatabase(_)
 
+                // CALL
+                | PlanNode::Call(_)
+
                 // Admin.
                 | PlanNode::AdminUseTenant(_) => Ok(()),
                 _ => Err(ErrorCode::ManagementModePermissionDenied(format!(
