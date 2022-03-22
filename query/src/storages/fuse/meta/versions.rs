@@ -37,24 +37,24 @@ impl<T> Default for Versioned<T> {
     }
 }
 
-pub enum SnapshotVersions {
+pub enum SnapshotVersion {
     V0(Versioned<TableSnapshotV0>),
     V1(Versioned<TableSnapshot>),
 }
 
-pub enum SegmentInfoVersions {
+pub enum SegmentInfoVersion {
     V0(Versioned<SegmentInfoV0>),
     V1(Versioned<SegmentInfo>),
 }
 
 mod converters {
     use super::*;
-    impl TryFrom<u64> for SnapshotVersions {
+    impl TryFrom<u64> for SnapshotVersion {
         type Error = ErrorCode;
         fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
             match value {
-                0 => Ok(SnapshotVersions::V0(Versioned::new())),
-                1 => Ok(SnapshotVersions::V1(Versioned::new())),
+                0 => Ok(SnapshotVersion::V0(Versioned::new())),
+                1 => Ok(SnapshotVersion::V1(Versioned::new())),
                 _ => Err(ErrorCode::LogicalError(format!(
                     "unknown snapshot version {value}, versions supported: 0, 1"
                 ))),
@@ -62,12 +62,12 @@ mod converters {
         }
     }
 
-    impl TryFrom<u64> for SegmentInfoVersions {
+    impl TryFrom<u64> for SegmentInfoVersion {
         type Error = ErrorCode;
         fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
             match value {
-                0 => Ok(SegmentInfoVersions::V0(Versioned::new())),
-                1 => Ok(SegmentInfoVersions::V1(Versioned::new())),
+                0 => Ok(SegmentInfoVersion::V0(Versioned::new())),
+                1 => Ok(SegmentInfoVersion::V1(Versioned::new())),
                 _ => Err(ErrorCode::LogicalError(format!(
                     "unknown segment version {value}, versions supported: 0, 1"
                 ))),

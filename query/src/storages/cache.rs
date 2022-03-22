@@ -15,8 +15,8 @@
 use crate::configs::QueryConfig;
 use crate::storages::fuse::cache;
 use crate::storages::fuse::cache::MemoryCache;
-use crate::storages::fuse::io::SegmentInfoCache;
-use crate::storages::fuse::io::TableSnapshotCache;
+use crate::storages::fuse::cache::SegmentInfoCache;
+use crate::storages::fuse::cache::TableSnapshotCache;
 
 /// Where all the caches reside
 pub struct CacheManager {

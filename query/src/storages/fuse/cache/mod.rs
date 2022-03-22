@@ -17,6 +17,8 @@ mod metrics;
 
 pub use memory_cache::new_memory_cache;
 pub use memory_cache::MemoryCache;
+pub use memory_cache::SegmentInfoCache;
+pub use memory_cache::TableSnapshotCache;
 
 pub use self::metrics::CacheDeferMetrics;
 pub use self::metrics::TenantLabel;
