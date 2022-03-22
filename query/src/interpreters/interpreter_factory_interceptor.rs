@@ -81,6 +81,7 @@ impl Interpreter for InterceptorInterpreter {
     async fn finish(&self) -> Result<()> {
         let session = self.ctx.get_current_session();
         let now = SystemTime::now();
+        session.get_status().write().query_finish();
         if session.get_type().is_user_session() {
             session
                 .get_session_manager()

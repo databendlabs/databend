@@ -46,8 +46,8 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 use crate::sessions::ProcessInfo;
+use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
-use crate::sessions::Status;
 use crate::storages::cache::CacheManager;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::UserApiProvider;
@@ -65,7 +65,7 @@ pub struct SessionManager {
     pub(in crate::sessions) storage_cache_manager: RwLock<Arc<CacheManager>>,
     pub(in crate::sessions) query_logger:
         RwLock<Option<Arc<dyn tracing::Subscriber + Send + Sync>>>,
-    pub status: Arc<RwLock<Status>>,
+    pub status: Arc<RwLock<SessionManagerStatus>>,
     storage_operator: RwLock<Operator>,
     storage_runtime: Runtime,
     _guards: Vec<WorkerGuard>,
