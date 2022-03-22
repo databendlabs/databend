@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::Instant;
 
 use common_base::tokio::task;
 use common_base::tokio::time::sleep;
@@ -52,12 +51,11 @@ async fn run_check<T: Expirable>(e: &T, max_idle: Duration) -> bool {
     loop {
         match e.expire_state() {
             ExpiringState::InUse => sleep(max_idle).await,
-            ExpiringState::Idle { since } => {
-                let now = Instant::now();
-                if now - since > max_idle {
+            ExpiringState::Idle { idle_time } => {
+                if idle_time > max_idle {
                     return true;
                 } else {
-                    sleep(max_idle - (now - since)).await;
+                    sleep(max_idle - idle_time).await;
                     continue;
                 }
             }

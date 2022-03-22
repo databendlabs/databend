@@ -1,3 +1,4 @@
+use std::time::Duration;
 use std::time::Instant;
 
 use crate::sessions::SessionRef;
@@ -5,7 +6,8 @@ use crate::sessions::SessionRef;
 #[derive(PartialEq)]
 pub enum ExpiringState {
     InUse,
-    Idle { since: Instant },
+    // return Duration, so user can choose to use Systime or Instance
+    Idle { idle_time: Duration },
     Aborted { need_cleanup: bool },
 }
 
@@ -26,7 +28,7 @@ impl Expirable for SessionRef {
             let status = self.get_status();
             let status = status.read();
             ExpiringState::Idle {
-                since: status.last_access(),
+                idle_time: Instant::now() - status.last_access(),
             }
         }
     }
