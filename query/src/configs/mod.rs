@@ -20,6 +20,7 @@ pub mod config_log;
 pub mod config_meta;
 pub mod config_query;
 pub mod config_storage;
+pub mod config_utils;
 
 pub use config::Config;
 pub use config::DATABEND_COMMIT_VERSION;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use databend_query::configs::config_utils::mask_string;
 use databend_query::configs::Config;
 use databend_query::configs::LogConfig;
 use databend_query::configs::MetaConfig;
@@ -223,4 +224,11 @@ fn test_fuse_commit_version() -> Result<()> {
     let v = &databend_query::configs::DATABEND_COMMIT_VERSION;
     assert!(v.len() > 0);
     Ok(())
+}
+
+#[test]
+fn mask_string_test() {
+    assert_eq!(mask_string(""), "".to_string());
+    assert_eq!(mask_string("string"), "******".to_string());
+    assert_eq!(mask_string("long_string"), "******ing".to_string());
 }

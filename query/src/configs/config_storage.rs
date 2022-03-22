@@ -19,6 +19,7 @@ use clap::Args;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::configs::config_utils::mask_string;
 use crate::configs::Config;
 
 pub const STORAGE_TYPE: &str = "STORAGE_TYPE";
@@ -137,6 +138,16 @@ impl fmt::Debug for S3StorageConfig {
         write!(f, "s3.storage.region: \"{}\", ", self.region)?;
         write!(f, "s3.storage.endpoint_url: \"{}\", ", self.endpoint_url)?;
         write!(f, "s3.storage.bucket: \"{}\", ", self.bucket)?;
+        write!(
+            f,
+            "s3.storage.access_key_id: \"{}\", ",
+            mask_string(&self.access_key_id[..])
+        )?;
+        write!(
+            f,
+            "s3.storage.secret_access_key: \"{}\", ",
+            mask_string(&self.secret_access_key[..])
+        )?;
         write!(f, "}}")
     }
 }
