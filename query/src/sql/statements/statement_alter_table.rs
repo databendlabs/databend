@@ -52,8 +52,7 @@ impl AnalyzableStatement for DfAlterTable {
         match self.action {
             AlterTableAction::RenameTo => {
                 let mut entities = Vec::new();
-                let (new_db, new_table_name) =
-                    self.resolve_table(ctx, &self.new_table_name)?;
+                let (new_db, new_table_name) = self.resolve_table(ctx, &self.new_table_name)?;
                 entities.push(RenameTableEntity {
                     if_exists: self.if_exists,
                     db,
