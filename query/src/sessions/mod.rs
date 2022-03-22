@@ -20,10 +20,11 @@ mod session_ctx;
 mod session_info;
 #[allow(clippy::module_inception)]
 mod session_mgr;
+mod session_mgr_status;
 mod session_ref;
 mod session_settings;
+mod session_status;
 mod session_type;
-mod status;
 
 pub use query_ctx::QueryContext;
 pub use query_ctx_shared::QueryContextShared;
@@ -31,7 +32,8 @@ pub use session::Session;
 pub use session_ctx::SessionContext;
 pub use session_info::ProcessInfo;
 pub use session_mgr::SessionManager;
+pub use session_mgr_status::SessionManagerStatus;
 pub use session_ref::SessionRef;
 pub use session_settings::Settings;
+pub use session_status::SessionStatus;
 pub use session_type::SessionType;
-pub use status::Status;
