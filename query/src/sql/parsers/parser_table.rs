@@ -113,8 +113,7 @@ impl<'a> DfParser<'a> {
             let rename = DfAlterTable {
                 if_exists,
                 table_name,
-                new_table_name,
-                action: AlterTableAction::RenameTo,
+                action: AlterTableAction::RenameTable(new_table_name),
             };
 
             Ok(DfStatement::AlterTable(rename))

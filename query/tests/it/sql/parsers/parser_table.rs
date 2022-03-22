@@ -203,8 +203,7 @@ fn alter_table() -> Result<()> {
         let expected = DfStatement::AlterTable(DfAlterTable {
             if_exists: false,
             table_name,
-            new_table_name,
-            action: AlterTableAction::RenameTo,
+            action: AlterTableAction::RenameTable(new_table_name),
         });
         expect_parse_ok(sql, expected)?;
     }

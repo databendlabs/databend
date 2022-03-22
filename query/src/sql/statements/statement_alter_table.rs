@@ -31,14 +31,11 @@ pub struct DfAlterTable {
     pub if_exists: bool,
     pub table_name: ObjectName,
     pub action: AlterTableAction,
-
-    // for AlterTableAction
-    pub new_table_name: ObjectName,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AlterTableAction {
-    RenameTo,
+    RenameTable(ObjectName),
     // TODO AddColumn etc.
 }
 
@@ -49,10 +46,10 @@ impl AnalyzableStatement for DfAlterTable {
         let tenant = ctx.get_tenant();
         let (db, table_name) = self.resolve_table(ctx.clone(), &self.table_name)?;
 
-        match self.action {
-            AlterTableAction::RenameTo => {
+        match &self.action {
+            AlterTableAction::RenameTable(o) => {
                 let mut entities = Vec::new();
-                let (new_db, new_table_name) = self.resolve_table(ctx, &self.new_table_name)?;
+                let (new_db, new_table_name) = self.resolve_table(ctx, o)?;
                 entities.push(RenameTableEntity {
                     if_exists: self.if_exists,
                     db,
@@ -77,11 +74,11 @@ impl DfAlterTable {
     ) -> Result<(String, String)> {
         let idents = &table_name.0;
         match idents.len() {
-            0 => Err(ErrorCode::SyntaxException("Rename table name is empty")),
+            0 => Err(ErrorCode::SyntaxException("Alter table name is empty")),
             1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
             2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
             _ => Err(ErrorCode::SyntaxException(
-                "Rename table name must be [`db`].`table`",
+                "Alter table name must be [`db`].`table`",
             )),
         }
     }
