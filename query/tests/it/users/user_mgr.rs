@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_base::tokio;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
@@ -43,13 +44,30 @@ async fn test_user_manager() -> Result<()> {
     // add user hostname.
     {
         let user_info = User::new(user, hostname, auth_info.clone());
-        user_mgr.add_user(tenant, user_info.into()).await?;
+        user_mgr.add_user(tenant, user_info.into(), false).await?;
+    }
+
+    // add user hostname again, error.
+    {
+        let user_info = User::new(user, hostname, auth_info.clone());
+        let res = user_mgr.add_user(tenant, user_info.into(), false).await;
+        assert!(res.is_err());
+        assert_eq!(
+            res.err().unwrap().code(),
+            ErrorCode::user_already_exists_code()
+        );
+    }
+
+    // add user hostname again, ok.
+    {
+        let user_info = User::new(user, hostname, auth_info.clone());
+        user_mgr.add_user(tenant, user_info.into(), true).await?;
     }
 
     // add user hostname2.
     {
         let user_info = User::new(user, hostname2, auth_info.clone());
-        user_mgr.add_user(tenant, user_info.into()).await?;
+        user_mgr.add_user(tenant, user_info.into(), false).await?;
     }
 
     // get all users.
@@ -95,7 +113,7 @@ async fn test_user_manager() -> Result<()> {
     // grant privileges
     {
         let user_info = User::new(user, hostname, auth_info.clone());
-        user_mgr.add_user(tenant, user_info.into()).await?;
+        user_mgr.add_user(tenant, user_info.into(), false).await?;
         let old_user = user_mgr.get_user(tenant, user, hostname).await?;
         assert_eq!(old_user.grants, UserGrantSet::empty());
 
@@ -117,7 +135,7 @@ async fn test_user_manager() -> Result<()> {
     // revoke privileges
     {
         let user_info = User::new(user, hostname, auth_info.clone());
-        user_mgr.add_user(tenant, user_info.into()).await?;
+        user_mgr.add_user(tenant, user_info.into(), false).await?;
         user_mgr
             .grant_privileges_to_user(
                 tenant,
@@ -154,7 +172,7 @@ async fn test_user_manager() -> Result<()> {
             hash_method: PasswordHashMethod::PlainText,
         };
         let user_info = User::new(user, hostname, auth_info.clone());
-        user_mgr.add_user(tenant, user_info.into()).await?;
+        user_mgr.add_user(tenant, user_info.into(), false).await?;
 
         let old_user = user_mgr.get_user(tenant, user, hostname).await?;
         assert_eq!(old_user.auth_info.get_password().unwrap(), Vec::from(pwd));
