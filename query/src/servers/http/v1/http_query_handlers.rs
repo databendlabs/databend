@@ -78,6 +78,7 @@ pub struct QueryStats {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct QueryResponse {
     pub id: String,
+    pub session_id: Option<String>,
     pub schema: Option<DataSchemaRef>,
     pub data: JsonBlockRef,
     pub state: ExecuteStateName,
@@ -99,7 +100,8 @@ impl QueryResponse {
             ),
             None => (Arc::new(vec![]), None),
         };
-        let columns = r.initial_state.as_ref().and_then(|v| v.schema.clone());
+        let schema = r.initial_state.as_ref().and_then(|v| v.schema.clone());
+        let session_id = r.initial_state.as_ref().map(|v| v.session_id.clone());
         let stats = QueryStats {
             scan_progress: r.state.scan_progress.clone(),
             running_time_ms: r.state.running_time_ms,
@@ -107,7 +109,8 @@ impl QueryResponse {
         QueryResponse {
             data,
             state: r.state.state,
-            schema: columns,
+            schema,
+            session_id,
             stats,
             id: id.clone(),
             next_uri: next_url,
@@ -124,6 +127,7 @@ impl QueryResponse {
             state: ExecuteStateName::Failed,
             data: Arc::new(vec![]),
             schema: None,
+            session_id: None,
             next_uri: None,
             stats_uri: None,
             final_uri: None,

@@ -26,3 +26,13 @@ fn test_progress() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn mask_string_test() {
+    assert_eq!(mask_string("", 10), "".to_string());
+    assert_eq!(mask_string("string", 0), "******".to_string());
+    assert_eq!(mask_string("string", 1), "******g".to_string());
+    assert_eq!(mask_string("string", 2), "******ng".to_string());
+    assert_eq!(mask_string("string", 3), "******ing".to_string());
+    assert_eq!(mask_string("string", 20), "string".to_string());
+}

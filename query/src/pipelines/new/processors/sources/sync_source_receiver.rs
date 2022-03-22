@@ -22,14 +22,19 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::sources::sync_source::SyncSource;
 use crate::pipelines::new::processors::sources::SyncSourcer;
+use crate::sessions::QueryContext;
 
 pub struct SyncReceiverSource {
     receiver: Receiver<Result<DataBlock>>,
 }
 
 impl SyncReceiverSource {
-    pub fn create(rx: Receiver<Result<DataBlock>>, out: Arc<OutputPort>) -> Result<ProcessorPtr> {
-        SyncSourcer::create(out, SyncReceiverSource { receiver: rx })
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        rx: Receiver<Result<DataBlock>>,
+        out: Arc<OutputPort>,
+    ) -> Result<ProcessorPtr> {
+        SyncSourcer::create(ctx, out, SyncReceiverSource { receiver: rx })
     }
 }
 

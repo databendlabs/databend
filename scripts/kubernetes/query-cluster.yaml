@@ -1,0 +1,191 @@
+---
+apiVersion: v1
+data:
+  S3_STORAGE_ACCESS_KEY_ID: bWluaW8=
+  S3_STORAGE_BUCKET: c2FtcGxlLXN0b3JhZ2U=
+  S3_STORAGE_ENDPOINT_URL: "aHR0cDovL21pbmlvL\
+  m1pbmlvLnN2Yy5jbHVzdGVyLmxvY2FsOjkwMDA="
+  S3_STORAGE_REGION: dXMtZWFzdC0x
+  S3_STORAGE_SECRET_ACCESS_KEY: bWluaW8xMjM=
+  STORAGE_TYPE: czM=
+kind: Secret
+metadata:
+  annotations:
+    meta_address: meta-service.databend-system.svc.cluster.local:9191
+  labels:
+    QUERY_CLUSTER_ID: hello-world
+    QUERY_TENANT_ID: tenant1
+    app: databend-query
+    cluster: hello-world
+    tenant: tenant1
+  name: query-secrets
+  namespace: tenant1
+type: Opaque
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    meta_address: meta-service.databend-system.svc.cluster.local:9191
+    prometheus.io/path: /metrics
+    prometheus.io/port: "10010"
+    prometheus.io/scrape: "true"
+  labels:
+    QUERY_CLUSTER_ID: hello-world
+    QUERY_TENANT_ID: tenant1
+    app: databend-query
+    cluster: hello-world
+    tenant: tenant1
+  name: query-service
+  namespace: tenant1
+spec:
+  ports:
+    - name: health
+      port: 8080
+      targetPort: 8080
+    - name: query
+      port: 9000
+      targetPort: 9000
+    - name: rpc
+      port: 9091
+      targetPort: 9091
+    - name: metrics
+      port: 10010
+      targetPort: 10010
+    - name: mysql
+      port: 3307
+      targetPort: 3307
+    - name: clickhouse
+      port: 10000
+      targetPort: 10000
+  selector:
+    QUERY_CLUSTER_ID: hello-world
+    QUERY_TENANT_ID: tenant1
+    app: databend-query
+    cluster: hello-world
+    tenant: tenant1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    meta_address: meta-service.databend-system.svc.cluster.local:9191
+    prometheus.io/path: /metrics
+    prometheus.io/port: "10010"
+    prometheus.io/scrape: "true"
+  labels:
+    QUERY_CLUSTER_ID: hello-world
+    QUERY_TENANT_ID: tenant1
+    app: databend-query
+    cluster: hello-world
+    tenant: tenant1
+  name: query
+  namespace: tenant1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      QUERY_CLUSTER_ID: hello-world
+      QUERY_TENANT_ID: tenant1
+      app: databend-query
+      cluster: hello-world
+      tenant: tenant1
+  template:
+    metadata:
+      annotations:
+        meta_address: meta-service.databend-system.svc.cluster.local:9191
+        prometheus.io/path: /metrics
+        prometheus.io/port: "10010"
+        prometheus.io/scrape: "true"
+      labels:
+        QUERY_CLUSTER_ID: hello-world
+        QUERY_TENANT_ID: tenant1
+        app: databend-query
+        cluster: hello-world
+        tenant: tenant1
+    spec:
+      containers:
+        - command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p ./log
+              /databend-query --flight-api-address $POD_IP:9191
+          env:
+            - name: LOG_LEVEL
+              value: DEBUG
+            - name: LOG_DIR
+              value: /log
+            - name: META_ADDRESS
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['meta_address']
+            - name: META_USERNAME
+              value: root
+            - name: META_PASSWORD
+              value: root
+            - name: QUERY_TENANT_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tenant']
+            - name: QUERY_CLUSTER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['cluster']
+            - name: QUERY_HTTP_HANDLER_HOST
+              value: 0.0.0.0
+            - name: QUERY_HTTP_HANDLER_PORT
+              value: "9000"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: QUERY_ADMIN_API_ADDRESS
+              value: 0.0.0.0:8080
+            - name: QUERY_METRIC_API_ADDRESS
+              value: 0.0.0.0:10010
+            - name: QUERY_MYSQL_HANDLER_HOST
+              value: 0.0.0.0
+            - name: QUERY_MYSQL_HANDLER_PORT
+              value: "3307"
+            - name: QUERY_CLICKHOUSE_HANDLER_HOST
+              value: 0.0.0.0
+            - name: QUERY_CLICKHOUSE_HANDLER_PORT
+              value: "10000"
+          envFrom:
+            - secretRef:
+                name: query-secrets
+          image: datafuselabs/databend-query:v0.6.97-nightly
+          name: query
+          ports:
+            - containerPort: 9000
+              name: query
+            - containerPort: 8080
+              name: http
+            - containerPort: 10010
+              name: metrics
+            - containerPort: 9091
+              name: flight
+            - containerPort: 3307
+              name: mysql
+            - containerPort: 10000
+              name: clickhouse
+          readinessProbe:
+            httpGet:
+              path: /v1/health
+              port: 8080
+          resources:
+            limits:
+              cpu: 900m
+              memory: 900Mi
+            requests:
+              cpu: 100m
+              memory: 100Mi

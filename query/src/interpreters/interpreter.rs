@@ -34,7 +34,7 @@ pub trait Interpreter: Sync + Send {
     ) -> Result<SendableDataBlockStream>;
 
     // TODO: maybe remove async
-    async fn execute2(&self) -> Result<NewPipeline> {
+    fn execute2(&self) -> Result<NewPipeline> {
         Err(ErrorCode::UnImplement(format!(
             "UnImplement execute2 method for {:?}",
             self.name()

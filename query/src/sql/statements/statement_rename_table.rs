@@ -42,6 +42,7 @@ impl AnalyzableStatement for DfRenameTable {
             let (db, table_name) = self.resolve_table(ctx.clone(), k)?;
             let (new_db, new_table_name) = self.resolve_table(ctx.clone(), v)?;
             entities.push(RenameTableEntity {
+                if_exists: false,
                 db,
                 table_name,
                 new_db,

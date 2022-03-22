@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_base::tokio;
 use common_exception::Result;
 use databend_query::pipelines::processors::*;
+use databend_query::pipelines::transforms::SourceTransform;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
@@ -65,11 +66,18 @@ async fn test_processor_mixed2() -> Result<()> {
 
     let m = 5;
     let n = 2;
-    let mut processor0 = MixedProcessor::create(ctx, n);
+    let mut partitions = vec![];
+    let mut processor0 = MixedProcessor::create(ctx.clone(), n);
     for i in 0..m {
-        let source = test_source.number_source_transform_for_test(i + 1)?;
-        processor0.connect_to(Arc::new(source))?;
+        let source_plan = test_source.number_read_source_plan_for_test(i + 1)?;
+        partitions.extend(source_plan.parts.clone());
+        processor0.connect_to(Arc::new(SourceTransform::try_create(
+            ctx.clone(),
+            source_plan,
+        )?))?;
     }
+
+    ctx.try_set_partitions(partitions)?;
     let processor1 = processor0.share()?;
 
     let stream0 = processor0.execute().await?;

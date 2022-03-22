@@ -15,9 +15,6 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeType;
-use common_planners::validate_function_arg;
 use common_planners::CallPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -39,21 +36,6 @@ impl CallInterpreter {
     }
 }
 
-impl CallInterpreter {
-    fn validate(&self) -> Result<()> {
-        let plan = &self.plan;
-        let name = plan.name.clone();
-        let features = ProcedureFactory::instance().get_features(&name)?;
-        validate_function_arg(
-            &name,
-            plan.args.len(),
-            features.variadic_arguments,
-            features.num_arguments,
-        )?;
-        Ok(())
-    }
-}
-
 #[async_trait::async_trait]
 impl Interpreter for CallInterpreter {
     fn name(&self) -> &str {
@@ -66,12 +48,7 @@ impl Interpreter for CallInterpreter {
         mut _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = &self.plan;
-        self.validate()?;
-        // TODO: fine-grained permissions
-        self.ctx
-            .get_current_session()
-            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super)
-            .await?;
+
         let name = plan.name.clone();
         let func = ProcedureFactory::instance().get(name)?;
         let blocks = func.eval(self.ctx.clone(), plan.args.clone()).await?;

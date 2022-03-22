@@ -120,7 +120,8 @@ impl CopyInterpreter {
         let mut pipeline = pipeline_builder.finalize(&from_plan)?;
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
-        let executor = PipelinePullingExecutor::try_create(pipeline)?;
+        let async_runtime = ctx.get_storage_runtime();
+        let executor = PipelinePullingExecutor::try_create(async_runtime, pipeline)?;
         let source_stream = Box::pin(ProcessorExecutorStream::create(executor)?);
         let progress_stream = Box::pin(ProgressStream::try_create(
             source_stream,

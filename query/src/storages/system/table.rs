@@ -133,7 +133,7 @@ where Self: SyncSource
         inner: Arc<TTable>,
         context: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(output, SystemTableSyncSource::<TTable> {
+        SyncSourcer::create(context.clone(), output, SystemTableSyncSource::<TTable> {
             inner,
             context,
             finished: false,
@@ -251,7 +251,7 @@ where Self: AsyncSource
         inner: Arc<TTable>,
         context: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(output, SystemTableAsyncSource::<TTable> {
+        AsyncSourcer::create(context.clone(), output, SystemTableAsyncSource::<TTable> {
             inner,
             context,
             finished: false,
