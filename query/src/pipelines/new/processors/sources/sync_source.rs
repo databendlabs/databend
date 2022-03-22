@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use common_base::Progress;
+use common_base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 
@@ -21,6 +23,7 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
+use crate::sessions::QueryContext;
 
 /// Synchronized source. such as:
 ///     - Memory storage engine.
@@ -38,13 +41,20 @@ pub struct SyncSourcer<T: 'static + SyncSource> {
     inner: T,
     output: Arc<OutputPort>,
     generated_data: Option<DataBlock>,
+    scan_progress: Arc<Progress>,
 }
 
 impl<T: 'static + SyncSource> SyncSourcer<T> {
-    pub fn create(output: Arc<OutputPort>, inner: T) -> Result<ProcessorPtr> {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        output: Arc<OutputPort>,
+        inner: T,
+    ) -> Result<ProcessorPtr> {
+        let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(Self {
             inner,
             output,
+            scan_progress,
             is_finish: false,
             generated_data: None,
         })))
@@ -83,7 +93,14 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
     fn process(&mut self) -> Result<()> {
         match self.inner.generate()? {
             None => self.is_finish = true,
-            Some(data_block) => self.generated_data = Some(data_block),
+            Some(data_block) => {
+                let progress_values = ProgressValues {
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
+                };
+                self.scan_progress.incr(&progress_values);
+                self.generated_data = Some(data_block)
+            }
         };
 
         Ok(())
