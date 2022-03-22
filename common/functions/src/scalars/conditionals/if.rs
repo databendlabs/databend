@@ -47,7 +47,7 @@ impl IfFunction {
                     .num_arguments(3),
             )
             .docs(FunctionDocs::default().description("If expr1 is TRUE, IF() returns expr2. Otherwise, it returns expr3.")
-                .definition("IF(expr1,expr2,expr3)")
+                .syntax("IF(expr1,expr2,expr3)")
                 .add_arg(
                     "expr1",
                     "The condition for evaluation that can be true or false.",

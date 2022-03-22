@@ -17,6 +17,7 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
+use crate::doc;
 use crate::rdoc::FunctionDocs;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
@@ -39,19 +40,19 @@ impl IsNullFunction {
             .features(
                 FunctionFeatures::default()
                     .deterministic()
-                    .negative_function("isnotnull")
+                    .negative_function("isNotNull")
                     .bool_function()
                     .disable_passthrough_null()
                     .num_arguments(1),
             )
-            .docs(
-                FunctionDocs::default()
-                    .description("Checks whether a value is not NULL.")
-                    .definition("isNotNull(x)")
-                    .add_arg("x", "A value with non-compound data type.")
-                    .return_type("If x is NULL, ISNULL() returns true, otherwise it returns false.")
-                    .add_example("select isNull(3)"),
-            )
+            .docs(doc! {
+                description => "Checks whether a value is NULL.",
+                syntax => "isNull(x)",
+                arg => ("x", "A value with non-compound data type."),
+                return_type => "If x is NULL, ISNULL() returns true, otherwise it returns false.",
+                example => "select isNull(3)",
+                example => "select isNull(null)"
+            })
     }
 }
 

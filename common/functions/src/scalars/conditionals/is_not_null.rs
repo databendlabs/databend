@@ -46,8 +46,8 @@ impl IsNotNullFunction {
             )
             .docs(
                 FunctionDocs::default()
-                    .description("Checks whether a value is NULL.")
-                    .definition("isNull(x)")
+                    .description("Checks whether a value is not NULL.")
+                    .syntax("isNotNull(x)")
                     .add_arg("x", "A value with non-compound data type.")
                     .return_type("If x is NULL, returns false, otherwise it returns true.")
                     .add_example("select isNotNull(3)"),
