@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_meta_sled_store::openraft;
-use common_meta_sled_store::sled;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
@@ -24,7 +23,6 @@ use maplit::btreeset;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use openraft::Membership;
-use sled::IVec;
 
 use crate::state_machine::SnapshotKeyValue;
 
@@ -99,17 +97,6 @@ pub fn pretty_snapshot(snap: &[SnapshotKeyValue]) -> Vec<String> {
         let line = format!("{:?}:{}", k, String::from_utf8(v.to_vec()).unwrap());
         res.push(line);
     }
-    res
-}
-
-pub fn pretty_snapshot_iter(snap: impl Iterator<Item = sled::Result<(IVec, IVec)>>) -> Vec<String> {
-    let mut res = vec![];
-    for kv in snap {
-        let (k, v) = kv.unwrap();
-        let line = format!("{:?}:{}", k, String::from_utf8(v.to_vec()).unwrap());
-        res.push(line);
-    }
-
     res
 }
 

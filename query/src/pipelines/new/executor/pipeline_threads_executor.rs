@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::Runtime;
 use common_base::Thread;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -29,9 +30,12 @@ pub struct PipelineThreadsExecutor {
 
 #[allow(dead_code)]
 impl PipelineThreadsExecutor {
-    pub fn create(pipeline: NewPipeline) -> Result<Arc<PipelineThreadsExecutor>> {
+    pub fn create(
+        async_runtime: Arc<Runtime>,
+        pipeline: NewPipeline,
+    ) -> Result<Arc<PipelineThreadsExecutor>> {
         let threads_num = pipeline.get_max_threads();
-        let inner_executor = PipelineExecutor::create(pipeline, threads_num)?;
+        let inner_executor = PipelineExecutor::create(async_runtime, pipeline, threads_num)?;
         Ok(Arc::new(PipelineThreadsExecutor {
             threads_num,
             inner_executor,

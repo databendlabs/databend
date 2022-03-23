@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod format;
 mod progress;
 mod runtime;
 mod stoppable;
+mod string_func;

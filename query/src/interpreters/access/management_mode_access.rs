@@ -74,6 +74,8 @@ impl ManagementModeAccess {
                 | PlanNode::DropUserStage(_)
                 | PlanNode::DescribeUserStage(_)
 
+                | PlanNode::List(_)
+
                 // UDF.
                 | PlanNode::CreateUserUDF(_)
                 | PlanNode::DropUserUDF(_)
@@ -81,6 +83,9 @@ impl ManagementModeAccess {
 
                 // USE.
                 | PlanNode::UseDatabase(_)
+
+                // CALL
+                | PlanNode::Call(_)
 
                 // Admin.
                 | PlanNode::AdminUseTenant(_) => Ok(()),

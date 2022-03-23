@@ -222,6 +222,7 @@ impl Table for MemoryTable {
             builder.add_source(
                 output.clone(),
                 MemoryTableSource::create(
+                    ctx.clone(),
                     output,
                     read_data_blocks.clone(),
                     plan.push_downs.clone(),
@@ -282,11 +283,12 @@ struct MemoryTableSource {
 
 impl MemoryTableSource {
     pub fn create(
+        ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,
         data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
         extras: Option<Extras>,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(output, MemoryTableSource {
+        SyncSourcer::create(ctx, output, MemoryTableSource {
             extras,
             data_blocks,
         })

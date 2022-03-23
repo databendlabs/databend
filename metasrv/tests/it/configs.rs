@@ -72,7 +72,7 @@ sled_tree_prefix = "sled_foo"
              "#
     )?;
 
-    let mut cfg = Config::load_from_toml(file_path.to_str().unwrap())?;
+    let mut cfg = Config::load_from_file(file_path.to_str().unwrap())?;
     assert_eq!(cfg.log_level, "ERROR");
     assert_eq!(cfg.log_dir, "foo/logs");
     assert_eq!(cfg.metric_api_address, "127.0.0.1:8000");

@@ -140,7 +140,6 @@ impl Default for FileFormatOptions {
 pub struct StageS3Storage {
     // `example-bucket` in `s3://example-bucket/path/to/object`
     pub bucket: String,
-    // `path/to/object` in `s3://example-bucket/path/to/object`
     pub path: String,
     pub credentials_aws_key_id: String,
     pub credentials_aws_secret_key: String,

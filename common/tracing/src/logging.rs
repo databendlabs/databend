@@ -113,6 +113,29 @@ pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> Vec<Worker
     guards
 }
 
+pub fn init_query_logger(
+    log_name: &str,
+    dir: &str,
+) -> (Vec<WorkerGuard>, Arc<dyn Subscriber + Send + Sync>) {
+    let mut guards = vec![];
+
+    let rolling_appender = RollingFileAppender::new(Rotation::HOURLY, dir, log_name);
+    let (rolling_writer, rolling_writer_guard) = tracing_appender::non_blocking(rolling_appender);
+    let format = tracing_subscriber::fmt::format()
+        .without_time()
+        .with_target(false)
+        .with_level(false)
+        .compact();
+    guards.push(rolling_writer_guard);
+
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(rolling_writer)
+        .event_format(format)
+        .finish();
+
+    (guards, Arc::new(subscriber))
+}
+
 /// Initialize unit test tracing for metasrv
 pub fn init_meta_ut_tracing() {
     static START: Once = Once::new();

@@ -36,7 +36,7 @@ use common_planners::PartInfoPtr;
 use common_planners::Partitions;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
-use common_planners::S3ExternalTableInfo;
+use common_planners::S3StageTableInfo;
 use common_planners::SourceInfo;
 use common_planners::Statistics;
 use common_streams::AbortStream;
@@ -55,7 +55,7 @@ use crate::sessions::Session;
 use crate::sessions::SessionRef;
 use crate::sessions::Settings;
 use crate::storages::cache::CacheManager;
-use crate::storages::S3ExternalTable;
+use crate::storages::S3StageTable;
 use crate::storages::Table;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::RoleCacheMgr;
@@ -101,7 +101,7 @@ impl QueryContext {
             SourceInfo::TableSource(table_info) => {
                 self.build_table_by_table_info(table_info, plan.tbl_args.clone())
             }
-            SourceInfo::S3ExternalSource(s3_table_info) => {
+            SourceInfo::S3StageSource(s3_table_info) => {
                 self.build_s3_external_by_table_info(s3_table_info, plan.tbl_args.clone())
             }
         }
@@ -129,10 +129,10 @@ impl QueryContext {
     // 's3://' here is a s3 external stage, and build it to the external table.
     fn build_s3_external_by_table_info(
         &self,
-        table_info: &S3ExternalTableInfo,
+        table_info: &S3StageTableInfo,
         _table_args: Option<Vec<Expression>>,
     ) -> Result<Arc<dyn Table>> {
-        S3ExternalTable::try_create(table_info.clone())
+        S3StageTable::try_create(table_info.clone())
     }
 
     pub fn get_scan_progress(&self) -> Arc<Progress> {
@@ -176,8 +176,11 @@ impl QueryContext {
 
     // Update the context partition pool from the pipeline builder.
     pub fn try_set_partitions(&self, partitions: Partitions) -> Result<()> {
+        let mut partition_queue = self.partition_queue.write();
+
+        partition_queue.clear();
         for part in partitions {
-            self.partition_queue.write().push_back(part);
+            partition_queue.push_back(part);
         }
         Ok(())
     }
@@ -344,8 +347,9 @@ impl QueryContext {
     }
 
     // Get the storage data accessor operator from the session manager.
-    pub async fn get_storage_operator(&self) -> Result<Operator> {
+    pub fn get_storage_operator(&self) -> Result<Operator> {
         let operator = self.shared.session.get_storage_operator();
+
         Ok(operator.layer(self.shared.dal_ctx.as_ref().clone()))
     }
 
@@ -353,12 +357,16 @@ impl QueryContext {
         self.shared.dal_ctx.as_ref()
     }
 
-    pub fn get_storage_runtime(&self) -> &Runtime {
+    pub fn get_storage_runtime(&self) -> Arc<Runtime> {
         self.shared.session.session_mgr.get_storage_runtime()
     }
 
     pub async fn reload_config(&self) -> Result<()> {
         self.shared.reload_config().await
+    }
+
+    pub fn get_query_logger(&self) -> Option<Arc<dyn tracing::Subscriber + Send + Sync>> {
+        self.shared.session.session_mgr.get_query_logger()
     }
 }
 

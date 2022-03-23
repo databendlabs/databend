@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
+use serde_json::json;
 
 #[test]
 fn test_serializers() -> Result<()> {
@@ -119,6 +120,26 @@ fn test_serializers() -> Result<()> {
                 "('2021-08-30', 1)".to_owned(),
                 "('2021-11-17', 2)".to_owned(),
                 "('1970-01-02', 3)".to_owned(),
+            ],
+        },
+        Test {
+            name: "variant",
+            data_type: VariantType::arc(),
+            value: DataValue::Json(json!(true)),
+            column: Arc::new(JsonColumn::new_from_vec(vec![
+                json!(null),
+                json!(true),
+                json!(false),
+                json!(123),
+                json!(12.34),
+            ])),
+            val_str: "true",
+            col_str: vec![
+                "null".to_owned(),
+                "true".to_owned(),
+                "false".to_owned(),
+                "123".to_owned(),
+                "12.34".to_owned(),
             ],
         },
     ];

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_ast::udfs::UDFParser;
+use common_base::escape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::is_builtin_function;
@@ -47,7 +48,7 @@ impl UdfMgr {
 
         Ok(UdfMgr {
             kv_api,
-            udf_prefix: format!("{}/{}", UDF_API_KEY_PREFIX, tenant),
+            udf_prefix: format!("{}/{}", UDF_API_KEY_PREFIX, escape_for_key(tenant)?),
         })
     }
 }
@@ -69,7 +70,7 @@ impl UdfApi for UdfMgr {
 
         let seq = MatchSeq::Exact(0);
         let val = Operation::Update(serde_json::to_vec(&info)?);
-        let key = format!("{}/{}", self.udf_prefix, info.name);
+        let key = format!("{}/{}", self.udf_prefix, escape_for_key(&info.name)?);
         let upsert_info = self
             .kv_api
             .upsert_kv(UpsertKVAction::new(&key, seq, val, None));
@@ -97,7 +98,7 @@ impl UdfApi for UdfMgr {
         let _ = self.get_udf(info.name.as_str(), seq).await?;
 
         let val = Operation::Update(serde_json::to_vec(&info)?);
-        let key = format!("{}/{}", self.udf_prefix, info.name);
+        let key = format!("{}/{}", self.udf_prefix, escape_for_key(&info.name)?);
         let upsert_info =
             self.kv_api
                 .upsert_kv(UpsertKVAction::new(&key, MatchSeq::from(seq), val, None));
@@ -113,7 +114,7 @@ impl UdfApi for UdfMgr {
     }
 
     async fn get_udf(&self, udf_name: &str, seq: Option<u64>) -> Result<SeqV<UserDefinedFunction>> {
-        let key = format!("{}/{}", self.udf_prefix, udf_name);
+        let key = format!("{}/{}", self.udf_prefix, escape_for_key(udf_name)?);
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
@@ -138,7 +139,7 @@ impl UdfApi for UdfMgr {
     }
 
     async fn drop_udf(&self, udf_name: &str, seq: Option<u64>) -> Result<()> {
-        let key = format!("{}/{}", self.udf_prefix, udf_name);
+        let key = format!("{}/{}", self.udf_prefix, escape_for_key(udf_name)?);
         let kv_api = self.kv_api.clone();
         let upsert_kv = async move {
             kv_api

@@ -20,8 +20,10 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::compute::cast;
 use common_arrow::arrow::compute::cast::CastOptions as ArrowOption;
 use common_datavalues::prelude::*;
+use common_datavalues::with_match_physical_primitive_type;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use serde_json::Value as JsonValue;
 
 use super::cast_from_datetimes::cast_from_date16;
 use super::cast_from_datetimes::cast_from_date32;
@@ -124,15 +126,23 @@ pub fn cast_with_type(
     let nonull_data_type = remove_nullable(data_type);
 
     let (result, valids) = match nonull_from_type.data_type_id() {
-        TypeID::String => cast_from_string(column, &nonull_data_type, cast_options),
-        TypeID::Date16 => cast_from_date16(column, &nonull_data_type, cast_options),
-        TypeID::Date32 => cast_from_date32(column, &nonull_data_type, cast_options),
-        TypeID::DateTime32 => cast_from_datetime32(column, &nonull_data_type, cast_options),
+        TypeID::String => {
+            cast_from_string(column, &nonull_from_type, &nonull_data_type, cast_options)
+        }
+        TypeID::Date16 => {
+            cast_from_date16(column, &nonull_from_type, &nonull_data_type, cast_options)
+        }
+        TypeID::Date32 => {
+            cast_from_date32(column, &nonull_from_type, &nonull_data_type, cast_options)
+        }
+        TypeID::DateTime32 => {
+            cast_from_datetime32(column, &nonull_from_type, &nonull_data_type, cast_options)
+        }
         TypeID::DateTime64 => {
             cast_from_datetime64(column, &nonull_from_type, &nonull_data_type, cast_options)
         }
         // TypeID::Interval => arrow_cast_compute(column, &nonull_data_type, cast_options),
-        _ => arrow_cast_compute(column, &nonull_data_type, cast_options),
+        _ => arrow_cast_compute(column, &nonull_from_type, &nonull_data_type, cast_options),
     }?;
 
     let (all_nulls, source_valids) = column.validity();
@@ -166,12 +176,62 @@ pub fn cast_with_type(
     Ok(result)
 }
 
+pub fn cast_to_variant(
+    column: &ColumnRef,
+    from_type: &DataTypePtr,
+) -> Result<(ColumnRef, Option<Bitmap>)> {
+    let column = Series::remove_nullable(column);
+    let size = column.len();
+    let mut builder = ColumnBuilder::<JsonValue>::with_capacity(size);
+
+    with_match_physical_primitive_type!(from_type.data_type_id().to_physical_type(), |$T| {
+        let col: &<$T as Scalar>::ColumnType = Series::check_get(&column)?;
+        for v in col.iter() {
+            let v = *v as $T;
+            let x: JsonValue = v.into();
+            builder.append(&x);
+        }
+        return Ok((builder.build(size), None));
+    }, {
+        match from_type.data_type_id() {
+            TypeID::Null => {
+                for _ in 0..size {
+                    let v = JsonValue::Null;
+                    builder.append(&v);
+                }
+                return Ok((builder.build(size), None));
+            }
+            TypeID::Boolean => {
+                let c: &BooleanColumn = Series::check_get(&column)?;
+                for v in c.iter() {
+                    let v = v as bool;
+                    let x: JsonValue = v.into();
+                    builder.append(&x);
+                }
+                return Ok((builder.build(size), None));
+            }
+            _ => {
+                // other data types can't automatically casted to variant
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "Expression type does not match column data type, expecting VARIANT but got {:?}",
+                    from_type.data_type_id()
+                )));
+            }
+        }
+    });
+}
+
 // cast using arrow's cast compute
 pub fn arrow_cast_compute(
     column: &ColumnRef,
+    from_type: &DataTypePtr,
     data_type: &DataTypePtr,
     cast_options: &CastOptions,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
+    if data_type.data_type_id() == TypeID::Variant {
+        return cast_to_variant(column, from_type);
+    }
+
     let arrow_array = column.as_arrow_array();
     let arrow_options = cast_options.as_arrow();
     let result = cast::cast(arrow_array.as_ref(), &data_type.arrow_type(), arrow_options)?;

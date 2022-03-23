@@ -17,6 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_stream::stream;
+use common_cache::Cache;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
@@ -46,7 +47,7 @@ impl FuseTable {
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
-        let da = ctx.get_storage_operator().await?;
+        let da = ctx.get_storage_operator()?;
 
         let mut segment_stream = BlockStreamWriter::write_block_stream(
             da.clone(),
@@ -59,6 +60,8 @@ impl FuseTable {
         .await;
 
         let locs = self.meta_locations().clone();
+        let segment_info_cache = ctx.get_storage_cache_manager().get_table_segment_cache();
+
         let log_entries = stream! {
             while let Some(segment) = segment_stream.next().await {
                 let log_entry_res = match segment {
@@ -70,7 +73,13 @@ impl FuseTable {
                         .write_bytes(bytes)
                         .await
                         .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
-                        let log_entry = AppendOperationLogEntry::new(seg_loc, seg);
+                        let seg = Arc::new(seg);
+                        let log_entry = AppendOperationLogEntry::new(seg_loc.clone(), seg.clone());
+                        if let Some(ref cache) = segment_info_cache {
+                            let cache = &mut cache.write().await;
+                            cache.put(seg_loc, seg);
+                        }
+
                         Ok(log_entry)
                     },
                     Err(err) => Err(err),
@@ -78,6 +87,7 @@ impl FuseTable {
                 yield(log_entry_res);
             }
         };
+
         Ok(Box::pin(log_entries))
     }
 

@@ -17,6 +17,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::UNIX_EPOCH;
 
+use common_base::escape_for_key;
+use common_base::unescape_for_key;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::KVApi;
@@ -58,68 +60,10 @@ impl ClusterMgr {
             cluster_prefix: format!(
                 "{}/{}/{}/databend_query",
                 CLUSTER_API_KEY_PREFIX,
-                Self::escape_for_key(tenant)?,
-                Self::escape_for_key(cluster_id)?
+                escape_for_key(tenant)?,
+                escape_for_key(cluster_id)?
             ),
         })
-    }
-
-    fn escape_for_key(key: &str) -> Result<String> {
-        let mut new_key = Vec::with_capacity(key.len());
-
-        fn hex(num: u8) -> u8 {
-            match num {
-                0..=9 => b'0' + num,
-                10..=15 => b'a' + (num - 10),
-                unreachable => unreachable!("Unreachable branch num = {}", unreachable),
-            }
-        }
-
-        for char in key.as_bytes() {
-            match char {
-                b'0'..=b'9' => new_key.push(*char),
-                b'_' | b'a'..=b'z' | b'A'..=b'Z' => new_key.push(*char),
-                _other => {
-                    new_key.push(b'%');
-                    new_key.push(hex(*char / 16));
-                    new_key.push(hex(*char % 16));
-                }
-            }
-        }
-
-        Ok(String::from_utf8(new_key)?)
-    }
-
-    fn unescape_for_key(key: &str) -> Result<String> {
-        let mut new_key = Vec::with_capacity(key.len());
-
-        fn unhex(num: u8) -> u8 {
-            match num {
-                b'0'..=b'9' => num - b'0',
-                b'a'..=b'f' => num - b'a',
-                unreachable => unreachable!("Unreachable branch num = {}", unreachable),
-            }
-        }
-
-        let bytes = key.as_bytes();
-
-        let mut index = 0;
-        while index < bytes.len() {
-            match bytes[index] {
-                b'%' => {
-                    let mut num = unhex(bytes[index + 1]) * 16;
-                    num += unhex(bytes[index + 2]);
-                    new_key.push(num);
-                    index += 3;
-                }
-                other => {
-                    new_key.push(other);
-                    index += 1;
-                }
-            }
-        }
-
-        Ok(String::from_utf8(new_key)?)
     }
 
     fn new_lift_time(&self) -> KVMeta {
@@ -142,11 +86,7 @@ impl ClusterApi for ClusterMgr {
         let seq = MatchSeq::Exact(0);
         let meta = Some(self.new_lift_time());
         let value = Operation::Update(serde_json::to_vec(&node)?);
-        let node_key = format!(
-            "{}/{}",
-            self.cluster_prefix,
-            Self::escape_for_key(&node.id)?
-        );
+        let node_key = format!("{}/{}", self.cluster_prefix, escape_for_key(&node.id)?);
         let upsert_node = self
             .kv_api
             .upsert_kv(UpsertKVAction::new(&node_key, seq, value, meta));
@@ -169,7 +109,7 @@ impl ClusterApi for ClusterMgr {
         for (node_key, value) in values {
             let mut node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;
 
-            let node_key = Self::unescape_for_key(&node_key)?;
+            let node_key = unescape_for_key(&node_key)?;
             node_info.id = node_key[self.cluster_prefix.len() + 1..].to_string();
             nodes_info.push(node_info);
         }
@@ -178,11 +118,7 @@ impl ClusterApi for ClusterMgr {
     }
 
     async fn drop_node(&self, node_id: String, seq: Option<u64>) -> Result<()> {
-        let node_key = format!(
-            "{}/{}",
-            self.cluster_prefix,
-            Self::escape_for_key(&node_id)?
-        );
+        let node_key = format!("{}/{}", self.cluster_prefix, escape_for_key(&node_id)?);
         let upsert_node = self.kv_api.upsert_kv(UpsertKVAction::new(
             &node_key,
             seq.into(),
@@ -205,11 +141,7 @@ impl ClusterApi for ClusterMgr {
 
     async fn heartbeat(&self, node: &NodeInfo, seq: Option<u64>) -> Result<u64> {
         let meta = Some(self.new_lift_time());
-        let node_key = format!(
-            "{}/{}",
-            self.cluster_prefix,
-            Self::escape_for_key(&node.id)?
-        );
+        let node_key = format!("{}/{}", self.cluster_prefix, escape_for_key(&node.id)?);
         let seq = match seq {
             None => MatchSeq::GE(1),
             Some(exact) => MatchSeq::Exact(exact),

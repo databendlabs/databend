@@ -25,7 +25,9 @@ use super::statements::DfCreateUserStage;
 use super::statements::DfDescribeUserStage;
 use super::statements::DfDropUserStage;
 use super::statements::DfGrantRoleStatement;
+use super::statements::DfList;
 use super::statements::DfRevokeRoleStatement;
+use crate::sql::statements::DfAlterTable;
 use crate::sql::statements::DfAlterUDF;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCreateDatabase;
@@ -85,6 +87,7 @@ pub enum DfStatement {
     CreateTable(DfCreateTable),
     DescribeTable(DfDescribeTable),
     DropTable(DfDropTable),
+    AlterTable(DfAlterTable),
     TruncateTable(DfTruncateTable),
     OptimizeTable(DfOptimizeTable),
     RenameTable(DfRenameTable),
@@ -128,6 +131,7 @@ pub enum DfStatement {
     CreateStage(DfCreateUserStage),
     DropStage(DfDropUserStage),
     DescribeStage(DfDescribeUserStage),
+    List(DfList),
 
     // Call
     Call(DfCall),

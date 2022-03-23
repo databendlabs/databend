@@ -17,6 +17,7 @@ use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
+use common_datavalues::prelude::*;
 use common_datavalues::ColumnWithField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataValue;
@@ -74,34 +75,38 @@ pub fn reduce_block_stats<T: Borrow<BlockStatistics>>(
             // TODO panic
             let data_type = schema.field((*id) as usize).data_type();
 
-            let field = schema.field((*id) as usize);
-            // TODO
-            // for some data types, we shall balance the accuracy and the length
-            // e.g. for a string col, which max value is "abcdef....", we record the max as something like "b"
-            let min = data_type.create_column(&min_stats)?;
-            let max = data_type.create_column(&max_stats)?;
-
-            let mins = eval_aggr(
-                "min",
-                vec![],
-                &[ColumnWithField::new(min.clone(), field.clone())],
-                min.len(),
-            )?;
-            let maxs = eval_aggr(
-                "max",
-                vec![],
-                &[ColumnWithField::new(max.clone(), field.clone())],
-                max.len(),
-            )?;
-
             let mut min = DataValue::Null;
             let mut max = DataValue::Null;
 
-            if mins.len() > 0 {
-                min = mins.get(0);
-            }
-            if maxs.len() > 0 {
-                max = maxs.get(0);
+            // TODO(b41sh): support max/min aggregate functions for variant
+            let nonull_data_type = remove_nullable(data_type);
+            if nonull_data_type.data_type_id() != TypeID::Variant {
+                let field = schema.field((*id) as usize);
+                // TODO
+                // for some data types, we shall balance the accuracy and the length
+                // e.g. for a string col, which max value is "abcdef....", we record the max as something like "b"
+                let min_column = data_type.create_column(&min_stats)?;
+                let max_column = data_type.create_column(&max_stats)?;
+
+                let mins = eval_aggr(
+                    "min",
+                    vec![],
+                    &[ColumnWithField::new(min_column.clone(), field.clone())],
+                    min_column.len(),
+                )?;
+                let maxs = eval_aggr(
+                    "max",
+                    vec![],
+                    &[ColumnWithField::new(max_column.clone(), field.clone())],
+                    max_column.len(),
+                )?;
+
+                if mins.len() > 0 {
+                    min = mins.get(0);
+                }
+                if maxs.len() > 0 {
+                    max = maxs.get(0);
+                }
             }
 
             acc.insert(*id, ColumnStatistics {

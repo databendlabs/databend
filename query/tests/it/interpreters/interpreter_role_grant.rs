@@ -40,7 +40,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
     }
 
     user_mgr
-        .add_role(&tenant, RoleInfo::new("test".to_string()))
+        .add_role(&tenant, RoleInfo::new("test".to_string()), false)
         .await?;
 
     // Grant role to unknown user.
@@ -60,6 +60,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
             .add_user(
                 &tenant,
                 UserInfo::new_no_auth("test_user".to_string(), "%".to_string()),
+                false,
             )
             .await?;
         let user_info = user_mgr.get_user(&tenant, "test_user", "%").await?;
@@ -91,7 +92,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
 
     // Grant role to normal role.
     {
-        user_mgr.add_role(&tenant, test_role.clone()).await?;
+        user_mgr.add_role(&tenant, test_role.clone(), false).await?;
         let role_info = user_mgr.get_role(&tenant, test_role.identity()).await?;
         assert_eq!(role_info.grants.roles().len(), 0);
 

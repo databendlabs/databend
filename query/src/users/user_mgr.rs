@@ -92,12 +92,23 @@ impl UserApiProvider {
     }
 
     // Add a new user info.
-    pub async fn add_user(&self, tenant: &str, user_info: UserInfo) -> Result<u64> {
+    pub async fn add_user(
+        &self,
+        tenant: &str,
+        user_info: UserInfo,
+        if_not_exists: bool,
+    ) -> Result<u64> {
         let client = self.get_user_api_client(tenant)?;
         let add_user = client.add_user(user_info);
         match add_user.await {
             Ok(res) => Ok(res),
-            Err(e) => Err(e.add_message_back("(while add user).")),
+            Err(e) => {
+                if if_not_exists && e.code() == ErrorCode::user_already_exists_code() {
+                    Ok(0)
+                } else {
+                    Err(e.add_message_back("(while add user)"))
+                }
+            }
         }
     }
 

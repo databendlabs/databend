@@ -155,6 +155,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::CreateTable(v) => v.analyze(ctx).await,
             DfStatement::DescribeTable(v) => v.analyze(ctx).await,
             DfStatement::DropTable(v) => v.analyze(ctx).await,
+            DfStatement::AlterTable(v) => v.analyze(ctx).await,
             DfStatement::RenameTable(v) => v.analyze(ctx).await,
             DfStatement::TruncateTable(v) => v.analyze(ctx).await,
             DfStatement::OptimizeTable(v) => v.analyze(ctx).await,
@@ -190,6 +191,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::CreateStage(v) => v.analyze(ctx).await,
             DfStatement::DropStage(v) => v.analyze(ctx).await,
             DfStatement::DescribeStage(v) => v.analyze(ctx).await,
+            DfStatement::List(v) => v.analyze(ctx).await,
         }
     }
 }

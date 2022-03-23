@@ -42,7 +42,7 @@ impl FuseTable {
             };
             let loc = self.meta_locations();
             let new_snapshot_loc = loc.snapshot_location_from_uuid(&new_snapshot.snapshot_id);
-            let operator = ctx.get_storage_operator().await?;
+            let operator = ctx.get_storage_operator()?;
             let bytes = serde_json::to_vec(&new_snapshot)?;
             operator
                 .object(&new_snapshot_loc)

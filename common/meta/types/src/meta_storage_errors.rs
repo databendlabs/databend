@@ -200,23 +200,29 @@ pub enum AppError {
 
 impl AppErrorMessage for UnknownDatabase {
     fn message(&self) -> String {
-        self.db_name.to_string()
+        format!("Unknown database '{}'", self.db_name)
     }
 }
+
+impl AppErrorMessage for DatabaseAlreadyExists {
+    fn message(&self) -> String {
+        format!("Database '{}' already exists", self.db_name)
+    }
+}
+
 impl AppErrorMessage for UnknownTable {
     fn message(&self) -> String {
-        format!("Unknown table: '{}'", self.table_name)
+        format!("Unknown table '{}'", self.table_name)
     }
 }
 
 impl AppErrorMessage for UnknownTableId {}
 impl AppErrorMessage for UnknownDatabaseId {}
-impl AppErrorMessage for DatabaseAlreadyExists {}
 impl AppErrorMessage for TableVersionMismatched {}
 
 impl AppErrorMessage for TableAlreadyExists {
     fn message(&self) -> String {
-        format!("table exists: {}", self.table_name)
+        format!("Table '{}' already exists", self.table_name)
     }
 }
 

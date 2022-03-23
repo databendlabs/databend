@@ -97,14 +97,6 @@ impl Settings {
                 desc: "Max duration the flight client request is allowed to take in seconds. By default, it is 60 seconds",
             },
 
-            // parallel_read_threads
-            SettingValue {
-                default_value: DataValue::UInt64(1),
-                user_setting: UserSetting::create("parallel_read_threads", DataValue::UInt64(1)),
-                level: ScopeLevel::Session,
-                desc: "The maximum number of parallelism for reading data. By default, it is 1.",
-            },
-
             // storage_read_buffer_size
             SettingValue {
                 default_value: DataValue::UInt64(1024 * 1024),
@@ -139,10 +131,10 @@ impl Settings {
 
             // enable_new_processor_framework
             SettingValue {
-                default_value: DataValue::UInt64(0),
-                user_setting: UserSetting::create("enable_new_processor_framework", DataValue::UInt64(0)),
+                default_value: DataValue::UInt64(1),
+                user_setting: UserSetting::create("enable_new_processor_framework", DataValue::UInt64(1)),
                 level: ScopeLevel::Session,
-                desc: "Enable new processor framework if value != 0, default value: 0",
+                desc: "Enable new processor framework if value != 0, default value: 1",
             },
         ];
 
@@ -198,12 +190,6 @@ impl Settings {
     // Get flight client timeout.
     pub fn get_flight_client_timeout(&self) -> Result<u64> {
         let key = "flight_client_timeout";
-        self.try_get_u64(key)
-    }
-
-    // Get parallel read threads.
-    pub fn get_parallel_read_threads(&self) -> Result<u64> {
-        let key = "parallel_read_threads";
         self.try_get_u64(key)
     }
 

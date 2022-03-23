@@ -31,4 +31,4 @@ pin-project-lite = "0.2.8"
 tempfile = "3.3.0"
 
 [dev-dependencies]
-opendal = "0.2.3"
+opendal = "0.2.5"
