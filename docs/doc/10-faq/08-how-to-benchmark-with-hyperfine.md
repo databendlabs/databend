@@ -8,7 +8,7 @@ Databend recommends using hyperfine to perform benchmarking via the ClickHouse/M
 
 ### Before you begin
 
-* Make sure you have already [How to installed Databend](/doc/category/deploy).
+* Make sure you have already [installed Databend](/doc/category/deploy).
 * Install the MySQl client.
 * Check out [hyperfine - Installation](https://github.com/sharkdp/hyperfine#installation) to install hyperfine according to your distribution.
 
@@ -16,7 +16,7 @@ Databend recommends using hyperfine to perform benchmarking via the ClickHouse/M
 
 Design benchmarks based on your dataset and key SQLs, write them to a file.
 
-Some SQLs for stateless computing benchmarks are listed below. Save them to a file called `bench.sql`.
+Some SQLs for stateless computing benchmarks are listed below. Save them to a file called `bench.sql`:
 
 ```sql
 SELECT avg(number) FROM numbers_mt(100000000000)
@@ -33,7 +33,7 @@ SELECT max(number), sum(number) FROM numbers_mt(1000000000) GROUP BY number % 3,
 
 ## Write an easy-to-use script
 
-Open a file called `benchmark.sh` and write the following.
+Open a file called `benchmark.sh` and write the following:
 
 ```shell
 #!/bin/bash
