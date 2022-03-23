@@ -88,19 +88,19 @@ fn test_expression_validate() -> Result<()> {
             )),
         },
         Test {
-            desc: "example-not-pass",
+            desc: "today-not-pass",
             expression: Expression::ScalarFunction {
-                op: "example".to_string(),
+                op: "today".to_string(),
                 args: vec![col("33")],
             },
             error: Some(ErrorCode::NumberArgumentsNotMatch(
-                "Function `example` expect to have 0 arguments, but got 1",
+                "Function `today` expect to have 0 arguments, but got 1",
             )),
         },
         Test {
-            desc: "example-pass",
+            desc: "today-pass",
             expression: Expression::ScalarFunction {
-                op: "example".to_string(),
+                op: "today".to_string(),
                 args: vec![],
             },
             error: None,

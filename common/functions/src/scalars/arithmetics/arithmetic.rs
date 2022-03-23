@@ -20,15 +20,12 @@ use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticNegateFunction;
 use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::FunctionFactory;
-use crate::scalars::FunctionFactoryLayer;
 
 #[derive(Clone)]
 pub struct ArithmeticFunction;
 
 impl ArithmeticFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        let mut factory = FunctionFactoryLayer::with_layer(factory).category("Arithmetic");
-
         factory.register_typed("negate", ArithmeticNegateFunction::desc());
         factory.register_typed("+", ArithmeticPlusFunction::desc());
         factory.register_typed("plus", ArithmeticPlusFunction::desc());

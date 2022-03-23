@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use crate::scalars::function_factory::FunctionFactory;
-use crate::scalars::FunctionFactoryLayer;
 use crate::scalars::TupleFunction;
 
 #[derive(Clone)]
@@ -21,8 +20,6 @@ pub struct TupleClassFunction;
 
 impl TupleClassFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        let mut factory = FunctionFactoryLayer::with_layer(factory).category("Tuple");
-
         factory.register("tuple", TupleFunction::desc());
     }
 }

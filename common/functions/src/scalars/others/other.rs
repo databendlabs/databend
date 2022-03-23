@@ -23,15 +23,12 @@ use super::InFunction;
 use super::SleepFunction;
 use super::ToTypeNameFunction;
 use crate::scalars::FunctionFactory;
-use crate::scalars::FunctionFactoryLayer;
 
 #[derive(Clone)]
 pub struct OtherFunction {}
 
 impl OtherFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        let mut factory = FunctionFactoryLayer::with_layer(factory).category("Other");
-
         factory.register("in", InFunction::<false>::desc());
         factory.register("not_in", InFunction::<true>::desc());
         factory.register("exists", ExistsFunction::desc());

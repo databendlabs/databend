@@ -29,7 +29,6 @@ use num::traits::AsPrimitive;
 use super::utils::*;
 use crate::scalars::assert_string;
 use crate::scalars::cast_column_field;
-use crate::scalars::function_factory_layer::FunctionFactoryLayer;
 use crate::scalars::primitive_simd_op_boolean;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::ComparisonEqFunction;
@@ -56,8 +55,6 @@ pub struct ComparisonFunction {
 
 impl ComparisonFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        let mut factory = FunctionFactoryLayer::with_layer(factory).category("Comparison");
-
         factory.register_typed("=", ComparisonEqFunction::desc("<>"));
         factory.register_typed("<", ComparisonLtFunction::desc(">="));
         factory.register_typed(">", ComparisonGtFunction::desc("<="));

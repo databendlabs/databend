@@ -17,7 +17,6 @@ use crate::scalars::function_factory::FactoryCreator;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::CastFunction;
-use crate::scalars::FunctionFactoryLayer;
 use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
@@ -70,7 +69,6 @@ impl ToCastFunction {
         for name in names {
             let to_name = format!("to{}", name);
 
-            let mut factory = FunctionFactoryLayer::with_layer(factory).category("Expression");
             factory.register(&to_name, Self::cast_function_creator(name).unwrap());
         }
     }

@@ -15,7 +15,6 @@
 use crate::scalars::CurrentUserFunction;
 use crate::scalars::DatabaseFunction;
 use crate::scalars::FunctionFactory;
-use crate::scalars::FunctionFactoryLayer;
 use crate::scalars::VersionFunction;
 
 #[derive(Clone)]
@@ -23,8 +22,6 @@ pub struct ContextFunction;
 
 impl ContextFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        let mut factory = FunctionFactoryLayer::with_layer(factory).category("Context");
-
         factory.register("database", DatabaseFunction::desc());
         factory.register("version", VersionFunction::desc());
         factory.register("current_user", CurrentUserFunction::desc());

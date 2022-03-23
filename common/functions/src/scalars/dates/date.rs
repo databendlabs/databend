@@ -44,7 +44,6 @@ use crate::scalars::function_factory::FactoryCreator;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
 use crate::scalars::FunctionFactory;
-use crate::scalars::FunctionFactoryLayer;
 use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
@@ -65,8 +64,6 @@ impl DateFunction {
     }
 
     pub fn register(factory: &mut FunctionFactory) {
-        let mut factory = FunctionFactoryLayer::with_layer(factory).category("Date");
-
         factory.register("today", TodayFunction::desc());
         factory.register("yesterday", YesterdayFunction::desc());
         factory.register("tomorrow", TomorrowFunction::desc());

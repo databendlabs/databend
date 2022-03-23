@@ -15,7 +15,6 @@
 use super::IsNotNullFunction;
 use super::IsNullFunction;
 use crate::scalars::FunctionFactory;
-use crate::scalars::FunctionFactoryLayer;
 use crate::scalars::IfFunction;
 
 #[derive(Clone)]
@@ -23,8 +22,6 @@ pub struct ConditionalFunction;
 
 impl ConditionalFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        let mut factory = FunctionFactoryLayer::with_layer(factory).category("Conditional");
-
         factory.register("if", IfFunction::desc());
         factory.register("isNull", IsNullFunction::desc());
         factory.register("isNotNull", IsNotNullFunction::desc());
