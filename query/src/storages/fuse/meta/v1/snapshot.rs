@@ -18,6 +18,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::storages::fuse::meta::v0::snapshot::Statistics;
+use crate::storages::fuse::meta::Versioned;
 
 pub type ColumnId = u32;
 pub type SnapshotId = Uuid;
@@ -27,7 +28,7 @@ pub type Location = (String, FormatVersion);
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
     /// format version of snapshot
-    pub format_version: FormatVersion,
+    format_version: FormatVersion,
 
     /// id of snapshot
     pub snapshot_id: SnapshotId,
@@ -48,8 +49,25 @@ pub struct TableSnapshot {
 }
 
 impl TableSnapshot {
-    pub const fn current_format_version() -> u64 {
-        1
+    pub fn new(
+        snapshot_id: SnapshotId,
+        prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
+        schema: DataSchema,
+        summary: Statistics,
+        segments: Vec<Location>,
+    ) -> Self {
+        Self {
+            format_version: TableSnapshot::VERSION,
+            snapshot_id,
+            prev_snapshot_id,
+            schema,
+            summary,
+            segments,
+        }
+    }
+
+    pub fn format_version(&self) -> u64 {
+        self.format_version
     }
 }
 
@@ -57,7 +75,7 @@ use super::super::v0::snapshot::TableSnapshot as V0;
 impl From<V0> for TableSnapshot {
     fn from(s: V0) -> Self {
         Self {
-            format_version: 1,
+            format_version: TableSnapshot::VERSION,
             snapshot_id: s.snapshot_id,
             prev_snapshot_id: s.prev_snapshot_id.map(|id| (id, 0)),
             schema: s.schema,

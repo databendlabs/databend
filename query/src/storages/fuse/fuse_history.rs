@@ -68,6 +68,7 @@ impl<'a> FuseHistory<'a> {
                 None => (None, 0),
             };
             prev_snapshot_ids.push(id);
+            // TODO buggy, this should NOT be the version of previous snapshot
             format_versions.push(ver);
             segment_count.push(s.segments.len() as u64);
             block_count.push(s.summary.block_count);

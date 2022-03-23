@@ -21,6 +21,7 @@ mod versions;
 pub use current::*;
 pub use versions::SegmentInfoVersion;
 pub use versions::SnapshotVersion;
+pub use versions::Versioned;
 pub use versions::CURRNET_BLOCK_VERSION;
 pub use versions::CURRNET_SEGMETN_VERSION;
 pub use versions::CURRNET_SNAPSHOT_VERSION;

@@ -75,7 +75,6 @@ impl<'a> TableSnapshotReader<'a> {
         if let Some(loc) = latest_snapshot_location {
             let mut ver = format_version;
             let mut loc = loc.to_string();
-            // TODO refine this
             loop {
                 let snapshot = match self.read(loc, None, ver).await {
                     Ok(s) => s,

@@ -35,8 +35,10 @@ use uuid::Uuid;
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::meta::Location;
+use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::meta::TableSnapshot;
+use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::operations::TableOperationLog;
 use crate::storages::fuse::statistics;
@@ -147,17 +149,18 @@ impl FuseTable {
             bytes: summary.uncompressed_byte_size as usize,
         };
 
-        // TODO refine this
-        let segments = segments.into_iter().map(|loc| (loc, 1u64)).collect();
+        let segments = segments
+            .into_iter()
+            .map(|loc| (loc, SegmentInfo::VERSION))
+            .collect();
         let new_snapshot = if overwrite {
-            TableSnapshot {
-                format_version: TableSnapshot::current_format_version(),
-                snapshot_id: Uuid::new_v4(),
-                prev_snapshot_id: prev.as_ref().map(|v| (v.snapshot_id, v.format_version)),
+            TableSnapshot::new(
+                Uuid::new_v4(),
+                prev.as_ref().map(|v| (v.snapshot_id, v.format_version())),
                 schema,
                 summary,
                 segments,
-            }
+            )
         } else {
             Self::merge_table_operations(
                 self.table_info.meta.schema.as_ref(),

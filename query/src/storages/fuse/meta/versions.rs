@@ -27,7 +27,7 @@ use crate::storages::fuse::meta::v1;
 
 pub const CURRNET_SEGMETN_VERSION: u64 = v1::SegmentInfo::VERSION;
 pub const CURRNET_SNAPSHOT_VERSION: u64 = v1::TableSnapshot::VERSION;
-pub const CURRNET_BLOCK_VERSION: u64 = 0;
+pub const CURRNET_BLOCK_VERSION: u64 = DataBlock::VERSION;
 
 pub trait Versioned<const V: u64>
 where Self: Sized
