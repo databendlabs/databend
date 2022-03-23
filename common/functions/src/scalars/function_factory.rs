@@ -30,6 +30,7 @@ use super::LogicFunction;
 use super::MathsFunction;
 use super::NullableFunction;
 use super::OtherFunction;
+use super::SemiStructuredFunction;
 use super::StringFunction;
 use super::ToCastFunction;
 use super::TupleClassFunction;
@@ -175,6 +176,7 @@ static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     TupleClassFunction::register(&mut function_factory);
     ComparisonFunction::register(&mut function_factory);
     UdfFunction::register(&mut function_factory);
+    SemiStructuredFunction::register(&mut function_factory);
     StringFunction::register(&mut function_factory);
     HashesFunction::register(&mut function_factory);
     ConditionalFunction::register(&mut function_factory);

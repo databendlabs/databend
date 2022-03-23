@@ -180,6 +180,10 @@ pub fn cast_to_variant(
     column: &ColumnRef,
     from_type: &DataTypePtr,
 ) -> Result<(ColumnRef, Option<Bitmap>)> {
+    if from_type.data_type_id() == TypeID::Variant {
+        return Ok((column.clone(), None));
+    }
+
     let column = Series::remove_nullable(column);
     let size = column.len();
     let mut builder = ColumnBuilder::<JsonValue>::with_capacity(size);
@@ -194,13 +198,6 @@ pub fn cast_to_variant(
         return Ok((builder.build(size), None));
     }, {
         match from_type.data_type_id() {
-            TypeID::Null => {
-                for _ in 0..size {
-                    let v = JsonValue::Null;
-                    builder.append(&v);
-                }
-                return Ok((builder.build(size), None));
-            }
             TypeID::Boolean => {
                 let c: &BooleanColumn = Series::check_get(&column)?;
                 for v in c.iter() {
