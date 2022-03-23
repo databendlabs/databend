@@ -48,10 +48,14 @@ impl<'a> FuseHistory<'a> {
                 tbl.meta_location_generator().clone(),
             )
             .await?;
-        Ok(self.snapshots_to_block(snapshots))
+        Ok(self.snapshots_to_block(snapshots, snapshot_version))
     }
 
-    fn snapshots_to_block(&self, snapshots: Vec<Arc<TableSnapshot>>) -> DataBlock {
+    fn snapshots_to_block(
+        &self,
+        snapshots: Vec<Arc<TableSnapshot>>,
+        lastest_snapshot_version: u64,
+    ) -> DataBlock {
         let len = snapshots.len();
         let mut snapshot_ids: Vec<Vec<u8>> = Vec::with_capacity(len);
         let mut prev_snapshot_ids: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
@@ -61,6 +65,7 @@ impl<'a> FuseHistory<'a> {
         let mut row_count: Vec<u64> = Vec::with_capacity(len);
         let mut compressed: Vec<u64> = Vec::with_capacity(len);
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
+        let mut current_snapshot_version = lastest_snapshot_version;
         for s in snapshots {
             snapshot_ids.push(s.snapshot_id.to_simple().to_string().into_bytes());
             let (id, ver) = match s.prev_snapshot_id {
@@ -68,13 +73,13 @@ impl<'a> FuseHistory<'a> {
                 None => (None, 0),
             };
             prev_snapshot_ids.push(id);
-            // TODO buggy, this should NOT be the version of previous snapshot
-            format_versions.push(ver);
+            format_versions.push(current_snapshot_version);
             segment_count.push(s.segments.len() as u64);
             block_count.push(s.summary.block_count);
             row_count.push(s.summary.row_count);
             compressed.push(s.summary.compressed_byte_size);
             uncompressed.push(s.summary.uncompressed_byte_size);
+            current_snapshot_version = ver;
         }
 
         DataBlock::create(FuseHistory::schema(), vec![
