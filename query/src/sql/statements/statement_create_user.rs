@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::AuthInfo;
+use common_meta_types::UserOption;
 use common_planners::CreateUserPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -45,7 +46,8 @@ pub struct DfCreateUser {
     /// User name
     pub name: String,
     pub hostname: String,
-    pub auth_options: DfAuthOption,
+    pub auth_option: DfAuthOption,
+    pub user_option: UserOption,
 }
 
 #[async_trait::async_trait]
@@ -57,9 +59,10 @@ impl AnalyzableStatement for DfCreateUser {
                 name: self.name.clone(),
                 hostname: self.hostname.clone(),
                 auth_info: AuthInfo::create(
-                    &self.auth_options.auth_type,
-                    &self.auth_options.by_value,
+                    &self.auth_option.auth_type,
+                    &self.auth_option.by_value,
                 )?,
+                user_option: self.user_option,
             },
         ))))
     }

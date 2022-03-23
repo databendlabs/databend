@@ -18,6 +18,8 @@
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::RoleIdentity;
 use common_meta_types::UserIdentity;
+use common_meta_types::UserOption;
+use common_meta_types::UserOptionFlag;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use sqlparser::ast::Ident;
@@ -47,13 +49,15 @@ impl<'a> DfParser<'a> {
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let (name, hostname) = self.parse_principal_name_and_host()?;
+        let user_option = self.parse_user_option()?;
         let auth_option = self.parse_auth_option()?;
 
         let create = DfCreateUser {
             if_not_exists,
             name,
             hostname,
-            auth_options: auth_option,
+            auth_option,
+            user_option,
         };
         Ok(DfStatement::CreateUser(create))
     }
@@ -272,6 +276,34 @@ impl<'a> DfParser<'a> {
         self.parser
             .parse_identifier()
             .or_else(|_| self.expected("identifier or *", token))
+    }
+
+    fn parse_user_option(&mut self) -> Result<UserOption, ParserError> {
+        let mut user_option = UserOption::default();
+        if !self.parser.parse_keyword(Keyword::WITH) {
+            return Ok(user_option);
+        }
+        loop {
+            match self.parser.next_token().to_string().to_uppercase().as_str() {
+                "TENANTSETTING" => {
+                    user_option.set_option_flag(UserOptionFlag::TenantSetting);
+                }
+                "NOTENANTSETTING" => {
+                    user_option.set_option_flag(UserOptionFlag::TenantSetting);
+                }
+                "CONFIGRELOAD" => {
+                    user_option.set_option_flag(UserOptionFlag::ConfigReload);
+                }
+                "NOCONFIGRELOAD" => {
+                    user_option.unset_option_flag(UserOptionFlag::ConfigReload);
+                }
+                w => return self.expected("user option", Token::make_word(w, None)),
+            }
+            if !self.parser.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+        Ok(user_option)
     }
 
     fn parse_auth_option(&mut self) -> Result<DfAuthOption, ParserError> {

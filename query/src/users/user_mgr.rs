@@ -18,6 +18,7 @@ use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::RoleIdentity;
 use common_meta_types::UserInfo;
+use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
 
 use crate::users::User;
@@ -220,11 +221,17 @@ impl UserApiProvider {
         tenant: &str,
         username: &str,
         hostname: &str,
-        auth_info: AuthInfo,
+        auth_info: Option<AuthInfo>,
+        user_option: Option<UserOption>,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
-        let update_user =
-            client.update_user(username.to_string(), hostname.to_string(), auth_info, None);
+        let update_user = client.update_user(
+            username.to_string(),
+            hostname.to_string(),
+            auth_info,
+            user_option,
+            None,
+        );
         match update_user.await {
             Ok(res) => Ok(res),
             Err(e) => Err(e.add_message_back("(while alter user).")),

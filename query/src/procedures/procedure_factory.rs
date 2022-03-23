@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::UserOptionFlag;
 use once_cell::sync::Lazy;
 
 use crate::procedures::admins::AdminProcedure;
@@ -35,6 +36,9 @@ pub struct ProcedureFeatures {
 
     // Management mode only.
     pub management_mode_required: bool,
+
+    // User option flag required.
+    pub user_option_flag: Option<UserOptionFlag>,
 }
 
 impl ProcedureFeatures {
@@ -43,6 +47,7 @@ impl ProcedureFeatures {
             num_arguments: 0,
             variadic_arguments: None,
             management_mode_required: false,
+            user_option_flag: None,
         }
     }
 
@@ -58,6 +63,11 @@ impl ProcedureFeatures {
 
     pub fn management_mode_required(mut self, required: bool) -> ProcedureFeatures {
         self.management_mode_required = required;
+        self
+    }
+
+    pub fn user_option_flag(mut self, flag: UserOptionFlag) -> ProcedureFeatures {
+        self.user_option_flag = Some(flag);
         self
     }
 }

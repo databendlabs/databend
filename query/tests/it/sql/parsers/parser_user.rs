@@ -16,6 +16,8 @@ use common_exception::Result;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::RoleIdentity;
 use common_meta_types::UserIdentity;
+use common_meta_types::UserOption;
+use common_meta_types::UserOptionFlag;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use databend_query::sql::statements::DfAlterUser;
@@ -44,10 +46,11 @@ fn create_user_auth_test(
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_options: DfAuthOption {
+            auth_option: DfAuthOption {
                 auth_type,
                 by_value: auth_string,
             },
+            user_option: UserOption::default(),
         }),
     )
 }
@@ -118,19 +121,59 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test@localhost"),
             hostname: String::from("%"),
-            auth_options: DfAuthOption::default(),
+            auth_option: DfAuthOption::default(),
+            user_option: UserOption::default(),
         }),
     )?;
 
-    // errors
+    // create user with option
+    let mut user_option = UserOption::default();
+    user_option.set_option_flag(UserOptionFlag::TenantSetting);
+    expect_parse_ok(
+        "CREATE USER 'operator' WITH TENANTSETTING NOT IDENTIFIED",
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: false,
+            name: String::from("operator"),
+            hostname: String::from("%"),
+            auth_option: DfAuthOption::no_password(),
+            user_option,
+        }),
+    )?;
+
+    user_option.set_option_flag(UserOptionFlag::ConfigReload);
+    expect_parse_ok(
+        "CREATE USER 'operator' WITH TENANTSETTING, CONFIGRELOAD NOT IDENTIFIED",
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: false,
+            name: String::from("operator"),
+            hostname: String::from("%"),
+            auth_option: DfAuthOption::no_password(),
+            user_option,
+        }),
+    )?;
+
+    // create user with option
+    expect_parse_err(
+        "CREATE USER 'operator' NOT IDENTIFIED WITH TENANTSETTINGS",
+        String::from("sql parser error: Expected end of statement, found: WITH"),
+    )?;
+
+    // create user with no_password
     expect_parse_err(
         "CREATE USER 'test'@'localhost' IDENTIFIED WITH no_password BY 'password'",
         String::from("sql parser error: Expected end of statement, found: BY"),
     )?;
 
+    // create user without password
     expect_parse_err(
         "CREATE USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY",
         String::from("sql parser error: Expected literal string, found: EOF"),
+    )?;
+
+    // create user with unknown option
+    expect_parse_err(
+        "CREATE USER 'operator' WITH TEST",
+        String::from("sql parser error: Expected user option, found: TEST"),
     )?;
 
     Ok(())

@@ -56,7 +56,8 @@ impl Interpreter for AlterUserInterpreter {
                     &tenant,
                     plan.name.as_str(),
                     plan.hostname.as_str(),
-                    new_auth_info,
+                    Some(new_auth_info),
+                    None,
                 )
                 .await?;
         }
