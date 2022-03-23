@@ -70,7 +70,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     set_panic_hook();
     tracing::info!("{:?}", conf);
     tracing::info!(
-        "DatabendQuery v-{}",
+        "DatabendQuery {}",
         *databend_query::configs::DATABEND_COMMIT_VERSION,
     );
 
