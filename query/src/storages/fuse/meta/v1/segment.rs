@@ -15,16 +15,31 @@
 
 use crate::storages::fuse::meta::v0::snapshot::Statistics;
 use crate::storages::fuse::meta::BlockMeta;
+use crate::storages::fuse::meta::Versioned;
 
 /// A segment comprises one or more blocks
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct SegmentInfo {
     /// format version
-    pub format_version: u32,
+    format_version: u64,
     /// blocks belong to this segment
     pub blocks: Vec<BlockMeta>,
     /// summary statistics
     pub summary: Statistics,
+}
+
+impl SegmentInfo {
+    pub fn new(blocks: Vec<BlockMeta>, summary: Statistics) -> Self {
+        Self {
+            format_version: SegmentInfo::VERSION,
+            blocks,
+            summary,
+        }
+    }
+
+    pub fn format_version(&self) -> u64 {
+        self.format_version
+    }
 }
 
 use super::super::v0::segment::SegmentInfo as SegmentInfoV0;

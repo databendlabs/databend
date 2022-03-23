@@ -138,17 +138,13 @@ impl BlockStreamWriter {
         self.number_of_blocks_accumulated += 1;
         if self.number_of_blocks_accumulated >= self.num_block_threshold {
             let summary = acc.summary(self.data_schema.as_ref())?;
-            let seg = SegmentInfo {
-                format_version: 1,
-                blocks: acc.blocks_metas,
-                summary: Statistics {
-                    row_count: acc.summary_row_count,
-                    block_count: acc.summary_block_count,
-                    uncompressed_byte_size: acc.in_memory_size,
-                    compressed_byte_size: acc.file_size,
-                    col_stats: summary,
-                },
-            };
+            let seg = SegmentInfo::new(acc.blocks_metas, Statistics {
+                row_count: acc.summary_row_count,
+                block_count: acc.summary_block_count,
+                uncompressed_byte_size: acc.in_memory_size,
+                compressed_byte_size: acc.file_size,
+                col_stats: summary,
+            });
 
             // Reset state
             self.number_of_blocks_accumulated = 0;
@@ -240,17 +236,13 @@ impl Compactor<DataBlock, SegmentInfo> for BlockStreamWriter {
             None => Ok(None),
             Some(acc) => {
                 let summary = acc.summary(data_schema)?;
-                let seg = SegmentInfo {
-                    format_version: 1,
-                    blocks: acc.blocks_metas,
-                    summary: Statistics {
-                        row_count: acc.summary_row_count,
-                        block_count: acc.summary_block_count,
-                        uncompressed_byte_size: acc.in_memory_size,
-                        compressed_byte_size: acc.file_size,
-                        col_stats: summary,
-                    },
-                };
+                let seg = SegmentInfo::new(acc.blocks_metas, Statistics {
+                    row_count: acc.summary_row_count,
+                    block_count: acc.summary_block_count,
+                    uncompressed_byte_size: acc.in_memory_size,
+                    compressed_byte_size: acc.file_size,
+                    col_stats: summary,
+                });
                 Ok(Some(seg))
             }
         }

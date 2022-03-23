@@ -208,7 +208,9 @@ impl FuseTable {
         } else {
             statistics
         };
-        let prev_snapshot_id = previous.as_ref().map(|v| (v.snapshot_id, v.format_version));
+        let prev_snapshot_id = previous
+            .as_ref()
+            .map(|v| (v.snapshot_id, v.format_version()));
 
         // 2. merge segment locations with previous snapshot, if any
         if let Some(snapshot) = &previous {
@@ -216,14 +218,13 @@ impl FuseTable {
             new_segments.append(&mut segments)
         };
 
-        let new_snapshot = TableSnapshot {
-            format_version: 1, // TODO
-            snapshot_id: Uuid::new_v4(),
+        let new_snapshot = TableSnapshot::new(
+            Uuid::new_v4(),
             prev_snapshot_id,
-            schema: schema.clone(),
-            summary: stats,
-            segments: new_segments,
-        };
+            schema.clone(),
+            stats,
+            new_segments,
+        );
         Ok(new_snapshot)
     }
 

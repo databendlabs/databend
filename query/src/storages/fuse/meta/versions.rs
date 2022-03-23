@@ -26,7 +26,8 @@ use crate::storages::fuse::meta::v0;
 use crate::storages::fuse::meta::v1;
 
 pub const CURRNET_SEGMETN_VERSION: u64 = v1::SegmentInfo::VERSION;
-pub const CURRNET_SNAPSHOT_VERSION: u64 = v1::TableSnapshot::VERSION;
+//pub const CURRNET_SNAPSHOT_VERSION: u64 = v1::TableSnapshot::VERSION;
+pub const CURRNET_SNAPSHOT_VERSION: u64 = 1;
 pub const CURRNET_BLOCK_VERSION: u64 = DataBlock::VERSION;
 
 pub trait Versioned<const V: u64>
@@ -52,6 +53,11 @@ pub enum SnapshotVersion {
 }
 
 impl Versioned<0> for DataBlock {}
+
+#[allow(dead_code)]
+pub enum BlockVersion {
+    V0(PhantomData<DataBlock>),
+}
 
 mod converters {
     use super::*;
