@@ -19,7 +19,7 @@ use crate::storages::fuse::meta::ColumnId;
 use crate::storages::index::ColumnStatistics;
 
 /// Meta information of a block
-/// Kept inside the [SegmentInfo]
+/// Part of and kept inside the [SegmentInfo]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BlockMeta {
     pub row_count: u64,

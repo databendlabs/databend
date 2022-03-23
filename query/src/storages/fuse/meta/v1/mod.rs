@@ -15,3 +15,6 @@
 pub mod block;
 pub mod segment;
 pub mod snapshot;
+
+pub use segment::SegmentInfo;
+pub use snapshot::TableSnapshot;

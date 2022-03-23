@@ -17,4 +17,6 @@ pub mod segment;
 pub mod snapshot;
 
 pub use block::ColumnMeta;
+pub use segment::SegmentInfo;
 pub use snapshot::Statistics;
+pub use snapshot::TableSnapshot;

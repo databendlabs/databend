@@ -13,8 +13,8 @@
 //  limitations under the License.
 
 use std::io::ErrorKind;
+use std::marker::PhantomData;
 
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::AsyncRead;
@@ -25,7 +25,6 @@ use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::SegmentInfoVersion;
 use crate::storages::fuse::meta::SnapshotVersion;
 use crate::storages::fuse::meta::TableSnapshot;
-use crate::storages::fuse::meta::Versioned;
 
 #[async_trait::async_trait]
 pub trait VersionedReader<T> {
@@ -38,8 +37,8 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
     async fn load<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
-            SnapshotVersion::V1(v) => do_load(reader, v).await?,
-            SnapshotVersion::V0(v) => do_load(reader, v).await?.into(),
+            SnapshotVersion::V1(v) => do_load_new(reader, v).await?,
+            SnapshotVersion::V0(v) => do_load_new(reader, v).await?.into(),
         };
         Ok(r)
     }
@@ -50,25 +49,14 @@ impl VersionedReader<SegmentInfo> for SegmentInfoVersion {
     async fn load<R>(&self, reader: R) -> Result<SegmentInfo>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
-            SegmentInfoVersion::V1(v) => do_load(reader, v).await?,
-            SegmentInfoVersion::V0(v) => do_load(reader, v).await?.into(),
+            SegmentInfoVersion::V1(v) => do_load_new(reader, v).await?,
+            SegmentInfoVersion::V0(v) => do_load_new(reader, v).await?.into(),
         };
         Ok(r)
     }
 }
 
-//#[async_trait::async_trait]
-//impl VersionedReader<DataBlock> for DataBlockVersion {
-//    async fn load<R>(&self, reader: R) -> Result<DataBlock>
-//    where R: AsyncRead + Unpin + Send {
-//        let r = match self {
-//            DataBlockVersion::V0(v) => do_load(reader, v).await?,
-//        };
-//        Ok(r)
-//    }
-//}
-
-async fn do_load<R, T, const VER: u64>(mut reader: R, _v: &Versioned<T, VER>) -> Result<T>
+async fn do_load_new<R, T>(mut reader: R, _v: &PhantomData<T>) -> Result<T>
 where
     T: DeserializeOwned,
     R: AsyncRead + Unpin + Send,

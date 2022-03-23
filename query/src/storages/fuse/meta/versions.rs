@@ -12,62 +12,51 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+//! Versions and Migration
+//!
+//! TODO doc
+//!
+
 use std::marker::PhantomData;
 
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 
-use crate::storages::fuse::meta::v0::segment::SegmentInfo as SegmentInfoV0;
-use crate::storages::fuse::meta::v0::snapshot::TableSnapshot as TableSnapshotV0;
-use crate::storages::fuse::meta::v1::segment::SegmentInfo;
-use crate::storages::fuse::meta::v1::snapshot::TableSnapshot;
+use crate::storages::fuse::meta::v0;
+use crate::storages::fuse::meta::v1;
 
-// TODO tuple struct
-pub struct Versioned<T, const V: u64> {
-    _p: PhantomData<T>,
+pub const CURRNET_SEGMETN_VERSION: u64 = v1::SegmentInfo::VERSION;
+pub const CURRNET_SNAPSHOT_VERSION: u64 = v1::TableSnapshot::VERSION;
+pub const CURRNET_BLOCK_VERSION: u64 = 0;
+
+pub trait Versioned<const V: u64> {
+    const VERSION: u64 = V;
 }
 
-impl<T, const V: u64> Versioned<T, V> {
-    pub fn new() -> Self {
-        Self { _p: PhantomData }
-    }
+impl Versioned<0> for v0::SegmentInfo {}
+impl Versioned<1> for v1::SegmentInfo {}
+
+impl Versioned<0> for v0::TableSnapshot {}
+impl Versioned<1> for v1::TableSnapshot {}
+
+pub enum SegmentInfoVersion {
+    V0(PhantomData<v0::SegmentInfo>),
+    V1(PhantomData<v1::SegmentInfo>),
 }
 
 pub enum SnapshotVersion {
-    V0(Versioned<TableSnapshotV0, 0>),
-    V1(Versioned<TableSnapshot, 1>),
-}
-
-pub enum SegmentInfoVersion {
-    V0(Versioned<SegmentInfoV0, 0>),
-    V1(Versioned<SegmentInfo, 1>),
-}
-
-pub enum BlockVersion {
-    V0(Versioned<DataBlock, 0>),
+    V0(PhantomData<v0::TableSnapshot>),
+    V1(PhantomData<v1::TableSnapshot>),
 }
 
 mod converters {
     use super::*;
-    impl TryFrom<u64> for SnapshotVersion {
-        type Error = ErrorCode;
-        fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
-            match value {
-                0 => Ok(SnapshotVersion::V0(Versioned::new())),
-                1 => Ok(SnapshotVersion::V1(Versioned::new())),
-                _ => Err(ErrorCode::LogicalError(format!(
-                    "unknown snapshot version {value}, versions supported: 0, 1"
-                ))),
-            }
-        }
-    }
 
     impl TryFrom<u64> for SegmentInfoVersion {
         type Error = ErrorCode;
         fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
             match value {
-                0 => Ok(SegmentInfoVersion::V0(Versioned::new())),
-                1 => Ok(SegmentInfoVersion::V1(Versioned::new())),
+                0 => Ok(SegmentInfoVersion::V0(PhantomData)),
+                1 => Ok(SegmentInfoVersion::V1(PhantomData)),
                 _ => Err(ErrorCode::LogicalError(format!(
                     "unknown segment version {value}, versions supported: 0, 1"
                 ))),
@@ -75,34 +64,16 @@ mod converters {
         }
     }
 
-    impl TryFrom<u64> for BlockVersion {
+    impl TryFrom<u64> for SnapshotVersion {
         type Error = ErrorCode;
         fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
             match value {
-                0 => Ok(BlockVersion::V0(Versioned::new())),
+                0 => Ok(SnapshotVersion::V0(PhantomData)),
+                1 => Ok(SnapshotVersion::V1(PhantomData)),
                 _ => Err(ErrorCode::LogicalError(format!(
-                    "unknown block version {value}, versions supported: 0"
+                    "unknown snapshot segment version {value}, versions supported: 0, 1"
                 ))),
             }
         }
     }
-
-    impl From<&BlockVersion> for u64 {
-        fn from(v: &BlockVersion) -> u64 {
-            match v {
-                BlockVersion::V0(_) => 0,
-            }
-        }
-    }
-
-    impl From<&SegmentInfoVersion> for u64 {
-        fn from(v: &SegmentInfoVersion) -> u64 {
-            match v {
-                SegmentInfoVersion::V0(_) => 0,
-                SegmentInfoVersion::V1(_) => 1,
-            }
-        }
-    }
 }
-
-mod experiment {}
