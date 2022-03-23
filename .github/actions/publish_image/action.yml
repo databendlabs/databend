@@ -46,4 +46,3 @@ runs:
     - name: Image digest
       shell: bash
       run: echo ${{ steps.docker_build.outputs.digest }}
-
