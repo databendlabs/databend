@@ -19,6 +19,7 @@
 
 use std::marker::PhantomData;
 
+use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 
 use crate::storages::fuse::meta::v0;
@@ -28,25 +29,29 @@ pub const CURRNET_SEGMETN_VERSION: u64 = v1::SegmentInfo::VERSION;
 pub const CURRNET_SNAPSHOT_VERSION: u64 = v1::TableSnapshot::VERSION;
 pub const CURRNET_BLOCK_VERSION: u64 = 0;
 
-pub trait Versioned<const V: u64> {
+pub trait Versioned<const V: u64>
+where Self: Sized
+{
     const VERSION: u64 = V;
 }
 
 impl Versioned<0> for v0::SegmentInfo {}
 impl Versioned<1> for v1::SegmentInfo {}
 
-impl Versioned<0> for v0::TableSnapshot {}
-impl Versioned<1> for v1::TableSnapshot {}
-
 pub enum SegmentInfoVersion {
     V0(PhantomData<v0::SegmentInfo>),
     V1(PhantomData<v1::SegmentInfo>),
 }
 
+impl Versioned<0> for v0::TableSnapshot {}
+impl Versioned<1> for v1::TableSnapshot {}
+
 pub enum SnapshotVersion {
     V0(PhantomData<v0::TableSnapshot>),
     V1(PhantomData<v1::TableSnapshot>),
 }
+
+impl Versioned<0> for DataBlock {}
 
 mod converters {
     use super::*;
@@ -55,8 +60,8 @@ mod converters {
         type Error = ErrorCode;
         fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
             match value {
-                0 => Ok(SegmentInfoVersion::V0(PhantomData)),
-                1 => Ok(SegmentInfoVersion::V1(PhantomData)),
+                0 => Ok(SegmentInfoVersion::V0(ver_eq::<_, 0>(PhantomData))),
+                1 => Ok(SegmentInfoVersion::V1(ver_eq::<_, 1>(PhantomData))),
                 _ => Err(ErrorCode::LogicalError(format!(
                     "unknown segment version {value}, versions supported: 0, 1"
                 ))),
@@ -68,12 +73,19 @@ mod converters {
         type Error = ErrorCode;
         fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
             match value {
-                0 => Ok(SnapshotVersion::V0(PhantomData)),
-                1 => Ok(SnapshotVersion::V1(PhantomData)),
+                0 => Ok(SnapshotVersion::V0(ver_eq::<_, 0>(PhantomData))),
+                1 => Ok(SnapshotVersion::V1(ver_eq::<_, 1>(PhantomData))),
                 _ => Err(ErrorCode::LogicalError(format!(
                     "unknown snapshot segment version {value}, versions supported: 0, 1"
                 ))),
             }
         }
+    }
+
+    /// Statically check that if T implements Versoined<U> where U equals V
+    #[inline]
+    fn ver_eq<T, const V: u64>(v: PhantomData<T>) -> PhantomData<T>
+    where T: Versioned<V> {
+        v
     }
 }
