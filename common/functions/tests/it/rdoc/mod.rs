@@ -13,7 +13,3 @@
 // limitations under the License.
 
 mod function_doc_asset;
-mod function_docs;
-
-pub use function_doc_asset::FunctionDocAsset;
-pub use function_docs::*;

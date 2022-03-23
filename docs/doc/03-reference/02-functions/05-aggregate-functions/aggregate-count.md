@@ -2,8 +2,6 @@
 title: COUNT
 ---
 
-Aggregate function. 
-
 The COUNT() function returns the number of records returned by a select query.
 
 **Note:** NULL values are not counted.

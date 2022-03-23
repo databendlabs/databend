@@ -13,9 +13,8 @@
 // limitations under the License.
 
 use codegen::writes::codegen_arithmetic_type;
-use codegen::writes::codegen_function_doc;
 
 fn main() {
     codegen_arithmetic_type();
-    codegen_function_doc().unwrap();
+    // codegen_function_doc().unwrap();
 }

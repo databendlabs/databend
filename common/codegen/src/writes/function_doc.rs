@@ -16,32 +16,33 @@ use std::error::Error;
 use std::fs::File;
 use std::io::Write;
 
+use common_functions::rdoc::FunctionDocAsset;
 use common_functions::scalars::FunctionFactory;
 use handlebars::no_escape;
 use handlebars::to_json;
 use handlebars::Handlebars;
 use serde_json::value::Map;
 
+#[allow(dead_code)]
 pub fn codegen_function_doc() -> Result<(), Box<dyn Error>> {
     let function_factory = FunctionFactory::instance();
     let names = function_factory.registered_names();
-    let features = function_factory.registered_features();
 
     let mut handlebars = Handlebars::new();
     handlebars.register_escape_fn(no_escape);
 
     handlebars.register_template_file("function", "common/codegen/src/template/function.hbs")?;
 
-    for (name, feature) in names.iter().zip(features.iter()) {
-        if feature.category != "Conditional" {
+    for name in names.iter() {
+        if name != "Conditional" {
             continue;
         }
+        let doc = FunctionDocAsset::get_doc(name);
         let mut data = Map::new();
         data.insert("name".to_string(), to_json(name));
-        data.insert("features".to_string(), to_json(feature));
+        data.insert("doc".to_string(), to_json(doc));
 
         let result = handlebars.render("function", &data)?;
-        // println!("{}", result);
         let path = "docs/doc/03-reference/02-functions/01-conditional-functions/".to_string()
             + name
             + "_new.md";

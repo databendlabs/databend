@@ -17,18 +17,17 @@ use serde::Serialize;
 #[derive(Clone, Debug, PartialEq, Serialize, Default)]
 pub struct FunctionDocs {
     // Function Category
-    pub category: &'static str,
+    pub category: String,
     // Introduce the function in brief.
-    pub description: &'static str,
+    pub description: String,
     // The syntax of the function, aka: syntax.
-    pub syntax: &'static str,
-    pub args: Vec<(&'static str, &'static str)>,
-    pub return_type: &'static str,
-
+    pub syntax: String,
+    pub args: Vec<(String, String)>,
+    pub return_type: String,
     // Example SQL of the function that can be run directly in query.
-    pub examples: Vec<&'static str>,
+    pub example: String,
 
-    pub more: &'static str,
+    pub markdown: String,
 }
 
 // set properties for descriptions
@@ -42,22 +41,23 @@ macro_rules! sp {
 }
 
 impl FunctionDocs {
-    sp!(category, &'static str);
-    sp!(description, &'static str);
-    sp!(syntax, &'static str);
-    sp!(return_type, &'static str);
+    sp!(category, String);
+    sp!(description, String);
+    sp!(syntax, String);
+    sp!(return_type, String);
 
-    pub fn add_arg(mut self, name: &'static str, description: &'static str) -> FunctionDocs {
+    pub fn add_arg(mut self, name: String, description: String) -> FunctionDocs {
         self.args.push((name, description));
         self
     }
 
-    pub fn add_example(mut self, example: &'static str) -> FunctionDocs {
-        self.examples.push(example);
+    pub fn markdown(mut self, markdown: String) -> FunctionDocs {
+        self.markdown = markdown;
         self
     }
 }
 
+#[allow(dead_code)]
 #[macro_export]
 macro_rules! doc {
     ( $($key:ident => $value:expr),+ ) => {
@@ -71,65 +71,34 @@ macro_rules! doc {
      };
 }
 
+#[allow(dead_code)]
 #[macro_export]
 macro_rules! set_doc {
     ($doc: expr, category, $v: expr) => {{
-        $doc.category = $v;
+        $doc.category = $v.to_string();
     }};
 
     ($doc: expr, description, $v: expr) => {{
-        $doc.description = $v;
+        $doc.description = $v.to_string();
     }};
 
     ($doc: expr, syntax, $v: expr) => {{
-        $doc.syntax = $v;
+        $doc.syntax = $v.to_string();
+    }};
+
+    ($doc: expr, markdown, $v: expr) => {{
+        $doc.markdown = $v.to_string();
     }};
 
     ($doc: expr, return_type, $v: expr) => {{
-        $doc.syntax = $v;
+        $doc.return_type = $v.to_string();
     }};
 
     ($doc: expr, arg, $v: expr) => {{
-        $doc.args.push(($v.0, $v.1));
+        $doc.args.push(($v.0.to_string(), $v.1.to_string()));
     }};
 
     ($doc: expr, example, $v: expr) => {{
-        $doc.examples.push($v);
+        $doc.example = $v.to_string();
     }};
-}
-
-#[cfg(test)]
-mod test {
-    use super::FunctionDocs;
-
-    #[test]
-    fn iw() {
-        let doc = doc! {
-            category => "Conditional",
-            description => "If x is null, then y is returned.",
-            syntax => "ifnull(x, y, z)",
-            return_type => "Combination type of y and z",
-            arg => ("x", "any type"),
-            arg => ("y", "any type"),
-            arg => ("z", "any type"),
-            example =>  "ifnull(3, 2, 1)",
-            example =>  "ifnull(null, 2, 1)"
-        };
-
-        println!("c {:?}", doc);
-
-        let doc = FunctionDocs::default().description("If expr1 is TRUE, IF() returns expr2. Otherwise, it returns expr3.")
-                .syntax("IF(expr1,expr2,expr3)")
-                .add_arg(
-                    "expr1",
-                    "The condition for evaluation that can be true or false.",
-                )
-                .add_arg("expr2", "The expression to return if condition is met.")
-                .add_arg("expr3", "The expression to return if condition is not met.")
-                .return_type("The return type is determined by expr2 and expr3, they must have the lowest common type.")
-                .add_example("select if(number=0, true, false) from numbers(1);");
-
-        println!("{:?}", doc);
-        println!("{:?}", serde_json::to_string(&doc).unwrap());
-    }
 }

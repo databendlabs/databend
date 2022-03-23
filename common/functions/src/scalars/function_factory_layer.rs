@@ -17,8 +17,8 @@ use super::FunctionFactory;
 use super::TypedFunctionDescription;
 
 pub struct FunctionFactoryLayer<'a> {
-    factory: &'a mut FunctionFactory,
     category: Option<&'static str>,
+    factory: &'a mut FunctionFactory,
 }
 
 impl<'a> FunctionFactoryLayer<'a> {
@@ -37,20 +37,10 @@ impl FunctionFactoryLayer<'_> {
     }
 
     pub fn register(&mut self, name: &str, desc: FunctionDescription) {
-        let mut docs = desc.docs.clone();
-        if let Some(category) = self.category {
-            docs.category = category;
-        }
-        let desc = desc.docs(docs);
         self.factory.register(name, desc);
     }
 
     pub fn register_typed(&mut self, name: &str, desc: TypedFunctionDescription) {
-        let mut docs = desc.docs.clone();
-        if let Some(category) = self.category {
-            docs.category = category;
-        }
-        let desc = desc.docs(docs);
         self.factory.register_typed(name, desc);
     }
 }

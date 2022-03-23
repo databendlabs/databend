@@ -18,6 +18,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::rdoc::FunctionDocAsset;
+use common_functions::rdoc::FunctionDocs;
 use common_functions::scalars::FunctionFactory;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -48,16 +50,25 @@ impl AsyncSystemTable for FunctionsTable {
         let aggr_func_names = aggregate_function_factory.registered_names();
         let udfs = FunctionsTable::get_udfs(ctx).await?;
 
-        let func_features = function_factory.registered_features();
-        let aggr_func_features = aggregate_function_factory.registered_features();
-
-        let names: Vec<&[u8]> = func_names
+        let names: Vec<&str> = func_names
             .iter()
             .chain(aggr_func_names.iter())
             .chain(udfs.iter().map(|udf| &udf.name))
-            .map(|x| x.as_bytes())
+            .map(|x| x.as_str())
             .collect();
+
         let builtin_func_len = func_names.len() + aggr_func_names.len();
+
+        let docs = (0..names.len())
+            .map(|i| {
+                if i < builtin_func_len {
+                    let name = &names[i];
+                    FunctionDocAsset::get_doc(name)
+                } else {
+                    FunctionDocs::default()
+                }
+            })
+            .collect::<Vec<_>>();
 
         let is_builtin = (0..names.len())
             .map(|i| i < builtin_func_len)
@@ -69,10 +80,8 @@ impl AsyncSystemTable for FunctionsTable {
 
         let categorys = (0..names.len())
             .map(|i| {
-                if i < func_names.len() {
-                    func_features[i].category
-                } else if i < builtin_func_len {
-                    "Aggregate"
+                if i < builtin_func_len {
+                    docs[i].category.as_str()
                 } else {
                     "UDF"
                 }
@@ -81,10 +90,8 @@ impl AsyncSystemTable for FunctionsTable {
 
         let descriptions = (0..names.len())
             .map(|i| {
-                if i < func_names.len() {
-                    func_features[i].description
-                } else if i < builtin_func_len {
-                    aggr_func_features[i - func_names.len()].description
+                if i < builtin_func_len {
+                    docs[i].description.as_str()
                 } else {
                     udfs.get(i - builtin_func_len)
                         .map_or("", |udf| udf.description.as_str())
@@ -92,12 +99,10 @@ impl AsyncSystemTable for FunctionsTable {
             })
             .collect::<Vec<&str>>();
 
-        let definitions = (0..names.len())
+        let syntaxs = (0..names.len())
             .map(|i| {
-                if i < func_names.len() {
-                    func_features[i].definition
-                } else if i < builtin_func_len {
-                    aggr_func_features[i - func_names.len()].definition
+                if i < builtin_func_len {
+                    docs[i].syntax.as_str()
                 } else {
                     udfs.get(i - builtin_func_len)
                         .map_or("", |udf| udf.definition.as_str())
@@ -107,10 +112,8 @@ impl AsyncSystemTable for FunctionsTable {
 
         let examples = (0..names.len())
             .map(|i| {
-                if i < func_names.len() {
-                    func_features[i].example
-                } else if i < builtin_func_len {
-                    aggr_func_features[i - func_names.len()].example
+                if i < builtin_func_len {
+                    docs[i].example.as_str()
                 } else {
                     ""
                 }
@@ -123,7 +126,7 @@ impl AsyncSystemTable for FunctionsTable {
             Series::from_data(is_aggregate),
             Series::from_data(categorys),
             Series::from_data(descriptions),
-            Series::from_data(definitions),
+            Series::from_data(syntaxs),
             Series::from_data(examples),
         ]))
     }
@@ -137,7 +140,7 @@ impl FunctionsTable {
             DataField::new("is_aggregate", bool::to_data_type()),
             DataField::new("category", Vu8::to_data_type()),
             DataField::new("description", Vu8::to_data_type()),
-            DataField::new("definition", Vu8::to_data_type()),
+            DataField::new("syntax", Vu8::to_data_type()),
             DataField::new("example", Vu8::to_data_type()),
         ]);
 

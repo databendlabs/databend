@@ -2,20 +2,20 @@
 title: {{name}}
 ---
 
-{{features.description}}
+{{doc.description}}
 
 ## Syntax
 
 ```sql
-{{features.definition}}
+{{doc.definition}}
 ```
 
-{{#if (gt (len features.args) 0)}}
+{{#if (gt (len doc.args) 0)}}
 ## Arguments
 
 | Arguments   | Description |
 | ----------- | ----------- |
-{{#each features.args}}
+{{#each doc.args}}
 | {{ this.[0] }} | {{ this.[1]}} |
 {{/each}}
 
@@ -26,10 +26,10 @@ title: {{name}}
 
 ## Return Type
 
-{{features.return_type}}
+{{doc.return_type}}
 
 ## Examples
 
 ```sql
-{{features.example}}
+{{doc.example}}
 ```

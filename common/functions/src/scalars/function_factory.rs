@@ -34,7 +34,6 @@ use super::OtherFunction;
 use super::StringFunction;
 use super::ToCastFunction;
 use super::TupleClassFunction;
-use crate::rdoc::FunctionDocs;
 use crate::scalars::DateFunction;
 use crate::scalars::UUIDFunction;
 
@@ -45,7 +44,6 @@ pub type FactoryCreatorWithTypes =
 
 pub struct FunctionDescription {
     pub(crate) features: FunctionFeatures,
-    pub(crate) docs: FunctionDocs,
     function_creator: FactoryCreator,
 }
 
@@ -54,7 +52,6 @@ impl FunctionDescription {
         FunctionDescription {
             function_creator: creator,
             features: FunctionFeatures::default(),
-            docs: FunctionDocs::default(),
         }
     }
 
@@ -63,17 +60,10 @@ impl FunctionDescription {
         self.features = features;
         self
     }
-
-    #[must_use]
-    pub fn docs(mut self, docs: FunctionDocs) -> FunctionDescription {
-        self.docs = docs;
-        self
-    }
 }
 
 pub struct TypedFunctionDescription {
     pub(crate) features: FunctionFeatures,
-    pub(crate) docs: FunctionDocs,
     pub typed_function_creator: FactoryCreatorWithTypes,
 }
 
@@ -82,19 +72,12 @@ impl TypedFunctionDescription {
         TypedFunctionDescription {
             typed_function_creator: creator,
             features: FunctionFeatures::default(),
-            docs: FunctionDocs::default(),
         }
     }
 
     #[must_use]
     pub fn features(mut self, features: FunctionFeatures) -> TypedFunctionDescription {
         self.features = features;
-        self
-    }
-
-    #[must_use]
-    pub fn docs(mut self, docs: FunctionDocs) -> TypedFunctionDescription {
-        self.docs = docs;
         self
     }
 }
