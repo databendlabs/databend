@@ -1,8 +1,11 @@
 ---
 title: HTTP Handler
+sidebar_label: REST
+description:
+  HTTP Handler
 ---
 
-## /v1/query to execute a SQL statement
+## /v1/query - Execute SQL statement
 
 ### Overview
 
@@ -26,10 +29,10 @@ This handler return results in "pages" with long-polling.
         2. for the following `QueryRequest` which **use** the context: use the `QueryResponse.session_id `
            for `QueryRequest.session.id`.
 
-### A quick examples
+### Quick example
 
 ```shell
-$ curl --request POST '127.0.0.1:8001/v1/query/' --header 'Content-Type: application/json' --data-raw '{"sql": "SELECT avg(number) FROM numbers(100000000)"}'
+curl --request POST '127.0.0.1:8001/v1/query/' --header 'Content-Type: application/json' --data-raw '{"sql": "SELECT avg(number) FROM numbers(100000000)"}'
 ```
 
 the SQL will be run with default session and pagination settings, mainly:
@@ -82,9 +85,8 @@ Note:
 1. next_uri is null because all data is returned.
 1. client should call final_uri to tell the server the client has received the results and server can delete them.
 
-### Reference
 
-#### QueryRequest
+## Query Request
 
 QueryRequest
 
@@ -113,7 +115,7 @@ PaginationConf: critical conditions for each HTTP request to return (before all 
 |----------------|------|----------|---------|-------------------|
 | wait_time_secs | i32  | No       | 1       | long polling time |
 
-#### QueryResponse
+## Query Response
 
 QueryResponse:
 
@@ -125,14 +127,14 @@ QueryResponse:
 | data   | array      | each item is a row of results            |
 | schema | Schema     | the schema of the results                |
 
-Schema
+Schema:
 
 | field    | type   | description                                               |
 |----------|--------|-----------------------------------------------------------|
 | fields   | array  | An ordered sequence of Field                              |
 | metadata | object | A map of key-value pairs containing additional meta data. |
 
-Field
+Field:
 
 | field     | type   |
 |-----------|--------|
@@ -140,21 +142,21 @@ Field
 | data_type | string |
 | nullable  | bool   |
 
-QueryStats
+Stats:
 
 | field           | type          | description                                                                                                      |
 |-----------------|---------------|------------------------------------------------------------------------------------------------------------------|
 | running_time_ms | float         | million secs elapsed since query begin to execute internally, stop timing when query Finished (state != Running) |
 | scan_progress   | QueryProgress | query scan progress                                                                                              |
 
-QueryProgress
+Progress:
 
 | field              | type |
 |--------------------|------|
 | read_rows          | int  |
 | read_bytes         | int  |
 
-QueryError
+Error:
 
 | field     | type   | description                     |
 |-----------|--------|---------------------------------|
@@ -162,9 +164,9 @@ QueryError
 | message   | string | error message                   |
 | backtrace | string |                                 |
 
-#### HTTP response status code
+## Response Status Code
 
-the usage of status code for different kinds of errors:
+The usage of status code for different kinds of errors:
 
 | code | error                                                                       |
 |------|-----------------------------------------------------------------------------|
@@ -172,6 +174,6 @@ the usage of status code for different kinds of errors:
 | 404  | "query_id" or "page" not found                                              |
 | 400  | invalid request format                                                      |
 
-check the response body for error reason as a string when status code is not 200.
+Check the response body for error reason as a string when status code is not 200.
 
 
