@@ -1,6 +1,8 @@
 ---
 title: Your first Databend Pull Request
 sidebar_label: First Databend Pull Request
+description:
+  You first good Databend Pull Request
 ---
 
 [Databend](https://github.com/datafuselabs/databend) is an open source project, you can help with ideas, code, or documentation, we appreciate any efforts that help us to make the project better!
@@ -140,6 +142,29 @@ More types:
 - `test`: (adding missing tests, refactoring tests; no production code change)
 - `chore`: (updating grunt tasks etc; no production code change)
 
+## Testing
+
+*Unit tests*
+
+```shell
+$ make unit-test
+```
+
+*Stateless tests*
+
+```shell
+$ make stateless-test
+```
+
+## Issues
+
+Databend uses [GitHub issues](https://github.com/datafuselabs/databend/issues) to track bugs. Please include necessary information and instructions to reproduce your issue.
+
 ## Documentation
 
 All developer documentation is published on the Databend developer site, [databend.rs](https://databend.rs). 
+
+## Code of Conduct
+
+Please refer to the [Code of Conduct](/dev/policies/code-of-conduct), which describes the expectations for interactions within the community.
+
