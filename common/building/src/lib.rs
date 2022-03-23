@@ -30,17 +30,30 @@ pub fn setup() {
 }
 
 pub fn add_building_env_vars() {
-    add_env_vergen();
+    set_env_config();
+    add_env_git_tag();
     add_env_commit_authors();
 }
 
-pub fn add_env_vergen() {
+pub fn set_env_config() {
     let mut config = Config::default();
     *config.git_mut().sha_kind_mut() = ShaKind::Short;
 
     if let Err(e) = vergen(config) {
         eprintln!("{}", e);
     }
+}
+
+// Get the latest tag:
+// git describe --tags --abbrev=0
+// v0.6.99-nightly
+pub fn add_env_git_tag() {
+    let r = run_script::run_script!(r#"git describe --tags --abbrev=0"#);
+    let tag = match r {
+        Ok((_, output, _)) => output,
+        Err(e) => e.to_string(),
+    };
+    println!("cargo:rustc-env=VERGEN_GIT_SEMVER={}", tag);
 }
 
 pub fn add_env_commit_authors() {
