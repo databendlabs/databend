@@ -22,34 +22,29 @@ use crate::storages::fuse::meta::v0::snapshot::TableSnapshot as TableSnapshotV0;
 use crate::storages::fuse::meta::v1::segment::SegmentInfo;
 use crate::storages::fuse::meta::v1::snapshot::TableSnapshot;
 
-pub struct Versioned<T> {
+// TODO tuple struct
+pub struct Versioned<T, const V: u64> {
     _p: PhantomData<T>,
 }
 
-impl<T> Versioned<T> {
+impl<T, const V: u64> Versioned<T, V> {
     pub fn new() -> Self {
         Self { _p: PhantomData }
     }
 }
 
-impl<T> Default for Versioned<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 pub enum SnapshotVersion {
-    V0(Versioned<TableSnapshotV0>),
-    V1(Versioned<TableSnapshot>),
+    V0(Versioned<TableSnapshotV0, 0>),
+    V1(Versioned<TableSnapshot, 1>),
 }
 
 pub enum SegmentInfoVersion {
-    V0(Versioned<SegmentInfoV0>),
-    V1(Versioned<SegmentInfo>),
+    V0(Versioned<SegmentInfoV0, 0>),
+    V1(Versioned<SegmentInfo, 1>),
 }
 
 pub enum BlockVersion {
-    V0(Versioned<DataBlock>),
+    V0(Versioned<DataBlock, 0>),
 }
 
 mod converters {
@@ -91,4 +86,23 @@ mod converters {
             }
         }
     }
+
+    impl From<&BlockVersion> for u64 {
+        fn from(v: &BlockVersion) -> u64 {
+            match v {
+                BlockVersion::V0(_) => 0,
+            }
+        }
+    }
+
+    impl From<&SegmentInfoVersion> for u64 {
+        fn from(v: &SegmentInfoVersion) -> u64 {
+            match v {
+                SegmentInfoVersion::V0(_) => 0,
+                SegmentInfoVersion::V1(_) => 1,
+            }
+        }
+    }
 }
+
+mod experiment {}

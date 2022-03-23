@@ -57,21 +57,21 @@ impl VersionedReader<SegmentInfo> for SegmentInfoVersion {
     }
 }
 
-#[async_trait::async_trait]
-impl VersionedReader<DataBlock> for DataBlockVersion {
-    async fn load<R>(&self, reader: R) -> Result<DataBlock>
-    where R: AsyncRead + Unpin + Send {
-        let r = match self {
-            DataBlockVersion::V0(v) => do_load(reader, v).await?,
-        };
-        Ok(r)
-    }
-}
+//#[async_trait::async_trait]
+//impl VersionedReader<DataBlock> for DataBlockVersion {
+//    async fn load<R>(&self, reader: R) -> Result<DataBlock>
+//    where R: AsyncRead + Unpin + Send {
+//        let r = match self {
+//            DataBlockVersion::V0(v) => do_load(reader, v).await?,
+//        };
+//        Ok(r)
+//    }
+//}
 
-async fn do_load<R, T>(mut reader: T, _v: &Versioned<R>) -> Result<R>
+async fn do_load<R, T, const VER: u64>(mut reader: R, _v: &Versioned<T, VER>) -> Result<T>
 where
-    R: DeserializeOwned,
-    T: AsyncRead + Unpin + Send,
+    T: DeserializeOwned,
+    R: AsyncRead + Unpin + Send,
 {
     let mut buffer: Vec<u8> = vec![];
     use futures::AsyncReadExt;
@@ -83,5 +83,5 @@ where
             ErrorCode::DalTransportError(msg)
         }
     })?;
-    Ok(from_slice::<R>(&buffer)?)
+    Ok(from_slice::<T>(&buffer)?)
 }
