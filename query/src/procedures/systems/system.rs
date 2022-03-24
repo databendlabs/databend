@@ -19,6 +19,9 @@ pub struct SystemProcedure;
 
 impl SystemProcedure {
     pub fn register(factory: &mut ProcedureFactory) {
-        factory.register("system$fuse_history", FuseHistoryProcedure::desc());
+        factory.register(
+            "system$fuse_history",
+            Box::new(FuseHistoryProcedure::try_create),
+        );
     }
 }

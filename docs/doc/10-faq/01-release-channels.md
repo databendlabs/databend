@@ -42,6 +42,6 @@ This is called the “train model” because every six weeks, a release “leave
 
 ## Notes
 
-[Roadmap 2021](https://github.com/datafuselabs/databend/issues/746)
+[Roadmap 2022](https://github.com/datafuselabs/databend/issues/3706)
 
 [https://databend.rs](https://databend.rs/)

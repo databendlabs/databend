@@ -118,6 +118,7 @@ build_exceptions! {
     PermissionDenied(1063),
     UnmarshalError(1064),
     SemanticError(1065),
+    InvalidAuthInfo(1066),
 
     // Uncategorized error codes.
     UnexpectedResponseType(1066),

@@ -22,6 +22,7 @@ use std::time::Duration;
 use common_base::tokio;
 use common_base::Runtime;
 use common_base::SignalStream;
+use common_contexts::DalRuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -45,8 +46,8 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 use crate::sessions::ProcessInfo;
+use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
-use crate::sessions::Status;
 use crate::storages::cache::CacheManager;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::UserApiProvider;
@@ -64,9 +65,9 @@ pub struct SessionManager {
     pub(in crate::sessions) storage_cache_manager: RwLock<Arc<CacheManager>>,
     pub(in crate::sessions) query_logger:
         RwLock<Option<Arc<dyn tracing::Subscriber + Send + Sync>>>,
-    pub status: Arc<RwLock<Status>>,
+    pub status: Arc<RwLock<SessionManagerStatus>>,
     storage_operator: RwLock<Operator>,
-    storage_runtime: Runtime,
+    storage_runtime: Arc<Runtime>,
     _guards: Vec<WorkerGuard>,
 }
 
@@ -74,7 +75,6 @@ impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
         let storage_cache_manager = Arc::new(CacheManager::init(&conf.query));
-        let storage_accessor = Self::init_storage_operator(&conf).await?;
 
         // Cluster discovery.
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
@@ -86,6 +86,12 @@ impl SessionManager {
             }
             Runtime::with_worker_threads(storage_num_cpus, Some("IO-worker".to_owned()))?
         };
+
+        // NOTE: Magic happens here. We will add a layer upon original storage operator
+        // so that all underlying storage operations will send to storage runtime.
+        let storage_operator = Self::init_storage_operator(&conf)
+            .await?
+            .layer(DalRuntime::new(storage_runtime.inner()));
 
         // User manager and init the default users.
         let user = UserApiProvider::create_global(conf.clone()).await?;
@@ -115,8 +121,8 @@ impl SessionManager {
             storage_cache_manager: RwLock::new(storage_cache_manager),
             query_logger: RwLock::new(query_logger),
             status,
-            storage_operator: RwLock::new(storage_accessor),
-            storage_runtime,
+            storage_operator: RwLock::new(storage_operator),
+            storage_runtime: Arc::new(storage_runtime),
             _guards,
         }))
     }
@@ -154,8 +160,8 @@ impl SessionManager {
         self.storage_cache_manager.read().clone()
     }
 
-    pub fn get_storage_runtime<'a>(self: &'a Arc<Self>) -> &'a Runtime {
-        &self.storage_runtime
+    pub fn get_storage_runtime(&self) -> Arc<Runtime> {
+        self.storage_runtime.clone()
     }
 
     pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<SessionRef> {
@@ -335,6 +341,11 @@ impl SessionManager {
                     builder.endpoint(&s3_conf.endpoint_url);
                 }
 
+                // Region
+                {
+                    builder.region(&s3_conf.region);
+                }
+
                 // Credential.
                 {
                     builder.credential(Credential::hmac(
@@ -388,7 +399,7 @@ impl SessionManager {
         let config = {
             let mut config = self.conf.write();
             let config_file = config.config_file.clone();
-            *config = Config::load_from_toml(&config_file)?;
+            *config = Config::load_from_file(&config_file)?;
             config.config_file = config_file;
             config.clone()
         };
@@ -401,7 +412,11 @@ impl SessionManager {
         *self.storage_cache_manager.write() = Arc::new(CacheManager::init(&config.query));
 
         {
-            let operator = Self::init_storage_operator(&config).await?;
+            // NOTE: Magic happens here. We will add a layer upon original storage operator
+            // so that all underlying storage operations will send to storage runtime.
+            let operator = Self::init_storage_operator(&config)
+                .await?
+                .layer(DalRuntime::new(self.storage_runtime.inner()));
             *self.storage_operator.write() = operator;
         }
 

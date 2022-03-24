@@ -15,6 +15,8 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
+use databend_query::sql::statements::AlterTableAction;
+use databend_query::sql::statements::DfAlterTable;
 use databend_query::sql::statements::DfCreateTable;
 use databend_query::sql::statements::DfDescribeTable;
 use databend_query::sql::statements::DfDropTable;
@@ -184,6 +186,24 @@ fn drop_table() -> Result<()> {
         let expected = DfStatement::DropTable(DfDropTable {
             if_exists: true,
             name: ObjectName(vec![Ident::new("t1")]),
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn alter_table() -> Result<()> {
+    // alter table rename
+    {
+        let sql = "ALTER TABLE t1 RENAME TO t2";
+        let table_name = ObjectName(vec![Ident::new("t1")]);
+        let new_table_name = ObjectName(vec![Ident::new("t2")]);
+        let expected = DfStatement::AlterTable(DfAlterTable {
+            if_exists: false,
+            table_name,
+            action: AlterTableAction::RenameTable(new_table_name),
         });
         expect_parse_ok(sql, expected)?;
     }

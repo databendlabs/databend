@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AlterUserPlan;
 use common_planners::PlanNode;
@@ -49,8 +48,7 @@ impl AnalyzableStatement for DfAlterUser {
 
         let new_auth_info = user_info
             .auth_info
-            .alter(&self.auth_option.auth_type, &self.auth_option.by_value)
-            .map_err(ErrorCode::SyntaxException)?;
+            .alter(&self.auth_option.auth_type, &self.auth_option.by_value)?;
 
         let new_auth_info = if user_info.auth_info == new_auth_info {
             None

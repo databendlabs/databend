@@ -120,7 +120,7 @@ impl Table for GithubTable {
 
     fn read2(
         &self,
-        _: Arc<QueryContext>,
+        ctx: Arc<QueryContext>,
         _: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
@@ -130,7 +130,7 @@ impl Table for GithubTable {
         pipeline.add_pipe(NewPipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
-            processors: vec![GithubSource::create(output, schema, options)?],
+            processors: vec![GithubSource::create(ctx, output, schema, options)?],
         });
 
         Ok(())
@@ -173,11 +173,12 @@ struct GithubSource {
 
 impl GithubSource {
     pub fn create(
+        ctx: Arc<QueryContext>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
         options: RepoTableOptions,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(output, GithubSource {
+        AsyncSourcer::create(ctx, output, GithubSource {
             schema,
             options,
             finish: false,

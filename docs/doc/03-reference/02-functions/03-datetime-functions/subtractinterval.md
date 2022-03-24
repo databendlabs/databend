@@ -1,6 +1,7 @@
 ---
 title: Subtract time interval
 description: Subtract time interval function
+title_includes: subtractYears, subtractMonths, subtractDays, subtractHours, subtractMinutes, subtractSeconds
 ---
 
 Subtract time interval from a date or datetime, return the result of date or datetime type.
@@ -17,7 +18,7 @@ subtractSeconds(exp0, expr1)
 
 ## Return Type
 
-Date16, Date32 or DateTime32, depends on the input.
+Date16, Date32 or DateTime32, DateTime64, depends on the input.
 
 ## Examples
 

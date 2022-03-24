@@ -88,6 +88,24 @@ async fn test_plan_parser() -> Result<()> {
             error: "",
         },
         Test {
+            name: "drop-table-if-exists-passed",
+            sql: "DROP TABLE IF EXISTS db1.t1",
+            expect: "Drop table db1.t1, if_exists:true",
+            error: "",
+        },
+        Test {
+            name: "alter-table-rename-table-passed",
+            sql: "ALTER TABLE t1 RENAME TO t2",
+            expect: "Rename table, [default.t1 to default.t2]",
+            error: "",
+        },
+        Test {
+            name: "alter-table-rename-table-passed",
+            sql: "ALTER TABLE db1.t1 RENAME TO db1.t2",
+            expect: "Rename table, [db1.t1 to db1.t2]",
+            error: "",
+        },
+        Test {
             name: "rename-table-passed",
             sql: "RENAME TABLE t1 TO t2",
             expect: "Rename table, [default.t1 to default.t2]",
@@ -97,12 +115,6 @@ async fn test_plan_parser() -> Result<()> {
             name: "rename-table-passed",
             sql: "RENAME TABLE db1.t1 TO db1.t2",
             expect: "Rename table, [db1.t1 to db1.t2]",
-            error: "",
-        },
-        Test {
-            name: "drop-table-if-exists-passed",
-            sql: "DROP TABLE IF EXISTS db1.t1",
-            expect: "Drop table db1.t1, if_exists:true",
             error: "",
         },
         Test {
@@ -177,19 +189,19 @@ async fn test_plan_parser() -> Result<()> {
             name: "insert-simple",
             sql: "insert into t(col1, col2) values(1,2), (3,4)",
             expect: "",
-            error: "Code: 1025, displayText = Unknown table: 't'.",
+            error: "Code: 1025, displayText = Unknown table 't'.",
         },
         Test {
             name: "insert-value-other-than-simple-expression",
             sql: "insert into t(col1, col2) values(1 + 0, 1 + 1), (3,4)",
             expect: "",
-            error: "Code: 1025, displayText = Unknown table: 't'.",
+            error: "Code: 1025, displayText = Unknown table 't'.",
         },
         Test {
             name: "insert-subquery-not-supported",
             sql: "insert into t select * from t",
             expect: "",
-            error: "Code: 1025, displayText = Unknown table: 't'.",
+            error: "Code: 1025, displayText = Unknown table 't'.",
         },
         Test {
             name: "select-full",

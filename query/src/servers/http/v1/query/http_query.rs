@@ -27,6 +27,8 @@ use common_exception::Result;
 use common_meta_types::UserInfo;
 use serde::Deserialize;
 
+use crate::servers::http::v1::query::expirable::Expirable;
+use crate::servers::http::v1::query::expirable::ExpiringState;
 use crate::servers::http::v1::query::http_query_manager::HttpQueryConfig;
 use crate::servers::http::v1::query::ExecuteState;
 use crate::servers::http::v1::query::ExecuteStateName;
@@ -35,12 +37,13 @@ use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::ResultDataManager;
 use crate::servers::http::v1::query::Wait;
 use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct HttpQueryRequest {
     #[serde(default)]
-    pub session: HttpSessionConf,
+    pub session: HttpSession,
     pub sql: String,
     #[serde(default)]
     pub pagination: PaginationConf,
@@ -68,13 +71,30 @@ impl PaginationConf {
     }
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct HttpSessionConf {
     pub database: Option<String>,
+    pub max_idle_time: Option<u64>,
+}
+
+#[derive(Deserialize, Debug, PartialEq)]
+#[serde(untagged)]
+pub enum HttpSession {
+    // keep New before old, so it deserialize to New when empty
+    New(HttpSessionConf),
+    Old { id: String },
+}
+
+impl Default for HttpSession {
+    fn default() -> Self {
+        HttpSession::New(Default::default())
+    }
 }
 
 pub struct ResponseInitialState {
     pub schema: Option<DataSchemaRef>,
+    pub session_id: String,
 }
 
 pub struct ResponseState {
@@ -92,6 +112,7 @@ pub struct HttpQueryResponseInternal {
 
 pub struct HttpQuery {
     pub(crate) id: String,
+    pub(crate) session_id: String,
     #[allow(dead_code)]
     request: HttpQueryRequest,
     state: Arc<RwLock<Executor>>,
@@ -108,14 +129,48 @@ impl HttpQuery {
         user_info: &UserInfo,
         config: HttpQueryConfig,
     ) -> Result<Arc<HttpQuery>> {
+        let http_query_manager = session_manager.get_http_query_manager();
+        let session = match &request.session {
+            HttpSession::New(session_conf) => {
+                let session = session_manager
+                    .create_session(SessionType::HTTPQuery)
+                    .await?;
+                if let Some(db) = &session_conf.database {
+                    session.set_current_database(db.clone());
+                }
+                if let Some(secs) = session_conf.max_idle_time {
+                    if secs > 0 {
+                        http_query_manager
+                            .add_session(session.clone(), Duration::from_secs(secs))
+                            .await;
+                    }
+                }
+                session
+            }
+            HttpSession::Old { id } => {
+                let session = http_query_manager
+                    .get_session(id)
+                    .await
+                    .ok_or_else(|| ErrorCode::UnknownSession(id))?;
+                if session.expire_state() == ExpiringState::InUse {
+                    return Err(ErrorCode::BadArguments(
+                        "last query on the session not finished",
+                    ));
+                };
+                session
+            }
+        };
+        session.set_current_user(user_info.clone());
+        let session_id = session.get_id().clone();
+
         //TODO(youngsofun): support config/set channel size
         let (block_tx, block_rx) = mpsc::channel(10);
 
-        let (state, schema) =
-            ExecuteState::try_create(&request, session_manager, user_info, block_tx).await?;
+        let (state, schema) = ExecuteState::try_create(&request, session, block_tx).await?;
         let data = Arc::new(TokioMutex::new(ResultDataManager::new(schema, block_rx)));
         let query = HttpQuery {
             id: id.to_string(),
+            session_id,
             request,
             state,
             data,
@@ -158,6 +213,7 @@ impl HttpQuery {
         let data = self.data.lock().await;
         ResponseInitialState {
             schema: Some(data.schema.clone()),
+            session_id: self.session_id.clone(),
         }
     }
 

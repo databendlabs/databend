@@ -42,7 +42,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     if !conf.config_file.is_empty() {
         tracing::info!("Config reload from {:?}", conf.config_file);
         let config_file = conf.config_file;
-        conf = Config::load_from_toml(config_file.as_str())?;
+        conf = Config::load_from_file(config_file.as_str())?;
         conf.config_file = config_file;
     }
 
@@ -70,7 +70,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     set_panic_hook();
     tracing::info!("{:?}", conf);
     tracing::info!(
-        "DatabendQuery v-{}",
+        "DatabendQuery {}",
         *databend_query::configs::DATABEND_COMMIT_VERSION,
     );
 

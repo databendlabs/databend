@@ -20,6 +20,7 @@ use std::time::Instant;
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoffBuilder;
 use common_base::ProgressValues;
+use common_cache::Cache;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -90,7 +91,7 @@ impl FuseTable {
                     match backoff.next_backoff() {
                         Some(d) => {
                             let name = tbl.table_info.name.clone();
-                            tracing::error!(
+                            tracing::warn!(
                                 "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
                                 d.as_millis(),
                                 name.as_str(),
@@ -171,8 +172,14 @@ impl FuseTable {
             .await
             .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 
-        Self::commit_to_meta_server(ctx, &self.get_table_info().ident, snapshot_loc).await?;
+        Self::commit_to_meta_server(ctx, &self.get_table_info().ident, snapshot_loc.clone())
+            .await?;
         ctx.get_write_progress().incr(&progress_values);
+
+        if let Some(snapshot_cache) = ctx.get_storage_cache_manager().get_table_snapshot_cache() {
+            let cache = &mut snapshot_cache.write().await;
+            cache.put(snapshot_loc, Arc::new(new_snapshot));
+        }
 
         Ok(())
     }

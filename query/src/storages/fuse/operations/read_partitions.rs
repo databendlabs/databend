@@ -26,6 +26,7 @@ use crate::sessions::QueryContext;
 use crate::storages::fuse::fuse_part::ColumnMeta;
 use crate::storages::fuse::fuse_part::FusePartInfo;
 use crate::storages::fuse::meta::BlockMeta;
+use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::pruning::BlockPruner;
 use crate::storages::fuse::FuseTable;
 
@@ -39,6 +40,9 @@ impl FuseTable {
         let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
         match snapshot {
             Some(snapshot) => {
+                if let Some(result) = self.check_quick_path(&snapshot, &push_downs) {
+                    return Ok(result);
+                }
                 let schema = self.table_info.schema();
                 let block_metas = BlockPruner::new(snapshot.clone())
                     .apply(schema, &push_downs, ctx.as_ref())
@@ -195,5 +199,30 @@ impl FuseTable {
         let rows_count = meta.row_count;
         let location = meta.location.path.clone();
         FusePartInfo::create(location, rows_count, columns_meta)
+    }
+
+    fn check_quick_path(
+        &self,
+        snapshot: &TableSnapshot,
+        push_down: &Option<Extras>,
+    ) -> Option<(Statistics, Partitions)> {
+        push_down.as_ref().and_then(|extra| match extra {
+            Extras {
+                projection: Some(projs),
+                filters,
+                ..
+            } if projs.is_empty() && filters.is_empty() => {
+                let summary = &snapshot.summary;
+                let stats = Statistics {
+                    read_rows: summary.row_count as usize,
+                    read_bytes: 0,
+                    partitions_scanned: 0,
+                    partitions_total: summary.block_count as usize,
+                    is_exact: true,
+                };
+                Some((stats, vec![]))
+            }
+            _ => None,
+        })
     }
 }

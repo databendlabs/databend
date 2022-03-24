@@ -14,6 +14,7 @@
 
 #![feature(thread_local)]
 
+mod format;
 mod http_shutdown_handlers;
 mod net;
 mod profiling;
@@ -23,9 +24,11 @@ mod runtime_tracker;
 mod shutdown_signal;
 mod stop_handle;
 mod stoppable;
+mod string_func;
 mod thread;
 mod uniq_id;
 
+pub use format::Format;
 pub use http_shutdown_handlers::HttpShutdownHandler;
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;
@@ -43,6 +46,9 @@ pub use shutdown_signal::SignalStream;
 pub use shutdown_signal::SignalType;
 pub use stop_handle::StopHandle;
 pub use stoppable::Stoppable;
+pub use string_func::escape_for_key;
+pub use string_func::mask_string;
+pub use string_func::unescape_for_key;
 pub use thread::Thread;
 pub use tokio;
 pub use uniq_id::GlobalSequence;

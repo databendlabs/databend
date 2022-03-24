@@ -15,6 +15,8 @@
 
 use std::sync::Arc;
 
+use common_base::Progress;
+use common_base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -45,8 +47,7 @@ impl FuseTable {
     ) -> Result<SendableDataBlockStream> {
         let block_reader = self.create_block_reader(&ctx, push_downs)?;
 
-        let bite_size = ctx.get_settings().get_parallel_read_threads()?;
-        let iter = std::iter::from_fn(move || match ctx.clone().try_get_partitions(bite_size) {
+        let iter = std::iter::from_fn(move || match ctx.clone().try_get_partitions(1) {
             Err(_) => None,
             Ok(parts) if parts.is_empty() => None,
             Ok(parts) => Some(parts),
@@ -56,12 +57,12 @@ impl FuseTable {
         let part_stream = futures::stream::iter(iter);
 
         let stream = part_stream
-            .map(move |part| {
+            .then(move |part| {
                 let block_reader = block_reader.clone();
                 async move { block_reader.read(part).await }
             })
-            .buffer_unordered(bite_size as usize)
             .instrument(common_tracing::tracing::Span::current());
+
         Ok(Box::pin(stream))
     }
 
@@ -84,7 +85,7 @@ impl FuseTable {
 
         let operator = ctx.get_storage_operator()?;
         let table_schema = self.table_info.schema();
-        BlockReader::create(ctx.clone(), operator, table_schema, projection)
+        BlockReader::create(operator, table_schema, projection)
     }
 
     #[inline]
@@ -125,6 +126,7 @@ enum State {
 struct FuseTableSource {
     state: State,
     ctx: Arc<QueryContext>,
+    scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
     output: Arc<OutputPort>,
 }
@@ -135,18 +137,21 @@ impl FuseTableSource {
         output: Arc<OutputPort>,
         block_reader: Arc<BlockReader>,
     ) -> Result<ProcessorPtr> {
+        let scan_progress = ctx.get_scan_progress();
         let mut partitions = ctx.try_get_partitions(1)?;
         match partitions.is_empty() {
             true => Ok(ProcessorPtr::create(Box::new(FuseTableSource {
                 ctx,
                 output,
                 block_reader,
+                scan_progress,
                 state: State::Finish,
             }))),
             false => Ok(ProcessorPtr::create(Box::new(FuseTableSource {
                 ctx,
                 output,
                 block_reader,
+                scan_progress,
                 state: State::ReadData(partitions.remove(0)),
             }))),
         }
@@ -198,6 +203,12 @@ impl Processor for FuseTableSource {
             State::Deserialize(part, chunks) => {
                 let data_block = self.block_reader.deserialize(part, chunks)?;
                 let mut partitions = self.ctx.try_get_partitions(1)?;
+
+                let progress_values = ProgressValues {
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
+                };
+                self.scan_progress.incr(&progress_values);
 
                 self.state = match partitions.is_empty() {
                     true => State::Generated(None, data_block),

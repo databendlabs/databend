@@ -29,10 +29,8 @@ use num::traits::AsPrimitive;
 use super::utils::*;
 use crate::scalars::assert_string;
 use crate::scalars::cast_column_field;
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::primitive_simd_op_boolean;
 use crate::scalars::scalar_binary_op;
-use crate::scalars::ArithmeticDescription;
 use crate::scalars::ComparisonEqFunction;
 use crate::scalars::ComparisonGtEqFunction;
 use crate::scalars::ComparisonGtFunction;
@@ -46,6 +44,8 @@ use crate::scalars::ComparisonRegexpFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionFactory;
+use crate::scalars::FunctionFeatures;
+use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]
 pub struct ComparisonFunction {
@@ -55,19 +55,19 @@ pub struct ComparisonFunction {
 
 impl ComparisonFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register_arithmetic("=", ComparisonEqFunction::desc("<>"));
-        factory.register_arithmetic("<", ComparisonLtFunction::desc(">="));
-        factory.register_arithmetic(">", ComparisonGtFunction::desc("<="));
-        factory.register_arithmetic("<=", ComparisonLtEqFunction::desc(">"));
-        factory.register_arithmetic(">=", ComparisonGtEqFunction::desc("<"));
-        factory.register_arithmetic("!=", ComparisonNotEqFunction::desc("="));
-        factory.register_arithmetic("<>", ComparisonNotEqFunction::desc("="));
-        factory.register_arithmetic("like", ComparisonLikeFunction::desc("not like"));
-        factory.register_arithmetic("not like", ComparisonNotLikeFunction::desc("like"));
-        factory.register_arithmetic("regexp", ComparisonRegexpFunction::desc("not regexp"));
-        factory.register_arithmetic("not regexp", ComparisonNotRegexpFunction::desc("regexp"));
-        factory.register_arithmetic("rlike", ComparisonRegexpFunction::desc("not regexp"));
-        factory.register_arithmetic("not rlike", ComparisonNotRegexpFunction::desc("regexp"));
+        factory.register_typed("=", ComparisonEqFunction::desc("<>"));
+        factory.register_typed("<", ComparisonLtFunction::desc(">="));
+        factory.register_typed(">", ComparisonGtFunction::desc("<="));
+        factory.register_typed("<=", ComparisonLtEqFunction::desc(">"));
+        factory.register_typed(">=", ComparisonGtEqFunction::desc("<"));
+        factory.register_typed("!=", ComparisonNotEqFunction::desc("="));
+        factory.register_typed("<>", ComparisonNotEqFunction::desc("="));
+        factory.register_typed("like", ComparisonLikeFunction::desc("not like"));
+        factory.register_typed("not like", ComparisonNotLikeFunction::desc("like"));
+        factory.register_typed("regexp", ComparisonRegexpFunction::desc("not regexp"));
+        factory.register_typed("not regexp", ComparisonNotRegexpFunction::desc("regexp"));
+        factory.register_typed("rlike", ComparisonRegexpFunction::desc("not regexp"));
+        factory.register_typed("not rlike", ComparisonNotRegexpFunction::desc("regexp"));
     }
 
     pub fn try_create_func(
@@ -161,8 +161,8 @@ impl<T: ComparisonImpl> ComparisonFunctionCreator<T> {
         })
     }
 
-    pub fn desc(negative_name: &str) -> ArithmeticDescription {
-        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc(negative_name: &str) -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function(negative_name)
@@ -191,8 +191,8 @@ impl<const NEGATED: bool, T: StringSearchImpl> StringSearchCreator<NEGATED, T> {
         ComparisonFunction::try_create_func(display_name, func)
     }
 
-    pub fn desc(negative_name: &str) -> ArithmeticDescription {
-        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc(negative_name: &str) -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function(negative_name)

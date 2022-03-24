@@ -1,5 +1,6 @@
 ---
 title: countDistinct
+title_includes: uniq
 ---
 
 Aggregate function.

@@ -17,7 +17,11 @@ use super::inet_aton::TryInetAtonFunction;
 use super::inet_ntoa::InetNtoaFunction;
 use super::inet_ntoa::TryInetNtoaFunction;
 use super::running_difference_function::RunningDifferenceFunction;
+use super::ExistsFunction;
 use super::IgnoreFunction;
+use super::InFunction;
+use super::SleepFunction;
+use super::ToTypeNameFunction;
 use crate::scalars::FunctionFactory;
 
 #[derive(Clone)]
@@ -25,6 +29,12 @@ pub struct OtherFunction {}
 
 impl OtherFunction {
     pub fn register(factory: &mut FunctionFactory) {
+        factory.register("in", InFunction::<false>::desc());
+        factory.register("not_in", InFunction::<true>::desc());
+        factory.register("exists", ExistsFunction::desc());
+        factory.register("totypename", ToTypeNameFunction::desc());
+        factory.register("sleep", SleepFunction::desc());
+
         factory.register("runningDifference", RunningDifferenceFunction::desc());
         factory.register("ignore", IgnoreFunction::desc());
 

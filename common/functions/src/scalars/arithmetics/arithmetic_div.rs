@@ -19,12 +19,12 @@ use common_exception::Result;
 use num::traits::AsPrimitive;
 
 use super::arithmetic_mul::arithmetic_mul_div_monotonicity;
-use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::ArithmeticDescription;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
+use crate::scalars::TypedFunctionDescription;
 
 #[inline]
 fn div_scalar(l: impl AsPrimitive<f64>, r: impl AsPrimitive<f64>, _ctx: &mut EvalContext) -> f64 {
@@ -49,16 +49,16 @@ impl ArithmeticDivFunction {
         })
     }
 
-    pub fn desc() -> ArithmeticDescription {
-        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+        arithmetic_mul_div_monotonicity(args, DataValueBinaryOperator::Div)
+    }
+
+    pub fn desc() -> TypedFunctionDescription {
+        TypedFunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()
                 .num_arguments(2),
         )
-    }
-
-    pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
-        arithmetic_mul_div_monotonicity(args, DataValueBinaryOperator::Div)
     }
 }

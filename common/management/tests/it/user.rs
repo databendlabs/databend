@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_base::escape_for_key;
 use common_base::tokio;
 use common_exception::ErrorCode;
 use common_management::*;
@@ -85,7 +86,7 @@ mod add {
 
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
         let test_seq = MatchSeq::Exact(0);
 
@@ -189,7 +190,7 @@ mod get {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
 
         let user_info = UserInfo::new(
@@ -223,7 +224,7 @@ mod get {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
 
         let user_info = UserInfo::new(
@@ -252,7 +253,7 @@ mod get {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
 
         let mut kv = MockKV::new();
@@ -277,7 +278,7 @@ mod get {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
 
         let mut kv = MockKV::new();
@@ -306,7 +307,7 @@ mod get {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
 
         let mut kv = MockKV::new();
@@ -423,7 +424,7 @@ mod drop {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user, test_hostname)
+            escape_for_key(&format_user_key(test_user, test_hostname))?
         );
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVAction::new(
@@ -449,7 +450,7 @@ mod drop {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user, test_hostname)
+            escape_for_key(&format_user_key(test_user, test_hostname))?
         );
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVAction::new(
@@ -504,7 +505,7 @@ mod update {
 
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
         let test_seq = None;
 
@@ -563,7 +564,7 @@ mod update {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
         let test_seq = None;
 
@@ -597,7 +598,7 @@ mod update {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
         let test_seq = None;
 
@@ -657,7 +658,7 @@ mod set_user_privileges {
         let test_hostname = "localhost";
         let test_key = format!(
             "__fd_users/tenant1/{}",
-            format_user_key(test_user_name, test_hostname)
+            escape_for_key(&format_user_key(test_user_name, test_hostname))?
         );
         let test_seq = None;
 

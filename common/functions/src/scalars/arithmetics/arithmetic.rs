@@ -26,18 +26,18 @@ pub struct ArithmeticFunction;
 
 impl ArithmeticFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register_arithmetic("negate", ArithmeticNegateFunction::desc());
-        factory.register_arithmetic("+", ArithmeticPlusFunction::desc());
-        factory.register_arithmetic("plus", ArithmeticPlusFunction::desc());
-        factory.register_arithmetic("-", ArithmeticMinusFunction::desc());
-        factory.register_arithmetic("minus", ArithmeticMinusFunction::desc());
-        factory.register_arithmetic("*", ArithmeticMulFunction::desc());
-        factory.register_arithmetic("multiply", ArithmeticMulFunction::desc());
-        factory.register_arithmetic("/", ArithmeticDivFunction::desc());
-        factory.register_arithmetic("divide", ArithmeticDivFunction::desc());
-        factory.register_arithmetic("div", ArithmeticIntDivFunction::desc());
-        factory.register_arithmetic("%", ArithmeticModuloFunction::desc());
-        factory.register_arithmetic("modulo", ArithmeticModuloFunction::desc());
-        factory.register_arithmetic("mod", ArithmeticModuloFunction::desc());
+        factory.register_typed("negate", ArithmeticNegateFunction::desc());
+        factory.register_typed("+", ArithmeticPlusFunction::desc());
+        factory.register_typed("plus", ArithmeticPlusFunction::desc());
+        factory.register_typed("-", ArithmeticMinusFunction::desc());
+        factory.register_typed("minus", ArithmeticMinusFunction::desc());
+        factory.register_typed("*", ArithmeticMulFunction::desc());
+        factory.register_typed("multiply", ArithmeticMulFunction::desc());
+        factory.register_typed("/", ArithmeticDivFunction::desc());
+        factory.register_typed("divide", ArithmeticDivFunction::desc());
+        factory.register_typed("div", ArithmeticIntDivFunction::desc());
+        factory.register_typed("%", ArithmeticModuloFunction::desc());
+        factory.register_typed("modulo", ArithmeticModuloFunction::desc());
+        factory.register_typed("mod", ArithmeticModuloFunction::desc());
     }
 }

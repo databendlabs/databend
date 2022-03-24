@@ -21,7 +21,6 @@ use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::EffectiveMembership;
 use common_meta_sled_store::openraft::MessageSummary;
-use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::AsTxnKeySpace;
 use common_meta_sled_store::SledKeySpace;
@@ -58,7 +57,6 @@ use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use serde::Deserialize;
 use serde::Serialize;
-use sled::IVec;
 
 use crate::config::RaftConfig;
 use crate::sled_key_spaces::ClientLastResps;
@@ -170,18 +168,14 @@ impl StateMachine {
     }
 
     /// Create a snapshot.
+    ///
     /// Returns:
-    /// - an consistent iterator of all kvs;
+    /// - all key values in state machine;
     /// - the last applied log id
-    /// - the last applied membership config
-    /// - and a snapshot id
-    pub fn snapshot(
+    /// - and a snapshot id that uniquely identifies this snapshot.
+    pub fn build_snapshot(
         &self,
-    ) -> MetaStorageResult<(
-        impl Iterator<Item = sled::Result<(IVec, IVec)>>,
-        LogId,
-        String,
-    )> {
+    ) -> std::result::Result<(SerializableSnapshot, LogId, String), MetaStorageError> {
         let last_applied = self.get_last_applied()?;
 
         // NOTE: An initialize node/cluster always has the first log contains membership config.
@@ -199,23 +193,16 @@ impl StateMachine {
             last_applied.term, last_applied.index, snapshot_idx
         );
 
-        Ok((self.sm_tree.tree.iter(), last_applied, snapshot_id))
-    }
+        let view = self.sm_tree.tree.iter();
 
-    /// Serialize a snapshot for transport.
-    /// This step does not require a lock, since sled::Tree::iter() creates a consistent view on a tree
-    /// no matter if there are other writes applied to the tree.
-    pub fn serialize_snapshot(
-        view: impl Iterator<Item = sled::Result<(IVec, IVec)>>,
-    ) -> MetaStorageResult<Vec<u8>> {
         let mut kvs = Vec::new();
         for rkv in view {
             let (k, v) = rkv.context(|| "taking snapshot")?;
             kvs.push(vec![k.to_vec(), v.to_vec()]);
         }
         let snap = SerializableSnapshot { kvs };
-        let snap = serde_json::to_vec(&snap)?;
-        Ok(snap)
+
+        Ok((snap, last_applied, snapshot_id))
     }
 
     /// Internal func to get an auto-incr seq number.

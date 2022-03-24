@@ -13,4 +13,5 @@
 // limitations under the License.
 
 mod aggregates;
+mod rdoc;
 mod scalars;

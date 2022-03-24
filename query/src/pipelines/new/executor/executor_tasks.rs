@@ -170,12 +170,12 @@ impl ExecutorTasks {
             return ExecutorTask::Sync(processor);
         }
 
-        if let Some(processor) = self.workers_async_tasks[worker_id].pop_front() {
-            return ExecutorTask::Async(processor);
-        }
-
         if let Some(task) = self.workers_completed_async_tasks[worker_id].pop_front() {
             return ExecutorTask::AsyncCompleted(task);
+        }
+
+        if let Some(processor) = self.workers_async_tasks[worker_id].pop_front() {
+            return ExecutorTask::Async(processor);
         }
 
         ExecutorTask::None
