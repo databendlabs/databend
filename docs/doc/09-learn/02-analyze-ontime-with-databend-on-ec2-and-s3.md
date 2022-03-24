@@ -190,5 +190,6 @@ All Queries:
 ## Benchmark Report
 
 * [Amazon S3: Databend Ontime Datasets Benchmark Report](../07-performance/02-ec2-s3-performance.md)
-* [Tencent COS: Databend Ontime Datasets Benchmark Report](../07-performance/04-cvm-cos-performance.md)
-* [Wasabi: Databend Ontime Datasets Benchmark Report](../07-performance/03-ec2-wasabi-performance.md)
+* [Tencent COS: Databend Ontime Datasets Benchmark Report](../07-performance/03-cvm-cos-performance.md)
+* [Alibaba OSS: Databend Ontime Datasets Benchmark Report](../07-performance/04-ecs-oss-performance.md)
+* [Wasabi: Databend Ontime Datasets Benchmark Report](../07-performance/06-ec2-wasabi-performance.md)
