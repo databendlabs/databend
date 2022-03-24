@@ -166,6 +166,7 @@ impl FuseTable {
             Self::merge_table_operations(
                 self.table_info.meta.schema.as_ref(),
                 prev,
+                prev_version,
                 segments,
                 summary,
             )?
@@ -199,6 +200,7 @@ impl FuseTable {
     fn merge_table_operations(
         schema: &DataSchema,
         previous: Option<Arc<TableSnapshot>>,
+        prev_version: u64,
         mut new_segments: Vec<Location>,
         statistics: Statistics,
     ) -> Result<TableSnapshot> {
@@ -209,9 +211,7 @@ impl FuseTable {
         } else {
             statistics
         };
-        let prev_snapshot_id = previous
-            .as_ref()
-            .map(|v| (v.snapshot_id, v.format_version()));
+        let prev_snapshot_id = previous.as_ref().map(|v| (v.snapshot_id, prev_version));
 
         // 2. merge segment locations with previous snapshot, if any
         if let Some(snapshot) = &previous {
