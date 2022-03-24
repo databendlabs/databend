@@ -1,8 +1,8 @@
 ---
-title: Deploy Databend With Wasabi Object Storage
-sidebar_label: With Wasabi
+title: Deploy Databend With Local Disk
+sidebar_label: With Local Disk
 description:
-  How to deploy Databend with Wasabi object storage
+  How to deploy Databend with Local Disk
 ---
 
 :::tip
@@ -11,28 +11,20 @@ Expected deployment time: ** 5 minutes ⏱ **
 
 :::
 
-[Wasabi](https://wasabi.com/) is a cheaper object storage and 100% compatible with Amazon S3.
-
-From its official website, they proclaim `80% Less than Amazon S3` and `No Fees for Egress`.
+This guideline will deploy Databend(standalone) with local disk step by step.
 
 <p align="center">
-<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-wasabi-standalone.png" width="300"/>
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-local-standalone.png" width="300"/>
 </p>
-
-
-### Before you begin
-
-* **Wasabi:** Wasabi is a S3-like object storage.
-  * [How to create Wasabi bucket](https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FGS-Buckets.htm%23TOC_Creating_a_Bucketbc-1&rhtocid=_5_0)
-  * [How to get Wasabi access_key_id and secret_access_key](https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FAssigning_an_Access_Key.htm)
 
 ## 1. Download
 
-You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../06-contributing/02-building-from-source.md).
+You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../06-contributing/01-building-from-source.md).
 
 ```shell
 mkdir databend && cd databend
 ```
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
@@ -40,7 +32,22 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Ubuntu">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.96-nightly/databend-v0.6.96-nightly-x86_64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.100-nightly/databend-v0.6.100-nightly-x86_64-unknown-linux-gnu.tar.gz
+```
+
+</TabItem>
+<TabItem value="mac" label="MacOS">
+
+```shell
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.100-nightly/databend-v0.6.100-nightly-aarch64-apple-darwin.tar.gz
+```
+
+</TabItem>
+
+<TabItem value="arm" label="Arm">
+
+```shell
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.100-nightly/databend-v0.6.100-nightly-aarch64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
@@ -50,13 +57,28 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.96-nig
 <TabItem value="linux" label="Ubuntu">
 
 ```shell
-tar xzvf databend-v0.6.96-nightly-x86_64-unknown-linux-gnu.tar.gz
+tar xzvf databend-v0.6.100-nightly-x86_64-unknown-linux-gnu.tar.gz
+```
+
+</TabItem>
+<TabItem value="mac" label="MacOS">
+
+```shell
+tar xzvf databend-v0.6.100-nightly-aarch64-apple-darwin.tar.gz
+```
+
+</TabItem>
+
+<TabItem value="arm" label="Arm">
+
+```shell
+tar xzvf databend-v0.6.100-nightly-aarch64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
 </Tabs>
 
-## 2. Deploy databend-meta (Standalone)
+## 2. Deploy databend-meta
 
 databend-meta is a global service for the meta data(such as user, table schema etc.).
 
@@ -73,13 +95,13 @@ single = true
 raft_dir = "metadata/datas"
 ```
 
-### 2.2 Start the databend-meta 
+### 2.2 Start the databend-meta
 
 ```shell
 ./databend-meta -c ./databend-meta.toml > meta.log 2>&1 &
 ```
 
-### 2.3 Check databend-meta 
+### 2.3 Check databend-meta
 
 ```shell
 curl -I  http://127.0.0.1:8101/v1/health
@@ -88,7 +110,7 @@ curl -I  http://127.0.0.1:8101/v1/health
 Check the response is `HTTP/1.1 200 OK`.
 
 
-## 3. Deploy databend-query (Standalone)
+## 3. Deploy databend-query (standalone)
 
 ### 3.1 Create databend-query.toml
 
@@ -107,6 +129,8 @@ metric_api_address = "127.0.0.1:7071"
 # Cluster flight RPC.
 flight_api_address = "127.0.0.1:9091"
 
+#
+
 # Query MySQL Handler.
 mysql_handler_host = "127.0.0.1"
 mysql_handler_port = 3307
@@ -123,38 +147,22 @@ tenant_id = "tenant1"
 cluster_id = "cluster1"
 
 [meta]
+# databend-meta grpc api address. 
 meta_address = "127.0.0.1:9101"
 meta_username = "root"
 meta_password = "root"
 
 [storage]
 # disk|s3
-storage_type = "s3"
+storage_type = "disk"
 
 [storage.disk]
+data_path = "benddata/datas"
 
 [storage.s3]
-# How to create a bucket:
-// highlight-next-line
-bucket = "<your-bucket>"
-
-# You can get the URL from:
-# https://wasabi-support.zendesk.com/hc/en-us/articles/360015106031-What-are-the-service-URLs-for-Wasabi-s-different-regions-
-// highlight-next-line
-endpoint_url = "https://s3.us-east-2.wasabisys.com"
-
-# How to get access_key_id and secret_access_key:
-// highlight-next-line
-access_key_id = "<your-key-id>"
-// highlight-next-line
-secret_access_key = "<your-access-key>"
 
 [storage.azure_storage_blob]
 ```
-
-:::tip
-In this example Wasabi region is `us-east-2`.
-:::
 
 ### 3.2 Start databend-query
 
@@ -162,7 +170,7 @@ In this example Wasabi region is `us-east-2`.
 ./databend-query -c ./databend-query.toml > query.log 2>&1 &
 ```
 
-### 3.3 Check databend-query
+### 3.3 Check databend-query 
 
 ```shell
 curl -I  http://127.0.0.1:8001/v1/health
