@@ -88,7 +88,7 @@ impl<'a> TableSnapshotReader<'a> {
                 };
                 if let Some((id, v)) = snapshot.prev_snapshot_id {
                     ver = v;
-                    loc = location_gen.snapshot_location_from_uuid(&id);
+                    loc = location_gen.snapshot_location_from_uuid(&id, v)?;
                     snapshots.push(snapshot);
                 } else {
                     snapshots.push(snapshot);

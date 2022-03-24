@@ -13,11 +13,13 @@
 //  limitations under the License.
 //
 
+use common_exception::Result;
 use uuid::Uuid;
 
 use crate::storages::fuse::constants::FUSE_TBL_BLOCK_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SNAPSHOT_PREFIX;
+use crate::storages::fuse::meta::SnapshotVersion;
 use crate::storages::fuse::meta::CURRNET_BLOCK_VERSION;
 use crate::storages::fuse::meta::CURRNET_SEGMETN_VERSION;
 use crate::storages::fuse::meta::CURRNET_SNAPSHOT_VERSION;
@@ -52,13 +54,36 @@ impl TableMetaLocationGenerator {
         )
     }
 
-    pub fn snapshot_location_from_uuid(&self, id: &Uuid) -> String {
-        format!(
-            "{}/{}/{}_v{}.json",
-            &self.prefix,
-            FUSE_TBL_SNAPSHOT_PREFIX,
-            id.to_simple(),
-            CURRNET_SNAPSHOT_VERSION,
-        )
+    pub fn snapshot_location_from_uuid(&self, id: &Uuid, version: u64) -> Result<String> {
+        let snaphost_version = SnapshotVersion::try_from(version)?;
+        Ok(snaphost_version.create(id, &self.prefix))
+    }
+}
+
+trait SnapshotLocationCreator {
+    fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String;
+}
+
+impl SnapshotLocationCreator for SnapshotVersion {
+    fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String {
+        match self {
+            SnapshotVersion::V0(_) => {
+                format!(
+                    "{}/{}/{}",
+                    prefix.as_ref(),
+                    FUSE_TBL_SNAPSHOT_PREFIX,
+                    id.to_simple(),
+                )
+            }
+            SnapshotVersion::V1(_) => {
+                format!(
+                    "{}/{}/{}_v{}.json",
+                    prefix.as_ref(),
+                    FUSE_TBL_SNAPSHOT_PREFIX,
+                    id.to_simple(),
+                    CURRNET_SNAPSHOT_VERSION,
+                )
+            }
+        }
     }
 }

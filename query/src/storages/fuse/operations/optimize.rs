@@ -101,8 +101,8 @@ impl FuseTable {
 
         let locs = self.meta_location_generator();
         // 3. remove the snapshots
-        for x in snapshots.iter().rev() {
-            let loc = locs.snapshot_location_from_uuid(&x.snapshot_id);
+        for s in snapshots.iter().rev() {
+            let loc = locs.snapshot_location_from_uuid(&s.snapshot_id, s.format_version())?;
             self.remove_location(accessor.clone(), loc.as_str()).await?;
             if let Some(c) = ctx.get_storage_cache_manager().get_table_snapshot_cache() {
                 let cache = &mut *c.write().await;

@@ -24,6 +24,7 @@ use crate::storages::fuse::meta::BlockLocation;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::ColumnMeta;
+use crate::storages::fuse::meta::Versioned;
 use crate::storages::index::BlockStatistics;
 use crate::storages::index::ColumnStatistics;
 
@@ -128,7 +129,7 @@ impl PartiallyAccumulated {
         let block_meta = BlockMeta {
             location: BlockLocation {
                 path: location,
-                format_version: 1,
+                format_version: DataBlock::VERSION,
             },
             row_count: self.block_row_count,
             block_size: self.block_size,

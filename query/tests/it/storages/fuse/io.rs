@@ -23,6 +23,8 @@ use common_exception::Result;
 use databend_query::storages::fuse::io::BlockCompactor;
 use databend_query::storages::fuse::io::BlockStreamWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
+use databend_query::storages::fuse::meta::TableSnapshot;
+use databend_query::storages::fuse::meta::Versioned;
 use databend_query::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -336,7 +338,7 @@ fn test_meta_locations() -> Result<()> {
     let seg_loc = locs.gen_segment_info_location();
     assert!(seg_loc.starts_with(test_prefix));
     let uuid = Uuid::new_v4();
-    let snapshot_loc = locs.snapshot_location_from_uuid(&uuid);
+    let snapshot_loc = locs.snapshot_location_from_uuid(&uuid, TableSnapshot::VERSION)?;
     assert!(snapshot_loc.starts_with(test_prefix));
     Ok(())
 }
