@@ -45,7 +45,7 @@ async fn test_revoke_role_interpreter() -> Result<()> {
         test_user
             .grants
             .grant_role(RoleIdentity::new("test".to_string()));
-        user_mgr.add_user(&tenant, test_user).await?;
+        user_mgr.add_user(&tenant, test_user, false).await?;
         let user_info = user_mgr.get_user(&tenant, "test_user", "%").await?;
         assert_eq!(user_info.grants.roles().len(), 1);
 
@@ -86,7 +86,7 @@ async fn test_revoke_role_interpreter() -> Result<()> {
     test_role
         .grants
         .grant_role(RoleIdentity::new("test".to_string()));
-    user_mgr.add_role(&tenant, test_role.clone()).await?;
+    user_mgr.add_role(&tenant, test_role.clone(), false).await?;
     let role_info = user_mgr.get_role(&tenant, test_role.identity()).await?;
     assert_eq!(role_info.grants.roles().len(), 1);
 

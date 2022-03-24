@@ -224,6 +224,7 @@ impl RequestHandler<DropTableReq> for ActionHandler {
 #[async_trait::async_trait]
 impl RequestHandler<RenameTableReq> for ActionHandler {
     async fn handle(&self, req: RenameTableReq) -> Result<RenameTableReply, MetaError> {
+        let if_exists = req.if_exists;
         let tenant = req.tenant;
         let db_name = &req.db;
         let table_name = &req.table_name;
@@ -241,13 +242,21 @@ impl RequestHandler<RenameTableReq> for ActionHandler {
             },
         };
 
-        let res = self.meta_node.write(cr).await?;
+        let res = self.meta_node.write(cr).await;
 
-        let mut ch: Change<TableMeta> = res
-            .try_into()
-            .map_err(|e: &str| MetaError::MetaServiceError(e.to_string()))?;
-        let table_id = ch.ident.take().unwrap();
-        Ok(RenameTableReply { table_id })
+        if let Err(MetaError::AppError(AppError::UnknownTable(e))) = res {
+            if if_exists {
+                Ok(RenameTableReply { table_id: 0 })
+            } else {
+                Err(MetaError::AppError(AppError::UnknownTable(e)))
+            }
+        } else {
+            let mut ch: Change<TableMeta> = res?
+                .try_into()
+                .map_err(|e: &str| MetaError::MetaServiceError(e.to_string()))?;
+            let table_id = ch.ident.take().unwrap();
+            Ok(RenameTableReply { table_id })
+        }
     }
 }
 

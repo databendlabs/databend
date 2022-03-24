@@ -21,6 +21,9 @@ jobs:
           # Linux
           - {os: ubuntu-latest, toolchain: stable, target: x86_64-unknown-linux-gnu, cross: false}
           - {os: ubuntu-latest, toolchain: stable, target: aarch64-unknown-linux-gnu, cross: true}
+          - {os: ubuntu-latest, toolchain: stable, target: aarch64-unknown-linux-musl, cross: true}
+          - {os: ubuntu-latest, toolchain: stable, target: x86_64-unknown-linux-musl, cross: true}
+
           # Macos
           - {os: macos-11, toolchain: stable, target: x86_64-apple-darwin, cross: false}
           - {os: macos-11, toolchain: stable, target: aarch64-apple-darwin, cross: false}
@@ -44,7 +47,6 @@ jobs:
               cargo build --release --target=${{ matrix.config.target }}
               if [ ${{ matrix.config.os }} = "ubuntu-latest" ]; then
                   objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-query
-                  objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-benchmark
                   objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-meta
                   objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-metactl
               fi
@@ -59,10 +61,10 @@ jobs:
             brew install gnu-tar
             sudo /usr/sbin/purge
             gtar -C ./target/${{ matrix.config.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-query databend-meta
-            gtar -C ./target/${{ matrix.config.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-benchmark databend-metactl
+            gtar -C ./target/${{ matrix.config.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-metactl
           else
             tar -C ./target/${{ matrix.config.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-query databend-meta
-            tar -C ./target/${{ matrix.config.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-benchmark databend-metactl
+            tar -C ./target/${{ matrix.config.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-metactl
           fi
 
       - name: Release databend
@@ -177,4 +179,26 @@ jobs:
           platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/query/Dockerfile
+          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
+
+      - name: push distroless meta service
+        id: push_distroless_meta_service
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend-meta:${{ steps.get_version.outputs.VERSION }}-distroless
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: ./docker/distroless/meta.Dockerfile
+          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
+
+      - name: push distroless query service
+        id: push_distroless_query_service
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend-query:${{ steps.get_version.outputs.VERSION }}-distroless
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: ./docker/distroless/query.Dockerfile
           build-args: VERSION=${{ steps.get_version.outputs.VERSION }}

@@ -29,7 +29,6 @@ use num::traits::AsPrimitive;
 use super::utils::*;
 use crate::scalars::assert_string;
 use crate::scalars::cast_column_field;
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::primitive_simd_op_boolean;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::ComparisonEqFunction;
@@ -45,6 +44,7 @@ use crate::scalars::ComparisonRegexpFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionFactory;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::TypedFunctionDescription;
 
 #[derive(Clone)]

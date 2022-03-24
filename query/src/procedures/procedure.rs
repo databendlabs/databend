@@ -16,13 +16,42 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::validate_function_arg;
 
+use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 
 #[async_trait::async_trait]
 pub trait Procedure: Sync + Send {
-    async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock>;
+    fn name(&self) -> &str;
+
+    fn features(&self) -> ProcedureFeatures;
+
+    fn validate(&self, ctx: Arc<QueryContext>, args: &[String]) -> Result<()> {
+        let features = self.features();
+        validate_function_arg(
+            self.name(),
+            args.len(),
+            features.variadic_arguments,
+            features.num_arguments,
+        )?;
+        if features.management_mode_required && !ctx.get_config().query.management_mode {
+            return Err(ErrorCode::ManagementModePermissionDenied(format!(
+                "Access denied: '{}' only used in management-mode",
+                self.name()
+            )));
+        }
+        Ok(())
+    }
+
+    async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+        self.validate(ctx.clone(), &args)?;
+        self.inner_eval(ctx, args).await
+    }
+
+    async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock>;
 
     fn schema(&self) -> Arc<DataSchema>;
 }

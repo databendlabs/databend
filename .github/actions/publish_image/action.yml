@@ -46,16 +46,3 @@ runs:
     - name: Image digest
       shell: bash
       run: echo ${{ steps.docker_build.outputs.digest }}
-
-    - name: Build and publish perf_tools images
-      id: docker_build_perf
-      uses: docker/build-push-action@v2
-      with:
-        push: true
-        tags: ${{ inputs.dockerhub_namespace }}/perf-tool:latest # assume latest tag is the latest release tag
-        platforms: ${{ matrix.config.platform }}
-        context: .
-        file: ./docker/perf-tool/Dockerfile
-    - name: Perf image digest
-      shell: bash
-      run: echo ${{ steps.docker_build_perf.outputs.digest }} && cat ./tests/perfs/perfs.yaml

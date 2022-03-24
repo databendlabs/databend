@@ -21,9 +21,9 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
 pub struct RunningDifferenceFunction {

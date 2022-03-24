@@ -9,6 +9,7 @@ cat $CURDIR/../ontime/create_table.sql | sed 's/ontime/ontime_streaming_load/g' 
 
 aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv /tmp/ontime_200.csv > /dev/null 2>&1
 aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.parquet /tmp/ontime_200.parquet  > /dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.ndjson /tmp/ontime_200.ndjson  > /dev/null 2>&1
 
 
 # do the Data integrity check
@@ -25,12 +26,24 @@ if [ $? -ne 0 ]; then
 	exit 1
 fi
 
+echo "8e6e663cf6fdaedf99516f8969512e40954bfa863822e8ef2d61e50c182c8d91 /tmp/ontime_200.ndjson" | sha256sum --check > /dev/null 2>&1
+
+if [ $? -ne 0 ]; then
+	echo "The downloaded dataset has been corrupted, please remove and fetch it again."
+	exit 1
+fi
+
+
 
 curl -H "insert_sql:insert into ontime_streaming_load format Csv" -H "skip_header:1" -F  "upload=@/tmp/ontime_200.csv"  -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select count(1) ,avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 
 
 curl -H "insert_sql:insert into ontime_streaming_load format Parquet" -H "skip_header:1" -F  "upload=@/tmp/ontime_200.parquet"  -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+echo "select count(1) ,avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
+
+
+curl -H "insert_sql:insert into ontime_streaming_load format NdJson" -H "skip_header:1" -F  "upload=@/tmp/ontime_200.ndjson"  -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select count(1) ,avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 
 

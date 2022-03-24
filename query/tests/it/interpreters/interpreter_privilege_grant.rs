@@ -47,10 +47,11 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         .add_user(
             &tenant,
             UserInfo::new(name.to_string(), hostname.to_string(), auth_info),
+            false,
         )
         .await?;
     user_mgr
-        .add_role(&tenant, RoleInfo::new("role1".to_string()))
+        .add_role(&tenant, RoleInfo::new("role1".to_string()), false)
         .await?;
 
     #[allow(dead_code)]

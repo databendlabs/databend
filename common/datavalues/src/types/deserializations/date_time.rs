@@ -54,6 +54,13 @@ where
         Ok(())
     }
 
+    fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
+        match value {
+            serde_json::Value::String(v) => self.de_text(v.as_bytes()),
+            _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
+        }
+    }
+
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
         let v = std::str::from_utf8(reader)
             .map_err_to_code(ErrorCode::BadBytes, || "Cannot convert value to utf8")?;

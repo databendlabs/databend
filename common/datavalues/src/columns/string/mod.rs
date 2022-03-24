@@ -19,6 +19,8 @@ mod transform;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::bitmap::utils::BitChunkIterExact;
+use common_arrow::arrow::bitmap::utils::BitChunksExact;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::cast::binary_to_large_binary;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -189,15 +191,61 @@ impl Column for StringColumn {
         if length == self.len() {
             return Arc::new(self.clone());
         }
+        const CHUNK_SIZE: usize = 64;
+
         let mut builder = MutableStringColumn::with_capacity(length);
         let values = self.values();
-        for (i, v) in filter.values().iter().enumerate() {
-            if v {
-                let start = self.offsets[i] as usize;
-                let end = self.offsets[i + 1] as usize;
-                builder.append_value(&values[start..end]);
-            }
+        let (mut slice, offset, mut length) = filter.values().as_slice();
+        let mut start_index: usize = 0;
+
+        if offset > 0 {
+            let n = 8 - offset;
+            start_index += n;
+
+            filter
+                .values()
+                .iter()
+                .enumerate()
+                .take(n)
+                .for_each(|(i, is_selected)| {
+                    if is_selected {
+                        let start = self.offsets[i] as usize;
+                        let end = self.offsets[i + 1] as usize;
+                        builder.append_value(&values[start..end]);
+                    }
+                });
+            slice = &slice[1..];
+            length -= n;
         }
+
+        let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
+
+        mask_chunks
+            .by_ref()
+            .enumerate()
+            .for_each(|(mask_index, mut mask)| {
+                while mask != 0 {
+                    let n = mask.trailing_zeros() as usize;
+                    let i = mask_index * CHUNK_SIZE + n + start_index;
+                    let start = self.offsets[i] as usize;
+                    let end = self.offsets[i + 1] as usize;
+                    builder.append_value(&values[start..end]);
+                    mask = mask & (mask - 1);
+                }
+            });
+
+        let remainder_start = length - length % CHUNK_SIZE;
+        mask_chunks
+            .remainder_iter()
+            .enumerate()
+            .for_each(|(mask_index, is_selected)| {
+                if is_selected {
+                    let i = mask_index + remainder_start + start_index;
+                    let start = self.offsets[i] as usize;
+                    let end = self.offsets[i + 1] as usize;
+                    builder.append_value(&values[start..end]);
+                }
+            });
         builder.to_column()
     }
 

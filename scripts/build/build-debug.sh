@@ -6,5 +6,5 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../.." || exit
 
 echo "Build(DEBUG) start..."
-cargo build --bin=databend-query --bin=databend-benchmark --bin=databend-meta --bin=databend-metactl
+cargo build --bin=databend-query --bin=databend-meta --bin=databend-metactl
 echo "All done..."

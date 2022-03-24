@@ -33,7 +33,7 @@ fn test_new_from_slice() {
 }
 
 #[test]
-fn test_string_column() {
+fn test_filter_string_column() {
     const N: usize = 1024;
     let it = (0..N).map(|i| if i % 2 == 0 { "你好" } else { "hello" });
     let data_column: StringColumn = NewColumn::new_from_iter(it);
@@ -48,4 +48,62 @@ fn test_string_column() {
     }
     let slice = data_column.slice(0, N / 2);
     assert!(slice.len() == N / 2);
+}
+
+#[test]
+fn test_string_column() {
+    const N: usize = 1024;
+    let it = (0..N).map(|i| if i % 2 == 0 { "你好" } else { "hello" });
+    let data_column: StringColumn = NewColumn::new_from_iter(it);
+    struct Test {
+        filter: BooleanColumn,
+        expect: StringColumn,
+    }
+
+    let empty_case: Vec<&str> = vec![];
+    let normal_case: Vec<&str> = (0..N)
+        .map(|i| if i % 2 == 0 { "你好" } else { "hello" })
+        .enumerate()
+        .filter(|(i, _)| i % 3 == 0)
+        .map(|(_, e)| e)
+        .collect();
+
+    let tests: Vec<Test> = vec![
+        Test {
+            filter: BooleanColumn::from_iterator((0..N).map(|_| true)),
+            expect: NewColumn::new_from_iter((0..N).map(|i| {
+                if i % 2 == 0 {
+                    "你好".as_bytes()
+                } else {
+                    "hello".as_bytes()
+                }
+            })),
+        },
+        Test {
+            filter: BooleanColumn::from_iterator((0..N).map(|_| false)),
+            expect: NewColumn::new_from_iter(empty_case.iter()),
+        },
+        Test {
+            filter: BooleanColumn::from_iterator((0..N).map(|i| i % 3 == 0)),
+            expect: NewColumn::new_from_iter(normal_case.iter()),
+        },
+    ];
+
+    for test in tests {
+        let res = data_column.filter(&test.filter);
+        let values = res
+            .as_any()
+            .downcast_ref::<StringColumn>()
+            .unwrap()
+            .values();
+
+        assert_eq!(
+            values,
+            test.expect
+                .as_any()
+                .downcast_ref::<StringColumn>()
+                .unwrap()
+                .values()
+        );
+    }
 }

@@ -53,7 +53,7 @@ impl Interpreter for CreateRoleInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
         let role_info = RoleInfo::new(plan.role_identity.name);
-        user_mgr.add_role(&tenant, role_info).await?;
+        user_mgr.add_role(&tenant, role_info, false).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

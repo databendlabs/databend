@@ -14,5 +14,4 @@
 
 mod database;
 mod to_type_name;
-mod udf_example;
 mod version;

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_base::tokio;
 use common_base::tokio::sync::mpsc::channel;
 use common_base::tokio::sync::mpsc::Receiver;
@@ -26,11 +28,15 @@ use databend_query::pipelines::new::processors::SyncSenderSink;
 use databend_query::pipelines::new::processors::TransformDummy;
 use databend_query::pipelines::new::NewPipe;
 use databend_query::pipelines::new::NewPipeline;
+use databend_query::sessions::QueryContext;
+
+use crate::tests::create_query_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_simple_pipeline() -> Result<()> {
+    let ctx = create_query_context().await?;
     assert_eq!(
-        format!("{:?}", create_simple_pipeline()?),
+        format!("{:?}", create_simple_pipeline(ctx)?),
         "digraph {\
             \n    0 [ label = \"SyncReceiverSource\" ]\
             \n    1 [ label = \"DummyTransform\" ]\
@@ -45,8 +51,9 @@ async fn test_create_simple_pipeline() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_parallel_simple_pipeline() -> Result<()> {
+    let ctx = create_query_context().await?;
     assert_eq!(
-        format!("{:?}", create_parallel_simple_pipeline()?),
+        format!("{:?}", create_parallel_simple_pipeline(ctx)?),
         "digraph {\
             \n    0 [ label = \"SyncReceiverSource\" ]\
             \n    1 [ label = \"SyncReceiverSource\" ]\
@@ -66,8 +73,9 @@ async fn test_create_parallel_simple_pipeline() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_resize_pipeline() -> Result<()> {
+    let ctx = create_query_context().await?;
     assert_eq!(
-        format!("{:?}", create_resize_pipeline()?),
+        format!("{:?}", create_resize_pipeline(ctx)?),
         "digraph {\
             \n    0 [ label = \"SyncReceiverSource\" ]\
             \n    1 [ label = \"Resize\" ]\
@@ -95,9 +103,10 @@ async fn test_create_resize_pipeline() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_simple_pipeline_init_queue() -> Result<()> {
+    let ctx = create_query_context().await?;
     unsafe {
         assert_eq!(
-            format!("{:?}", create_simple_pipeline()?.init_schedule_queue()?),
+            format!("{:?}", create_simple_pipeline(ctx)?.init_schedule_queue()?),
             "ScheduleQueue { \
                 sync_queue: [\
                     QueueItem { id: 2, name: \"SyncSenderSink\" }\
@@ -111,11 +120,12 @@ async fn test_simple_pipeline_init_queue() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_parallel_simple_pipeline_init_queue() -> Result<()> {
+    let ctx = create_query_context().await?;
     unsafe {
         assert_eq!(
             format!(
                 "{:?}",
-                create_parallel_simple_pipeline()?.init_schedule_queue()?
+                create_parallel_simple_pipeline(ctx)?.init_schedule_queue()?
             ),
             "ScheduleQueue { \
                 sync_queue: [\
@@ -131,9 +141,10 @@ async fn test_parallel_simple_pipeline_init_queue() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_resize_pipeline_init_queue() -> Result<()> {
+    let ctx = create_query_context().await?;
     unsafe {
         assert_eq!(
-            format!("{:?}", create_resize_pipeline()?.init_schedule_queue()?),
+            format!("{:?}", create_resize_pipeline(ctx)?.init_schedule_queue()?),
             "ScheduleQueue { \
                 sync_queue: [\
                     QueueItem { id: 7, name: \"SyncSenderSink\" }, \
@@ -188,9 +199,9 @@ async fn test_resize_pipeline_init_queue() -> Result<()> {
 //     unimplemented!("")
 // }
 
-fn create_simple_pipeline() -> Result<RunningGraph> {
+fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
     let (_rx, sink_pipe) = create_sink_pipe(1)?;
-    let (_tx, source_pipe) = create_source_pipe(1)?;
+    let (_tx, source_pipe) = create_source_pipe(ctx, 1)?;
 
     let mut pipeline = NewPipeline::create();
     pipeline.add_pipe(source_pipe);
@@ -200,9 +211,9 @@ fn create_simple_pipeline() -> Result<RunningGraph> {
     RunningGraph::create(pipeline)
 }
 
-fn create_parallel_simple_pipeline() -> Result<RunningGraph> {
+fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
     let (_rx, sink_pipe) = create_sink_pipe(2)?;
-    let (_tx, source_pipe) = create_source_pipe(2)?;
+    let (_tx, source_pipe) = create_source_pipe(ctx, 2)?;
 
     let mut pipeline = NewPipeline::create();
     pipeline.add_pipe(source_pipe);
@@ -212,9 +223,9 @@ fn create_parallel_simple_pipeline() -> Result<RunningGraph> {
     RunningGraph::create(pipeline)
 }
 
-fn create_resize_pipeline() -> Result<RunningGraph> {
+fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
     let (_rx, sink_pipe) = create_sink_pipe(2)?;
-    let (_tx, source_pipe) = create_source_pipe(1)?;
+    let (_tx, source_pipe) = create_source_pipe(ctx, 1)?;
 
     let mut pipeline = NewPipeline::create();
     pipeline.add_pipe(source_pipe);
@@ -228,7 +239,10 @@ fn create_resize_pipeline() -> Result<RunningGraph> {
     RunningGraph::create(pipeline)
 }
 
-fn create_source_pipe(size: usize) -> Result<(Vec<Sender<Result<DataBlock>>>, NewPipe)> {
+fn create_source_pipe(
+    ctx: Arc<QueryContext>,
+    size: usize,
+) -> Result<(Vec<Sender<Result<DataBlock>>>, NewPipe)> {
     let mut txs = Vec::with_capacity(size);
     let mut outputs = Vec::with_capacity(size);
     let mut processors = Vec::with_capacity(size);
@@ -238,7 +252,7 @@ fn create_source_pipe(size: usize) -> Result<(Vec<Sender<Result<DataBlock>>>, Ne
         let (tx, rx) = channel(1);
         txs.push(tx);
         outputs.push(output.clone());
-        processors.push(SyncReceiverSource::create(rx, output)?);
+        processors.push(SyncReceiverSource::create(ctx.clone(), rx, output)?);
     }
     Ok((txs, NewPipe::SimplePipe {
         processors,

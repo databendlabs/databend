@@ -26,7 +26,7 @@ pub struct VariantSerializer {}
 impl TypeSerializer for VariantSerializer {
     fn serialize_value(&self, value: &DataValue) -> Result<String> {
         if let DataValue::Json(v) = value {
-            Ok(format!("{:#}", v))
+            Ok(v.to_string())
         } else {
             Err(ErrorCode::BadBytes("Incorrect Variant value"))
         }
@@ -34,7 +34,7 @@ impl TypeSerializer for VariantSerializer {
 
     fn serialize_column(&self, column: &ColumnRef) -> Result<Vec<String>> {
         let column: &JsonColumn = Series::check_get(column)?;
-        let result: Vec<String> = column.iter().map(|v| format!("{:#}", v)).collect();
+        let result: Vec<String> = column.iter().map(|v| v.to_string()).collect();
         Ok(result)
     }
 
@@ -49,7 +49,7 @@ impl TypeSerializer for VariantSerializer {
         column: &ColumnRef,
     ) -> Result<opensrv_clickhouse::types::column::ArcColumnData> {
         let column: &JsonColumn = Series::check_get(column)?;
-        let values: Vec<String> = column.iter().map(|v| format!("{:#}", v)).collect();
+        let values: Vec<String> = column.iter().map(|v| v.to_string()).collect();
 
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
     }
