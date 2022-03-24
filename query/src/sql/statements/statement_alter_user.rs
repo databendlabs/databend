@@ -23,6 +23,7 @@ use super::statement_create_user::DfAuthOption;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
+use crate::sql::statements::DfUserWithOption;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfAlterUser {
@@ -31,7 +32,8 @@ pub struct DfAlterUser {
     pub name: String,
     pub hostname: String,
     // None means no change to make
-    pub auth_option: DfAuthOption,
+    pub auth_option: Option<DfAuthOption>,
+    pub with_options: Vec<DfUserWithOption>,
 }
 
 #[async_trait::async_trait]
@@ -46,14 +48,27 @@ impl AnalyzableStatement for DfAlterUser {
                 .await?
         };
 
-        let new_auth_info = user_info
-            .auth_info
-            .alter(&self.auth_option.auth_type, &self.auth_option.by_value)?;
+        let new_auth_info = if let Some(auth_option) = &self.auth_option {
+            let auth_info = user_info
+                .auth_info
+                .alter(&auth_option.auth_type, &auth_option.by_value)?;
+            if user_info.auth_info == auth_info {
+                None
+            } else {
+                Some(auth_info)
+            }
+        } else {
+            None
+        };
 
-        let new_auth_info = if user_info.auth_info == new_auth_info {
+        let mut user_option = user_info.option.clone();
+        for option in &self.with_options {
+            option.apply(&mut user_option);
+        }
+        let new_user_option = if user_option == user_info.option {
             None
         } else {
-            Some(new_auth_info)
+            Some(user_option)
         };
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::AlterUser(
@@ -61,6 +76,7 @@ impl AnalyzableStatement for DfAlterUser {
                 name: user_info.name.clone(),
                 hostname: user_info.hostname,
                 auth_info: new_auth_info,
+                user_option: new_user_option,
             },
         ))))
     }

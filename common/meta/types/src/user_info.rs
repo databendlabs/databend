@@ -90,13 +90,17 @@ impl TryFrom<Vec<u8>> for UserInfo {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(default)]
 pub struct UserOption {
     flags: BitFlags<UserOptionFlag>,
 }
 
 impl UserOption {
+    pub fn set_all_flag(&mut self) {
+        self.flags = BitFlags::all();
+    }
+
     pub fn set_option_flag(&mut self, flag: UserOptionFlag) {
         self.flags.insert(flag);
     }

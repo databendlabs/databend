@@ -16,8 +16,6 @@ use common_exception::Result;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::RoleIdentity;
 use common_meta_types::UserIdentity;
-use common_meta_types::UserOption;
-use common_meta_types::UserOptionFlag;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use databend_query::sql::statements::DfAlterUser;
@@ -31,6 +29,7 @@ use databend_query::sql::statements::DfGrantPrivilegeStatement;
 use databend_query::sql::statements::DfGrantRoleStatement;
 use databend_query::sql::statements::DfRevokePrivilegeStatement;
 use databend_query::sql::statements::DfShowGrants;
+use databend_query::sql::statements::DfUserWithOption;
 use databend_query::sql::*;
 
 use crate::sql::sql_parser::*;
@@ -50,7 +49,7 @@ fn create_user_auth_test(
                 auth_type,
                 by_value: auth_string,
             },
-            user_option: UserOption::default(),
+            with_options: Default::default(),
         }),
     )
 }
@@ -76,10 +75,11 @@ fn alter_user_auth_test(
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_option: DfAuthOption {
+            auth_option: Some(DfAuthOption {
                 auth_type,
                 by_value: auth_string,
-            },
+            }),
+            with_options: Default::default(),
         }),
     )
 }
@@ -122,13 +122,12 @@ fn create_user_test() -> Result<()> {
             name: String::from("test@localhost"),
             hostname: String::from("%"),
             auth_option: DfAuthOption::default(),
-            user_option: UserOption::default(),
+            with_options: Default::default(),
         }),
     )?;
 
     // create user with option
-    let mut user_option = UserOption::default();
-    user_option.set_option_flag(UserOptionFlag::TenantSetting);
+    let with_options = vec![DfUserWithOption::TenantSetting];
     expect_parse_ok(
         "CREATE USER 'operator' WITH TENANTSETTING NOT IDENTIFIED",
         DfStatement::CreateUser(DfCreateUser {
@@ -136,19 +135,22 @@ fn create_user_test() -> Result<()> {
             name: String::from("operator"),
             hostname: String::from("%"),
             auth_option: DfAuthOption::no_password(),
-            user_option,
+            with_options,
         }),
     )?;
 
-    user_option.set_option_flag(UserOptionFlag::ConfigReload);
+    let with_options = vec![
+        DfUserWithOption::NoTenantSetting,
+        DfUserWithOption::ConfigReload,
+    ];
     expect_parse_ok(
-        "CREATE USER 'operator' WITH TENANTSETTING, CONFIGRELOAD NOT IDENTIFIED",
+        "CREATE USER 'operator' WITH NOTENANTSETTING, CONFIGRELOAD NOT IDENTIFIED",
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
             name: String::from("operator"),
             hostname: String::from("%"),
             auth_option: DfAuthOption::no_password(),
-            user_option,
+            with_options,
         }),
     )?;
 
@@ -197,7 +199,18 @@ fn alter_user_test() -> Result<()> {
 
     alter_user_auth_test("NOT IDENTIFIED", Some("no_password".to_string()), None)?;
 
-    alter_user_auth_test("", None, None)?;
+    // alter_user_auth_test("", None, None)?;
+
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            auth_option: None,
+            with_options: Default::default(),
+        }),
+    )?;
 
     expect_parse_ok(
         "ALTER USER USER() IDENTIFIED BY 'password'",
@@ -205,10 +218,11 @@ fn alter_user_test() -> Result<()> {
             if_current_user: true,
             name: String::from(""),
             hostname: String::from(""),
-            auth_option: DfAuthOption {
+            auth_option: Some(DfAuthOption {
                 auth_type: None,
                 by_value: Some(password),
-            },
+            }),
+            with_options: Default::default(),
         }),
     )?;
 
@@ -218,10 +232,38 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test@localhost"),
             hostname: String::from("%"),
-            auth_option: DfAuthOption {
+            auth_option: Some(DfAuthOption {
                 auth_type: Some("sha256_password".to_string()),
                 by_value: Some("password".to_string()),
-            },
+            }),
+            with_options: Default::default(),
+        }),
+    )?;
+
+    let mut with_options = vec![DfUserWithOption::TenantSetting];
+    expect_parse_ok(
+        "ALTER USER 'test'@'%' WITH TENANTSETTING",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("%"),
+            auth_option: None,
+            with_options: with_options.clone(),
+        }),
+    )?;
+
+    with_options.push(DfUserWithOption::ConfigReload);
+    expect_parse_ok(
+        "ALTER USER 'test'@'%' WITH TENANTSETTING, CONFIGRELOAD IDENTIFIED by 'password'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("%"),
+            auth_option: Some(DfAuthOption {
+                auth_type: None,
+                by_value: Some("password".to_string()),
+            }),
+            with_options,
         }),
     )?;
 
@@ -233,6 +275,11 @@ fn alter_user_test() -> Result<()> {
     expect_parse_err(
         "ALTER USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY",
         String::from("sql parser error: Expected literal string, found: EOF"),
+    )?;
+
+    expect_parse_err(
+        "ALTER USER 'operator' WITH TEST",
+        String::from("sql parser error: Expected user option, found: TEST"),
     )?;
 
     Ok(())

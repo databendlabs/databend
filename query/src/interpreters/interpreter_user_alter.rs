@@ -50,14 +50,14 @@ impl Interpreter for AlterUserInterpreter {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
-        if let Some(new_auth_info) = plan.auth_info {
+        if plan.auth_info.is_some() || plan.user_option.is_some() {
             user_mgr
                 .update_user(
                     &tenant,
                     plan.name.as_str(),
                     plan.hostname.as_str(),
-                    Some(new_auth_info),
-                    None,
+                    plan.auth_info,
+                    plan.user_option,
                 )
                 .await?;
         }
