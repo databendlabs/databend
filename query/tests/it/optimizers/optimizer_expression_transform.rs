@@ -47,7 +47,7 @@ async fn test_expression_transform_optimizer() -> Result<()> {
                 query: "select * from system.databases where not (isNotNull(name) and name LIKE '%sys%')",
                 expect: "\
                 Projection: name:String\
-                \n  Filter: (isnull(name) or (name not like %sys%))\
+                \n  Filter: (isNull(name) or (name not like %sys%))\
                 \n    ReadDataSource: scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [(NOT (isNotNull(name) AND (name LIKE %sys%)))]]",
             },
             Test {
@@ -55,7 +55,7 @@ async fn test_expression_transform_optimizer() -> Result<()> {
                 query: "select * from system.databases where not (name is null or name not like 'a%')",
                 expect: "\
                 Projection: name:String\
-                \n  Filter: (isnotnull(name) and (name like a%))\
+                \n  Filter: (isNotNull(name) and (name like a%))\
                 \n    ReadDataSource: scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0, partitions_scanned: 0, partitions_total: 0], push_downs: [projections: [0], filters: [(NOT (isnull(name) OR (name NOT LIKE a%)))]]",
             },
             Test {

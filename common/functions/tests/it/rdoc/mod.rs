@@ -12,6 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod database;
-mod to_type_name;
-mod version;
+mod function_doc_asset;

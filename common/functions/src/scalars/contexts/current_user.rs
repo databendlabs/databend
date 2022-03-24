@@ -14,39 +14,33 @@
 
 use std::fmt;
 
-use common_datavalues::DataValue;
 use common_datavalues::StringType;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
-pub struct ToTypeNameFunction {
-    _display_name: String,
-}
+pub struct CurrentUserFunction {}
 
-impl ToTypeNameFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(ToTypeNameFunction {
-            _display_name: display_name.to_string(),
-        }))
+impl CurrentUserFunction {
+    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
+        Ok(Box::new(CurrentUserFunction {}))
     }
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
-                .deterministic()
-                .disable_passthrough_null()
+                .context_function()
                 .num_arguments(1),
         )
     }
 }
 
-impl Function for ToTypeNameFunction {
+impl Function for CurrentUserFunction {
     fn name(&self) -> &str {
-        "ToTypeNameFunction"
+        "CurrentUserFunction"
     }
 
     fn return_type(
@@ -59,17 +53,14 @@ impl Function for ToTypeNameFunction {
     fn eval(
         &self,
         columns: &common_datavalues::ColumnsWithField,
-        input_rows: usize,
+        _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        let type_name = format!("{:?}", columns[0].data_type());
-        let value = DataValue::String(type_name.as_bytes().to_vec());
-        let data_type = StringType::arc();
-        value.as_const_column(&data_type, input_rows)
+        Ok(columns[0].column().clone())
     }
 }
 
-impl fmt::Display for ToTypeNameFunction {
+impl fmt::Display for CurrentUserFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "toTypeName")
+        write!(f, "current_user")
     }
 }

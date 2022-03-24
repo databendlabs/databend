@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod is_not_null;
-mod is_null;
-mod nullable;
+mod function_doc_asset;
+mod function_docs;
 
-pub use is_not_null::IsNotNullFunction;
-pub use is_null::IsNullFunction;
-pub use nullable::NullableFunction;
+pub use function_doc_asset::FunctionDocAsset;
+pub use function_docs::*;

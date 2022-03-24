@@ -17,19 +17,19 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
-pub struct IsNotNullFunction {
+pub struct IsNullFunction {
     _display_name: String,
 }
 
-impl IsNotNullFunction {
+impl IsNullFunction {
     pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(IsNotNullFunction {
-            _display_name: "isNotNull".to_string(),
+        Ok(Box::new(IsNullFunction {
+            _display_name: "isNull".to_string(),
         }))
     }
 
@@ -37,7 +37,7 @@ impl IsNotNullFunction {
         FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
-                .negative_function("isnull")
+                .negative_function("isNotNull")
                 .bool_function()
                 .disable_passthrough_null()
                 .num_arguments(1),
@@ -45,9 +45,9 @@ impl IsNotNullFunction {
     }
 }
 
-impl Function for IsNotNullFunction {
+impl Function for IsNullFunction {
     fn name(&self) -> &str {
-        "IsNotNullFunction"
+        "IsNullFunction"
     }
 
     fn return_type(
@@ -64,18 +64,21 @@ impl Function for IsNotNullFunction {
     ) -> Result<common_datavalues::ColumnRef> {
         let (all_null, validity) = columns[0].column().validity();
         if all_null {
-            return Ok(ConstColumn::new(Series::from_data(vec![false]), input_rows).arc());
+            return Ok(ConstColumn::new(Series::from_data(vec![true]), input_rows).arc());
         }
 
         match validity {
-            Some(validity) => Ok(BooleanColumn::from_arrow_data(validity.clone()).arc()),
-            None => Ok(ConstColumn::new(Series::from_data(vec![true]), input_rows).arc()),
+            Some(validity) => {
+                let iter = validity.iter().map(|v| !v);
+                Ok(BooleanColumn::from_iterator(iter).arc())
+            }
+            None => Ok(ConstColumn::new(Series::from_data(vec![false]), input_rows).arc()),
         }
     }
 }
 
-impl std::fmt::Display for IsNotNullFunction {
+impl std::fmt::Display for IsNullFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "isNotNull")
+        write!(f, "isNull")
     }
 }

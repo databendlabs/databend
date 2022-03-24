@@ -1,6 +1,7 @@
 ---
 title: Add time interval
 description: Add time interval function
+title_includes: addYears, addMonths, addDays, addHours, addMinutes, addSeconds
 ---
 
 Add time interval to a date or datetime, return the result of date or datetime type.
@@ -17,7 +18,7 @@ addSeconds(exp0, expr1)
 
 ## Return Type
 
-Date16, Date32 or DateTime32, depends on the input.
+Date16, Date32 or DateTime32, DateTime64, depends on the input.
 
 ## Examples
 

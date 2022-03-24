@@ -26,12 +26,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::CastFunction;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionAdapter;
+use crate::scalars::FunctionFeatures;
 use crate::scalars::Monotonicity;
 use crate::scalars::RoundFunction;
 

@@ -14,53 +14,68 @@
 
 use std::fmt;
 
-use common_datavalues::StringType;
+use common_datavalues::prelude::*;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
-pub struct CurrentUserFunction {}
+pub struct IsNotNullFunction {
+    _display_name: String,
+}
 
-impl CurrentUserFunction {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(CurrentUserFunction {}))
+impl IsNotNullFunction {
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
+        Ok(Box::new(IsNotNullFunction {
+            _display_name: "isNotNull".to_string(),
+        }))
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create)).features(
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
-                .context_function()
+                .deterministic()
+                .negative_function("isNull")
+                .bool_function()
+                .disable_passthrough_null()
                 .num_arguments(1),
         )
     }
 }
 
-impl Function for CurrentUserFunction {
+impl Function for IsNotNullFunction {
     fn name(&self) -> &str {
-        "CurrentUserFunction"
+        "IsNotNullFunction"
     }
 
     fn return_type(
         &self,
         _args: &[&common_datavalues::DataTypePtr],
     ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(StringType::arc())
+        Ok(bool::to_data_type())
     }
 
     fn eval(
         &self,
         columns: &common_datavalues::ColumnsWithField,
-        _input_rows: usize,
+        input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        Ok(columns[0].column().clone())
+        let (all_null, validity) = columns[0].column().validity();
+        if all_null {
+            return Ok(ConstColumn::new(Series::from_data(vec![false]), input_rows).arc());
+        }
+
+        match validity {
+            Some(validity) => Ok(BooleanColumn::from_arrow_data(validity.clone()).arc()),
+            None => Ok(ConstColumn::new(Series::from_data(vec![true]), input_rows).arc()),
+        }
     }
 }
 
-impl fmt::Display for CurrentUserFunction {
+impl std::fmt::Display for IsNotNullFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "current_user")
+        write!(f, "isNotNull")
     }
 }
