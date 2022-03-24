@@ -28,6 +28,7 @@ async-trait = "0.1.52"
 csv-async = "1.2.4"
 futures = "0.3.21"
 pin-project-lite = "0.2.8"
+serde_json = { version = "1.0.79", default-features = false, features = ["preserve_order"] }
 tempfile = "3.3.0"
 
 [dev-dependencies]

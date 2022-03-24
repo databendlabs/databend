@@ -41,6 +41,11 @@ impl TypeDeserializer for NullDeserializer {
         Ok(())
     }
 
+    fn de_json(&mut self, _value: &serde_json::Value) -> Result<()> {
+        self.builder.append_default();
+        Ok(())
+    }
+
     fn de_text(&mut self, _reader: &[u8]) -> Result<()> {
         self.builder.append_default();
         Ok(())
