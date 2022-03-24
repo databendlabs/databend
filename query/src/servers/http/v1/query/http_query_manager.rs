@@ -14,18 +14,22 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use common_base::tokio;
 use common_base::tokio::sync::RwLock;
 use common_base::tokio::time::sleep;
 use common_exception::Result;
+use common_infallible::Mutex;
 use common_meta_types::UserInfo;
 use common_tracing::tracing;
 
+use super::expiring_map::ExpiringMap;
 use crate::configs::Config;
 use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::HttpQueryRequest;
 use crate::sessions::SessionManager;
+use crate::sessions::SessionRef;
 
 // TODO(youngsofun): may need refactor later for 2 reasons:
 // 1. some can be both configured and overwritten by http query request
@@ -37,6 +41,7 @@ pub(crate) struct HttpQueryConfig {
 
 pub struct HttpQueryManager {
     pub(crate) queries: Arc<RwLock<HashMap<String, Arc<HttpQuery>>>>,
+    pub(crate) sessions: Mutex<ExpiringMap<String, SessionRef>>,
     pub(crate) config: HttpQueryConfig,
 }
 
@@ -44,6 +49,7 @@ impl HttpQueryManager {
     pub async fn create_global(cfg: Config) -> Result<Arc<HttpQueryManager>> {
         Ok(Arc::new(HttpQueryManager {
             queries: Arc::new(RwLock::new(HashMap::new())),
+            sessions: Mutex::new(ExpiringMap::default()),
             config: HttpQueryConfig {
                 result_timeout_millis: cfg.query.http_handler_result_timeout_millis,
             },
@@ -103,5 +109,20 @@ impl HttpQueryManager {
             }
         }
         q
+    }
+
+    pub(crate) async fn get_session(self: &Arc<Self>, session_id: &str) -> Option<SessionRef> {
+        let sessions = self.sessions.lock();
+        sessions.get(session_id)
+    }
+
+    pub(crate) async fn add_session(self: &Arc<Self>, session: SessionRef, timeout: Duration) {
+        let mut sessions = self.sessions.lock();
+        sessions.insert(session.get_id(), session.clone(), Some(timeout));
+    }
+
+    pub(crate) fn kill_session(self: &Arc<Self>, session_id: &str) {
+        let mut sessions = self.sessions.lock();
+        sessions.remove(session_id);
     }
 }

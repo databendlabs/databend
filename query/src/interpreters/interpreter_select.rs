@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
@@ -69,26 +68,31 @@ impl Interpreter for SelectInterpreter {
         let settings = self.ctx.get_settings();
 
         if settings.get_enable_new_processor_framework()? != 0 {
-            if !self.ctx.get_cluster().is_empty() {
-                return Err(ErrorCode::UnImplement(
-                    "NewProcessor framework unsupported cluster query.",
-                ));
+            if self.ctx.get_cluster().is_empty() {
+                let async_runtime = self.ctx.get_storage_runtime();
+                let new_pipeline = self.execute2()?;
+                let executor = PipelinePullingExecutor::try_create(async_runtime, new_pipeline)?;
+                let executor_stream = Box::pin(ProcessorExecutorStream::create(executor)?);
+                return Ok(Box::pin(self.ctx.try_create_abortable(executor_stream)?));
             }
 
-            let new_pipeline = self.execute2().await?;
-            let executor = PipelinePullingExecutor::try_create(new_pipeline)?;
-
-            Ok(Box::pin(ProcessorExecutorStream::create(executor)?))
+            let optimized_plan = self.rewrite_plan()?;
+            plan_schedulers::schedule_query(&self.ctx, &optimized_plan).await
         } else {
             let optimized_plan = self.rewrite_plan()?;
             plan_schedulers::schedule_query(&self.ctx, &optimized_plan).await
         }
     }
 
-    async fn execute2(&self) -> Result<NewPipeline> {
+    fn execute2(&self) -> Result<NewPipeline> {
         let settings = self.ctx.get_settings();
         let builder = QueryPipelineBuilder::create(self.ctx.clone());
-        let mut new_pipeline = builder.finalize(&self.select)?;
+
+        let optimized_plan = self.rewrite_plan()?;
+        let select_plan = SelectPlan {
+            input: Arc::new(optimized_plan),
+        };
+        let mut new_pipeline = builder.finalize(&select_plan)?;
         new_pipeline.set_max_threads(settings.get_max_threads()? as usize);
         Ok(new_pipeline)
     }

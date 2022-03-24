@@ -46,8 +46,8 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 use crate::sessions::ProcessInfo;
+use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
-use crate::sessions::Status;
 use crate::storages::cache::CacheManager;
 use crate::users::auth::auth_mgr::AuthMgr;
 use crate::users::UserApiProvider;
@@ -65,9 +65,9 @@ pub struct SessionManager {
     pub(in crate::sessions) storage_cache_manager: RwLock<Arc<CacheManager>>,
     pub(in crate::sessions) query_logger:
         RwLock<Option<Arc<dyn tracing::Subscriber + Send + Sync>>>,
-    pub status: Arc<RwLock<Status>>,
+    pub status: Arc<RwLock<SessionManagerStatus>>,
     storage_operator: RwLock<Operator>,
-    storage_runtime: Runtime,
+    storage_runtime: Arc<Runtime>,
     _guards: Vec<WorkerGuard>,
 }
 
@@ -122,7 +122,7 @@ impl SessionManager {
             query_logger: RwLock::new(query_logger),
             status,
             storage_operator: RwLock::new(storage_operator),
-            storage_runtime,
+            storage_runtime: Arc::new(storage_runtime),
             _guards,
         }))
     }
@@ -160,8 +160,8 @@ impl SessionManager {
         self.storage_cache_manager.read().clone()
     }
 
-    pub fn get_storage_runtime<'a>(self: &'a Arc<Self>) -> &'a Runtime {
-        &self.storage_runtime
+    pub fn get_storage_runtime(&self) -> Arc<Runtime> {
+        self.storage_runtime.clone()
     }
 
     pub async fn create_session(self: &Arc<Self>, typ: SessionType) -> Result<SessionRef> {
@@ -339,6 +339,11 @@ impl SessionManager {
                 // Endpoint.
                 {
                     builder.endpoint(&s3_conf.endpoint_url);
+                }
+
+                // Region
+                {
+                    builder.region(&s3_conf.region);
                 }
 
                 // Credential.

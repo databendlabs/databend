@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use common_base::Progress;
+use common_base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use futures::Future;
@@ -22,6 +24,7 @@ use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::Processor;
+use crate::sessions::QueryContext;
 
 pub trait AsyncSource: Send {
     const NAME: &'static str;
@@ -39,14 +42,21 @@ pub struct AsyncSourcer<T: 'static + AsyncSource> {
 
     inner: T,
     output: Arc<OutputPort>,
+    scan_progress: Arc<Progress>,
     generated_data: Option<DataBlock>,
 }
 
 impl<T: 'static + AsyncSource> AsyncSourcer<T> {
-    pub fn create(output: Arc<OutputPort>, inner: T) -> Result<ProcessorPtr> {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        output: Arc<OutputPort>,
+        inner: T,
+    ) -> Result<ProcessorPtr> {
+        let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(Self {
             inner,
             output,
+            scan_progress,
             is_finish: false,
             generated_data: None,
         })))
@@ -85,7 +95,14 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
     async fn async_process(&mut self) -> Result<()> {
         match self.inner.generate().await? {
             None => self.is_finish = true,
-            Some(data_block) => self.generated_data = Some(data_block),
+            Some(data_block) => {
+                let progress_values = ProgressValues {
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
+                };
+                self.scan_progress.incr(&progress_values);
+                self.generated_data = Some(data_block)
+            }
         };
 
         Ok(())

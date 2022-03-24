@@ -162,7 +162,7 @@ impl Table for QueryLogTable {
 
     fn read2(
         &self,
-        _: Arc<QueryContext>,
+        ctx: Arc<QueryContext>,
         _: &ReadDataSourcePlan,
         pipeline: &mut NewPipeline,
     ) -> Result<()> {
@@ -172,7 +172,7 @@ impl Table for QueryLogTable {
 
         source_builder.add_source(
             output.clone(),
-            QueryLogSource::create(output, &self.data.read())?,
+            QueryLogSource::create(ctx, output, &self.data.read())?,
         );
 
         pipeline.add_pipe(source_builder.finalize());
@@ -220,8 +220,12 @@ struct QueryLogSource {
 }
 
 impl QueryLogSource {
-    pub fn create(output: Arc<OutputPort>, data: &VecDeque<DataBlock>) -> Result<ProcessorPtr> {
-        SyncSourcer::create(output, QueryLogSource { data: data.clone() })
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        output: Arc<OutputPort>,
+        data: &VecDeque<DataBlock>,
+    ) -> Result<ProcessorPtr> {
+        SyncSourcer::create(ctx, output, QueryLogSource { data: data.clone() })
     }
 }
 

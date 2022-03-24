@@ -215,6 +215,7 @@ pub struct DropTableReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct RenameTableReq {
+    pub if_exists: bool,
     pub tenant: String,
     pub db: String,
     pub table_name: String,

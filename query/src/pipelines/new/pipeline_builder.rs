@@ -36,7 +36,9 @@ use crate::pipelines::new::processors::AggregatorParams;
 use crate::pipelines::new::processors::AggregatorTransformParams;
 use crate::pipelines::new::processors::ExpressionTransform;
 use crate::pipelines::new::processors::ProjectionTransform;
+use crate::pipelines::new::processors::SubQueriesPuller;
 use crate::pipelines::new::processors::TransformAggregator;
+use crate::pipelines::new::processors::TransformCreateSets;
 use crate::pipelines::new::processors::TransformFilter;
 use crate::pipelines::new::processors::TransformHaving;
 use crate::pipelines::new::processors::TransformLimit;
@@ -83,6 +85,7 @@ impl PlanVisitor for QueryPipelineBuilder {
             PlanNode::LimitBy(n) => self.visit_limit_by(n),
             PlanNode::ReadSource(n) => self.visit_read_data_source(n),
             PlanNode::Select(n) => self.visit_select(n),
+            PlanNode::SubQueryExpression(n) => self.visit_sub_queries_sets(n),
             _ => Err(ErrorCode::UnImplement("")),
         }
     }
@@ -199,10 +202,22 @@ impl PlanVisitor for QueryPipelineBuilder {
             })
     }
 
-    fn visit_sub_queries_sets(&mut self, _: &SubQueriesSetPlan) -> Result<()> {
-        Err(ErrorCode::UnImplement(
-            "New processor framework unsupported subquery.",
-        ))
+    fn visit_sub_queries_sets(&mut self, plan: &SubQueriesSetPlan) -> Result<()> {
+        self.visit_plan_node(&plan.input)?;
+
+        let schema = plan.schema();
+        let context = self.ctx.clone();
+        let expressions = plan.expressions.to_vec();
+        let sub_queries_puller = SubQueriesPuller::create(context, expressions);
+        self.pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformCreateSets::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    schema.clone(),
+                    sub_queries_puller.clone(),
+                )
+            })
     }
 
     fn visit_sort(&mut self, plan: &SortPlan) -> Result<()> {

@@ -21,7 +21,6 @@ use common_exception::Result;
 
 use crate::catalogs::Catalog;
 use crate::procedures::Procedure;
-use crate::procedures::ProcedureDescription;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::FuseHistory;
@@ -33,16 +32,19 @@ impl FuseHistoryProcedure {
     pub fn try_create() -> Result<Box<dyn Procedure>> {
         Ok(Box::new(FuseHistoryProcedure {}))
     }
-
-    pub fn desc() -> ProcedureDescription {
-        ProcedureDescription::creator(Box::new(Self::try_create))
-            .features(ProcedureFeatures::default().num_arguments(2))
-    }
 }
 
 #[async_trait::async_trait]
 impl Procedure for FuseHistoryProcedure {
-    async fn eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+    fn name(&self) -> &str {
+        "FUSE_HISTORY"
+    }
+
+    fn features(&self) -> ProcedureFeatures {
+        ProcedureFeatures::default().num_arguments(2)
+    }
+
+    async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
         let database_name = args[0].clone();
         let table_name = args[1].clone();
         let tenant_id = ctx.get_tenant();

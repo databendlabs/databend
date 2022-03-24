@@ -279,6 +279,7 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::USER => self.parse_alter_user(),
                 Keyword::FUNCTION => self.parse_alter_udf(),
+                Keyword::TABLE => self.parse_alter_table(),
                 _ => self.expected("keyword USER or FUNCTION", Token::Word(w)),
             },
             unexpected => self.expected("alter statement", unexpected),

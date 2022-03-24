@@ -341,7 +341,7 @@ impl PipelineBuilder {
         let mut pipeline = self.visit(&*plan.input)?;
         let schema = plan.schema();
         let context = self.ctx.clone();
-        let expressions = plan.expressions.clone();
+        let expressions = plan.expressions.to_vec();
         let sub_queries_puller = SubQueriesPuller::create(context.clone(), expressions);
         pipeline.add_simple_transform(move || {
             Ok(Box::new(CreateSetsTransform::try_create(

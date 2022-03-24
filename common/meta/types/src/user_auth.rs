@@ -14,6 +14,7 @@
 use std::str::FromStr;
 
 use common_exception::ErrorCode;
+use common_exception::Result;
 use sha2::Digest;
 use sha2::Sha256;
 
@@ -33,15 +34,15 @@ pub enum AuthType {
 }
 
 impl std::str::FromStr for AuthType {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, String> {
+    type Err = ErrorCode;
+    fn from_str(s: &str) -> Result<Self> {
         match s {
             PLAINTEXT_PASSWORD_STR => Ok(AuthType::PlaintextPassword),
             SHA256_PASSWORD_STR => Ok(AuthType::Sha256Password),
             DOUBLE_SHA1_PASSWORD_STR => Ok(AuthType::DoubleSha1Password),
             NO_PASSWORD_STR => Ok(AuthType::NoPassword),
             JWT_AUTH_STR => Ok(AuthType::JWT),
-            _ => Err(AuthType::bad_auth_types(s)),
+            _ => Err(ErrorCode::InvalidAuthInfo(AuthType::bad_auth_types(s))),
         }
     }
 }
@@ -104,7 +105,7 @@ fn double_sha1(v: &[u8]) -> [u8; 20] {
 }
 
 impl AuthInfo {
-    pub fn new(auth_type: AuthType, auth_string: &Option<String>) -> Result<AuthInfo, String> {
+    pub fn new(auth_type: AuthType, auth_string: &Option<String>) -> Result<AuthInfo> {
         match auth_type {
             AuthType::NoPassword => Ok(AuthInfo::None),
             AuthType::JWT => Ok(AuthInfo::JWT),
@@ -118,15 +119,12 @@ impl AuthInfo {
                         hash_method: method,
                     })
                 }
-                None => Err("need password".to_string()),
+                None => Err(ErrorCode::InvalidAuthInfo("need password".to_string())),
             },
         }
     }
 
-    pub fn create(
-        auth_type: &Option<String>,
-        auth_string: &Option<String>,
-    ) -> Result<AuthInfo, String> {
+    pub fn create(auth_type: &Option<String>, auth_string: &Option<String>) -> Result<AuthInfo> {
         let default = AuthType::DoubleSha1Password;
         let auth_type = auth_type
             .clone()
@@ -140,7 +138,7 @@ impl AuthInfo {
         &self,
         auth_type: &Option<String>,
         auth_string: &Option<String>,
-    ) -> Result<AuthInfo, String> {
+    ) -> Result<AuthInfo> {
         let old_auth_type = self.get_type();
         let new_auth_type = auth_type
             .clone()
@@ -195,11 +193,7 @@ impl AuthInfo {
         }
     }
 
-    fn restore_sha1_mysql(
-        salt: &[u8],
-        input: &[u8],
-        user_password_hash: &[u8],
-    ) -> Result<Vec<u8>, ErrorCode> {
+    fn restore_sha1_mysql(salt: &[u8], input: &[u8], user_password_hash: &[u8]) -> Result<Vec<u8>> {
         // SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1( password ) ) )
         let mut m = sha1::Sha1::new();
         m.update(salt);
@@ -216,7 +210,7 @@ impl AuthInfo {
         Ok(s)
     }
 
-    pub fn auth_mysql(&self, password_input: &[u8], salt: &[u8]) -> Result<bool, ErrorCode> {
+    pub fn auth_mysql(&self, password_input: &[u8], salt: &[u8]) -> Result<bool> {
         match self {
             AuthInfo::None => Ok(true),
             AuthInfo::Password {

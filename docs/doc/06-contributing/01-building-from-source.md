@@ -1,6 +1,8 @@
 ---
 title: Getting and Building Databend from source
 sidebar_label: Building from Source
+description:
+  Getting and Building Databend from source
 ---
 
 :::note

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_base::tokio;
 use common_exception::Result;
 use databend_query::pipelines::processors::*;
+use databend_query::pipelines::transforms::SourceTransform;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
@@ -25,14 +26,24 @@ async fn transform_source_test() -> Result<()> {
     let ctx = crate::tests::create_query_context().await?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
-    let mut pipeline = Pipeline::create(ctx);
+    let mut pipeline = Pipeline::create(ctx.clone());
+    let mut partitions = vec![];
 
-    let a = test_source.number_source_transform_for_test(1)?;
-    pipeline.add_source(Arc::new(a))?;
+    let source_plan = test_source.number_read_source_plan_for_test(1)?;
+    partitions.extend(source_plan.parts.clone());
+    pipeline.add_source(Arc::new(SourceTransform::try_create(
+        ctx.clone(),
+        source_plan,
+    )?))?;
 
-    let b = test_source.number_source_transform_for_test(1)?;
+    let source_plan = test_source.number_read_source_plan_for_test(1)?;
+    partitions.extend(source_plan.parts.clone());
+    pipeline.add_source(Arc::new(SourceTransform::try_create(
+        ctx.clone(),
+        source_plan,
+    )?))?;
 
-    pipeline.add_source(Arc::new(b))?;
+    ctx.try_set_partitions(partitions)?;
     pipeline.merge_processor()?;
 
     let stream = pipeline.execute().await?;

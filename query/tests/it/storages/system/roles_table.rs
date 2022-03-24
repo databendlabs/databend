@@ -28,7 +28,9 @@ async fn test_roles_table() -> Result<()> {
 
     {
         let role_info = RoleInfo::new("test".to_string());
-        ctx.get_user_manager().add_role(&tenant, role_info).await?;
+        ctx.get_user_manager()
+            .add_role(&tenant, role_info, false)
+            .await?;
     }
 
     {
@@ -36,7 +38,9 @@ async fn test_roles_table() -> Result<()> {
         role_info
             .grants
             .grant_role(RoleIdentity::new("test".to_string()));
-        ctx.get_user_manager().add_role(&tenant, role_info).await?;
+        ctx.get_user_manager()
+            .add_role(&tenant, role_info, false)
+            .await?;
     }
 
     let table = RolesTable::create(1);
