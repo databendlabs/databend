@@ -17,6 +17,7 @@
 #![feature(portable_simd)]
 
 pub mod aggregates;
+pub mod rdoc;
 pub mod scalars;
 
 use aggregates::AggregateFunctionFactory;

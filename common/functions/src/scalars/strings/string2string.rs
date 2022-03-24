@@ -21,10 +21,10 @@ use common_datavalues::TypeID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-// use common_tracing::tracing;
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+// use common_tracing::tracing;
+use crate::scalars::FunctionFeatures;
 
 pub trait StringOperator: Send + Sync + Clone + Default + 'static {
     fn try_apply<'a>(&'a mut self, _: &'a [u8], _: &mut [u8]) -> Result<usize>;

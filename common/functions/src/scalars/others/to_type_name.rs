@@ -14,47 +14,46 @@
 
 use std::fmt;
 
-use common_datavalues::prelude::*;
+use common_datavalues::DataValue;
+use common_datavalues::StringType;
 use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 #[derive(Clone)]
-pub struct IsNullFunction {
+pub struct ToTypeNameFunction {
     _display_name: String,
 }
 
-impl IsNullFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(IsNullFunction {
-            _display_name: "isNull".to_string(),
+impl ToTypeNameFunction {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+        Ok(Box::new(ToTypeNameFunction {
+            _display_name: display_name.to_string(),
         }))
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
             FunctionFeatures::default()
                 .deterministic()
-                .negative_function("isnotnull")
-                .bool_function()
                 .disable_passthrough_null()
                 .num_arguments(1),
         )
     }
 }
 
-impl Function for IsNullFunction {
+impl Function for ToTypeNameFunction {
     fn name(&self) -> &str {
-        "IsNullFunction"
+        "ToTypeNameFunction"
     }
 
     fn return_type(
         &self,
         _args: &[&common_datavalues::DataTypePtr],
     ) -> Result<common_datavalues::DataTypePtr> {
-        Ok(bool::to_data_type())
+        Ok(StringType::arc())
     }
 
     fn eval(
@@ -62,23 +61,15 @@ impl Function for IsNullFunction {
         columns: &common_datavalues::ColumnsWithField,
         input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
-        let (all_null, validity) = columns[0].column().validity();
-        if all_null {
-            return Ok(ConstColumn::new(Series::from_data(vec![true]), input_rows).arc());
-        }
-
-        match validity {
-            Some(validity) => {
-                let iter = validity.iter().map(|v| !v);
-                Ok(BooleanColumn::from_iterator(iter).arc())
-            }
-            None => Ok(ConstColumn::new(Series::from_data(vec![false]), input_rows).arc()),
-        }
+        let type_name = format!("{:?}", columns[0].data_type());
+        let value = DataValue::String(type_name.as_bytes().to_vec());
+        let data_type = StringType::arc();
+        value.as_const_column(&data_type, input_rows)
     }
 }
 
-impl std::fmt::Display for IsNullFunction {
+impl fmt::Display for ToTypeNameFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "isNull")
+        write!(f, "toTypeName")
     }
 }

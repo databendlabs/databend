@@ -23,12 +23,12 @@ use common_exception::Result;
 use num_traits::AsPrimitive;
 
 use crate::scalars::assert_numeric;
-use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::scalar_binary_op;
 use crate::scalars::scalar_unary_op;
 use crate::scalars::EvalContext;
 use crate::scalars::Function;
 use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
 
 /// Const f64 is now allowed.
 /// feature(adt_const_params) is not stable & complete

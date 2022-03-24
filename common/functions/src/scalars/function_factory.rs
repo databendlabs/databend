@@ -24,17 +24,17 @@ use super::function::Function;
 use super::ArithmeticFunction;
 use super::ComparisonFunction;
 use super::ConditionalFunction;
+use super::ContextFunction;
 use super::FunctionAdapter;
+use super::FunctionFeatures;
 use super::HashesFunction;
 use super::LogicFunction;
 use super::MathsFunction;
-use super::NullableFunction;
 use super::OtherFunction;
 use super::SemiStructuredFunction;
 use super::StringFunction;
 use super::ToCastFunction;
 use super::TupleClassFunction;
-use super::UdfFunction;
 use crate::scalars::DateFunction;
 use crate::scalars::UUIDFunction;
 
@@ -43,88 +43,8 @@ pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send +
 pub type FactoryCreatorWithTypes =
     Box<dyn Fn(&str, &[&DataTypePtr]) -> Result<Box<dyn Function>> + Send + Sync>;
 
-#[derive(Clone)]
-pub struct FunctionFeatures {
-    pub is_deterministic: bool,
-    pub negative_function_name: Option<String>,
-    pub is_bool_func: bool,
-    pub is_context_func: bool,
-    pub maybe_monotonic: bool,
-
-    /// Whether the function passes through null input.
-    /// True if the function just return null with any given null input.
-    /// False if the function may return non-null with null input.
-    ///
-    /// For example, arithmetic plus('+') will output null for any null input, like '12 + null = null'.
-    /// It has no idea of how to handle null, but just pass through.
-    ///
-    /// While ISNULL function  treats null input as a valid one. For example ISNULL(NULL, 'test') will return 'test'.
-    pub passthrough_null: bool,
-
-    // The number of arguments the function accepts.
-    pub num_arguments: usize,
-    // (1, 2) means we only accept [1, 2] arguments
-    // None means it's not variadic function.
-    pub variadic_arguments: Option<(usize, usize)>,
-}
-
-impl FunctionFeatures {
-    pub fn default() -> FunctionFeatures {
-        FunctionFeatures {
-            is_deterministic: false,
-            negative_function_name: None,
-            is_bool_func: false,
-            is_context_func: false,
-            maybe_monotonic: false,
-            passthrough_null: true,
-            num_arguments: 0,
-            variadic_arguments: None,
-        }
-    }
-
-    pub fn deterministic(mut self) -> FunctionFeatures {
-        self.is_deterministic = true;
-        self
-    }
-
-    pub fn negative_function(mut self, negative_name: &str) -> FunctionFeatures {
-        self.negative_function_name = Some(negative_name.to_string());
-        self
-    }
-
-    pub fn bool_function(mut self) -> FunctionFeatures {
-        self.is_bool_func = true;
-        self
-    }
-
-    pub fn context_function(mut self) -> FunctionFeatures {
-        self.is_context_func = true;
-        self
-    }
-
-    pub fn monotonicity(mut self) -> FunctionFeatures {
-        self.maybe_monotonic = true;
-        self
-    }
-
-    pub fn disable_passthrough_null(mut self) -> FunctionFeatures {
-        self.passthrough_null = false;
-        self
-    }
-
-    pub fn num_arguments(mut self, num_arguments: usize) -> FunctionFeatures {
-        self.num_arguments = num_arguments;
-        self
-    }
-
-    pub fn variadic_arguments(mut self, min: usize, max: usize) -> FunctionFeatures {
-        self.variadic_arguments = Some((min, max));
-        self
-    }
-}
-
 pub struct FunctionDescription {
-    features: FunctionFeatures,
+    pub(crate) features: FunctionFeatures,
     function_creator: FactoryCreator,
 }
 
@@ -144,7 +64,7 @@ impl FunctionDescription {
 }
 
 pub struct TypedFunctionDescription {
-    pub features: FunctionFeatures,
+    pub(crate) features: FunctionFeatures,
     pub typed_function_creator: FactoryCreatorWithTypes,
 }
 
@@ -175,13 +95,12 @@ static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
     ToCastFunction::register(&mut function_factory);
     TupleClassFunction::register(&mut function_factory);
     ComparisonFunction::register(&mut function_factory);
-    UdfFunction::register(&mut function_factory);
+    ContextFunction::register(&mut function_factory);
     SemiStructuredFunction::register(&mut function_factory);
     StringFunction::register(&mut function_factory);
     HashesFunction::register(&mut function_factory);
     ConditionalFunction::register(&mut function_factory);
     LogicFunction::register(&mut function_factory);
-    NullableFunction::register(&mut function_factory);
     DateFunction::register(&mut function_factory);
     OtherFunction::register(&mut function_factory);
     UUIDFunction::register(&mut function_factory);
@@ -267,6 +186,21 @@ impl FunctionFactory {
         self.case_insensitive_desc
             .keys()
             .chain(self.case_insensitive_typed_desc.keys())
+            .cloned()
+            .collect::<Vec<_>>()
+    }
+
+    pub fn registered_features(&self) -> Vec<FunctionFeatures> {
+        self.case_insensitive_desc
+            .values()
+            .into_iter()
+            .map(|v| &v.features)
+            .chain(
+                self.case_insensitive_typed_desc
+                    .values()
+                    .into_iter()
+                    .map(|v| &v.features),
+            )
             .cloned()
             .collect::<Vec<_>>()
     }

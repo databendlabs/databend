@@ -12,21 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod current_user;
-mod database;
-mod exists;
-mod in_basic;
-mod sleep;
-mod to_type_name;
-mod udf;
-mod udf_example;
-mod version;
+use crate::scalars::CurrentUserFunction;
+use crate::scalars::DatabaseFunction;
+use crate::scalars::FunctionFactory;
+use crate::scalars::VersionFunction;
 
-pub use current_user::CurrentUserFunction;
-pub use database::DatabaseFunction;
-pub use in_basic::InFunction;
-pub use sleep::SleepFunction;
-pub use to_type_name::ToTypeNameFunction;
-pub use udf::UdfFunction;
-pub use udf_example::UdfExampleFunction;
-pub use version::VersionFunction;
+#[derive(Clone)]
+pub struct ContextFunction;
+
+impl ContextFunction {
+    pub fn register(factory: &mut FunctionFactory) {
+        factory.register("database", DatabaseFunction::desc());
+        factory.register("version", VersionFunction::desc());
+        factory.register("current_user", CurrentUserFunction::desc());
+    }
+}

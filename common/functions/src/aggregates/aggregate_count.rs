@@ -54,13 +54,11 @@ impl AggregateCountFunction {
     }
 
     pub fn desc() -> AggregateFunctionDescription {
-        let properties = super::aggregate_function_factory::AggregateFunctionProperties {
+        let features = super::aggregate_function_factory::AggregateFunctionFeatures {
             returns_default_when_only_null: true,
+            ..Default::default()
         };
-        AggregateFunctionDescription::creator_with_properties(
-            Box::new(Self::try_create),
-            properties,
-        )
+        AggregateFunctionDescription::creator_with_features(Box::new(Self::try_create), features)
     }
 }
 
