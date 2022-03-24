@@ -279,6 +279,16 @@ impl Settings {
         result
     }
 
+    pub fn get_setting_values_short(&self) -> HashMap<String, DataValue> {
+        let settings = self.settings.read();
+
+        let mut result = HashMap::new();
+        for (k, v) in settings.iter().sorted_by_key(|&(k, _)| k) {
+            result.insert(k.clone(), v.user_setting.value.clone());
+        }
+        result
+    }
+
     pub fn set_settings(&self, key: String, val: String, is_global: bool) -> Result<()> {
         let setting = self.check_and_get_setting_value(&key)?;
 

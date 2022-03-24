@@ -5,11 +5,47 @@ title: system.query_log
 A read-only in-memory table stores all the query logs;
 
 ```sql
-MySQL [(none)]> select * from system.query_log limit 1;
-+----------+--------------+-----------+------------+----------+---------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------+------------+--------------------------------+------------+-------------------------+------------------+-----------+--------+---------+-------------+--------------+---------------+------------------+--------------------------+-----------+------------+---------------+-----------------------+-----------------+------------------+-------------+--------------+-----------+--------------+-------------+-----------------------+----------------+----------------+-------------+----------------+-------+
-| log_type | handler_type | tenant_id | cluster_id | sql_user | sql_user_quota                                                            | sql_user_privileges                                                                                                                                                                                                                                                                  | query_id                             | query_kind | query_text                     | event_date | event_time              | current_database | databases | tables | columns | projections | written_rows | written_bytes | written_io_bytes | written_io_bytes_cost_ms | scan_rows | scan_bytes | scan_io_bytes | scan_io_bytes_cost_ms | scan_partitions | total_partitions | result_rows | result_bytes | cpu_usage | memory_usage | client_info | client_address        | exception_code | exception_text | stack_trace | server_version | extra |
-+----------+--------------+-----------+------------+----------+---------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------+------------+--------------------------------+------------+-------------------------+------------------+-----------+--------+---------+-------------+--------------+---------------+------------------+--------------------------+-----------+------------+---------------+-----------------------+-----------------+------------------+-------------+--------------+-----------+--------------+-------------+-----------------------+----------------+----------------+-------------+----------------+-------+
-|        1 | MySQL        | admin     |            | root     | UserQuota<cpu:0,mem:0,store:0> | UserGrantSet { entries: [GrantEntry { user: "root", host_pattern: "127.0.0.1", object: Global, privileges: BitFlags<UserPrivilegeType>(0b1111111101111, Usage | Select | Insert | Update | Delete | Create | Drop | Alter | Super | CreateUser | CreateRole | Grant) }], roles: {} } | f178084a-cae0-422d-887d-422cb4a8f14e | SelectPlan | select * from system.query_log | 2022-03-09 | 2022-03-09 03:44:21.450 | default          |           |        |         |             |            0 |             0 |                0 |                        0 |         0 |          0 |             0 |                     0 |               0 |                0 |           0 |            0 |        32 |         2672 |             | 127.0.0.1:55362 |              0 |                |             |                |       |
-+----------+--------------+-----------+------------+----------+---------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------+------------+--------------------------------+------------+-------------------------+------------------+-----------+--------+---------+-------------+--------------+---------------+------------------+--------------------------+-----------+------------+---------------+-----------------------+-----------------+------------------+-------------+--------------+-----------+--------------+-------------+-----------------------+----------------+----------------+-------------+----------------+-------+
-1 row in set (0.024 sec)
+mysql> select * from system.query_log order by event_time desc limit 1\G
+*************************** 1. row ***************************
+                log_type: 1
+            handler_type: MySQL
+               tenant_id: test_tenant
+              cluster_id: test_cluster
+                sql_user: root
+          sql_user_quota: UserQuota<cpu:0,mem:0,store:0>
+     sql_user_privileges: GRANT ALL ON *.* TO 'root'@'127.0.0.1', ROLES: []
+                query_id: da879c17-94bb-4163-b2ac-ff4786bbe69e
+              query_kind: SelectPlan
+              query_text: select * from system.query_log order by event_time desc limit 1
+              event_date: 2022-03-24
+              event_time: 2022-03-24 11:13:27.414
+        current_database: default
+               databases:
+                  tables:
+                 columns:
+             projections:
+            written_rows: 0
+           written_bytes: 0
+        written_io_bytes: 0
+written_io_bytes_cost_ms: 0
+               scan_rows: 0
+              scan_bytes: 0
+           scan_io_bytes: 0
+   scan_io_bytes_cost_ms: 0
+         scan_partitions: 0
+        total_partitions: 0
+             result_rows: 0
+            result_bytes: 0
+               cpu_usage: 10
+            memory_usage: 1603
+             client_info:
+          client_address: 127.0.0.1:56744
+          exception_code: 0
+          exception_text:
+             stack_trace:
+          server_version:
+        session_settings: storage_occ_backoff_max_elapsed_ms=120000, max_block_size=10000, enable_new_processor_framework=1, storage_occ_backoff_max_delay_ms=20000, flight_client_timeout=60, storage_occ_backoff_init_delay_ms=5, max_threads=10, storage_read_buffer_size=1048576, scope: SESSION
+                   extra:
+1 row in set (0.03 sec)
+Read 1 rows, 969 B in 0.011 sec., 87.06 rows/sec., 84.36 KB/sec.
 ```

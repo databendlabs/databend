@@ -190,7 +190,7 @@ impl InterpreterQueryLog {
         let user = self.ctx.get_current_user()?;
         let sql_user = user.name;
         let sql_user_quota = format!("{:?}", user.quota);
-        let sql_user_privileges = format!("{:?}", user.grants);
+        let sql_user_privileges = format!("{}", user.grants);
 
         // Query.
         let query_id = self.ctx.get_id();
@@ -228,13 +228,16 @@ impl InterpreterQueryLog {
         };
 
         // Session settings
-        let session_settings = format!(
-            "{:?}",
-            self.ctx
-                .get_current_session()
-                .get_settings()
-                .get_setting_values()
-        );
+        let mut session_settings = String::new();
+        for (key, value) in self
+            .ctx
+            .get_current_session()
+            .get_settings()
+            .get_setting_values_short()
+        {
+            session_settings.push_str(&format!("{}={}, ", key, value));
+        }
+        session_settings.push_str("scope: SESSION");
 
         let log_event = LogEvent {
             log_type: LogType::Start,
@@ -290,7 +293,7 @@ impl InterpreterQueryLog {
         let user = self.ctx.get_current_user()?;
         let sql_user = user.name;
         let sql_user_quota = format!("{:?}", user.quota);
-        let sql_user_privileges = format!("{:?}", user.grants);
+        let sql_user_privileges = format!("{}", user.grants);
 
         // Query.
         let query_id = self.ctx.get_id();
@@ -334,13 +337,16 @@ impl InterpreterQueryLog {
         let current_database = self.ctx.get_current_database();
 
         // Session settings
-        let session_settings = format!(
-            "{:?}",
-            self.ctx
-                .get_current_session()
-                .get_settings()
-                .get_setting_values()
-        );
+        let mut session_settings = String::new();
+        for (key, value) in self
+            .ctx
+            .get_current_session()
+            .get_settings()
+            .get_setting_values_short()
+        {
+            session_settings.push_str(&format!("{}={}, ", key, value));
+        }
+        session_settings.push_str("scope: SESSION");
 
         let log_event = LogEvent {
             log_type: LogType::Finish,
