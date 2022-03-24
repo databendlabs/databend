@@ -11,6 +11,7 @@ description:
 * Dataset: [ontime](https://transtats.bts.gov/PREZIP/), 60.8 GB Raw CSV Data, 202687654 records
 * Databend: [v0.6.98-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.6.98-nightly)
 * No Local Caching(Data Caching/Query Result Caching)
+* Databend is automatic performance optimization with **no manual tuning** required.
 * [Analyzing OnTime Datasets with Databend on AWS EC2 and S3](../09-learn/02-analyze-ontime-with-databend-on-ec2-and-s3.md)
 :::
 
