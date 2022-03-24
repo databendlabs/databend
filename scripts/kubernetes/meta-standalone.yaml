@@ -21,20 +21,11 @@ spec:
           - "meta-service.databend-system.svc.cluster.local"
       containers:
         - name: databend-meta
-          image: datafuselabs/databend-meta:v0.6.97-nightly
-          command: ["/bin/bash", "-c"]
+          image: datafuselabs/databend-meta:v0.6.100-nightly
+          command:
+            - /databend-meta
           args:
-            - |
-              /databend-meta --id 1 --log-dir "/mnt/data/log" \
-                                   --raft-dir "/mnt/data/raft" \
-                                  --metric-api-address ${POD_IP}:28001 \
-                                  --admin-api-address ${POD_IP}:28002 \
-                                  --grpc-api-address ${POD_IP}:9191 \
-                                  --raft-api-port 28003 \
-                                  --raft-listen-host ${POD_IP} \
-                                  --raft-advertise-host \
-              ${POD_NAME}.${POD_SERVICE_NAME}.${POD_NAMESPACE} \
-                                  --config-id 1 --single
+            - --single
           env:
             - name: POD_NAME
               valueFrom:
@@ -50,6 +41,24 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+            - name: METASRV_LOG_DIR
+              value: /mnt/data/log
+            - name: KVSRV_RAFT_DIR
+              value: /mnt/data/raft
+            - name: METASRV_METRIC_API_ADDRESS
+              value: "$(POD_IP):28001"
+            - name: ADMIN_API_ADDRESS
+              value: "$(POD_IP):28002"
+            - name: METASRV_GRPC_API_ADDRESS
+              value: "$(POD_IP):9191"
+            - name: KVSRV_API_PORT
+              value: "28003"
+            - name: KVSRV_LISTEN_HOST
+              value: "$(POD_IP)"
+            - name: KVSRV_ADVERTISE_HOST
+              value: "$(POD_NAME).$(POD_SERVICE_NAME).$(POD_NAMESPACE)"
+            - name: KVSRV_ID
+              value: "1"
           readinessProbe:
             httpGet:
               path: /v1/health
