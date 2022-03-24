@@ -23,6 +23,7 @@ use common_meta_types::UserInfo;
 use common_planners::InsertInputSource;
 use common_planners::PlanNode;
 use common_streams::CsvSourceBuilder;
+use common_streams::NDJsonSourceBuilder;
 use common_streams::ParquetSourceBuilder;
 use common_streams::SendableDataBlockStream;
 use common_streams::Source;
@@ -97,6 +98,10 @@ pub async fn streaming_load(
                     build_csv_stream(&plan, req, multipart, max_block_size)
                 } else if format.to_lowercase().as_str() == "parquet" {
                     build_parquet_stream(&plan, multipart)
+                } else if format.to_lowercase().as_str() == "ndjson"
+                    || format.to_lowercase().as_str() == "jsoneachrow"
+                {
+                    build_ndjson_stream(&plan, multipart)
                 } else {
                     Err(poem::Error::from_string(
                         format!(
@@ -164,6 +169,31 @@ fn build_parquet_stream(
             let bytes = field.bytes().await.map_err_to_code(ErrorCode::BadBytes,  || "Read part to field bytes error")?;
             let cursor = Cursor::new(bytes);
 
+            let mut source = builder.build(cursor)?;
+
+            loop {
+                let block = source.read().await;
+                match block {
+                    Ok(None) => break,
+                    Ok(Some(b)) =>  yield(Ok(b)),
+                    Err(e) => yield(Err(e)),
+                }
+            }
+        }
+    };
+
+    Ok(Box::pin(stream))
+}
+
+fn build_ndjson_stream(
+    plan: &PlanNode,
+    mut multipart: Multipart,
+) -> PoemResult<SendableDataBlockStream> {
+    let builder = NDJsonSourceBuilder::create(plan.schema());
+    let stream = stream! {
+        while let Ok(Some(field)) = multipart.next_field().await {
+            let bytes = field.bytes().await.map_err_to_code(ErrorCode::BadBytes,  || "Read part to field bytes error")?;
+            let cursor = std::io::Cursor::new(bytes);
             let mut source = builder.build(cursor)?;
 
             loop {

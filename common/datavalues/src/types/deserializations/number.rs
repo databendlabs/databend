@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use lexical_core::FromLexical;
@@ -44,6 +45,16 @@ where
             self.builder.append_value(value);
         }
         Ok(())
+    }
+
+    fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
+        match value {
+            serde_json::Value::Number(v) => {
+                let str = v.to_string();
+                self.de_text(str.as_bytes())
+            }
+            _ => Err(ErrorCode::BadBytes("Incorrect json value, must be number")),
+        }
     }
 
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {

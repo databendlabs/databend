@@ -64,6 +64,11 @@ impl TypeDeserializer for VariantDeserializer {
         Ok(())
     }
 
+    fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
+        self.builder.append_value(value.clone());
+        Ok(())
+    }
+
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
         let val = serde_json::from_slice(reader)?;
         self.builder.append_value(val);

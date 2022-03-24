@@ -1217,6 +1217,7 @@ dependencies = [
  "futures",
  "opendal",
  "pin-project-lite",
+ "serde_json",
  "tempfile",
 ]
 
