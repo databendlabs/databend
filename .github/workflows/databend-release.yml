@@ -180,3 +180,25 @@ jobs:
           context: .
           file: ./docker/query/Dockerfile
           build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
+
+      - name: push distroless meta service
+        id: push_distroless_meta_service
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend-meta:${{ steps.get_version.outputs.VERSION }}-distroless
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: ./docker/distroless/meta.Dockerfile
+          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
+
+      - name: push distroless query service
+        id: push_distroless_query_service
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend-query:${{ steps.get_version.outputs.VERSION }}-distroless
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: ./docker/distroless/query.Dockerfile
+          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
