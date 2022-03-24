@@ -141,6 +141,7 @@ impl FuseTable {
         overwrite: bool,
     ) -> Result<()> {
         let prev = self.read_table_snapshot(ctx).await?;
+        let prev_version = self.snapshot_format_version()?;
         let schema = self.table_info.meta.schema.as_ref().clone();
         let (segments, summary) = Self::merge_append_operations(&schema, operation_log)?;
 
@@ -156,7 +157,7 @@ impl FuseTable {
         let new_snapshot = if overwrite {
             TableSnapshot::new(
                 Uuid::new_v4(),
-                prev.as_ref().map(|v| (v.snapshot_id, v.format_version())),
+                prev.as_ref().map(|v| (v.snapshot_id, prev_version)),
                 schema,
                 summary,
                 segments,
