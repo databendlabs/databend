@@ -21,8 +21,8 @@ This guideline will deploy Databend(standalone) with Alibaba Cloud(阿里云) OS
 ### Before you begin
 
 * **OSS:** Alibaba Cloud OSS is a S3-like object storage.
-  * [How to create OSS bucket](https://www.alibabacloud.com/help/zh/doc-detail/31842.html)
-  * [How to get OSS access_key_id and secret_access_key](https://help.aliyun.com/document_detail/53045.htm)
+  * [How to Create OSS Bucket](https://www.alibabacloud.com/help/zh/doc-detail/31842.html)
+  * [How to Get OSS access_key_id and secret_access_key](https://help.aliyun.com/document_detail/53045.htm)
 
 ## 1. Download
 
@@ -138,11 +138,11 @@ bucket = "databend"
 
 # You can get the URL from the bucket detail page.
 // highlight-next-line
-# https://<bucket-name>.<region-id>.aliyuncs.com
-// highlight-next-line
 # https://help.aliyun.com/document_detail/31837.htm
 // highlight-next-line
-endpoint_url = "https://databend.oss-cn-beijing.aliyuncs.com"
+# https://<bucket-name>.<region-id>[-internal].aliyuncs.com
+// highlight-next-line
+endpoint_url = "https://databend.oss-cn-beijing-internal.aliyuncs.com"
 
 # How to get access_key_id and secret_access_key:
 # https://help.aliyun.com/document_detail/53045.htm
@@ -155,7 +155,7 @@ secret_access_key = "<your-access-key>"
 ```
 
 :::tip
-In this example OSS region is `oss-cn-beijing`.
+In this example OSS region id is `oss-cn-beijing-internal`.
 :::
 
 ### 3.2 Start databend-query

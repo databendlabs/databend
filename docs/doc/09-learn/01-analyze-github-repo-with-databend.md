@@ -9,7 +9,7 @@ Use Databend analyzing Github repository step by step.
 
 ## Step 1 
 
-Install Databend, see [How to deploy Databend with local disk](../01-deploy/00_local.md).
+Install Databend, see [How to deploy Databend with local disk](../01-deploy/00-local.md).
 
 ## Step 2
 

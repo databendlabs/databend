@@ -21,8 +21,8 @@ This guideline will deploy Databend(standalone) with Tencent Cloud(腾讯云) CO
 ### Before you begin
 
 * **COS:** Tencent Cloud COS is a S3-like object storage.
-  * [How to create COS bucket](https://cloud.tencent.com/document/product/436/13309)
-  * [How to get COS access_key_id and secret_access_key](https://cloud.tencent.com/document/product/436/68282)
+  * [How to Create COS Bucket](https://cloud.tencent.com/document/product/436/13309)
+  * [How to Get COS access_key_id and secret_access_key](https://cloud.tencent.com/document/product/436/68282)
 
 ## 1. Download
 

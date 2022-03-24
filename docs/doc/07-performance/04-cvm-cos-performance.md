@@ -1,12 +1,12 @@
 ---
-title: Databend On CVM COS Performance
-sidebar_label: On CVM COS Performance
+title: Databend On Tencent Cloud CVM COS Performance
+sidebar_label: On Tencent COS Performance
 description:
-  Sub-second analytics on CVM + COS experience.
+  Sub-second analytics on Tencent Cloud CVM + COS experience.
 ---
 
 :::tip
-* Hardware: CVM(SA2.8XLARGE64, ap-beijing), 32 CPUs
+* Hardware: CVM(SA2.8XLARGE64, ap-beijing), 32 vCPUs
 * Storage: COS S3(ap-beijing)
 * Dataset: [ontime](https://transtats.bts.gov/PREZIP/), 60.8 GB Raw CSV Data, 202687654 records
 * Databend: [v0.6.100-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.6.100-nightly)

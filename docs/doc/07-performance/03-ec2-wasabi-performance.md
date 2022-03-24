@@ -6,7 +6,7 @@ description:
 ---
 
 :::tip
-* Hardware: EC2(c5n.9xlarge, us-east-2), 36 CPUs
+* Hardware: EC2(c5n.9xlarge, us-east-2), 36 vCPUs
 * Storage: Wasabi S3(us-east-2)
 * Dataset: [ontime](https://transtats.bts.gov/PREZIP/), 60.8 GB Raw CSV Data, 202687654 records
 * Databend: [v0.6.98-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.6.98-nightly)
