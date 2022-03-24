@@ -11,7 +11,7 @@ Expected deployment time: ** 5 minutes ⏱ **
 
 :::
 
-Once you've [installed Databend](02_minio.md), it's very simple to run a databend-query cluster locally.
+Once you've [installed Databend](04-minio.md), it's very simple to run a databend-query cluster locally.
 
 The new databend-query node only needs to register itself to the databend-meta with the same `cluster_id`, they will autodiscovery and formed into a cluster.
 
@@ -21,14 +21,14 @@ The new databend-query node only needs to register itself to the databend-meta w
 
 ## Before you begin
 
-* Make sure you have already [installed Databend](02_minio.md).
+* Make sure you have already [installed Databend](04-minio.md).
 * Databend Cluster mode only works on shared storage(AWS S3 or MinIO s3-like storage).
 * Note that running multiple nodes on a single host is useful for testing Databend, but it's not suitable for production.
 
 
 ## Step 1. Start standalone
 
-Install Databend with standalone mode, please see [Install Databend with MinIO](02_minio.md).
+Install Databend with standalone mode, please see [Install Databend with MinIO](04-minio.md).
 
 ## Step 2. Scale new databend-query Node to the Cluster
 

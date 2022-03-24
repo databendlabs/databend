@@ -1,8 +1,8 @@
 ---
-title: Deploy Databend With Tencent Cloud COS
-sidebar_label: With COS
+title: Deploy Databend With Wasabi Object Storage
+sidebar_label: With Wasabi
 description:
-  How to deploy Databend with Tencent Cloud(腾讯云) COS
+  How to deploy Databend with Wasabi object storage
 ---
 
 :::tip
@@ -11,22 +11,24 @@ Expected deployment time: ** 5 minutes ⏱ **
 
 :::
 
-This guideline will deploy Databend(standalone) with Tencent Cloud(腾讯云) COS step by step.
+[Wasabi](https://wasabi.com/) is a cheaper object storage and 100% compatible with Amazon S3.
+
+From its official website, they proclaim `80% Less than Amazon S3` and `No Fees for Egress`.
 
 <p align="center">
-<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-cos-standalone.png" width="300"/>
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-wasabi-standalone.png" width="300"/>
 </p>
 
 
 ### Before you begin
 
-* **COS:** Tencent Cloud COS is a S3-like object storage.
-  * [How to create COS bucket](https://cloud.tencent.com/document/product/436/13309)
-  * [How to get COS access_key_id and secret_access_key](https://cloud.tencent.com/document/product/436/68282)
+* **Wasabi:** Wasabi is a S3-like object storage.
+  * [How to create Wasabi bucket](https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FGS-Buckets.htm%23TOC_Creating_a_Bucketbc-1&rhtocid=_5_0)
+  * [How to get Wasabi access_key_id and secret_access_key](https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FAssigning_an_Access_Key.htm)
 
 ## 1. Download
 
-You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../06-contributing/02-building-from-source.md).
+You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../06-contributing/01-building-from-source.md).
 
 ```shell
 mkdir databend && cd databend
@@ -38,7 +40,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Ubuntu">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.96-nightly/databend-v0.6.96-nightly-x86_64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.100-nightly/databend-v0.6.100-nightly-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
@@ -48,7 +50,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.96-nig
 <TabItem value="linux" label="Ubuntu">
 
 ```shell
-tar xzvf databend-v0.6.96-nightly-x86_64-unknown-linux-gnu.tar.gz
+tar xzvf databend-v0.6.100-nightly-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
@@ -133,16 +135,15 @@ storage_type = "s3"
 
 [storage.s3]
 # How to create a bucket:
-# https://cloud.tencent.com/document/product/436/13309
 // highlight-next-line
-bucket = "databend-1253727613"
+bucket = "<your-bucket>"
 
-# You can get the URL from the bucket detail page.
+# You can get the URL from:
+# https://wasabi-support.zendesk.com/hc/en-us/articles/360015106031-What-are-the-service-URLs-for-Wasabi-s-different-regions-
 // highlight-next-line
-endpoint_url = "https://cos.ap-beijing.myqcloud.com"
+endpoint_url = "https://s3.us-east-2.wasabisys.com"
 
 # How to get access_key_id and secret_access_key:
-# https://cloud.tencent.com/document/product/436/68282
 // highlight-next-line
 access_key_id = "<your-key-id>"
 // highlight-next-line
@@ -152,7 +153,7 @@ secret_access_key = "<your-access-key>"
 ```
 
 :::tip
-In this example COS region is beijing.
+In this example Wasabi region is `us-east-2`.
 :::
 
 ### 3.2 Start databend-query

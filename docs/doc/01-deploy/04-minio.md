@@ -1,8 +1,8 @@
 ---
-title: Deploy Databend With Local Disk
-sidebar_label: With Local Disk
+title: Deploy Databend With MinIO
+sidebar_label: With MinIO
 description:
-  How to deploy Databend with Local Disk
+  How to deploy Databend with MinIO
 ---
 
 :::tip
@@ -11,15 +11,37 @@ Expected deployment time: ** 5 minutes ⏱ **
 
 :::
 
-This guideline will deploy Databend(standalone) with local disk step by step.
+This guideline will deploy Databend(standalone) with MinIO step by step.
 
 <p align="center">
-<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-local-standalone.png" width="300"/>
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-minio-standalone.png" width="300"/>
 </p>
 
-## 1. Download
 
-You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../06-contributing/02-building-from-source.md).
+## 1. Deploy MinIO
+
+Run a standalone MinIO server via Docker:
+```shell
+docker run -d -p 9900:9000 --name minio \
+  -e "MINIO_ACCESS_KEY=minioadmin" \
+  -e "MINIO_SECRET_KEY=minioadmin" \
+  -v /tmp/data:/data \
+  -v /tmp/config:/root/.minio \
+  minio/minio server /data
+```
+
+We recommend using [aws cli](https://aws.amazon.com/cli/) to create a new MinIO bucket:
+
+```shell
+export AWS_ACCESS_KEY_ID=minioadmin
+export AWS_SECRET_ACCESS_KEY=minioadmin
+export AWS_EC2_METADATA_DISABLED=true
+aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://databend
+```
+
+## 2. Download
+
+You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../06-contributing/01-building-from-source.md).
 
 ```shell
 mkdir databend && cd databend
@@ -32,14 +54,14 @@ import TabItem from '@theme/TabItem';
 <TabItem value="linux" label="Ubuntu">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.96-nightly/databend-v0.6.96-nightly-x86_64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.100-nightly/databend-v0.6.100-nightly-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.96-nightly/databend-v0.6.96-nightly-aarch64-apple-darwin.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.100-nightly/databend-v0.6.100-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -47,7 +69,7 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.96-nig
 <TabItem value="arm" label="Arm">
 
 ```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.96-nightly/databend-v0.6.96-nightly-aarch64-unknown-linux-gnu.tar.gz
+curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.100-nightly/databend-v0.6.100-nightly-aarch64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
@@ -57,14 +79,14 @@ curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.6.96-nig
 <TabItem value="linux" label="Ubuntu">
 
 ```shell
-tar xzvf databend-v0.6.96-nightly-x86_64-unknown-linux-gnu.tar.gz
+tar xzvf databend-v0.6.100-nightly-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
 <TabItem value="mac" label="MacOS">
 
 ```shell
-tar xzvf databend-v0.6.96-nightly-aarch64-apple-darwin.tar.gz
+tar xzvf databend-v0.6.100-nightly-aarch64-apple-darwin.tar.gz
 ```
 
 </TabItem>
@@ -72,17 +94,17 @@ tar xzvf databend-v0.6.96-nightly-aarch64-apple-darwin.tar.gz
 <TabItem value="arm" label="Arm">
 
 ```shell
-tar xzvf databend-v0.6.96-nightly-aarch64-unknown-linux-gnu.tar.gz
+tar xzvf databend-v0.6.100-nightly-aarch64-unknown-linux-gnu.tar.gz
 ```
 
 </TabItem>
 </Tabs>
 
-## 2. Deploy databend-meta
+## 3. Deploy databend-meta (Standalone)
 
 databend-meta is a global service for the meta data(such as user, table schema etc.).
 
-### 2.1 Create databend-meta.toml
+### 3.1 Create databend-meta.toml
 
 ```shell title="databend-meta.toml"
 log_dir = "metadata/_logs"
@@ -95,13 +117,13 @@ single = true
 raft_dir = "metadata/datas"
 ```
 
-### 2.2 Start the databend-meta
+### 3.2 Start the databend-meta
 
 ```shell
 ./databend-meta -c ./databend-meta.toml > meta.log 2>&1 &
 ```
 
-### 2.3 Check databend-meta
+### 3.3 Check databend-meta
 
 ```shell
 curl -I  http://127.0.0.1:8101/v1/health
@@ -110,9 +132,9 @@ curl -I  http://127.0.0.1:8101/v1/health
 Check the response is `HTTP/1.1 200 OK`.
 
 
-## 3. Deploy databend-query (standalone)
+## 4. Deploy databend-query (Standalone)
 
-### 3.1 Create databend-query.toml
+### 4.1 Create databend-query.toml
 
 ```shell title="databend-query.toml"
 [log]
@@ -128,8 +150,6 @@ metric_api_address = "127.0.0.1:7071"
 
 # Cluster flight RPC.
 flight_api_address = "127.0.0.1:9091"
-
-#
 
 # Query MySQL Handler.
 mysql_handler_host = "127.0.0.1"
@@ -152,25 +172,28 @@ meta_address = "127.0.0.1:9101"
 meta_username = "root"
 meta_password = "root"
 
+
 [storage]
 # disk|s3
-storage_type = "disk"
+storage_type = "s3"
 
 [storage.disk]
-data_path = "benddata/datas"
 
 [storage.s3]
-
-[storage.azure_storage_blob]
+bucket = "databend"
+// highlight-next-line
+endpoint_url = "http://127.0.0.1:9900"
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
 ```
 
-### 3.2 Start databend-query
+### 4.2 Start databend-query
 
 ```shell
 ./databend-query -c ./databend-query.toml > query.log 2>&1 &
 ```
 
-### 3.3 Check databend-query 
+### 4.3 Check databend-query 
 
 ```shell
 curl -I  http://127.0.0.1:8001/v1/health
@@ -178,7 +201,7 @@ curl -I  http://127.0.0.1:8001/v1/health
 
 Check the response is `HTTP/1.1 200 OK`.
 
-## 4. Play
+## 5. Play
 
 ```shell
 mysql -h127.0.0.1 -uroot -P3307 
