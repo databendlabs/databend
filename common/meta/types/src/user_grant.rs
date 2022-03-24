@@ -212,3 +212,12 @@ impl UserGrantSet {
         self.entries = new_entries;
     }
 }
+
+impl fmt::Display for UserGrantSet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
+        for entry in self.entries.iter() {
+            write!(f, "{}, ", entry)?;
+        }
+        write!(f, "ROLES: {:?}", self.roles())
+    }
+}
