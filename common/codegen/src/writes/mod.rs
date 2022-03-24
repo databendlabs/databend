@@ -13,7 +13,5 @@
 // limitations under the License.
 
 mod arithmetics_type;
-mod function_doc;
 
 pub use arithmetics_type::*;
-pub use function_doc::*;

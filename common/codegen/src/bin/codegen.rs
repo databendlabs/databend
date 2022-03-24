@@ -16,5 +16,4 @@ use codegen::writes::codegen_arithmetic_type;
 
 fn main() {
     codegen_arithmetic_type();
-    // codegen_function_doc().unwrap();
 }
