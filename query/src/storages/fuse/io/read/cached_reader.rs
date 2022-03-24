@@ -34,16 +34,16 @@ pub trait HasTenantLabel {
 }
 
 /// A "cache-aware" reader
-pub struct CachedReader<V, L> {
-    cache: Option<MemoryCache<V>>,
+pub struct CachedReader<T, L> {
+    cache: Option<MemoryCache<T>>,
     loader: L,
     name: String,
 }
 
-impl<V, L> CachedReader<V, L>
-where L: Loader<V> + HasTenantLabel
+impl<T, L> CachedReader<T, L>
+where L: Loader<T> + HasTenantLabel
 {
-    pub fn new(cache: Option<MemoryCache<V>>, loader: L, name: impl Into<String>) -> Self {
+    pub fn new(cache: Option<MemoryCache<T>>, loader: L, name: impl Into<String>) -> Self {
         Self {
             cache,
             loader,
@@ -57,7 +57,7 @@ where L: Loader<V> + HasTenantLabel
         location: impl AsRef<str>,
         len_hint: Option<u64>,
         version: u64,
-    ) -> Result<Arc<V>> {
+    ) -> Result<Arc<T>> {
         match &self.cache {
             None => self.load(location.as_ref(), len_hint, version).await,
             Some(cache) => {
@@ -94,7 +94,7 @@ where L: Loader<V> + HasTenantLabel
         self.name.as_str()
     }
 
-    async fn load(&self, loc: &str, len_hint: Option<u64>, version: u64) -> Result<Arc<V>> {
+    async fn load(&self, loc: &str, len_hint: Option<u64>, version: u64) -> Result<Arc<T>> {
         let val = self.loader.load(loc, len_hint, version).await?;
         let item = Arc::new(val);
         Ok(item)
