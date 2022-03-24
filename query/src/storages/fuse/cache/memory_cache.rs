@@ -22,8 +22,7 @@ use common_cache::LruCache;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
 
-type LaCache<K, V> = LruCache<K, V, DefaultHashBuilder, Count>;
-pub type MemoryCache<V> = Arc<RwLock<LaCache<String, Arc<V>>>>;
+pub type MemoryCache<V> = Arc<RwLock<LruCache<String, Arc<V>, DefaultHashBuilder, Count>>>;
 
 pub fn new_memory_cache<V>(capacity: u64) -> MemoryCache<V> {
     Arc::new(RwLock::new(LruCache::new(capacity)))

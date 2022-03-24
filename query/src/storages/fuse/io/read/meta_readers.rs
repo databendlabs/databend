@@ -113,7 +113,7 @@ where T: BufReaderProvider + Sync
     ) -> Result<TableSnapshot> {
         let version = SnapshotVersion::try_from(version)?;
         let reader = self.buf_reader(key, length_hint).await?;
-        version.load(reader).await
+        version.read(reader).await
     }
 }
 
@@ -124,7 +124,7 @@ where T: BufReaderProvider + Sync
     async fn load(&self, key: &str, length_hint: Option<u64>, version: u64) -> Result<SegmentInfo> {
         let version = SegmentInfoVersion::try_from(version)?;
         let reader = self.buf_reader(key, length_hint).await?;
-        version.load(reader).await
+        version.read(reader).await
     }
 }
 
