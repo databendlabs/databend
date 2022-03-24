@@ -23,8 +23,8 @@ From its official website, they proclaim `80% Less than Amazon S3` and `No Fees 
 ### Before you begin
 
 * **Wasabi:** Wasabi is a S3-like object storage.
-  * [How to create Wasabi bucket](https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FGS-Buckets.htm%23TOC_Creating_a_Bucketbc-1&rhtocid=_5_0)
-  * [How to get Wasabi access_key_id and secret_access_key](https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FAssigning_an_Access_Key.htm)
+  * [How to Create Wasabi Bucket](https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FGS-Buckets.htm%23TOC_Creating_a_Bucketbc-1&rhtocid=_5_0)
+  * [How to Get Wasabi access_key_id and secret_access_key](https://wasabi.com/wp-content/themes/wasabi/docs/Getting_Started/index.html#t=topics%2FAssigning_an_Access_Key.htm)
 
 ## 1. Download
 

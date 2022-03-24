@@ -1,18 +1,18 @@
 ---
-title: Analyzing OnTime Datasets with Databend on AWS EC2 and S3
-sidebar_label: Analyzing OnTime with S3
+title: Analyzing OnTime with Databend on Object Storage
+sidebar_label: Analyzing OnTime on S3
 ---
 
-Analyzing `OnTime` datasets on AWS EC2 and S3 with Databend step by step.
+Analyzing `OnTime` datasets on S3 with Databend step by step.
 
 ## Step 1. Deploy Databend
 
-Install databend, see 
+Make sure you have installed Databend, if not please see:
 
-* [How to Deploy Databend with AWS S3](../01-deploy/01-s3.md) 
-* [How to Deploy Databend with Wasabi](../01-deploy/04-wasabi.md)
+* [How to Deploy Databend with Amazon S3](../01-deploy/01-s3.md) 
 * [How to Deploy Databend with Tencent COS](../01-deploy/02-cos.md)
 * [How to Deploy Databend with Alibaba OSS](../01-deploy/03-oss.md)
+* [How to Deploy Databend with Wasabi](../01-deploy/04-wasabi.md)
 
 ## Step 2. Load OnTime Datasets
 
@@ -189,6 +189,6 @@ All Queries:
 
 ## Benchmark Report
 
-* [S3: Databend Ontime Datasets Benchmark Report](../07-performance/02-ec2-s3-performance.md)
+* [Amazon S3: Databend Ontime Datasets Benchmark Report](../07-performance/02-ec2-s3-performance.md)
+* [Tencent COS: Databend Ontime Datasets Benchmark Report](../07-performance/04-cvm-cos-performance.md)
 * [Wasabi: Databend Ontime Datasets Benchmark Report](../07-performance/03-ec2-wasabi-performance.md)
-* [COS: Databend Ontime Datasets Benchmark Report](../07-performance/04-cvm-cos-performance.md)

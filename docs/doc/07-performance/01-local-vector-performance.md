@@ -28,4 +28,4 @@ description:
 
 <img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/databend-v1.61-groupby-10b.gif" width="1100"/>
 
-Experience 100 billion performance on your laptop, [talk is cheap just bench it](../01-deploy/00_local.md)
+Experience 100 billion performance on your laptop, [talk is cheap just bench it](../01-deploy/00-local.md)

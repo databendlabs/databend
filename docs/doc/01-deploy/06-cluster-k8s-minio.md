@@ -2,7 +2,7 @@
 title: Start a query Cluster on kubernetes
 sidebar_label: K8s Cluster
 description:
-  How to Deploy a databend Query Cluster on kubernetes
+  How to Deploy a Databend Query Cluster on kubernetes
 ---
 
 :::tip
@@ -11,7 +11,7 @@ Expected deployment time: ** 5 minutes ⏱ **
 
 :::
 
-This tutorial covers how to install and configure databend query cluster on kubernetes with minio storage backend.
+This tutorial covers how to install and configure Databend query cluster on kubernetes with minio storage backend.
 ## Before you begin
 
 * Make sure your cluster have enough resource for installation (at least 4 cpus, 4GB RAM, 50GB disk)
