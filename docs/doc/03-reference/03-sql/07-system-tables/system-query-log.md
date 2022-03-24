@@ -44,7 +44,7 @@ written_io_bytes_cost_ms: 0
           exception_text:
              stack_trace:
           server_version:
-        session_settings: storage_occ_backoff_max_elapsed_ms=120000, max_block_size=10000, enable_new_processor_framework=1, storage_occ_backoff_max_delay_ms=20000, flight_client_timeout=60, storage_occ_backoff_init_delay_ms=5, max_threads=10, storage_read_buffer_size=1048576, scope: SESSION
+        session_settings: enable_new_processor_framework=1, flight_client_timeout=60, max_block_size=10000, max_threads=8, storage_occ_backoff_init_delay_ms=5, storage_occ_backoff_max_delay_ms=20000, storage_occ_backoff_max_elapsed_ms=120000, storage_read_buffer_size=1048576, scope: SESSION
                    extra:
 1 row in set (0.03 sec)
 Read 1 rows, 969 B in 0.011 sec., 87.06 rows/sec., 84.36 KB/sec.

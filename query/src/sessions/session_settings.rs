@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -279,10 +280,10 @@ impl Settings {
         result
     }
 
-    pub fn get_setting_values_short(&self) -> HashMap<String, DataValue> {
+    pub fn get_setting_values_short(&self) -> BTreeMap<String, DataValue> {
         let settings = self.settings.read();
 
-        let mut result = HashMap::new();
+        let mut result = BTreeMap::new();
         for (k, v) in settings.iter().sorted_by_key(|&(k, _)| k) {
             result.insert(k.clone(), v.user_setting.value.clone());
         }
