@@ -9,8 +9,8 @@ Create a new table.
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name
 (
-    <col_name> <col_type> [ { DEFAULT <expr> }],
-    <col_name> <col_type> [ { DEFAULT <expr> }],
+    <col_name> <col_type> [ { DEFAULT <expr> }] [ NOT NULL | Null ],
+    <col_name> <col_type> [ { DEFAULT <expr> }] [ NOT NULL | Null ],
     ...
 )
 ```
@@ -23,6 +23,10 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 LIKE [db.]origin_table_name
 AS SELECT query
 ```
+
+## Column Option is nullable or not
+
+By default, all columns are not nullable.
 
 ## Default Values
 ```sql
@@ -73,7 +77,7 @@ mysql> SELECT * FROM test2;
 ### Create Table As Select (CTAS) statement
 
 ```sql
-mysql> CREATE TABLE source(a UInt64, b Varchar) 
+mysql> CREATE TABLE source(a UInt64 null, b Varchar null)
 
 mysql> INSERT INTO source(a,b) values(888, 'stars');
 
@@ -93,7 +97,7 @@ mysql> SELECT * FROM copy1;
 |  888 | stars |
 +------+-------+
 
-mysql> CREATE TABLE copy2(x VARCHAR, y VARCHAR) AS SELECT * FROM source;
+mysql> CREATE TABLE copy2(x VARCHAR null, y VARCHAR null) AS SELECT * FROM source;
 
 mysql> SELECT * FROM copy2;
 +------+------+------+-------+
