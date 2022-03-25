@@ -29,6 +29,8 @@ pub mod type_string;
 pub mod type_struct;
 pub mod type_traits;
 pub mod type_variant;
+pub mod type_variant_array;
+pub mod type_variant_object;
 
 pub mod eq;
 pub mod type_id;
@@ -61,3 +63,5 @@ pub use type_string::*;
 pub use type_struct::*;
 pub use type_traits::*;
 pub use type_variant::*;
+pub use type_variant_array::*;
+pub use type_variant_object::*;

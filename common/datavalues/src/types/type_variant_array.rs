@@ -25,18 +25,18 @@ use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct VariantType {}
+pub struct VariantArrayType {}
 
-impl VariantType {
+impl VariantArrayType {
     pub fn arc() -> DataTypePtr {
         Arc::new(Self {})
     }
 }
 
 #[typetag::serde]
-impl DataType for VariantType {
+impl DataType for VariantArrayType {
     fn data_type_id(&self) -> TypeID {
-        TypeID::Variant
+        TypeID::VariantArray
     }
 
     #[inline]
@@ -45,11 +45,11 @@ impl DataType for VariantType {
     }
 
     fn name(&self) -> &str {
-        "Variant"
+        "Array"
     }
 
     fn default_value(&self) -> DataValue {
-        DataValue::Json(JsonValue::Null)
+        DataValue::Json(JsonValue::Array(vec![]))
     }
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
@@ -68,12 +68,16 @@ impl DataType for VariantType {
     }
 
     fn arrow_type(&self) -> ArrowType {
-        ArrowType::Extension("Variant".to_owned(), Box::new(ArrowType::LargeBinary), None)
+        ArrowType::Extension(
+            "VariantArray".to_owned(),
+            Box::new(ArrowType::LargeBinary),
+            None,
+        )
     }
 
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         let mut mp = BTreeMap::new();
-        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Variant".to_string());
+        mp.insert(ARROW_EXTENSION_NAME.to_string(), "VariantArray".to_string());
         Some(mp)
     }
 
@@ -90,7 +94,7 @@ impl DataType for VariantType {
     }
 }
 
-impl std::fmt::Debug for VariantType {
+impl std::fmt::Debug for VariantArrayType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }

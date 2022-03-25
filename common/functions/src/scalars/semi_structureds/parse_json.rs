@@ -74,7 +74,15 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
 
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
         let data_type = columns[0].field().data_type();
-        if data_type.data_type_id() == TypeID::Null {
+        if data_type.data_type_id() == TypeID::VariantArray
+            || data_type.data_type_id() == TypeID::VariantObject
+        {
+            return Err(ErrorCode::BadDataValueType(format!(
+                "Invalid argument types for function '{}': ({})",
+                self.display_name,
+                data_type.name()
+            )));
+        } else if data_type.data_type_id() == TypeID::Null {
             return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
         }
 
@@ -112,9 +120,18 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
             let column = nullable_column.inner();
 
             let data_type = remove_nullable(data_type);
-            if data_type.data_type_id() == TypeID::Null {
+            if data_type.data_type_id() == TypeID::VariantArray
+                || data_type.data_type_id() == TypeID::VariantObject
+            {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "Invalid argument types for function '{}': ({})",
+                    self.display_name,
+                    data_type.name()
+                )));
+            } else if data_type.data_type_id() == TypeID::Null {
                 return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
             }
+
             let mut builder = NullableColumnBuilder::<JsonValue>::with_capacity(input_rows);
             if data_type.data_type_id().is_numeric()
                 || data_type.data_type_id().is_string()

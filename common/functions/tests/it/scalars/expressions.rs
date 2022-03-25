@@ -280,6 +280,62 @@ fn test_datetime_cast_function() -> Result<()> {
 }
 
 #[test]
+fn test_variant_cast_function() -> Result<()> {
+    let tests = vec![
+        (
+            CastFunction::create("cast", "array")?,
+            ScalarFunctionWithFieldTest {
+                name: "cast-variant-to-array-passed",
+                columns: vec![ColumnWithField::new(
+                    Series::from_data(vec![
+                        json!(1_i32),
+                        json!([1_i32, 2, 3]),
+                        json!(["a", "b", "c"]),
+                    ]),
+                    DataField::new("dummy_1", VariantType::arc()),
+                )],
+                expect: Series::from_data(vec![
+                    json!([1_i32]),
+                    json!([1_i32, 2, 3]),
+                    json!(["a", "b", "c"]),
+                ]),
+                error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "object")?,
+            ScalarFunctionWithFieldTest {
+                name: "cast-variant-to-object-passed",
+                columns: vec![ColumnWithField::new(
+                    Series::from_data(vec![json!({"a":1_i32}), json!({"k":"v"})]),
+                    DataField::new("dummy_1", VariantType::arc()),
+                )],
+                expect: Series::from_data(vec![json!({"a":1_i32}), json!({"k":"v"})]),
+                error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "object")?,
+            ScalarFunctionWithFieldTest {
+                name: "cast-variant-to-object-error",
+                columns: vec![ColumnWithField::new(
+                    Series::from_data(vec![json!(["a", "b", "c"]), json!("abc")]),
+                    DataField::new("dummy_1", VariantType::arc()),
+                )],
+                expect: Arc::new(NullColumn::new(2)),
+                error: "Failed to cast variant value [\"a\",\"b\",\"c\"] to OBJECT",
+            },
+        ),
+    ];
+
+    for (test_func, test) in tests {
+        test_scalar_functions_with_type(test_func, &[test], false)?;
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_binary_contains() {
     fn contains(a: &'_ [u8], b: &'_ [u8], _ctx: &mut EvalContext) -> bool {
         a.windows(b.len()).any(|window| window == b)
