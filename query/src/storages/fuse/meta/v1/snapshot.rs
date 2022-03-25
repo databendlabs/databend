@@ -15,15 +15,12 @@
 use common_datavalues::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use uuid::Uuid;
 
-use crate::storages::fuse::meta::v0::snapshot::Statistics;
-use crate::storages::fuse::meta::Versioned;
-
-pub type ColumnId = u32;
-pub type SnapshotId = Uuid;
-pub type FormatVersion = u64;
-pub type Location = (String, FormatVersion);
+use crate::storages::fuse::meta::common::FormatVersion;
+use crate::storages::fuse::meta::common::Location;
+use crate::storages::fuse::meta::common::SnapshotId;
+use crate::storages::fuse::meta::common::Statistics;
+use crate::storages::fuse::meta::common::Versioned;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
@@ -71,9 +68,10 @@ impl TableSnapshot {
     }
 }
 
-use super::super::v0::snapshot::TableSnapshot as V0;
-impl From<V0> for TableSnapshot {
-    fn from(s: V0) -> Self {
+use super::super::v0;
+
+impl From<v0::TableSnapshot> for TableSnapshot {
+    fn from(s: v0::TableSnapshot) -> Self {
         Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: s.snapshot_id,

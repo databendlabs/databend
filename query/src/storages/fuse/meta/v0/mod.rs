@@ -12,11 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-pub mod block;
-pub mod segment;
-pub mod snapshot;
+mod segment;
+mod snapshot;
 
-pub use block::ColumnMeta;
+pub use segment::BlockMeta;
+pub use segment::ColumnMeta;
 pub use segment::SegmentInfo;
-pub use snapshot::Statistics;
 pub use snapshot::TableSnapshot;

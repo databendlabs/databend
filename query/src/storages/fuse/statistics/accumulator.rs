@@ -20,7 +20,6 @@ use common_datavalues::prelude::*;
 use common_datavalues::DataSchema;
 use common_functions::aggregates::eval_aggr;
 
-use crate::storages::fuse::meta::BlockLocation;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::ColumnMeta;
@@ -127,15 +126,12 @@ impl PartiallyAccumulated {
         let mut stats = &mut self.accumulator;
         stats.file_size += file_size;
         let block_meta = BlockMeta {
-            location: BlockLocation {
-                path: location,
-                format_version: DataBlock::VERSION,
-            },
             row_count: self.block_row_count,
             block_size: self.block_size,
             file_size,
             col_stats: self.block_column_statistics,
             col_metas,
+            location: (location, DataBlock::VERSION),
         };
         stats.blocks_metas.push(block_meta);
         self.accumulator

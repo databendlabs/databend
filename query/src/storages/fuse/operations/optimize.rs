@@ -126,7 +126,7 @@ impl FuseTable {
             let (x, ver) = l;
             let res = reader.read(x, None, *ver).await?;
             for block_meta in &res.blocks {
-                result.insert(block_meta.location.path.clone());
+                result.insert(block_meta.location.0.clone());
             }
         }
         Ok(result)

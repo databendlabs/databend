@@ -22,18 +22,13 @@ use std::marker::PhantomData;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 
+use crate::storages::fuse::meta::common::Versioned;
 use crate::storages::fuse::meta::v0;
 use crate::storages::fuse::meta::v1;
 
 pub const CURRNET_SEGMETN_VERSION: u64 = v1::SegmentInfo::VERSION;
 pub const CURRNET_SNAPSHOT_VERSION: u64 = v1::TableSnapshot::VERSION;
 pub const CURRNET_BLOCK_VERSION: u64 = DataBlock::VERSION;
-
-pub trait Versioned<const V: u64>
-where Self: Sized
-{
-    const VERSION: u64 = V;
-}
 
 impl Versioned<0> for v0::SegmentInfo {}
 impl Versioned<1> for v1::SegmentInfo {}

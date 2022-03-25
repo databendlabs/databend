@@ -13,9 +13,16 @@
 //  limitations under the License.
 //
 
-use crate::storages::fuse::meta::v0::snapshot::Statistics;
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::Versioned;
+use std::collections::HashMap;
+
+use common_datablocks::DataBlock;
+
+use crate::storages::fuse::meta::common::ColumnId;
+use crate::storages::fuse::meta::common::Location;
+use crate::storages::fuse::meta::common::Statistics;
+use crate::storages::fuse::meta::common::Versioned;
+use crate::storages::fuse::meta::v0::ColumnMeta;
+use crate::storages::index::ColumnStatistics;
 
 /// A segment comprises one or more blocks
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -26,6 +33,18 @@ pub struct SegmentInfo {
     pub blocks: Vec<BlockMeta>,
     /// summary statistics
     pub summary: Statistics,
+}
+
+/// Meta information of a block
+/// Part of and kept inside the [SegmentInfo]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct BlockMeta {
+    pub row_count: u64,
+    pub block_size: u64,
+    pub file_size: u64,
+    pub col_stats: HashMap<ColumnId, ColumnStatistics>,
+    pub col_metas: HashMap<ColumnId, ColumnMeta>,
+    pub location: Location,
 }
 
 impl SegmentInfo {
@@ -42,13 +61,27 @@ impl SegmentInfo {
     }
 }
 
-use super::super::v0::segment::SegmentInfo as SegmentInfoV0;
-impl From<SegmentInfoV0> for SegmentInfo {
-    fn from(s: SegmentInfoV0) -> Self {
+use super::super::v0;
+
+impl From<v0::SegmentInfo> for SegmentInfo {
+    fn from(s: v0::SegmentInfo) -> Self {
         Self {
-            format_version: 1,
+            format_version: SegmentInfo::VERSION,
             blocks: s.blocks.into_iter().map(|b| b.into()).collect::<_>(),
             summary: s.summary,
+        }
+    }
+}
+
+impl From<v0::BlockMeta> for BlockMeta {
+    fn from(s: v0::BlockMeta) -> Self {
+        Self {
+            row_count: s.row_count,
+            block_size: s.block_size,
+            file_size: s.file_size,
+            col_stats: s.col_stats,
+            col_metas: s.col_metas,
+            location: (s.location.path, DataBlock::VERSION),
         }
     }
 }

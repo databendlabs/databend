@@ -180,8 +180,8 @@ impl FuseTable {
         }
 
         let rows_count = meta.row_count;
-        let location = meta.location.path.clone();
-        let format_version = meta.location.format_version;
+        let location = meta.location.0.clone();
+        let format_version = meta.location.1;
         FusePartInfo::create(location, format_version, rows_count, columns_meta)
     }
 
@@ -198,8 +198,8 @@ impl FuseTable {
         }
 
         let rows_count = meta.row_count;
-        let location = meta.location.path.clone();
-        let format_version = meta.location.format_version;
+        let location = meta.location.0.clone();
+        let format_version = meta.location.1;
         FusePartInfo::create(location, format_version, rows_count, columns_meta)
     }
 

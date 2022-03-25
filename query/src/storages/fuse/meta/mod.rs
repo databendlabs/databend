@@ -13,15 +13,20 @@
 //  limitations under the License.
 //
 
+mod common;
 mod current;
 mod v0;
 mod v1;
 mod versions;
 
+pub use common::ColumnId;
+pub use common::Location;
+pub use common::SnapshotId;
+pub use common::Statistics;
+pub use common::Versioned;
 pub use current::*;
 pub use versions::SegmentInfoVersion;
 pub use versions::SnapshotVersion;
-pub use versions::Versioned;
 pub use versions::CURRNET_BLOCK_VERSION;
 pub use versions::CURRNET_SEGMETN_VERSION;
 pub use versions::CURRNET_SNAPSHOT_VERSION;

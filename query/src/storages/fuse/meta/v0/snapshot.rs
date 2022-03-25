@@ -12,17 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use common_datavalues::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use uuid::Uuid;
 
-use crate::storages::index::ColumnStatistics;
+use crate::storages::fuse::meta::common::SnapshotId;
+use crate::storages::fuse::meta::common::Statistics;
 
-pub type ColumnId = u32;
-pub type SnapshotId = Uuid;
 pub type Location = String;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -44,16 +40,4 @@ impl TableSnapshot {
         self.segments.push(location);
         self
     }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
-pub struct Statistics {
-    pub row_count: u64,
-    pub block_count: u64,
-
-    // TODO rename these two fields
-    pub uncompressed_byte_size: u64,
-    pub compressed_byte_size: u64,
-
-    pub col_stats: HashMap<ColumnId, ColumnStatistics>,
 }

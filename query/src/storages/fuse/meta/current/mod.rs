@@ -12,17 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-//! Exports meta of current version here
-
 pub use v0::ColumnMeta;
-pub use v0::Statistics;
-pub use v1::block::BlockLocation;
-pub use v1::block::BlockMeta;
-pub use v1::segment::SegmentInfo;
-pub use v1::snapshot::ColumnId;
-pub use v1::snapshot::Location;
-pub use v1::snapshot::SnapshotId;
-pub use v1::snapshot::TableSnapshot;
+pub use v1::BlockMeta;
+pub use v1::SegmentInfo;
+pub use v1::TableSnapshot;
 
 use super::v0;
 use super::v1;
