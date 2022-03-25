@@ -27,7 +27,7 @@ metadata:
   annotations:
     meta_address: meta-service.databend-system.svc.cluster.local:9191
     prometheus.io/path: /metrics
-    prometheus.io/port: "10010"
+    prometheus.io/port: "7070"
     prometheus.io/scrape: "true"
   labels:
     QUERY_CLUSTER_ID: hello-world
@@ -39,24 +39,24 @@ metadata:
   namespace: tenant1
 spec:
   ports:
-    - name: health
+    - name: http
+      port: 8000
+      targetPort: 8000
+    - name: admin
       port: 8080
       targetPort: 8080
-    - name: query
-      port: 9000
-      targetPort: 9000
-    - name: rpc
-      port: 9091
-      targetPort: 9091
     - name: metrics
-      port: 10010
-      targetPort: 10010
+      port: 7070
+      targetPort: 7070
     - name: mysql
       port: 3307
       targetPort: 3307
     - name: clickhouse
-      port: 10000
-      targetPort: 10000
+      port: 9000
+      targetPort: 9000
+    - name: flight
+      port: 9090
+      targetPort: 9090
   selector:
     QUERY_CLUSTER_ID: hello-world
     QUERY_TENANT_ID: tenant1
@@ -131,10 +131,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.labels['cluster']
-            - name: QUERY_HTTP_HANDLER_HOST
-              value: 0.0.0.0
-            - name: QUERY_HTTP_HANDLER_PORT
-              value: "9000"
             - name: POD_NAME
               valueFrom:
                 fieldRef:
@@ -147,38 +143,42 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+            - name: QUERY_HTTP_HANDLER_HOST
+              value: "0.0.0.0"
+            - name: QUERY_HTTP_HANDLER_PORT
+              value: "8000"
             - name: QUERY_ADMIN_API_ADDRESS
-              value: 0.0.0.0:8080
+              value: "0.0.0.0:8080"
             - name: QUERY_METRIC_API_ADDRESS
-              value: 0.0.0.0:10010
+              value: "0.0.0.0:7070"
             - name: QUERY_MYSQL_HANDLER_HOST
-              value: 0.0.0.0
+              value: "0.0.0.0"
             - name: QUERY_MYSQL_HANDLER_PORT
               value: "3307"
             - name: QUERY_CLICKHOUSE_HANDLER_HOST
-              value: 0.0.0.0
+              value: "0.0.0.0"
             - name: QUERY_CLICKHOUSE_HANDLER_PORT
-              value: "10000"
+              value: "9000"
             - name: QUERY_FLIGHT_API_ADDRESS
-              value: "$(POD_IP):9191"
+              value: "$(POD_IP):9090"
           envFrom:
             - secretRef:
                 name: query-secrets
           image: datafuselabs/databend-query:v0.6.100-nightly
           name: query
           ports:
-            - containerPort: 9000
-              name: query
-            - containerPort: 8080
-              name: http
-            - containerPort: 10010
-              name: metrics
-            - containerPort: 9091
-              name: flight
-            - containerPort: 3307
-              name: mysql
-            - containerPort: 10000
-              name: clickhouse
+            - name: http
+              containerPort: 8000
+            - name: admin
+              containerPort: 8080
+            - name: metrics
+              containerPort: 7070
+            - name: mysql
+              containerPort: 3307
+            - name: clickhouse
+              containerPort: 9000
+            - name: flight
+              containerPort: 9090
           readinessProbe:
             httpGet:
               path: /v1/health
