@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod memory_cache;
-mod metrics;
+mod block_reader;
+mod cached_reader;
+mod meta_readers;
+mod versioned_reader;
 
-pub use memory_cache::new_memory_cache;
-pub use memory_cache::MemoryCache;
-pub use memory_cache::SegmentInfoCache;
-pub use memory_cache::TableSnapshotCache;
-
-pub use self::metrics::CacheDeferMetrics;
-pub use self::metrics::TenantLabel;
+pub use block_reader::BlockReader;
+pub use meta_readers::MetaReaders;
+pub use meta_readers::SegmentInfoReader;
+pub use meta_readers::TableSnapshotReader;

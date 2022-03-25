@@ -24,6 +24,7 @@ use common_cache::Cache;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::MatchSeq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::UpsertTableOptionReply;
@@ -33,13 +34,17 @@ use uuid::Uuid;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::meta::Location;
+use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::meta::TableSnapshot;
+use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::operations::TableOperationLog;
 use crate::storages::fuse::statistics;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
+use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_VER;
 use crate::storages::Table;
 
 impl FuseTable {
@@ -136,6 +141,7 @@ impl FuseTable {
         overwrite: bool,
     ) -> Result<()> {
         let prev = self.read_table_snapshot(ctx).await?;
+        let prev_version = self.snapshot_format_version()?;
         let schema = self.table_info.meta.schema.as_ref().clone();
         let (segments, summary) = Self::merge_append_operations(&schema, operation_log)?;
 
@@ -144,25 +150,32 @@ impl FuseTable {
             bytes: summary.uncompressed_byte_size as usize,
         };
 
+        let segments = segments
+            .into_iter()
+            .map(|loc| (loc, SegmentInfo::VERSION))
+            .collect();
         let new_snapshot = if overwrite {
-            TableSnapshot {
-                snapshot_id: Uuid::new_v4(),
-                prev_snapshot_id: prev.as_ref().map(|v| v.snapshot_id),
+            TableSnapshot::new(
+                Uuid::new_v4(),
+                prev.as_ref().map(|v| (v.snapshot_id, prev_version)),
                 schema,
                 summary,
                 segments,
-            }
+            )
         } else {
             Self::merge_table_operations(
                 self.table_info.meta.schema.as_ref(),
                 prev,
+                prev_version,
                 segments,
                 summary,
             )?
         };
 
         let uuid = new_snapshot.snapshot_id;
-        let snapshot_loc = self.meta_locations().snapshot_location_from_uuid(&uuid);
+        let snapshot_loc = self
+            .meta_location_generator()
+            .snapshot_location_from_uuid(&uuid, TableSnapshot::VERSION)?;
         let bytes = serde_json::to_vec(&new_snapshot)?;
         let operator = ctx.get_storage_operator()?;
         operator
@@ -187,7 +200,8 @@ impl FuseTable {
     fn merge_table_operations(
         schema: &DataSchema,
         previous: Option<Arc<TableSnapshot>>,
-        mut new_segments: Vec<String>,
+        prev_version: u64,
+        mut new_segments: Vec<Location>,
         statistics: Statistics,
     ) -> Result<TableSnapshot> {
         // 1. merge stats with previous snapshot, if any
@@ -197,7 +211,7 @@ impl FuseTable {
         } else {
             statistics
         };
-        let prev_snapshot_id = previous.as_ref().map(|v| v.snapshot_id);
+        let prev_snapshot_id = previous.as_ref().map(|v| (v.snapshot_id, prev_version));
 
         // 2. merge segment locations with previous snapshot, if any
         if let Some(snapshot) = &previous {
@@ -205,13 +219,13 @@ impl FuseTable {
             new_segments.append(&mut segments)
         };
 
-        let new_snapshot = TableSnapshot {
-            snapshot_id: Uuid::new_v4(),
+        let new_snapshot = TableSnapshot::new(
+            Uuid::new_v4(),
             prev_snapshot_id,
-            schema: schema.clone(),
-            summary: stats,
-            segments: new_segments,
-        };
+            schema.clone(),
+            stats,
+            new_segments,
+        );
         Ok(new_snapshot)
     }
 
@@ -221,18 +235,26 @@ impl FuseTable {
         new_snapshot_location: String,
     ) -> Result<UpsertTableOptionReply> {
         let table_id = tbl_id.table_id;
-        let table_version = tbl_id.version;
         let catalog = ctx.get_catalog();
-        catalog
-            .upsert_table_option(UpsertTableOptionReq::new(
-                &TableIdent {
-                    table_id,
-                    version: table_version,
-                },
-                FUSE_OPT_KEY_SNAPSHOT_LOC,
-                new_snapshot_location,
-            ))
-            .await
+
+        let req = UpsertTableOptionReq {
+            table_id,
+            seq: MatchSeq::Exact(tbl_id.version),
+            options: [
+                (
+                    FUSE_OPT_KEY_SNAPSHOT_LOC.to_owned(),
+                    Some(new_snapshot_location),
+                ),
+                (
+                    FUSE_OPT_KEY_SNAPSHOT_VER.to_owned(),
+                    Some(TableSnapshot::VERSION.to_string()),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        };
+
+        catalog.upsert_table_option(req).await
     }
 
     pub fn merge_append_operations(

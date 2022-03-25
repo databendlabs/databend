@@ -15,8 +15,18 @@
 
 use std::collections::HashMap;
 
-use crate::storages::fuse::meta::ColumnId;
+use crate::storages::fuse::meta::common::ColumnId;
+use crate::storages::fuse::meta::common::Statistics;
 use crate::storages::index::ColumnStatistics;
+
+/// A segment comprised of one or more blocks
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct SegmentInfo {
+    /// blocks belong to this segment
+    pub blocks: Vec<BlockMeta>,
+    /// summary statistics
+    pub summary: Statistics,
+}
 
 /// Meta information of a block (currently, the parquet file)
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

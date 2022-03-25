@@ -21,7 +21,6 @@ use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Extras;
 use databend_query::interpreters::CreateTableInterpreter;
-use databend_query::storages::fuse::meta::BlockLocation;
 use databend_query::storages::fuse::meta::BlockMeta;
 use databend_query::storages::fuse::meta::ColumnMeta;
 use databend_query::storages::fuse::FuseTable;
@@ -68,10 +67,7 @@ fn test_to_partitions() -> Result<()> {
         file_size: 0,
         col_stats: cols_stats.clone(),
         col_metas: cols_metas,
-        location: BlockLocation {
-            path: "".to_string(),
-            meta_size: 0,
-        },
+        location: ("".to_owned(), 0),
     };
 
     let blocks_metas = (0..num_of_block)

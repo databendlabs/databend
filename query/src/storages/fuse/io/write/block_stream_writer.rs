@@ -27,7 +27,7 @@ use futures::TryStreamExt;
 use opendal::Operator;
 use parquet_format_async_temp::FileMetaData;
 
-use crate::storages::fuse::io::block_writer;
+use super::block_writer;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::ColumnMeta;
@@ -112,12 +112,12 @@ impl BlockStreamWriter {
         try_unfold(init_state, |(mapper, mut inputs)| async move {
             if let Some(mut acc) = mapper {
                 while let Some(item) = inputs.next().await {
-                    match acc.regulate(item?).await? {
+                    match acc.compact(item?).await? {
                         Some(item) => return Ok(Some((item, (Some(acc), inputs)))),
                         None => continue,
                     }
                 }
-                let remains = acc.seal()?;
+                let remains = acc.finish()?;
                 Ok(remains.map(|t| (t, (None, inputs))))
             } else {
                 Ok::<_, ErrorCode>(None)
@@ -133,21 +133,18 @@ impl BlockStreamWriter {
         let (file_size, file_meta_data) =
             block_writer::write_block(&schema, block, self.data_accessor.clone(), &location)
                 .await?;
-        let col_offsets = Self::column_metas(&file_meta_data)?;
-        acc = partial_acc.end(file_size, location, col_offsets);
+        let col_metas = Self::column_metas(&file_meta_data)?;
+        acc = partial_acc.end(file_size, location, col_metas);
         self.number_of_blocks_accumulated += 1;
         if self.number_of_blocks_accumulated >= self.num_block_threshold {
             let summary = acc.summary(self.data_schema.as_ref())?;
-            let seg = SegmentInfo {
-                blocks: acc.blocks_metas,
-                summary: Statistics {
-                    row_count: acc.summary_row_count,
-                    block_count: acc.summary_block_count,
-                    uncompressed_byte_size: acc.in_memory_size,
-                    compressed_byte_size: acc.file_size,
-                    col_stats: summary,
-                },
-            };
+            let seg = SegmentInfo::new(acc.blocks_metas, Statistics {
+                row_count: acc.summary_row_count,
+                block_count: acc.summary_block_count,
+                uncompressed_byte_size: acc.in_memory_size,
+                compressed_byte_size: acc.file_size,
+                col_stats: summary,
+            });
 
             // Reset state
             self.number_of_blocks_accumulated = 0;
@@ -218,37 +215,34 @@ pub trait Compactor<S, T> {
     ///       in this case, s will been split into vector of (smaller) blocks
     ///    - or [None] might be returned if s is too small
     ///       in this case, s will be accumulated
-    async fn regulate(&mut self, s: S) -> Result<Option<T>>;
+    async fn compact(&mut self, s: S) -> Result<Option<T>>;
 
     /// Indicate that no more elements remains.
     ///
     /// Spills [Some<T>] if there were, otherwise [None]
-    fn seal(self) -> Result<Option<T>>;
+    fn finish(self) -> Result<Option<T>>;
 }
 
 #[async_trait::async_trait]
 impl Compactor<DataBlock, SegmentInfo> for BlockStreamWriter {
-    async fn regulate(&mut self, s: DataBlock) -> Result<Option<SegmentInfo>> {
+    async fn compact(&mut self, s: DataBlock) -> Result<Option<SegmentInfo>> {
         self.write_block(s).await
     }
 
-    fn seal(mut self) -> Result<Option<SegmentInfo>> {
+    fn finish(mut self) -> Result<Option<SegmentInfo>> {
         let acc = self.statistics_accumulator.take();
         let data_schema = self.data_schema.as_ref();
         match acc {
             None => Ok(None),
             Some(acc) => {
                 let summary = acc.summary(data_schema)?;
-                let seg = SegmentInfo {
-                    blocks: acc.blocks_metas,
-                    summary: Statistics {
-                        row_count: acc.summary_row_count,
-                        block_count: acc.summary_block_count,
-                        uncompressed_byte_size: acc.in_memory_size,
-                        compressed_byte_size: acc.file_size,
-                        col_stats: summary,
-                    },
-                };
+                let seg = SegmentInfo::new(acc.blocks_metas, Statistics {
+                    row_count: acc.summary_row_count,
+                    block_count: acc.summary_block_count,
+                    uncompressed_byte_size: acc.in_memory_size,
+                    compressed_byte_size: acc.file_size,
+                    col_stats: summary,
+                });
                 Ok(Some(seg))
             }
         }
@@ -256,6 +250,7 @@ impl Compactor<DataBlock, SegmentInfo> for BlockStreamWriter {
 }
 
 pub struct BlockCompactor {
+    // TODO threshold of block size
     /// Max number of rows per data block
     max_row_per_block: usize,
     /// Number of rows accumulate in `accumulated_blocks`.
@@ -319,14 +314,13 @@ impl BlockCompactor {
     }
 }
 
-// A delegation to keep trait [Regulator] private (to unit tests)
 #[async_trait::async_trait]
 impl Compactor<DataBlock, Vec<DataBlock>> for BlockCompactor {
-    async fn regulate(&mut self, block: DataBlock) -> Result<Option<Vec<DataBlock>>> {
+    async fn compact(&mut self, block: DataBlock) -> Result<Option<Vec<DataBlock>>> {
         BlockCompactor::compact(self, block)
     }
 
-    fn seal(self) -> Result<Option<Vec<DataBlock>>> {
+    fn finish(self) -> Result<Option<Vec<DataBlock>>> {
         BlockCompactor::finish(self)
     }
 }

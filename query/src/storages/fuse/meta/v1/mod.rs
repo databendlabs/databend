@@ -1,4 +1,4 @@
-//  Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -11,25 +11,10 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
-mod common;
+mod segment;
+mod snapshot;
 
-/// Re-exports meta data structures of current version, i.e. v1
-mod current;
-mod v0;
-mod v1;
-/// where
-/// - Numeric values of version is assigned
-/// - converters from u64 into meta data version informations
-mod versions;
-
-pub use common::ColumnId;
-pub use common::Location;
-pub use common::SnapshotId;
-pub use common::Statistics;
-pub use common::Versioned;
-pub use current::*;
-pub use versions::SegmentInfoVersion;
-pub use versions::SnapshotVersion;
-pub use versions::DEFAULT_SNAPSHOT_VERSION;
+pub use segment::BlockMeta;
+pub use segment::SegmentInfo;
+pub use snapshot::TableSnapshot;
