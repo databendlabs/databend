@@ -22,7 +22,7 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_configs_table() -> Result<()> {
     let conf = crate::tests::ConfigBuilder::create().config();
-    let ctx = crate::tests::create_query_context_with_config(conf).await?;
+    let ctx = crate::tests::create_query_context_with_config(conf, None).await?;
     ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create(1);
@@ -111,7 +111,7 @@ async fn test_configs_table_redact() -> Result<()> {
     let mut conf = crate::tests::ConfigBuilder::create().config();
     conf.storage.s3.access_key_id = "access_key_id".to_string();
     conf.storage.s3.secret_access_key = "secret_access_key".to_string();
-    let ctx = crate::tests::create_query_context_with_config(conf).await?;
+    let ctx = crate::tests::create_query_context_with_config(conf, None).await?;
     ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create(1);

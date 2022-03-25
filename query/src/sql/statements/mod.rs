@@ -83,6 +83,7 @@ pub use statement_create_table::DfCreateTable;
 pub use statement_create_udf::DfCreateUDF;
 pub use statement_create_user::DfAuthOption;
 pub use statement_create_user::DfCreateUser;
+pub use statement_create_user::DfUserWithOption;
 pub use statement_create_user_stage::DfCreateUserStage;
 pub use statement_describe_table::DfDescribeTable;
 pub use statement_describe_user_stage::DfDescribeUserStage;

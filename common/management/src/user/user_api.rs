@@ -18,6 +18,7 @@ use common_meta_types::GrantObject;
 use common_meta_types::RoleIdentity;
 use common_meta_types::SeqV;
 use common_meta_types::UserInfo;
+use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
 
 #[async_trait::async_trait]
@@ -37,7 +38,8 @@ pub trait UserApi: Sync + Send {
         &self,
         username: String,
         hostname: String,
-        auth_info_args: AuthInfo,
+        auth_info: Option<AuthInfo>,
+        user_option: Option<UserOption>,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 
