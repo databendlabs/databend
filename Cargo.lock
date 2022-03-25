@@ -866,7 +866,7 @@ dependencies = [
  "async-trait",
  "common-base",
  "opendal",
- "time 0.3.7",
+ "time 0.3.9",
 ]
 
 [[package]]
@@ -927,7 +927,7 @@ dependencies = [
  "serde_json",
  "sqlparser",
  "thiserror",
- "time 0.3.7",
+ "time 0.3.9",
  "tonic",
 ]
 
@@ -1007,7 +1007,7 @@ dependencies = [
  "opendal",
  "rand 0.8.5",
  "serde",
- "time 0.3.7",
+ "time 0.3.9",
 ]
 
 [[package]]
@@ -1737,7 +1737,7 @@ dependencies = [
  "sqlparser",
  "tempfile",
  "threadpool",
- "time 0.3.7",
+ "time 0.3.9",
  "tokio-rustls 0.23.2",
  "tokio-stream",
  "toml",
@@ -3318,6 +3318,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
+name = "minitrace"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a07fdf302cc0591c97eb45939550ddaddd9962e400c20b319aa16c244cb1f16"
+dependencies = [
+ "crossbeam",
+ "futures",
+ "minitrace-macro",
+ "minstant",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "pin-project",
+ "retain_mut",
+]
+
+[[package]]
+name = "minitrace-macro"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4132dfe6097f4a90c0bbb34be0687c38d14303dd2e74f8442ae80e9bc5a34c47"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "miniz_oxide"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3325,6 +3353,17 @@ checksum = "a92518e98c078586bc6c934028adcca4c92a53d6a958196de835170a01d84e4b"
 dependencies = [
  "adler",
  "autocfg 1.0.1",
+]
+
+[[package]]
+name = "minstant"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2cb320648b7883b43ce5dfbc5c6f4a84038194c3f67b4fcb7d05c994e6006557"
+dependencies = [
+ "ctor",
+ "libc",
+ "wasi 0.7.0",
 ]
 
 [[package]]
@@ -3501,7 +3540,7 @@ dependencies = [
  "smallvec",
  "subprocess",
  "thiserror",
- "time 0.3.7",
+ "time 0.3.9",
  "uuid",
 ]
 
@@ -3783,13 +3822,14 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "opendal"
-version = "0.2.5"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21cf4b1d8c549b00c200a110b558f35c0517553e836a663bbfc883b828d649aa"
+checksum = "1c4cf26cc5de7a50ca0a6368eee871a64a6e1a72bc00df53f32de0fff912faa1"
 dependencies = [
  "anyhow",
  "async-compat",
  "async-trait",
+ "base64 0.13.0",
  "bstr",
  "bytes",
  "futures",
@@ -3797,7 +3837,9 @@ dependencies = [
  "hyper",
  "hyper-tls",
  "log",
+ "md5",
  "metrics",
+ "minitrace",
  "once_cell",
  "pin-project",
  "quick-xml",
@@ -3806,7 +3848,7 @@ dependencies = [
  "roxmltree",
  "serde",
  "thiserror",
- "time 0.3.7",
+ "time 0.3.9",
  "tokio",
  "tower",
 ]
@@ -4782,12 +4824,14 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.0.1"
+version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "839cb0893bbd7b3fbd8627cd2b38a879128f0e2a34bdfcf611ff1a8f1ed763be"
+checksum = "c595520a47f27ad20af3313ce68a26ac1882b182fcea007835530d78518c2f54"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.13.0",
+ "bytes",
  "dirs",
  "form_urlencoded",
  "hex",
@@ -4800,7 +4844,7 @@ dependencies = [
  "roxmltree",
  "rust-ini",
  "sha2 0.10.2",
- "time 0.3.7",
+ "time 0.3.9",
  "tokio",
 ]
 
@@ -4850,6 +4894,12 @@ dependencies = [
  "hostname",
  "quick-error",
 ]
+
+[[package]]
+name = "retain_mut"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c31b5c4033f8fdde8700e4657be2c497e7288f01515be52168c631e2e4d4086"
 
 [[package]]
 name = "rgb"
@@ -5725,9 +5775,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.7"
+version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "004cbc98f30fa233c61a38bc77e96a9106e65c88f2d3bef182ae952027e5753d"
+checksum = "c2702e08a7a860f005826c6815dcac101b19b5eb330c27fe4a5928fec1d20ddd"
 dependencies = [
  "itoa 1.0.1",
  "libc",
@@ -5737,9 +5787,9 @@ dependencies = [
 
 [[package]]
 name = "time-macros"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25eb0ca3468fc0acc11828786797f6ef9aa1555e4a211a60d64cc8e4d1be47d6"
+checksum = "42657b1a6f4d817cda8e7a0ace261fe0cc946cf3a80314390b22cc61ae080792"
 
 [[package]]
 name = "tinytemplate"
@@ -6001,7 +6051,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ab026b18a46ac429e5c98bec10ca06424a97b3ad7b3949d9b4a102fff6623c4"
 dependencies = [
  "crossbeam-channel",
- "time 0.3.7",
+ "time 0.3.9",
  "tracing-subscriber",
 ]
 
@@ -6026,7 +6076,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
- "time 0.3.7",
+ "time 0.3.9",
  "tracing",
  "tracing-core",
  "tracing-log",
@@ -6353,6 +6403,12 @@ dependencies = [
  "log",
  "try-lock",
 ]
+
+[[package]]
+name = "wasi"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b89c3ce4ce14bdc6fb6beaf9ec7928ca331de5df7e5ea278375642a2f478570d"
 
 [[package]]
 name = "wasi"

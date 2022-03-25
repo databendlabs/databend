@@ -34,6 +34,7 @@ use futures::future::Either;
 use futures::StreamExt;
 use opendal::credential::Credential;
 use opendal::services::fs;
+use opendal::services::memory;
 use opendal::services::s3;
 use opendal::Accessor;
 use opendal::Operator;
@@ -332,6 +333,14 @@ impl SessionManager {
             .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
 
         let accessor: Arc<dyn Accessor> = match schema {
+            DalSchema::Memory => {
+                let mut builder = memory::Backend::build();
+
+                builder
+                    .finish()
+                    .await
+                    .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?
+            }
             DalSchema::S3 => {
                 let s3_conf = &storage_conf.s3;
                 let mut builder = s3::Backend::build();
@@ -371,9 +380,6 @@ impl SessionManager {
                     .await
                     .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?
             }
-            DalSchema::Azblob => {
-                todo!()
-            }
             DalSchema::Fs => {
                 let mut path = storage_conf.disk.data_path.clone();
                 if !path.starts_with('/') {
@@ -385,6 +391,11 @@ impl SessionManager {
                     .finish()
                     .await
                     .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?
+            }
+            _ => {
+                return Err(ErrorCode::DalTransportError(
+                    "not supported storage backend",
+                ))
             }
         };
 
