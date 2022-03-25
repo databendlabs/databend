@@ -35,6 +35,7 @@ use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::TableSnapshot;
+use crate::storages::fuse::meta::DEFAULT_SNAPSHOT_VERSION;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_VER;
@@ -197,7 +198,13 @@ impl FuseTable {
                 })
             })
             .transpose()
-            .map(|opt| opt.unwrap_or(0))
+            .map(|opt| {
+                opt.unwrap_or(
+                    // TableSnapshot of version other than v0 should have a explicitly define
+                    // version
+                    DEFAULT_SNAPSHOT_VERSION,
+                )
+            })
     }
 
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]

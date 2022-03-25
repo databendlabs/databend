@@ -21,9 +21,7 @@ use crate::storages::fuse::meta::common::Versioned;
 use crate::storages::fuse::meta::v0;
 use crate::storages::fuse::meta::v1;
 
-pub const CURRNET_SEGMETN_VERSION: u64 = v1::SegmentInfo::VERSION;
-pub const CURRNET_SNAPSHOT_VERSION: u64 = v1::TableSnapshot::VERSION;
-pub const CURRNET_BLOCK_VERSION: u64 = DataBlock::VERSION;
+pub const DEFAULT_SNAPSHOT_VERSION: u64 = v0::TableSnapshot::VERSION;
 
 // Here versions of meta are tagged with numeric values
 //
@@ -36,7 +34,7 @@ pub const CURRNET_BLOCK_VERSION: u64 = DataBlock::VERSION;
 // Fortunately, since v0::SegmentInfo::VESION is used in
 // several places, compiler will report compile error if it
 // can not deduce a unique value the constant expression.
-//
+
 impl Versioned<0> for v0::SegmentInfo {}
 impl Versioned<1> for v1::SegmentInfo {}
 

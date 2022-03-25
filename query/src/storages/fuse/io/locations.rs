@@ -13,16 +13,17 @@
 //  limitations under the License.
 //
 
+use common_datablocks::DataBlock;
 use common_exception::Result;
 use uuid::Uuid;
 
 use crate::storages::fuse::constants::FUSE_TBL_BLOCK_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SNAPSHOT_PREFIX;
+use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::SnapshotVersion;
-use crate::storages::fuse::meta::CURRNET_BLOCK_VERSION;
-use crate::storages::fuse::meta::CURRNET_SEGMETN_VERSION;
-use crate::storages::fuse::meta::CURRNET_SNAPSHOT_VERSION;
+use crate::storages::fuse::meta::TableSnapshot;
+use crate::storages::fuse::meta::Versioned;
 
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
@@ -42,7 +43,10 @@ impl TableMetaLocationGenerator {
         let part_uuid = Uuid::new_v4().to_simple().to_string();
         format!(
             "{}/{}/{}_v{}.parquet",
-            &self.prefix, FUSE_TBL_BLOCK_PREFIX, part_uuid, CURRNET_BLOCK_VERSION
+            &self.prefix,
+            FUSE_TBL_BLOCK_PREFIX,
+            part_uuid,
+            DataBlock::VERSION,
         )
     }
 
@@ -50,7 +54,10 @@ impl TableMetaLocationGenerator {
         let segment_uuid = Uuid::new_v4().to_simple().to_string();
         format!(
             "{}/{}/{}_v{}.json",
-            &self.prefix, FUSE_TBL_SEGMENT_PREFIX, segment_uuid, CURRNET_SEGMETN_VERSION
+            &self.prefix,
+            FUSE_TBL_SEGMENT_PREFIX,
+            segment_uuid,
+            SegmentInfo::VERSION,
         )
     }
 
@@ -81,7 +88,7 @@ impl SnapshotLocationCreator for SnapshotVersion {
                     prefix.as_ref(),
                     FUSE_TBL_SNAPSHOT_PREFIX,
                     id.to_simple(),
-                    CURRNET_SNAPSHOT_VERSION,
+                    TableSnapshot::VERSION,
                 )
             }
         }
