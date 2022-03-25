@@ -24,7 +24,7 @@ DROP TABLE IF EXISTS t4;
 -- prepare test databases for testing 'create table like' and 'as select' statements.
 CREATE DATABASE db1;
 CREATE DATABASE db2;
-CREATE TABLE db1.test1(a INT NOT NULL, b INT) ENGINE=memory;
+CREATE TABLE db1.test1(a INT, b INT null) ENGINE=memory;
 INSERT INTO db1.test1 VALUES (1, 2), (2, 3), (3, 4);
 
 SELECT '====BEGIN TEST CREATE TABLE LIKE STATEMENT====';
