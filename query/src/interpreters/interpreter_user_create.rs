@@ -59,6 +59,7 @@ impl Interpreter for CreateUserInterpreter {
             hostname: plan.hostname,
             grants: UserGrantSet::empty(),
             quota: UserQuota::no_limit(),
+            option: plan.user_option,
         };
         user_mgr.add_user(&tenant, user_info, false).await?;
 

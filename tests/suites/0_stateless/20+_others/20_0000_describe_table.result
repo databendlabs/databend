@@ -1,10 +1,10 @@
 a	Int64	YES
 b	Int32	YES
 c	String	YES
-d	Int16	YES
-e	Date16	YES
+d	Int16	NO
+e	Date16	NO
 a	Int64	YES
 b	Int32	YES
 c	String	YES
-d	Int16	YES
-e	Date16	YES
+d	Int16	NO
+e	Date16	NO

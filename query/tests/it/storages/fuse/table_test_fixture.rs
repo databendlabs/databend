@@ -61,7 +61,7 @@ impl TestFixture {
         // use `TempDir` as root path (auto clean)
         conf.storage.disk.data_path = tmp_dir.path().to_str().unwrap().to_string();
         conf.storage.disk.temp_data_path = tmp_dir.path().to_str().unwrap().to_string();
-        let ctx = crate::tests::create_query_context_with_config(conf)
+        let ctx = crate::tests::create_query_context_with_config(conf, None)
             .await
             .unwrap();
 

@@ -158,6 +158,8 @@ pub use user_grant::GrantObject;
 pub use user_grant::UserGrantSet;
 pub use user_identity::UserIdentity;
 pub use user_info::UserInfo;
+pub use user_info::UserOption;
+pub use user_info::UserOptionFlag;
 pub use user_privilege::UserPrivilegeSet;
 pub use user_privilege::UserPrivilegeType;
 pub use user_quota::UserQuota;

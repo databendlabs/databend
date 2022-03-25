@@ -55,7 +55,7 @@ bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" 
 cargo-license = { git = "https://github.com/datafuse-extras/cargo-license", rev = "f1ce4a2" }
 opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "9690be9", package = "opensrv-clickhouse" }
 opensrv-mysql = { git = "https://github.com/datafuselabs/opensrv", rev = "9690be9", package = "opensrv-mysql" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "0b1b0d7" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "da3b180" }
 
 # Crates.io dependencies
 ahash = "0.7.6"

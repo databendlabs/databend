@@ -1,6 +1,6 @@
 DROP TABLE IF EXISTS t;
 
-CREATE TABLE t(a int, b int);
+CREATE TABLE t(a int null, b int null);
 
 insert into t values(1,2);
 

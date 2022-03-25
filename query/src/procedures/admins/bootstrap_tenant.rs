@@ -21,6 +21,7 @@ use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
+use common_meta_types::UserOptionFlag;
 use common_meta_types::UserPrivilegeSet;
 use common_tracing::tracing;
 
@@ -52,6 +53,7 @@ impl Procedure for BootstrapTenantProcedure {
         ProcedureFeatures::default()
             .num_arguments(5)
             .management_mode_required(true)
+            .user_option_flag(UserOptionFlag::TenantSetting)
     }
 
     async fn inner_eval(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
