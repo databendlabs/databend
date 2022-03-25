@@ -2,7 +2,7 @@ DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;
 USE db1;
 
-CREATE TABLE IF NOT EXISTS t1(a Int8, b UInt32, c DateTime32, d String) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t1(a Int8 null, b UInt32 null, c DateTime32 null, d String null) Engine = Memory;
 
 
 INSERT INTO t1 (a,b,c,d) VALUES(-1, 33, '2021-08-15 10:00:00', 'string1234'),
@@ -12,7 +12,7 @@ select * from t1;
 select sum(a),sum(b) from t1;
 
 
-CREATE TABLE IF NOT EXISTS t2(id Int, var Variant) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t2(id Int null, var Variant null) Engine = Memory;
 
 INSERT INTO t2 (id, var) VALUES(1, null),
                                (2, true),

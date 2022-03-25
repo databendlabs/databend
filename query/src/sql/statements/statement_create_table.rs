@@ -143,12 +143,15 @@ impl DfCreateTable {
                 let mut fields = Vec::with_capacity(self.columns.len());
 
                 for column in &self.columns {
-                    let mut nullable = true;
+                    //  Defaults to not nullable, if you want to use nullable, you should add `null` into table options
+                    // For example: `CREATE TABLE test (id INT NOT NULL, name String NULL)`
+                    // Equals to: `CREATE TABLE test (id INT, name String NULL)`
+                    let mut nullable = false;
                     let mut default_expr = None;
                     for opt in &column.options {
                         match &opt.option {
-                            ColumnOption::NotNull => {
-                                nullable = false;
+                            ColumnOption::Null => {
+                                nullable = true;
                             }
                             ColumnOption::Default(expr) => {
                                 let expr = expr_analyzer.analyze(expr).await?;

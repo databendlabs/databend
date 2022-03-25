@@ -1,4 +1,4 @@
-create table t09_0012(c int);
+create table t09_0012(c int null);
 
 -- there will be 2 blocks after two insertions, each block contains 2 rows
 insert into t09_0012 values(1), (2);
