@@ -5,3 +5,5 @@ USE system;
 select database();
 create database `rust-lang`;
 use `rust-lang`;
+
+DROP DATABASE if exists `rust-lang`;

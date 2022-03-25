@@ -34,7 +34,7 @@ DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;
 USE db1;
 
-CREATE TABLE IF NOT EXISTS t1(v String) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t1(v String null) Engine = Memory;
 
 insert into t1 values (null),('null'),('true'),('123'),('"abc"'),('[1,2,3]'),('{"a":"b"}');
 
@@ -43,7 +43,7 @@ select parse_json(v), v from t1;
 select '==try_parse_json from table==';
 select try_parse_json(v), v from t1;
 
-CREATE TABLE IF NOT EXISTS t2(v String) Engine = Memory;
+CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Memory;
 
 insert into t2 values ('abc'),('[1,');
 
