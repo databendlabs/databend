@@ -245,7 +245,10 @@ impl FuseTable {
                     FUSE_OPT_KEY_SNAPSHOT_LOC.to_owned(),
                     Some(new_snapshot_location),
                 ),
-                (FUSE_OPT_KEY_SNAPSHOT_VER.to_owned(), Some("1".to_owned())),
+                (
+                    FUSE_OPT_KEY_SNAPSHOT_VER.to_owned(),
+                    Some(TableSnapshot::VERSION.to_string()),
+                ),
             ]
             .into_iter()
             .collect(),
