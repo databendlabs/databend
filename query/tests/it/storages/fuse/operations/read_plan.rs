@@ -23,7 +23,6 @@ use common_planners::Extras;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::storages::fuse::meta::BlockMeta;
 use databend_query::storages::fuse::meta::ColumnMeta;
-use databend_query::storages::fuse::meta::Location;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::storages::index::ColumnStatistics;
 use futures::TryStreamExt;

@@ -30,6 +30,18 @@ pub const CURRNET_SEGMETN_VERSION: u64 = v1::SegmentInfo::VERSION;
 pub const CURRNET_SNAPSHOT_VERSION: u64 = v1::TableSnapshot::VERSION;
 pub const CURRNET_BLOCK_VERSION: u64 = DataBlock::VERSION;
 
+// Here versions of meta are tagged with numeric values
+//
+// The trait Versioned itself can not prevent us from
+// giving multiple version numbers to a specific type, such as
+//
+// impl Versioned<0> for v0::SegmentInfo {}
+// impl Versioned<1> for v0::SegmentInfo {}
+//
+// Fortunately, since v0::SegmentInfo::VESION is used in
+// several places, compiler will report compile error if it
+// can not deduce a unique value the constant expression.
+//
 impl Versioned<0> for v0::SegmentInfo {}
 impl Versioned<1> for v1::SegmentInfo {}
 
@@ -54,13 +66,18 @@ pub enum BlockVersion {
 }
 
 mod converters {
+
     use super::*;
 
     impl TryFrom<u64> for SegmentInfoVersion {
         type Error = ErrorCode;
         fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
             match value {
-                0 => Ok(SegmentInfoVersion::V0(ver_eq::<_, 0>(PhantomData))),
+                0 => Ok(SegmentInfoVersion::V0(
+                    // `ver_eq<_, 0>` is merely a static check to make sure that
+                    // the type `v0::SegmentInfoVersion` do have a numeric version number of 0
+                    ver_eq::<_, 0>(PhantomData),
+                )),
                 1 => Ok(SegmentInfoVersion::V1(ver_eq::<_, 1>(PhantomData))),
                 _ => Err(ErrorCode::LogicalError(format!(
                     "unknown segment version {value}, versions supported: 0, 1"

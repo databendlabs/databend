@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use common_datablocks::DataBlock;
 
 use crate::storages::fuse::meta::common::ColumnId;
+use crate::storages::fuse::meta::common::FormatVersion;
 use crate::storages::fuse::meta::common::Location;
 use crate::storages::fuse::meta::common::Statistics;
 use crate::storages::fuse::meta::common::Versioned;
@@ -28,7 +29,7 @@ use crate::storages::index::ColumnStatistics;
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct SegmentInfo {
     /// format version
-    format_version: u64,
+    format_version: FormatVersion,
     /// blocks belong to this segment
     pub blocks: Vec<BlockMeta>,
     /// summary statistics

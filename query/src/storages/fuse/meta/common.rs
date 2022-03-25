@@ -34,6 +34,7 @@ pub struct Statistics {
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
 }
 
+/// Thing has a u64 version nubmer
 pub trait Versioned<const V: u64>
 where Self: Sized
 {

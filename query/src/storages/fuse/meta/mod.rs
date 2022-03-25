@@ -14,9 +14,12 @@
 //
 
 mod common;
+
+/// Re-exports meta data structures of current version, i.e. v1
 mod current;
 mod v0;
 mod v1;
+/// Numeric values of version is assigned
 mod versions;
 
 pub use common::ColumnId;
