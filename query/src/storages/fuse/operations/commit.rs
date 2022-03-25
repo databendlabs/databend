@@ -150,7 +150,6 @@ impl FuseTable {
             bytes: summary.uncompressed_byte_size as usize,
         };
 
-        // BUGGY
         let segments = segments
             .into_iter()
             .map(|loc| (loc, SegmentInfo::VERSION))

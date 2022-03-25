@@ -12,11 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-//! Versions and Migration
-//!
-//! TODO doc
-//!
-
 use std::marker::PhantomData;
 
 use common_datablocks::DataBlock;
