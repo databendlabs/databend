@@ -150,7 +150,7 @@ impl TransformerSqlparser {
                         quote: column.name.quote_style,
                     };
                     let typ = self.transform_data_type(&column.data_type)?;
-                    let mut is_null: bool = true;
+                    let mut is_null: bool = false;
                     let mut has_default: bool = false;
                     let mut default_literal: Literal = Literal::Null;
                     for column_option_def in &column.options {
