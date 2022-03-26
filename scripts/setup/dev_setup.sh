@@ -185,7 +185,6 @@ function install_pkg_config {
 function install_rustup {
 	RUST_TOOLCHAIN=$1
 
-	# Install Rust
 	echo "==> Installing Rust......"
 	if rustup --version &>/dev/null; then
 		echo "Rust is already installed"
