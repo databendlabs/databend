@@ -1,0 +1,45 @@
+name: Platform
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'rust-toolchain.toml'
+      - 'scripts/setup/dev_setup.sh'
+
+jobs:
+  build_dev_image:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        distro:
+          - debian
+          - alpine
+    steps:
+      - name: Maximize build space
+        uses: ./.github/actions/cleanup
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+        with:
+          platforms: amd64,arm64
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and publish databend build tool image
+        id: docker_build
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/build-tool:${{ matrix.distro }}
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: ./docker/build-tool/${{ matrix.distro }}/Dockerfile
