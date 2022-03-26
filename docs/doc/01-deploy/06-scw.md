@@ -13,6 +13,10 @@ Expected deployment time: ** 5 minutes ⏱ **
 
 This guideline will deploy Databend(standalone) with Scaleway OS step by step.
 
+<p align="center">
+<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/deploy-scaleway-standalone.png" width="300"/>
+</p>
+
 
 ### Before you begin
 

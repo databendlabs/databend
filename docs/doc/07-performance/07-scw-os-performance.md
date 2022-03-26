@@ -12,7 +12,7 @@ description:
 * Databend: [v0.6.100-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.6.98-nightly)
 * No Local Caching(Data Caching/Query Result Caching)
 * Databend is automatic performance optimization with **no manual tuning** required.
-* [Analyzing OnTime Datasets with Databend on Scaleway and OS](../01-deploy/07-scw.md)
+* [Analyzing OnTime Datasets with Databend on Scaleway and OS](../01-deploy/06-scw.md)
 :::
 
 ## Q1 (1.420 sec., 137.82 million rows/sec., 413.46 MB/sec.)
