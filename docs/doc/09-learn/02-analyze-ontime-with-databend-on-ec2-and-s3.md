@@ -12,7 +12,8 @@ Make sure you have installed Databend, if not please see:
 * [How to Deploy Databend with Amazon S3](../01-deploy/01-s3.md) 
 * [How to Deploy Databend with Tencent COS](../01-deploy/02-cos.md)
 * [How to Deploy Databend with Alibaba OSS](../01-deploy/03-oss.md)
-* [How to Deploy Databend with Wasabi](../01-deploy/04-wasabi.md)
+* [How to Deploy Databend with Wasabi](../01-deploy/05-wasabi.md)
+* [How to Deploy Databend with Scaleway OS](../01-deploy/06-scw.md)
 
 ## Step 2. Load OnTime Datasets
 
