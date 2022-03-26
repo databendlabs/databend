@@ -9,13 +9,13 @@ description:
 * Hardware: General(GP1-XL, nl-ams), 48 vCPUs
 * Storage: Scaleway Object Storage (nl-ams)
 * Dataset: [ontime](https://transtats.bts.gov/PREZIP/), 60.8 GB Raw CSV Data, 195662214 records
-* Databend: [v0.6.100-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.6.98-nightly)
+* Databend: [v0.6.100-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.6.100-nightly)
 * No Local Caching(Data Caching/Query Result Caching)
 * Databend is automatic performance optimization with **no manual tuning** required.
 * [Analyzing OnTime Datasets with Databend on Scaleway and OS](../01-deploy/06-scw.md)
 :::
 
-## Q1 (1.420 sec., 137.82 million rows/sec., 413.46 MB/sec.)
+## Q1 (0.673 sec., 90.69 million rows/sec., 272.07 MB/sec.)
 
 ```sql title='mysql>'
 SELECT
@@ -31,16 +31,16 @@ ORDER BY c DESC
 +-----------+---------+
 | DayOfWeek | c       |
 +-----------+---------+
-|         5 | 8518339 |
-|         1 | 8499468 |
-|         4 | 8478252 |
-|         3 | 8439882 |
-|         2 | 8395393 |
-|         7 | 8055509 |
-|         6 | 7318926 |
+|         5 | 8732422 |
+|         1 | 8730614 |
+|         4 | 8710843 |
+|         3 | 8685626 |
+|         2 | 8639632 |
+|         7 | 8274367 |
+|         6 | 7514194 |
 +-----------+---------+
-7 rows in set (2.23 sec)
-Read 195662214 rows, 586.99 MB in 1.420 sec., 137.82 million rows/sec., 413.46 MB/sec.
+7 rows in set (1.34 sec)
+Read 61000000 rows, 183 MB in 0.673 sec., 90.69 million rows/sec., 272.07 MB/sec.
 ```
 
 ```sql title='explain'
@@ -50,11 +50,11 @@ Read 195662214 rows, 586.99 MB in 1.420 sec., 137.82 million rows/sec., 413.46 M
 │     AggregatorFinal: groupBy=[[DayOfWeek]], aggr=[[count()]]                                                                                                                                                                                               │
 │       AggregatorPartial: groupBy=[[DayOfWeek]], aggr=[[count()]]                                                                                                                                                                                           │
 │         Filter: ((Year >= 2000) and (Year <= 2008))                                                                                                                                                                                                        │
-│           ReadDataSource: scan schema: [Year:UInt16, DayOfWeek:UInt8], statistics: [read_rows: 195662214, read_bytes: 586986642, partitions_scanned: 196, partitions_total: 196], push_downs: [projections: [0, 4], filters: [((Year >= 2000) AND (Year <= 2008))]] │
+│           ReadDataSource: scan schema: [Year:UInt16, DayOfWeek:UInt8], statistics: [read_rows: 61000000, read_bytes: 183000000, partitions_scanned: 61, partitions_total: 203], push_downs: [projections: [0, 4], filters: [((Year >= 2000) AND (Year <= 2008))]] │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Q2 (2.730 sec., 71.68 million rows/sec., 501.74 MB/sec.)
+## Q2 (0.753 sec., 81.05 million rows/sec., 567.34 MB/sec.)
 
 ```sql title='mysql>'
 SELECT
@@ -70,16 +70,16 @@ ORDER BY c DESC
 +-----------+---------+
 | DayOfWeek | c       |
 +-----------+---------+
-|         5 | 2042282 |
-|         4 | 1874544 |
-|         1 | 1753732 |
-|         7 | 1744528 |
-|         3 | 1602002 |
-|         2 | 1503090 |
-|         6 | 1362701 |
+|         5 | 2175733 |
+|         4 | 2012848 |
+|         1 | 1898879 |
+|         7 | 1880896 |
+|         3 | 1757508 |
+|         2 | 1665303 |
+|         6 | 1510894 |
 +-----------+---------+
-7 rows in set (3.62 sec)
-Read 195662214 rows, 1.37 GB in 2.730 sec., 71.68 million rows/sec., 501.74 MB/sec.
+7 rows in set (1.51 sec)
+Read 61000000 rows, 427 MB in 0.753 sec., 81.05 million rows/sec., 567.34 MB/sec.
 ```
 
 ```sql title='explain'
@@ -89,11 +89,11 @@ Read 195662214 rows, 1.37 GB in 2.730 sec., 71.68 million rows/sec., 501.74 MB/s
 │     AggregatorFinal: groupBy=[[DayOfWeek]], aggr=[[count()]]                                                                                                                                                                                               │
 │       AggregatorPartial: groupBy=[[DayOfWeek]], aggr=[[count()]]                                                                                                                                                                                           │
 │         Filter: (((DepDelay > 10) and (Year >= 2000)) and (Year <= 2008))                                                                                                                                                                                  │
-│           ReadDataSource: scan schema: [Year:UInt16, DayOfWeek:UInt8, DepDelay:Int32], statistics: [read_rows: 195662214, read_bytes: 1369635498, partitions_scanned: 196, partitions_total: 196], push_downs: [projections: [0, 4, 31], filters: [(((DepDelay > 10) AND (Year >= 2000)) AND (Year <= 2008))]] │
+│           ReadDataSource: scan schema: [Year:UInt16, DayOfWeek:UInt8, DepDelay:Int32], statistics: [read_rows: 61000000, read_bytes: 427000000, partitions_scanned: 61, partitions_total: 203], push_downs: [projections: [0, 4, 31], filters: [(((DepDelay > 10) AND (Year >= 2000)) AND (Year <= 2008))]] │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Q3 (2.739 sec., 71.43 million rows/sec., 1.5 GB/sec.)
+## Q3 (0.864 sec., 70.61 million rows/sec., 1.2 GB/sec.)
 
 ```sql title='mysql>'
 SELECT
@@ -107,22 +107,22 @@ LIMIT 10
 ```
 
 ```sql title='result'
-+---------+--------+
-| Origin  | c      |
-+---------+--------+
-| ORD\0\0 | 832507 |
-| ATL\0\0 | 800277 |
-| DFW\0\0 | 594161 |
-| LAX\0\0 | 384148 |
-| PHX\0\0 | 383200 |
-| LAS\0\0 | 343654 |
-| DEN\0\0 | 339157 |
-| EWR\0\0 | 284785 |
-| DTW\0\0 | 282756 |
-| IAH\0\0 | 277686 |
-+---------+--------+
-10 rows in set (3.64 sec)
-Read 195662214 rows, 4.11 GB in 2.739 sec., 71.43 million rows/sec., 1.5 GB/sec.
++--------+--------+
+| Origin | c      |
++--------+--------+
+| ORD    | 860911 |
+| ATL    | 831822 |
+| DFW    | 614403 |
+| LAX    | 402671 |
+| PHX    | 400475 |
+| LAS    | 362026 |
+| DEN    | 352893 |
+| EWR    | 302267 |
+| DTW    | 296832 |
+| IAH    | 290729 |
++--------+--------+
+10 rows in set (1.56 sec)
+Read 61000000 rows, 1.04 GB in 0.864 sec., 70.61 million rows/sec., 1.2 GB/sec.
 ```
 
 ```sql title='explain'
@@ -133,11 +133,11 @@ Read 195662214 rows, 4.11 GB in 2.739 sec., 71.43 million rows/sec., 1.5 GB/sec.
 │       AggregatorFinal: groupBy=[[Origin]], aggr=[[count()]]                                                                                                                                                                                                │
 │         AggregatorPartial: groupBy=[[Origin]], aggr=[[count()]]                                                                                                                                                                                            │
 │           Filter: (((DepDelay > 10) and (Year >= 2000)) and (Year <= 2008))                                                                                                                                                                                │
-│             ReadDataSource: scan schema: [Year:UInt16, Origin:String, DepDelay:Int32], statistics: [read_rows: 195662214, read_bytes: 4108908062, partitions_scanned: 196, partitions_total: 196], push_downs: [projections: [0, 14, 31], filters: [(((DepDelay > 10) AND (Year >= 2000)) AND (Year <= 2008))]] │
+│             ReadDataSource: scan schema: [Year:UInt16, Origin:String, DepDelay:Int32], statistics: [read_rows: 61000000, read_bytes: 1037000488, partitions_scanned: 61, partitions_total: 203], push_downs: [projections: [0, 14, 31], filters: [(((DepDelay > 10) AND (Year >= 2000)) AND (Year <= 2008))]] │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Q4 (2.005 sec., 97.61 million rows/sec., 1.56 GB/sec.)
+## Q4 (0.369 sec., 21.69 million rows/sec., 346.98 MB/sec.)
 
 ```sql title='mysql>'
 SELECT
@@ -153,29 +153,29 @@ ORDER BY count() DESC
 +---------+---------+
 | Carrier | count() |
 +---------+---------+
-| WN      |  296293 |
-| AA      |  176203 |
-| MQ      |  145630 |
-| US      |  135987 |
-| UA      |  128174 |
-| OO      |  127426 |
-| EV      |  101796 |
-| XE      |   99915 |
-| DL      |   93675 |
-| NW      |   90429 |
-| CO      |   76662 |
-| YV      |   67905 |
-| FL      |   59460 |
-| OH      |   59034 |
-| B6      |   50740 |
-| 9E      |   46948 |
-| AS      |   42830 |
-| F9      |   23035 |
-| AQ      |    4299 |
-| HA      |    2746 |
+| WN      |  296451 |
+| AA      |  179769 |
+| MQ      |  152293 |
+| OO      |  147019 |
+| US      |  140199 |
+| UA      |  135061 |
+| XE      |  108571 |
+| EV      |  104055 |
+| NW      |  102206 |
+| DL      |   98427 |
+| CO      |   81039 |
+| YV      |   79553 |
+| FL      |   64583 |
+| OH      |   60532 |
+| AS      |   54326 |
+| B6      |   53716 |
+| 9E      |   48578 |
+| F9      |   24100 |
+| AQ      |    6764 |
+| HA      |    4059 |
 +---------+---------+
-20 rows in set (2.66 sec)
-Read 195662214 rows, 3.13 GB in 2.005 sec., 97.61 million rows/sec., 1.56 GB/sec.
+20 rows in set (1.10 sec)
+Read 8000000 rows, 128 MB in 0.369 sec., 21.69 million rows/sec., 346.98 MB/sec.
 ```
 
 ```sql title='explain'
@@ -185,11 +185,11 @@ Read 195662214 rows, 3.13 GB in 2.005 sec., 97.61 million rows/sec., 1.56 GB/sec
 │     AggregatorFinal: groupBy=[[IATA_CODE_Reporting_Airline]], aggr=[[count()]]                                                                                                                                                                             │
 │       AggregatorPartial: groupBy=[[IATA_CODE_Reporting_Airline]], aggr=[[count()]]                                                                                                                                                                         │
 │         Filter: ((DepDelay > 10) and (Year = 2007))                                                                                                                                                                                                        │
-│           ReadDataSource: scan schema: [Year:UInt16, IATA_CODE_Reporting_Airline:String, DepDelay:Int32], statistics: [read_rows: 195662214, read_bytes: 3130596992, partitions_scanned: 196, partitions_total: 196], push_downs: [projections: [0, 8, 31], filters: [((DepDelay > 10) AND (Year = 2007))]] │
+│           ReadDataSource: scan schema: [Year:UInt16, IATA_CODE_Reporting_Airline:String, DepDelay:Int32], statistics: [read_rows: 8000000, read_bytes: 128000064, partitions_scanned: 8, partitions_total: 203], push_downs: [projections: [0, 8, 31], filters: [((DepDelay > 10) AND (Year = 2007))]] │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Q5 (1.589 sec., 123.11 million rows/sec., 1.97 GB/sec.)
+## Q5 (0.371 sec., 21.54 million rows/sec., 344.67 MB/sec.)
 
 ```sql title='mysql>'
 SELECT
@@ -205,29 +205,29 @@ ORDER BY c3 DESC
 +---------+--------------------+
 | Carrier | c3                 |
 +---------+--------------------+
-| EV      |  355.6390924907593 |
-| US      |  280.1273877477871 |
-| AA      | 277.98541311368336 |
-| MQ      | 269.43869867195565 |
-| AS      |  267.3783437899928 |
-| B6      |  265.0300339514233 |
-| UA      |  261.5785241692891 |
-| WN      | 253.48648396615198 |
-| OH      | 250.11015455531455 |
-| CO      | 237.23274877688758 |
-| F9      | 235.62806873977087 |
-| YV      | 230.68534661403305 |
-| XE      |  229.8095787916913 |
-| FL      | 225.94705102238572 |
-| NW      | 218.15036933750838 |
-| OO      |  213.1297250284338 |
-| DL      |  196.8421207466447 |
-| 9E      |  181.3707499681284 |
-| AQ      |  92.73080241587576 |
-| HA      |  48.88295505117935 |
+| EV      | 363.53123668047823 |
+| AS      |  339.1453631738303 |
+| US      |  288.8039271022377 |
+| AA      |  283.6112877194699 |
+| MQ      |  281.7663100792978 |
+| B6      |  280.5745625489684 |
+| UA      | 275.63356884257615 |
+| YV      | 270.25567158804466 |
+| OH      |  256.4567516268981 |
+| WN      | 253.62165713752844 |
+| CO      | 250.77750030171651 |
+| XE      | 249.71881878589517 |
+| NW      | 246.56113247419944 |
+| F9      | 246.52209492635023 |
+| OO      | 245.90051515354253 |
+| FL      |  245.4143692596491 |
+| DL      | 206.82764258051773 |
+| 9E      | 187.66780889391967 |
+| AQ      |  145.9016393442623 |
+| HA      |  72.25634178905207 |
 +---------+--------------------+
-20 rows in set (1.94 sec)
-Read 195662214 rows, 3.13 GB in 1.589 sec., 123.11 million rows/sec., 1.97 GB/sec.
+20 rows in set (1.07 sec)
+Read 8000000 rows, 128 MB in 0.371 sec., 21.54 million rows/sec., 344.67 MB/sec.
 ```
 
 ```sql title='explain'
@@ -239,11 +239,11 @@ Read 195662214 rows, 3.13 GB in 1.589 sec., 123.11 million rows/sec., 1.97 GB/se
 │         AggregatorPartial: groupBy=[[IATA_CODE_Reporting_Airline]], aggr=[[avg(cast((DepDelay > 10) as Int8))]]                                                                                                                                            │
 │           Expression: IATA_CODE_Reporting_Airline:String, cast((DepDelay > 10) as Int8):Int8 (Before GroupBy)                                                                                                                                              │
 │             Filter: (Year = 2007)                                                                                                                                                                                                                          │
-│               ReadDataSource: scan schema: [Year:UInt16, IATA_CODE_Reporting_Airline:String, DepDelay:Int32], statistics: [read_rows: 195662214, read_bytes: 3130596992, partitions_scanned: 196, partitions_total: 196], push_downs: [projections: [0, 8, 31], filters: [(Year = 2007)]] │
+│               ReadDataSource: scan schema: [Year:UInt16, IATA_CODE_Reporting_Airline:String, DepDelay:Int32], statistics: [read_rows: 8000000, read_bytes: 128000064, partitions_scanned: 8, partitions_total: 203], push_downs: [projections: [0, 8, 31], filters: [(Year = 2007)]] │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Q6 (2.162 sec., 90.49 million rows/sec., 1.45 GB/sec.)
+## Q6 (0.990 sec., 61.59 million rows/sec., 985.5 MB/sec.)
 
 ```sql title='mysql>'
 SELECT
@@ -259,34 +259,34 @@ ORDER BY c3 DESC
 +---------+--------------------+
 | Carrier | c3                 |
 +---------+--------------------+
-| EV      | 273.75673908484157 |
-| AS      |  249.3750261156234 |
-| B6      |  242.9765484752507 |
-| FL      | 235.78579837350685 |
-| WN      | 234.25767821665684 |
-| YV      | 232.75640004870877 |
-| XE      | 225.37125427720642 |
-| MQ      | 223.90123340736127 |
-| UA      |   216.795406879701 |
-| F9      | 215.44602190134705 |
-| DH      | 215.11592809811052 |
-| OH      | 207.80180638232238 |
-| HP      |  205.4787666304912 |
-| AA      | 202.27635104259056 |
-| US      | 194.92934952964256 |
-| TW      |  185.2254167220212 |
-| OO      | 181.59144617288132 |
-| CO      | 179.07975376134564 |
-| DL      | 178.57936839556356 |
-| 9E      | 171.55638804818648 |
-| NW      |  169.9350396739337 |
-| RU      | 165.93486875604194 |
-| TZ      | 159.30095696228443 |
-| AQ      | 111.66529559984713 |
-| HA      |  57.99147625931697 |
+| AS      | 293.05649076611434 |
+| EV      |  282.0709981074399 |
+| YV      |  270.3897636688929 |
+| B6      | 257.40594891667007 |
+| FL      | 249.28742951361826 |
+| XE      | 246.59005902424192 |
+| MQ      |  245.3695989400477 |
+| WN      | 233.38127235928863 |
+| DH      | 227.11013827345042 |
+| F9      | 226.08455653226812 |
+| UA      | 224.42824657703645 |
+| OH      | 215.52882835147614 |
+| AA      | 211.97122176454556 |
+| US      | 206.60330294168244 |
+| HP      | 205.31690167066455 |
+| OO      |  202.4243177198239 |
+| NW      |  191.7393936377831 |
+| TW      |  188.6912623180138 |
+| DL      | 187.84162871590732 |
+| CO      | 187.71301306878976 |
+| 9E      |  181.6396991511518 |
+| RU      | 181.46244295416398 |
+| TZ      |  176.8928125899626 |
+| AQ      | 145.65911608293766 |
+| HA      |  79.38672451825789 |
 +---------+--------------------+
-25 rows in set (2.61 sec)
-Read 195662214 rows, 3.13 GB in 2.162 sec., 90.49 million rows/sec., 1.45 GB/sec.
+25 rows in set (1.63 sec)
+Read 61000000 rows, 976 MB in 0.990 sec., 61.59 million rows/sec., 985.5 MB/sec.
 ```
 
 ```sql title='explain'
@@ -298,11 +298,11 @@ Read 195662214 rows, 3.13 GB in 2.162 sec., 90.49 million rows/sec., 1.45 GB/sec
 │         AggregatorPartial: groupBy=[[IATA_CODE_Reporting_Airline]], aggr=[[avg(cast((DepDelay > 10) as Int8))]]                                                                                                                                            │
 │           Expression: IATA_CODE_Reporting_Airline:String, cast((DepDelay > 10) as Int8):Int8 (Before GroupBy)                                                                                                                                              │
 │             Filter: ((Year >= 2000) and (Year <= 2008))                                                                                                                                                                                                    │
-│               ReadDataSource: scan schema: [Year:UInt16, IATA_CODE_Reporting_Airline:String, DepDelay:Int32], statistics: [read_rows: 195662214, read_bytes: 3130596992, partitions_scanned: 196, partitions_total: 196], push_downs: [projections: [0, 8, 31], filters: [((Year >= 2000) AND (Year <= 2008))]] │
+│               ReadDataSource: scan schema: [Year:UInt16, IATA_CODE_Reporting_Airline:String, DepDelay:Int32], statistics: [read_rows: 61000000, read_bytes: 976000488, partitions_scanned: 61, partitions_total: 203], push_downs: [projections: [0, 8, 31], filters: [((Year >= 2000) AND (Year <= 2008))]] │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Q7 (1.984 sec., 98.63 million rows/sec., 1.58 GB/sec.)
+## Q7 (1.044 sec., 58.45 million rows/sec., 935.18 MB/sec.)
 
 ```sql title='mysql>'
 SELECT
@@ -317,34 +317,34 @@ GROUP BY Carrier
 +---------+--------------------+
 | Carrier | c3                 |
 +---------+--------------------+
-| HA      | -538.8768939038356 |
-| OO      |  7156.105931260668 |
-| EV      | 13248.640462884143 |
-| B6      | 11177.923627230142 |
-| WN      |  9800.984032216535 |
-| FL      |   10091.3806677191 |
-| OH      |  9174.990431086686 |
-| 9E      |  7700.845777541507 |
-| UA      | 10474.691240783097 |
-| RU      |   6137.49191332561 |
-| F9      |  6078.962351003004 |
-| US      |  7003.805255113001 |
-| AA      |  9107.644700861949 |
-| AQ      | 1569.9276465368148 |
-| CO      |  7723.676547969114 |
-| DL      |  7316.332086536578 |
-| HP      |  8606.658580393145 |
-| XE      | 11066.582047557225 |
-| NW      |  5953.887737746666 |
-| MQ      |   9004.73935505603 |
-| AS      |  9446.867494009617 |
-| TW      |  7715.900299305268 |
-| YV      | 12465.722388227468 |
-| DH      |  9562.764009429655 |
-| TZ      |  5604.692697405455 |
+| NW      | 11717.623092632819 |
+| 9E      | 13091.087573576122 |
+| AQ      |  7323.278123603293 |
+| WN      | 10484.932610056378 |
+| UA      | 14594.243159716054 |
+| DL      | 10943.456441165357 |
+| DH      | 15311.949983190174 |
+| TZ      | 12618.760195758565 |
+| B6      | 16789.739456036365 |
+| HA      |  6851.555976883671 |
+| TW      | 10842.722114986364 |
+| FL      | 15192.451732538268 |
+| OH      | 12655.103820799075 |
+| F9      | 11232.889558936127 |
+| MQ      | 14125.201554023559 |
+| CO      | 12671.595978518368 |
+| RU      | 12556.249210602802 |
+| EV      | 16374.703330010156 |
+| XE      | 17092.548853057146 |
+| OO      | 11600.594852741107 |
+| AA      |  13508.78515494305 |
+| HP      | 11625.682112859839 |
+| US      |   11868.7097884053 |
+| YV      |  17971.53933699898 |
+| AS      | 14735.545887755581 |
 +---------+--------------------+
-25 rows in set (2.67 sec)
-Read 195662214 rows, 3.13 GB in 1.984 sec., 98.63 million rows/sec., 1.58 GB/sec.
+25 rows in set (1.78 sec)
+Read 61000000 rows, 976 MB in 1.044 sec., 58.45 million rows/sec., 935.18 MB/sec.
 ```
 
 ```sql title='explain'
@@ -354,11 +354,11 @@ Read 195662214 rows, 3.13 GB in 1.984 sec., 98.63 million rows/sec., 1.58 GB/sec
 │     AggregatorFinal: groupBy=[[IATA_CODE_Reporting_Airline]], aggr=[[avg(DepDelay)]]                                                                                                                                                                       │
 │       AggregatorPartial: groupBy=[[IATA_CODE_Reporting_Airline]], aggr=[[avg(DepDelay)]]                                                                                                                                                                   │
 │         Filter: ((Year >= 2000) and (Year <= 2008))                                                                                                                                                                                                        │
-│           ReadDataSource: scan schema: [Year:UInt16, IATA_CODE_Reporting_Airline:String, DepDelay:Int32], statistics: [read_rows: 195662214, read_bytes: 3130596992, partitions_scanned: 196, partitions_total: 196], push_downs: [projections: [0, 8, 31], filters: [((Year >= 2000) AND (Year <= 2008))]] │
+│           ReadDataSource: scan schema: [Year:UInt16, IATA_CODE_Reporting_Airline:String, DepDelay:Int32], statistics: [read_rows: 61000000, read_bytes: 976000488, partitions_scanned: 61, partitions_total: 203], push_downs: [projections: [0, 8, 31], filters: [((Year >= 2000) AND (Year <= 2008))]] │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Q8 (1.371 sec., 142.75 million rows/sec., 856.47 MB/sec.)
+## Q8 (1.484 sec., 136.59 million rows/sec., 819.54 MB/sec.)
 
 ```sql title='mysql>'
 SELECT
@@ -372,43 +372,44 @@ GROUP BY Year
 +------+--------------------+
 | Year | avg(DepDelay)      |
 +------+--------------------+
-| 1987 |  7.942636447211749 |
-| 1988 |  6.642095416924255 |
-| 1989 |  8.082143933983971 |
-| 1990 |  6.840675574328676 |
-| 1991 | 5.7044772180010535 |
-| 1992 |   5.62925082631977 |
-| 1993 | 6.0503186963181745 |
-| 1994 |  6.574114757237771 |
-| 1995 |  8.135946473302818 |
-| 1996 |   9.75112383578199 |
-| 1997 |  8.086793537802187 |
-| 1998 |  8.782369968657616 |
-| 1999 |  9.076455475549054 |
-| 2000 |  10.90851967263336 |
-| 2001 |  7.838910616678229 |
-| 2002 |  5.463908832617927 |
-| 2003 |  5.343154272904457 |
-| 2004 |  7.750883470537657 |
-| 2005 |  8.653783323640981 |
-| 2006 |  9.921313478360586 |
-| 2007 | 11.154102001513522 |
-| 2008 |  9.778738997786789 |
-| 2009 |  7.875202103472947 |
-| 2010 |  8.122003058239098 |
-| 2011 |   8.30051069128936 |
-| 2012 |  7.697317526910186 |
-| 2013 |   9.60551109179679 |
-| 2014 | 10.417677824932802 |
-| 2015 |  9.231430609551786 |
-| 2016 |  8.837048463968436 |
-| 2017 |   9.58803416122416 |
-| 2018 |  9.807826800117446 |
-| 2019 | 10.731779968221662 |
-| 2020 | 1.9366636990295527 |
+| 1987 |  8.600789281505321 |
+| 1988 |  7.345867511864449 |
+| 1989 |   8.81845473300008 |
+| 1990 |  7.966702606180775 |
+| 1991 |  6.940411174086677 |
+| 1992 |  6.687364706154975 |
+| 1993 |  7.207721091071671 |
+| 1994 |  7.758752042452116 |
+| 1995 |  9.328649903752932 |
+| 1996 |  11.14468468976826 |
+| 1997 |  9.919225483813925 |
+| 1998 | 10.884314711941435 |
+| 1999 | 11.567390524113748 |
+| 2000 | 13.456897681824556 |
+| 2001 | 10.895474364001354 |
+| 2002 |   9.97856700710386 |
+| 2003 |  9.778465263372038 |
+| 2004 | 11.936799840656898 |
+| 2005 |  12.60167890747495 |
+| 2006 | 14.237297887039372 |
+| 2007 | 15.431738868356579 |
+| 2008 | 14.654588068064287 |
+| 2009 | 13.168984006133062 |
+| 2010 | 13.202976628175891 |
+| 2011 | 13.496191548097778 |
+| 2012 | 13.155971481255131 |
+| 2013 | 14.901210490900201 |
+| 2014 | 15.513697266113969 |
+| 2015 | 14.638336410280733 |
+| 2016 | 14.643883269504837 |
+| 2017 |  15.70225324299191 |
+| 2018 |  16.16188254545747 |
+| 2019 | 16.983263489524507 |
+| 2020 | 10.624498278073712 |
+| 2021 | 15.289615417399649 |
 +------+--------------------+
-34 rows in set (2.00 sec)
-Read 195662214 rows, 1.17 GB in 1.371 sec., 142.75 million rows/sec., 856.47 MB/sec.
+35 rows in set (1.95 sec)
+Read 202687655 rows, 1.22 GB in 1.484 sec., 136.59 million rows/sec., 819.54 MB/sec.
 ```
 
 ```sql title='explain'
@@ -416,11 +417,11 @@ Read 195662214 rows, 1.17 GB in 1.371 sec., 142.75 million rows/sec., 856.47 MB/
 │ Projection: Year:UInt16, avg(DepDelay):Float64                                                                                                                                                                   │
 │   AggregatorFinal: groupBy=[[Year]], aggr=[[avg(DepDelay)]]                                                                                                                                                      │
 │     AggregatorPartial: groupBy=[[Year]], aggr=[[avg(DepDelay)]]                                                                                                                                                  │
-│       ReadDataSource: scan schema: [Year:UInt16, DepDelay:Int32], statistics: [read_rows: 195662214, read_bytes: 1173973284, partitions_scanned: 196, partitions_total: 196], push_downs: [projections: [0, 31]] │
+│       ReadDataSource: scan schema: [Year:UInt16, DepDelay:Int32], statistics: [read_rows: 202687655, read_bytes: 1216125930, partitions_scanned: 203, partitions_total: 203], push_downs: [projections: [0, 31]] │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Q9 (1.525 sec., 128.28 million rows/sec., 256.55 MB/sec.)
+## Q9 (1.112 sec., 182.22 million rows/sec., 364.43 MB/sec.)
 ```sql title='mysql>'
 SELECT
     Year,
@@ -449,9 +450,9 @@ GROUP BY Year
 | 2000 | 5683047 |
 | 2001 | 5967780 |
 | 2002 | 5271359 |
-| 2003 | 6013240 |
+| 2003 | 6488540 |
 | 2004 | 7129270 |
-| 2005 | 6033967 |
+| 2005 | 7140596 |
 | 2006 | 7141922 |
 | 2007 | 7455458 |
 | 2008 | 7009726 |
@@ -467,9 +468,10 @@ GROUP BY Year
 | 2018 | 7213446 |
 | 2019 | 7422037 |
 | 2020 | 4688354 |
+| 2021 | 5443512 |
 +------+---------+
-34 rows in set (2.23 sec)
-Read 195662214 rows, 391.32 MB in 1.525 sec., 128.28 million rows/sec., 256.55 MB/sec.
+35 rows in set (1.85 sec)
+Read 202687655 rows, 405.38 MB in 1.112 sec., 182.22 million rows/sec., 364.43 MB/sec.
 ```
 
 ```sql title='explain'
@@ -477,11 +479,11 @@ Read 195662214 rows, 391.32 MB in 1.525 sec., 128.28 million rows/sec., 256.55 M
 │ Projection: Year:UInt16, count() as c1:UInt64                                                                                                                                               │
 │   AggregatorFinal: groupBy=[[Year]], aggr=[[count()]]                                                                                                                                       │
 │     AggregatorPartial: groupBy=[[Year]], aggr=[[count()]]                                                                                                                                   │
-│       ReadDataSource: scan schema: [Year:UInt16], statistics: [read_rows: 195662214, read_bytes: 391324428, partitions_scanned: 196, partitions_total: 196], push_downs: [projections: [0]] │
+│       ReadDataSource: scan schema: [Year:UInt16], statistics: [read_rows: 202687655, read_bytes: 405375310, partitions_scanned: 203, partitions_total: 203], push_downs: [projections: [0]] │
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Q10 (1.370 sec., 142.84 million rows/sec., 999.85 MB/sec.)
+## Q10 (1.463 sec., 138.52 million rows/sec., 969.61 MB/sec.)
 
 ```sql title='mysql>'
 SELECT avg(cnt)
@@ -503,10 +505,10 @@ FROM
 +-------------------+
 | avg(cnt)          |
 +-------------------+
-| 80743.73182957394 |
+| 81342.93170731707 |
 +-------------------+
-1 row in set (2.02 sec)
-Read 195662214 rows, 1.37 GB in 1.370 sec., 142.84 million rows/sec., 999.85 MB/sec.
+1 row in set (2.12 sec)
+Read 202687655 rows, 1.42 GB in 1.463 sec., 138.52 million rows/sec., 969.61 MB/sec.
 ```
 
 ```sql title='explain'
@@ -518,11 +520,11 @@ Read 195662214 rows, 1.37 GB in 1.370 sec., 142.84 million rows/sec., 999.85 MB/
 │         AggregatorFinal: groupBy=[[Year, Month]], aggr=[[count()]]                                                                                                                                                                                         │
 │           AggregatorPartial: groupBy=[[Year, Month]], aggr=[[count()]]                                                                                                                                                                                     │
 │             Filter: (DepDel15 = 1)                                                                                                                                                                                                                         │
-│               ReadDataSource: scan schema: [Year:UInt16, Month:UInt8, DepDel15:Int32], statistics: [read_rows: 195662214, read_bytes: 1369635498, partitions_scanned: 196, partitions_total: 196], push_downs: [projections: [0, 2, 33], filters: [(DepDel15 = 1)]] │
+│               ReadDataSource: scan schema: [Year:UInt16, Month:UInt8, DepDel15:Int32], statistics: [read_rows: 202687655, read_bytes: 1418813585, partitions_scanned: 203, partitions_total: 203], push_downs: [projections: [0, 2, 33], filters: [(DepDel15 = 1)]] │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Q11 (1.394 sec., 140.32 million rows/sec., 420.95 MB/sec.)
+## Q11 (1.739 sec., 116.57 million rows/sec., 349.72 MB/sec.)
 
 ```sql title='mysql>'
 SELECT avg(c1)
@@ -543,10 +545,10 @@ FROM
 +-------------------+
 | avg(c1)           |
 +-------------------+
-| 490381.4887218045 |
+| 494360.1341463415 |
 +-------------------+
-1 row in set (1.96 sec)
-Read 195662214 rows, 586.99 MB in 1.394 sec., 140.32 million rows/sec., 420.95 MB/sec.
+1 row in set (2.54 sec)
+Read 202687655 rows, 608.06 MB in 1.739 sec., 116.57 million rows/sec., 349.72 MB/sec.
 ```
 
 ```sql title='explain'
@@ -557,11 +559,11 @@ Read 195662214 rows, 586.99 MB in 1.394 sec., 140.32 million rows/sec., 420.95 M
 │       Projection: Year:UInt16, Month:UInt8, count() as c1:UInt64                                                                                                                                                  │
 │         AggregatorFinal: groupBy=[[Year, Month]], aggr=[[count()]]                                                                                                                                                │
 │           AggregatorPartial: groupBy=[[Year, Month]], aggr=[[count()]]                                                                                                                                            │
-│             ReadDataSource: scan schema: [Year:UInt16, Month:UInt8], statistics: [read_rows: 195662214, read_bytes: 586986642, partitions_scanned: 196, partitions_total: 196], push_downs: [projections: [0, 2]] │
+│             ReadDataSource: scan schema: [Year:UInt16, Month:UInt8], statistics: [read_rows: 202687655, read_bytes: 608062965, partitions_scanned: 203, partitions_total: 203], push_downs: [projections: [0, 2]] │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Q12 (4.691 sec., 41.71 million rows/sec., 1.77 GB/sec.)
+## Q12 (7.410 sec., 27.35 million rows/sec., 1.16 GB/sec.)
 
 ```sql title='mysql>'
 SELECT
@@ -580,19 +582,19 @@ LIMIT 10
 +-------------------+-------------------+--------+
 | OriginCityName    | DestCityName      | c      |
 +-------------------+-------------------+--------+
-| San Francisco, CA | Los Angeles, CA   | 508490 |
-| Los Angeles, CA   | San Francisco, CA | 505651 |
-| New York, NY      | Chicago, IL       | 447403 |
-| Chicago, IL       | New York, NY      | 440075 |
-| Chicago, IL       | Minneapolis, MN   | 429892 |
-| Minneapolis, MN   | Chicago, IL       | 425768 |
-| Los Angeles, CA   | Las Vegas, NV     | 420528 |
-| Las Vegas, NV     | Los Angeles, CA   | 414502 |
-| New York, NY      | Boston, MA        | 412145 |
-| Boston, MA        | New York, NY      | 408873 |
+| San Francisco, CA | Los Angeles, CA   | 518850 |
+| Los Angeles, CA   | San Francisco, CA | 515980 |
+| New York, NY      | Chicago, IL       | 457899 |
+| Chicago, IL       | New York, NY      | 450557 |
+| Chicago, IL       | Minneapolis, MN   | 439491 |
+| Minneapolis, MN   | Chicago, IL       | 435311 |
+| Los Angeles, CA   | Las Vegas, NV     | 431245 |
+| Las Vegas, NV     | Los Angeles, CA   | 425188 |
+| New York, NY      | Boston, MA        | 421854 |
+| Boston, MA        | New York, NY      | 418572 |
 +-------------------+-------------------+--------+
-10 rows in set (5.48 sec)
-Read 195662214 rows, 8.28 GB in 4.691 sec., 41.71 million rows/sec., 1.77 GB/sec.
+10 rows in set (8.22 sec)
+Read 202687655 rows, 8.58 GB in 7.410 sec., 27.35 million rows/sec., 1.16 GB/sec.
 ```
 
 ```sql title='explain'
@@ -602,12 +604,12 @@ Read 195662214 rows, 8.28 GB in 4.691 sec., 41.71 million rows/sec., 1.77 GB/sec
 │     Sort: count():UInt64                                                                                                                                                                                                             │
 │       AggregatorFinal: groupBy=[[OriginCityName, DestCityName]], aggr=[[count()]]                                                                                                                                                    │
 │         AggregatorPartial: groupBy=[[OriginCityName, DestCityName]], aggr=[[count()]]                                                                                                                                                │
-│           ReadDataSource: scan schema: [OriginCityName:String, DestCityName:String], statistics: [read_rows: 195662214, read_bytes: 8280594103, partitions_scanned: 196, partitions_total: 196], push_downs: [projections: [15, 24]] │
+│           ReadDataSource: scan schema: [OriginCityName:String, DestCityName:String], statistics: [read_rows: 202687655, read_bytes: 8577734458, partitions_scanned: 203, partitions_total: 203], push_downs: [projections: [15, 24]] │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 ```
 
-## Q13 (2.326 sec., 84.12 million rows/sec., 1.78 GB/sec.)
+## Q13 (2.745 sec., 73.83 million rows/sec., 1.56 GB/sec.)
 
 ```sql title='mysql>'
 SELECT
@@ -622,19 +624,19 @@ LIMIT 10
 +-----------------------+----------+
 | OriginCityName        | c        |
 +-----------------------+----------+
-| Chicago, IL           | 12226995 |
-| Atlanta, GA           | 10556206 |
-| Dallas/Fort Worth, TX |  8746526 |
-| Houston, TX           |  6642902 |
-| Los Angeles, CA       |  6517688 |
-| New York, NY          |  6144673 |
-| Denver, CO            |  6034004 |
-| Phoenix, AZ           |  5484188 |
-| Washington, DC        |  4855803 |
-| San Francisco, CA     |  4579841 |
+| Chicago, IL           | 12592771 |
+| Atlanta, GA           | 10944276 |
+| Dallas/Fort Worth, TX |  9045390 |
+| Houston, TX           |  6868696 |
+| Los Angeles, CA       |  6726120 |
+| New York, NY          |  6336818 |
+| Denver, CO            |  6311909 |
+| Phoenix, AZ           |  5678632 |
+| Washington, DC        |  5022328 |
+| San Francisco, CA     |  4696887 |
 +-----------------------+----------+
-10 rows in set (3.12 sec)
-Read 195662214 rows, 4.14 GB in 2.326 sec., 84.12 million rows/sec., 1.78 GB/sec.
+10 rows in set (3.47 sec)
+Read 202687655 rows, 4.29 GB in 2.745 sec., 73.83 million rows/sec., 1.56 GB/sec.
 ```
 
 ```sql title='explain'
@@ -644,7 +646,7 @@ Read 195662214 rows, 4.14 GB in 2.326 sec., 84.12 million rows/sec., 1.78 GB/sec
 │     Sort: count():UInt64                                                                                                                                                                                    │
 │       AggregatorFinal: groupBy=[[OriginCityName]], aggr=[[count()]]                                                                                                                                         │
 │         AggregatorPartial: groupBy=[[OriginCityName]], aggr=[[count()]]                                                                                                                                     │
-│           ReadDataSource: scan schema: [OriginCityName:String], statistics: [read_rows: 195662214, read_bytes: 4140328419, partitions_scanned: 196, partitions_total: 196], push_downs: [projections: [15]] │
+│           ReadDataSource: scan schema: [OriginCityName:String], statistics: [read_rows: 202687655, read_bytes: 4288897398, partitions_scanned: 203, partitions_total: 203], push_downs: [projections: [15]] │
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -660,16 +662,30 @@ FROM ontime;
 +-----------+
 | count()   |
 +-----------+
-| 195662214 |
+| 202687655 |
 +-----------+
-1 row in set (0.35 sec)
+1 row in set (0.44 sec)
 ```
 
 ```sql title='explain'
 ┌─explain─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Projection: count():UInt64                                                                                                              │
-│   Projection: 195662214 as count():UInt64                                                                                               │
-│     Expression: 195662214:UInt64 (Exact Statistics)                                                                                     │
+│   Projection: 202687655 as count():UInt64                                                                                               │
+│     Expression: 202687655:UInt64 (Exact Statistics)                                                                                     │
 │       ReadDataSource: scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1, partitions_scanned: 1, partitions_total: 1] │
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Block Statistics
+
+```shell title='mysql>'
+call system$fuse_history('default', 'ontime');
+```
+
+```shell
++----------------------------------+------------------+---------------+-------------+-----------+--------------------+------------------+
+| snapshot_id                      | prev_snapshot_id | segment_count | block_count | row_count | bytes_uncompressed | bytes_compressed |
++----------------------------------+------------------+---------------+-------------+-----------+--------------------+------------------+
+| dd5685ae857f4cbb804d76b0513a0ff9 | NULL             |             1 |         203 | 202687655 |       146705866574 |       8891053905 |
++----------------------------------+------------------+---------------+-------------+-----------+--------------------+------------------+
 ```
