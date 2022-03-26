@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'rust-toolchain.toml'
-      - 'scripts/setup/dev_setup.sh'
+      - "rust-toolchain.toml"
+      - "scripts/setup/dev_setup.sh"
 
 jobs:
   build_dev_image:
@@ -34,12 +34,18 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Get rust toolchain version
+        id: toolchain_version
+        run: |
+          version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
+          echo "::set-output name=RUST_TOOLCHAIN::${version}"
+
       - name: Build and publish databend build tool image
         id: docker_build
         uses: docker/build-push-action@v2
         with:
           push: true
-          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/build-tool:${{ matrix.distro }}
+          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/build-tool:${{ matrix.distro }}, ${{ secrets.DOCKERHUB_NAMESPACE }}/build-tool:${{ matrix.distro }}-${{ steps.toolchain_version.outputs.RUST_TOOLCHAIN }}
           platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/build-tool/${{ matrix.distro }}/Dockerfile
