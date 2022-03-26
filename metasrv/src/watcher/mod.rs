@@ -12,20 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(backtrace)]
+mod server_watcher;
+mod watcher;
 
-pub mod api;
-pub mod configs;
-pub mod executor;
-pub mod export;
-pub mod meta_service;
-pub mod metrics;
-pub mod network;
-pub mod store;
-pub mod watcher;
-
-pub trait Opened {
-    /// Return true if it is opened from a previous persistent state.
-    /// Otherwise it is just created.
-    fn is_opened(&self) -> bool;
-}
+pub use server_watcher::MetaServiceWatcher;
+pub use server_watcher::WatcherId;
+pub use server_watcher::WatcherStreamSender;
+pub use watcher::Watcher;

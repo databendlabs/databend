@@ -12,20 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(backtrace)]
+use anyerror::AnyError;
+use common_exception::ErrorCode;
+use serde::Deserialize;
+use serde::Serialize;
+use thiserror::Error;
 
-pub mod api;
-pub mod configs;
-pub mod executor;
-pub mod export;
-pub mod meta_service;
-pub mod metrics;
-pub mod network;
-pub mod store;
-pub mod watcher;
+// represent watcher related errors
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum MetaWatcherError {}
 
-pub trait Opened {
-    /// Return true if it is opened from a previous persistent state.
-    /// Otherwise it is just created.
-    fn is_opened(&self) -> bool;
-}
+pub type MetaWatcherResult<T> = std::result::Result<T, MetaWatcherError>;

@@ -57,6 +57,8 @@ tempfile = "3.3.0"
 tokio-stream = "0.1.8"
 toml = "0.5.8"
 tonic = { version = "0.6.2", features = ["tls"] }
+#tokio = {version="0.2.18",features = ["sync", "stream", "macros"]}
+tokio = { version = "1.17.0", features = ["full"] }
 
 [dev-dependencies]
 common-meta-api = { path = "../common/meta/api" }

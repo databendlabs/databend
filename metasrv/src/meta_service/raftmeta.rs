@@ -18,6 +18,7 @@ use std::net::Ipv4Addr;
 use std::sync::Arc;
 
 use common_base::tokio;
+use common_base::tokio::sync::mpsc;
 use common_base::tokio::sync::watch;
 use common_base::tokio::sync::Mutex;
 use common_base::tokio::sync::RwLockReadGuard;
@@ -32,6 +33,8 @@ use common_meta_sled_store::openraft;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::protobuf::raft_service_server::RaftServiceServer;
 use common_meta_types::protobuf::RaftReply;
+use common_meta_types::protobuf::WatchRequest;
+use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::ConnectionError;
@@ -46,6 +49,7 @@ use common_meta_types::MetaNetworkError;
 use common_meta_types::MetaNetworkResult;
 use common_meta_types::MetaRaftError;
 use common_meta_types::MetaResult;
+use common_meta_types::MetaWatcherResult;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::SeqV;
@@ -59,6 +63,7 @@ use openraft::Raft;
 use openraft::RaftMetrics;
 use openraft::SnapshotPolicy;
 use tonic::Status;
+use tonic::Streaming;
 
 use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::ForwardRequestBody;
@@ -66,6 +71,8 @@ use crate::meta_service::JoinRequest;
 use crate::meta_service::RaftServiceImpl;
 use crate::network::Network;
 use crate::store::MetaRaftStore;
+use crate::watcher::MetaServiceWatcher;
+use crate::watcher::WatcherStreamSender;
 use crate::Opened;
 
 // MetaRaft is a impl of the generic Raft handling meta data R/W.
@@ -74,6 +81,7 @@ pub type MetaRaft = Raft<LogEntry, AppliedState, Network, MetaRaftStore>;
 // MetaNode is the container of meta data related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
     pub sto: Arc<MetaRaftStore>,
+    pub watcher: MetaServiceWatcher,
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
@@ -117,8 +125,11 @@ impl MetaNodeBuilder {
 
         let (tx, rx) = watch::channel::<()>(());
 
+        let watcher = MetaServiceWatcher::create();
+
         let mn = Arc::new(MetaNode {
             sto: sto.clone(),
+            watcher,
             raft,
             running_tx: tx,
             running_rx: rx,
@@ -808,5 +819,9 @@ impl MetaNode {
 
         let res: Result<ForwardResponse, MetaError> = raft_mes.into();
         res
+    }
+
+    pub async fn create_watcher(&self, stream: Streaming<WatchRequest>, tx: WatcherStreamSender) {
+        self.watcher.create_watcher(stream, tx).await
     }
 }

@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package meta;
 
+import "kv.proto";
+
 message Empty {}
 message GetRequest { string key = 1; }
 
@@ -48,6 +50,68 @@ message ExportedChunk {
   repeated string data = 10;
 }
 
+message WatchRequest {
+  // request_union is a request to either create a new watcher or cancel an existing watcher.
+  oneof request_union {
+    WatchCreateRequest create_request = 1;
+    WatchCancelRequest cancel_request = 2;
+  }
+}
+
+enum KeyType {
+  DB = 0;
+
+  TABLE = 1;
+
+  KV = 2;
+}
+
+enum FilterType {
+  // filter out put event.
+  NOPUT = 0;
+  // filter out delete event.
+  NODELETE = 1;
+}
+
+message WatchCreateRequest {
+  KeyType kv_type = 1;
+
+  // key is the key to register for watching.
+  bytes key = 2;
+
+  // range_end is the end of the range [key, range_end) to watch. If range_end is not given,
+  // only the key argument is watched. If range_end is equal to '\0', all keys greater than
+  // or equal to the key argument are watched.
+  // If the range_end is one bit larger than the given key,
+  // then all keys with the prefix (the given key) will be watched.
+  bytes key_end = 3;
+
+  // filter the events at server side before it sends back to the watcher.
+  FilterType filter = 4;
+}
+
+message WatchCancelRequest {
+
+}
+
+message WatchResponse {
+  //ResponseHeader header = 1;
+  // watch_id is the ID of the watcher that corresponds to the response.
+  int64 watch_id = 1;
+
+  // created is set to true if the response is for a create watch request.
+  // The client should record the watch_id and expect to receive events for
+  // the created watcher from the same stream.
+  // All events sent to the created watcher will attach with the same watch_id.
+  bool created = 2;
+
+  // canceled is set to true if the response is for a cancel watch request.
+  // No further events will be sent to the canceled watcher.
+  bool canceled = 4;
+
+  repeated Event events = 3;
+}
+
 service RaftService {
 
   rpc Write(RaftRequest) returns (RaftReply) {}
@@ -76,4 +140,8 @@ service MetaService {
   // Including raft hard state, logs and state machine.
   // The exported data is a list of json strings in form of `(tree_name, sub_tree_prefix, key, value)`.
   rpc Export(Empty) returns (stream ExportedChunk);
+
+  // Add watch key stream.
+  // Whenever the watch key data updated, client will be notified accross the stream.
+  rpc Watch(stream WatchRequest) returns (stream WatchResponse);
 }

@@ -22,12 +22,16 @@ use crate::ConnectionError;
 use crate::MetaError;
 use crate::MetaNetworkError;
 use crate::MetaResult;
+use crate::MetaWatcherError;
 
 impl From<MetaError> for ErrorCode {
     fn from(e: MetaError) -> Self {
         match e {
             MetaError::AppError(app_err) => app_err.into(),
             MetaError::MetaNetworkError(net_err) => net_err.into(),
+            MetaError::MetaWatcherError(watcher_err) => {
+                ErrorCode::MetaServiceError(watcher_err.to_string())
+            }
 
             // Except application error and part of network error,
             // all other errors are not handleable and can only be converted to a fatal error.

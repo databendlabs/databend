@@ -304,7 +304,6 @@ impl StateMachine {
     fn apply_incr_seq_cmd(
         &self,
         key: &str,
-
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
         let r = self.txn_incr_seq(key, txn_tree)?;
@@ -317,7 +316,6 @@ impl StateMachine {
         &self,
         node_id: &u64,
         node: &Node,
-
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
         let sm_nodes = txn_tree.key_space::<Nodes>();
