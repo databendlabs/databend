@@ -9,7 +9,7 @@ description:
 * Hardware: General(GP1-XL, nl-ams), 48 vCPUs
 * Storage: Scaleway Object Storage (nl-ams)
 * Dataset: [ontime](https://transtats.bts.gov/PREZIP/), 60.8 GB Raw CSV Data, 195662214 records
-* Databend: [v0.6.98-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.6.98-nightly)
+* Databend: [v0.6.100-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.6.98-nightly)
 * No Local Caching(Data Caching/Query Result Caching)
 * Databend is automatic performance optimization with **no manual tuning** required.
 * [Analyzing OnTime Datasets with Databend on Scaleway and OS](../01-deploy/07-scw.md)
