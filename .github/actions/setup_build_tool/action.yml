@@ -1,0 +1,46 @@
+name: "Setup Build Tool Binaries"
+description: "Setup Build Tool Binaries"
+inputs:
+  image:
+    description: "Build Tool Docker Image to use"
+    required: true
+    default: datafuselabs/build-tool:dev-debian-amd64
+  bypass_env_vars:
+    description: "Environment variables bypass to docker container"
+    required: false
+    default: RUSTFLAGS,RUST_LOG
+runs:
+  using: "composite"
+  steps:
+    - name: clean the existing toolchain
+      shell: bash
+      run: |
+        rm -rf /home/runner/.cargo
+        rm -rf /home/runner/.rustup
+
+    - name: setup build-tool binary
+      shell: bash
+      run: |
+        BIN_LOCAL=$HOME/.cargo/bin
+        mkdir -p $BIN_LOCAL
+        echo "$BIN_LOCAL" >> $GITHUB_PATH
+
+        cat <<EOF >$BIN_LOCAL/build-tool
+        #!/bin/bash
+        script_name=\$(basename "\$0")
+        export IMAGE=${{ inputs.image }}
+        export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }}
+        if [[ \${script_name} == "build-tool" ]]; then
+          scripts/setup/run_build_tool.sh \$@
+        else
+          scripts/setup/run_build_tool.sh \${script_name} \$@
+        fi
+        EOF
+        chmod +x $BIN_LOCAL/build-tool
+        ln -s build-tool $BIN_LOCAL/rustc
+        ln -s build-tool $BIN_LOCAL/cargo
+        ln -s build-tool $BIN_LOCAL/rustup
+
+    - name: check cargo version
+      shell: bash
+      run: rustup show
