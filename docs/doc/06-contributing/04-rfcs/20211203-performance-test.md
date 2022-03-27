@@ -1,4 +1,9 @@
-# Design of test infra for performance test
+---
+title: Test Infra for Performance Test
+description:
+  Test Infra for performance test RFC
+---
+
 
 Currently, we have already supports to run performance tests locally in tests/perfs directory, and here we need to support performance testing in CI
 
