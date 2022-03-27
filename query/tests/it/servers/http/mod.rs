@@ -13,5 +13,6 @@
 // limitations under the License.
 
 mod block_to_json;
+mod format;
 mod http_query_handlers;
 mod statement;
