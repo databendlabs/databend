@@ -13,6 +13,10 @@ select parse_json('[-1, 12, 289, 2188, false]');
 select parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
 select parse_json('[1,'); -- {ErrorCode 1010}
 select parse_json('"ab'); -- {ErrorCode 1010}
+select parse_json(parse_json('123'));
+select parse_json(parse_json('"\\\"abc\\\""'));
+select parse_json(parse_json('"abc"')); -- {ErrorCode 1010}
+select parse_json(todate32('2022-01-01')); -- {ErrorCode 1010}
 
 select '==try_parse_json==';
 select try_parse_json(null);
@@ -29,6 +33,10 @@ select try_parse_json('[-1, 12, 289, 2188, false]');
 select try_parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
 select try_parse_json('[1,');
 select try_parse_json('"ab');
+select try_parse_json(parse_json('123'));
+select try_parse_json(parse_json('"\\\"abc\\\""'));
+select try_parse_json(parse_json('"abc"'));
+select try_parse_json(todate32('2022-01-01'));
 
 DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;

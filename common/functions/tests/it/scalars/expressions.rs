@@ -210,6 +210,18 @@ fn test_cast_function() -> Result<()> {
                 error: "",
             },
         ),
+        (
+            CastFunction::create("cast", "variant")?,
+            ScalarFunctionTest {
+                name: "cast-string-to-variant-error",
+                columns: vec![Series::from_data(vec![
+                    "abc",
+                    "123",
+                ])],
+                expect: Arc::new(NullColumn::new(2)),
+                error: "Expression type does not match column data type, expecting VARIANT but got String",
+            },
+        ),
     ];
 
     for (test_func, test) in tests {
@@ -244,6 +256,18 @@ fn test_datetime_cast_function() -> Result<()> {
                 )],
                 expect: Series::from_data(vec!["2021-03-05 01:01:01", "2021-10-24 10:10:10"]),
                 error: "",
+            },
+        ),
+        (
+            CastFunction::create("cast", "variant")?,
+            ScalarFunctionWithFieldTest {
+                name: "cast-date32-to-variant-error",
+                columns: vec![ColumnWithField::new(
+                    Series::from_data(vec![18691i32, 18924]),
+                    DataField::new("dummy_1", Date32Type::arc()),
+                )],
+                expect: Arc::new(NullColumn::new(2)),
+                error: "Expression type does not match column data type, expecting VARIANT but got Date32",
             },
         ),
     ];
