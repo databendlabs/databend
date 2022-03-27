@@ -16,7 +16,6 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_datavalues::with_match_physical_primitive_type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde_json::Value as JsonValue;
@@ -74,186 +73,100 @@ impl<const SUPPRESS_PARSE_ERROR: bool> Function for ParseJsonFunctionImpl<SUPPRE
     }
 
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
-        let column = columns[0].column();
-        if column.data_type_id() == TypeID::Null {
+        let data_type = columns[0].field().data_type();
+        if data_type.data_type_id() == TypeID::Null {
             return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
         }
-        if column.data_type_id() == TypeID::Variant {
-            return Ok(column.arc());
-        }
 
+        let column = columns[0].column();
         if SUPPRESS_PARSE_ERROR {
             let mut builder = NullableColumnBuilder::<JsonValue>::with_capacity(input_rows);
-            with_match_physical_primitive_type!(column.data_type_id().to_physical_type(), |$T| {
-                let c: &<$T as Scalar>::ColumnType = Series::check_get(&column)?;
-                for v in c.iter() {
-                    let v = *v as $T;
-                    let x: JsonValue = v.into();
-                    builder.append(&x, true);
-                }
-            }, {
-                match column.data_type_id() {
-                    TypeID::Boolean => {
-                        let c: &BooleanColumn = Series::check_get(column)?;
-                        for v in c.iter() {
-                            let v = v as bool;
-                            let x: JsonValue = v.into();
-                            builder.append(&x, true);
-                        }
-                    }
-                    TypeID::String => {
-                        let c: &StringColumn = Series::check_get(column)?;
-                        for v in c.iter() {
-                            match std::str::from_utf8(v) {
-                                Ok(v) => {
-                                    match serde_json::from_str(v) {
-                                        Ok(x) => builder.append(&x, true),
-                                        Err(_) => builder.append_null(),
-                                    }
-                                }
-                                Err(_) => builder.append_null(),
+            if data_type.data_type_id().is_numeric()
+                || data_type.data_type_id().is_string()
+                || data_type.data_type_id() == TypeID::Boolean
+                || data_type.data_type_id() == TypeID::Variant
+            {
+                let serializer = data_type.create_serializer();
+                match serializer.serialize_json_object_suppress_error(column) {
+                    Ok(values) => {
+                        for v in values {
+                            match v {
+                                Some(v) => builder.append(&v, true),
+                                None => builder.append_null(),
                             }
                         }
                     }
-                    _ => {
-                        for _ in 0..input_rows {
-                            builder.append_null();
-                        }
-                    }
+                    Err(e) => return Err(e),
                 }
-            });
+            } else {
+                for _ in 0..input_rows {
+                    builder.append_null();
+                }
+            };
             return Ok(builder.build(input_rows));
         }
 
         if column.is_nullable() {
-            let (_, source_valids) = column.validity();
+            let (_, valids) = column.validity();
             let nullable_column: &NullableColumn = Series::check_get(column)?;
             let column = nullable_column.inner();
 
-            if column.data_type_id() == TypeID::Null {
+            let data_type = remove_nullable(data_type);
+            if data_type.data_type_id() == TypeID::Null {
                 return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
             }
-            if column.data_type_id() == TypeID::Variant {
-                return Ok(column.arc());
-            }
-
             let mut builder = NullableColumnBuilder::<JsonValue>::with_capacity(input_rows);
-            with_match_physical_primitive_type!(column.data_type_id().to_physical_type(), |$T| {
-                let c: &<$T as Scalar>::ColumnType = Series::check_get(&column)?;
-                for (i, v) in c.iter().enumerate() {
-                    if let Some(source_valids) = source_valids {
-                        if !source_valids.get_bit(i) {
-                            builder.append_null();
-                            continue;
-                        }
-                    }
-                    let v = *v as $T;
-                    let x: JsonValue = v.into();
-                    builder.append(&x, true);
-                }
-            }, {
-                match column.data_type_id() {
-                    TypeID::Boolean => {
-                        let c: &BooleanColumn = Series::check_get(column)?;
-                        for (i, v) in c.iter().enumerate() {
-                            if let Some(source_valids) = source_valids {
-                                if !source_valids.get_bit(i) {
+            if data_type.data_type_id().is_numeric()
+                || data_type.data_type_id().is_string()
+                || data_type.data_type_id() == TypeID::Boolean
+                || data_type.data_type_id() == TypeID::Variant
+            {
+                let serializer = data_type.create_serializer();
+                match serializer.serialize_json_object(column, valids) {
+                    Ok(values) => {
+                        for (i, v) in values.iter().enumerate() {
+                            if let Some(valids) = valids {
+                                if !valids.get_bit(i) {
                                     builder.append_null();
                                     continue;
                                 }
                             }
-                            let v = v as bool;
-                            let x: JsonValue = v.into();
-                            builder.append(&x, true);
+                            builder.append(v, true);
                         }
                     }
-                    TypeID::String => {
-                        let c: &StringColumn = Series::check_get(column)?;
-                        for (i, v) in c.iter().enumerate() {
-                            if let Some(source_valids) = source_valids {
-                                if !source_valids.get_bit(i) {
-                                    builder.append_null();
-                                    continue;
-                                }
-                            }
-                            match std::str::from_utf8(v) {
-                                Ok(v) => {
-                                    match serde_json::from_str(v) {
-                                        Ok(x) => builder.append(&x, true),
-                                        Err(e) => {
-                                            return Err(ErrorCode::BadDataValueType(format!(
-                                                "Error parsing JSON: {:?}", e
-                                            )));
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    return Err(ErrorCode::BadDataValueType(format!(
-                                        "Error parsing JSON: {:?}", e
-                                    )));
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        return Err(ErrorCode::BadDataValueType(format!(
-                            "Error parsing JSON: type does not match {:?}",
-                            column.data_type_id()
-                        )));
-                    }
+                    Err(e) => return Err(e),
                 }
-            });
+            } else {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "Error parsing JSON: type does not match {:?}",
+                    data_type.data_type_id()
+                )));
+            }
             return Ok(builder.build(input_rows));
         }
 
         let mut builder = ColumnBuilder::<JsonValue>::with_capacity(input_rows);
-        with_match_physical_primitive_type!(column.data_type_id().to_physical_type(), |$T| {
-            let c: &<$T as Scalar>::ColumnType = Series::check_get(&column)?;
-            for v in c.iter() {
-                let v = *v as $T;
-                let x: JsonValue = v.into();
-                builder.append(&x);
-            }
-        }, {
-            match column.data_type_id() {
-                TypeID::Boolean => {
-                    let c: &BooleanColumn = Series::check_get(column)?;
-                    for v in c.iter() {
-                        let v = v as bool;
-                        let x: JsonValue = v.into();
-                        builder.append(&x);
+        if data_type.data_type_id().is_numeric()
+            || data_type.data_type_id().is_string()
+            || data_type.data_type_id() == TypeID::Boolean
+            || data_type.data_type_id() == TypeID::Variant
+        {
+            let serializer = data_type.create_serializer();
+            match serializer.serialize_json_object(column, None) {
+                Ok(values) => {
+                    for v in values {
+                        builder.append(&v);
                     }
                 }
-                TypeID::String => {
-                    let c: &StringColumn = Series::check_get(column)?;
-                    for v in c.iter() {
-                        match std::str::from_utf8(v) {
-                            Ok(v) => {
-                                match serde_json::from_str(v) {
-                                    Ok(x) => builder.append(&x),
-                                    Err(e) => {
-                                        return Err(ErrorCode::BadDataValueType(format!(
-                                            "Error parsing JSON: {:?}", e
-                                        )));
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                return Err(ErrorCode::BadDataValueType(format!(
-                                    "Error parsing JSON: {:?}", e
-                                )));
-                            }
-                        }
-                    }
-                }
-                _ => {
-                    return Err(ErrorCode::BadDataValueType(format!(
-                        "Error parsing JSON: type does not match {:?}",
-                        column.data_type_id()
-                    )));
-                }
+                Err(e) => return Err(e),
             }
-        });
+        } else {
+            return Err(ErrorCode::BadDataValueType(format!(
+                "Error parsing JSON: type does not match {:?}",
+                data_type.data_type_id()
+            )));
+        }
+
         Ok(builder.build(input_rows))
     }
 }

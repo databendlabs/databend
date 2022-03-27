@@ -86,7 +86,7 @@ fn test_parse_json_function() -> Result<()> {
             name: "parse_json_invalid_string",
             columns: vec![Series::from_data(vec!["\"abcd\"", "[1,2", "{\"k"])],
             expect: Series::from_data(vec![JsonValue::Null, JsonValue::Null, JsonValue::Null]),
-            error: "Error parsing JSON: Error(\"EOF while parsing a list\", line: 1, column: 4)",
+            error: "Error parsing JSON: EOF while parsing a list at line 1 column 4",
         },
         ScalarFunctionTest {
             name: "parse_json_nullable_bool",
@@ -164,7 +164,7 @@ fn test_parse_json_function() -> Result<()> {
                 Some("{\"k"),
             ])],
             expect: Series::from_data(vec![Some(json!("abcd")), None, None]),
-            error: "Error parsing JSON: Error(\"EOF while parsing a list\", line: 1, column: 4)",
+            error: "Error parsing JSON: EOF while parsing a list at line 1 column 4",
         },
     ];
 
