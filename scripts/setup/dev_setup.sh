@@ -424,19 +424,9 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_toolchain "$RUST_TOOLCHAIN"
 
 	if [ -f rust-tools.txt ]; then
-		if [[ "$PACKAGE_MANAGER" == "brew" ]]; then
-			# macos with bash 3.2 has no array support
-			echo "Please manually install rust tools in rust-tools.txt if needed."
-		else
-			declare -A RUST_TOOLS
-			while IFS='@' read -r key value; do
-				RUST_TOOLS[$key]=$value
-			done <rust-tools.txt
-
-			for tool in "${!RUST_TOOLS[@]}"; do
-				install_cargo_binary "$tool" "${RUST_TOOLS[$tool]}"
-			done
-		fi
+		while IFS='@' read -r tool version; do
+			install_cargo_binary "$tool" "$version"
+		done <rust-tools.txt
 	fi
 
 	if [[ "$PACKAGE_MANAGER" == "apk" ]]; then
