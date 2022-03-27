@@ -1743,6 +1743,7 @@ dependencies = [
  "toml",
  "tonic",
  "typetag",
+ "url",
  "uuid",
  "walkdir",
  "wiremock",

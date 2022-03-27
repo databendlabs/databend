@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod block_to_json;
+mod clickhouse_handler;
 mod format;
 mod http_query_handlers;
 mod statement;

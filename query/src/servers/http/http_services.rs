@@ -28,6 +28,7 @@ use poem::Route;
 use super::v1::upload_to_stage;
 use crate::common::service::HttpShutdownHandler;
 use crate::configs::Config;
+use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::middleware::HTTPSessionMiddleware;
 use crate::servers::http::v1::query_route;
 use crate::servers::http::v1::statement_router;
@@ -65,6 +66,7 @@ curl --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' -
                 get(poem::endpoint::make_sync(move |_| Self::usage(sock))),
             )
             .nest("/v1/statement", statement_router())
+            .nest("/v1/clickhouse", clickhouse_router())
             .nest("/v1/query", query_route())
             .at("/v1/streaming_load", put(streaming_load))
             .at("/v1/upload_to_stage", put(upload_to_stage))
