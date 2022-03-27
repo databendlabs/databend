@@ -387,9 +387,7 @@ if [[ "$BATCH_MODE" == "false" ]]; then
 fi
 
 if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
-	[[ "$BATCH_MODE" == "false" ]] && echo "Updating apt-get......"
 	"${PRE_COMMAND[@]}" apt-get update
-	[[ "$BATCH_MODE" == "false" ]] && echo "Installing ca-certificates......"
 	install_pkg ca-certificates "$PACKAGE_MANAGER"
 fi
 
@@ -424,6 +422,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_toolchain "$RUST_TOOLCHAIN"
 
 	if [[ -f scripts/setup/rust-tools.txt ]]; then
+		export RUSTFLAGS="-C target-feature=-crt-static"
 		while IFS='@' read -r tool version; do
 			install_cargo_binary "$tool" "$version"
 		done <scripts/setup/rust-tools.txt
