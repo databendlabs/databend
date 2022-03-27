@@ -197,10 +197,15 @@ function install_rustup {
 
 function install_cargo_binary {
 	BIN_NAME=$1
+	VERSION=$2
 	if cargo install --list | grep "${BIN_NAME}" &>/dev/null; then
 		echo "${BIN_NAME} is already installed"
 	else
-		cargo install $BIN_NAME
+		if [ -z "$VERSION" ]; then
+			cargo install "${BIN_NAME}"
+		else
+			cargo install --version "${VERSION}" "${BIN_NAME}"
+		fi
 	fi
 }
 
@@ -385,7 +390,7 @@ if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
 	[[ "$BATCH_MODE" == "false" ]] && echo "Updating apt-get......"
 	"${PRE_COMMAND[@]}" apt-get update
 	[[ "$BATCH_MODE" == "false" ]] && echo "Installing ca-certificates......"
-	"${PRE_COMMAND[@]}" install_pkg ca-certificates "$PACKAGE_MANAGER"
+	install_pkg ca-certificates "$PACKAGE_MANAGER"
 fi
 
 [[ "$INSTALL_PROFILE" == "true" ]] && update_path_and_profile
@@ -418,7 +423,11 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 
 	install_toolchain "$RUST_TOOLCHAIN"
 
-	install_cargo_binary "taplo-cli"
+	if [[ -f scripts/setup/rust-tools.txt ]]; then
+		while IFS='@' read -r tool version; do
+			install_cargo_binary "$tool" "$version"
+		done <scripts/setup/rust-tools.txt
+	fi
 
 	if [[ "$PACKAGE_MANAGER" == "apk" ]]; then
 		# needed by lcov
