@@ -423,10 +423,10 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 
 	install_toolchain "$RUST_TOOLCHAIN"
 
-	if [ -f rust-tools.txt ]; then
+	if [[ -f scripts/setup/rust-tools.txt ]]; then
 		while IFS='@' read -r tool version; do
 			install_cargo_binary "$tool" "$version"
-		done <rust-tools.txt
+		done <scripts/setup/rust-tools.txt
 	fi
 
 	if [[ "$PACKAGE_MANAGER" == "apk" ]]; then
