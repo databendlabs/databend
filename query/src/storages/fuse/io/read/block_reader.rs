@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,7 +96,7 @@ impl BlockReader {
         )?)
     }
 
-    async fn read_columns(self, part: PartInfoPtr) -> Result<(usize, Vec<ArrayIter<'static>>)> {
+    async fn read_columns(&self, part: PartInfoPtr) -> Result<(usize, Vec<ArrayIter<'static>>)> {
         let part = FusePartInfo::from_part(&part)?;
 
         let rows = part.nums_rows;
@@ -219,8 +219,7 @@ impl BlockReader {
 
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn read(&self, part: PartInfoPtr) -> Result<DataBlock> {
-        let this = self.clone();
-        let (num_rows, columns_array_iter) = this.read_columns(part).await?;
+        let (num_rows, columns_array_iter) = self.read_columns(part).await?;
 
         let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
 

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod memory_cache;
-mod metrics;
+mod block_stream_writer;
+mod block_writer;
 
-pub use memory_cache::new_memory_cache;
-pub use memory_cache::MemoryCache;
-pub use memory_cache::SegmentInfoCache;
-pub use memory_cache::TableSnapshotCache;
-
-pub use self::metrics::CacheDeferMetrics;
-pub use self::metrics::TenantLabel;
+// for testing only
+pub use block_stream_writer::BlockCompactor;
+pub use block_stream_writer::BlockStreamWriter;
+pub use block_stream_writer::SegmentInfoStream;

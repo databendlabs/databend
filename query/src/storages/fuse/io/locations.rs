@@ -13,11 +13,17 @@
 //  limitations under the License.
 //
 
+use common_datablocks::DataBlock;
+use common_exception::Result;
 use uuid::Uuid;
 
 use crate::storages::fuse::constants::FUSE_TBL_BLOCK_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SNAPSHOT_PREFIX;
+use crate::storages::fuse::meta::SegmentInfo;
+use crate::storages::fuse::meta::SnapshotVersion;
+use crate::storages::fuse::meta::TableSnapshot;
+use crate::storages::fuse::meta::Versioned;
 
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
@@ -34,24 +40,57 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn gen_block_location(&self) -> String {
-        let part_uuid = Uuid::new_v4().to_simple().to_string() + ".parquet";
-        format!("{}/{}/{}", &self.prefix, FUSE_TBL_BLOCK_PREFIX, part_uuid)
+        let part_uuid = Uuid::new_v4().to_simple().to_string();
+        format!(
+            "{}/{}/{}_v{}.parquet",
+            &self.prefix,
+            FUSE_TBL_BLOCK_PREFIX,
+            part_uuid,
+            DataBlock::VERSION,
+        )
     }
 
-    pub fn gen_segment_info_location(&self) -> String {
+    pub fn gen_segment_info_location(&self) -> String where {
         let segment_uuid = Uuid::new_v4().to_simple().to_string();
         format!(
-            "{}/{}/{}",
-            &self.prefix, FUSE_TBL_SEGMENT_PREFIX, segment_uuid
+            "{}/{}/{}_v{}.json",
+            &self.prefix,
+            FUSE_TBL_SEGMENT_PREFIX,
+            segment_uuid,
+            SegmentInfo::VERSION,
         )
     }
 
-    pub fn snapshot_location_from_uuid(&self, id: &Uuid) -> String {
-        format!(
-            "{}/{}/{}",
-            &self.prefix,
-            FUSE_TBL_SNAPSHOT_PREFIX,
-            id.to_simple()
-        )
+    pub fn snapshot_location_from_uuid(&self, id: &Uuid, version: u64) -> Result<String> {
+        let snaphost_version = SnapshotVersion::try_from(version)?;
+        Ok(snaphost_version.create(id, &self.prefix))
+    }
+}
+
+trait SnapshotLocationCreator {
+    fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String;
+}
+
+impl SnapshotLocationCreator for SnapshotVersion {
+    fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String {
+        match self {
+            SnapshotVersion::V0(_) => {
+                format!(
+                    "{}/{}/{}",
+                    prefix.as_ref(),
+                    FUSE_TBL_SNAPSHOT_PREFIX,
+                    id.to_simple(),
+                )
+            }
+            SnapshotVersion::V1(_) => {
+                format!(
+                    "{}/{}/{}_v{}.json",
+                    prefix.as_ref(),
+                    FUSE_TBL_SNAPSHOT_PREFIX,
+                    id.to_simple(),
+                    TableSnapshot::VERSION,
+                )
+            }
+        }
     }
 }

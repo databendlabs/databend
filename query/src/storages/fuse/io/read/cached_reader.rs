@@ -15,45 +15,35 @@
 
 use std::sync::Arc;
 
-use common_base::tokio::sync::RwLock;
 use common_cache::Cache;
-use common_cache::Count;
-use common_cache::DefaultHashBuilder;
-use common_cache::LruCache;
 use common_exception::Result;
 
-use crate::storages::fuse::cache::metrics::CacheDeferMetrics;
-use crate::storages::fuse::cache::metrics::TenantLabel;
+use crate::storages::fuse::cache::CacheDeferMetrics;
+use crate::storages::fuse::cache::MemoryCache;
+use crate::storages::fuse::cache::TenantLabel;
 
 /// Loads an object from a source
 #[async_trait::async_trait]
 pub trait Loader<T> {
     /// Loads object of type T, located at `location`
-    async fn load(&self, location: &str, len_hint: Option<u64>) -> Result<T>;
+    async fn load(&self, location: &str, len_hint: Option<u64>, ver: u64) -> Result<T>;
 }
 
 pub trait HasTenantLabel {
     fn tenant_label(&self) -> TenantLabel;
 }
 
-type LaCache<K, V> = LruCache<K, V, DefaultHashBuilder, Count>;
-pub type MemoryCache<V> = Arc<RwLock<LaCache<String, Arc<V>>>>;
-
-pub fn new_memory_cache<V>(capacity: u64) -> MemoryCache<V> {
-    Arc::new(RwLock::new(LruCache::new(capacity)))
-}
-
 /// A "cache-aware" reader
-pub struct CachedReader<V, L> {
-    cache: Option<MemoryCache<V>>,
+pub struct CachedReader<T, L> {
+    cache: Option<MemoryCache<T>>,
     loader: L,
     name: String,
 }
 
-impl<V, L> CachedReader<V, L>
-where L: Loader<V> + HasTenantLabel
+impl<T, L> CachedReader<T, L>
+where L: Loader<T> + HasTenantLabel
 {
-    pub fn new(cache: Option<MemoryCache<V>>, loader: L, name: impl Into<String>) -> Self {
+    pub fn new(cache: Option<MemoryCache<T>>, loader: L, name: impl Into<String>) -> Self {
         Self {
             cache,
             loader,
@@ -62,9 +52,14 @@ where L: Loader<V> + HasTenantLabel
     }
 
     /// Load the object at `location`, uses/populates the cache if possible/necessary.
-    pub async fn read(&self, location: impl AsRef<str>) -> Result<Arc<V>> {
+    pub async fn read(
+        &self,
+        location: impl AsRef<str>,
+        len_hint: Option<u64>,
+        version: u64,
+    ) -> Result<Arc<T>> {
         match &self.cache {
-            None => self.load(location.as_ref()).await,
+            None => self.load(location.as_ref(), len_hint, version).await,
             Some(cache) => {
                 let tenant_label = self.loader.tenant_label();
 
@@ -86,7 +81,7 @@ where L: Loader<V> + HasTenantLabel
                         Ok(item.clone())
                     }
                     None => {
-                        let item = self.load(location.as_ref()).await?;
+                        let item = self.load(location.as_ref(), len_hint, version).await?;
                         cache.put(location.as_ref().to_owned(), item.clone());
                         Ok(item)
                     }
@@ -99,8 +94,8 @@ where L: Loader<V> + HasTenantLabel
         self.name.as_str()
     }
 
-    async fn load(&self, loc: &str) -> Result<Arc<V>> {
-        let val = self.loader.load(loc, None).await?;
+    async fn load(&self, loc: &str, len_hint: Option<u64>, version: u64) -> Result<Arc<T>> {
+        let val = self.loader.load(loc, len_hint, version).await?;
         let item = Arc::new(val);
         Ok(item)
     }

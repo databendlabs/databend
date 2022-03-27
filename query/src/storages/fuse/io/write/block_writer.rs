@@ -46,10 +46,6 @@ pub async fn write_block(
     let iter = vec![Ok(batch)];
     let row_groups = RowGroupIterator::try_new(iter.into_iter(), arrow_schema, options, encodings)?;
 
-    // PutObject in S3 need to know the content-length in advance
-    // multipart upload may intimidate this, but let's fit things together first
-    // see issue #xxx
-
     // we need a configuration of block size threshold here
     let mut buf = Vec::with_capacity(100 * 1024 * 1024);
 

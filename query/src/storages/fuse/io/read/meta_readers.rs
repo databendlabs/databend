@@ -12,28 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::ErrorKind;
 use std::sync::Arc;
 
-use common_arrow::arrow::io::parquet::read::read_metadata_async;
-use common_arrow::arrow::io::parquet::read::schema::FileMetaData as ParquetFileMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing::debug_span;
-use common_tracing::tracing::Instrument;
 use futures::io::BufReader;
 use opendal::error::Kind as DalErrorKind;
 use opendal::Reader;
-use serde::de::DeserializeOwned;
 
+use super::cached_reader::CachedReader;
+use super::cached_reader::HasTenantLabel;
+use super::cached_reader::Loader;
+use super::versioned_reader::VersionedReader;
 use crate::sessions::QueryContext;
-use crate::storages::fuse::cache::CachedReader;
-use crate::storages::fuse::cache::HasTenantLabel;
-use crate::storages::fuse::cache::Loader;
-use crate::storages::fuse::cache::MemoryCache;
 use crate::storages::fuse::cache::TenantLabel;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::SegmentInfo;
+use crate::storages::fuse::meta::SegmentInfoVersion;
+use crate::storages::fuse::meta::SnapshotVersion;
 use crate::storages::fuse::meta::TableSnapshot;
 
 /// Provider of [BufReader]
@@ -45,32 +41,9 @@ pub trait BufReaderProvider {
     async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<Reader>>;
 }
 
-/// A Newtype for [FileMetaData].
-///
-/// To avoid implementation (of trait [Loader]) conflicts
-pub struct FileMetaData(ParquetFileMetaData);
-
-impl FileMetaData {
-    pub fn inner(&self) -> &ParquetFileMetaData {
-        &self.0
-    }
-}
-
-pub type SegmentInfoCache = MemoryCache<SegmentInfo>;
-pub type TableSnapshotCache = MemoryCache<TableSnapshot>;
-pub type BlockMetaCache = MemoryCache<FileMetaData>;
-
 pub type SegmentInfoReader<'a> = CachedReader<SegmentInfo, &'a QueryContext>;
 pub type TableSnapshotReader<'a> = CachedReader<TableSnapshot, &'a QueryContext>;
 
-/// A sugar type of BlockMeta reader
-///
-/// To make it "lifetime-compliant", `Arc<QueryContext>` is used as the `Loader` of [CachedReader],
-/// instead of `&QueryContext`.  (BlockMetaReader is used in constructing async streams)
-///
-pub type BlockMetaReader = CachedReader<FileMetaData, Arc<QueryContext>>;
-
-/// Aux struct, factory of common readers
 pub struct MetaReaders;
 
 impl MetaReaders {
@@ -89,76 +62,69 @@ impl MetaReaders {
             "SNAPSHOT_CACHE".to_owned(),
         )
     }
-
-    pub fn block_meta_reader(ctx: Arc<QueryContext>) -> BlockMetaReader {
-        BlockMetaReader::new(
-            ctx.get_storage_cache_manager().get_block_meta_cache(),
-            ctx,
-            "BLOCK_META_CACHE".to_owned(),
-        )
-    }
 }
 
 impl<'a> TableSnapshotReader<'a> {
     pub async fn read_snapshot_history(
         &self,
         latest_snapshot_location: Option<&String>,
-        meta_locs: TableMetaLocationGenerator,
+        format_version: u64,
+        location_gen: TableMetaLocationGenerator,
     ) -> Result<Vec<Arc<TableSnapshot>>> {
         let mut snapshots = vec![];
-        let mut current_snapshot_location = latest_snapshot_location.cloned();
-        while let Some(loc) = current_snapshot_location {
-            let r = self.read(loc).await;
-            let snapshot = match r {
-                Ok(s) => s,
-                Err(e) if e.code() == ErrorCode::dal_path_not_found_code() => {
+        if let Some(loc) = latest_snapshot_location {
+            let mut ver = format_version;
+            let mut loc = loc.to_string();
+            loop {
+                let snapshot = match self.read(loc, None, ver).await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        if e.code() == ErrorCode::dal_path_not_found_code() {
+                            break;
+                        } else {
+                            return Err(e);
+                        }
+                    }
+                };
+                if let Some((id, v)) = snapshot.prev_snapshot_id {
+                    ver = v;
+                    loc = location_gen.snapshot_location_from_uuid(&id, v)?;
+                    snapshots.push(snapshot);
+                } else {
+                    snapshots.push(snapshot);
                     break;
                 }
-                Err(e) => return Err(e),
-            };
-            let prev = snapshot.prev_snapshot_id;
-            snapshots.push(snapshot);
-            current_snapshot_location = prev.map(|id| meta_locs.snapshot_location_from_uuid(&id));
+            }
         }
+
         Ok(snapshots)
     }
 }
 
 #[async_trait::async_trait]
-impl<T, V> Loader<V> for T
-where
-    T: BufReaderProvider + Sync,
-    V: DeserializeOwned,
+impl<T> Loader<TableSnapshot> for T
+where T: BufReaderProvider + Sync
 {
-    async fn load(&self, key: &str, length_hint: Option<u64>) -> Result<V> {
-        let mut reader = self.buf_reader(key, length_hint).await?;
-        let mut buffer = vec![];
-
-        use futures::AsyncReadExt;
-        reader.read_to_end(&mut buffer).await.map_err(|e| {
-            let msg = e.to_string();
-            if e.kind() == ErrorKind::NotFound {
-                ErrorCode::DalPathNotFound(msg)
-            } else {
-                ErrorCode::DalTransportError(msg)
-            }
-        })?;
-        let r = serde_json::from_slice::<V>(&buffer)?;
-        Ok(r)
+    async fn load(
+        &self,
+        key: &str,
+        length_hint: Option<u64>,
+        version: u64,
+    ) -> Result<TableSnapshot> {
+        let version = SnapshotVersion::try_from(version)?;
+        let reader = self.buf_reader(key, length_hint).await?;
+        version.read(reader).await
     }
 }
 
 #[async_trait::async_trait]
-impl<T> Loader<FileMetaData> for T
+impl<T> Loader<SegmentInfo> for T
 where T: BufReaderProvider + Sync
 {
-    async fn load(&self, key: &str, length_hint: Option<u64>) -> Result<FileMetaData> {
-        let mut reader = self.buf_reader(key, length_hint).await?;
-        let meta = read_metadata_async(&mut reader)
-            .instrument(debug_span!("parquet_source_read_meta"))
-            .await
-            .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-        Ok(FileMetaData(meta))
+    async fn load(&self, key: &str, length_hint: Option<u64>, version: u64) -> Result<SegmentInfo> {
+        let version = SegmentInfoVersion::try_from(version)?;
+        let reader = self.buf_reader(key, length_hint).await?;
+        version.read(reader).await
     }
 }
 
@@ -183,13 +149,6 @@ impl BufReaderProvider for &QueryContext {
         let reader = object.limited_reader(len);
         let read_buffer_size = self.get_settings().get_storage_read_buffer_size()?;
         Ok(BufReader::with_capacity(read_buffer_size as usize, reader))
-    }
-}
-
-#[async_trait::async_trait]
-impl BufReaderProvider for Arc<QueryContext> {
-    async fn buf_reader(&self, path: &str, len: Option<u64>) -> Result<BufReader<Reader>> {
-        self.as_ref().buf_reader(path, len).await
     }
 }
 

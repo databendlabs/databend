@@ -24,7 +24,6 @@ use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 use common_planners::SourceInfo;
 use common_streams::DataBlockStream;
-use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use futures::TryStreamExt;
@@ -123,16 +122,12 @@ impl CopyInterpreter {
         let async_runtime = ctx.get_storage_runtime();
         let executor = PipelinePullingExecutor::try_create(async_runtime, pipeline)?;
         let source_stream = Box::pin(ProcessorExecutorStream::create(executor)?);
-        let progress_stream = Box::pin(ProgressStream::try_create(
-            source_stream,
-            ctx.get_scan_progress(),
-        )?);
 
         let table = ctx
             .get_table(&self.plan.db_name, &self.plan.tbl_name)
             .await?;
         let operations = table
-            .append_data(ctx.clone(), progress_stream)
+            .append_data(ctx.clone(), source_stream)
             .await?
             .try_collect()
             .await?;

@@ -25,12 +25,12 @@ use common_exception::Result;
 /// [FuseTable]: crate::storages::fuse::FuseTable
 ///
 #[derive(PartialEq, Debug)]
-pub struct PartInfo<'a>(&'a str, u64);
+pub struct PartInfo<'a>(&'a str, u64, u64);
 
 impl<'a> PartInfo<'a> {
     #[inline]
-    pub fn new(location: &'a str, length: u64) -> Self {
-        Self(location, length)
+    pub fn new(location: &'a str, length: u64, format_version: u64) -> Self {
+        Self(location, length, format_version)
     }
 
     #[inline]
@@ -44,26 +44,37 @@ impl<'a> PartInfo<'a> {
     }
 
     #[inline]
+    pub fn format_version(&self) -> u64 {
+        self.2
+    }
+
+    #[inline]
     pub fn decode(part_name: &'a str) -> Result<PartInfo> {
         let parts = part_name.split('-').collect::<Vec<_>>();
-        if parts.len() != 2 {
+        if parts.len() != 3 {
             return Err(ErrorCode::LogicalError(format!(
-                "invalid format of `Part.name` , expects 'name-length', got {}",
+                "invalid format of `Part` , expects 'name-length', got {}",
                 part_name
             )));
         }
         let part_location = parts[0];
         let part_len = parts[1].parse::<u64>().map_err(|e| {
             ErrorCode::LogicalError(format!(
-                "invalid format of `Part.name` format, expects number for length', but got {}, {}",
+                "invalid format of `Part` format, expects number for length', but got {}, {}",
                 parts[1], e
             ))
         })?;
-        Ok(Self(part_location, part_len))
+        let format_version = parts[2].parse::<u64>().map_err(|e| {
+            ErrorCode::LogicalError(format!(
+                "invalid format of `Part` format, expects number for format_version', but got {}, {}",
+                parts[2], e
+            ))
+        })?;
+        Ok(Self(part_location, part_len, format_version))
     }
 
     #[inline]
     pub fn encode(&self) -> String {
-        format!("{}-{}", self.0, self.1,)
+        format!("{}-{}-{}", self.0, self.1, self.2)
     }
 }

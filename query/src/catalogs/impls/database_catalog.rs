@@ -299,7 +299,6 @@ impl Catalog for DatabaseCatalog {
         &self,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        // upsert table option in BOTTOM layer only
         self.mutable_catalog.upsert_table_option(req).await
     }
 
