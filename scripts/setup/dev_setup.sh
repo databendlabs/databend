@@ -387,9 +387,7 @@ if [[ "$BATCH_MODE" == "false" ]]; then
 fi
 
 if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
-	[[ "$BATCH_MODE" == "false" ]] && echo "Updating apt-get......"
 	"${PRE_COMMAND[@]}" apt-get update
-	[[ "$BATCH_MODE" == "false" ]] && echo "Installing ca-certificates......"
 	install_pkg ca-certificates "$PACKAGE_MANAGER"
 fi
 
