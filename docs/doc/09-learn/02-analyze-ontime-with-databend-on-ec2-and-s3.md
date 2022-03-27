@@ -9,7 +9,7 @@ Analyzing `OnTime` datasets on S3 with Databend step by step.
 
 Make sure you have installed Databend, if not please see:
 
-* [How to Deploy Databend with Amazon S3](../01-deploy/01-s3.md) 
+* [How to Deploy Databend with Amazon S3](../01-deploy/01-s3.md)
 * [How to Deploy Databend with Tencent COS](../01-deploy/02-cos.md)
 * [How to Deploy Databend with Alibaba OSS](../01-deploy/03-oss.md)
 * [How to Deploy Databend with Wasabi](../01-deploy/04-wasabi.md)
@@ -144,7 +144,7 @@ unzip t_ontime.csv.zip
 ```
 
 ```shell title='Load CSV files into Databend'
-ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -H \"skip_header:0\" -H \"field_delimiter:'\t'\"  -F  \"upload=@{}\"  -XPUT http://127.0.0.1:8081/v1/streaming_load |bash
+ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -H \"skip_header:0\" -H \"field_delimiter:\t\"  -F  \"upload=@{}\"  -XPUT http://127.0.0.1:8081/v1/streaming_load |bash
 ```
 
 :::tip
@@ -161,25 +161,25 @@ ls *.csv|xargs -I{} echo  curl -H \"insert_sql:insert into ontime format CSV\" -
 Execute Queries:
 
 ```shell title='mysql'
-mysql -h127.0.0.1 -P3307 -uroot 
+mysql -h127.0.0.1 -P3307 -uroot
 ```
-```shell 
+```shell
 select Year, count(*) from ontime group by Year;
 ```
 
 All Queries:
 
-| Number      | Query | 
+| Number      | Query |
 | ----------- | ----------- |
 | Q1   |SELECT DayOfWeek, count(*) AS c FROM ontime WHERE Year >= 2000 AND Year <= 2008 GROUP BY DayOfWeek ORDER BY c DESC;       |
 | Q2   |SELECT DayOfWeek, count(*) AS c FROM ontime WHERE DepDelay>10 AND Year >= 2000 AND Year <= 2008 GROUP BY DayOfWeek ORDER BY c DESC;    |
-| Q3   |SELECT Origin, count(*) AS c FROM ontime WHERE DepDelay>10 AND Year >= 2000 AND Year <= 2008 GROUP BY Origin ORDER BY c DESC LIMIT 10;   | 
-| Q4   |SELECT IATA_CODE_Reporting_Airline AS Carrier, count(*) FROM ontime WHERE DepDelay>10 AND Year = 2007 GROUP BY Carrier ORDER BY count(*) DESC;      | 
-| Q5   |SELECT IATA_CODE_Reporting_Airline AS Carrier, avg(cast(DepDelay>10 as Int8))*1000 AS c3 FROM ontime WHERE Year=2007 GROUP BY Carrier ORDER BY c3 DESC;| 
-| Q6   |SELECT IATA_CODE_Reporting_Airline AS Carrier, avg(cast(DepDelay>10 as Int8))*1000 AS c3 FROM ontime WHERE Year>=2000 AND Year <=2008 GROUP BY Carrier ORDER BY c3 DESC;| 
-| Q7   |SELECT IATA_CODE_Reporting_Airline AS Carrier, avg(DepDelay) * 1000 AS c3 FROM ontime WHERE Year >= 2000 AND Year <= 2008 GROUP BY Carrier; | 
+| Q3   |SELECT Origin, count(*) AS c FROM ontime WHERE DepDelay>10 AND Year >= 2000 AND Year <= 2008 GROUP BY Origin ORDER BY c DESC LIMIT 10;   |
+| Q4   |SELECT IATA_CODE_Reporting_Airline AS Carrier, count(*) FROM ontime WHERE DepDelay>10 AND Year = 2007 GROUP BY Carrier ORDER BY count(*) DESC;      |
+| Q5   |SELECT IATA_CODE_Reporting_Airline AS Carrier, avg(cast(DepDelay>10 as Int8))*1000 AS c3 FROM ontime WHERE Year=2007 GROUP BY Carrier ORDER BY c3 DESC;|
+| Q6   |SELECT IATA_CODE_Reporting_Airline AS Carrier, avg(cast(DepDelay>10 as Int8))*1000 AS c3 FROM ontime WHERE Year>=2000 AND Year <=2008 GROUP BY Carrier ORDER BY c3 DESC;|
+| Q7   |SELECT IATA_CODE_Reporting_Airline AS Carrier, avg(DepDelay) * 1000 AS c3 FROM ontime WHERE Year >= 2000 AND Year <= 2008 GROUP BY Carrier; |
 | Q8   |SELECT Year, avg(DepDelay) FROM ontime GROUP BY Year;      |
-| Q9   |SELECT Year, count(*) as c1 FROM ontime GROUP BY Year;      | 
+| Q9   |SELECT Year, count(*) as c1 FROM ontime GROUP BY Year;      |
 | Q10  |SELECT avg(cnt) FROM (SELECT Year,Month,count(*) AS cnt FROM ontime WHERE DepDel15=1 GROUP BY Year,Month) a;      |
 | Q11  |SELECT avg(c1) FROM (SELECT Year,Month,count(*) AS c1 FROM ontime GROUP BY Year,Month) a;      |
 | Q12  |SELECT OriginCityName, DestCityName, count(*) AS c FROM ontime GROUP BY OriginCityName, DestCityName ORDER BY c DESC LIMIT 10;     |
