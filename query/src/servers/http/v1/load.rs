@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use async_compat::CompatExt;
 use async_stream::stream;
-use common_base::tokio;
 use common_base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
@@ -194,7 +193,7 @@ fn build_ndjson_stream(
     let stream = stream! {
         while let Ok(Some(field)) = multipart.next_field().await {
             let bytes = field.bytes().await.map_err_to_code(ErrorCode::BadBytes,  || "Read part to field bytes error")?;
-            let cursor = tokio::io::Cursor::new(bytes);
+            let cursor = std::io::Cursor::new(bytes);
             let mut source = builder.build(cursor)?;
 
             loop {
