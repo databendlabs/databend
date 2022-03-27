@@ -73,7 +73,7 @@ create table books
 <TabItem value="csv" label="CSV">
 
 ```shell title='Request'
-echo curl -H \"insert_sql:insert into book_db.books format CSV\" -H \"skip_header:0\" -H \"field_delimiter:,\" -H \"record_delimiter:\n\" -F  \"upload=@./books.csv\" -XPUT http://127.0.0.1:8081/v1/streaming_load|bash
+echo curl -H \"insert_sql:insert into book_db.books format CSV\" -H \"skip_header:0\" -H \"field_delimiter:','\" -H \"record_delimiter:'\n'\" -F  \"upload=@./books.csv\" -XPUT http://127.0.0.1:8081/v1/streaming_load|bash
 ```
 
 ```json title='Response'
