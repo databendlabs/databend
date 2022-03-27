@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "rust-toolchain.toml"
+      - "rust-tools.txt"
       - "scripts/setup/dev_setup.sh"
 
 jobs:

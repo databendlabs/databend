@@ -197,10 +197,15 @@ function install_rustup {
 
 function install_cargo_binary {
 	BIN_NAME=$1
+	VERSION=$2
 	if cargo install --list | grep "${BIN_NAME}" &>/dev/null; then
 		echo "${BIN_NAME} is already installed"
 	else
-		cargo install $BIN_NAME
+		if [ -z "$VERSION" ]; then
+			cargo install "${BIN_NAME}"
+		else
+			cargo install --version "${VERSION}" "${BIN_NAME}"
+		fi
 	fi
 }
 
@@ -418,7 +423,21 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 
 	install_toolchain "$RUST_TOOLCHAIN"
 
-	install_cargo_binary "taplo-cli"
+	if [ -f rust-tools.txt ]; then
+		if [[ "$PACKAGE_MANAGER" == "brew" ]]; then
+			# macos with bash 3.2 has no array support
+			echo "Please manually install rust tools in rust-tools.txt if needed."
+		else
+			declare -A RUST_TOOLS
+			while IFS='@' read -r key value; do
+				RUST_TOOLS[$key]=$value
+			done <rust-tools.txt
+
+			for tool in "${!RUST_TOOLS[@]}"; do
+				install_cargo_binary "$tool" "${RUST_TOOLS[$tool]}"
+			done
+		fi
+	fi
 
 	if [[ "$PACKAGE_MANAGER" == "apk" ]]; then
 		# needed by lcov
