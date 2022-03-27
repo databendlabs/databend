@@ -1,6 +1,10 @@
-# New datavalues system design
+---
+title: New DataValues system
+description:
+  New DataValues system design RFC
+---
 
-## Sumamry
+## Summary
 
 ### Short comes of current `DataType`
 

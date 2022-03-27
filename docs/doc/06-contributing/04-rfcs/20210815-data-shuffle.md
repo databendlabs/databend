@@ -1,4 +1,8 @@
-# Distributed query and data shuffle
+---
+title: Distributed Query and Shuffle
+description:
+  Distributed query and data shuffle RFC
+---
 
 ## Summary
 

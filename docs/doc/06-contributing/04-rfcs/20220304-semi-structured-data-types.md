@@ -1,4 +1,38 @@
-# Semi-structured data types design
+---
+title: Semi-structured Data Type
+description:
+  Semi-structured data type design RFC
+---
+
+## Summary
+
+### Short comes of current `DataType`
+
+
+- `DataType` is an enum type, we must use specific type after matching. For example, if we want to create deserializer/serializer by `DataType`, we should always do matching. It does not mean that match is not necessary. If we want to add more and more functions to `DataType`, matching may be very annoyment.
+
+- `DataType` represented as enum type, we can't use it as generic argument.
+
+- `DataType` may involve some nested datatypes, such as `DataType::Struct`, but we put `DataField` inside `DataType`, it's logically unreasonable。
+
+- Hard to put attributes into enum based `DataType`, such as nullable attribute #3726 #3769
+
+### Too many concepts about column (Series/Column/Array)
+
+-  DataColumn is an enum, including `Constant(value)` and `Array(Series)`
+```rust
+pub enum DataColumn {
+    // Array of values.
+    Array(Series),
+    // A Single value.
+    Constant(DataValue, usize),
+}
+```
+
+- Series is a wrap of `SeriesTrait`
+```rust
+pub struct Series(pub Arc<dyn SeriesTrait>);
+```
 
 ## Summary
 

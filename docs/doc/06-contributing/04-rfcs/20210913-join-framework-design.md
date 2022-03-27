@@ -1,4 +1,9 @@
-# Proposal: Join framework
+---
+title: Join Framework
+description:
+  Join framework RFC
+---
+
 
 ## Background
 

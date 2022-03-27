@@ -1,9 +1,13 @@
-# New SQL planner framework design
+---
+title: New SQL Planner Framework 
+description:
+  New SQL planner framework design RFC
+---
 
 - Start date: 2021/09/13
 - Tracking issues: https://github.com/datafuselabs/databend/issues/1217
 
-# Sumamry
+# Summary
 
 In order to support more complicated SQL queries, for example the queries contain `JOIN` and correlated subquery, we need to redesign the SQL planner component.
 
