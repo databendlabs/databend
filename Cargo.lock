@@ -3905,7 +3905,7 @@ dependencies = [
 [[package]]
 name = "opensrv-mysql"
 version = "0.1.0"
-source = "git+https://github.com/datafuselabs/opensrv?rev=9690be9#9690be9ff965c0e86e1ff599897c2019b0a379bd"
+source = "git+https://github.com/datafuselabs/opensrv?rev=e744427#e744427ebce9271289e47d655f1223790aae7482"
 dependencies = [
  "async-trait",
  "byteorder",

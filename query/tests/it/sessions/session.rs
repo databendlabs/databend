@@ -81,7 +81,7 @@ async fn test_session_in_management_mode() -> Result<()> {
     // Tenant.
     {
         let actual = session.get_current_tenant();
-        assert_eq!(&actual, "");
+        assert_eq!(&actual, "test");
 
         session.set_current_tenant("tenant2".to_string());
         let actual = session.get_current_tenant();
