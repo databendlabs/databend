@@ -184,7 +184,7 @@ async fn test_user_manager() -> Result<()> {
             hash_method: PasswordHashMethod::Sha256,
         };
         user_mgr
-            .update_user(tenant, user, hostname, auth_info)
+            .update_user(tenant, user, hostname, Some(auth_info), None)
             .await?;
         let new_user = user_mgr.get_user(tenant, user, hostname).await?;
         assert_eq!(
@@ -203,7 +203,7 @@ async fn test_user_manager() -> Result<()> {
             hash_method: PasswordHashMethod::Sha256,
         };
         user_mgr
-            .update_user(tenant, user, hostname, auth_info.clone())
+            .update_user(tenant, user, hostname, Some(auth_info.clone()), None)
             .await?;
         let new_new_user = user_mgr.get_user(tenant, user, hostname).await?;
         assert_eq!(
@@ -212,7 +212,7 @@ async fn test_user_manager() -> Result<()> {
         );
 
         let not_exist = user_mgr
-            .update_user(tenant, "user", hostname, auth_info.clone())
+            .update_user(tenant, "user", hostname, Some(auth_info.clone()), None)
             .await;
         // ErrorCode::UnknownUser
         assert_eq!(not_exist.err().unwrap().code(), 2201)

@@ -38,6 +38,7 @@ use crate::sql::statements::DfGrantRoleStatement;
 use crate::sql::statements::DfRevokePrivilegeStatement;
 use crate::sql::statements::DfRevokeRoleStatement;
 use crate::sql::statements::DfShowGrants;
+use crate::sql::statements::DfUserWithOption;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
@@ -47,13 +48,15 @@ impl<'a> DfParser<'a> {
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let (name, hostname) = self.parse_principal_name_and_host()?;
+        let with_options = self.parse_user_options()?;
         let auth_option = self.parse_auth_option()?;
 
         let create = DfCreateUser {
             if_not_exists,
             name,
             hostname,
-            auth_options: auth_option,
+            auth_option,
+            with_options,
         };
         Ok(DfStatement::CreateUser(create))
     }
@@ -69,13 +72,24 @@ impl<'a> DfParser<'a> {
             ("".to_string(), "".to_string())
         };
 
-        let auth_option = self.parse_auth_option()?;
+        let with_options = self.parse_user_options()?;
+        let auth_option = match self.parser.peek_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::NOT | Keyword::IDENTIFIED => Some(self.parse_auth_option()?),
+                _ => {
+                    return self.expected("IDENTIFIED or NOT IDENTIFIED", self.parser.peek_token())
+                }
+            },
+            Token::EOF => None,
+            unexpected => return self.expected("IDENTIFIED or NOT IDENTIFIED", unexpected),
+        };
 
         let alter = DfAlterUser {
             if_current_user,
             name,
             hostname,
             auth_option,
+            with_options,
         };
 
         Ok(DfStatement::AlterUser(alter))
@@ -272,6 +286,26 @@ impl<'a> DfParser<'a> {
         self.parser
             .parse_identifier()
             .or_else(|_| self.expected("identifier or *", token))
+    }
+
+    fn parse_user_options(&mut self) -> Result<Vec<DfUserWithOption>, ParserError> {
+        let mut user_options = vec![];
+        if !self.parser.parse_keyword(Keyword::WITH) {
+            return Ok(user_options);
+        }
+        loop {
+            match self.parser.peek_token().to_string().as_str().try_into() {
+                Ok(option) => user_options.push(option),
+                Err(_) => {
+                    return self.expected("user option", self.parser.peek_token());
+                }
+            }
+            self.parser.next_token();
+            if !self.parser.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+        Ok(user_options)
     }
 
     fn parse_auth_option(&mut self) -> Result<DfAuthOption, ParserError> {

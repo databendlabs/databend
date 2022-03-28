@@ -11,6 +11,8 @@ true
 "Om ara pa ca na dhih"
 [-1,12,289,2188,false]
 {"x":"abc","y":false,"z":10}
+123
+"abc"
 ==try_parse_json==
 NULL
 true
@@ -24,6 +26,10 @@ true
 "Om ara pa ca na dhih"
 [-1,12,289,2188,false]
 {"x":"abc","y":false,"z":10}
+NULL
+NULL
+123
+"abc"
 NULL
 NULL
 ==parse_json from table==

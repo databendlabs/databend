@@ -32,7 +32,6 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::PlanParser;
 use databend_query::storages::fuse::FuseHistoryTable;
-use databend_query::storages::fuse::FUSE_OPT_KEY_CHUNK_BLOCK_NUM;
 use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -61,7 +60,7 @@ impl TestFixture {
         // use `TempDir` as root path (auto clean)
         conf.storage.disk.data_path = tmp_dir.path().to_str().unwrap().to_string();
         conf.storage.disk.temp_data_path = tmp_dir.path().to_str().unwrap().to_string();
-        let ctx = crate::tests::create_query_context_with_config(conf)
+        let ctx = crate::tests::create_query_context_with_config(conf, None)
             .await
             .unwrap();
 
@@ -119,9 +118,7 @@ impl TestFixture {
             table_meta: TableMeta {
                 schema: TestFixture::default_schema(),
                 engine: "FUSE".to_string(),
-                // make sure blocks will not be merged
                 options: [
-                    (FUSE_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), "1".to_owned()),
                     // database id is required for FUSE
                     (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]

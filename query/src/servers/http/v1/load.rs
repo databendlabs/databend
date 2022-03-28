@@ -239,15 +239,19 @@ fn build_csv_stream(
             .headers()
             .get("field_delimiter")
             .and_then(|v| v.to_str().ok())
-            .map(|v| match v.len() {
-                n if n >= 1 => {
-                    if v.as_bytes()[0] == b'\\' {
-                        "\t"
-                    } else {
-                        v
+            .map(|v| {
+                let v = v.trim_matches(|p| p == '"' || p == '\'');
+
+                match v.len() {
+                    n if n >= 1 => {
+                        if v.as_bytes()[0] == b'\\' {
+                            "\t"
+                        } else {
+                            v
+                        }
                     }
+                    _ => ",",
                 }
-                _ => ",",
             })
             .unwrap_or(",");
 
@@ -260,15 +264,18 @@ fn build_csv_stream(
             .headers()
             .get("record_delimiter")
             .and_then(|v| v.to_str().ok())
-            .map(|v| match v.len() {
-                n if n >= 1 => {
-                    if v.as_bytes()[0] == b'\\' {
-                        "\n"
-                    } else {
-                        v
+            .map(|v| {
+                let v = v.trim_matches(|p| p == '"' || p == '\'');
+                match v.len() {
+                    n if n >= 1 => {
+                        if v.as_bytes()[0] == b'\\' {
+                            "\n"
+                        } else {
+                            v
+                        }
                     }
+                    _ => "\n",
                 }
-                _ => "\n",
             })
             .unwrap_or("\n");
 

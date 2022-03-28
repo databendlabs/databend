@@ -550,7 +550,8 @@ mod update {
         let res = user_mgr.update_user(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            new_test_auth_info(full),
+            Some(new_test_auth_info(full)),
+            None,
             test_seq,
         );
 
@@ -582,7 +583,8 @@ mod update {
         let res = user_mgr.update_user(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            new_test_auth_info(false),
+            Some(new_test_auth_info(false)),
+            None,
             test_seq,
         );
         assert_eq!(
@@ -633,7 +635,8 @@ mod update {
         let res = user_mgr.update_user(
             test_user_name.to_string(),
             test_hostname.to_string(),
-            new_test_auth_info(true),
+            Some(new_test_auth_info(true)),
+            None,
             test_seq,
         );
         assert_eq!(

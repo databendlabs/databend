@@ -16,7 +16,7 @@ common-arrow = { path = "../arrow" }
 anyhow = "1.0.55"
 backtrace = "0.3.64"
 octocrab = "0.15.4"
-opendal = "0.2.5"
+opendal = "0.3.0"
 paste = "1.0.6"
 prost = "0.9.0"
 serde = { version = "1.0.136", features = ["derive"] }
@@ -27,4 +27,4 @@ tonic = "0.6.2"
 
 # Github dependencies
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "0b1b0d7" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "da3b180" }

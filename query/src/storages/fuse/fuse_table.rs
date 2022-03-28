@@ -35,8 +35,10 @@ use crate::sessions::QueryContext;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::TableSnapshot;
+use crate::storages::fuse::meta::DEFAULT_SNAPSHOT_VERSION;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
+use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_VER;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
@@ -172,11 +174,37 @@ impl Table for FuseTable {
 }
 
 impl FuseTable {
-    pub(crate) fn snapshot_loc(&self) -> Option<String> {
+    fn snapshot_loc(&self) -> Option<String> {
         self.table_info
             .options()
             .get(FUSE_OPT_KEY_SNAPSHOT_LOC)
             .cloned()
+    }
+
+    pub fn snapshot_format_version(&self) -> Result<u64> {
+        Self::parse_snaphost_format_version(&self.table_info)
+    }
+
+    pub fn parse_snaphost_format_version(table_info: &TableInfo) -> Result<u64> {
+        table_info
+            .options()
+            .get(FUSE_OPT_KEY_SNAPSHOT_VER)
+            .map(|ver_str| {
+                let v = ver_str.as_str();
+                v.parse::<u64>().map_err(|_| {
+                    ErrorCode::LogicalError(format!(
+                        "invalid snapshot version {v}, can not be parsed as u64"
+                    ))
+                })
+            })
+            .transpose()
+            .map(|opt| {
+                opt.unwrap_or(
+                    // TableSnapshot of version other than v0 should have a explicitly define
+                    // version
+                    DEFAULT_SNAPSHOT_VERSION,
+                )
+            })
     }
 
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
@@ -186,13 +214,14 @@ impl FuseTable {
     ) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc() {
             let reader = MetaReaders::table_snapshot_reader(ctx);
-            Ok(Some(reader.read(&loc).await?))
+            let ver = self.snapshot_format_version()?;
+            Ok(Some(reader.read(loc.as_str(), None, ver).await?))
         } else {
             Ok(None)
         }
     }
 
-    pub fn meta_locations(&self) -> &TableMetaLocationGenerator {
+    pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
         &self.meta_location_generator
     }
 

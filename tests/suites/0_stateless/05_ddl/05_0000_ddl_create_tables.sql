@@ -24,7 +24,7 @@ DROP TABLE IF EXISTS t4;
 -- prepare test databases for testing 'create table like' and 'as select' statements.
 CREATE DATABASE db1;
 CREATE DATABASE db2;
-CREATE TABLE db1.test1(a INT NOT NULL, b INT) ENGINE=memory;
+CREATE TABLE db1.test1(a INT, b INT null) ENGINE=memory;
 INSERT INTO db1.test1 VALUES (1, 2), (2, 3), (3, 4);
 
 SELECT '====BEGIN TEST CREATE TABLE LIKE STATEMENT====';
@@ -38,13 +38,13 @@ SELECT '====END TEST CREATE TABLE LIKE STATEMENT====';
 
 SELECT '====BEGIN TEST CREATE TABLE AS SELECT STATEMENT====';
 -- test 'create table as select' statement, expect db2.test3 has the data from db1.test1 with casting
-CREATE TABLE db2.test3(a Varchar, y Varchar) ENGINE=fuse AS SELECT * FROM db1.test1;
+CREATE TABLE db2.test3(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT * FROM db1.test1;
 DESCRIBE db2.test3;
 SELECT a FROM db2.test3;
-CREATE TABLE db2.test4(a Varchar, y Varchar) ENGINE=fuse AS SELECT b, a FROM db1.test1;
+CREATE TABLE db2.test4(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b, a FROM db1.test1;
 DESCRIBE db2.test4;
 SELECT a FROM db2.test4;
-CREATE TABLE db2.test5(a Varchar, y Varchar) ENGINE=fuse AS SELECT b FROM db1.test1;
+CREATE TABLE db2.test5(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b FROM db1.test1;
 SELECT a FROM db2.test5;
 SELECT '====END TEST CREATE TABLE AS SELECT STATEMENT====';
 

@@ -24,6 +24,7 @@ use uuid::Uuid;
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::meta::TableSnapshot;
+use crate::storages::fuse::meta::Versioned;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 
@@ -33,15 +34,16 @@ impl FuseTable {
         if let Some(prev_snapshot) = self.read_table_snapshot(ctx.as_ref()).await? {
             let prev_id = prev_snapshot.snapshot_id;
 
-            let new_snapshot = TableSnapshot {
-                snapshot_id: Uuid::new_v4(),
-                prev_snapshot_id: Some(prev_id),
-                schema: prev_snapshot.schema.clone(),
-                summary: Default::default(),
-                segments: vec![],
-            };
-            let loc = self.meta_locations();
-            let new_snapshot_loc = loc.snapshot_location_from_uuid(&new_snapshot.snapshot_id);
+            let new_snapshot = TableSnapshot::new(
+                Uuid::new_v4(),
+                Some((prev_id, prev_snapshot.format_version())),
+                prev_snapshot.schema.clone(),
+                Default::default(),
+                vec![],
+            );
+            let loc = self.meta_location_generator();
+            let new_snapshot_loc =
+                loc.snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
             let operator = ctx.get_storage_operator()?;
             let bytes = serde_json::to_vec(&new_snapshot)?;
             operator

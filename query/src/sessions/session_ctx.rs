@@ -91,10 +91,11 @@ impl SessionContext {
     pub fn get_current_tenant(&self) -> String {
         if self.conf.query.management_mode {
             let lock = self.current_tenant.read();
-            lock.clone()
-        } else {
-            self.conf.query.tenant_id.clone()
+            if !lock.is_empty() {
+                return lock.clone();
+            }
         }
+        self.conf.query.tenant_id.clone()
     }
 
     // Get current user

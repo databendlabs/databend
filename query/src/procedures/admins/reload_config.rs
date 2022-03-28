@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::Result;
+use common_meta_types::UserOptionFlag;
 
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
@@ -37,7 +38,7 @@ impl Procedure for ReloadConfigProcedure {
     }
 
     fn features(&self) -> ProcedureFeatures {
-        ProcedureFeatures::default()
+        ProcedureFeatures::default().user_option_flag(UserOptionFlag::ConfigReload)
     }
 
     async fn inner_eval(&self, ctx: Arc<QueryContext>, _: Vec<String>) -> Result<DataBlock> {

@@ -17,6 +17,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserGrantSet;
+use common_meta_types::UserOptionFlag;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
 use pretty_assertions::assert_eq;
@@ -136,9 +137,29 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
     let conf = crate::tests::ConfigBuilder::create()
         .with_management_mode()
         .config();
-    let ctx = crate::tests::create_query_context_with_config(conf.clone()).await?;
+    let ctx = crate::tests::create_query_context_with_config(conf.clone(), None).await?;
 
-    // Management Mode
+    // Management Mode, without user option
+    {
+        let plan = PlanParser::parse(
+            ctx.clone(),
+            "call admin$bootstrap_tenant(tenant1, test_user, '%', sha256_password, test_passwd)",
+        )
+        .await?;
+        let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
+        let res = executor.execute(None).await;
+        assert_eq!(res.is_err(), true);
+        let expect = "Code: 1063, displayText = Access denied: 'BOOTSTRAP_TENANT' requires user TENANTSETTING option flag.";
+        assert_eq!(expect, res.err().unwrap().to_string());
+    }
+
+    let mut user_info = ctx.get_current_user()?;
+    user_info
+        .option
+        .set_option_flag(UserOptionFlag::TenantSetting);
+    let ctx = crate::tests::create_query_context_with_config(conf.clone(), Some(user_info)).await?;
+
+    // Management Mode, with user option
     {
         let plan = PlanParser::parse(
             ctx.clone(),
@@ -147,9 +168,7 @@ async fn test_call_bootstrap_tenant_interpreter() -> Result<()> {
         .await?;
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         executor.execute(None).await?;
-    }
 
-    {
         let user_mgr = ctx.get_user_manager();
         let user_info = user_mgr.get_user("tenant1", "test_user", "%").await?;
         assert_eq!(user_info.grants.roles().len(), 1);

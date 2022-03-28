@@ -15,6 +15,7 @@
 use common_meta_types::AuthInfo;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
+use common_meta_types::UserOption;
 use common_meta_types::UserQuota;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -38,6 +39,7 @@ impl From<&User> for UserInfo {
     fn from(user: &User) -> Self {
         let grants = UserGrantSet::empty();
         let quota = UserQuota::no_limit();
+        let option = UserOption::default();
 
         UserInfo {
             name: user.name.clone(),
@@ -45,6 +47,7 @@ impl From<&User> for UserInfo {
             auth_info: user.auth_data.clone(),
             grants,
             quota,
+            option,
         }
     }
 }

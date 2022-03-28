@@ -23,7 +23,9 @@ use common_exception::Result;
 use databend_query::storages::fuse::io::BlockCompactor;
 use databend_query::storages::fuse::io::BlockStreamWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
-use databend_query::storages::fuse::DEFAULT_CHUNK_BLOCK_NUM;
+use databend_query::storages::fuse::meta::TableSnapshot;
+use databend_query::storages::fuse::meta::Versioned;
+use databend_query::storages::fuse::DEFAULT_BLOCK_PER_SEGMENT;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use num::Integer;
@@ -56,7 +58,7 @@ async fn test_fuse_table_block_appender() {
         local_fs.clone(),
         Box::pin(block_stream),
         schema.clone(),
-        DEFAULT_CHUNK_BLOCK_NUM,
+        DEFAULT_BLOCK_PER_SEGMENT,
         0,
         locs.clone(),
     )
@@ -103,7 +105,7 @@ async fn test_fuse_table_block_appender() {
         local_fs,
         Box::pin(block_stream),
         schema,
-        DEFAULT_CHUNK_BLOCK_NUM,
+        DEFAULT_BLOCK_PER_SEGMENT,
         0,
         locs,
     )
@@ -336,7 +338,7 @@ fn test_meta_locations() -> Result<()> {
     let seg_loc = locs.gen_segment_info_location();
     assert!(seg_loc.starts_with(test_prefix));
     let uuid = Uuid::new_v4();
-    let snapshot_loc = locs.snapshot_location_from_uuid(&uuid);
+    let snapshot_loc = locs.snapshot_location_from_uuid(&uuid, TableSnapshot::VERSION)?;
     assert!(snapshot_loc.starts_with(test_prefix));
     Ok(())
 }

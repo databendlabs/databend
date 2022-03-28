@@ -12,21 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_reader;
-mod block_stream_writer;
-mod block_writer;
 mod locations;
-mod meta_readers;
+mod read;
+mod write;
 
-pub use block_reader::BlockReader;
-pub use block_stream_writer::BlockCompactor;
-pub use block_stream_writer::BlockStreamWriter;
-pub use block_stream_writer::SegmentInfoStream;
 pub use locations::TableMetaLocationGenerator;
-pub use meta_readers::BlockMetaCache;
-pub use meta_readers::BlockMetaReader;
-pub use meta_readers::MetaReaders;
-pub use meta_readers::SegmentInfoCache;
-pub use meta_readers::SegmentInfoReader;
-pub use meta_readers::TableSnapshotCache;
-pub use meta_readers::TableSnapshotReader;
+pub use read::BlockReader;
+pub use read::MetaReaders;
+pub use read::SegmentInfoReader;
+pub use read::TableSnapshotReader;
+pub use write::BlockCompactor;
+pub use write::BlockStreamWriter;
+pub use write::SegmentInfoStream;
