@@ -54,6 +54,7 @@ impl ExecutorTasksQueue {
     pub unsafe fn steal_task_to_context(&self, context: &mut ExecutorWorkerContext) {
         {
             let mut workers_tasks = self.workers_tasks.lock();
+
             if !workers_tasks.is_empty() {
                 let task = workers_tasks.pop_task(context.get_worker_num());
                 context.set_task(task);
@@ -68,6 +69,14 @@ impl ExecutorTasksQueue {
 
                 return;
             }
+        }
+
+        // When tasks queue is empty and all workers are waiting, no new tasks will be generated.
+        let workers_notify = context.get_workers_notify();
+        if workers_notify.active_workers() <= 1 {
+            self.finish();
+            workers_notify.wakeup_all();
+            return;
         }
 
         context.get_workers_notify().wait(context.get_worker_num());

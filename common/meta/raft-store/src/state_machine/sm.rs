@@ -14,6 +14,7 @@
 
 use std::convert::TryInto;
 use std::fmt::Debug;
+use std::ops::RangeBounds;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -90,6 +91,12 @@ const SEQ_DATABASE_META_ID: &str = "database_meta_id";
 // const TREE_META: &str = "meta";
 const TREE_STATE_MACHINE: &str = "state_machine";
 
+/// StateMachine subscriber trait
+#[async_trait::async_trait]
+pub trait StateMachineSubscriber: Debug + Sync + Send {
+    async fn kv_changed(&self, key: &str, prev: &Option<SeqV>, meta: &Option<SeqV>);
+}
+
 /// The state machine of the `MemStore`.
 /// It includes user data and two raft-related informations:
 /// `last_applied_logs` and `client_serial_responses` to achieve idempotence.
@@ -99,6 +106,9 @@ pub struct StateMachine {
     /// - Store initialization state and last applied in keyspace `StateMachineMeta`.
     /// - Every other state is store in its own keyspace such as `Nodes`.
     pub sm_tree: SledTree,
+
+    /// subscriber of statemachine data
+    pub subscriber: Option<Box<dyn StateMachineSubscriber>>,
 }
 
 /// A key-value pair in a snapshot is a vec of two `Vec<u8>`.
@@ -149,7 +159,10 @@ impl StateMachine {
 
         let sm_tree = SledTree::open(&db, &tree_name, config.is_sync())?;
 
-        let sm = StateMachine { sm_tree };
+        let sm = StateMachine {
+            sm_tree,
+            subscriber: None,
+        };
 
         let inited = {
             let sm_meta = sm.sm_meta();
@@ -165,6 +178,10 @@ impl StateMachine {
                 .await?;
             Ok(sm)
         }
+    }
+
+    pub fn set_subscriber(&mut self, subscriber: Box<dyn StateMachineSubscriber>) {
+        self.subscriber = Some(subscriber);
     }
 
     /// Create a snapshot.
@@ -344,10 +361,10 @@ impl StateMachine {
         let db_id = self.txn_incr_seq(SEQ_DATABASE_ID, txn_tree)?;
 
         let db_lookup_tree = txn_tree.key_space::<DatabaseLookup>();
-
+        let db_key = DatabaseLookupKey::new(tenant.to_string(), name.to_string());
         let (prev, result) = self.txn_sub_tree_upsert(
             &db_lookup_tree,
-            &DatabaseLookupKey::new(tenant.to_string(), name.to_string()),
+            &db_key,
             &MatchSeq::Exact(0),
             Operation::Update(db_id),
             None,
@@ -405,13 +422,9 @@ impl StateMachine {
     ) -> MetaStorageResult<AppliedState> {
         let dbs = txn_tree.key_space::<DatabaseLookup>();
 
-        let (prev, result) = self.txn_sub_tree_upsert(
-            &dbs,
-            &DatabaseLookupKey::new(tenant.to_string(), name.to_string()),
-            &MatchSeq::Any,
-            Operation::Delete,
-            None,
-        )?;
+        let db_key = DatabaseLookupKey::new(tenant.to_string(), name.to_string());
+        let (prev, result) =
+            self.txn_sub_tree_upsert(&dbs, &db_key, &MatchSeq::Any, Operation::Delete, None)?;
 
         assert!(
             result.is_none(),
@@ -466,6 +479,7 @@ impl StateMachine {
         if result.is_some() {
             self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)?;
         }
+
         Ok(AppliedState::TableMeta(Change::new_with_id(
             table_id.unwrap(),
             prev,
@@ -530,6 +544,7 @@ impl StateMachine {
             new_db_name,
             new_table_name
         );
+
         Ok(AppliedState::TableMeta(Change::new_with_id(
             new_table_id.unwrap(),
             prev,
@@ -547,16 +562,32 @@ impl StateMachine {
         txn_tree: &TransactionSledTree,
     ) -> MetaStorageResult<AppliedState> {
         let sub_tree = txn_tree.key_space::<GenericKV>();
+        let key_str = key.to_string();
         let (prev, result) = self.txn_sub_tree_upsert(
             &sub_tree,
-            &key.to_string(),
+            &key_str,
             seq,
             value_op.clone(),
             value_meta.clone(),
         )?;
 
         tracing::debug!("applied UpsertKV: {} {:?}", key, result);
+
+        if let Some(subscriber) = &self.subscriber {
+            let _ = subscriber.kv_changed(&key_str, &prev, &result);
+        }
+
         Ok(Change::new(prev, result).into())
+    }
+
+    pub fn get_kv_by_range<KV, R>(
+        &self,
+        range: R,
+    ) -> MetaStorageResult<Vec<(String, SeqV<Vec<u8>>)>>
+    where
+        R: RangeBounds<String>,
+    {
+        self.kvs().range_kvs(range)
     }
 
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
@@ -1025,6 +1056,29 @@ impl StateMachine {
         }
     }
 
+    pub fn get_database_meta_by_range<KV, R>(
+        &self,
+        range: R,
+    ) -> MetaStorageResult<Vec<(DatabaseLookupKey, DatabaseMeta)>>
+    where
+        R: RangeBounds<DatabaseLookupKey>,
+    {
+        let sm_db_ids = self.database_lookup();
+        let lookup_keys = sm_db_ids.range_kvs(range)?;
+        let mut ret = Vec::new();
+        for lookup_key in &lookup_keys {
+            let key = &lookup_key.0;
+            let id = &lookup_key.1;
+            let meta = self.get_database_meta_by_id(&id.data);
+            match meta {
+                Ok(meta) => ret.push((key.clone(), meta.data)),
+                Err(_) => continue,
+            }
+        }
+
+        Ok(ret)
+    }
+
     pub fn get_database_meta_by_id(&self, db_id: &u64) -> MetaStorageResult<SeqV<DatabaseMeta>> {
         let x = self.databases().get(db_id)?.ok_or_else(|| {
             MetaStorageError::AppError(AppError::UnknownDatabaseId(UnknownDatabaseId::new(
@@ -1056,6 +1110,29 @@ impl StateMachine {
     pub fn get_table_meta_by_id(&self, tid: &u64) -> MetaResult<Option<SeqV<TableMeta>>> {
         let x = self.tables().get(tid)?;
         Ok(x)
+    }
+
+    pub fn get_table_meta_by_range<KV, R>(
+        &self,
+        range: R,
+    ) -> MetaStorageResult<Vec<(TableLookupKey, Option<SeqV<TableMeta>>)>>
+    where
+        R: RangeBounds<TableLookupKey>,
+    {
+        let sm_table_ids = self.table_lookup();
+        let lookup_keys = sm_table_ids.range_kvs(range)?;
+        let mut ret = Vec::new();
+        for lookup_key in &lookup_keys {
+            let key = &lookup_key.0;
+            let id = &lookup_key.1;
+            let meta = self.get_table_meta_by_id(&id.data.0);
+            match meta {
+                Ok(meta) => ret.push((key.clone(), meta)),
+                Err(_) => continue,
+            }
+        }
+
+        Ok(ret)
     }
 
     pub fn txn_get_table_meta_by_id(
