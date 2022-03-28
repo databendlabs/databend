@@ -14,6 +14,7 @@
 
 use super::parse_json::ParseJsonFunction;
 use super::parse_json::TryParseJsonFunction;
+use crate::scalars::CheckJsonFunction;
 use crate::scalars::FunctionFactory;
 
 pub struct SemiStructuredFunction;
@@ -22,5 +23,6 @@ impl SemiStructuredFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("parse_json", ParseJsonFunction::desc());
         factory.register("try_parse_json", TryParseJsonFunction::desc());
+        factory.register("check_json", CheckJsonFunction::desc());
     }
 }
