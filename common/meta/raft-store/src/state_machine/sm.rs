@@ -93,9 +93,6 @@ const SEQ_DATABASE_META_ID: &str = "database_meta_id";
 // const TREE_META: &str = "meta";
 const TREE_STATE_MACHINE: &str = "state_machine";
 
-/// database meta data kev-value type
-pub type DatabaseMetaKV = (DatabaseLookupKey, DatabaseMeta);
-
 pub enum DataChangeType {
     Create,
     Update,
