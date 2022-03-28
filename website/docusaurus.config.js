@@ -96,6 +96,7 @@ const config = {
                     label: 'Documentation',
                     position: 'left',
                   },
+                    {to: '/blog', label: 'Blog', position: 'left'}, // or position: 'right'
                   {
                       href: 'https://github.com/datafuselabs/databend',
                       label: 'GitHub',
