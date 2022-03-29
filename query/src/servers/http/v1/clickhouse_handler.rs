@@ -66,7 +66,6 @@ async fn execute(
     input_stream: Option<SendableDataBlockStream>,
 ) -> Result<Body> {
     let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-    // Write Start to query log table.
     let _ = interpreter
         .start()
         .await
@@ -76,7 +75,7 @@ async fn execute(
     let mut data_stream = ctx.try_create_abortable(data_stream)?;
 
     let stream = stream! {
-           while let Some(block) = data_stream.next().await {
+        while let Some(block) = data_stream.next().await {
             match block{
                 Ok(block) => {
                     yield(block_to_tsv(&block))
@@ -84,6 +83,11 @@ async fn execute(
                 Err(err) => yield(Err(err)),
             };
         }
+
+        let _ = interpreter
+            .finish()
+            .await
+            .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
     };
 
     Ok(Body::from_bytes_stream(stream))
