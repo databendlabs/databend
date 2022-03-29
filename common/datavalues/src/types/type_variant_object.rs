@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_exception::Result;
+use serde_json::Map;
 use serde_json::Value as JsonValue;
 
 use super::data_type::DataType;
@@ -25,18 +26,18 @@ use super::type_id::TypeID;
 use crate::prelude::*;
 
 #[derive(Default, Clone, serde::Deserialize, serde::Serialize)]
-pub struct VariantType {}
+pub struct VariantObjectType {}
 
-impl VariantType {
+impl VariantObjectType {
     pub fn arc() -> DataTypePtr {
         Arc::new(Self {})
     }
 }
 
 #[typetag::serde]
-impl DataType for VariantType {
+impl DataType for VariantObjectType {
     fn data_type_id(&self) -> TypeID {
-        TypeID::Variant
+        TypeID::VariantObject
     }
 
     #[inline]
@@ -45,11 +46,11 @@ impl DataType for VariantType {
     }
 
     fn name(&self) -> &str {
-        "Variant"
+        "Object"
     }
 
     fn default_value(&self) -> DataValue {
-        DataValue::Json(JsonValue::Null)
+        DataValue::Json(JsonValue::Object(Map::new()))
     }
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {
@@ -68,12 +69,19 @@ impl DataType for VariantType {
     }
 
     fn arrow_type(&self) -> ArrowType {
-        ArrowType::Extension("Variant".to_owned(), Box::new(ArrowType::LargeBinary), None)
+        ArrowType::Extension(
+            "VariantObject".to_owned(),
+            Box::new(ArrowType::LargeBinary),
+            None,
+        )
     }
 
     fn custom_arrow_meta(&self) -> Option<BTreeMap<String, String>> {
         let mut mp = BTreeMap::new();
-        mp.insert(ARROW_EXTENSION_NAME.to_string(), "Variant".to_string());
+        mp.insert(
+            ARROW_EXTENSION_NAME.to_string(),
+            "VariantObject".to_string(),
+        );
         Some(mp)
     }
 
@@ -90,7 +98,7 @@ impl DataType for VariantType {
     }
 }
 
-impl std::fmt::Debug for VariantType {
+impl std::fmt::Debug for VariantObjectType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }
