@@ -223,16 +223,16 @@ function install_toolchain {
 
 function usage {
 	cat <<EOF
-    usage: $0 [options]"
+    usage: $0 [options]
 
     options:
-        -b Enable BATCH_MODE for installation
-        -t Install build tools
+        -y Auto approve installation
+        -b Install build tools
+        -d Install development tools
         -o Install some operation tools
         -p Install profile
-        -v Verbose mode
-        -y Install prover
         -s Install codegen tools
+        -v Verbose mode
 EOF
 }
 
@@ -248,12 +248,21 @@ EOF
 
 	if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 		cat <<EOF
-Build tools (since -t or no option was provided):
+Build tools (since -b or no option was provided):
   * Rust (and the necessary components, e.g. rust-fmt, clippy)
-  * lcov
+  * build-essential
   * pkg-config
   * libssl-dev
-  * if linux, gcc-powerpc-linux-gnu
+  * protobuf-compiler
+EOF
+	fi
+
+	if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
+		cat <<EOF
+Development tools (since -d was provided):
+  * python3 (boto3, yapf, ...)
+  * lcov
+  * tools from rust-tools.txt ( e.g. cargo-audit, cargo-udeps, taplo-cli)
 EOF
 	fi
 
@@ -284,22 +293,25 @@ now with Ctrl-C.
 EOF
 }
 
-BATCH_MODE=true
+AUTO_APPROVE=false
 VERBOSE=false
 INSTALL_BUILD_TOOLS=false
+INSTALL_DEV_TOOLS=false
 OPERATIONS=false
 INSTALL_PROFILE=false
-INSTALL_PROVER=false
 INSTALL_CODEGEN=false
 
-#parse args
-while getopts "bmtopvysh" arg; do
+# parse args
+while getopts "ybdopvs" arg; do
 	case "$arg" in
-	b)
-		BATCH_MODE="true"
+	y)
+		AUTO_APPROVE="true"
 		;;
-	t)
+	b)
 		INSTALL_BUILD_TOOLS="true"
+		;;
+	d)
+		INSTALL_DEV_TOOLS="true"
 		;;
 	o)
 		OPERATIONS="true"
@@ -307,14 +319,11 @@ while getopts "bmtopvysh" arg; do
 	p)
 		INSTALL_PROFILE="true"
 		;;
-	v)
-		VERBOSE=true
-		;;
-	y)
-		INSTALL_PROVER="true"
-		;;
 	s)
 		INSTALL_CODEGEN="true"
+		;;
+	v)
+		VERBOSE="true"
 		;;
 	*)
 		usage
@@ -328,9 +337,9 @@ if [[ "$VERBOSE" == "true" ]]; then
 fi
 
 if [[ "$INSTALL_BUILD_TOOLS" == "false" ]] &&
+	[[ "$INSTALL_DEV_TOOLS" == "false" ]] &&
 	[[ "$OPERATIONS" == "false" ]] &&
 	[[ "$INSTALL_PROFILE" == "false" ]] &&
-	[[ "$INSTALL_PROVER" == "false" ]] &&
 	[[ "$INSTALL_CODEGEN" == "false" ]]; then
 	INSTALL_BUILD_TOOLS="true"
 fi
@@ -376,7 +385,7 @@ if [[ "$(whoami)" != 'root' ]] && [[ ${PACKAGE_MANAGER} != "brew" ]]; then
 	PRE_COMMAND=(sudo)
 fi
 
-if [[ "$BATCH_MODE" == "false" ]]; then
+if [[ "$AUTO_APPROVE" == "false" ]]; then
 	welcome_message
 	printf "Proceed with installing necessary dependencies? (y/N) > "
 	read -e -r input
@@ -406,6 +415,11 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_pkg cmake "$PACKAGE_MANAGER"
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
+
+	install_toolchain "$RUST_TOOLCHAIN"
+fi
+
+if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	install_pkg python3 "$PACKAGE_MANAGER"
 	if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
 		install_pkg python3-all-dev "$PACKAGE_MANAGER"
@@ -418,8 +432,6 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 		install_pkg libffi-dev "$PACKAGE_MANAGER"
 	fi
 	python3 -m pip install --quiet boto3 "moto[all]" yapf shfmt-py mysql-connector-python toml
-
-	install_toolchain "$RUST_TOOLCHAIN"
 
 	if [[ -f scripts/setup/rust-tools.txt ]]; then
 		export RUSTFLAGS="-C target-feature=-crt-static"
@@ -488,7 +500,7 @@ if [[ "$INSTALL_CODEGEN" == "true" ]]; then
 	"${PRE_COMMAND[@]}" python3 -m pip install --quiet coscmd PyYAML
 fi
 
-[[ "${BATCH_MODE}" == "false" ]] && cat <<EOF
+[[ "${AUTO_APPROVE}" == "false" ]] && cat <<EOF
 Finished installing all dependencies.
 
 You should now be able to build the project by running:
