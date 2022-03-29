@@ -25,6 +25,7 @@ mod interpreter_explain;
 mod interpreter_factory;
 mod interpreter_factory_interceptor;
 mod interpreter_insert;
+mod interpreter_insert_values;
 mod interpreter_insert_with_stream;
 mod interpreter_kill;
 mod interpreter_list;
