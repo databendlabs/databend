@@ -65,8 +65,8 @@ echo '{}' | curl '{:?}/clickhouse/?query=INSERT%20INTO%20test%20FORMAT%20JSONEac
                 "/",
                 get(poem::endpoint::make_sync(move |_| Self::usage(sock))),
             )
+            .nest("/clickhouse", clickhouse_router())
             .nest("/v1/statement", statement_router())
-            .nest("/v1/clickhouse", clickhouse_router())
             .nest("/v1/query", query_route())
             .at("/v1/streaming_load", put(streaming_load))
             .at("/v1/upload_to_stage", put(upload_to_stage))
