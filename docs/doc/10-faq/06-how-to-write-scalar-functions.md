@@ -80,7 +80,7 @@ This is very common optimization and widely used in arrow's compute system.
     ```
 - Nullable column
 
-    By defaults, column are not nullable. If we want nullable column, we can use this to represent it.
+    By default, columns are not nullable. If we want a nullable column, we can use this to represent it.
 
     ```rust
     #[derive(Clone)]
@@ -184,7 +184,7 @@ So inside the `eval` function, we really don't need to care about constant or nu
 The macro `with_match_primitive_type_id` will match the primitive type id, and cast the column into corresponding type, so we allowed `sqrt(i8)`, `sqrt(i16)` ... types.
 
 The `scalar_unary_op` is a helper function to implement the scalar function for unary operator.
-This is very common used and there is `scalar_binary_op` too. See more in [binary](https://github.com/datafuselabs/databend/blob/e7edeea2e3ae5fb1f8408903df10b1b641b57652/common/functions/src/scalars/expressions/binary.rs), [unary](https://github.com/datafuselabs/databend/blob/e7edeea2e3ae5fb1f8408903df10b1b641b57652/common/functions/src/scalars/expressions/unary.rs)
+This is very commonly used and there is `scalar_binary_op` too. See more in [binary](https://github.com/datafuselabs/databend/blob/e7edeea2e3ae5fb1f8408903df10b1b641b57652/common/functions/src/scalars/expressions/binary.rs), [unary](https://github.com/datafuselabs/databend/blob/e7edeea2e3ae5fb1f8408903df10b1b641b57652/common/functions/src/scalars/expressions/unary.rs)
 
 
 ## Register the function into the factory
