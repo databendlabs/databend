@@ -65,6 +65,7 @@ use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
 use crate::sql::statements::DfUseTenant;
+use crate::sql::statements::DfCreateView;
 
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]
@@ -91,6 +92,12 @@ pub enum DfStatement {
     TruncateTable(DfTruncateTable),
     OptimizeTable(DfOptimizeTable),
     RenameTable(DfRenameTable),
+
+    // Views.
+    CreateView(DfCreateView),
+    // TODO(veeupup) make alter and delete view done
+    AlterView,
+    DeleteView,
 
     // Settings.
     ShowSettings(DfShowSettings),

@@ -28,3 +28,4 @@ mod parser_table;
 mod parser_udf;
 mod parser_use;
 mod parser_user;
+mod parser_view;
