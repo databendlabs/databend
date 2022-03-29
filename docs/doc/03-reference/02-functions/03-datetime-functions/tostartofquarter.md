@@ -1,12 +1,15 @@
 ---
-title: toStartOfISOYear
+title: toStartOfQuarter
 ---
 
-Returns the first day of the ISO year for a date or a date with time.
+Rounds down a date or date with time to the first day of the quarter.
+The first day of the quarter is either 1 January, 1 April, 1 July, or 1 October.
+Returns the date.
+
 ## Syntax
 
 ```sql
-toStartOfISOYear(expr)
+toStartOfQuarter(expr)
 ```
 
 ## Arguments
@@ -21,17 +24,17 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 ## Examples
 
 ```sql
-mysql> select toStartOfISOYear(toDate(18869));
+mysql> select toStartOfQuarter(toDate(18869));
 +---------------------------------+
-| toStartOfISOYear(toDate(18869)) |
+| toStartOfQuarter(toDate(18869)) |
 +---------------------------------+
-| 2021-01-04                      |
+| 2021-07-01                      |
 +---------------------------------+
 
-mysql> select toStartOfISOYear(toDateTime(1630812366));
+mysql> select toStartOfQuarter(toDateTime(1630812366));
 +------------------------------------------+
-| toStartOfISOYear(toDateTime(1630812366)) |
+| toStartOfQuarter(toDateTime(1630812366)) |
 +------------------------------------------+
-| 2021-01-04                               |
+| 2021-07-01                               |
 +------------------------------------------+
 ```

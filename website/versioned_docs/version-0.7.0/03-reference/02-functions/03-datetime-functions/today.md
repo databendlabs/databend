@@ -1,5 +1,5 @@
 ---
-title: YESTERDAY
+title: TODAY
 ---
 
 Returns current date.

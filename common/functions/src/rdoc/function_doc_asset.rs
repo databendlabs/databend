@@ -104,7 +104,6 @@ impl FunctionDocAsset {
 
                 pulldown_cmark::Event::Text(txt) => {
                     let txt = txt.as_ref();
-                    let txt_string = txt.to_lowercase();
                     if inside_head {
                         // Stage
                         if txt.starts_with("title:") {
@@ -132,7 +131,7 @@ impl FunctionDocAsset {
                             stage = MarkdownStage::ReturnType;
                         } else if txt.starts_with("Example") {
                             stage = MarkdownStage::Example;
-                        } else if keys.contains(&txt_string) {
+                        } else if txt.starts_with("description") {
                             stage = MarkdownStage::Description;
                         } else {
                             stage = MarkdownStage::Unknown;
