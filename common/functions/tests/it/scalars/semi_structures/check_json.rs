@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_functions::scalars::CheckJsonFunction;
 use serde_json::json;
-use serde_json::Value as JsonValue;
 
 use crate::scalars::scalar_function2_test::test_scalar_functions;
 use crate::scalars::scalar_function2_test::ScalarFunctionTest;
@@ -30,37 +29,25 @@ fn test_check_json_function() -> Result<()> {
         ScalarFunctionTest {
             name: "check_json_bool",
             columns: vec![Series::from_data(vec![true, false])],
-            expect: Series::from_data(vec![None::<JsonValue>, None::<JsonValue>]),
+            expect: Series::from_data(vec![None::<&str>, None::<&str>]),
             error: "",
         },
         ScalarFunctionTest {
             name: "check_json_int",
             columns: vec![Series::from_data(vec![1_i16, -1, 100])],
-            expect: Series::from_data(vec![
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-            ]),
+            expect: Series::from_data(vec![None::<&str>, None::<&str>, None::<&str>]),
             error: "",
         },
         ScalarFunctionTest {
             name: "check_json_float",
             columns: vec![Series::from_data(vec![12.34_f64, 56.79, 0.12345679])],
-            expect: Series::from_data(vec![
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-            ]),
+            expect: Series::from_data(vec![None::<&str>, None::<&str>, None::<&str>]),
             error: "",
         },
         ScalarFunctionTest {
             name: "check_json_string",
             columns: vec![Series::from_data(vec!["\"abcd\"", "true", "123"])],
-            expect: Series::from_data(vec![
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-            ]),
+            expect: Series::from_data(vec![None::<&str>, None::<&str>, None::<&str>]),
             error: "",
         },
         ScalarFunctionTest {
@@ -70,11 +57,7 @@ fn test_check_json_function() -> Result<()> {
                 "[\"str\", true]",
                 "[1, 2, 3]",
             ])],
-            expect: Series::from_data(vec![
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-            ]),
+            expect: Series::from_data(vec![None::<&str>, None::<&str>, None::<&str>]),
             error: "",
         },
         ScalarFunctionTest {
@@ -84,45 +67,29 @@ fn test_check_json_function() -> Result<()> {
                 "{\"key\": true}",
                 "{\"k\": 1}",
             ])],
-            expect: Series::from_data(vec![
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-            ]),
+            expect: Series::from_data(vec![None::<&str>, None::<&str>, None::<&str>]),
             error: "",
         },
         ScalarFunctionTest {
             name: "check_json_invalid_string",
             columns: vec![Series::from_data(vec!["\"abcd\"", "[1,2", "{\"k"])],
             expect: Series::from_data(vec![
-                None::<JsonValue>,
-                Some(JsonValue::String(
-                    "EOF while parsing a list at line 1 column 4".to_string(),
-                )),
-                Some(JsonValue::String(
-                    "EOF while parsing a string at line 1 column 3".to_string(),
-                )),
+                None::<&str>,
+                Some("EOF while parsing a list at line 1 column 4"),
+                Some("EOF while parsing a string at line 1 column 3"),
             ]),
             error: "",
         },
         ScalarFunctionTest {
             name: "check_json_nullable_bool",
             columns: vec![Series::from_data(vec![None, Some(true), Some(false)])],
-            expect: Series::from_data(vec![
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-            ]),
+            expect: Series::from_data(vec![None::<&str>, None::<&str>, None::<&str>]),
             error: "",
         },
         ScalarFunctionTest {
             name: "check_json_nullable_int",
             columns: vec![Series::from_data(vec![Some(1_i16), Some(-1), Some(100)])],
-            expect: Series::from_data(vec![
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-            ]),
+            expect: Series::from_data(vec![None::<&str>, None::<&str>, None::<&str>]),
             error: "",
         },
         ScalarFunctionTest {
@@ -132,11 +99,7 @@ fn test_check_json_function() -> Result<()> {
                 Some(56.79),
                 Some(0.12345679),
             ])],
-            expect: Series::from_data(vec![
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-            ]),
+            expect: Series::from_data(vec![None::<&str>, None::<&str>, None::<&str>]),
             error: "",
         },
         ScalarFunctionTest {
@@ -146,11 +109,7 @@ fn test_check_json_function() -> Result<()> {
                 Some("\"abcd\""),
                 Some("true"),
             ])],
-            expect: Series::from_data(vec![
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-            ]),
+            expect: Series::from_data(vec![None::<&str>, None::<&str>, None::<&str>]),
             error: "",
         },
         ScalarFunctionTest {
@@ -160,11 +119,7 @@ fn test_check_json_function() -> Result<()> {
                 Some("[\"str\", true]"),
                 Some("[1, 2, 3]"),
             ])],
-            expect: Series::from_data(vec![
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-            ]),
+            expect: Series::from_data(vec![None::<&str>, None::<&str>, None::<&str>]),
             error: "",
         },
         ScalarFunctionTest {
@@ -174,11 +129,7 @@ fn test_check_json_function() -> Result<()> {
                 Some("{\"k\": true}"),
                 Some("{\"k\": 1}"),
             ])],
-            expect: Series::from_data(vec![
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-            ]),
+            expect: Series::from_data(vec![None::<&str>, None::<&str>, None::<&str>]),
             error: "",
         },
         ScalarFunctionTest {
@@ -189,15 +140,11 @@ fn test_check_json_function() -> Result<()> {
                 Some("{\"k"),
             ])],
             expect: Series::from_data(vec![
-                None::<JsonValue>,
-                Some(JsonValue::String(
-                    "EOF while parsing a list at line 1 column 4".to_string(),
-                )),
-                Some(JsonValue::String(
-                    "EOF while parsing a string at line 1 column 3".to_string(),
-                )),
+                None::<&str>,
+                Some("EOF while parsing a list at line 1 column 4"),
+                Some("EOF while parsing a string at line 1 column 3"),
             ]),
-            error: "Error parsing JSON: Error(\"EOF while parsing a list\", line: 1, column: 4)",
+            error: "",
         },
         ScalarFunctionTest {
             name: "check_json_array",
@@ -206,18 +153,8 @@ fn test_check_json_function() -> Result<()> {
                 vec![0, 1, 3, 6].into(),
                 Series::from_data(vec!["test", "data", "bend", "hello", "world", "NULL"]),
             ))],
-            expect: Series::from_data(vec![
-                Some(JsonValue::String(
-                    "Invalid argument types for function 'CHECK_JSON': (ARRAY)".to_string(),
-                )),
-                Some(JsonValue::String(
-                    "Invalid argument types for function 'CHECK_JSON': (ARRAY)".to_string(),
-                )),
-                Some(JsonValue::String(
-                    "Invalid argument types for function 'CHECK_JSON': (ARRAY)".to_string(),
-                )),
-            ]),
-            error: "",
+            expect: Series::from_data(vec![None::<&str>, None::<&str>, None::<&str>]),
+            error: "Invalid argument types for function 'CHECK_JSON': Array",
         },
         ScalarFunctionTest {
             name: "check_json_struct",
@@ -231,18 +168,8 @@ fn test_check_json_function() -> Result<()> {
                     vec![Date32Type::arc(), Int8Type::arc()],
                 )),
             ))],
-            expect: Series::from_data(vec![
-                Some(JsonValue::String(
-                    "Invalid argument types for function 'CHECK_JSON': (STRUCT)".to_string(),
-                )),
-                Some(JsonValue::String(
-                    "Invalid argument types for function 'CHECK_JSON': (STRUCT)".to_string(),
-                )),
-                Some(JsonValue::String(
-                    "Invalid argument types for function 'CHECK_JSON': (STRUCT)".to_string(),
-                )),
-            ]),
-            error: "",
+            expect: Series::from_data(vec![None::<&str>, None::<&str>, None::<&str>]),
+            error: "Invalid argument types for function 'CHECK_JSON': Struct",
         },
         ScalarFunctionTest {
             name: "check_json_variant",
@@ -257,16 +184,14 @@ fn test_check_json_function() -> Result<()> {
                 json!("[1,2"),
             ]))],
             expect: Series::from_data(vec![
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-                None::<JsonValue>,
-                Some(JsonValue::String(
-                    "EOF while parsing a list at line 1 column 4".to_string(),
-                )),
+                None::<&str>,
+                None::<&str>,
+                None::<&str>,
+                None::<&str>,
+                None::<&str>,
+                None::<&str>,
+                None::<&str>,
+                Some("EOF while parsing a list at line 1 column 4"),
             ]),
             error: "",
         },
