@@ -12,6 +12,12 @@ Returns the date.
 toStartOfQuarter(expr)
 ```
 
+## Arguments
+
+| Arguments   | Description |
+| ----------- | ----------- |
+| expr | date16/date32/datetime |
+
 ## Return Type
 Datetime object, returns date in “YYYY-MM-DD” format.
 
