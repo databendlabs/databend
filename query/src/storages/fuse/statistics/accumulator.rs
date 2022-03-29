@@ -77,7 +77,10 @@ impl StatisticsAccumulator {
 
             // TODO(b41sh): support max/min aggregate functions for variant
             let nonull_data_type = remove_nullable(field.data_type());
-            if nonull_data_type.data_type_id() != TypeID::Variant {
+            if nonull_data_type.data_type_id() != TypeID::Variant
+                && nonull_data_type.data_type_id() != TypeID::VariantArray
+                && nonull_data_type.data_type_id() != TypeID::VariantObject
+            {
                 let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
                 let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
 
