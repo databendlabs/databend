@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_datavalues::prelude::*;
-use common_datavalues::with_match_physical_primitive_type;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde_json::Value as JsonValue;
@@ -58,10 +57,11 @@ impl Function for CheckJsonFunction {
             return Ok(NullType::arc());
         }
 
-        return Ok(Arc::new(NullableType::create(StringType::arc())));
+        Ok(Arc::new(NullableType::create(StringType::arc())))
     }
 
     fn eval(&self, columns: &ColumnsWithField, input_rows: usize) -> Result<ColumnRef> {
+        let data_type = remove_nullable(columns[0].field().data_type());
         let mut column = columns[0].column();
         let mut _all_null = false;
         let mut source_valids: Option<&Bitmap> = None;
@@ -71,64 +71,61 @@ impl Function for CheckJsonFunction {
             column = nullable_column.inner();
         }
 
-        if column.data_type_id() == TypeID::Null {
+        if data_type.data_type_id() == TypeID::Null {
             return NullType::arc().create_constant_column(&DataValue::Null, input_rows);
         }
 
         let mut builder = NullableColumnBuilder::<Vu8>::with_capacity(input_rows);
 
-        with_match_physical_primitive_type!(column.data_type_id().to_physical_type(), |$T| {
+        if data_type.data_type_id().is_numeric() || data_type.data_type_id() == TypeID::Boolean {
             for _i in 0..input_rows {
                 builder.append_null()
             }
-        }, {
-            match column.data_type_id() {
-                TypeID::Boolean => {
-                    for _i in 0..input_rows {
-                        builder.append_null()
+        } else if data_type.data_type_id() == TypeID::String {
+            let c: &StringColumn = Series::check_get(column)?;
+            for (i, v) in c.iter().enumerate() {
+                if let Some(source_valids) = source_valids {
+                    if !source_valids.get_bit(i) {
+                        builder.append_null();
+                        continue;
                     }
                 }
-                TypeID::String => {
-                    let c: &StringColumn = Series::check_get(column)?;
-                    for (i, v) in c.iter().enumerate() {
-                        if let Some(source_valids) = source_valids {
-                            if !source_valids.get_bit(i) {
-                                builder.append_null();
-                                continue;
-                            }
-                        }
 
-                        match std::str::from_utf8(v) {
-                            Ok(v) => match serde_json::from_str::<JsonValue>(v) {
-                                Ok(_v) => builder.append_null(),
-                                Err(e) => builder.append(e.to_string().as_bytes(), true),
-                            },
-                            Err(e) => builder.append(e.to_string().as_bytes(), true),
-                        }
-                    }
-                }
-                TypeID::Variant => {
-                    let c: &ObjectColumn<JsonValue> = Series::check_get(column)?;
-                    for v in c.iter() {
-                        if let JsonValue::String(s) = v {
-                            match serde_json::from_str::<JsonValue>(s.as_str()) {
-                                Ok(_v) => builder.append_null(),
-                                Err(e) => builder.append(e.to_string().as_bytes(), true),
-                            }
-                        } else {
-                            builder.append_null()
-                        }
-                    }
-                }
-                _ => {
-                    return Err(ErrorCode::BadDataValueType(format!(
-                        "Invalid argument types for function 'CHECK_JSON': {:?}",
-                        column.data_type_id()
-                    )));
+                match std::str::from_utf8(v) {
+                    Ok(v) => match serde_json::from_str::<JsonValue>(v) {
+                        Ok(_v) => builder.append_null(),
+                        Err(e) => builder.append(e.to_string().as_bytes(), true),
+                    },
+                    Err(e) => builder.append(e.to_string().as_bytes(), true),
                 }
             }
-        });
-        return Ok(builder.build(input_rows));
+        } else if data_type.data_type_id() == TypeID::Variant {
+            let c: &ObjectColumn<JsonValue> = Series::check_get(column)?;
+            for v in c.iter() {
+                if let JsonValue::String(s) = v {
+                    match serde_json::from_str::<JsonValue>(s.as_str()) {
+                        Ok(_v) => builder.append_null(),
+                        Err(e) => builder.append(e.to_string().as_bytes(), true),
+                    }
+                } else {
+                    builder.append_null()
+                }
+            }
+        } else if data_type.data_type_id().is_date_or_date_time() {
+            for _i in 0..input_rows {
+                builder.append(
+                    format!("{:?} is not a valid JSON", data_type.data_type_id()).as_bytes(),
+                    true,
+                )
+            }
+        } else {
+            return Err(ErrorCode::BadDataValueType(format!(
+                "Invalid argument types for function 'CHECK_JSON': {:?}",
+                column.data_type_id()
+            )));
+        }
+
+        Ok(builder.build(input_rows))
     }
 }
 

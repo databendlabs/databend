@@ -13,7 +13,10 @@ select check_json('[-1, 12, 289, 2188, false]');
 select check_json('{ "x" : "abc", "y" : false, "z": 10} ');
 select check_json('[1,');
 select check_json('"ab');
+select check_json(todate16('2022-01-01'));
 select check_json(todate32('2022-01-01'));
+select check_json(todatetime32('2022-01-01 20:20:20'));
+select check_json(todatetime64('2022-01-01 20:20:20'));
 
 DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;
