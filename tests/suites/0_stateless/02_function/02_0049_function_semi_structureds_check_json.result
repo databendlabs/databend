@@ -1,0 +1,27 @@
+==check_json==
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+EOF while parsing a value at line 1 column 3
+EOF while parsing a string at line 1 column 3
+NULL
+==check_json from table==
+NULL	NULL
+NULL	null
+NULL	true
+NULL	123
+NULL	"abc"
+NULL	[1,2,3]
+NULL	{"a":"b"}
+==check_json from table invalid json==
+expected value at line 1 column 1	abc
+EOF while parsing a value at line 1 column 3	[1,
