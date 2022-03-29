@@ -89,7 +89,9 @@ async fn test_select() -> PoemResult<()> {
 
     {
         // basic tsv format
-        let (status, body) = server.get(r#"select number, 'a' from numbers(2)"#).await;
+        let (status, body) = server
+            .get(r#"select number, 'a' from numbers(2) order by number"#)
+            .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(&body, "0\ta\n1\ta\n");
     }
