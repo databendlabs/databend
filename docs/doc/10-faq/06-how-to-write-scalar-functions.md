@@ -24,74 +24,6 @@ Scalar functions (sometimes referred to as User-Defined Functions / UDFs) return
 ```
 
 
-
-## ScalarFunction trait introduction
-
-All scalar functions implement `Function` trait, and we register them into a global static `FunctionFactory`, the factory is just an index map and the key is the name of the scalar function.
-
-:::tip
-    Function name in Databend is case-insensitive.
-:::
-
-``` rust
-
-pub trait Function: fmt::Display + Sync + Send + DynClone {
-    /// Returns the name of the function, should be unique.
-    fn name(&self) -> &str;
-
-    // Returns the number of arguments the function accepts.
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
-    /// (1, 2) means we only accept [1, 2] arguments
-    /// None means it's not variadic function
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        None
-    }
-
-    /// Calculate the monotonicity from arguments' monotonicity information.
-    /// The input should be argument's monotonicity. For binary function it should be an
-    /// array of left expression's monotonicity and right expression's monotonicity.
-    /// For unary function, the input should be an array of the only argument's monotonicity.
-    /// The returned monotonicity should have 'left' and 'right' fields None -- the boundary
-    /// calculation relies on the function.eval method.
-    fn get_monotonicity(&self, _args: &[Monotonicity]) -> Result<Monotonicity> {
-        Ok(Monotonicity::default())
-    }
-
-    /// The method returns the return_type of this function.
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable>;
-
-    /// Evaluate the function, e.g. run/execute the function.
-    fn eval(&self, _columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn>;
-
-    /// Whether the function passes through null input.
-    /// Return true is the function just return null with any given null input.
-    /// Return false if the function may return non-null with null input.
-    ///
-    /// For example, arithmetic plus('+') will output null for any null input, like '12 + null = null'.
-    /// It has no idea of how to handle null, but just pass through.
-    ///
-    /// While ISNULL function  treats null input as a valid one. For example ISNULL(NULL, 'test') will return 'test'.
-    fn passthrough_null(&self) -> bool {
-        true
-    }
-}
-
-```
-
-### Understand the functions
-
-- The function `name` indicates the name of this function, such as `log`, `sign`. Sometimes we should store the name inside the function, because different names may share the same function, such as `pow` and `power`, we can take `power` as the alias(synonyms) function of `pow`.
-- The function `num_arguments` indicates how many arguments can this function accept.
-- Some functions may accept variadic arguments, that's the `variadic_arguments` function works. For example, `round` function accepts one or two functions, its range is [1,2], we use closed interval here.
-- The function `get_monotonicity` indicates the monotonicity of this function, it can be used to optimize the execution.
-- The function `return_type` indicates the return type of this function, we can also validate the `args` in this function.
-- The function `nullable` indicates whether this function can return a column with a nullable field. The default behavior is checking if any nullable input column exists, return true if it does exist, otherwise false.
-- `eval` is the main function to execute the ScalarFunction, `columns` is the input columns, `input_rows` is the number of input rows, we will explain how to write `eval` function false.
-- `passthrough_null` indicates whether the function return null if one of the input is null. For most function it should be true (which is the default behavior). But some exceptions do exist, like `ISNULL, CONCAT_WS` etc.
-
 ### Knowledge before writing the eval function
 
 ####  Logical datatypes and physical datatypes.
@@ -100,7 +32,7 @@ Logical datatypes are the datatypes that we use in Databend, and physical dataty
 Such as `Date32`, it's a logical data type, but its physical is `Int32`, so its column is represented by `DFInt32Array`.
 
 We can get logical datatype by `data_type` function of `DataField` , and the physical datatype by `data_type` function in `DataColumn`.
-`DataColumnsWithField` has `data_type` function which returns the logical datatype.
+`ColumnsWithField` has `data_type` function which returns the logical datatype.
 
 ####  Arrow's memory layout
 
@@ -128,66 +60,167 @@ Would look like this:
 
 ```
 
-#### Constant column
+In most cases, we can ignore null for simd operation, and add the null mask to the result after the operation.
+This is very common optimization and widely used in arrow's compute system.
 
-Sometimes column is constant in the block, such as: `select 3 from table`, the column 3 is always 3, so we can use a constant column to represent it. This is useful to save the memory during computation.
+### Special column
 
-So databend's DataColumn is represented by:
+-  Constant column
 
-```rust
-pub enum DataColumn {
-    // Array of values. Series is wrap of arrow's array
-    Array(Series),
-    // A Single value.
-    Constant(DataValue, usize),
-}
-```
+    Sometimes column is constant in the block, such as: `select 3 from table`, the column 3 is always 3, so we can use a constant column to represent it. This is useful to save the memory space during computation.
 
+    So databend's DataColumn is represented by:
+
+    ```rust
+    #[derive(Clone)]
+    pub struct ConstColumn {
+        length: usize,
+        column: ColumnRef,
+    }
+    ```
+- Nullable column
+
+    By defaults, column are not nullable. If we want nullable column, we can use this to represent it.
+
+    ```rust
+    #[derive(Clone)]
+    pub struct NullableColumn {
+        validity: Bitmap,
+        column: ColumnRef,
+    }
+    ```
 
 ### Writing function guidelines
 
-#### Column Casting
-To execute the scalar function, we surely need to iterate the input columns of arguments.
-Since we already check the datatypes in `return_type` function, so we can cast the input columns to the specific columns like `DFInt32Array` using `i32` function.
+## ScalarFunction trait introduction
 
-#### Constant Column case
-Noticed that we should take care of the Constant Column match case to improve memory usage.
+All scalar functions implement `Function` trait, and we register them into a global static `FunctionFactory`, the factory is just an index map and the key is the name of the scalar function.
 
+:::tip
+    Function name in Databend is case-insensitive.
+:::
 
-#### Column Iteration and validity bitmap combination
-Most functions have default null behavior, see [Pass through null](#pass-through-null). We don't need to combine validity bitmap. But for functions that can produce valid result with null input, we need to generate our own bitmap inside the function `eval`.
+``` rust
 
-To iterate the column, we can use `column.iter()` to generate an iterator, the item is `Option<T>`, `None` means it's null.
-But this's inefficient because we need to check the null value every time we iterate the column inside the loop which will pollute the CPU cache.
-
-According to the memory layout of Arrow, we can directly use the validity bitmap of the original column to indicate the null value.
-So we have `ArrayApply` trait to help you iterate the column. If there are two zip iterator, we can use `binary` function to combine the validity bitmap of two columns.
-
-```rust title="ArrayApply""
-let array: DFUInt8Array = self.apply_cast_numeric(|a| {
-                            AsPrimitive::<u8>::as_(a - (a / rhs) * rhs)
-                        });
+pub trait Function: fmt::Display + Sync + Send + DynClone {
+    ...
+}
 ```
 
-```rust title="binary"
-binary(x_series.f64()?, y_series.f64()?, |x, y| x.pow(y))
+ *Let's take function `sqrt` as an example*
+
+- Declar the function named `SqrtFunction`
+``` rust
+#[derive(Clone)]
+pub struct SqrtFunction {
+    display_name: String,
+}
 ```
 
-### Return type
-The return value of `return_type` is `DataTypeAndNullable`, which is a wrapper of `DataType` and `nullable`. Most functions produces nullable data type only when one of the input data types is nullable. Some exceptions include `sqrt(-1)`,`from_base64("1")`, etc.
+- Implement `SqrtFunction` to have a constructor and description.
 
-### Implicit cast
-Databend can accept implicit cast, eg: `pow('3', 2)`, `sign('1232')` we can cast the argument to specific column using `cast_with_type`.
+```rust
+impl SqrtFunction {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+        Ok(Box::new(SqrtFunction {
+            display_name: display_name.to_string(),
+        }))
+    }
 
-### Pass through null
-Most functions have default null behavior (thus you don't need to override), that is, a null value in any of the input produces a null result. For functions like this, the `eval` method doesn't need to conditionally calculate the result with checking the input is null or not. The bitmap with null bits will be applied outside the function by masking the return column. For example, arithmetic plus operation with inputs`[1, None, 1], [None, 2, 2]` doesn't need to check if every column value is null. The bitmap of `[1, 0, 1], [0, 1, 1]` will be merged to `[0, 0, 1]` and applied to the results, which ensures the first two values are none.
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
+    }
+}
+```
 
-## Refer to other examples
-As you see, adding a new scalar function in Databend is not as hard as you think.
-Before you start to add one, please refer to other scalar function examples, such as `sign`, `expr`, `tan`, `atan`.
+The `try_create` is useful to create this function, at last we can register it into the factory.
+
+The `desc` is used to describe the function. Inside it, we can set the features, such as the number of arguments, the deterministic or not, etc.
+
+- Implement the simple function for `sqrt`
+
+```rust
+fn sqrt<S>(value: S, _ctx: &mut EvalContext) -> f64
+where S: AsPrimitive<f64> {
+    value.as_().sqrt()
+}
+```
+
+It's really simple, `S: AsPrimitive<f64>` means we can accept a primitive value as the argument.
+
+- Implement Function trait
+
+```rust
+impl Function for SqrtFunction {
+    fn name(&self) -> &str {
+        &*self.display_name
+    }
+
+    fn return_type(&self, args: &[&DataTypePtr]) -> Result<DataTypePtr> {
+        assert_numeric(args[0])?;
+        Ok(Float64Type::arc())
+    }
+
+    fn eval(&self, columns: &ColumnsWithField, _input_rows: usize) -> Result<ColumnRef> {
+        let mut ctx = EvalContext::default();
+        with_match_primitive_type_id!(columns[0].data_type().data_type_id(), |$S| {
+             let col = scalar_unary_op::<$S, f64, _>(columns[0].column(), sqrt::<$S>, &mut ctx)?;
+             Ok(col.arc())
+        },{
+            unreachable!()
+        })
+    }
+}
+```
+
+By defaults, we enable `passthrough_constant`, that means: `sqrt(constant_column)`  will be converted into `Consntat(sqrt(column), rows)` in `FunctionAdaptor`.
+
+And we have enabled `passthrough_nullable`, that means: `sqrt(nullable_column)`  will be converted into `Nullable(sqrt(no_nullable_column), null_bitmaps)` in `FunctionAdaptor`.
+
+So inside the `eval` function, we really don't need to care about constant or nullable cases. It's pretty simple and efficient.
+
+
+The macro `with_match_primitive_type_id` will match the primitive type id, and cast the column into corresponding type, so we allowed `sqrt(i8)`, `sqrt(i16)` ... types.
+
+The `scalar_unary_op` is a helper function to implement the scalar function for unary operator.
+This is very common used and there is `scalar_binary_op` too. See more in [binary](https://github.com/datafuselabs/databend/blob/e7edeea2e3ae5fb1f8408903df10b1b641b57652/common/functions/src/scalars/expressions/binary.rs), [unary](https://github.com/datafuselabs/databend/blob/e7edeea2e3ae5fb1f8408903df10b1b641b57652/common/functions/src/scalars/expressions/unary.rs)
+
+
+## Register the function into the factory
+
+```rust
+factory.register("sqrt", SqrtFunction::desc());
+```
+
 
 ## Testing
 To be a good engineer, don't forget to test your codes, please add unit tests and stateless tests after you finish the new scalar functions.
+
+- [Unit tests](https://github.com/datafuselabs/databend/blob/034e1cd95c1376341b9421c08f8eb38b40fc5dda/common/functions/tests/it/scalars/maths/sqrt.rs)
+
+- Stateless tests:
+
+```sql
+
+MySQL [(none)]> select sqrt(-3), sqrt(3), sqrt(0), sqrt(3.0), sqrt( toUInt64(3) ), sqrt(null) ;
++----------+--------------------+---------+--------------------+--------------------+------------+
+| sqrt(-3) | sqrt(3)            | sqrt(0) | sqrt(3)            | sqrt(toUInt64(3))  | sqrt(NULL) |
++----------+--------------------+---------+--------------------+--------------------+------------+
+|      NaN | 1.7320508075688772 |       0 | 1.7320508075688772 | 1.7320508075688772 |       NULL |
++----------+--------------------+---------+--------------------+--------------------+------------+
+1 row in set (0.012 sec)
+
+MySQL [(none)]> select sqrt('-3');
+ERROR 1105 (HY000): Code: 1007, displayText = Expected a numeric type, but got String (while in select before projection).
+```
+
+All is done!
+
+
+## Refer to other examples
+As you see, adding a new scalar function in Databend is not as hard as you think.
+Before you start to add one, please refer to other scalar function examples, such as `sign`, `expr`, `tan`, `atan`
 
 ## Summary
 We welcome all community users to contribute more powerful functions to Databend. If you find any problems, feel free to [open an issue](https://github.com/datafuselabs/databend/issues) in GitHub, we will use our best efforts to help you.
