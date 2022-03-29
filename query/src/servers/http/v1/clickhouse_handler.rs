@@ -135,7 +135,7 @@ fn try_parse_insert_formatted(sql: &str) -> Result<Option<(Format, Vec<DfStateme
         if let DfStatement::InsertQuery(ref insert) = statement {
             if let Some(format) = &insert.format {
                 match format.as_str() {
-                    FORMAT_JSON_EACH_ROW => return Ok(Some((Format::TSV, statements))),
+                    FORMAT_JSON_EACH_ROW => return Ok(Some((Format::NDJson, statements))),
                     // "" for "insert into my_table values;"
                     "" => {}
                     _ => {
@@ -196,7 +196,7 @@ pub async fn clickhouse_handler_post(
 
     if let Some((format, body)) = format {
         let input_stream = match format {
-            Format::TSV => build_ndjson_stream(&plan, body).await.map_err(BadRequest)?,
+            Format::NDJson => build_ndjson_stream(&plan, body).await.map_err(BadRequest)?,
         };
         execute(ctx, plan, Some(input_stream))
             .await
