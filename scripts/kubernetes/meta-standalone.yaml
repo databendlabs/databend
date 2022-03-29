@@ -52,7 +52,7 @@ spec:
             - name: METASRV_GRPC_API_ADDRESS
               value: "$(POD_IP):9191"
             - name: KVSRV_API_PORT
-              value: "28003"
+              value: "28004"
             - name: KVSRV_LISTEN_HOST
               value: "$(POD_IP)"
             - name: KVSRV_ADVERTISE_HOST
@@ -67,14 +67,14 @@ spec:
             periodSeconds: 15
             failureThreshold: 3
           ports:
-            - containerPort: 28001
-              name: metrics
-            - containerPort: 28002
-              name: admin
-            - containerPort: 9191
-              name: flight
-            - containerPort: 28003
-              name: raft
+            - name: metrics
+              containerPort: 28001
+            - name: admin
+              containerPort: 28002
+            - name: flight
+              containerPort: 9191
+            - name: raft
+              containerPort: 28004
           volumeMounts:
             - name: data
               mountPath: /mnt/data
@@ -96,17 +96,17 @@ metadata:
 spec:
   clusterIP: None
   ports:
-    - port: 28001
+    - name: metrics
+      port: 28001
       targetPort: 28001
-      name: metrics
-    - port: 28002
+    - name: admin
+      port: 28002
       targetPort: 28002
-      name: admin
-    - port: 9191
+    - name: flight
+      port: 9191
       targetPort: 9191
-      name: flight
-    - port: 28003
-      targetPort: 28003
-      name: raft
+    - name: raft
+      port: 28004
+      targetPort: 28004
   selector:
     app: meta-service

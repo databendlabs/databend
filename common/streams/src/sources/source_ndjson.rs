@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::BufRead;
-
 use async_trait::async_trait;
+use common_base::tokio::io::AsyncBufRead;
+use common_base::tokio::io::AsyncBufReadExt;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -50,7 +50,7 @@ impl NDJsonSourceBuilder {
     }
 
     pub fn build<R>(&self, reader: R) -> Result<NDJsonSource<R>>
-    where R: BufRead + Unpin + Send {
+    where R: AsyncBufRead + Unpin + Send {
         NDJsonSource::try_create(self.clone(), reader)
     }
 }
@@ -63,7 +63,7 @@ pub struct NDJsonSource<R> {
 }
 
 impl<R> NDJsonSource<R>
-where R: BufRead + Unpin + Send
+where R: AsyncBufRead + Unpin + Send
 {
     fn try_create(builder: NDJsonSourceBuilder, reader: R) -> Result<Self> {
         Ok(Self {
@@ -77,7 +77,7 @@ where R: BufRead + Unpin + Send
 
 #[async_trait]
 impl<R> Source for NDJsonSource<R>
-where R: BufRead + Unpin + Send
+where R: AsyncBufRead + Unpin + Send
 {
     async fn read(&mut self) -> Result<Option<DataBlock>> {
         // Check size_limit.
@@ -105,9 +105,11 @@ where R: BufRead + Unpin + Send
 
         loop {
             self.buffer.clear();
+
             if self
                 .reader
                 .read_line(&mut self.buffer)
+                .await
                 .map_err_to_code(ErrorCode::BadBytes, || {
                     format!("Parse NDJson error at line {}", self.rows)
                 })?

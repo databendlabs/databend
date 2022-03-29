@@ -24,7 +24,7 @@ async fn test_use_tenant_interpreter() -> Result<()> {
     let conf = crate::tests::ConfigBuilder::create()
         .with_management_mode()
         .config();
-    let ctx = crate::tests::create_query_context_with_config(conf.clone()).await?;
+    let ctx = crate::tests::create_query_context_with_config(conf.clone(), None).await?;
 
     let plan = PlanParser::parse(ctx.clone(), "SUDO USE TENANT 't1'").await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;

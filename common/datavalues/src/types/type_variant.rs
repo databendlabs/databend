@@ -49,7 +49,7 @@ impl DataType for VariantType {
     }
 
     fn default_value(&self) -> DataValue {
-        DataValue::String("Null".as_bytes().to_vec())
+        DataValue::Json(JsonValue::Null)
     }
 
     fn create_constant_column(&self, data: &DataValue, size: usize) -> Result<ColumnRef> {

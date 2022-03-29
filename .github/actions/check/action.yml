@@ -71,13 +71,3 @@ runs:
       with:
         command: udeps
         args: --workspace
-
-    - name: Install taplo
-      uses: actions-rs/cargo@v1
-      with:
-        command: install
-        args: taplo-cli
-
-    - name: Check toml format
-      shell: bash
-      run: taplo fmt --check

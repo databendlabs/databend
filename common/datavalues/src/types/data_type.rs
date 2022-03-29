@@ -138,6 +138,8 @@ pub fn from_arrow_type(dt: &ArrowType) -> DataTypePtr {
         }
         ArrowType::Extension(custom_name, _, _) => match custom_name.as_str() {
             "Variant" => Arc::new(VariantType::default()),
+            "VariantArray" => Arc::new(VariantArrayType::default()),
+            "VariantObject" => Arc::new(VariantObjectType::default()),
             _ => unimplemented!("data_type: {:?}", dt),
         },
 
@@ -166,6 +168,8 @@ pub fn from_arrow_field(f: &ArrowField) -> DataTypePtr {
             },
             "Interval" => return IntervalType::arc(metadata.unwrap().into()),
             "Variant" => return VariantType::arc(),
+            "VariantArray" => return VariantArrayType::arc(),
+            "VariantObject" => return VariantObjectType::arc(),
             _ => {}
         }
     }
@@ -219,7 +223,7 @@ pub fn remove_nullable(data_type: &DataTypePtr) -> DataTypePtr {
 pub fn format_data_type_sql(data_type: &DataTypePtr) -> String {
     let notnull_type = remove_nullable(data_type);
     match data_type.is_nullable() {
-        true => format!("{:?}", notnull_type),
-        false => format!("{:?} NOT NULL", notnull_type),
+        true => format!("{:?} NULL", notnull_type),
+        false => format!("{:?}", notnull_type),
     }
 }

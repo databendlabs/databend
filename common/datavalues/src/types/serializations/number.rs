@@ -14,6 +14,7 @@
 
 use std::marker::PhantomData;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_io::prelude::Marshal;
 use common_io::prelude::Unmarshal;
@@ -73,5 +74,28 @@ where T: PrimitiveType
         let col: &PrimitiveColumn<T> = Series::check_get(column)?;
         let values: Vec<T> = col.iter().map(|c| c.to_owned()).collect();
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
+    }
+
+    fn serialize_json_object(
+        &self,
+        column: &ColumnRef,
+        _valids: Option<&Bitmap>,
+    ) -> Result<Vec<Value>> {
+        self.serialize_json(column)
+    }
+
+    fn serialize_json_object_suppress_error(
+        &self,
+        column: &ColumnRef,
+    ) -> Result<Vec<Option<Value>>> {
+        let column: &PrimitiveColumn<T> = Series::check_get(column)?;
+        let result: Vec<Option<Value>> = column
+            .iter()
+            .map(|x| match serde_json::to_value(x) {
+                Ok(v) => Some(v),
+                Err(_) => None,
+            })
+            .collect();
+        Ok(result)
     }
 }

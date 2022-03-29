@@ -30,6 +30,7 @@ use common_meta_types::RoleIdentity;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UserInfo;
+use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
 
 use crate::user::user_api::UserApi;
@@ -150,40 +151,21 @@ impl UserApi for UserMgr {
         &self,
         username: String,
         hostname: String,
-        new_auth_info: AuthInfo,
+        new_auth_info: Option<AuthInfo>,
+        new_user_option: Option<UserOption>,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
         let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
-        let user_info = user_val_seq.await?.data;
+        let mut user_info = user_val_seq.await?.data;
 
-        let mut new_user_info = UserInfo::new(username.clone(), hostname.clone(), new_auth_info);
-        new_user_info.grants = user_info.grants;
-
-        let user_key = format_user_key(&new_user_info.name, &new_user_info.hostname);
-        let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
-        let value = serde_json::to_vec(&new_user_info)?;
-
-        let match_seq = match seq {
-            None => MatchSeq::GE(1),
-            Some(s) => MatchSeq::Exact(s),
+        if let Some(auth_info) = new_auth_info {
+            user_info.auth_info = auth_info;
         };
-
-        let res = self
-            .kv_api
-            .upsert_kv(UpsertKVAction::new(
-                &key,
-                match_seq,
-                Operation::Update(value),
-                None,
-            ))
-            .await?;
-        match res.result {
-            Some(SeqV { seq: s, .. }) => Ok(Some(s)),
-            None => Err(ErrorCode::UnknownUser(format!(
-                "unknown user, or seq not match {}",
-                username
-            ))),
-        }
+        if let Some(user_option) = new_user_option {
+            user_info.option = user_option;
+        };
+        let seq = self.upsert_user_info(&user_info, seq).await?;
+        Ok(Some(seq))
     }
 
     async fn grant_privileges(

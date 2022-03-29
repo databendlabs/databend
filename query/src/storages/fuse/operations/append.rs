@@ -55,11 +55,11 @@ impl FuseTable {
             self.table_info.schema().clone(),
             rows_per_block,
             block_per_seg,
-            self.meta_locations().clone(),
+            self.meta_location_generator().clone(),
         )
         .await;
 
-        let locs = self.meta_locations().clone();
+        let locs = self.meta_location_generator().clone();
         let segment_info_cache = ctx.get_storage_cache_manager().get_table_segment_cache();
 
         let log_entries = stream! {

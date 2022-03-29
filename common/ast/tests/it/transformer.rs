@@ -87,7 +87,7 @@ fn test_parse_with_ddl() {
         r#"DROP TABLE IF EXISTS table1"#,
         r#"CREATE TABLE t (c1 INTEGER NULL, c2 BIGINT NULL, c3 VARCHAR(255) NULL)"#,
         r#"CREATE TABLE t (c1 INTEGER NOT NULL, c2 BIGINT NOT NULL, c3 VARCHAR(255) NOT NULL)"#,
-        r#"CREATE TABLE t (c1 INTEGER NULL DEFAULT 1)"#,
+        r#"CREATE TABLE t (c1 INTEGER NOT NULL DEFAULT 1)"#,
     ];
     for (stmt, expect) in stmts.iter().zip(expected) {
         assert_eq!(format!("{}", stmt), expect);

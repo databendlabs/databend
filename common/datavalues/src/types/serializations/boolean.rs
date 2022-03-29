@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use opensrv_clickhouse::types::column::ArcColumnWrapper;
@@ -70,5 +71,28 @@ impl TypeSerializer for BooleanSerializer {
         let col: &BooleanColumn = Series::check_get(column)?;
         let values: Vec<u8> = col.iter().map(|c| c as u8).collect();
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
+    }
+
+    fn serialize_json_object(
+        &self,
+        column: &ColumnRef,
+        _valids: Option<&Bitmap>,
+    ) -> Result<Vec<Value>> {
+        self.serialize_json(column)
+    }
+
+    fn serialize_json_object_suppress_error(
+        &self,
+        column: &ColumnRef,
+    ) -> Result<Vec<Option<Value>>> {
+        let column: &BooleanColumn = Series::check_get(column)?;
+        let result: Vec<Option<Value>> = column
+            .iter()
+            .map(|x| match serde_json::to_value(x) {
+                Ok(v) => Some(v),
+                Err(_) => None,
+            })
+            .collect();
+        Ok(result)
     }
 }

@@ -476,6 +476,7 @@ async fn test_auth_jwt() -> Result<()> {
         auth_info: AuthInfo::JWT,
         grants: Default::default(),
         quota: Default::default(),
+        option: Default::default(),
     };
 
     let tenant = "test";

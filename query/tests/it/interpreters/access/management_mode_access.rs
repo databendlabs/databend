@@ -151,7 +151,7 @@ async fn test_management_mode_access() -> Result<()> {
     let conf = crate::tests::ConfigBuilder::create()
         .with_management_mode()
         .config();
-    let ctx = crate::tests::create_query_context_with_config(conf.clone()).await?;
+    let ctx = crate::tests::create_query_context_with_config(conf.clone(), None).await?;
     // First to set tenant.
     {
         let plan = PlanParser::parse(ctx.clone(), "SUDO USE TENANT 'test'").await?;

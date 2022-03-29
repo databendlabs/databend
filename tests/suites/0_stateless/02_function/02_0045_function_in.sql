@@ -10,8 +10,8 @@ select 1 in (1.0, 2);
 select 'aa' in ('aa', 'bb', 'cc');
 select true in (true, false);
 select true in (NULL, false);
--- 
+--
 DROP TABLE IF EXISTS t1;
-CREATE TABLE t1(a UInt64, b UInt64) Engine = Memory;
+CREATE TABLE t1(a UInt64 null, b UInt64 null) Engine = Memory;
 INSERT INTO t1 (a,b) VALUES (1, NULL), (2, 3);
 SELECT a FROM t1 WHERE b IN (NULL,3);

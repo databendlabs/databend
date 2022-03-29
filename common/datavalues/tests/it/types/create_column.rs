@@ -129,6 +129,20 @@ fn test_create_constant() -> Result<()> {
             size: 2,
             column_expected: Series::from_data(vec![json!("hello"), json!("hello")]),
         },
+        Test {
+            name: "variant_array",
+            data_type: VariantArrayType::arc(),
+            value: DataValue::Json(json!([1, 2, 3])),
+            size: 2,
+            column_expected: Series::from_data(vec![json!([1, 2, 3]), json!([1, 2, 3])]),
+        },
+        Test {
+            name: "variant_object",
+            data_type: VariantObjectType::arc(),
+            value: DataValue::Json(json!({"a":1,"b":2})),
+            size: 2,
+            column_expected: Series::from_data(vec![json!({"a":1,"b":2}), json!({"a":1,"b":2})]),
+        },
     ];
 
     for test in tests {

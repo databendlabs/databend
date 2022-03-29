@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use opensrv_clickhouse::types::column::ArcColumnWrapper;
 use opensrv_clickhouse::types::column::ColumnFrom;
 use serde_json;
-use serde_json::Value as JsonValue;
+use serde_json::Value;
 
 use crate::prelude::*;
 
@@ -38,9 +39,9 @@ impl TypeSerializer for VariantSerializer {
         Ok(result)
     }
 
-    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<JsonValue>> {
+    fn serialize_json(&self, column: &ColumnRef) -> Result<Vec<Value>> {
         let column: &JsonColumn = Series::check_get(column)?;
-        let result: Vec<JsonValue> = column.iter().map(|v| v.to_owned()).collect();
+        let result: Vec<Value> = column.iter().map(|v| v.to_owned()).collect();
         Ok(result)
     }
 
@@ -52,5 +53,53 @@ impl TypeSerializer for VariantSerializer {
         let values: Vec<String> = column.iter().map(|v| v.to_string()).collect();
 
         Ok(Vec::column_from::<ArcColumnWrapper>(values))
+    }
+
+    fn serialize_json_object(
+        &self,
+        column: &ColumnRef,
+        valids: Option<&Bitmap>,
+    ) -> Result<Vec<Value>> {
+        let column: &JsonColumn = Series::check_get(column)?;
+        let mut result: Vec<Value> = Vec::new();
+        for (i, v) in column.iter().enumerate() {
+            if let Some(valids) = valids {
+                if !valids.get_bit(i) {
+                    result.push(Value::Null);
+                    continue;
+                }
+            }
+            match v {
+                Value::String(v) => match serde_json::from_str::<Value>(v) {
+                    Ok(v) => result.push(v),
+                    Err(e) => {
+                        return Err(ErrorCode::BadDataValueType(format!(
+                            "Error parsing JSON: {}",
+                            e
+                        )))
+                    }
+                },
+                _ => result.push(v.clone()),
+            }
+        }
+        Ok(result)
+    }
+
+    fn serialize_json_object_suppress_error(
+        &self,
+        column: &ColumnRef,
+    ) -> Result<Vec<Option<Value>>> {
+        let column: &JsonColumn = Series::check_get(column)?;
+        let result: Vec<Option<Value>> = column
+            .iter()
+            .map(|v| match v {
+                Value::String(v) => match serde_json::from_str::<Value>(v.as_str()) {
+                    Ok(v) => Some(v),
+                    Err(_) => None,
+                },
+                _ => Some(v.clone()),
+            })
+            .collect();
+        Ok(result)
     }
 }
