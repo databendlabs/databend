@@ -77,13 +77,6 @@ impl Function for City64WithSeedFunction {
         &*self.display_name
     }
 
-    fn get_monotonicity(
-        &self,
-        _args: &[crate::scalars::Monotonicity],
-    ) -> Result<crate::scalars::Monotonicity> {
-        Ok(crate::scalars::Monotonicity::default())
-    }
-
     fn return_type(
         &self,
         args: &[&common_datavalues::DataTypePtr],
