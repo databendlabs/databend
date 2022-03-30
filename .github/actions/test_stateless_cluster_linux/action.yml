@@ -1,5 +1,5 @@
-name: "Test metactl"
-description: ""
+name: "Test Stateless Cluster"
+description: "Running stateless tests in cluster mode"
 inputs:
   profile:
     description: "The profile for this test"
@@ -15,12 +15,20 @@ runs:
     - name: Maximize build space
       uses: ./.github/actions/cleanup
 
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
+
     - uses: actions/download-artifact@v2
       with:
         name: ${{ inputs.profile }}-${{ github.sha }}-${{ inputs.target }}
         path: ./target/debug
 
-    - name: Test metactl
+    - name: Set up file as executable
       shell: bash
       run: |
-        make metactl-test
+        chmod +x ./target/debug/databend-*
+
+    - name: Run Stateless Tests with Cluster mode
+      shell: bash
+      run: |
+        build-tool bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
