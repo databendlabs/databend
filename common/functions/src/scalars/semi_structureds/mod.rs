@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod check_json;
 mod parse_json;
 mod semi_structured;
 
+pub use check_json::CheckJsonFunction;
 pub use parse_json::ParseJsonFunction;
 pub use parse_json::TryParseJsonFunction;
 pub use semi_structured::SemiStructuredFunction;

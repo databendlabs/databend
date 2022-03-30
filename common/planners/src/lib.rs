@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod plan_admin_use_tenant;
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
 mod plan_broadcast;
@@ -96,7 +95,6 @@ mod plan_user_udf_alter;
 mod plan_user_udf_create;
 mod plan_user_udf_drop;
 
-pub use plan_admin_use_tenant::AdminUseTenantPlan;
 pub use plan_aggregator_final::AggregatorFinalPlan;
 pub use plan_aggregator_partial::AggregatorPartialPlan;
 pub use plan_broadcast::BroadcastPlan;

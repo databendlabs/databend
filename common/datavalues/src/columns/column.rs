@@ -177,6 +177,8 @@ where A: AsRef<dyn Array>
             Struct => Arc::new(StructColumn::from_arrow_array(self.as_ref())),
             String => Arc::new(StringColumn::from_arrow_array(self.as_ref())),
             Variant => Arc::new(JsonColumn::from_arrow_array(self.as_ref())),
+            VariantArray => Arc::new(JsonColumn::from_arrow_array(self.as_ref())),
+            VariantObject => Arc::new(JsonColumn::from_arrow_array(self.as_ref())),
         }
     }
 

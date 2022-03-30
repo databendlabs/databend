@@ -10,7 +10,7 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 /** @type {import('@docusaurus/types').Config} */
 const config = {
     title: 'Databend',
-    tagline: 'The modern data warehouse, have the Elasticity and Performance both on Object Storage',
+    tagline: 'The modern Cloud Data Warehouse, activate your Object Storage for sub-second analytics.',
     url: 'https://databend.rs',
     baseUrl: '/',
     onBrokenLinks: 'throw',
@@ -94,8 +94,14 @@ const config = {
                   {
                     to: '/doc',
                     label: 'Documentation',
-                    position: 'left',
+                    position: 'right',
                   },
+                  {
+                     to: '/doc/contributing/good-pr',
+                     label: 'Contributing',
+                     position: 'right',
+                  },
+                  {to: '/blog', label: 'Blog', position: 'right'}, // or position: 'right'
                   {
                       href: 'https://github.com/datafuselabs/databend',
                       label: 'GitHub',

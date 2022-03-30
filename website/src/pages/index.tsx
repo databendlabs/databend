@@ -36,8 +36,8 @@ export default function Home(): JSX.Element {
     const {siteConfig} = useDocusaurusContext();
     return (
       <Layout
-        title={`Databend - A Modern Real-Time Data Processing & Analytics DBMS with Cloud-Native Architecture`}
-        description={`A Modern Real-Time Data Processing & Analytics DBMS with Cloud-Native Architecture`}>
+        title={`Databend - Activate your Object Storage for sub-second analytics`}
+        description={`A modern Elasticity and Performance Cloud Data Warehouse, activate your Object Storage for sub-second analytics`}>
         <HomepageHeader/>
       </Layout>
     );

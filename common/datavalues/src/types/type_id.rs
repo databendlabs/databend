@@ -71,6 +71,8 @@ pub enum TypeID {
     /// Variant is a tagged universal type, which can store values of any other type,
     /// including Object and Array, up to a maximum size of 16 MB.
     Variant,
+    VariantArray,
+    VariantObject,
 }
 
 impl TypeID {
@@ -216,7 +218,7 @@ impl TypeID {
             String => PhysicalTypeID::String,
             Array => PhysicalTypeID::Array,
             Struct => PhysicalTypeID::Struct,
-            Variant => PhysicalTypeID::Variant,
+            Variant | VariantArray | VariantObject => PhysicalTypeID::Variant,
         }
     }
 }

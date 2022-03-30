@@ -104,14 +104,3 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: ./.github/actions/test_stateful_standalone
-
-  test_management_mode:
-    runs-on: ${{ matrix.config.os }}
-    needs: build
-    strategy:
-      matrix:
-        config:
-          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
-    steps:
-      - uses: actions/checkout@v2
-      - uses: ./.github/actions/test_management_mode

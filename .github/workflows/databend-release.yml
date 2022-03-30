@@ -34,7 +34,7 @@ jobs:
 
       - name: Rust setup
         run: |
-          bash ./scripts/setup/dev_setup.sh
+          bash ./scripts/setup/dev_setup.sh -y
           cargo install --version 0.2.1 cross
       - name: Build Binary
         run: |

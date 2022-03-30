@@ -40,3 +40,5 @@ pub use stage::upload_to_stage;
 pub use stage::UploadToStageResponse;
 pub use statement::statement_handler;
 pub use statement::statement_router;
+
+pub use crate::servers::http::clickhouse_handler::clickhouse_router;

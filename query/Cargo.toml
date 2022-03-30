@@ -54,7 +54,7 @@ common-tracing = { path = "../common/tracing" }
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
 cargo-license = { git = "https://github.com/datafuse-extras/cargo-license", rev = "f1ce4a2" }
 opensrv-clickhouse = { git = "https://github.com/datafuselabs/opensrv", rev = "9690be9", package = "opensrv-clickhouse" }
-opensrv-mysql = { git = "https://github.com/datafuselabs/opensrv", rev = "e744427", package = "opensrv-mysql" }
+opensrv-mysql = { git = "https://github.com/datafuselabs/opensrv", rev = "b82c432", package = "opensrv-mysql" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "da3b180" }
 
 # Crates.io dependencies
@@ -118,6 +118,7 @@ pretty_assertions = "1.1.0"
 reqwest = { version = "0.11.9", features = ["json", "native-tls"] }
 tempfile = "3.3.0"
 toml = { version = "0.5.8", default-features = false }
+url = "2.2.2"
 wiremock = "0.5.11"
 
 [build-dependencies]

@@ -23,7 +23,6 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::AdminUseTenantPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
@@ -187,9 +186,6 @@ pub trait PlanRewriter: Sized {
 
             // Kill.
             PlanNode::Kill(plan) => self.rewrite_kill(plan),
-
-            // Admin.
-            PlanNode::AdminUseTenant(plan) => self.rewrite_use_tenant(plan),
         }
     }
 
@@ -362,10 +358,6 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_use_database(&mut self, plan: &UseDatabasePlan) -> Result<PlanNode> {
         Ok(PlanNode::UseDatabase(plan.clone()))
-    }
-
-    fn rewrite_use_tenant(&mut self, plan: &AdminUseTenantPlan) -> Result<PlanNode> {
-        Ok(PlanNode::AdminUseTenant(plan.clone()))
     }
 
     fn rewrite_set_variable(&mut self, plan: &SettingPlan) -> Result<PlanNode> {
