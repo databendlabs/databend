@@ -19,7 +19,10 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::GrantObject;
+use common_meta_types::TableMeta;
+use common_meta_types::TableView;
 use common_meta_types::UserPrivilegeType;
+use common_meta_types::CreateTableReq;
 use common_planners::CreateTablePlan;
 use common_planners::InsertInputSource;
 use common_planners::InsertPlan;
@@ -56,6 +59,52 @@ impl Interpreter for CreateViewInterpreter {
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        todo!()
+        // check privilige
+        self.ctx
+        .get_current_session()
+        .validate_privilege(
+            &GrantObject::Database(self.plan.db.clone()),
+            UserPrivilegeType::Create,
+        )
+        .await?;
+
+        // check whether view has exists
+        if !self
+        .ctx
+        .get_catalog()
+        .list_tables(&*self.plan.tenant, &*self.plan.db)
+        .await?
+        .iter()
+        .all(|table| table.name() != self.plan.viewname.as_str()) {
+            return Err(ErrorCode::ViewAlreadyExists(
+                format!("{}.{} as view Already Exists", self.plan.db, self.plan.viewname)
+            ));
+        }
+
+        self.create_view().await
+    }
+}
+
+impl CreateViewInterpreter {
+    async fn create_view(&self) -> Result<SendableDataBlockStream> {
+        let catalog = self.ctx.get_catalog();
+        let plan = CreateTableReq {
+            if_not_exists: self.plan.if_not_exists,
+            tenant: self.plan.tenant.clone(),
+            db: self.plan.db.clone(),
+            table: self.plan.viewname.clone(),
+            table_meta: TableMeta {
+                engine: "VIEW".to_string(),
+                view: Some(TableView { subquery:self.plan.subquery.clone() }),
+                ..Default::default()
+            }
+        };
+        catalog.create_table(plan).await?;
+
+        Ok(Box::pin(DataBlockStream::create(
+            self.plan.schema(),
+            None,
+            vec![],
+        )))
     }
 }

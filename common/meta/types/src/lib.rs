@@ -146,6 +146,7 @@ pub use table::RenameTableReq;
 pub use table::TableIdent;
 pub use table::TableInfo;
 pub use table::TableMeta;
+pub use table::TableView;
 pub use table::TableNameIndent;
 pub use table::UpsertTableOptionReply;
 pub use table::UpsertTableOptionReq;
