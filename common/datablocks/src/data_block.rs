@@ -25,9 +25,10 @@ use common_exception::Result;
 
 use crate::pretty_format_blocks;
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct DataBlock {
     schema: DataSchemaRef,
+    #[serde(skip)]
     columns: Vec<ColumnRef>,
 }
 

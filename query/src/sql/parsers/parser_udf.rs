@@ -107,7 +107,7 @@ impl<'a> DfParser<'a> {
         Ok(definition)
     }
 
-    pub(crate) fn parse_create_udf(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_create_udf(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -131,7 +131,7 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::CreateUDF(create_udf))
     }
 
-    pub(crate) fn parse_alter_udf(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_alter_udf(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let udf_name = self.parser.parse_literal_string()?;
         let as_token = Token::make_keyword("AS");
         self.parser.expect_token(&as_token)?;
@@ -151,7 +151,7 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::AlterUDF(update_udf))
     }
 
-    pub(crate) fn parse_drop_udf(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_drop_udf(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let udf_name = self.parser.parse_literal_string()?;
 

@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Cursor;
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
@@ -28,7 +30,6 @@ use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::OnInsert;
 use sqlparser::ast::Query;
-use sqlparser::ast::SetExpr;
 use sqlparser::ast::SqliteOnConflict;
 use sqlparser::ast::Values;
 
@@ -37,12 +38,14 @@ use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
+use crate::sql::DfParser;
 use crate::sql::DfStatement;
 use crate::sql::PlanParser;
+use crate::sql::ValueSource;
 use crate::storages::Table;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfInsertStatement {
+pub struct DfInsertStatement<'a> {
     pub or: Option<SqliteOnConflict>,
     /// TABLE
     pub table_name: ObjectName,
@@ -51,7 +54,7 @@ pub struct DfInsertStatement {
     /// Overwrite (Hive)
     pub overwrite: bool,
     /// A SQL query that specifies what to insert
-    pub source: Option<Box<Query>>,
+    pub source: InsertSource<'a>,
     /// partitioned insert (Hive)
     pub partitioned: Option<Vec<Expr>>,
     /// format name
@@ -64,8 +67,15 @@ pub struct DfInsertStatement {
     pub on: Option<OnInsert>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum InsertSource<'a> {
+    Empty,
+    Select(Box<Query>),
+    Values(&'a str),
+}
+
 #[async_trait::async_trait]
-impl AnalyzableStatement for DfInsertStatement {
+impl<'a> AnalyzableStatement for DfInsertStatement<'a> {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         self.is_supported()?;
@@ -76,14 +86,12 @@ impl AnalyzableStatement for DfInsertStatement {
         let schema = self.insert_schema(write_table)?;
 
         let input_source = match &self.source {
-            None => self.analyze_insert_without_source().await,
-            Some(source) => match &source.body {
-                SetExpr::Values(v) => self.analyze_insert_values(ctx.clone(), v, &schema).await,
-                SetExpr::Select(_) => self.analyze_insert_select(ctx.clone(), source).await,
-                _ => Err(ErrorCode::SyntaxException(
-                    "Insert must be have values or select source.",
-                )),
-            },
+            InsertSource::Empty => self.analyze_insert_without_source().await,
+            InsertSource::Values(values_str) => {
+                self.analyze_insert_values(ctx.clone(), values_str, &schema)
+                    .await
+            }
+            InsertSource::Select(select) => self.analyze_insert_select(ctx.clone(), select).await,
         }?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Insert(
@@ -99,7 +107,7 @@ impl AnalyzableStatement for DfInsertStatement {
     }
 }
 
-impl DfInsertStatement {
+impl<'a> DfInsertStatement<'a> {
     fn resolve_table(&self, ctx: &QueryContext) -> Result<(String, String)> {
         match self.table_name.0.len() {
             0 => Err(ErrorCode::SyntaxException("Insert table name is empty")),
@@ -136,12 +144,24 @@ impl DfInsertStatement {
     async fn analyze_insert_values(
         &self,
         ctx: Arc<QueryContext>,
-        values: &Values,
+        values_str: &str,
         schema: &DataSchemaRef,
     ) -> Result<InsertInputSource> {
-        tracing::debug!("{:?}", values);
+        tracing::debug!("{:?}", values_str);
 
+        // Fast path
+        let block_size = ctx.get_settings().get_max_block_size()? as usize;
+        let values_source = ValueSource::new(Cursor::new(values_str), schema.clone(), block_size);
+        let data_blocks = values_source
+            .into_iter()
+            .collect::<Result<Vec<DataBlock>>>();
+        if let Ok(data_blocks) = data_blocks {
+            return Ok(InsertInputSource::LiterialValues(data_blocks));
+        }
+
+        // Slow path
         let expression_analyzer = ExpressionAnalyzer::create(ctx);
+        let values = self.parse_values_expr(values_str)?;
         let mut value_exprs = Vec::with_capacity(values.0.len());
         for value in &values.0 {
             let mut exprs = Vec::with_capacity(value.len());
@@ -164,11 +184,7 @@ impl DfInsertStatement {
             value_exprs.push(exprs);
         }
 
-        let values = format!("{}", values);
-        Ok(InsertInputSource::Expressions(
-            (values["VALUES ".len()..]).to_string(),
-            value_exprs,
-        ))
+        Ok(InsertInputSource::Expressions(value_exprs))
     }
 
     async fn analyze_insert_without_source(&self) -> Result<InsertInputSource> {
@@ -203,5 +219,11 @@ impl DfInsertStatement {
                 Ok(DataSchemaRefExt::create(fields))
             }
         }
+    }
+
+    fn parse_values_expr(&self, values: &str) -> Result<Values> {
+        let mut parser = DfParser::new(values)?;
+        let values = parser.parser.parse_values()?;
+        Ok(values)
     }
 }

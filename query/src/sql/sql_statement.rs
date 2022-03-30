@@ -67,10 +67,10 @@ use crate::sql::statements::DfUseDatabase;
 
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]
-pub enum DfStatement {
+pub enum DfStatement<'a> {
     // ANSI SQL AST node
     Query(Box<DfQueryStatement>),
-    Explain(DfExplain),
+    Explain(DfExplain<'a>),
 
     // Databases.
     ShowDatabases(DfShowDatabases),
@@ -109,7 +109,7 @@ pub enum DfStatement {
     SetVariable(DfSetVariable),
 
     // Insert
-    InsertQuery(DfInsertStatement),
+    InsertQuery(DfInsertStatement<'a>),
 
     // User
     CreateUser(DfCreateUser),

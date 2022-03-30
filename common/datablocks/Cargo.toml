@@ -23,6 +23,7 @@ common-infallible = { path = "../infallible" }
 ahash = "0.7.6"
 comfy-table = "5.0.1"
 regex = "1.5.5"
+serde = { version = "1.0.136", features = ["derive"] }
 
 [dev-dependencies]
 pretty_assertions = "1.1.0"

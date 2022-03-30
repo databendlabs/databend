@@ -9,18 +9,18 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../.." || exit
 
 if [[ $(uname -m) != "x86_64" ]]; then
-    echo "Cross-compilation is only supported on x86_64"
-    exit 1
+	echo "Cross-compilation is only supported on x86_64"
+	exit 1
 fi
 
 if [[ ! $(grep /etc/os-release -e "ID=debian") ]]; then
-    echo "Cross-compilation is only supported on Debian"
-    exit 1
+	echo "Cross-compilation is only supported on Debian"
+	exit 1
 fi
 
 if [[ ! $(id -u) -eq 0 ]]; then
-    echo "Cross-compilation requires root"
-    exit 1
+	echo "Cross-compilation requires root"
+	exit 1
 fi
 
 dpkg --add-architecture arm64

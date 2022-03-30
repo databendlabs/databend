@@ -43,7 +43,7 @@ use crate::sql::DfParser;
 use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
-    pub(crate) fn parse_create_user(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_create_user(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -61,7 +61,7 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::CreateUser(create))
     }
 
-    pub(crate) fn parse_alter_user(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_alter_user(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_current_user = self.consume_token("USER")
             && self.parser.expect_token(&Token::LParen).is_ok()
             && self.parser.expect_token(&Token::RParen).is_ok();
@@ -95,7 +95,7 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::AlterUser(alter))
     }
 
-    pub(crate) fn parse_drop_user(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_drop_user(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let (name, hostname) = self.parse_principal_name_and_host()?;
         let drop = DfDropUser {
@@ -107,7 +107,7 @@ impl<'a> DfParser<'a> {
     }
 
     // Create role
-    pub(crate) fn parse_create_role(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_create_role(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
@@ -120,7 +120,7 @@ impl<'a> DfParser<'a> {
     }
 
     // Drop role
-    pub(crate) fn parse_drop_role(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_drop_role(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let name = self.parser.parse_literal_string()?;
         let drop = DfDropRole {
@@ -130,7 +130,7 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::DropRole(drop))
     }
 
-    pub(crate) fn parse_grant(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_grant(&mut self) -> Result<DfStatement<'a>, ParserError> {
         if self.consume_token("ROLE") {
             return self.parse_grant_role();
         }
@@ -139,7 +139,7 @@ impl<'a> DfParser<'a> {
 
     /// GRANT privs TO [USER] 'name'@'host'
     /// GRANT privs TO ROLE 'name'
-    pub(crate) fn parse_grant_privilege(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_grant_privilege(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let privileges = self.parse_privileges()?;
         if !self.parser.parse_keyword(Keyword::ON) {
             return self.expected("keyword ON", self.parser.peek_token());
@@ -158,7 +158,7 @@ impl<'a> DfParser<'a> {
     }
 
     /// GRANT ROLE <name> TO { ROLE <parent_role_name> | USER <user_name> }
-    pub(crate) fn parse_grant_role(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_grant_role(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let name = self.parser.parse_literal_string()?;
         self.parser.expect_keyword(Keyword::TO)?;
         let principal = self.parse_principal_identity()?;
@@ -170,7 +170,7 @@ impl<'a> DfParser<'a> {
     }
 
     // Revoke.
-    pub(crate) fn parse_revoke(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_revoke(&mut self) -> Result<DfStatement<'a>, ParserError> {
         if self.consume_token("ROLE") {
             return self.parse_revoke_role();
         }
@@ -179,7 +179,7 @@ impl<'a> DfParser<'a> {
 
     /// REVOKE privs ON * FROM [USER] 'name'@'host'
     /// REVOKE privs ON * FROM ROLE 'name'
-    pub fn parse_revoke_privilege(&mut self) -> Result<DfStatement, ParserError> {
+    pub fn parse_revoke_privilege(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let privileges = self.parse_privileges()?;
         if !self.parser.parse_keyword(Keyword::ON) {
             return self.expected("keyword ON", self.parser.peek_token());
@@ -198,7 +198,7 @@ impl<'a> DfParser<'a> {
     }
 
     /// REVOKE ROLE <name> FROM { ROLE <parent_role_name> | USER <user_name> }
-    pub fn parse_revoke_role(&mut self) -> Result<DfStatement, ParserError> {
+    pub fn parse_revoke_role(&mut self) -> Result<DfStatement<'a>, ParserError> {
         let name = self.parser.parse_literal_string()?;
         self.parser.expect_keyword(Keyword::FROM)?;
         let prinicpal = self.parse_principal_identity()?;
@@ -210,7 +210,7 @@ impl<'a> DfParser<'a> {
     }
 
     // Show grants.
-    pub(crate) fn parse_show_grants(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_show_grants(&mut self) -> Result<DfStatement<'a>, ParserError> {
         // SHOW GRANTS
         if !self.consume_token("FOR") {
             return Ok(DfStatement::ShowGrants(DfShowGrants {

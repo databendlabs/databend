@@ -907,6 +907,7 @@ dependencies = [
  "common-infallible",
  "pretty_assertions",
  "regex",
+ "serde",
 ]
 
 [[package]]
@@ -5534,7 +5535,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=da3b180#da3b1801de9e502c8b8d2ec624cc00e1a5d0e108"
+source = "git+https://github.com/ygf11/sqlparser-rs?rev=6d0d60f#6d0d60ffaaf480004e738ae848ab479ceb598183"
 dependencies = [
  "log",
 ]

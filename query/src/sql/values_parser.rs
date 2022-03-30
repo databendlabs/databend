@@ -57,6 +57,7 @@ where R: io::Read + Send + Sync
 
         let col_size = desers.len();
         let mut rows = 0;
+
         for _row in 0..self.block_size {
             let _ = reader.ignore_spaces()?;
             if reader.buffer().is_empty() {

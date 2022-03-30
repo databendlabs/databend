@@ -13,17 +13,17 @@ COMMAND="$@"
 
 _UID=$(id -u)
 if [[ ${_UID} != "501" ]] && [[ $_UID != "1000" ]] && [[ $_UID != "1001" ]]; then
-    echo "warning: You might encounter permission issues when running this script, since the current uid is ${_UID}, not in [501,1000,1001]." >&2
-    echo ":) feel free to ignore this warning if you do not need sudo." >&2
+	echo "warning: You might encounter permission issues when running this script, since the current uid is ${_UID}, not in [501,1000,1001]." >&2
+	echo ":) feel free to ignore this warning if you do not need sudo." >&2
 fi
 
 if [[ $INTERACTIVE == "true" ]]; then
-    echo "running interactive..." >&2
-    EXTRA_ARGS="--interactive --env TERM=xterm-256color"
+	echo "running interactive..." >&2
+	EXTRA_ARGS="--interactive --env TERM=xterm-256color"
 fi
 
 for var in ${BYPASS_ENV_VARS//,/ }; do
-    EXTRA_ARGS="${EXTRA_ARGS} --env ${var}"
+	EXTRA_ARGS="${EXTRA_ARGS} --env ${var}"
 done
 
 # NOTE: create with runner user first to avoid permission issues
@@ -31,10 +31,10 @@ mkdir -p "${CARGO_HOME}/registry"
 mkdir -p "${CARGO_HOME}/git"
 
 exec docker run --rm --tty --net=host ${EXTRA_ARGS} \
-    --user $(id -u):$(id -g) \
-    --volume "${CARGO_HOME}/registry:/opt/rust/cargo/registry" \
-    --volume "${CARGO_HOME}/git:/opt/rust/cargo/git" \
-    --volume "${PWD}:/workspace" \
-    --workdir "/workspace" \
-    "${IMAGE}" \
-    ${COMMAND}
+	--user $(id -u):$(id -g) \
+	--volume "${CARGO_HOME}/registry:/opt/rust/cargo/registry" \
+	--volume "${CARGO_HOME}/git:/opt/rust/cargo/git" \
+	--volume "${PWD}:/workspace" \
+	--workdir "/workspace" \
+	"${IMAGE}" \
+	${COMMAND}

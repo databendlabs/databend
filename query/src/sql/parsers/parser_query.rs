@@ -23,7 +23,7 @@ use crate::sql::DfStatement;
 
 impl<'a> DfParser<'a> {
     // SELECT.
-    pub(crate) fn parse_query(&mut self) -> Result<DfStatement, ParserError> {
+    pub(crate) fn parse_query(&mut self) -> Result<DfStatement<'a>, ParserError> {
         // self.parser.prev_token();
         let native_query = self.parser.parse_query()?;
         Ok(DfStatement::Query(Box::new(DfQueryStatement::try_from(

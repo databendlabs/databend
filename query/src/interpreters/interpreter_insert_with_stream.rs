@@ -13,18 +13,15 @@
 //  limitations under the License.
 //
 
-use std::io::Cursor;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::Expression;
-use common_streams::DataBlockStream;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 
-use super::interpreter_insert_values::ValueSource;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
@@ -54,15 +51,11 @@ impl<'a> InsertWithStream<'a> {
 }
 
 pub trait SendableWithSchema {
-    fn to_stream(
-        self,
-        schema: Arc<DataSchema>,
-        max_block_size: usize,
-    ) -> Result<SendableDataBlockStream>;
+    fn to_stream(self, schema: Arc<DataSchema>) -> Result<SendableDataBlockStream>;
 }
 
 impl SendableWithSchema for &[Vec<Expression>] {
-    fn to_stream(self, schema: Arc<DataSchema>, _: usize) -> Result<SendableDataBlockStream> {
+    fn to_stream(self, schema: Arc<DataSchema>) -> Result<SendableDataBlockStream> {
         let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);
         let one_row_block = DataBlock::create(dummy.clone(), vec![Series::from_data(vec![1u8])]);
         let blocks = self
@@ -83,22 +76,6 @@ impl SendableWithSchema for &[Vec<Expression>] {
         let stream = Box::pin(futures::stream::iter(vec![DataBlock::concat_blocks(
             &blocks,
         )]));
-        Ok(stream)
-    }
-}
-
-impl SendableWithSchema for &str {
-    fn to_stream(
-        self,
-        schema: Arc<DataSchema>,
-        max_block_size: usize,
-    ) -> Result<SendableDataBlockStream> {
-        let value_source = ValueSource::new(Cursor::new(self), schema.clone(), max_block_size);
-        let data_blocks = value_source
-            .into_iter()
-            .collect::<Result<Vec<DataBlock>>>()?;
-        let stream = Box::pin(DataBlockStream::create(schema, None, data_blocks));
-
         Ok(stream)
     }
 }
