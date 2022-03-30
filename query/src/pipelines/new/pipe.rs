@@ -18,6 +18,7 @@ use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 
+#[derive(Clone)]
 pub enum NewPipe {
     SimplePipe {
         processors: Vec<ProcessorPtr>,
@@ -82,11 +83,13 @@ impl SourcePipeBuilder {
     }
 }
 
+#[allow(dead_code)]
 pub struct SinkPipeBuilder {
     processors: Vec<ProcessorPtr>,
     inputs_port: Vec<Arc<InputPort>>,
 }
 
+#[allow(dead_code)]
 impl SinkPipeBuilder {
     pub fn create() -> SinkPipeBuilder {
         SinkPipeBuilder {

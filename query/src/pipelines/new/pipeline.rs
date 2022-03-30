@@ -37,8 +37,45 @@ impl NewPipeline {
         }
     }
 
+    // We need to push data to executor
+    pub fn is_pushing_pipeline(&self) -> Result<bool> {
+        match self.pipes.first() {
+            Some(pipe) => Ok(pipe.input_size() != 0),
+            None => Err(ErrorCode::LogicalError(
+                "Logical error, call is_pushing on empty pipeline.",
+            )),
+        }
+    }
+
+    // We need to pull data from executor
+    pub fn is_pulling_pipeline(&self) -> Result<bool> {
+        match self.pipes.last() {
+            Some(pipe) => Ok(pipe.output_size() != 0),
+            None => Err(ErrorCode::LogicalError(
+                "Logical error, call is_pulling on empty pipeline.",
+            )),
+        }
+    }
+
+    // We just need to execute it.
+    pub fn is_complete_pipeline(&self) -> Result<bool> {
+        Ok(
+            !self.pipes.is_empty()
+                && !self.is_pushing_pipeline()?
+                && !self.is_pulling_pipeline()?,
+        )
+    }
+
     pub fn add_pipe(&mut self, pipe: NewPipe) {
         self.pipes.push(pipe);
+    }
+
+    pub fn input_len(&self) -> usize {
+        match self.pipes.first() {
+            None => 0,
+            Some(NewPipe::SimplePipe { inputs_port, .. }) => inputs_port.len(),
+            Some(NewPipe::ResizePipe { inputs_port, .. }) => inputs_port.len(),
+        }
     }
 
     pub fn output_len(&self) -> usize {

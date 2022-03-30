@@ -1,8 +1,11 @@
-name: 'Build Debug'
-description: 'Build with debug profile'
+name: "Build Debug"
+description: "Build with debug profile"
 inputs:
   github_token:
     description: "Github Token"
+    required: true
+  target:
+    description: ""
     required: true
 runs:
   using: "composite"
@@ -11,27 +14,35 @@ runs:
       uses: ./.github/actions/cleanup
 
     - uses: arduino/setup-protoc@v1
+      if: "contains(inputs.target, 'apple')"
       with:
-        version: '3.x'
+        version: "3.x"
         repo-token: ${{ inputs.github_token }}
 
-    - name: Add rust target
-      shell: bash
-      run: rustup target add ${{ matrix.config.target }}
+    - shell: bash
+      if: "contains(inputs.target, 'apple')"
+      run: rustup target add ${{ inputs.target }}
+
+    - name: Setup Build Tool
+      if: "contains(inputs.target, 'linux')"
+      uses: ./.github/actions/setup_build_tool
+      with:
+        image: datafuselabs/build-tool:multiarch
 
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
       with:
-        sharedKey: debug-v1
+        sharedKey: debug-${{ inputs.target }}-v2
 
-    - uses: actions-rs/cargo@v1
-      with:
-        command: build
-        use-cross: ${{ matrix.config.cross }}
-        args: --target ${{ matrix.config.target }}
+    - shell: bash
+      run: cargo build --target ${{ inputs.target }}
 
     - name: Upload artifact
       uses: actions/upload-artifact@v2
       with:
-        name: debug-${{ github.sha }}-${{ matrix.config.os }}-${{ matrix.config.target }}
-        path: ./target/${{ matrix.config.target }}/debug/databend-*
+        name: debug-${{ github.sha }}-${{ inputs.target }}
+        path: ./target/${{ inputs.target }}/debug/databend-*
+
+    # for cache
+    - shell: bash
+      run: cargo metadata --all-features --format-version 1 > ./target/metadata.json

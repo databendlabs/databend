@@ -1,0 +1,41 @@
+name: "Test Stateless Cluster"
+description: "Running stateless tests in cluster mode"
+inputs:
+  profile:
+    description: "The profile for this test"
+    required: true
+    default: "debug"
+  target:
+    description: ""
+    required: true
+    default: "x86_64-apple-darwin"
+runs:
+  using: "composite"
+  steps:
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
+
+    - uses: actions/download-artifact@v2
+      with:
+        name: ${{ inputs.profile }}-${{ github.sha }}-${{ inputs.target }}
+        path: ./target/debug
+
+    - name: Set up file as executable
+      shell: bash
+      run: |
+        chmod +x ./target/debug/databend-*
+
+    - name: Install mysql client for macos-11
+      shell: bash
+      run: |
+        brew install mysql
+
+    - name: Install python dependences
+      shell: bash
+      run: |
+        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector
+
+    - name: Run Stateless Tests with Cluster mode
+      shell: bash
+      run: |
+        bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
