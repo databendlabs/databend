@@ -137,6 +137,11 @@ impl InterpreterFactory {
             PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),
 
+            // View.
+            PlanNode::CreateView(v) => todo!(),
+            PlanNode::AlterView => todo!(),
+            PlanNode::DropView => todo!(),
+
             // User.
             PlanNode::CreateUser(v) => CreateUserInterpreter::try_create(ctx_clone, v),
             PlanNode::AlterUser(v) => AlterUserInterpreter::try_create(ctx_clone, v),

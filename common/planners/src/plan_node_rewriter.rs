@@ -21,6 +21,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::CreateViewPlan;
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AdminUseTenantPlan;
@@ -152,7 +153,7 @@ pub trait PlanRewriter: Sized {
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
 
             // View.
-            PlanNode::CreateView(v) => todo!(),
+            PlanNode::CreateView(plan) => self.rewrite_create_view(plan),
             PlanNode::AlterView => todo!(),
             PlanNode::DropView => todo!(),
 
@@ -359,6 +360,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_optimize_table(&mut self, plan: &OptimizeTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::OptimizeTable(plan.clone()))
+    }
+
+    fn rewrite_create_view(&mut self, plan: &CreateViewPlan) -> Result<PlanNode> {
+        Ok(PlanNode::CreateView(plan.clone()))
     }
 
     fn rewrite_create_database(&mut self, plan: &CreateDatabasePlan) -> Result<PlanNode> {

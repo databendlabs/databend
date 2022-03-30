@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchema;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateViewPlan {
     pub if_not_exists: bool,
@@ -19,4 +24,10 @@ pub struct CreateViewPlan {
     pub db: String,
     pub viewname: String,
     pub subquery: String,
+}
+
+impl CreateViewPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
 }

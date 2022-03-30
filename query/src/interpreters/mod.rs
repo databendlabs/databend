@@ -64,6 +64,7 @@ mod interpreter_user_stage_drop;
 mod interpreter_user_udf_alter;
 mod interpreter_user_udf_create;
 mod interpreter_user_udf_drop;
+mod interpreter_view_create;
 mod plan_schedulers;
 mod stream;
 
@@ -117,3 +118,4 @@ pub use interpreter_user_udf_alter::AlterUserUDFInterpreter;
 pub use interpreter_user_udf_create::CreateUserUDFInterpreter;
 pub use interpreter_user_udf_drop::DropUserUDFInterpreter;
 pub use plan_schedulers::PlanScheduler;
+pub use interpreter_view_create::CreateViewInterpreter;

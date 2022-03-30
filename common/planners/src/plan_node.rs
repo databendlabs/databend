@@ -227,7 +227,7 @@ impl PlanNode {
             PlanNode::ShowCreateTable(v) => v.schema(),
 
             // View.
-            PlanNode::CreateView(v) => todo!(),
+            PlanNode::CreateView(v) => v.schema(),
             PlanNode::AlterView => todo!(),
             PlanNode::DropView => todo!(),
 
@@ -328,9 +328,9 @@ impl PlanNode {
             PlanNode::DescribeTable(_) => "DescribeTablePlan",
 
             // View.
-            PlanNode::CreateView(v) => todo!(),
-            PlanNode::AlterView => todo!(),
-            PlanNode::DropView => todo!(),
+            PlanNode::CreateView(v) => "CreateViewPlan",
+            PlanNode::AlterView => "AlterViewPlan",
+            PlanNode::DropView => "DropViewPlan",
 
             // User.
             PlanNode::CreateUser(_) => "CreateUser",
