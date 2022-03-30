@@ -117,12 +117,21 @@ jobs:
         uses: ./.github/actions/setup_build_tool
         with:
           image: datafuselabs/build-tool:multiarch
+      - name: get objcopy path
+        id: get_objcopy
+        shell: bash
+        run: |
+          OBJCOPY=/usr/bin/objcopy
+          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
+            OBJCOPY=/usr/bin/aarch64-linux-gnu-objcopy
+          fi
+          echo ::set-output name=OBJCOPY::${OBJCOPY}
       - name: Build Binary
         run: |
           cargo build --release --target=${{ matrix.target }}
-          build-tool objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.target }}/release/databend-query
-          build-tool objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.target }}/release/databend-meta
-          build-tool objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.target }}/release/databend-metactl
+          build-tool ${{ steps.get_objcopy.outputs.OBJCOPY }} --compress-debug-sections=zlib-gnu ./target/${{ matrix.target }}/release/databend-query
+          build-tool ${{ steps.get_objcopy.outputs.OBJCOPY }} --compress-debug-sections=zlib-gnu ./target/${{ matrix.target }}/release/databend-meta
+          build-tool ${{ steps.get_objcopy.outputs.OBJCOPY }} --compress-debug-sections=zlib-gnu ./target/${{ matrix.target }}/release/databend-metactl
       - name: Pack binaries
         run: |
           tar -C ./target/${{ matrix.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.tar.gz databend-query databend-meta
