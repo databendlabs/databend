@@ -34,6 +34,7 @@ use poem::web::Data;
 use poem::web::Query;
 use poem::Body;
 use poem::Endpoint;
+use poem::EndpointExt;
 use poem::Route;
 use serde::Deserialize;
 
@@ -222,8 +223,10 @@ async fn build_ndjson_stream(plan: &PlanNode, body: Body) -> Result<SendableData
 }
 
 pub fn clickhouse_router() -> impl Endpoint {
-    Route::new().at(
-        "/",
-        post(clickhouse_handler_post).get(clickhouse_handler_get),
-    )
+    Route::new()
+        .at(
+            "/",
+            post(clickhouse_handler_post).get(clickhouse_handler_get),
+        )
+        .with(poem::middleware::Compression)
 }
