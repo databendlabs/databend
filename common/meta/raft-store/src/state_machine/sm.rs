@@ -96,8 +96,6 @@ pub trait StateMachineSubscriber: Debug + Sync + Send {
     async fn kv_changed(&self, key: &str, prev: &Option<SeqV>, meta: &Option<SeqV>);
 }
 
-//dyn_clone::clone_trait_object!(StateMachineSubscriber);
-
 /// The state machine of the `MemStore`.
 /// It includes user data and two raft-related informations:
 /// `last_applied_logs` and `client_serial_responses` to achieve idempotence.
