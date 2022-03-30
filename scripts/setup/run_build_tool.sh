@@ -19,7 +19,7 @@ fi
 
 if [[ $INTERACTIVE == "true" ]]; then
     echo "running interactive..." >&2
-    EXTRA_ARGS="--interactive"
+    EXTRA_ARGS="--interactive --env TERM=xterm-256color"
 fi
 
 for var in ${BYPASS_ENV_VARS//,/ }; do
