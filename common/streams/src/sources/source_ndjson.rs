@@ -128,7 +128,8 @@ where R: AsyncBufRead + Unpin + Send
                 let value = &json[name];
                 deser.de_json(value).map_err(|e| {
                     ErrorCode::BadBytes(format!(
-                        "invalid value for column {}: type={}, value={:?}: {}",
+                        "error at row {} column {}: type={}, value={:?}: {}",
+                        rows,
                         name,
                         type_name,
                         value,
