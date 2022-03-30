@@ -29,12 +29,12 @@ use common_planners::Extras;
 use databend_query::catalogs::Catalog;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::sessions::QueryContext;
+use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::meta::BlockMeta;
 use databend_query::storages::fuse::meta::TableSnapshot;
 use databend_query::storages::fuse::pruning::BlockPruner;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
-use databend_query::storages::fuse::FUSE_OPT_KEY_DATABASE_ID;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_query::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 use futures::TryStreamExt;
@@ -81,7 +81,7 @@ async fn test_block_pruner() -> Result<()> {
                 // for the convenience of testing, let one segment contains one block
                 (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
                 // database id is required for FUSE
-                (FUSE_OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+                (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
             ..Default::default()
@@ -221,7 +221,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
                 // for the convenience of testing, let one seegment contains one block
                 (FUSE_OPT_KEY_BLOCK_PER_SEGMENT.to_owned(), "1".to_owned()),
                 // database id is required for FUSE
-                (FUSE_OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+                (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
             ..Default::default()

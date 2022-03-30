@@ -32,14 +32,14 @@ use futures::StreamExt;
 
 use crate::pipelines::new::NewPipeline;
 use crate::sessions::QueryContext;
+use crate::sql::OPT_KEY_DATABASE_ID;
+use crate::sql::OPT_KEY_SNAPSHOT_VER;
 use crate::storages::fuse::io::MetaReaders;
 use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::meta::DEFAULT_SNAPSHOT_VERSION;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
-use crate::storages::fuse::FUSE_OPT_KEY_DATABASE_ID;
 use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
-use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_VER;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
@@ -63,11 +63,11 @@ impl FuseTable {
         let table_id = table_info.ident.table_id;
         let db_id = table_info
             .options()
-            .get(FUSE_OPT_KEY_DATABASE_ID)
+            .get(OPT_KEY_DATABASE_ID)
             .ok_or_else(|| {
                 ErrorCode::LogicalError(format!(
                     "Invalid fuse table, table option {} not found",
-                    FUSE_OPT_KEY_DATABASE_ID
+                    OPT_KEY_DATABASE_ID
                 ))
             })?;
         Ok(format!("{}/{}", db_id, table_id))
@@ -188,7 +188,7 @@ impl FuseTable {
     pub fn parse_snaphost_format_version(table_info: &TableInfo) -> Result<u64> {
         table_info
             .options()
-            .get(FUSE_OPT_KEY_SNAPSHOT_VER)
+            .get(OPT_KEY_SNAPSHOT_VER)
             .map(|ver_str| {
                 let v = ver_str.as_str();
                 v.parse::<u64>().map_err(|_| {

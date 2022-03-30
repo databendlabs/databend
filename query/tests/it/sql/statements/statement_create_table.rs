@@ -18,7 +18,7 @@ use common_exception::Result;
 use databend_query::sql::statements::AnalyzableStatement;
 use databend_query::sql::DfParser;
 use databend_query::sql::DfStatement;
-use databend_query::storages::fuse::RESERVED_OPTS;
+use databend_query::sql::RESERVED_OPTS;
 
 use crate::tests::create_query_context;
 

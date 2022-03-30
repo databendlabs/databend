@@ -31,14 +31,14 @@ use sqlparser::ast::ObjectName;
 use super::analyzer_expr::ExpressionAnalyzer;
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
+use crate::sql::is_reserved_opt_key;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
 use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::sql::SQLCommon;
-use crate::storages::fuse::is_fuse_reserved_opt_key;
-use crate::storages::fuse::FUSE_OPT_KEY_DATABASE_ID;
+use crate::sql::OPT_KEY_DATABASE_ID;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfCreateTable {
@@ -200,7 +200,7 @@ impl DfCreateTable {
                 .await?;
             let db_id = db.get_db_info().database_id;
             meta.options
-                .insert(FUSE_OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+                .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
         }
         Ok(meta)
     }
@@ -210,7 +210,7 @@ impl DfCreateTable {
             .options
             .keys()
             .filter_map(|k| {
-                if is_fuse_reserved_opt_key(k) {
+                if is_reserved_opt_key(k) {
                     Some(k.as_str())
                 } else {
                     None

@@ -24,8 +24,8 @@ use common_planners::TruncateTablePlan;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::PlanParser;
+use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::storages::fuse::FUSE_OPT_KEY_DATABASE_ID;
 use databend_query::storages::ToReadDataSourcePlan;
 use futures::TryStreamExt;
 
@@ -287,7 +287,7 @@ fn test_parse_storage_prefix() -> Result<()> {
     tbl_info
         .meta
         .options
-        .insert(FUSE_OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+        .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
     let prefix = FuseTable::parse_storage_prefix(&tbl_info)?;
     assert_eq!(format!("{}/{}", db_id, tbl_id), prefix);
     Ok(())

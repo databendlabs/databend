@@ -34,6 +34,7 @@ use uuid::Uuid;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
+use crate::sql::OPT_KEY_SNAPSHOT_VER;
 use crate::storages::fuse::meta::Location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
@@ -44,7 +45,6 @@ use crate::storages::fuse::operations::TableOperationLog;
 use crate::storages::fuse::statistics;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
-use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_VER;
 use crate::storages::Table;
 
 impl FuseTable {
@@ -246,7 +246,7 @@ impl FuseTable {
                     Some(new_snapshot_location),
                 ),
                 (
-                    FUSE_OPT_KEY_SNAPSHOT_VER.to_owned(),
+                    OPT_KEY_SNAPSHOT_VER.to_owned(),
                     Some(TableSnapshot::VERSION.to_string()),
                 ),
             ]
