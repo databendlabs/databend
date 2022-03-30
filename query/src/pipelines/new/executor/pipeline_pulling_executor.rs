@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
@@ -30,22 +32,34 @@ use crate::pipelines::new::processors::Sink;
 use crate::pipelines::new::processors::Sinker;
 use crate::pipelines::new::NewPipeline;
 
-enum Executor {
-    Inited(Arc<PipelineExecutor>),
-    Running(Arc<PipelineExecutor>),
-    Finished(Result<()>),
+struct State {
+    finished: AtomicBool,
+    has_throw_error: AtomicBool,
+
+    throw_error: Mutex<Option<ErrorCode>>,
+}
+
+impl State {
+    pub fn create() -> Arc<State> {
+        Arc::new(State {
+            finished: AtomicBool::new(false),
+            has_throw_error: AtomicBool::new(false),
+            throw_error: Mutex::new(None),
+        })
+    }
 }
 
 pub struct PipelinePullingExecutor {
-    executor: Arc<Mutex<Executor>>,
-    receiver: Receiver<DataBlock>,
+    state: Arc<State>,
+    executor: Arc<PipelineExecutor>,
+    receiver: Receiver<Option<DataBlock>>,
 }
 
 impl PipelinePullingExecutor {
-    fn wrap_pipeline(pipeline: &mut NewPipeline) -> Result<Receiver<DataBlock>> {
+    fn wrap_pipeline(pipeline: &mut NewPipeline) -> Result<Receiver<Option<DataBlock>>> {
         if pipeline.is_pushing_pipeline()? || !pipeline.is_pulling_pipeline()? {
             return Err(ErrorCode::LogicalError(
-                "Logical error, PipelinePullingExecutor can only work on pulling pipeline."
+                "Logical error, PipelinePullingExecutor can only work on pulling pipeline.",
             ));
         }
 
@@ -62,68 +76,86 @@ impl PipelinePullingExecutor {
         Ok(rx)
     }
 
-    pub fn try_create(async_runtime: Arc<Runtime>, mut pipeline: NewPipeline) -> Result<PipelinePullingExecutor> {
+    pub fn try_create(
+        async_runtime: Arc<Runtime>,
+        mut pipeline: NewPipeline,
+    ) -> Result<PipelinePullingExecutor> {
+        let state = State::create();
         let receiver = Self::wrap_pipeline(&mut pipeline)?;
-        let pipeline_executor = PipelineExecutor::create(async_runtime, pipeline)?;
-        let executor = Arc::new(Mutex::new(Executor::Inited(pipeline_executor)));
-        Ok(PipelinePullingExecutor { receiver, executor })
+        let executor = PipelineExecutor::create(async_runtime, pipeline)?;
+        Ok(PipelinePullingExecutor {
+            receiver,
+            state,
+            executor,
+        })
     }
 
-    pub fn start(&mut self) -> Result<()> {
-        let mut executor = self.executor.lock();
-
-        if let Executor::Inited(threads_executor) = &*executor {
-            let state = self.executor.clone();
-            let threads_executor = threads_executor.clone();
-            let thread_function = Self::thread_function(state, threads_executor.clone());
-
-            std::thread::spawn(thread_function);
-            *executor = Executor::Running(threads_executor);
-        }
-
-        Ok(())
+    pub fn start(&mut self) {
+        let state = self.state.clone();
+        let threads_executor = self.executor.clone();
+        let thread_function = Self::thread_function(state, threads_executor);
+        std::thread::spawn(thread_function);
     }
 
-    fn thread_function(state: Arc<Mutex<Executor>>, threads_executor: Arc<PipelineExecutor>) -> impl Fn() {
+    fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {
         move || {
-            let res = threads_executor.execute();
-            let mut state = state.lock();
-            match res {
-                Ok(_) => {
-                    *state = Executor::Finished(Ok(()));
-                }
-                Err(cause) => {
-                    *state = Executor::Finished(Err(cause));
-                }
+            if let Err(cause) = executor.execute() {
+                state.has_throw_error.store(true, Ordering::Release);
+                std::sync::atomic::fence(Ordering::Acquire);
+                let mut throw_error = state.throw_error.lock();
+                *throw_error = Some(cause);
+                return;
             }
+
+            state.finished.store(true, Ordering::Release);
         }
     }
 
     pub fn finish(&self) -> Result<()> {
-        let mutex_guard = self.executor.lock();
-        match &*mutex_guard {
-            Executor::Inited(_) => Ok(()),
-            Executor::Running(executor) => executor.finish(),
-            Executor::Finished(res) => res.clone(),
-        }
+        self.state.finished.store(true, Ordering::Release);
+        self.executor.finish()
     }
 
-    pub fn pull_data(&mut self) -> Option<DataBlock> {
+    pub fn pull_data(&mut self) -> Result<Option<DataBlock>> {
+        if self.state.has_throw_error.load(Ordering::Relaxed) {
+            let mut throw_error = self.state.throw_error.lock();
+
+            return match throw_error.take() {
+                None => Err(ErrorCode::LogicalError("Missing error info.")),
+                Some(cause) => Err(cause),
+            };
+        }
+
+        if self.state.finished.load(Ordering::Relaxed) {
+            return Ok(None);
+        }
+
         match self.receiver.recv() {
-            Err(_recv_err) => None,
-            Ok(data_block) => Some(data_block),
+            Ok(data_block) => Ok(data_block),
+            Err(_recv_err) => Err(ErrorCode::LogicalError("Logical error, receiver error.")),
         }
     }
 }
 
-enum PullingSink {
-    Running(SyncSender<DataBlock>),
-    Finished,
+impl Drop for PipelinePullingExecutor {
+    fn drop(&mut self) {
+        if !self.state.finished.load(Ordering::Relaxed)
+            && !self.state.has_throw_error.load(Ordering::Relaxed)
+        {
+            if let Err(cause) = self.finish() {
+                common_tracing::tracing::warn!("Executor finish is failure {:?}", cause);
+            }
+        }
+    }
+}
+
+struct PullingSink {
+    sender: SyncSender<Option<DataBlock>>,
 }
 
 impl PullingSink {
-    pub fn create(tx: SyncSender<DataBlock>, input: Arc<InputPort>) -> ProcessorPtr {
-        Sinker::create(input, PullingSink::Running(tx))
+    pub fn create(tx: SyncSender<Option<DataBlock>>, input: Arc<InputPort>) -> ProcessorPtr {
+        Sinker::create(input, PullingSink { sender: tx })
     }
 }
 
@@ -131,20 +163,24 @@ impl Sink for PullingSink {
     const NAME: &'static str = "PullingExecutorSink";
 
     fn on_finish(&mut self) -> Result<()> {
-        if let PullingSink::Running(_) = self {
-            *self = PullingSink::Finished;
+        if let Err(cause) = self.sender.send(None) {
+            return Err(ErrorCode::LogicalError(format!(
+                "Logical error, cannot push data into SyncSender, cause {:?}",
+                cause
+            )));
         }
 
         Ok(())
     }
 
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        match self {
-            PullingSink::Finished => Ok(()),
-            PullingSink::Running(tx) => match tx.send(data_block) {
-                Ok(_) => Ok(()),
-                Err(cause) => Err(ErrorCode::LogicalError(format!("{:?}", cause))),
-            },
+        if let Err(cause) = self.sender.send(Some(data_block)) {
+            return Err(ErrorCode::LogicalError(format!(
+                "Logical error, cannot push data into SyncSender, cause {:?}",
+                cause
+            )));
         }
+
+        Ok(())
     }
 }

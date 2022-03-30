@@ -16,8 +16,11 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
-use common_base::{Runtime, Thread};
-use common_exception::{ErrorCode, Result};
+use common_base::Runtime;
+use common_base::Thread;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_tracing::tracing;
 
 use crate::pipelines::new::executor::executor_graph::RunningGraph;
 use crate::pipelines::new::executor::executor_notify::WorkersNotify;
@@ -101,10 +104,7 @@ impl PipelineExecutor {
         // Wake up other threads to finish when throw error
         self.finish()?;
 
-        return Err(cause.add_message_back(format!(
-            " (while in processor thread {})",
-            thread_num
-        )));
+        return Err(cause.add_message_back(format!(" (while in processor thread {})", thread_num)));
     }
 
     /// # Safety
@@ -130,5 +130,13 @@ impl PipelineExecutor {
         }
 
         Ok(())
+    }
+}
+
+impl Drop for PipelineExecutor {
+    fn drop(&mut self) {
+        if let Err(cause) = self.finish() {
+            tracing::warn!("Catch error when drop pipeline executor {:?}", cause);
+        }
     }
 }
