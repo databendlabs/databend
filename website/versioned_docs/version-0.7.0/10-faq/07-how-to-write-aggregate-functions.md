@@ -20,32 +20,8 @@ Function name in Databend is case-insensitive.
 
 ``` rust
 pub trait AggregateFunction: fmt::Display + Sync + Send {
-    fn name(&self) -> &str;
-    fn return_type(&self) -> Result<DataType>;
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool>;
-
-    fn init_state(&self, place: StateAddr);
-    fn state_layout(&self) -> Layout;
-
-    fn accumulate(&self, _place: StateAddr, _arrays: &[Series], _input_rows: usize) -> Result<()>;
-
-    fn accumulate_keys(
-        &self,
-        _places: &[StateAddr],
-        _offset: usize,
-        _arrays: &[Series],
-        _input_rows: usize,
-    ) -> Result<()>;
-
-    fn serialize(&self, _place: StateAddr, _writer: &mut BytesMut) -> Result<()>;
-
-    fn deserialize(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()>;
-
-    fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
-
-    fn merge_result(&self, _place: StateAddr) -> Result<DataValue>;
+    ...
 }
-```
 
 ### Understand the functions
 
@@ -62,10 +38,12 @@ It indicates the temporary results of an aggregate function. Because an aggregat
 For example, in the `avg` aggregate function, we can represent the state like:
 
 ```rust
-struct AggregateAvgState<T: BinarySer + BinaryDe> {
+struct AggregateAvgState<T: PrimitiveType> {
+    #[serde(bound(deserialize = "T: DeserializeOwned"))]
     pub value: T,
     pub count: u64,
 }
+
 ```
 
 - The function `init_state` initializes the aggregate function state, we ensure the memory is already allocated, and we just need to initial the state with the initial value.
@@ -95,13 +73,37 @@ The `AggregateSumState` will be
 
 ```rust
 struct AggregateSumState<T> {
-    pub value: Option<T>,
+    pub value: T,
 }
 ```
 
-The generic `T` is from `SumT`, the `Option<T>` can return `null` if nothing is passed into this function.
+The generic `T` is from `SumT`.
 
 Let's take into the function `accumulate_keys`, because this is the only function that a little hard to understand in this case.
+
+```sql
+fn accumulate_keys(
+    &self,
+    places: &[StateAddr],
+    offset: usize,
+    columns: &[ColumnRef],
+    _input_rows: usize,
+) -> Result<()> {
+    if columns[0].data_type().data_type_id() == TypeID::Boolean {
+        // boolean cast into u8 column
+        // ...
+    } else {
+        let darray: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+        darray.iter().zip(places.iter()).for_each(|(c, place)| {
+            let place = place.next(offset);
+            let state = place.get::<AggregateSumState<SumT>>();
+            state.add(c.as_());
+        });
+    }
+
+    Ok(())
+}
+```
 
 The `places` is the memory address of the first state in this row, so we can get the address of `AggregateSumState<T>` using `places[row] + offset`, then using `place.get::<AggregateSumState<SumT>>()` to get the value of the corresponding state.
 
@@ -109,12 +111,27 @@ Since we already know the array type of this function, we can safely cast it to 
 
 Ok, this example is pretty easy. If you already read this, you may have the ability to write a new function.
 
-## Refer to other examples
-As you see, adding a new aggregate function in Databend is not as hard as you think.
-Before you start to add one, please refer to other aggregate function examples, such as `min`, `count`, `max`, `avg`.
 
 ## Testing
 To be a good engineer, don't forget to test your codes, please add unit tests and stateless tests after you finish the new aggregate functions.
+
+- [Unit tests](https://github.com/datafuselabs/databend/blob/a0869e8ac3cc70105822e6f0aaddfa534c4270d2/common/functions/tests/it/aggregates/aggregate_function.rs)
+
+- Stateless tests:
+
+```sql
+MySQL [(none)]> select sum(number), sum(-1), sum(2.3)  from numbers(3);
++-------------+---------+--------------------+
+| sum(number) | sum(-1) | sum(2.3)           |
++-------------+---------+--------------------+
+|           3 |      -3 | 6.8999999999999995 |
++-------------+---------+--------------------+
+1 row in set (0.013 sec)
+```
+
+## Refer to other examples
+As you see, adding a new aggregate function in Databend is not as hard as you think.
+Before you start to add one, please refer to other aggregate function examples, such as `min`, `count`, `max`, `avg`.
 
 ## Summary
 We welcome all community users to contribute more powerful functions to Databend. If you find any problems, feel free to [open an issue](https://github.com/datafuselabs/databend/issues) in GitHub, we will use our best efforts to help you.

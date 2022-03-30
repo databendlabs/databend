@@ -9,6 +9,12 @@ Returns the first day of the ISO year for a date or a date with time.
 toStartOfISOYear(expr)
 ```
 
+## Arguments
+
+| Arguments   | Description |
+| ----------- | ----------- |
+| expr | date16/date32/datetime |
+
 ## Return Type
 Datetime object, returns date in “YYYY-MM-DD” format.
 
