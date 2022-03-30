@@ -15,16 +15,10 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
-use std::collections::HashMap;
-
-use sqlparser::ast::ColumnDef;
-use sqlparser::ast::ColumnOptionDef;
-use sqlparser::ast::TableConstraint;
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::ParserError;
-use sqlparser::tokenizer::Token;
-use sqlparser::tokenizer::Word;
 
+use crate::sql::statements::DfQueryStatement;
 use crate::parser_err;
 use crate::sql::statements::DfCreateView;
 use crate::sql::DfParser;
@@ -34,19 +28,20 @@ impl<'a> DfParser<'a> {
     // Create view.
     // syntax reference to https://clickhouse.com/docs/zh/sql-reference/statements/create/view/
     pub(crate) fn parse_create_view(&mut self) -> Result<DfStatement, ParserError> {
-        // let materialized = self.parse_keyword(Keyword::MATERIALIZED);
         let if_not_exists =
         self.parser
             .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parser.parse_object_name()?;
         
         if self.consume_token("AS") {
-            // let query = Box::new(self.parse_query()?);
-            // TODO(veeupup) we should get subquery str
+            let native_query = self.parser.parse_query()?;
+            let query = DfQueryStatement::try_from(native_query.clone())?;
+            let subquery = format!("{}", native_query);
             let create = DfCreateView {
                 if_not_exists,
                 name,
-                subquery: "subquery".to_string()
+                subquery,
+                query,
             };
             Ok(DfStatement::CreateView(create))
         }else {

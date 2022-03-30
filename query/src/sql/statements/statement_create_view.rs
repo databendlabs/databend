@@ -44,13 +44,33 @@ pub struct DfCreateView {
     pub if_not_exists: bool,
     /// View Name
     pub name: ObjectName,
-    /// Original SQL, store in meta service
+    /// Original SQL String, store in meta service
     pub subquery: String,
+    /// Check and Analyze Select query
+    pub query: DfQueryStatement,
 }
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCreateView {
-    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+        // check if query is ok
+        self.query.analyze(ctx)?;
+        // 
+        let (db, table) = Self::resolve_table(ctx.clone(), &self.name)?;
         todo!()
+    }
+}
+
+impl DfCreateView {
+    fn resolve_table(ctx: Arc<QueryContext>, table_name: &ObjectName) -> Result<(String, String)> {
+        let idents = &table_name.0;
+        match idents.len() {
+            0 => Err(ErrorCode::SyntaxException("Create table name is empty")),
+            1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
+            2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
+            _ => Err(ErrorCode::SyntaxException(
+                "Create table name must be [`db`].`table`",
+            )),
+        }
     }
 }
