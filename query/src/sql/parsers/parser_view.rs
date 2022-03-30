@@ -23,6 +23,7 @@ use crate::parser_err;
 use crate::sql::statements::DfCreateView;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
+use common_tracing::tracing;
 
 impl<'a> DfParser<'a> {
     // Create view.
@@ -43,6 +44,7 @@ impl<'a> DfParser<'a> {
                 subquery,
                 query,
             };
+            tracing::error!("parse create view: {:?}", create);
             Ok(DfStatement::CreateView(create))
         }else {
             parser_err!("need `AS` after VIEW NAME")

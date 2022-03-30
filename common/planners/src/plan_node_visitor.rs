@@ -163,6 +163,11 @@ pub trait PlanVisitor {
             PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
             PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
 
+            // View.
+            PlanNode::CreateView(v) => todo!(),
+            PlanNode::AlterView => todo!(),
+            PlanNode::DropView => todo!(),
+
             // User.
             PlanNode::CreateUser(plan) => self.visit_create_user(plan),
             PlanNode::AlterUser(plan) => self.visit_alter_user(plan),

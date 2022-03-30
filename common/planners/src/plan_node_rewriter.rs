@@ -151,6 +151,11 @@ pub trait PlanRewriter: Sized {
             PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
 
+            // View.
+            PlanNode::CreateView(v) => todo!(),
+            PlanNode::AlterView => todo!(),
+            PlanNode::DropView => todo!(),
+
             // User.
             PlanNode::CreateUser(plan) => self.create_user(plan),
             PlanNode::AlterUser(plan) => self.alter_user(plan),

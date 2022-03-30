@@ -13,31 +13,19 @@
 // limitations under the License.
 //
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::TableMeta;
-use common_planners::CreateTablePlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
-use sqlparser::ast::ColumnDef;
-use sqlparser::ast::ColumnOption;
 use sqlparser::ast::ObjectName;
 
-use super::analyzer_expr::ExpressionAnalyzer;
-use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
-use crate::sql::DfStatement;
-use crate::sql::PlanParser;
-use crate::sql::SQLCommon;
+use common_planners::CreateViewPlan;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfCreateView {
@@ -54,15 +42,26 @@ pub struct DfCreateView {
 impl AnalyzableStatement for DfCreateView {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         // check if query is ok
-        self.query.analyze(ctx)?;
+        let _ = self.query.analyze(ctx.clone()).await?;
         // 
-        let (db, table) = Self::resolve_table(ctx.clone(), &self.name)?;
-        todo!()
+        let if_not_exists = self.if_not_exists;
+        let subquery = self.subquery.clone();
+        let tenant = ctx.get_tenant();
+        let (db, viewname) = Self::resolve_viewname(ctx.clone(), &self.name)?;
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::CreateView(CreateViewPlan {
+                if_not_exists,
+                tenant,
+                db,
+                viewname,
+                subquery
+            })
+        )))
     }
 }
 
 impl DfCreateView {
-    fn resolve_table(ctx: Arc<QueryContext>, table_name: &ObjectName) -> Result<(String, String)> {
+    fn resolve_viewname(ctx: Arc<QueryContext>, table_name: &ObjectName) -> Result<(String, String)> {
         let idents = &table_name.0;
         match idents.len() {
             0 => Err(ErrorCode::SyntaxException("Create table name is empty")),
