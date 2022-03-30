@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::TimeZone;
 use chrono_tz::Tz;
 use common_exception::*;
 use common_io::prelude::*;
@@ -25,6 +24,7 @@ use crate::prelude::*;
 pub struct DateTimeDeserializer<T: PrimitiveType> {
     pub builder: MutablePrimitiveColumn<T>,
     pub tz: Tz,
+    pub precision: usize,
 }
 
 impl<T> TypeDeserializer for DateTimeDeserializer<T>
@@ -56,25 +56,82 @@ where
 
     fn de_json(&mut self, value: &serde_json::Value) -> Result<()> {
         match value {
-            serde_json::Value::String(v) => self.de_text(v.as_bytes()),
+            serde_json::Value::String(v) => {
+                let v = v.clone();
+                let mut reader = BufferReader::new(v.as_bytes());
+                let datetime = reader.read_datetime_text(&self.tz)?;
+                self.builder
+                    .append_value(uniform(datetime.timestamp_nanos(), self.precision).as_());
+                Ok(())
+            }
             _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
         }
     }
 
-    fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        let v = std::str::from_utf8(reader)
-            .map_err_to_code(ErrorCode::BadBytes, || "Cannot convert value to utf8")?;
-        let res = self
-            .tz
-            .datetime_from_str(v, "%Y-%m-%d %H:%M:%S%.f")
-            .map_err_to_code(ErrorCode::BadBytes, || {
-                "Cannot parse value to DateTime type"
-            })?;
-        self.builder.append_value(res.timestamp().as_());
+    fn de_text_quoted(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        reader.must_ignore_byte(b'\'')?;
+        let datetime = reader.read_datetime_text(&self.tz)?;
+        reader.must_ignore_byte(b'\'')?;
+
+        self.builder
+            .append_value(uniform(datetime.timestamp_nanos(), self.precision).as_());
+        Ok(())
+    }
+
+    fn de_whole_text(&mut self, reader: &[u8]) -> Result<()> {
+        let mut reader = BufferReader::new(reader);
+        let datetime = reader.read_datetime_text(&self.tz)?;
+        reader.must_eof()?;
+        self.builder
+            .append_value(uniform(datetime.timestamp_nanos(), self.precision).as_());
+        Ok(())
+    }
+
+    fn de_text(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        let datetime = reader.read_datetime_text(&self.tz)?;
+        self.builder
+            .append_value(uniform(datetime.timestamp_nanos(), self.precision).as_());
+        Ok(())
+    }
+
+    fn de_text_csv(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        let maybe_quote = reader.ignore(|f| f == b'\'' || f == b'"')?;
+        let datetime = reader.read_datetime_text(&self.tz)?;
+        if maybe_quote {
+            reader.must_ignore(|f| f == b'\'' || f == b'"')?;
+        }
+        self.builder
+            .append_value(uniform(datetime.timestamp_nanos(), self.precision).as_());
+        Ok(())
+    }
+
+    fn de_text_json(&mut self, reader: &mut CpBufferReader) -> Result<()> {
+        reader.must_ignore_byte(b'"')?;
+        let datetime = reader.read_datetime_text(&self.tz)?;
+        reader.must_ignore_byte(b'"')?;
+
+        self.builder
+            .append_value(uniform(datetime.timestamp_nanos(), self.precision).as_());
+        Ok(())
+    }
+
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
+        let v = value.as_i64()?;
+        self.builder.append_value(v.as_());
         Ok(())
     }
 
     fn finish_to_column(&mut self) -> ColumnRef {
         self.builder.to_column()
+    }
+}
+
+#[inline]
+fn uniform(nanos: i64, precision: usize) -> i64 {
+    match precision {
+        0 => nanos as i64 / 1_000_000_000,
+        3 => nanos as i64 / 1_000_000,
+        6 => nanos as i64 / 1_000,
+        _ => nanos as i64,
     }
 }

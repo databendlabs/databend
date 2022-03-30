@@ -56,6 +56,11 @@ impl DataSchema {
     }
 
     #[inline]
+    pub fn num_fields(&self) -> usize {
+        self.fields.len()
+    }
+
+    #[inline]
     pub fn has_field(&self, name: &str) -> bool {
         for i in 0..self.fields.len() {
             if self.fields[i].name() == name {

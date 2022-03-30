@@ -227,3 +227,9 @@ impl fmt::Debug for DataBlock {
         write!(f, "\n{:#?}\n", lines)
     }
 }
+
+impl Default for DataBlock {
+    fn default() -> Self {
+        Self::empty()
+    }
+}

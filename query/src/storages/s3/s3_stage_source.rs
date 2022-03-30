@@ -19,6 +19,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::prelude::FormatSettings;
 use common_io::prelude::S3File;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::StageStorage;
@@ -69,7 +70,7 @@ impl StageSource {
         stage_info: &UserStageInfo,
         reader: BytesReader,
     ) -> Result<Box<dyn Source>> {
-        let mut builder = CsvSourceBuilder::create(schema);
+        let mut builder = CsvSourceBuilder::create(schema, FormatSettings::default());
         let size_limit = stage_info.copy_options.size_limit;
 
         // Size limit.
@@ -87,7 +88,7 @@ impl StageSource {
 
         // Skip header.
         {
-            builder.skip_header(stage_info.file_format_options.skip_header);
+            builder.skip_header(stage_info.file_format_options.skip_header > 0);
         }
 
         // Field delimiter, default ','.

@@ -19,6 +19,8 @@ use async_stream::stream;
 use common_base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
+use common_io::prelude::parse_escape_bytes;
+use common_io::prelude::FormatSettings;
 use common_meta_types::UserInfo;
 use common_planners::InsertInputSource;
 use common_planners::PlanNode;
@@ -73,11 +75,28 @@ pub async fn streaming_load(
         .create_query_context()
         .await
         .map_err(InternalServerError)?;
+
     let insert_sql = req
         .headers()
         .get("insert_sql")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
+
+    let settings = context.get_settings();
+    for (key, value) in req.headers().iter() {
+        if settings.has_setting(key.as_str()) {
+            let value = value.to_str().unwrap();
+            let value = value.trim_matches(|p| p == '"' || p == '\'');
+            let value = parse_escape_bytes(value.as_bytes());
+            settings
+                .set_settings(
+                    key.to_string(),
+                    String::from_utf8_lossy(&value).to_string(),
+                    false,
+                )
+                .map_err(InternalServerError)?
+        }
+    }
 
     let plan = PlanParser::parse(context.clone(), insert_sql)
         .await
@@ -90,12 +109,14 @@ pub async fn streaming_load(
         .get_max_block_size()
         .map_err(InternalServerError)? as usize;
 
+    let format_settings = context.get_format_settings().map_err(InternalServerError)?;
+
     // validate plan
     let source_stream = match &plan {
         PlanNode::Insert(insert) => match &insert.source {
             InsertInputSource::StreamingWithFormat(format) => {
                 if format.to_lowercase().as_str() == "csv" {
-                    build_csv_stream(&plan, req, multipart, max_block_size)
+                    build_csv_stream(&plan, &format_settings, multipart, max_block_size)
                 } else if format.to_lowercase().as_str() == "parquet" {
                     build_parquet_stream(&plan, multipart)
                 } else if format.to_lowercase().as_str() == "ndjson"
@@ -212,75 +233,12 @@ fn build_ndjson_stream(
 
 fn build_csv_stream(
     plan: &PlanNode,
-    req: &Request,
+    format_settings: &FormatSettings,
     mut multipart: Multipart,
     block_size: usize,
 ) -> PoemResult<SendableDataBlockStream> {
-    let mut builder = CsvSourceBuilder::create(plan.schema());
+    let mut builder = CsvSourceBuilder::create(plan.schema(), format_settings.clone());
     builder.block_size(block_size);
-    // Skip header.
-    {
-        let skip_header = req
-            .headers()
-            .get("skip_header")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("0")
-            .parse::<i32>()
-            .map_err(|_| {
-                poem::Error::from_string("skip_header must be an integer", StatusCode::BAD_REQUEST)
-            })?;
-
-        builder.skip_header(skip_header);
-    }
-
-    // Field delimiter.
-    {
-        let field_delimiter = req
-            .headers()
-            .get("field_delimiter")
-            .and_then(|v| v.to_str().ok())
-            .map(|v| {
-                let v = v.trim_matches(|p| p == '"' || p == '\'');
-
-                match v.len() {
-                    n if n >= 1 => {
-                        if v.as_bytes()[0] == b'\\' {
-                            "\t"
-                        } else {
-                            v
-                        }
-                    }
-                    _ => ",",
-                }
-            })
-            .unwrap_or(",");
-
-        builder.field_delimiter(field_delimiter);
-    }
-
-    // Record delimiter.
-    {
-        let record_delimiter = req
-            .headers()
-            .get("record_delimiter")
-            .and_then(|v| v.to_str().ok())
-            .map(|v| {
-                let v = v.trim_matches(|p| p == '"' || p == '\'');
-                match v.len() {
-                    n if n >= 1 => {
-                        if v.as_bytes()[0] == b'\\' {
-                            "\n"
-                        } else {
-                            v
-                        }
-                    }
-                    _ => "\n",
-                }
-            })
-            .unwrap_or("\n");
-
-        builder.record_delimiter(record_delimiter);
-    }
 
     let stream = stream! {
         while let Ok(Some(field)) = multipart.next_field().await {

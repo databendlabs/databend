@@ -109,6 +109,7 @@ impl DataType for DateTime32Type {
         Box::new(DateTimeDeserializer::<u32> {
             builder: MutablePrimitiveColumn::<u32>::with_capacity(capacity),
             tz: tz.parse::<Tz>().unwrap(),
+            precision: 0,
         })
     }
 

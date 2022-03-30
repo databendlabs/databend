@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_io::prelude::CpBufferReader;
 
 use crate::ColumnRef;
+use crate::DataValue;
 use crate::MutableColumn;
 use crate::MutableNullColumn;
 use crate::TypeDeserializer;
@@ -46,7 +48,16 @@ impl TypeDeserializer for NullDeserializer {
         Ok(())
     }
 
-    fn de_text(&mut self, _reader: &[u8]) -> Result<()> {
+    fn de_whole_text(&mut self, _reader: &[u8]) -> Result<()> {
+        Ok(())
+    }
+
+    fn de_text(&mut self, _reader: &mut CpBufferReader) -> Result<()> {
+        self.builder.append_default();
+        Ok(())
+    }
+
+    fn append_data_value(&mut self, _value: DataValue) -> Result<()> {
         self.builder.append_default();
         Ok(())
     }

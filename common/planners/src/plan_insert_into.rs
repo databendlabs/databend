@@ -12,17 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 
-use crate::Expression;
 use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub enum InsertInputSource {
     SelectPlan(Box<PlanNode>),
-    Expressions(String, Vec<Vec<Expression>>),
     StreamingWithFormat(String),
+    Values(InsertValueBlock),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct InsertValueBlock {
+    #[serde(skip)]
+    pub block: DataBlock,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]

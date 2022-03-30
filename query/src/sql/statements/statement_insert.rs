@@ -18,9 +18,9 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::Expression;
 use common_planners::InsertInputSource;
 use common_planners::InsertPlan;
+use common_planners::InsertValueBlock;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::Expr;
@@ -37,6 +37,7 @@ use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
+use crate::sql::statements::ValueSource;
 use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::storages::Table;
@@ -140,35 +141,22 @@ impl DfInsertStatement {
         schema: &DataSchemaRef,
     ) -> Result<InsertInputSource> {
         tracing::debug!("{:?}", values);
+        // TODO(ygf11): set the self.values from parser
+        // let values_str = self.value.clone().unwrap();
+        let offsize = "VALUES ".len();
+        let values_str = format!("{}", values);
+        let source = ValueSource::new(schema.clone());
 
-        let expression_analyzer = ExpressionAnalyzer::create(ctx);
-        let mut value_exprs = Vec::with_capacity(values.0.len());
-        for value in &values.0 {
-            let mut exprs = Vec::with_capacity(value.len());
-            for (i, v) in value.iter().enumerate() {
-                let expr = expression_analyzer.analyze(v).await?;
-                let expr = if &expr.to_data_type(schema)? != schema.field(i).data_type() {
-                    Expression::Cast {
-                        expr: Box::new(expr),
-                        data_type: schema.field(i).data_type().clone(),
-                        is_nullable: schema.field(i).is_nullable(),
-                    }
-                } else {
-                    expr
-                };
-                exprs.push(Expression::Alias(
-                    schema.field(i).name().to_string(),
-                    Box::new(expr),
-                ));
+        let block = match source.stream_read(values_str.clone()) {
+            Ok(block) => Ok(block),
+            Err(_) => {
+                let bytes = values_str.as_bytes();
+                source
+                    .parser_read(&bytes[offsize..], ExpressionAnalyzer::create(ctx))
+                    .await
             }
-            value_exprs.push(exprs);
-        }
-
-        let values = format!("{}", values);
-        Ok(InsertInputSource::Expressions(
-            (values["VALUES ".len()..]).to_string(),
-            value_exprs,
-        ))
+        }?;
+        Ok(InsertInputSource::Values(InsertValueBlock { block }))
     }
 
     async fn analyze_insert_without_source(&self) -> Result<InsertInputSource> {

@@ -31,3 +31,17 @@ fn path_test() {
     assert_eq!(get_abs_path("/ab/c", "d"), "/ab/c/d".to_string());
     assert_eq!(get_abs_path("/ab/c", "/d/e"), "/ab/c/d/e".to_string());
 }
+
+#[test]
+fn parse_escape() {
+    let cases = vec![
+        vec!["a", "a"],
+        vec!["abc", "abc"],
+        vec!["\t\nabc", "\t\nabc"],
+        vec!["\\t\\nabc", "\t\nabc"],
+    ];
+
+    for c in cases {
+        assert_eq!(parse_escape_bytes(c[0].as_bytes()), c[1].as_bytes());
+    }
+}

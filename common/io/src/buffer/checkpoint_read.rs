@@ -12,9 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod binary_read;
-mod binary_write;
-mod buffer;
-mod marshal;
-mod options_deserializer;
-mod utils;
+use std::io::Result;
+
+use super::BufferRead;
+
+pub trait CheckpointRead: BufferRead {
+    // reset the checkpoint
+    fn reset_checkpoint(&mut self);
+
+    fn checkpoint(&mut self);
+    fn get_checkpoint_buffer(&self) -> &[u8];
+
+    fn rollback_to_checkpoint(&mut self) -> Result<()>;
+}

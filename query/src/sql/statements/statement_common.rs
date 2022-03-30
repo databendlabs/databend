@@ -136,7 +136,7 @@ pub fn parse_copy_file_format_options(
     let skip_header = file_format_options
         .get("skip_header")
         .unwrap_or(&"0".to_string())
-        .parse::<i32>()?;
+        .parse::<u64>()?;
 
     // Field delimiter.
     let field_delimiter = file_format_options

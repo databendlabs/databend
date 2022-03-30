@@ -16,3 +16,4 @@ mod query;
 mod statement_copy;
 mod statement_create_table;
 mod statement_select;
+mod value_source;
