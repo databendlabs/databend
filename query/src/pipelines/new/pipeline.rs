@@ -70,6 +70,14 @@ impl NewPipeline {
         self.pipes.push(pipe);
     }
 
+    pub fn input_len(&self) -> usize {
+        match self.pipes.first() {
+            None => 0,
+            Some(NewPipe::SimplePipe { inputs_port, .. }) => inputs_port.len(),
+            Some(NewPipe::ResizePipe { inputs_port, .. }) => inputs_port.len(),
+        }
+    }
+
     pub fn output_len(&self) -> usize {
         match self.pipes.last() {
             None => 0,
