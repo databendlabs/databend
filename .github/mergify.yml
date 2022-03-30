@@ -3,7 +3,7 @@ queue_rules:
     conditions:
       - "#approved-reviews-by>=2"
 
-      - '#check-success>=10'
+      - '#check-success>=12'
       - check-success=check
       - check-success~=build
       - check-success~=test_unit
