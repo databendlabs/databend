@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod pipeline_executor;
-mod pipeline_threads_executor;
 
 mod executor_graph;
 mod executor_notify;

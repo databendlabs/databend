@@ -22,7 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
 
-use crate::pipelines::new::executor::pipeline_threads_executor::PipelineThreadsExecutor;
+use crate::pipelines::new::executor::PipelineExecutor;
 use crate::pipelines::new::pipe::SinkPipeBuilder;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
@@ -31,8 +31,8 @@ use crate::pipelines::new::processors::Sinker;
 use crate::pipelines::new::NewPipeline;
 
 enum Executor {
-    Inited(Arc<PipelineThreadsExecutor>),
-    Running(Arc<PipelineThreadsExecutor>),
+    Inited(Arc<PipelineExecutor>),
+    Running(Arc<PipelineExecutor>),
     Finished(Result<()>),
 }
 
@@ -43,37 +43,28 @@ pub struct PipelinePullingExecutor {
 
 impl PipelinePullingExecutor {
     fn wrap_pipeline(pipeline: &mut NewPipeline) -> Result<Receiver<DataBlock>> {
-        if pipeline.pipes.is_empty() {
-            return Err(ErrorCode::PipelineUnInitialized(""));
-        }
-
-        if pipeline.pipes[0].input_size() != 0 {
-            return Err(ErrorCode::PipelineUnInitialized(""));
-        }
-
-        if pipeline.output_len() == 0 {
-            return Err(ErrorCode::PipelineUnInitialized(""));
+        if pipeline.is_pushing_pipeline()? || !pipeline.is_pulling_pipeline()? {
+            return Err(ErrorCode::LogicalError(
+                "Logical error, PipelinePullingExecutor can only work on pulling pipeline."
+            ));
         }
 
         let (tx, rx) = std::sync::mpsc::sync_channel(pipeline.output_len());
-        let mut pipe_builder = SinkPipeBuilder::create();
+        let mut sink_pipe_builder = SinkPipeBuilder::create();
 
         for _index in 0..pipeline.output_len() {
             let input = InputPort::create();
             let pulling_sink = PullingSink::create(tx.clone(), input.clone());
-            pipe_builder.add_sink(input.clone(), pulling_sink);
+            sink_pipe_builder.add_sink(input.clone(), pulling_sink);
         }
 
-        pipeline.add_pipe(pipe_builder.finalize());
+        pipeline.add_pipe(sink_pipe_builder.finalize());
         Ok(rx)
     }
 
-    pub fn try_create(
-        async_runtime: Arc<Runtime>,
-        mut pipeline: NewPipeline,
-    ) -> Result<PipelinePullingExecutor> {
+    pub fn try_create(async_runtime: Arc<Runtime>, mut pipeline: NewPipeline) -> Result<PipelinePullingExecutor> {
         let receiver = Self::wrap_pipeline(&mut pipeline)?;
-        let pipeline_executor = PipelineThreadsExecutor::create(async_runtime, pipeline)?;
+        let pipeline_executor = PipelineExecutor::create(async_runtime, pipeline)?;
         let executor = Arc::new(Mutex::new(Executor::Inited(pipeline_executor)));
         Ok(PipelinePullingExecutor { receiver, executor })
     }
@@ -93,10 +84,7 @@ impl PipelinePullingExecutor {
         Ok(())
     }
 
-    fn thread_function(
-        state: Arc<Mutex<Executor>>,
-        threads_executor: Arc<PipelineThreadsExecutor>,
-    ) -> impl Fn() {
+    fn thread_function(state: Arc<Mutex<Executor>>, threads_executor: Arc<PipelineExecutor>) -> impl Fn() {
         move || {
             let res = threads_executor.execute();
             let mut state = state.lock();

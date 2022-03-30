@@ -37,6 +37,27 @@ impl NewPipeline {
         }
     }
 
+    // We need to push data to executor
+    pub fn is_pushing_pipeline(&self) -> Result<bool> {
+        match self.pipes.first() {
+            Some(pipe) => Ok(pipe.input_size() != 0),
+            None => Err(ErrorCode::LogicalError("Logical error, call is_pushing on empty pipeline.")),
+        }
+    }
+
+    // We need to pull data from executor
+    pub fn is_pulling_pipeline(&self) -> Result<bool> {
+        match self.pipes.last() {
+            Some(pipe) => Ok(pipe.output_size() != 0),
+            None => Err(ErrorCode::LogicalError("Logical error, call is_pulling on empty pipeline.")),
+        }
+    }
+
+    // We just need to execute it.
+    pub fn is_complete_pipeline(&self) -> Result<bool> {
+        Ok(!self.pipes.is_empty() && !self.is_pushing_pipeline()? && !self.is_pulling_pipeline()?)
+    }
+
     pub fn add_pipe(&mut self, pipe: NewPipe) {
         self.pipes.push(pipe);
     }
@@ -63,7 +84,7 @@ impl NewPipeline {
     }
 
     pub fn add_transform<F>(&mut self, f: F) -> Result<()>
-    where F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> {
+        where F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> {
         let mut transform_builder = TransformPipeBuilder::create();
         for _index in 0..self.output_len() {
             let input_port = InputPort::create();
