@@ -17,7 +17,7 @@ toSecond(expr)
 | expr | datetime |
 
 ## Return Type
- `UInt8` datatype.
+`UInt8` datatype.
 
 ## Examples
 

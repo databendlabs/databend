@@ -15,7 +15,7 @@ toMonday(expr)
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| expr | datetime |
+| expr | date16/date32/datetime |
 
 ## Return Type
 `UInt16` datatype.
