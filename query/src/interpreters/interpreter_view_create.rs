@@ -34,6 +34,7 @@ use common_streams::SendableDataBlockStream;
 use common_planners::CreateViewPlan;
 use super::InsertInterpreter;
 use crate::catalogs::Catalog;
+use std::collections::HashMap;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -88,6 +89,8 @@ impl Interpreter for CreateViewInterpreter {
 impl CreateViewInterpreter {
     async fn create_view(&self) -> Result<SendableDataBlockStream> {
         let catalog = self.ctx.get_catalog();
+        let mut options = HashMap::new();
+        options.insert("query".to_string(), self.plan.subquery.clone());
         let plan = CreateTableReq {
             if_not_exists: self.plan.if_not_exists,
             tenant: self.plan.tenant.clone(),
@@ -95,7 +98,7 @@ impl CreateViewInterpreter {
             table: self.plan.viewname.clone(),
             table_meta: TableMeta {
                 engine: "VIEW".to_string(),
-                view: Some(TableView { subquery:self.plan.subquery.clone() }),
+                options,
                 ..Default::default()
             }
         };

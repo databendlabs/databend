@@ -36,6 +36,10 @@ use crate::sql::statements::query::query_schema_joined::JoinedSchema;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
+use crate::storages::Table;
+use crate::storages::view::ViewTable;
+use crate::storages::view::view_table::VIEW_ENGINE;
+use crate::storages::view::view_table::QUERY;
 
 pub struct JoinedSchemaAnalyzer {
     ctx: Arc<QueryContext>,
@@ -101,28 +105,26 @@ impl JoinedSchemaAnalyzer {
         // TODO(Winter): await query_context.get_table
         let (database, table) = self.resolve_table(&item.name)?;
         let read_table = self.ctx.get_table(&database, &table).await?;
-
         let tbl_info = read_table.get_table_info();
-        // TODO(veeupup) make view use subquery logic
-        if let Some(view) = &tbl_info.meta.view { // view, not table
-            // parse and make it subquery
-            let sql = view.subquery.clone();
-            let (statements, _) = DfParser::parse_sql(&sql)?;
-            if statements.len() == 1 {
-                if let DfStatement::Query(subquery) = &statements[0] {
-                    match subquery.analyze(self.ctx.clone()).await? {
-                        AnalyzedResult::SelectQuery(state) =>  {
-                            let viewname = tbl_info.name.clone();
-                            let alias = vec![viewname];
-                            return JoinedSchema::from_subquery(state, alias);
-                        },
-                        _ => {}
+
+        if tbl_info.engine() == VIEW_ENGINE {
+            if let Some(query) = tbl_info.options().get(QUERY) {
+                let (statements, _) = DfParser::parse_sql(query.as_str())?;
+                if statements.len() == 1 {
+                    if let DfStatement::Query(subquery) = &statements[0] {
+                        match subquery.analyze(self.ctx.clone()).await? {
+                            AnalyzedResult::SelectQuery(state) =>  {
+                                let alias = vec![tbl_info.name.clone()];
+                                return JoinedSchema::from_subquery(state, alias);
+                            },
+                            _ => {}
+                        }
                     }
                 }
             }
-            return Err(ErrorCode::LogicalError(
+            Err(ErrorCode::LogicalError(
                     "Logical error, subquery analyzed data must be SelectQuery, it's a bug.",
-                ));   
+                ))
         }else {
             match &item.alias {
                 None => {

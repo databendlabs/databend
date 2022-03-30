@@ -78,7 +78,9 @@ pub trait Table: Sync + Send {
         &self,
         _ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)>;
+    ) -> Result<(Statistics, Partitions)> {
+        unimplemented!()
+    }
 
     fn table_args(&self) -> Option<Vec<Expression>> {
         None
@@ -89,14 +91,18 @@ pub trait Table: Sync + Send {
         &self,
         _ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream>;
+    ) -> Result<SendableDataBlockStream> {
+        unimplemented!()
+    }
 
     fn read2(
         &self,
         _: Arc<QueryContext>,
         _: &ReadDataSourcePlan,
         _: &mut NewPipeline,
-    ) -> Result<()>;
+    ) -> Result<()> {
+        unimplemented!()
+    }
 
     async fn append_data(
         &self,

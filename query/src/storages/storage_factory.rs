@@ -24,6 +24,7 @@ use crate::configs::Config;
 use crate::storages::fuse::FuseTable;
 use crate::storages::github::GithubTable;
 use crate::storages::memory::MemoryTable;
+use crate::storages::view::ViewTable;
 use crate::storages::null::NullTable;
 use crate::storages::StorageContext;
 use crate::storages::Table;
@@ -109,8 +110,8 @@ impl StorageFactory {
         // so we will need a table engine to present VIEW type
         // TODO(veeupup) add a new table engine storage
         creators.insert("VIEW".to_string(), Storage {
-            creator: Arc::new(MemoryTable::try_create),
-            descriptor: Arc::new(MemoryTable::description),
+            creator: Arc::new(ViewTable::try_create),
+            descriptor: Arc::new(ViewTable::description),
         });
 
         StorageFactory {

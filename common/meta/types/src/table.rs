@@ -116,7 +116,6 @@ pub struct TableMeta {
     pub engine_options: HashMap<String, String>,
     pub options: HashMap<String, String>,
     pub created_on: DateTime<Utc>,
-    pub view: Option<TableView>
 }
 
 impl TableInfo {
@@ -173,7 +172,6 @@ impl Default for TableMeta {
             engine_options: HashMap::new(),
             options: HashMap::new(),
             created_on: Utc::now(),
-            view: None,
         }
     }
 }
@@ -182,8 +180,8 @@ impl Display for TableMeta {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Engine: {}={:?}, Schema: {}, Options: {:?} CreatedOn: {:?} IsView: {:?}",
-            self.engine, self.engine_options, self.schema, self.options, self.created_on, self.view
+            "Engine: {}={:?}, Schema: {}, Options: {:?} CreatedOn: {:?}",
+            self.engine, self.engine_options, self.schema, self.options, self.created_on
         )
     }
 }
@@ -192,8 +190,8 @@ impl Display for TableInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "DB.Table: {}, Table: {}-{}, Engine: {}, IsView: {:?}",
-            self.desc, self.name, self.ident, self.meta.engine, self.meta.view
+            "DB.Table: {}, Table: {}-{}, Engine: {}",
+            self.desc, self.name, self.ident, self.meta.engine
         )
     }
 }
