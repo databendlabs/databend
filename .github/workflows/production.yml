@@ -111,12 +111,11 @@ jobs:
   publish_image:
     runs-on: ubuntu-latest
     # Release after all tests have been passed.
-    needs: [
-      test_unit,
-      test_stateless_standalone_linux,
-      test_stateless_cluster_linux,
-      test_stateful_standalone,
-    ]
+    needs:
+      - test_unit
+      - test_stateless_standalone_linux
+      - test_stateless_cluster_linux
+      - test_stateful_standalone
     strategy:
       matrix:
         config:
