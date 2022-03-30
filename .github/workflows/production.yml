@@ -121,7 +121,6 @@ jobs:
       matrix:
         config:
           - { target: x86_64-unknown-linux-gnu, platform: linux/amd64 }
-          - { target: aarch64-unknown-linux-gnu, platform: linux/arm64 }
     steps:
       - uses: actions/checkout@v2
       - uses: ./.github/actions/publish_image
