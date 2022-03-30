@@ -45,7 +45,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ steps.get_version.outputs.VERSION }}
-          target: ${{ matrix.config.target }}
+          target: ${{ matrix.target }}
           tag: ${{ github.ref }}
           aws_access_key_id: ${{ secrets.REPO_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
@@ -87,7 +87,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ steps.get_version.outputs.VERSION }}
-          target: ${{ matrix.config.target }}
+          target: ${{ matrix.target }}
           tag: ${{ github.ref }}
           aws_access_key_id: ${{ secrets.REPO_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
@@ -132,7 +132,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ steps.get_version.outputs.VERSION }}
-          target: ${{ matrix.config.target }}
+          target: ${{ matrix.target }}
           tag: ${{ github.ref }}
           aws_access_key_id: ${{ secrets.REPO_ACCESS_KEY_ID }}
           aws_secret_access_key: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
