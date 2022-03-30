@@ -136,8 +136,8 @@ jobs:
           aws_secret_access_key: ${{ secrets.REPO_SECRET_ACCESS_KEY }}
           changelog: ${{ steps.changelog_reader.outputs.log_entry }}
 
-  release-docker:
-    name: Release assets
+  release_docker_combined:
+    name: Release combined docker image
     runs-on: ubuntu-latest
     needs: publish_linux_gnu
     steps:
@@ -162,19 +162,8 @@ jobs:
         id: download_binaries
         run: |
           mkdir -p ./target/release
-          wget https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
           wget https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-aarch64-unknown-linux-gnu.tar.gz
-          mkdir -p ./target/x86_64-unknown-linux-gnu/release
-          mkdir -p ./target/aarch64-unknown-linux-gnu/release
           tar xC ./target/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
-          tar xC ./target/x86_64-unknown-linux-gnu/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
-          tar xC ./target/aarch64-unknown-linux-gnu/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-aarch64-unknown-linux-gnu.tar.gz
-          mkdir -p ./distro/linux/amd64
-          mkdir -p ./distro/linux/arm64
-          cp ./target/x86_64-unknown-linux-gnu/release/databend-meta ./distro/linux/amd64
-          cp ./target/x86_64-unknown-linux-gnu/release/databend-query ./distro/linux/amd64
-          cp ./target/aarch64-unknown-linux-gnu/release/databend-meta ./distro/linux/arm64
-          cp ./target/aarch64-unknown-linux-gnu/release/databend-query ./distro/linux/arm64
 
       - name: Build and push
         id: docker_build
@@ -187,46 +176,63 @@ jobs:
           file: ./docker/Dockerfile
           build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
 
-      - name: push meta service
-        id: push_meta_service
-        uses: docker/build-push-action@v2
-        with:
-          push: true
-          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend-meta:${{ steps.get_version.outputs.VERSION }}
-          platforms: linux/amd64,linux/arm64
-          context: .
-          file: ./docker/meta/Dockerfile
-          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
+  release_docker_separate:
+    name: Release separate docker image for k8s service
+    runs-on: ubuntu-latest
+    needs: publish_linux_gnu
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - meta
+          - query
+        distro:
+          - debian
+          - distroless
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Get the version
+        id: get_version
+        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
 
-      - name: push query service
-        id: push_query_service
-        uses: docker/build-push-action@v2
-        with:
-          push: true
-          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend-query:${{ steps.get_version.outputs.VERSION }}
-          platforms: linux/amd64,linux/arm64
-          context: .
-          file: ./docker/query/Dockerfile
-          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
+      - name: Download binaries for usage
+        id: download_binaries
+        run: |
+          mkdir -p ./target/release
+          wget https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          wget https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-aarch64-unknown-linux-gnu.tar.gz
+          mkdir -p ./target/x86_64-unknown-linux-gnu/release
+          mkdir -p ./target/aarch64-unknown-linux-gnu/release
+          tar xC ./target/x86_64-unknown-linux-gnu/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          tar xC ./target/aarch64-unknown-linux-gnu/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-aarch64-unknown-linux-gnu.tar.gz
+          mkdir -p ./distro/linux/amd64
+          mkdir -p ./distro/linux/arm64
+          cp ./target/x86_64-unknown-linux-gnu/release/databend-${{ matrix.service }} ./distro/linux/amd64
+          cp ./target/aarch64-unknown-linux-gnu/release/databend-${{ matrix.service }} ./distro/linux/arm64
 
-      - name: push distroless meta service
-        id: push_distroless_meta_service
-        uses: docker/build-push-action@v2
-        with:
-          push: true
-          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend-meta:${{ steps.get_version.outputs.VERSION }}-distroless
-          platforms: linux/amd64,linux/arm64
-          context: .
-          file: ./docker/distroless/meta.Dockerfile
-          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
+      - name: get image tags
+        id: get_image_tags
+        shell: bash
+        run: |
+          _base=${{ secrets.DOCKERHUB_NAMESPACE }}/databend-${{ matrix.service }}:${{ steps.get_version.outputs.VERSION }}
+          _tags=${_base}-${{ matrix.distro }}
+          if [[ "${{ matrix.service }}" == "debian" ]]; then
+            _tags="${_tags}, ${_base}"
+          fi
+          echo ::set-output name=IMAGE_TAGS::${_tags}
 
-      - name: push distroless query service
-        id: push_distroless_query_service
+      - name: push service image
         uses: docker/build-push-action@v2
         with:
           push: true
-          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend-query:${{ steps.get_version.outputs.VERSION }}-distroless
+          tags: ${{ steps.get_image_tags.outputs.IMAGE_TAGS }}
           platforms: linux/amd64,linux/arm64
           context: .
-          file: ./docker/distroless/query.Dockerfile
+          file: ./docker/${{ matrix.distro }}/${{ matrix.service }}.Dockerfile
           build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
