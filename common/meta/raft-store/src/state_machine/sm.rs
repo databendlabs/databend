@@ -14,8 +14,6 @@
 
 use std::convert::TryInto;
 use std::fmt::Debug;
-use std::fmt::Display;
-use std::ops::RangeBounds;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -55,7 +53,6 @@ use common_meta_types::UnknownDatabaseId;
 use common_meta_types::UnknownTable;
 use common_meta_types::UnknownTableId;
 use common_tracing::tracing;
-use dyn_clone::DynClone;
 use openraft::raft::Entry;
 use openraft::raft::EntryPayload;
 use serde::Deserialize;
@@ -93,44 +90,13 @@ const SEQ_DATABASE_META_ID: &str = "database_meta_id";
 // const TREE_META: &str = "meta";
 const TREE_STATE_MACHINE: &str = "state_machine";
 
-/// database meta data kev-value type
-pub type DatabaseMetaKV = (DatabaseLookupKey, DatabaseMeta);
-
-pub enum DataChangeType {
-    Create,
-    Update,
-    Drop,
-}
-
 /// StateMachine subscriber trait
 #[async_trait::async_trait]
-pub trait StateMachineSubscriber: Display + Debug + Sync + Send + DynClone {
-    async fn database_changed(
-        &self,
-        change_type: DataChangeType,
-        key: &DatabaseLookupKey,
-        prev: &Option<SeqV<DatabaseMeta>>,
-        meta: &Option<SeqV<DatabaseMeta>>,
-    );
-
-    async fn table_changed(
-        &self,
-        change_type: DataChangeType,
-        table_name: &str,
-        prev: &Option<SeqV<TableMeta>>,
-        meta: &Option<SeqV<TableMeta>>,
-    );
-
-    async fn kv_changed(
-        &self,
-        change_type: DataChangeType,
-        key: &str,
-        prev: &Option<SeqV>,
-        meta: &Option<SeqV>,
-    );
+pub trait StateMachineSubscriber: Debug + Sync + Send {
+    async fn kv_changed(&self, key: &str, prev: &Option<SeqV>, meta: &Option<SeqV>);
 }
 
-dyn_clone::clone_trait_object!(StateMachineSubscriber);
+//dyn_clone::clone_trait_object!(StateMachineSubscriber);
 
 /// The state machine of the `MemStore`.
 /// It includes user data and two raft-related informations:
@@ -441,15 +407,6 @@ impl StateMachine {
             result
         );
 
-        if let Some(subscriber) = &self.subscriber {
-            let _ = subscriber.database_changed(
-                DataChangeType::Create,
-                &db_key,
-                &prev_meta,
-                &result_meta,
-            );
-        }
-
         Ok(AppliedState::DatabaseMeta(Change::new_with_id(
             db_id,
             prev_meta,
@@ -488,15 +445,6 @@ impl StateMachine {
 
             tracing::debug!("applied drop Database: {} {:?}", name, result);
 
-            if let Some(subscriber) = &self.subscriber {
-                let _ = subscriber.database_changed(
-                    DataChangeType::Drop,
-                    &db_key,
-                    &prev_meta,
-                    &result_meta,
-                );
-            }
-
             return Ok(AppliedState::DatabaseMeta(Change::new_with_id(
                 db_id,
                 prev_meta,
@@ -533,10 +481,6 @@ impl StateMachine {
             self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)?;
         }
 
-        if let Some(subscriber) = &self.subscriber {
-            let _ = subscriber.table_changed(DataChangeType::Create, table_name, &prev, &result);
-        }
-
         Ok(AppliedState::TableMeta(Change::new_with_id(
             table_id.unwrap(),
             prev,
@@ -561,9 +505,7 @@ impl StateMachine {
         if result.is_none() {
             self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)?;
         }
-        if let Some(subscriber) = &self.subscriber {
-            let _ = subscriber.table_changed(DataChangeType::Drop, table_name, &prev, &result);
-        }
+
         Ok(Change::new_with_id(table_id.unwrap(), prev, result).into())
     }
 
@@ -605,15 +547,6 @@ impl StateMachine {
             new_table_name
         );
 
-        if let Some(subscriber) = &self.subscriber {
-            let _ = subscriber.table_changed(
-                DataChangeType::Update,
-                table_name,
-                &new_prev,
-                &new_result,
-            );
-        }
-
         Ok(AppliedState::TableMeta(Change::new_with_id(
             new_table_id.unwrap(),
             prev,
@@ -643,20 +576,10 @@ impl StateMachine {
         tracing::debug!("applied UpsertKV: {} {:?}", key, result);
 
         if let Some(subscriber) = &self.subscriber {
-            let _ = subscriber.kv_changed(DataChangeType::Update, &key_str, &prev, &result);
+            let _ = subscriber.kv_changed(&key_str, &prev, &result);
         }
 
         Ok(Change::new(prev, result).into())
-    }
-
-    pub fn get_kv_by_range<KV, R>(
-        &self,
-        range: R,
-    ) -> MetaStorageResult<Vec<(String, SeqV<Vec<u8>>)>>
-    where
-        R: RangeBounds<String>,
-    {
-        self.kvs().range_kvs(range)
     }
 
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
@@ -1125,29 +1048,6 @@ impl StateMachine {
         }
     }
 
-    pub fn get_database_meta_by_range<KV, R>(
-        &self,
-        range: R,
-    ) -> MetaStorageResult<Vec<(DatabaseLookupKey, DatabaseMeta)>>
-    where
-        R: RangeBounds<DatabaseLookupKey>,
-    {
-        let sm_db_ids = self.database_lookup();
-        let lookup_keys = sm_db_ids.range_kvs(range)?;
-        let mut ret = Vec::new();
-        for lookup_key in &lookup_keys {
-            let key = &lookup_key.0;
-            let id = &lookup_key.1;
-            let meta = self.get_database_meta_by_id(&id.data);
-            match meta {
-                Ok(meta) => ret.push((key.clone(), meta.data)),
-                Err(_) => continue,
-            }
-        }
-
-        Ok(ret)
-    }
-
     pub fn get_database_meta_by_id(&self, db_id: &u64) -> MetaStorageResult<SeqV<DatabaseMeta>> {
         let x = self.databases().get(db_id)?.ok_or_else(|| {
             MetaStorageError::AppError(AppError::UnknownDatabaseId(UnknownDatabaseId::new(
@@ -1179,29 +1079,6 @@ impl StateMachine {
     pub fn get_table_meta_by_id(&self, tid: &u64) -> MetaResult<Option<SeqV<TableMeta>>> {
         let x = self.tables().get(tid)?;
         Ok(x)
-    }
-
-    pub fn get_table_meta_by_range<KV, R>(
-        &self,
-        range: R,
-    ) -> MetaStorageResult<Vec<(TableLookupKey, Option<SeqV<TableMeta>>)>>
-    where
-        R: RangeBounds<TableLookupKey>,
-    {
-        let sm_table_ids = self.table_lookup();
-        let lookup_keys = sm_table_ids.range_kvs(range)?;
-        let mut ret = Vec::new();
-        for lookup_key in &lookup_keys {
-            let key = &lookup_key.0;
-            let id = &lookup_key.1;
-            let meta = self.get_table_meta_by_id(&id.data.0);
-            match meta {
-                Ok(meta) => ret.push((key.clone(), meta)),
-                Err(_) => continue,
-            }
-        }
-
-        Ok(ret)
     }
 
     pub fn txn_get_table_meta_by_id(
