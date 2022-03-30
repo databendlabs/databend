@@ -19,6 +19,7 @@ pub const FUSE_OPT_KEY_ROW_PER_BLOCK: &str = "row_per_block";
 pub const FUSE_OPT_KEY_SNAPSHOT_LOC: &str = "snapshot_loc";
 pub const FUSE_OPT_KEY_SNAPSHOT_SIZE: &str = "snapshot_size";
 pub const FUSE_OPT_KEY_SNAPSHOT_VER: &str = "snapshot_ver";
+pub const FUSE_OPT_KEY_DATABASE_ID: &str = "database_id";
 
 pub const FUSE_TBL_BLOCK_PREFIX: &str = "_b";
 pub const FUSE_TBL_SEGMENT_PREFIX: &str = "_sg";

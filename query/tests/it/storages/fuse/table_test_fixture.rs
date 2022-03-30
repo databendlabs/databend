@@ -32,12 +32,12 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::PlanParser;
 use databend_query::storages::fuse::FuseHistoryTable;
+use databend_query::storages::fuse::FUSE_OPT_KEY_DATABASE_ID;
 use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_query::storages::Table;
 use databend_query::storages::ToReadDataSourcePlan;
-use databend_query::storages::OPT_KEY_DATABASE_ID;
 use databend_query::table_functions::TableArgs;
 use futures::TryStreamExt;
 use tempfile::TempDir;
@@ -120,7 +120,7 @@ impl TestFixture {
                 engine: "FUSE".to_string(),
                 options: [
                     // database id is required for FUSE
-                    (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+                    (FUSE_OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
                 ]
                 .into(),
                 ..Default::default()

@@ -37,7 +37,7 @@ use crate::sql::statements::DfQueryStatement;
 use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::sql::SQLCommon;
-use crate::storages::OPT_KEY_DATABASE_ID;
+use crate::storages::fuse::FUSE_OPT_KEY_DATABASE_ID;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfCreateTable {
@@ -197,7 +197,7 @@ impl DfCreateTable {
                 .await?;
             let db_id = db.get_db_info().database_id;
             meta.options
-                .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
+                .insert(FUSE_OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
         }
         Ok(meta)
     }

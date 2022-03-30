@@ -37,12 +37,12 @@ use crate::storages::fuse::io::TableMetaLocationGenerator;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::meta::DEFAULT_SNAPSHOT_VERSION;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
+use crate::storages::fuse::FUSE_OPT_KEY_DATABASE_ID;
 use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_VER;
 use crate::storages::StorageContext;
 use crate::storages::StorageDescription;
 use crate::storages::Table;
-use crate::storages::OPT_KEY_DATABASE_ID;
 
 #[derive(Clone)]
 pub struct FuseTable {
@@ -63,11 +63,11 @@ impl FuseTable {
         let table_id = table_info.ident.table_id;
         let db_id = table_info
             .options()
-            .get(OPT_KEY_DATABASE_ID)
+            .get(FUSE_OPT_KEY_DATABASE_ID)
             .ok_or_else(|| {
                 ErrorCode::LogicalError(format!(
                     "Invalid fuse table, table option {} not found",
-                    OPT_KEY_DATABASE_ID
+                    FUSE_OPT_KEY_DATABASE_ID
                 ))
             })?;
         Ok(format!("{}/{}", db_id, table_id))
