@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod clickhouse_handler;
 pub mod formats;
 mod http_services;
 pub mod v1;
