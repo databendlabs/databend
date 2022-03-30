@@ -18,8 +18,8 @@ use common_functions::scalars::TryParseJsonFunction;
 use serde_json::json;
 use serde_json::Value as JsonValue;
 
-use super::scalar_function2_test::test_scalar_functions;
-use super::scalar_function2_test::ScalarFunctionTest;
+use crate::scalars::scalar_function2_test::test_scalar_functions;
+use crate::scalars::scalar_function2_test::ScalarFunctionTest;
 
 #[test]
 fn test_parse_json_function() -> Result<()> {

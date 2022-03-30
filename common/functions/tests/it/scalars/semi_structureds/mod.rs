@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,3 @@
 
 mod check_json;
 mod parse_json;
-mod semi_structured;
-
-pub use check_json::CheckJsonFunction;
-pub use parse_json::ParseJsonFunction;
-pub use parse_json::TryParseJsonFunction;
-pub use semi_structured::SemiStructuredFunction;
