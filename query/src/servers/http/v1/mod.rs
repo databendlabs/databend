@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub mod block_to_json;
-mod clickhouse_handler;
 mod http_query_handlers;
 mod load;
 pub mod middleware;
@@ -24,7 +23,6 @@ mod statement;
 pub(crate) use block_to_json::block_to_json;
 pub(crate) use block_to_json::JsonBlock;
 pub(crate) use block_to_json::JsonBlockRef;
-pub use clickhouse_handler::clickhouse_router;
 pub use http_query_handlers::make_final_uri;
 pub use http_query_handlers::make_page_uri;
 pub use http_query_handlers::make_state_uri;
@@ -42,3 +40,5 @@ pub use stage::upload_to_stage;
 pub use stage::UploadToStageResponse;
 pub use statement::statement_handler;
 pub use statement::statement_router;
+
+pub use crate::servers::http::clickhouse_handler::clickhouse_router;
