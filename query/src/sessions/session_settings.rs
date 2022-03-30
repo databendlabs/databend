@@ -246,7 +246,7 @@ impl Settings {
         setting.user_setting.value = DataValue::UInt64(val);
 
         if is_global {
-            let tenant = self.session_ctx.get_current_tenant();
+            let tenant = self.session_ctx.get_tenant();
             let _ = futures::executor::block_on(
                 self.user_api
                     .get_setting_api_client(&tenant)?

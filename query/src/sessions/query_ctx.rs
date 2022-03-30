@@ -256,12 +256,6 @@ impl QueryContext {
         Ok(())
     }
 
-    pub async fn set_current_tenant(&self, tenant: String) -> Result<()> {
-        self.shared.set_current_tenant(tenant);
-
-        Ok(())
-    }
-
     pub fn get_current_user(&self) -> Result<UserInfo> {
         self.shared.get_current_user()
     }
