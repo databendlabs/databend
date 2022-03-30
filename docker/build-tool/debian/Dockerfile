@@ -27,13 +27,13 @@ RUN chmod +x /build/scripts/setup/dev_setup.sh && \
     rm -rf /root/.cargo/git && \
     rm -rf /root/.cargo/registry && \
     mkdir -p /opt/rust && \
-    mv /root/.cargo /opt/rust/ && \
-    mv /root/.rustup /opt/rust/
+    mv /root/.cargo /opt/rust/cargo && \
+    mv /root/.rustup /opt/rust/rustup
 
-ENV RUSTUP_HOME /opt/rust/.rustup
-ENV CARGO_HOME /opt/rust/.cargo
-ENV PATH /opt/rust/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-VOLUME [ "/workspace", "/opt/rust/.cargo/registry", "/opt/rust/.cargo/git" ]
+ENV RUSTUP_HOME /opt/rust/rustup
+ENV CARGO_HOME /opt/rust/cargo
+ENV PATH /opt/rust/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+VOLUME [ "/workspace", "/opt/rust/cargo/registry", "/opt/rust/cargo/git" ]
 
 
 FROM build-base as multiarch
@@ -45,6 +45,6 @@ RUN chmod +x /build/scripts/setup/cross_setup.sh && /build/scripts/setup/cross_s
 FROM build-base as dev
 COPY scripts/setup/rust-tools.txt /build/scripts/setup/rust-tools.txt
 RUN /build/scripts/setup/dev_setup.sh -yd && \
-    rm -rf /opt/rust/.cargo/git && \
-    rm -rf /opt/rust/.cargo/registry && \
+    rm -rf /opt/rust/cargo/git && \
+    rm -rf /opt/rust/cargo/registry && \
     rm -rf /root/.cache/*

@@ -70,7 +70,6 @@ function install_build_essentials {
 
 	echo "==> installing build essentials..."
 
-	# Differently packages for build essentials
 	case "$PACKAGE_MANAGER" in
 	apt-get)
 		install_pkg build-essential "$PACKAGE_MANAGER"
@@ -164,7 +163,6 @@ function install_pkg_config {
 
 	echo "==> installing pkg-config..."
 
-	# Differently named packages for pkg-configs
 	case "$PACKAGE_MANAGER" in
 	apt-get | dnf)
 		install_pkg pkg-config "$PACKAGE_MANAGER"
@@ -177,6 +175,31 @@ function install_pkg_config {
 		;;
 	*)
 		echo "Unable to install pkg-config with package manager: $PACKAGE_MANAGER"
+		exit 1
+		;;
+	esac
+}
+
+function install_mysql_client {
+	PACKAGE_MANAGER=$1
+
+	echo "==> installing mysql client..."
+
+	case "$PACKAGE_MANAGER" in
+	apt-get)
+		install_pkg default-mysql-client "$PACKAGE_MANAGER"
+		;;
+	pacman)
+		install_pkg mysql-clients "$PACKAGE_MANAGER"
+		;;
+	apk)
+		install_pkg mysql-client "$PACKAGE_MANAGER"
+		;;
+	yum | dnf | brew)
+		install_pkg mysql "$PACKAGE_MANAGER"
+		;;
+	*)
+		echo "Unable to install mysql client with package manager: $PACKAGE_MANAGER"
 		exit 1
 		;;
 	esac
@@ -229,7 +252,6 @@ function usage {
         -y Auto approve installation
         -b Install build tools
         -d Install development tools
-        -o Install some operation tools
         -p Install profile
         -s Install codegen tools
         -v Verbose mode
@@ -260,17 +282,10 @@ EOF
 	if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 		cat <<EOF
 Development tools (since -d was provided):
+  * mysql client
   * python3 (boto3, yapf, ...)
   * lcov
   * tools from rust-tools.txt ( e.g. cargo-audit, cargo-udeps, taplo-cli)
-EOF
-	fi
-
-	if [[ "$OPERATIONS" == "true" ]]; then
-		cat <<EOF
-Operation tools (since -o was provided):
-  * python3
-  * docker
 EOF
 	fi
 
@@ -297,12 +312,11 @@ AUTO_APPROVE=false
 VERBOSE=false
 INSTALL_BUILD_TOOLS=false
 INSTALL_DEV_TOOLS=false
-OPERATIONS=false
 INSTALL_PROFILE=false
 INSTALL_CODEGEN=false
 
 # parse args
-while getopts "ybdopvs" arg; do
+while getopts "ybdpsv" arg; do
 	case "$arg" in
 	y)
 		AUTO_APPROVE="true"
@@ -312,9 +326,6 @@ while getopts "ybdopvs" arg; do
 		;;
 	d)
 		INSTALL_DEV_TOOLS="true"
-		;;
-	o)
-		OPERATIONS="true"
 		;;
 	p)
 		INSTALL_PROFILE="true"
@@ -338,7 +349,6 @@ fi
 
 if [[ "$INSTALL_BUILD_TOOLS" == "false" ]] &&
 	[[ "$INSTALL_DEV_TOOLS" == "false" ]] &&
-	[[ "$OPERATIONS" == "false" ]] &&
 	[[ "$INSTALL_PROFILE" == "false" ]] &&
 	[[ "$INSTALL_CODEGEN" == "false" ]]; then
 	INSTALL_BUILD_TOOLS="true"
@@ -420,8 +430,13 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 fi
 
 if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
+	install_mysql_client "$PACKAGE_MANAGER"
+	install_pkg git "$PACKAGE_MANAGER"
 	install_pkg python3 "$PACKAGE_MANAGER"
 	if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
+		# for killall & timeout
+		install_pkg psmisc "$PACKAGE_MANAGER"
+		install_pkg coreutils "$PACKAGE_MANAGER"
 		install_pkg python3-all-dev "$PACKAGE_MANAGER"
 		install_pkg python3-setuptools "$PACKAGE_MANAGER"
 		install_pkg python3-pip "$PACKAGE_MANAGER"
@@ -445,43 +460,6 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 		echo http://nl.alpinelinux.org/alpine/edge/testing >>/etc/apk/repositories
 	fi
 	install_pkg lcov "$PACKAGE_MANAGER"
-fi
-
-if [[ "$OPERATIONS" == "true" ]]; then
-	install_pkg python3 "$PACKAGE_MANAGER"
-	install_pkg git "$PACKAGE_MANAGER"
-	# for timeout
-	if [[ "$PACKAGE_MANAGER" == "apt-get" ]]; then
-		install_pkg coreutils "$PACKAGE_MANAGER"
-	fi
-	if [[ "$PACKAGE_MANAGER" == "apk" ]]; then
-		install_pkg python3-dev "$PACKAGE_MANAGER"
-	fi
-	# for mysql client
-	case "$PACKAGE_MANAGER" in
-	apt-get)
-		install_pkg mysql-client "$PACKAGE_MANAGER"
-		;;
-	pacman)
-		install_pkg mysql-clients "$PACKAGE_MANAGER"
-		;;
-	apk)
-		install_pkg mysql-client "$PACKAGE_MANAGER"
-		;;
-	yum)
-		install_pkg mysql "$PACKAGE_MANAGER"
-		;;
-	dnf)
-		install_pkg mysql "$PACKAGE_MANAGER"
-		;;
-	brew)
-		install_pkg mysql "$PACKAGE_MANAGER"
-		;;
-	*)
-		echo "Unable to install mysql client with package manager: $PACKAGE_MANAGER"
-		exit 1
-		;;
-	esac
 fi
 
 if [[ "$INSTALL_CODEGEN" == "true" ]]; then
