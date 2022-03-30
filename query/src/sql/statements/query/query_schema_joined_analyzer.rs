@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_ast::parser::Parser;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::FunctionArg;
@@ -24,9 +25,12 @@ use sqlparser::ast::Query;
 use sqlparser::ast::TableAlias;
 use sqlparser::ast::TableFactor;
 use sqlparser::ast::TableWithJoins;
+use sqlparser::dialect::GenericDialect;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
+use crate::sql::DfParser;
+use crate::sql::DfStatement;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::query::query_schema_joined::JoinedSchema;
 use crate::sql::statements::AnalyzableStatement;
@@ -98,14 +102,37 @@ impl JoinedSchemaAnalyzer {
         let (database, table) = self.resolve_table(&item.name)?;
         let read_table = self.ctx.get_table(&database, &table).await?;
 
-        match &item.alias {
-            None => {
-                let name_prefix = vec![database, table];
-                JoinedSchema::from_table(read_table, name_prefix)
+        let tbl_info = read_table.get_table_info();
+        // TODO(veeupup) make view use subquery logic
+        if let Some(view) = &tbl_info.meta.view { // view, not table
+            // parse and make it subquery
+            let sql = view.subquery.clone();
+            let (statements, _) = DfParser::parse_sql(&sql)?;
+            if statements.len() == 1 {
+                if let DfStatement::Query(subquery) = &statements[0] {
+                    match subquery.analyze(self.ctx.clone()).await? {
+                        AnalyzedResult::SelectQuery(state) =>  {
+                            let viewname = tbl_info.name.clone();
+                            let alias = vec![viewname];
+                            return JoinedSchema::from_subquery(state, alias);
+                        },
+                        _ => {}
+                    }
+                }
             }
-            Some(table_alias) => {
-                let name_prefix = vec![table_alias.name.value.clone()];
-                JoinedSchema::from_table(read_table, name_prefix)
+            return Err(ErrorCode::LogicalError(
+                    "Logical error, subquery analyzed data must be SelectQuery, it's a bug.",
+                ));   
+        }else {
+            match &item.alias {
+                None => {
+                    let name_prefix = vec![database, table];
+                    JoinedSchema::from_table(read_table, name_prefix)
+                }
+                Some(table_alias) => {
+                    let name_prefix = vec![table_alias.name.value.clone()];
+                    JoinedSchema::from_table(read_table, name_prefix)
+                }
             }
         }
     }
