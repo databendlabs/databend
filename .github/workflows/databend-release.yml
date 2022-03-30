@@ -94,7 +94,7 @@ jobs:
           changelog: ${{ steps.changelog_reader.outputs.log_entry }}
 
   publish_linux_gnu:
-    name: Release linux musl assets
+    name: Release linux gnu assets
     runs-on: ubuntu-latest
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.REPO_ACCESS_KEY_ID }}
@@ -115,6 +115,8 @@ jobs:
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
       - name: Setup Build Tool
         uses: ./.github/actions/setup_build_tool
+        with:
+          image: datafuselabs/build-tool:multiarch
       - name: Build Binary
         run: |
           cargo build --release --target=${{ matrix.target }}
