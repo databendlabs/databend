@@ -15,3 +15,11 @@ DROP DATABASE db1;
 DROP DATABASE IF EXISTS db1;
 
 DROP DATABASE db1; -- {ErrorCode 1003}
+
+
+-- create table with reserved table option should failed
+CREATE TABLE t(c int) Engine = fuse database_id = 1; -- {ErrorCode 1022}
+CREATE TABLE t(c int) Engine = fuse DATABASE_ID = 1; -- {ErrorCode 1022}
+CREATE TABLE t(c int) Engine = fuse snapshot_ver = 1; -- {ErrorCode 1022}
+CREATE TABLE t(c int) Engine = fuse SNAPSHOT_VER = 1; -- {ErrorCode 1022}
+

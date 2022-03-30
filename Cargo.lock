@@ -1709,6 +1709,7 @@ dependencies = [
  "hyper",
  "itertools",
  "jwt-simple",
+ "lazy_static",
  "maplit",
  "metrics",
  "mysql_async",
