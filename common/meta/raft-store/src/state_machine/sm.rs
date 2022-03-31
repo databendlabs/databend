@@ -14,7 +14,6 @@
 
 use std::convert::TryInto;
 use std::fmt::Debug;
-use std::ops::RangeBounds;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -581,16 +580,6 @@ impl StateMachine {
         Ok(Change::new(prev, result).into())
     }
 
-    pub fn get_kv_by_range<KV, R>(
-        &self,
-        range: R,
-    ) -> MetaStorageResult<Vec<(String, SeqV<Vec<u8>>)>>
-    where
-        R: RangeBounds<String>,
-    {
-        self.kvs().range_kvs(range)
-    }
-
     #[tracing::instrument(level = "debug", skip(self, txn_tree))]
     fn apply_upsert_table_options_cmd(
         &self,
@@ -1057,29 +1046,6 @@ impl StateMachine {
         }
     }
 
-    pub fn get_database_meta_by_range<KV, R>(
-        &self,
-        range: R,
-    ) -> MetaStorageResult<Vec<(DatabaseLookupKey, DatabaseMeta)>>
-    where
-        R: RangeBounds<DatabaseLookupKey>,
-    {
-        let sm_db_ids = self.database_lookup();
-        let lookup_keys = sm_db_ids.range_kvs(range)?;
-        let mut ret = Vec::new();
-        for lookup_key in &lookup_keys {
-            let key = &lookup_key.0;
-            let id = &lookup_key.1;
-            let meta = self.get_database_meta_by_id(&id.data);
-            match meta {
-                Ok(meta) => ret.push((key.clone(), meta.data)),
-                Err(_) => continue,
-            }
-        }
-
-        Ok(ret)
-    }
-
     pub fn get_database_meta_by_id(&self, db_id: &u64) -> MetaStorageResult<SeqV<DatabaseMeta>> {
         let x = self.databases().get(db_id)?.ok_or_else(|| {
             MetaStorageError::AppError(AppError::UnknownDatabaseId(UnknownDatabaseId::new(
@@ -1111,29 +1077,6 @@ impl StateMachine {
     pub fn get_table_meta_by_id(&self, tid: &u64) -> MetaResult<Option<SeqV<TableMeta>>> {
         let x = self.tables().get(tid)?;
         Ok(x)
-    }
-
-    pub fn get_table_meta_by_range<KV, R>(
-        &self,
-        range: R,
-    ) -> MetaStorageResult<Vec<(TableLookupKey, Option<SeqV<TableMeta>>)>>
-    where
-        R: RangeBounds<TableLookupKey>,
-    {
-        let sm_table_ids = self.table_lookup();
-        let lookup_keys = sm_table_ids.range_kvs(range)?;
-        let mut ret = Vec::new();
-        for lookup_key in &lookup_keys {
-            let key = &lookup_key.0;
-            let id = &lookup_key.1;
-            let meta = self.get_table_meta_by_id(&id.data.0);
-            match meta {
-                Ok(meta) => ret.push((key.clone(), meta)),
-                Err(_) => continue,
-            }
-        }
-
-        Ok(ret)
     }
 
     pub fn txn_get_table_meta_by_id(
