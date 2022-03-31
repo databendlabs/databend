@@ -1,0 +1,16 @@
+[package]
+name = "common-range-map"
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+doctest = false
+test = true
+
+[dependencies] # In alphabetical order
+
+[dev-dependencies]
+
