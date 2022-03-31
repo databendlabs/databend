@@ -3,10 +3,9 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
-
   publish_macos:
     name: Release macos assets
     runs-on: macos-11
@@ -36,10 +35,10 @@ jobs:
           cargo build --release --target=${{ matrix.target }}
       - name: Pack binaries
         run: |
-            brew install gnu-tar
-            sudo /usr/sbin/purge
-            gtar -C ./target/${{ matrix.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.tar.gz databend-query databend-meta
-            gtar -C ./target/${{ matrix.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.tar.gz databend-metactl
+          brew install gnu-tar
+          sudo /usr/sbin/purge
+          gtar -C ./target/${{ matrix.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.tar.gz databend-query databend-meta
+          gtar -C ./target/${{ matrix.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.tar.gz databend-metactl
       - name: Publish Binaries
         uses: ./.github/actions/publish_binary
         with:
@@ -80,8 +79,8 @@ jobs:
           RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib-gabi" cross build --release --target=${{ matrix.target }}
       - name: Pack binaries
         run: |
-            tar -C ./target/${{ matrix.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.tar.gz databend-query databend-meta
-            tar -C ./target/${{ matrix.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.tar.gz databend-metactl
+          tar -C ./target/${{ matrix.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.tar.gz databend-query databend-meta
+          tar -C ./target/${{ matrix.target }}/release -czvf databend-tools-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.tar.gz databend-metactl
       - name: Publish Binaries
         uses: ./.github/actions/publish_binary
         with:
@@ -173,7 +172,7 @@ jobs:
         id: download_binaries
         run: |
           mkdir -p ./target/release
-          wget https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          wget -q https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
           tar xC ./target/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
 
       - name: Build and push
@@ -221,17 +220,17 @@ jobs:
       - name: Download binaries for usage
         id: download_binaries
         run: |
-          mkdir -p ./target/release
-          wget https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
-          wget https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-aarch64-unknown-linux-gnu.tar.gz
-          mkdir -p ./target/x86_64-unknown-linux-gnu/release
-          mkdir -p ./target/aarch64-unknown-linux-gnu/release
-          tar xC ./target/x86_64-unknown-linux-gnu/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
-          tar xC ./target/aarch64-unknown-linux-gnu/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-aarch64-unknown-linux-gnu.tar.gz
-          mkdir -p ./distro/linux/amd64
-          mkdir -p ./distro/linux/arm64
-          cp ./target/x86_64-unknown-linux-gnu/release/databend-${{ matrix.service }} ./distro/linux/amd64
-          cp ./target/aarch64-unknown-linux-gnu/release/databend-${{ matrix.service }} ./distro/linux/arm64
+          version="${{ steps.get_version.outputs.VERSION }}"
+          declare -A platform_targets=( ["arm64"]="aarch64-unknown-linux-gnu" ["amd64"]="x86_64-unknown-linux-gnu")
+          mkdir -p ./distro/
+          for platform in ${!platform_targets[@]}; do
+              target=${platform_targets[$platform]}
+              wget -P distro -qc https://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz
+              mkdir -p ./target/${target}/release
+              tar xC ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz
+              mkdir -p ./distro/linux/${platform}
+              cp ./target/${target}/release/databend-${{ matrix.service }} ./distro/linux/${platform}
+          done
 
       - name: get image tags
         id: get_image_tags
