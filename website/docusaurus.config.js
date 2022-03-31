@@ -113,15 +113,28 @@ const config = {
                 style: 'dark',
                 links: [
                     {
-                        title: 'Resources',
+                        title: 'About',
                         items: [
                             {
-                                label: 'Develop',
-                                to: '/doc/category/develop'
+                                label: 'What is Databend?',
+                                to: '/doc/'
                             },
                             {
                                 label: 'Performance',
                                 to: '/doc/category/performance'
+                            },
+                        ]
+                    },
+                    {
+                        title: 'Resources',
+                        items: [
+                            {
+                                label: 'Deployment',
+                                to: '/doc/category/deploy'
+                            },
+                            {
+                                label: 'Develop',
+                                to: '/doc/category/develop'
                             },
                         ]
                     },
