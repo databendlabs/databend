@@ -108,12 +108,11 @@ impl JoinedSchemaAnalyzer {
                 let (statements, _) = DfParser::parse_sql(query.as_str())?;
                 if statements.len() == 1 {
                     if let DfStatement::Query(subquery) = &statements[0] {
-                        match subquery.analyze(self.ctx.clone()).await? {
-                            AnalyzedResult::SelectQuery(state) => {
-                                let alias = vec![tbl_info.name.clone()];
-                                return JoinedSchema::from_subquery(state, alias);
-                            }
-                            _ => {}
+                        if let AnalyzedResult::SelectQuery(state) =
+                            subquery.analyze(self.ctx.clone()).await?
+                        {
+                            let alias = vec![tbl_info.name.clone()];
+                            return JoinedSchema::from_subquery(state, alias);
                         }
                     }
                 }
