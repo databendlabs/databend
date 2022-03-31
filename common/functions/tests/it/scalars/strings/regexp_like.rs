@@ -58,7 +58,7 @@ fn test_regexp_like_function() -> Result<()> {
                 Series::from_data(vec!["x"]),
             ],
             expect: Series::from_data(Vec::<bool>::new()),
-            error: "Incorrect arguments to REGEXP_LIKE match type: x",
+            error: "Incorrect arguments to regexp_like match type: x",
         },
         ScalarFunctionTest {
             name: "regexp-like-match-type-error2",
@@ -68,7 +68,7 @@ fn test_regexp_like_function() -> Result<()> {
                 Series::from_data(vec!["u"]),
             ],
             expect: Series::from_data(Vec::<bool>::new()),
-            error: "Unsupported arguments to REGEXP_LIKE match type: u",
+            error: "Unsupported arguments to regexp_like match type: u",
         },
         ScalarFunctionTest {
             name: "regexp-like-nullable-passed",
@@ -96,7 +96,7 @@ fn test_regexp_like_match_type_joiner() -> Result<()> {
                 Series::from_data(vec!["i", "-i"]),
             ],
             expect: Series::from_data(Vec::<bool>::new()),
-            error: "Incorrect arguments to REGEXP_LIKE match type: -i",
+            error: "Incorrect arguments to regexp_like match type: -i",
         },
         ScalarFunctionTest {
             name: "regexp-like-match-type-joiner-error-2",
@@ -106,7 +106,7 @@ fn test_regexp_like_match_type_joiner() -> Result<()> {
                 Series::from_data(vec!["", "-"]),
             ],
             expect: Series::from_data(Vec::<bool>::new()),
-            error: "Incorrect arguments to REGEXP_LIKE match type: -",
+            error: "Incorrect arguments to regexp_like match type: -",
         },
     ];
 
