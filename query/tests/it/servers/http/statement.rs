@@ -14,7 +14,7 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use databend_query::servers::http::v1::middleware::HTTPSessionMiddleware;
+use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::statement_handler;
 use databend_query::servers::http::v1::QueryResponse;
 use poem::http::Method;
