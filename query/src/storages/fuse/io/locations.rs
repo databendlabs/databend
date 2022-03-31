@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+use std::marker::PhantomData;
+
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use uuid::Uuid;
@@ -22,8 +24,10 @@ use crate::storages::fuse::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::SnapshotVersion;
-use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::meta::Versioned;
+
+static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
+static SNAPHOST_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
 
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
@@ -65,32 +69,36 @@ impl TableMetaLocationGenerator {
         let snaphost_version = SnapshotVersion::try_from(version)?;
         Ok(snaphost_version.create(id, &self.prefix))
     }
+
+    pub fn snaphost_version(location: impl AsRef<str>) -> u64 {
+        if location.as_ref().ends_with(SNAPHOST_V1.suffix()) {
+            SNAPHOST_V1.version()
+        } else {
+            SNAPSHOT_V0.version()
+        }
+    }
 }
 
 trait SnapshotLocationCreator {
     fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String;
+    fn suffix(&self) -> &'static str;
 }
 
 impl SnapshotLocationCreator for SnapshotVersion {
     fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String {
+        format!(
+            "{}/{}/{}{}",
+            prefix.as_ref(),
+            FUSE_TBL_SNAPSHOT_PREFIX,
+            id.to_simple(),
+            self.suffix(),
+        )
+    }
+
+    fn suffix(&self) -> &'static str {
         match self {
-            SnapshotVersion::V0(_) => {
-                format!(
-                    "{}/{}/{}",
-                    prefix.as_ref(),
-                    FUSE_TBL_SNAPSHOT_PREFIX,
-                    id.to_simple(),
-                )
-            }
-            SnapshotVersion::V1(_) => {
-                format!(
-                    "{}/{}/{}_v{}.json",
-                    prefix.as_ref(),
-                    FUSE_TBL_SNAPSHOT_PREFIX,
-                    id.to_simple(),
-                    TableSnapshot::VERSION,
-                )
-            }
+            SnapshotVersion::V0(_) => "",
+            SnapshotVersion::V1(_) => "_v1.json",
         }
     }
 }

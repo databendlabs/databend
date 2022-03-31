@@ -16,18 +16,16 @@ use std::collections::HashSet;
 
 use lazy_static::lazy_static;
 
-pub const OPT_KEY_SNAPSHOT_VER: &str = "snapshot_ver";
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 
 lazy_static! {
-    pub static ref RESERVED_OPTS: HashSet<&'static str> = {
+    pub static ref RESERVED_TABLE_OPTION_KEYS: HashSet<&'static str> = {
         let mut r = HashSet::new();
         r.insert(OPT_KEY_DATABASE_ID);
-        r.insert(OPT_KEY_SNAPSHOT_VER);
         r
     };
 }
 
 pub fn is_reserved_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
-    RESERVED_OPTS.contains(opt_key.as_ref().to_lowercase().as_str())
+    RESERVED_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
 }

@@ -18,14 +18,14 @@ use common_exception::Result;
 use databend_query::sql::statements::AnalyzableStatement;
 use databend_query::sql::DfParser;
 use databend_query::sql::DfStatement;
-use databend_query::sql::RESERVED_OPTS;
+use databend_query::sql::RESERVED_TABLE_OPTION_KEYS;
 
 use crate::tests::create_query_context;
 
 #[tokio::test]
 async fn test_statement_create_table_reserved_opt_keys() -> Result<()> {
     let ctx = create_query_context().await?;
-    for opt in &*RESERVED_OPTS {
+    for opt in &*RESERVED_TABLE_OPTION_KEYS {
         let query = format!("CREATE TABLE default.a( c int) {opt}= 1");
         let (mut statements, _) = DfParser::parse_sql(query.as_str())?;
         match statements.remove(0) {
