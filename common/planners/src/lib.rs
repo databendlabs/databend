@@ -95,6 +95,7 @@ mod plan_user_stage_drop;
 mod plan_user_udf_alter;
 mod plan_user_udf_create;
 mod plan_user_udf_drop;
+mod plan_view_alter;
 mod plan_view_create;
 mod plan_view_drop;
 
@@ -217,5 +218,6 @@ pub use plan_user_stage_drop::DropUserStagePlan;
 pub use plan_user_udf_alter::AlterUserUDFPlan;
 pub use plan_user_udf_create::CreateUserUDFPlan;
 pub use plan_user_udf_drop::DropUserUDFPlan;
+pub use plan_view_alter::AlterViewPlan;
 pub use plan_view_create::CreateViewPlan;
 pub use plan_view_drop::DropViewPlan;

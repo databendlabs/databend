@@ -21,7 +21,6 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::CreateViewPlan;
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AdminUseTenantPlan;
@@ -29,6 +28,7 @@ use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
+use crate::AlterViewPlan;
 use crate::CallPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
@@ -37,6 +37,7 @@ use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::CreateUserUDFPlan;
+use crate::CreateViewPlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
@@ -45,6 +46,7 @@ use crate::DropTablePlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
 use crate::DropUserUDFPlan;
+use crate::DropViewPlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::Expression;
@@ -79,7 +81,6 @@ use crate::SortPlan;
 use crate::StagePlan;
 use crate::TruncateTablePlan;
 use crate::UseDatabasePlan;
-use crate::DropViewPlan;
 
 /// `PlanRewriter` is a visitor that can help to rewrite `PlanNode`
 /// By default, a `PlanRewriter` will traverse the plan tree in pre-order and return rewritten plan tree.
@@ -155,7 +156,7 @@ pub trait PlanRewriter: Sized {
 
             // View.
             PlanNode::CreateView(plan) => self.rewrite_create_view(plan),
-            PlanNode::AlterView => todo!(),
+            PlanNode::AlterView(plan) => self.rewrite_alter_view(plan),
             PlanNode::DropView(plan) => self.rewrite_drop_view(plan),
 
             // User.
@@ -369,6 +370,10 @@ pub trait PlanRewriter: Sized {
 
     fn rewrite_drop_view(&mut self, plan: &DropViewPlan) -> Result<PlanNode> {
         Ok(PlanNode::DropView(plan.clone()))
+    }
+
+    fn rewrite_alter_view(&mut self, plan: &AlterViewPlan) -> Result<PlanNode> {
+        Ok(PlanNode::AlterView(plan.clone()))
     }
 
     fn rewrite_create_database(&mut self, plan: &CreateDatabasePlan) -> Result<PlanNode> {

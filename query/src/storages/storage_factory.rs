@@ -24,8 +24,8 @@ use crate::configs::Config;
 use crate::storages::fuse::FuseTable;
 use crate::storages::github::GithubTable;
 use crate::storages::memory::MemoryTable;
-use crate::storages::view::ViewTable;
 use crate::storages::null::NullTable;
+use crate::storages::view::ViewTable;
 use crate::storages::StorageContext;
 use crate::storages::Table;
 

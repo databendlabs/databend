@@ -99,7 +99,7 @@ pub struct TableInfo {
 }
 
 /// TableView info
-/// 
+///
 /// it only store the subquery string to make future reading
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableView {

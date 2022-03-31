@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
 use common_exception::ErrorCode;
-use common_planners::PlanNode;
+use common_exception::Result;
 use common_planners::DropViewPlan;
+use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
@@ -38,7 +38,7 @@ impl AnalyzableStatement for DfDropView {
         let if_exists = self.if_exists;
         let tenant = ctx.get_tenant();
         let (db, viewname) = self.resolve_table(ctx)?;
-        
+
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::DropView(
             DropViewPlan {
                 if_exists,

@@ -27,15 +27,15 @@ use sqlparser::ast::TableWithJoins;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
-use crate::sql::DfParser;
-use crate::sql::DfStatement;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::query::query_schema_joined::JoinedSchema;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
-use crate::storages::view::view_table::VIEW_ENGINE;
+use crate::sql::DfParser;
+use crate::sql::DfStatement;
 use crate::storages::view::view_table::QUERY;
+use crate::storages::view::view_table::VIEW_ENGINE;
 
 pub struct JoinedSchemaAnalyzer {
     ctx: Arc<QueryContext>,
@@ -109,19 +109,19 @@ impl JoinedSchemaAnalyzer {
                 if statements.len() == 1 {
                     if let DfStatement::Query(subquery) = &statements[0] {
                         match subquery.analyze(self.ctx.clone()).await? {
-                            AnalyzedResult::SelectQuery(state) =>  {
+                            AnalyzedResult::SelectQuery(state) => {
                                 let alias = vec![tbl_info.name.clone()];
                                 return JoinedSchema::from_subquery(state, alias);
-                            },
+                            }
                             _ => {}
                         }
                     }
                 }
             }
             Err(ErrorCode::LogicalError(
-                    "Logical error, subquery analyzed data must be SelectQuery, it's a bug.",
-                ))
-        }else {
+                "Logical error, subquery analyzed data must be SelectQuery, it's a bug.",
+            ))
+        } else {
             match &item.alias {
                 None => {
                     let name_prefix = vec![database, table];

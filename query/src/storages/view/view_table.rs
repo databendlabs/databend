@@ -34,12 +34,11 @@ impl ViewTable {
     pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
         let query = table_info.options().get(QUERY).cloned();
         if let Some(query) = query {
-            Ok(Box::new(ViewTable {
-                query,
-                table_info,
-            }))
-        }else {
-            Err(ErrorCode::LogicalError("Need `query` when creating ViewTable"))
+            Ok(Box::new(ViewTable { query, table_info }))
+        } else {
+            Err(ErrorCode::LogicalError(
+                "Need `query` when creating ViewTable",
+            ))
         }
     }
 

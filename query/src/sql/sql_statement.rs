@@ -19,6 +19,7 @@ use nom::character::complete::multispace0;
 use nom::character::complete::multispace1;
 use nom::IResult;
 
+use super::statements::DfAlterView;
 use super::statements::DfCall;
 use super::statements::DfCopy;
 use super::statements::DfCreateUserStage;
@@ -36,6 +37,7 @@ use crate::sql::statements::DfCreateRole;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUDF;
 use crate::sql::statements::DfCreateUser;
+use crate::sql::statements::DfCreateView;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropRole;
@@ -66,7 +68,6 @@ use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
 use crate::sql::statements::DfUseTenant;
-use crate::sql::statements::DfCreateView;
 
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]
@@ -97,7 +98,7 @@ pub enum DfStatement {
     // Views.
     CreateView(DfCreateView),
     // TODO(veeupup) make alter and delete view done
-    AlterView,
+    AlterView(DfAlterView),
     DropView(DfDropView),
 
     // Settings.

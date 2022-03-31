@@ -18,23 +18,23 @@
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::ParserError;
 
+use crate::parser_err;
+use crate::sql::statements::DfAlterView;
+use crate::sql::statements::DfCreateView;
 use crate::sql::statements::DfDropView;
 use crate::sql::statements::DfQueryStatement;
-use crate::parser_err;
-use crate::sql::statements::DfCreateView;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
-use common_tracing::tracing;
 
 impl<'a> DfParser<'a> {
     // Create view.
     // syntax reference to https://clickhouse.com/docs/zh/sql-reference/statements/create/view/
     pub(crate) fn parse_create_view(&mut self) -> Result<DfStatement, ParserError> {
         let if_not_exists =
-        self.parser
-            .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+            self.parser
+                .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parser.parse_object_name()?;
-        
+
         if self.consume_token("AS") {
             let native_query = self.parser.parse_query()?;
             let query = DfQueryStatement::try_from(native_query.clone())?;
@@ -45,9 +45,8 @@ impl<'a> DfParser<'a> {
                 subquery,
                 query,
             };
-            tracing::error!("parse create view: {:?}", create);
             Ok(DfStatement::CreateView(create))
-        }else {
+        } else {
             parser_err!("need `AS` after VIEW NAME")
         }
     }
@@ -62,5 +61,22 @@ impl<'a> DfParser<'a> {
         };
 
         Ok(DfStatement::DropView(drop))
+    }
+
+    pub(crate) fn parse_alter_view(&mut self) -> Result<DfStatement, ParserError> {
+        let name = self.parser.parse_object_name()?;
+        if self.consume_token("AS") {
+            let native_query = self.parser.parse_query()?;
+            let query = DfQueryStatement::try_from(native_query.clone())?;
+            let subquery = format!("{}", native_query);
+            let alter = DfAlterView {
+                name,
+                subquery,
+                query,
+            };
+            Ok(DfStatement::AlterView(alter))
+        } else {
+            parser_err!("need `AS` after VIEW NAME")
+        }
     }
 }

@@ -52,7 +52,11 @@ impl Interpreter for DropViewInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let db_name = self.plan.db.clone();
         let viewname = self.plan.viewname.clone();
-        let tbl = self.ctx.get_table(db_name.as_str(), viewname.as_str()).await.ok();
+        let tbl = self
+            .ctx
+            .get_table(db_name.as_str(), viewname.as_str())
+            .await
+            .ok();
 
         self.ctx
             .get_current_session()
@@ -61,13 +65,16 @@ impl Interpreter for DropViewInterpreter {
                 UserPrivilegeType::Drop,
             )
             .await?;
-        
+
         if let Some(table) = &tbl {
             if table.get_table_info().engine() != VIEW_ENGINE {
-                return Err(ErrorCode::UnexpectedError(format!("{}.{} is not VIEW, please use `DROP TABLE {}.{}`", &self.plan.db, &self.plan.viewname, &self.plan.db, &self.plan.viewname)));
+                return Err(ErrorCode::UnexpectedError(format!(
+                    "{}.{} is not VIEW, please use `DROP TABLE {}.{}`",
+                    &self.plan.db, &self.plan.viewname, &self.plan.db, &self.plan.viewname
+                )));
             }
         };
-        
+
         let catalog = self.ctx.get_catalog();
         let plan = DropTableReq {
             if_exists: self.plan.if_exists,
@@ -84,4 +91,3 @@ impl Interpreter for DropViewInterpreter {
         )))
     }
 }
-

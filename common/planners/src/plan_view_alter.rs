@@ -18,15 +18,14 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct CreateViewPlan {
-    pub if_not_exists: bool,
+pub struct AlterViewPlan {
     pub tenant: String,
     pub db: String,
     pub viewname: String,
     pub subquery: String,
 }
 
-impl CreateViewPlan {
+impl AlterViewPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

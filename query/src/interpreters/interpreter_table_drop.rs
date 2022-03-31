@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
 use common_exception::ErrorCode;
+use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilegeType;
 use common_planners::DropTablePlan;
@@ -63,7 +63,10 @@ impl Interpreter for DropTableInterpreter {
 
         if let Some(table) = &tbl {
             if table.get_table_info().engine() == VIEW_ENGINE {
-                return Err(ErrorCode::UnexpectedError(format!("{}.{} is VIEW, planse use `DROP VIEW {}.{}`", &self.plan.db, &self.plan.table, &self.plan.db, &self.plan.table)));
+                return Err(ErrorCode::UnexpectedError(format!(
+                    "{}.{} is VIEW, planse use `DROP VIEW {}.{}`",
+                    &self.plan.db, &self.plan.table, &self.plan.db, &self.plan.table
+                )));
             }
         };
 

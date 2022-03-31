@@ -21,6 +21,7 @@ use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
 use crate::AlterUserUDFPlan;
+use crate::AlterViewPlan;
 use crate::BroadcastPlan;
 use crate::CallPlan;
 use crate::CopyPlan;
@@ -30,6 +31,7 @@ use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::CreateUserUDFPlan;
+use crate::CreateViewPlan;
 use crate::DescribeTablePlan;
 use crate::DescribeUserStagePlan;
 use crate::DropDatabasePlan;
@@ -38,6 +40,7 @@ use crate::DropTablePlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
 use crate::DropUserUDFPlan;
+use crate::DropViewPlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::ExpressionPlan;
@@ -68,8 +71,6 @@ use crate::StagePlan;
 use crate::SubQueriesSetPlan;
 use crate::TruncateTablePlan;
 use crate::UseDatabasePlan;
-use crate::CreateViewPlan;
-use crate::DropViewPlan;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
@@ -129,9 +130,8 @@ pub enum PlanNode {
 
     // View.
     CreateView(CreateViewPlan),
-    // TODO(veeupup)
     DropView(DropViewPlan),
-    AlterView,
+    AlterView(AlterViewPlan),
 
     // User.
     CreateUser(CreateUserPlan),
@@ -229,7 +229,7 @@ impl PlanNode {
 
             // View.
             PlanNode::CreateView(v) => v.schema(),
-            PlanNode::AlterView => todo!(),
+            PlanNode::AlterView(v) => v.schema(),
             PlanNode::DropView(v) => v.schema(),
 
             // User.
@@ -330,7 +330,7 @@ impl PlanNode {
 
             // View.
             PlanNode::CreateView(_) => "CreateViewPlan",
-            PlanNode::AlterView => "AlterViewPlan",
+            PlanNode::AlterView(_) => "AlterViewPlan",
             PlanNode::DropView(_) => "DropViewPlan",
 
             // User.

@@ -18,10 +18,11 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
+use common_meta_types::DropTableReq;
 use common_meta_types::GrantObject;
 use common_meta_types::TableMeta;
 use common_meta_types::UserPrivilegeType;
-use common_planners::CreateViewPlan;
+use common_planners::AlterViewPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -31,21 +32,21 @@ use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 use crate::storages::view::view_table::VIEW_ENGINE;
 
-pub struct CreateViewInterpreter {
+pub struct AlterViewInterpreter {
     ctx: Arc<QueryContext>,
-    plan: CreateViewPlan,
+    plan: AlterViewPlan,
 }
 
-impl CreateViewInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateViewPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(CreateViewInterpreter { ctx, plan }))
+impl AlterViewInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterViewPlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(AlterViewInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreateViewInterpreter {
+impl Interpreter for AlterViewInterpreter {
     fn name(&self) -> &str {
-        "CreateViewInterpreter"
+        "AlterViewInterpreter"
     }
 
     async fn execute(&self, _: Option<SendableDataBlockStream>) -> Result<SendableDataBlockStream> {
@@ -59,31 +60,44 @@ impl Interpreter for CreateViewInterpreter {
             .await?;
 
         // check whether view has exists
-        if self
+        if !self
             .ctx
             .get_catalog()
             .list_tables(&*self.plan.tenant, &*self.plan.db)
             .await?
             .iter()
-            .any(|table| table.name() == self.plan.viewname.as_str())
+            .any(|table| {
+                table.name() == self.plan.viewname.as_str()
+                    && table.get_table_info().engine() == VIEW_ENGINE
+            })
         {
             return Err(ErrorCode::ViewAlreadyExists(format!(
-                "{}.{} as view Already Exists",
+                "{}.{} view is not existed",
                 self.plan.db, self.plan.viewname
             )));
         }
 
-        self.create_view().await
+        self.alter_view().await
     }
 }
 
-impl CreateViewInterpreter {
-    async fn create_view(&self) -> Result<SendableDataBlockStream> {
+impl AlterViewInterpreter {
+    async fn alter_view(&self) -> Result<SendableDataBlockStream> {
+        // drop view
         let catalog = self.ctx.get_catalog();
+        let plan = DropTableReq {
+            if_exists: true,
+            tenant: self.plan.tenant.clone(),
+            db: self.plan.db.clone(),
+            table: self.plan.viewname.clone(),
+        };
+        catalog.drop_table(plan).await?;
+
+        // create new view
         let mut options = HashMap::new();
         options.insert("query".to_string(), self.plan.subquery.clone());
         let plan = CreateTableReq {
-            if_not_exists: self.plan.if_not_exists,
+            if_not_exists: true,
             tenant: self.plan.tenant.clone(),
             db: self.plan.db.clone(),
             table: self.plan.viewname.clone(),
