@@ -32,7 +32,7 @@ pub async fn write_block(
     location: &str,
 ) -> Result<(u64, FileMetaData)> {
     let options = WriteOptions {
-        write_statistics: true,
+        write_statistics: false,
         compression: Compression::Lz4, // let's begin with lz4
         version: Version::V2,
     };
