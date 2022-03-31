@@ -16,7 +16,6 @@ use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
-use crate::AdminUseTenantPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
@@ -207,9 +206,6 @@ pub trait PlanVisitor {
 
             // Kill.
             PlanNode::Kill(plan) => self.visit_kill_query(plan),
-
-            // Admin.
-            PlanNode::AdminUseTenant(plan) => self.visit_use_tenant(plan),
         }
     }
 
@@ -390,10 +386,6 @@ pub trait PlanVisitor {
     }
 
     fn visit_use_database(&mut self, _: &UseDatabasePlan) -> Result<()> {
-        Ok(())
-    }
-
-    fn visit_use_tenant(&mut self, _: &AdminUseTenantPlan) -> Result<()> {
         Ok(())
     }
 

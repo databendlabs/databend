@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use async_trait::async_trait;
 use common_base::tokio::io::AsyncBufRead;
 use common_base::tokio::io::AsyncBufReadExt;
@@ -75,6 +77,19 @@ where R: AsyncBufRead + Unpin + Send
     }
 }
 
+fn maybe_truncated(s: &str, limit: usize) -> Cow<'_, str> {
+    if s.len() > limit {
+        Cow::Owned(format!(
+            "(first {}B of {}B): {}",
+            limit,
+            s.len(),
+            &s[..limit]
+        ))
+    } else {
+        Cow::Borrowed(s)
+    }
+}
+
 #[async_trait]
 impl<R> Source for NDJsonSource<R>
 where R: AsyncBufRead + Unpin + Send
@@ -93,12 +108,12 @@ where R: AsyncBufRead + Unpin + Send
             .map(|f| f.data_type().create_deserializer(self.builder.block_size))
             .collect::<Vec<_>>();
 
-        let names = self
+        let fields = self
             .builder
             .schema
             .fields()
             .iter()
-            .map(|f| f.name())
+            .map(|f| (f.name(), f.data_type().name()))
             .collect::<Vec<_>>();
 
         let mut rows = 0;
@@ -123,11 +138,20 @@ where R: AsyncBufRead + Unpin + Send
             }
 
             let json: serde_json::Value = serde_json::from_reader(self.buffer.as_bytes())?;
-            // Deserialize each field.
 
-            for (name, deser) in names.iter().zip(packs.iter_mut()) {
+            for ((name, type_name), deser) in fields.iter().zip(packs.iter_mut()) {
                 let value = &json[name];
-                deser.de_json(value)?;
+                deser.de_json(value).map_err(|e| {
+                    let value_str = format!("{:?}", value);
+                    ErrorCode::BadBytes(format!(
+                        "error at row {} column {}: type={}, err={}, value={}",
+                        rows,
+                        name,
+                        type_name,
+                        e.message(),
+                        maybe_truncated(&value_str, 1024),
+                    ))
+                })?;
             }
 
             rows += 1;

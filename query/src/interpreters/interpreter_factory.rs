@@ -68,7 +68,6 @@ use crate::interpreters::ShowTablesInterpreter;
 use crate::interpreters::ShowUsersInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
-use crate::interpreters::UseTenantInterpreter;
 use crate::sessions::QueryContext;
 
 pub struct InterpreterFactory;
@@ -184,9 +183,6 @@ impl InterpreterFactory {
 
             // Set.
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx_clone, v),
-
-            // Admin.
-            PlanNode::AdminUseTenant(v) => UseTenantInterpreter::try_create(ctx_clone, v),
 
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",

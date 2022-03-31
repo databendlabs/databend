@@ -93,7 +93,6 @@ Summary about this PR
 - Improvement
 - Performance Improvement
 - Build/Testing/CI
-- Need Documentation (Need to add documentation to https://databend.rs)
 - Documentation
 - Other 
 - Not for changelog (changelog entry is not required)

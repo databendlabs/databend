@@ -6,8 +6,7 @@ on:
       - main
     paths:
       - "rust-toolchain.toml"
-      - "scripts/setup/rust-tools.txt"
-      - "scripts/setup/dev_setup.sh"
+      - "scripts/setup/**"
 
 jobs:
   build_dev_image:
@@ -19,17 +18,8 @@ jobs:
           - alpine
         platform:
           - amd64
-          - arm64
     steps:
       - uses: actions/checkout@v2
-
-      - name: Maximize build space
-        uses: ./.github/actions/cleanup
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
-        with:
-          platforms: amd64,arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
@@ -46,12 +36,33 @@ jobs:
           version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
           echo "::set-output name=RUST_TOOLCHAIN::${version}"
 
-      - name: Build and publish databend build tool image
-        id: docker_build
+      - name: Build and publish databend build base image
+        id: docker_build_base
         uses: docker/build-push-action@v2
         with:
           push: true
-          tags: datafuselabs/build-tool:${{ matrix.distro }}-${{ matrix.platform }}, datafuselabs/build-tool:${{ matrix.distro }}-${{ matrix.platform }}-${{ steps.toolchain_version.outputs.RUST_TOOLCHAIN }}
-          platforms: linux/${{ matrix.platform }}
+          tags: datafuselabs/build-tool:base-${{ matrix.distro }}-${{ matrix.platform }}, datafuselabs/build-tool:base-${{ matrix.distro }}-${{ matrix.platform }}-${{ steps.toolchain_version.outputs.RUST_TOOLCHAIN }}
           context: .
+          target: build-base
+          file: ./docker/build-tool/${{ matrix.distro }}/Dockerfile
+
+      - name: Build and publish databend multiarch image
+        id: docker_build_multiarch
+        if: ${{ matrix.distro == 'debian' }}
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: datafuselabs/build-tool:multiarch, datafuselabs/build-tool:multiarch-${{ steps.toolchain_version.outputs.RUST_TOOLCHAIN }}
+          context: .
+          target: multiarch
+          file: ./docker/build-tool/${{ matrix.distro }}/Dockerfile
+
+      - name: Build and publish databend development image
+        id: docker_build_development
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: datafuselabs/build-tool:dev-${{ matrix.distro }}-${{ matrix.platform }}, datafuselabs/build-tool:dev-${{ matrix.distro }}-${{ matrix.platform }}-${{ steps.toolchain_version.outputs.RUST_TOOLCHAIN }}
+          context: .
+          target: dev
           file: ./docker/build-tool/${{ matrix.distro }}/Dockerfile

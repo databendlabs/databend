@@ -1,9 +1,6 @@
-name: 'Test Unite'
-description: 'Running unit tests'
+name: "Test Unite"
+description: "Running unit tests"
 inputs:
-  github_token:
-    description: "Github Token"
-    required: true
   codecov_token:
     description: "CodeCov Token"
     required: true
@@ -18,23 +15,20 @@ runs:
     - name: Maximize build space
       uses: ./.github/actions/cleanup
 
-    - uses: arduino/setup-protoc@v1
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
       with:
-        version: '3.x'
-        repo-token: ${{ inputs.github_token }}
+        bypass_env_vars: RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
 
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
       with:
-        sharedKey: unit-v1
+        sharedKey: unit-v2
 
-    - name: Test
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
-        args: --no-fail-fast
+    - shell: bash
+      run: cargo test --no-fail-fast
       env:
-        RUST_TEST_THREADS: 2
+        RUST_TEST_THREADS: "2"
         RUST_LOG: ERROR
         RUST_BACKTRACE: full
         # RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests --cfg tokio_unstable'
@@ -74,3 +68,7 @@ runs:
           metasrv/_logs*/
           query/_logs*/
           store/_logs*/
+
+    # for cache
+    - shell: bash
+      run: cargo metadata --all-features --format-version 1 > ./target/metadata.json

@@ -160,7 +160,6 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::TruncateTable(v) => v.analyze(ctx).await,
             DfStatement::OptimizeTable(v) => v.analyze(ctx).await,
             DfStatement::UseDatabase(v) => v.analyze(ctx).await,
-            DfStatement::UseTenant(v) => v.analyze(ctx).await,
             DfStatement::ShowCreateTable(v) => v.analyze(ctx).await,
             DfStatement::ShowTables(v) => v.analyze(ctx).await,
             DfStatement::ShowSettings(v) => v.analyze(ctx).await,

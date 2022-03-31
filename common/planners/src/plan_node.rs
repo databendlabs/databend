@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 
-use crate::AdminUseTenantPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
@@ -168,9 +167,6 @@ pub enum PlanNode {
 
     // Kill.
     Kill(KillPlan),
-
-    // Admin
-    AdminUseTenant(AdminUseTenantPlan),
 }
 
 impl PlanNode {
@@ -270,9 +266,6 @@ impl PlanNode {
 
             // Kill.
             PlanNode::Kill(v) => v.schema(),
-
-            // Admin.
-            PlanNode::AdminUseTenant(v) => v.schema(),
         }
     }
 
@@ -371,9 +364,6 @@ impl PlanNode {
 
             // Kill.
             PlanNode::Kill(_) => "KillQuery",
-
-            // Admin.
-            PlanNode::AdminUseTenant(_) => "UseTenantPlan",
         }
     }
 

@@ -1,0 +1,34 @@
+name: "Test Stateless Standalone"
+description: "Running stateless tests in standalone mode"
+inputs:
+  profile:
+    description: "The profile for this test"
+    required: true
+    default: "debug"
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+runs:
+  using: "composite"
+  steps:
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
+
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
+
+    - uses: actions/download-artifact@v2
+      with:
+        name: ${{ inputs.profile }}-${{ github.sha }}-${{ inputs.target }}
+        path: ./target/debug
+
+    - name: Set up file as executable
+      shell: bash
+      run: |
+        chmod +x ./target/debug/databend-*
+
+    - name: Run Stateless Tests with Standalone mode, with embedded meta-store
+      shell: bash
+      run: |
+        build-tool bash ./scripts/ci/ci-run-tests-embedded-meta.sh

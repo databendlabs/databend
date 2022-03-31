@@ -132,16 +132,12 @@ impl QueryContextShared {
         self.session.set_current_database(new_database_name);
     }
 
-    pub fn set_current_tenant(&self, tenant: String) {
-        self.session.set_current_tenant(tenant);
-    }
-
     pub fn get_current_user(&self) -> Result<UserInfo> {
         self.session.get_current_user()
     }
 
     pub fn get_tenant(&self) -> String {
-        self.session.get_current_tenant()
+        self.session.get_tenant()
     }
 
     pub fn get_user_manager(&self) -> Arc<UserApiProvider> {

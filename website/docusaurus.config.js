@@ -94,9 +94,14 @@ const config = {
                   {
                     to: '/doc',
                     label: 'Documentation',
-                    position: 'left',
+                    position: 'right',
                   },
-                    {to: '/blog', label: 'Blog', position: 'left'}, // or position: 'right'
+                  {
+                     to: '/doc/contributing/good-pr',
+                     label: 'Contributing',
+                     position: 'right',
+                  },
+                  {to: '/blog', label: 'Blog', position: 'right'}, // or position: 'right'
                   {
                       href: 'https://github.com/datafuselabs/databend',
                       label: 'GitHub',
@@ -108,15 +113,28 @@ const config = {
                 style: 'dark',
                 links: [
                     {
-                        title: 'Resources',
+                        title: 'About',
                         items: [
                             {
-                                label: 'Develop',
-                                to: '/doc/category/develop'
+                                label: 'What is Databend?',
+                                to: '/doc/'
                             },
                             {
                                 label: 'Performance',
                                 to: '/doc/category/performance'
+                            },
+                        ]
+                    },
+                    {
+                        title: 'Resources',
+                        items: [
+                            {
+                                label: 'Deployment',
+                                to: '/doc/category/deploy'
+                            },
+                            {
+                                label: 'Develop',
+                                to: '/doc/category/develop'
                             },
                         ]
                     },

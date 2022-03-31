@@ -1,0 +1,46 @@
+name: "Test Stateless Standalone"
+description: "Running stateless tests in standalone mode"
+inputs:
+  profile:
+    description: "The profile for this test"
+    required: true
+    default: "debug"
+  target:
+    description: ""
+    required: true
+    default: "x86_64-apple-darwin"
+runs:
+  using: "composite"
+  steps:
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
+
+    - uses: actions/download-artifact@v2
+      with:
+        name: ${{ inputs.profile }}-${{ github.sha }}-${{ inputs.target }}
+        path: ./target/debug
+
+    - name: Install mysql client for macos-11
+      shell: bash
+      run: |
+        brew install mysql
+
+    - name: Install python dependences
+      shell: bash
+      run: |
+        pip3 install --user boto3 "moto[all]" yapf shfmt-py mysql-connector
+
+    - name: Set up file as executable
+      shell: bash
+      run: |
+        chmod +x ./target/debug/databend-*
+
+    - name: Run Stateless Tests with Standalone mode
+      shell: bash
+      run: |
+        bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
+
+    - name: Run Stateless Tests with Standalone mode, with embedded meta-store
+      shell: bash
+      run: |
+        bash ./scripts/ci/ci-run-tests-embedded-meta.sh

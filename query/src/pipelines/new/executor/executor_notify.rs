@@ -37,6 +37,7 @@ struct WorkersNotifyMutable {
 }
 
 pub struct WorkersNotify {
+    workers: usize,
     mutable_state: Mutex<WorkersNotifyMutable>,
     workers_notify: Vec<WorkerNotify>,
 }
@@ -52,12 +53,18 @@ impl WorkersNotify {
         }
 
         Arc::new(WorkersNotify {
+            workers,
             workers_notify,
             mutable_state: Mutex::new(WorkersNotifyMutable {
                 waiting_size: 0,
                 workers_waiting,
             }),
         })
+    }
+
+    pub fn active_workers(&self) -> usize {
+        let mutable_state = self.mutable_state.lock();
+        self.workers - mutable_state.waiting_size
     }
 
     pub fn is_empty(&self) -> bool {

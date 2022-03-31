@@ -14,6 +14,7 @@
 
 // mod locate;
 mod lower;
+mod regexp_instr;
 mod regexp_like;
 mod substring;
 mod trim;

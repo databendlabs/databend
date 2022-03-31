@@ -30,3 +30,10 @@ make build-release
 ```
 
 `databend-query` and `databend-meta` will be placed in the `target/release` directory.
+
+
+### Build with Docker Image
+
+We provide a docker image with full development requirements, currently only on amd64.
+
+Making sure docker is installed and running, just run `INTERACTIVE=true scripts/setup/run_build_tool.sh` to get into the build/test environment.
