@@ -80,7 +80,7 @@ embedded-meta-test: build-debug
 
 stateless-test: build-debug
 	rm -rf ./_meta*/
-	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
+	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-tests-embedded-meta.sh
 
 management-test: build-debug
 	rm -rf ./_meta*/

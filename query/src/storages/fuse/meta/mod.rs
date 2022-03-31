@@ -19,9 +19,6 @@ mod common;
 mod current;
 mod v0;
 mod v1;
-/// where
-/// - Numeric values of version is assigned
-/// - converters from u64 into meta data version informations
 mod versions;
 
 pub use common::ColumnId;
@@ -32,4 +29,3 @@ pub use common::Versioned;
 pub use current::*;
 pub use versions::SegmentInfoVersion;
 pub use versions::SnapshotVersion;
-pub use versions::DEFAULT_SNAPSHOT_VERSION;

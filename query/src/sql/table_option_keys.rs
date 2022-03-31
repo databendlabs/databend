@@ -12,25 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod cache;
-pub mod fuse;
-pub mod github;
-pub mod index;
-pub mod memory;
-pub mod null;
-pub mod system;
+use std::collections::HashSet;
 
-mod s3;
-mod storage_context;
-mod storage_factory;
-mod storage_table;
-mod storage_table_read_plan;
+use lazy_static::lazy_static;
 
-pub use s3::S3StageTable;
-pub use s3::StageSource;
-pub use storage_context::StorageContext;
-pub use storage_factory::StorageCreator;
-pub use storage_factory::StorageDescription;
-pub use storage_factory::StorageFactory;
-pub use storage_table::Table;
-pub use storage_table_read_plan::ToReadDataSourcePlan;
+pub const OPT_KEY_DATABASE_ID: &str = "database_id";
+
+lazy_static! {
+    pub static ref RESERVED_TABLE_OPTION_KEYS: HashSet<&'static str> = {
+        let mut r = HashSet::new();
+        r.insert(OPT_KEY_DATABASE_ID);
+        r
+    };
+}
+
+pub fn is_reserved_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
+    RESERVED_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
+}

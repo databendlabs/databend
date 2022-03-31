@@ -31,13 +31,14 @@ use sqlparser::ast::ObjectName;
 use super::analyzer_expr::ExpressionAnalyzer;
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
+use crate::sql::is_reserved_opt_key;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
 use crate::sql::DfStatement;
 use crate::sql::PlanParser;
 use crate::sql::SQLCommon;
-use crate::storages::OPT_KEY_DATABASE_ID;
+use crate::sql::OPT_KEY_DATABASE_ID;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfCreateTable {
@@ -122,6 +123,8 @@ impl DfCreateTable {
             options: self.options.clone(),
             ..Default::default()
         };
+        self.validate_table_options()?;
+
         self.plan_with_db_id(ctx.as_ref(), db_name, meta).await
     }
 
@@ -200,5 +203,26 @@ impl DfCreateTable {
                 .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
         }
         Ok(meta)
+    }
+
+    fn validate_table_options(&self) -> Result<()> {
+        let reserved = self
+            .options
+            .keys()
+            .filter_map(|k| {
+                if is_reserved_opt_key(k) {
+                    Some(k.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        if !reserved.is_empty() {
+            Err(ErrorCode::BadOption(format!("the following table options are reserved, please do not specify them in the CREATE TABLE statement: {}",
+                        reserved.join(",")
+                        )))
+        } else {
+            Ok(())
+        }
     }
 }

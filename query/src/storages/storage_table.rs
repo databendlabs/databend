@@ -134,7 +134,3 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 }
-
-pub mod opt_keys {
-    pub const OPT_KEY_DATABASE_ID: &str = "database_id";
-}

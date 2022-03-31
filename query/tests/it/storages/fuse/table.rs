@@ -24,9 +24,9 @@ use common_planners::TruncateTablePlan;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::PlanParser;
+use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::storages::ToReadDataSourcePlan;
-use databend_query::storages::OPT_KEY_DATABASE_ID;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;

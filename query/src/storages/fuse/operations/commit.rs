@@ -44,7 +44,6 @@ use crate::storages::fuse::operations::TableOperationLog;
 use crate::storages::fuse::statistics;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
-use crate::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_VER;
 use crate::storages::Table;
 
 impl FuseTable {
@@ -141,7 +140,7 @@ impl FuseTable {
         overwrite: bool,
     ) -> Result<()> {
         let prev = self.read_table_snapshot(ctx).await?;
-        let prev_version = self.snapshot_format_version()?;
+        let prev_version = self.snapshot_format_version();
         let schema = self.table_info.meta.schema.as_ref().clone();
         let (segments, summary) = Self::merge_append_operations(&schema, operation_log)?;
 
@@ -240,16 +239,10 @@ impl FuseTable {
         let req = UpsertTableOptionReq {
             table_id,
             seq: MatchSeq::Exact(tbl_id.version),
-            options: [
-                (
-                    FUSE_OPT_KEY_SNAPSHOT_LOC.to_owned(),
-                    Some(new_snapshot_location),
-                ),
-                (
-                    FUSE_OPT_KEY_SNAPSHOT_VER.to_owned(),
-                    Some(TableSnapshot::VERSION.to_string()),
-                ),
-            ]
+            options: [(
+                FUSE_OPT_KEY_SNAPSHOT_LOC.to_owned(),
+                Some(new_snapshot_location),
+            )]
             .into_iter()
             .collect(),
         };
