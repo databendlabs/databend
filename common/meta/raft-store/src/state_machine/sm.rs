@@ -504,6 +504,7 @@ impl StateMachine {
         if result.is_none() {
             self.txn_incr_seq(SEQ_DATABASE_META_ID, txn_tree)?;
         }
+
         Ok(Change::new_with_id(table_id.unwrap(), prev, result).into())
     }
 
