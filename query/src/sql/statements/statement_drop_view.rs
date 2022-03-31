@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DropViewPlan;
 use common_planners::PlanNode;
@@ -24,6 +23,7 @@ use sqlparser::ast::ObjectName;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
+use crate::sql::statements::DfCreateTable;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfDropView {
@@ -37,7 +37,7 @@ impl AnalyzableStatement for DfDropView {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let if_exists = self.if_exists;
         let tenant = ctx.get_tenant();
-        let (db, viewname) = self.resolve_table(ctx)?;
+        let (db, viewname) = DfCreateTable::resolve_table(ctx, &self.name, "View")?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::DropView(
             DropViewPlan {
@@ -47,22 +47,5 @@ impl AnalyzableStatement for DfDropView {
                 viewname,
             },
         ))))
-    }
-}
-
-impl DfDropView {
-    fn resolve_table(&self, ctx: Arc<QueryContext>) -> Result<(String, String)> {
-        let DfDropView {
-            name: ObjectName(idents),
-            ..
-        } = self;
-        match idents.len() {
-            0 => Err(ErrorCode::SyntaxException("Drop VIEW name is empty")),
-            1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
-            2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException(
-                "Drop VIEW name must be [`db`].`VIEW`",
-            )),
-        }
     }
 }

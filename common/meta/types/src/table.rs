@@ -98,14 +98,6 @@ pub struct TableInfo {
     pub meta: TableMeta,
 }
 
-/// TableView info
-///
-/// it only store the subquery string to make future reading
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct TableView {
-    pub subquery: String,
-}
-
 /// The essential state that defines what a table is.
 ///
 /// It is what a meta store just needs to save.

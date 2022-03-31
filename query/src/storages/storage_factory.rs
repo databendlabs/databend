@@ -106,9 +106,6 @@ impl StorageFactory {
         });
 
         // Register View table engine
-        // to store view as normal table in meta service
-        // so we will need a table engine to present VIEW type
-        // TODO(veeupup) add a new table engine storage
         creators.insert("VIEW".to_string(), Storage {
             creator: Arc::new(ViewTable::try_create),
             descriptor: Arc::new(ViewTable::description),

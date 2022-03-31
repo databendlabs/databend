@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::AlterViewPlan;
 use common_planners::PlanNode;
@@ -24,6 +23,7 @@ use sqlparser::ast::ObjectName;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
+use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfQueryStatement;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,12 +40,11 @@ pub struct DfAlterView {
 impl AnalyzableStatement for DfAlterView {
     #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        // check if query is ok
+        // check whether query is valid
         let _ = self.query.analyze(ctx.clone()).await?;
-        //
         let subquery = self.subquery.clone();
         let tenant = ctx.get_tenant();
-        let (db, viewname) = Self::resolve_viewname(ctx.clone(), &self.name)?;
+        let (db, viewname) = DfCreateTable::resolve_table(ctx.clone(), &self.name, "View")?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::AlterView(
             AlterViewPlan {
                 tenant,
@@ -54,22 +53,5 @@ impl AnalyzableStatement for DfAlterView {
                 subquery,
             },
         ))))
-    }
-}
-
-impl DfAlterView {
-    fn resolve_viewname(
-        ctx: Arc<QueryContext>,
-        table_name: &ObjectName,
-    ) -> Result<(String, String)> {
-        let idents = &table_name.0;
-        match idents.len() {
-            0 => Err(ErrorCode::SyntaxException("Create VIEW name is empty")),
-            1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
-            2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException(
-                "Create VIEW name must be [`db`].`VIEW`",
-            )),
-        }
     }
 }
