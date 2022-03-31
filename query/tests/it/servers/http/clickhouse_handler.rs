@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_base::tokio;
+use databend_query::servers::http::middleware::HTTPSessionEndpoint;
+use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::clickhouse_router;
-use databend_query::servers::http::v1::middleware::HTTPSessionEndpoint;
-use databend_query::servers::http::v1::middleware::HTTPSessionMiddleware;
 use http::Uri;
 use poem::error::Result as PoemResult;
 use poem::http::Method;
