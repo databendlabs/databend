@@ -38,6 +38,7 @@ _tmp/
 tls/certs/
 .databend/
 checksums.txt
+distro/
 
 # fuzz
 hfuzz_target/
