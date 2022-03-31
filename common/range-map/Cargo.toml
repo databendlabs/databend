@@ -8,9 +8,4 @@ edition = "2021"
 
 [lib]
 doctest = false
-test = true
-
-[dependencies] # In alphabetical order
-
-[dev-dependencies]
-
+test = false
