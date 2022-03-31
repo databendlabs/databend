@@ -29,6 +29,7 @@ use common_planners::Extras;
 use databend_query::catalogs::Catalog;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::sessions::QueryContext;
+use databend_query::sql::OPT_KEY_DATABASE_ID;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::meta::BlockMeta;
 use databend_query::storages::fuse::meta::TableSnapshot;
@@ -36,7 +37,6 @@ use databend_query::storages::fuse::pruning::BlockPruner;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_query::storages::fuse::FUSE_OPT_KEY_SNAPSHOT_LOC;
-use databend_query::storages::OPT_KEY_DATABASE_ID;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;

@@ -11,14 +11,11 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 pub const FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD: &str = "block_size_threshold";
 pub const FUSE_OPT_KEY_BLOCK_PER_SEGMENT: &str = "block_per_segment";
 pub const FUSE_OPT_KEY_ROW_PER_BLOCK: &str = "row_per_block";
 pub const FUSE_OPT_KEY_SNAPSHOT_LOC: &str = "snapshot_loc";
-pub const FUSE_OPT_KEY_SNAPSHOT_SIZE: &str = "snapshot_size";
-pub const FUSE_OPT_KEY_SNAPSHOT_VER: &str = "snapshot_ver";
 
 pub const FUSE_TBL_BLOCK_PREFIX: &str = "_b";
 pub const FUSE_TBL_SEGMENT_PREFIX: &str = "_sg";

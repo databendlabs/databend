@@ -21,8 +21,6 @@ use crate::storages::fuse::meta::common::Versioned;
 use crate::storages::fuse::meta::v0;
 use crate::storages::fuse::meta::v1;
 
-pub const DEFAULT_SNAPSHOT_VERSION: u64 = v0::TableSnapshot::VERSION;
-
 // Here versions of meta are tagged with numeric values
 //
 // The trait Versioned itself can not prevent us from
@@ -49,6 +47,19 @@ impl Versioned<1> for v1::TableSnapshot {}
 pub enum SnapshotVersion {
     V0(PhantomData<v0::TableSnapshot>),
     V1(PhantomData<v1::TableSnapshot>),
+}
+
+impl SnapshotVersion {
+    pub fn version(&self) -> u64 {
+        match self {
+            SnapshotVersion::V0(a) => Self::ver(a),
+            SnapshotVersion::V1(a) => Self::ver(a),
+        }
+    }
+
+    fn ver<const V: u64, T: Versioned<V>>(_v: &PhantomData<T>) -> u64 {
+        V
+    }
 }
 
 impl Versioned<0> for DataBlock {}
@@ -94,8 +105,8 @@ mod converters {
 
     /// Statically check that if T implements Versoined<U> where U equals V
     #[inline]
-    fn ver_eq<T, const V: u64>(v: PhantomData<T>) -> PhantomData<T>
+    fn ver_eq<T, const V: u64>(t: PhantomData<T>) -> PhantomData<T>
     where T: Versioned<V> {
-        v
+        t
     }
 }
