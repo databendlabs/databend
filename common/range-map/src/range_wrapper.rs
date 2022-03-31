@@ -14,15 +14,35 @@
 
 use core::cmp::Ordering;
 use core::ops::Range;
+use std::fmt::Debug;
 
 #[derive(Eq, Debug, Clone)]
 pub struct RangeWrapper<T> {
     pub range: Range<T>,
 }
 
-impl<T> RangeWrapper<T> {
+impl<T> RangeWrapper<T>
+where T: Eq + Ord
+{
     pub fn new(range: Range<T>) -> RangeWrapper<T> {
         RangeWrapper { range }
+    }
+
+    // compare to the range which start == end
+    pub fn compare_to_point(&self, other: &RangeWrapper<T>) -> Ordering {
+        assert!(other.range.start == other.range.end);
+        if self.range.end.cmp(&other.range.end) == Ordering::Greater {
+            return Ordering::Greater;
+        }
+        Ordering::Less
+    }
+}
+
+impl<T> ToString for RangeWrapper<T>
+where T: Debug
+{
+    fn to_string(&self) -> String {
+        format!("{:?}-{:?}", self.range.start, self.range.end)
     }
 }
 
@@ -35,100 +55,24 @@ where T: Eq
 }
 
 impl<T> Ord for RangeWrapper<T>
-where T: Ord + std::fmt::Debug
+where T: Ord + std::fmt::Debug + Copy
 {
     fn cmp(&self, other: &RangeWrapper<T>) -> Ordering {
-        let start = self.range.start.cmp(&other.range.start);
-        let end = self.range.end.cmp(&other.range.end);
-
+        // first handle the case one of the range has only one point(start == end)
         if other.range.start == other.range.end {
-            if end == Ordering::Less {
-                return Ordering::Less;
-            }
-
-            return Ordering::Greater;
+            return self.compare_to_point(other);
+        } else if self.range.start == self.range.end {
+            return Ordering::reverse(other.compare_to_point(self));
         }
-
-        match start {
-            Ordering::Less => match end {
-                Ordering::Less => {
-                    return Ordering::Less;
-                }
-                Ordering::Equal => {
-                    return Ordering::Less;
-                }
-                Ordering::Greater => {
-                    return Ordering::Greater;
-                }
-            },
-            Ordering::Equal => {
-                return end;
-            }
-            Ordering::Greater => match end {
-                Ordering::Less => {
-                    return Ordering::Less;
-                }
-                Ordering::Equal => {
-                    return Ordering::Greater;
-                }
-                Ordering::Greater => {
-                    return Ordering::Greater;
-                }
-            },
-        }
+        // use (start,end) tuple cmp result
+        (self.range.start, self.range.end).cmp(&(other.range.start, other.range.end))
     }
 }
 
 impl<T> PartialOrd for RangeWrapper<T>
-where T: Ord + std::fmt::Debug
+where T: Ord + std::fmt::Debug + Copy
 {
     fn partial_cmp(&self, other: &RangeWrapper<T>) -> Option<Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// test if or not RangeWrapper satisfy reflexive property
-    #[test]
-    fn test_range_wrapper_reflexive_property() {
-        let tests = vec![
-            RangeWrapper::new(2..4),
-            RangeWrapper::new(0..1),
-            RangeWrapper::new(1..2),
-            RangeWrapper::new(2..3),
-            RangeWrapper::new(3..4),
-            RangeWrapper::new(1..4),
-            RangeWrapper::new(1..5),
-            RangeWrapper::new(2..6),
-            RangeWrapper::new(3..6),
-            RangeWrapper::new(4..6),
-            RangeWrapper::new(5..6),
-        ];
-        for i in tests.clone().iter() {
-            for j in tests.clone().iter() {
-                let ret_i_j = i.cmp(j);
-                let ret_j_i = j.cmp(i);
-
-                println!(
-                    "i:{:?}, j:{:?}, ret_i_j: {:?}, ret_j_i: {:?}",
-                    i, j, ret_i_j, ret_j_i
-                );
-
-                match ret_i_j {
-                    Ordering::Equal => {
-                        assert_eq!(ret_j_i, Ordering::Equal);
-                    }
-                    Ordering::Less => {
-                        assert_eq!(ret_j_i, Ordering::Greater);
-                    }
-                    Ordering::Greater => {
-                        assert_eq!(ret_j_i, Ordering::Less);
-                    }
-                }
-            }
-        }
     }
 }

@@ -12,8 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod range_map;
-mod range_wrapper;
-
-pub use range_map::RangeMap;
-pub use range_wrapper::RangeWrapper;
+mod range_map_test;
+mod range_wrapper_test;
