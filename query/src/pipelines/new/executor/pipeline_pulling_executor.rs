@@ -39,6 +39,7 @@ impl State {
     }
 }
 
+// Use this executor when the pipeline is pulling pipeline (exists source but not exists sink)
 pub struct PipelinePullingExecutor {
     state: Arc<State>,
     executor: Arc<PipelineExecutor>,
