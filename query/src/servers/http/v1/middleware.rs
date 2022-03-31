@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserInfo;
+use common_tracing::tracing;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
 use headers::authorization::Credentials;
@@ -103,6 +104,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     type Output = E::Output;
 
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
+        tracing::debug!("receive http request: {:?},", req);
         match self.auth(&req).await {
             Ok(user_info) => {
                 req.extensions_mut().insert(self.manager.clone());

@@ -154,9 +154,10 @@ async fn test_insert_format_values() -> PoemResult<()> {
 async fn test_insert_format_ndjson() -> PoemResult<()> {
     let server = Server::new();
     {
-        let (status, body) = server.post("create table t1(a int, b string)", "").await;
-        assert_eq!(status, StatusCode::OK);
-        assert_error!(body, "");
+        let (status, body) = server
+            .post("create table t1(a int, b string null)", "")
+            .await;
+        assert_ok!(status, body);
     }
 
     {
@@ -166,13 +167,37 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
             .post("insert into table t1 format JSONEachRow", &body)
             .await;
         assert_ok!(status, body);
-        assert_error!(body, "");
     }
 
     {
-        let (status, body) = server.get(r#"select * from t1"#).await;
-        assert_eq!(status, StatusCode::OK, "{} {}", status, body);
+        let (status, body) = server.get(r#"select * from t1 order by a"#).await;
+        assert_ok!(status, body);
         assert_eq!(&body, "0\ta\n1\tb\n");
+    }
+
+    {
+        let jsons = vec![r#"{"a": 2}"#];
+        let body = jsons.join("\n");
+        let (status, body) = server
+            .post("insert into table t1 format JSONEachRow", &body)
+            .await;
+        assert_ok!(status, body);
+    }
+
+    {
+        let (status, body) = server.get(r#"select * from t1 order by a"#).await;
+        assert_ok!(status, body);
+        assert_eq!(&body, "0\ta\n1\tb\n2\tNULL\n");
+    }
+
+    {
+        let jsons = vec![r#"{"b": 0}"#];
+        let body = jsons.join("\n");
+        let (status, body) = server
+            .post("insert into table t1 format JSONEachRow", &body)
+            .await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_error!(body, "column a");
     }
     Ok(())
 }

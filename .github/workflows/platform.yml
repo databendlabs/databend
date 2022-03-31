@@ -48,7 +48,7 @@ jobs:
 
       - name: Build and publish databend multiarch image
         id: docker_build_multiarch
-        if: ${{ inputs.distro == 'debian' }}
+        if: ${{ matrix.distro == 'debian' }}
         uses: docker/build-push-action@v2
         with:
           push: true
