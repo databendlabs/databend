@@ -18,6 +18,7 @@ mod executor_graph;
 mod executor_notify;
 mod executor_tasks;
 mod executor_worker_context;
+mod pipeline_complete_executor;
 mod pipeline_pulling_executor;
 mod pipeline_pushing_executor;
 

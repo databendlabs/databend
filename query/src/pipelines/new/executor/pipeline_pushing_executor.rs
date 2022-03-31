@@ -49,6 +49,7 @@ impl State {
     }
 }
 
+// Use this executor when the pipeline is pushing pipeline (exists sink but not exists source)
 #[allow(dead_code)]
 pub struct PipelinePushingExecutor {
     state: Arc<State>,
