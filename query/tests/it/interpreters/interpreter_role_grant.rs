@@ -15,7 +15,6 @@
 use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::RoleIdentity;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
 use databend_query::interpreters::InterpreterFactory;
@@ -74,7 +73,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
         let user_info = user_mgr.get_user(&tenant, "test_user", "%").await?;
         let roles = user_info.grants.roles();
         assert_eq!(roles.len(), 1);
-        assert_eq!(roles[0], RoleIdentity::new("test".to_string()));
+        assert_eq!(roles[0], "test".to_string());
     }
 
     // Grant role to unknown role.
@@ -104,7 +103,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
         let role_info = user_mgr.get_role(&tenant, test_role.identity()).await?;
         let roles = role_info.grants.roles();
         assert_eq!(roles.len(), 1);
-        assert_eq!(roles[0], RoleIdentity::new("test".to_string()));
+        assert_eq!(roles[0], "test".to_string());
     }
     Ok(())
 }

@@ -16,12 +16,11 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_meta_types::RoleIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateRolePlan {
     pub if_not_exists: bool,
-    pub role_identity: RoleIdentity,
+    pub role_name: String,
 }
 
 impl CreateRolePlan {

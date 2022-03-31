@@ -16,7 +16,6 @@
 // See notice.md
 
 use common_meta_types::PrincipalIdentity;
-use common_meta_types::RoleIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
@@ -114,7 +113,7 @@ impl<'a> DfParser<'a> {
         let name = self.parser.parse_literal_string()?;
         let create = DfCreateRole {
             if_not_exists,
-            role_identity: RoleIdentity::new(name),
+            role_name: name,
         };
         Ok(DfStatement::CreateRole(create))
     }
@@ -125,7 +124,7 @@ impl<'a> DfParser<'a> {
         let name = self.parser.parse_literal_string()?;
         let drop = DfDropRole {
             if_exists,
-            role_identity: RoleIdentity::new(name),
+            role_name: name,
         };
         Ok(DfStatement::DropRole(drop))
     }
@@ -164,7 +163,7 @@ impl<'a> DfParser<'a> {
         let principal = self.parse_principal_identity()?;
         let grant = DfGrantRoleStatement {
             principal,
-            role: RoleIdentity { name },
+            role: name,
         };
         Ok(DfStatement::GrantRole(grant))
     }
@@ -204,7 +203,7 @@ impl<'a> DfParser<'a> {
         let prinicpal = self.parse_principal_identity()?;
         let revoke = DfRevokeRoleStatement {
             principal: prinicpal,
-            role: RoleIdentity { name },
+            role: name,
         };
         Ok(DfStatement::RevokeRole(revoke))
     }

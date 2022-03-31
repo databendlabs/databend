@@ -18,7 +18,6 @@ use std::collections::HashSet;
 use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::GrantObject;
-use common_meta_types::RoleIdentity;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
@@ -45,7 +44,7 @@ async fn test_role_cache_mgr() -> Result<()> {
         role_cache_mgr
             .verify_privilege(
                 "tenant1",
-                &[RoleIdentity::new("role1".to_string())],
+                &["role1".to_string()],
                 &GrantObject::Database("db1".to_string()),
                 UserPrivilegeType::Create,
             )
@@ -55,7 +54,7 @@ async fn test_role_cache_mgr() -> Result<()> {
         !role_cache_mgr
             .verify_privilege(
                 "tenant1",
-                &[RoleIdentity::new("role1".to_string())],
+                &["role1".to_string()],
                 &GrantObject::Global,
                 UserPrivilegeType::Create,
             )
@@ -65,7 +64,7 @@ async fn test_role_cache_mgr() -> Result<()> {
         !role_cache_mgr
             .verify_privilege(
                 "tenant2",
-                &[RoleIdentity::new("role1".to_string())],
+                &["role1".to_string()],
                 &GrantObject::Database("db1".to_string()),
                 UserPrivilegeType::Create,
             )
@@ -86,33 +85,18 @@ async fn test_find_all_related_roles() -> Result<()> {
     // role1 -> role2 -> role4 -> role5
     //    <- -> role3
     let role_grants = vec![
-        (
-            RoleIdentity::new("role1".to_string()),
-            RoleIdentity::new("role2".to_string()),
-        ),
-        (
-            RoleIdentity::new("role1".to_string()),
-            RoleIdentity::new("role3".to_string()),
-        ),
-        (
-            RoleIdentity::new("role2".to_string()),
-            RoleIdentity::new("role4".to_string()),
-        ),
-        (
-            RoleIdentity::new("role3".to_string()),
-            RoleIdentity::new("role1".to_string()),
-        ),
-        (
-            RoleIdentity::new("role4".to_string()),
-            RoleIdentity::new("role5".to_string()),
-        ),
+        ("role1".to_string(), "role2".to_string()),
+        ("role1".to_string(), "role3".to_string()),
+        ("role2".to_string(), "role4".to_string()),
+        ("role3".to_string(), "role1".to_string()),
+        ("role4".to_string(), "role5".to_string()),
     ];
     let tests = vec![
-        (vec![RoleIdentity::new("role1".to_string())], vec![
-            "'role1'", "'role2'", "'role3'", "'role4'", "'role5'",
+        (vec!["role1".to_string()], vec![
+            "role1", "role2", "role3", "role4", "role5",
         ]),
-        (vec![RoleIdentity::new("role3".to_string())], vec![
-            "'role1'", "'role2'", "'role3'", "'role4'", "'role5'",
+        (vec!["role3".to_string()], vec![
+            "role1", "role2", "role3", "role4", "role5",
         ]),
     ];
     let mut cached: HashMap<String, RoleInfo> = roles

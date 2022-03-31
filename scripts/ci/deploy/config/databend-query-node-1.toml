@@ -17,7 +17,7 @@ metric_api_address = "0.0.0.0:7071"
 
 # Databend Query MySQL Handler.
 mysql_handler_host = "0.0.0.0"
-mysql_handler_port = 3307
+mysql_handler_port = 3306
 
 # Databend Query ClickHouse Handler.
 clickhouse_handler_host = "0.0.0.0"
@@ -41,7 +41,7 @@ table_disk_cache_root = "_cache"
 table_disk_cache_mb_size = 10240
 
 [log]
-log_level = "ERROR"
+log_level = "DEBUG"
 log_dir = "./_logs"
 log_query_enabled = false
 

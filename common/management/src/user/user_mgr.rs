@@ -26,7 +26,6 @@ use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
-use common_meta_types::RoleIdentity;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UserInfo;
@@ -204,7 +203,7 @@ impl UserApi for UserMgr {
         &self,
         username: String,
         hostname: String,
-        grant_role: RoleIdentity,
+        grant_role: String,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
         let user_val_seq = self.get_user(username, hostname, seq);
@@ -218,7 +217,7 @@ impl UserApi for UserMgr {
         &self,
         username: String,
         hostname: String,
-        revoke_role: RoleIdentity,
+        revoke_role: String,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
         let user_val_seq = self.get_user(username, hostname, seq);

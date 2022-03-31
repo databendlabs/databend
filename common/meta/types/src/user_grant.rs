@@ -17,7 +17,6 @@ use std::fmt;
 
 use enumflags2::BitFlags;
 
-use crate::role_identity::RoleIdentity;
 use crate::UserPrivilegeSet;
 use crate::UserPrivilegeType;
 
@@ -127,7 +126,7 @@ impl fmt::Display for GrantEntry {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct UserGrantSet {
     entries: Vec<GrantEntry>,
-    roles: HashSet<RoleIdentity>,
+    roles: HashSet<String>,
 }
 
 impl UserGrantSet {
@@ -142,15 +141,15 @@ impl UserGrantSet {
         &self.entries
     }
 
-    pub fn roles(&self) -> Vec<RoleIdentity> {
+    pub fn roles(&self) -> Vec<String> {
         self.roles.iter().cloned().collect::<Vec<_>>()
     }
 
-    pub fn grant_role(&mut self, role: RoleIdentity) {
+    pub fn grant_role(&mut self, role: String) {
         self.roles.insert(role);
     }
 
-    pub fn revoke_role(&mut self, role: &RoleIdentity) {
+    pub fn revoke_role(&mut self, role: &String) {
         self.roles.remove(role);
     }
 

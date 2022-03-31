@@ -14,7 +14,6 @@
 
 use common_exception::Result;
 use common_meta_types::PrincipalIdentity;
-use common_meta_types::RoleIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
@@ -548,9 +547,7 @@ fn create_role_test() -> Result<()> {
         "CREATE ROLE 'test'",
         DfStatement::CreateRole(DfCreateRole {
             if_not_exists: false,
-            role_identity: RoleIdentity {
-                name: String::from("test"),
-            },
+            role_name: String::from("test"),
         }),
     )?;
 
@@ -558,9 +555,7 @@ fn create_role_test() -> Result<()> {
         "CREATE ROLE IF NOT EXISTS 'test'",
         DfStatement::CreateRole(DfCreateRole {
             if_not_exists: true,
-            role_identity: RoleIdentity {
-                name: String::from("test"),
-            },
+            role_name: String::from("test"),
         }),
     )?;
 
@@ -573,9 +568,7 @@ fn drop_role_test() -> Result<()> {
         "DROP ROLE 'test'",
         DfStatement::DropRole(DfDropRole {
             if_exists: false,
-            role_identity: RoleIdentity {
-                name: String::from("test"),
-            },
+            role_name: String::from("test"),
         }),
     )?;
 
@@ -583,9 +576,7 @@ fn drop_role_test() -> Result<()> {
         "DROP ROLE IF EXISTS 'test'",
         DfStatement::DropRole(DfDropRole {
             if_exists: true,
-            role_identity: RoleIdentity {
-                name: String::from("test"),
-            },
+            role_name: String::from("test"),
         }),
     )?;
 
@@ -599,9 +590,7 @@ fn grant_role_test() -> Result<()> {
         "GRANT ROLE 'test' TO 'test'",
         DfStatement::GrantRole(DfGrantRoleStatement {
             principal: PrincipalIdentity::user("test".to_string(), "%".to_string()),
-            role: RoleIdentity {
-                name: String::from("test"),
-            },
+            role: String::from("test"),
         }),
     )?;
     //
@@ -610,9 +599,7 @@ fn grant_role_test() -> Result<()> {
         "GRANT ROLE 'test' TO USER 'test'@'localhost'",
         DfStatement::GrantRole(DfGrantRoleStatement {
             principal: PrincipalIdentity::user("test".to_string(), "localhost".to_string()),
-            role: RoleIdentity {
-                name: String::from("test"),
-            },
+            role: String::from("test"),
         }),
     )?;
 
@@ -621,9 +608,7 @@ fn grant_role_test() -> Result<()> {
         "GRANT ROLE 'test' TO ROLE 'test'",
         DfStatement::GrantRole(DfGrantRoleStatement {
             principal: PrincipalIdentity::role("test".to_string()),
-            role: RoleIdentity {
-                name: String::from("test"),
-            },
+            role: String::from("test"),
         }),
     )?;
 

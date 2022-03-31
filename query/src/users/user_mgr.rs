@@ -16,7 +16,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
-use common_meta_types::RoleIdentity;
 use common_meta_types::UserInfo;
 use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
@@ -161,7 +160,7 @@ impl UserApiProvider {
         tenant: &str,
         username: &str,
         hostname: &str,
-        grant_role: RoleIdentity,
+        grant_role: String,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
         client
@@ -180,7 +179,7 @@ impl UserApiProvider {
         tenant: &str,
         username: &str,
         hostname: &str,
-        revoke_role: RoleIdentity,
+        revoke_role: String,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client(tenant)?;
         client

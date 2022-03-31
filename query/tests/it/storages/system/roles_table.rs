@@ -14,7 +14,6 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_meta_types::RoleIdentity;
 use common_meta_types::RoleInfo;
 use databend_query::storages::system::RolesTable;
 use databend_query::storages::ToReadDataSourcePlan;
@@ -35,9 +34,7 @@ async fn test_roles_table() -> Result<()> {
 
     {
         let mut role_info = RoleInfo::new("test1".to_string());
-        role_info
-            .grants
-            .grant_role(RoleIdentity::new("test".to_string()));
+        role_info.grants.grant_role("test".to_string());
         ctx.get_user_manager()
             .add_role(&tenant, role_info, false)
             .await?;

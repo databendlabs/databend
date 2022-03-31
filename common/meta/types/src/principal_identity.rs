@@ -14,13 +14,12 @@
 
 use std::fmt;
 
-use crate::RoleIdentity;
 use crate::UserIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum PrincipalIdentity {
     User(UserIdentity),
-    Role(RoleIdentity),
+    Role(String),
 }
 
 impl PrincipalIdentity {
@@ -29,7 +28,7 @@ impl PrincipalIdentity {
     }
 
     pub fn role(name: String) -> Self {
-        PrincipalIdentity::Role(RoleIdentity::new(name))
+        PrincipalIdentity::Role(name)
     }
 }
 

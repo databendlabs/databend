@@ -17,7 +17,6 @@ use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::PasswordHashMethod;
-use common_meta_types::RoleIdentity;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
@@ -85,9 +84,7 @@ async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
     let mut stream = executor.execute(None).await?;
     while let Some(_block) = stream.next().await {}
 
-    let role = user_mgr
-        .get_role(&tenant, RoleIdentity::new("role1".to_string()))
-        .await?;
+    let role = user_mgr.get_role(&tenant, "role1".to_string()).await?;
     assert!(!role
         .grants
         .verify_privilege(&GrantObject::Global, UserPrivilegeType::Create));
