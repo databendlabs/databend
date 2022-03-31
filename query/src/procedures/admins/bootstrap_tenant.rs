@@ -75,8 +75,6 @@ impl Procedure for BootstrapTenantProcedure {
         // Create account admin role.
         let mut account_admin_role = RoleInfo::new("account_admin".to_string());
         account_admin_role.grants.grant_privileges(
-            &account_admin_role.name,
-            "",
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_global(),
         );

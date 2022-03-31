@@ -135,7 +135,7 @@ async fn load_roles_data(user_api: &Arc<UserApiProvider>, tenant: &str) -> Resul
     let roles = user_api.get_roles(tenant).await?;
     let roles_map = roles
         .into_iter()
-        .map(|r| (r.identity().to_string(), r))
+        .map(|r| (r.identity(), r))
         .collect::<HashMap<_, _>>();
     Ok(CachedRoles {
         roles: roles_map,

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::UserIdentity;
 use common_planners::AlterUserPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -28,9 +29,7 @@ use crate::sql::statements::DfUserWithOption;
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfAlterUser {
     pub if_current_user: bool,
-    /// User name
-    pub name: String,
-    pub hostname: String,
+    pub user: UserIdentity,
     // None means no change to make
     pub auth_option: Option<DfAuthOption>,
     pub with_options: Vec<DfUserWithOption>,
@@ -44,7 +43,7 @@ impl AnalyzableStatement for DfAlterUser {
             ctx.get_current_user()?
         } else {
             ctx.get_user_manager()
-                .get_user(&ctx.get_tenant(), &self.name, &self.hostname)
+                .get_user(&ctx.get_tenant(), self.user.clone())
                 .await?
         };
 
@@ -73,8 +72,7 @@ impl AnalyzableStatement for DfAlterUser {
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::AlterUser(
             AlterUserPlan {
-                name: user_info.name.clone(),
-                hostname: user_info.hostname,
+                user: user_info.identity(),
                 auth_info: new_auth_info,
                 user_option: new_user_option,
             },

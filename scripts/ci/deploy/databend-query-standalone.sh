@@ -24,4 +24,7 @@ echo "Waiting on databend-meta 10 seconds..."
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
 echo 'Start databend-query...'
-target/${BIN}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml
+nohup target/${BIN}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml &
+
+echo "Waiting on databend-query 10 seconds..."
+python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307

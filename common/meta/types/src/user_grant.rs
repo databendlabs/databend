@@ -65,25 +65,13 @@ impl fmt::Display for GrantObject {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GrantEntry {
-    user: String,
-    host_pattern: String,
     object: GrantObject,
     privileges: BitFlags<UserPrivilegeType>,
 }
 
 impl GrantEntry {
-    pub fn new(
-        user: String,
-        host_pattern: String,
-        object: GrantObject,
-        privileges: BitFlags<UserPrivilegeType>,
-    ) -> Self {
-        Self {
-            user,
-            host_pattern,
-            object,
-            privileges,
-        }
+    pub fn new(object: GrantObject, privileges: BitFlags<UserPrivilegeType>) -> Self {
+        Self { object, privileges }
     }
 
     pub fn verify_privilege(&self, object: &GrantObject, privilege: UserPrivilegeType) -> bool {
@@ -106,7 +94,6 @@ impl GrantEntry {
     }
 }
 
-// TODO: remove user and host fields in the GrantEntry struct
 impl fmt::Display for GrantEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         let privileges: UserPrivilegeSet = self.privileges.into();
@@ -115,11 +102,7 @@ impl fmt::Display for GrantEntry {
         } else {
             privileges.to_string()
         };
-        write!(
-            f,
-            "GRANT {} ON {} TO '{}'@'{}'",
-            &privileges_str, self.object, self.user, self.host_pattern
-        )
+        write!(f, "GRANT {} ON {}", &privileges_str, self.object)
     }
 }
 
@@ -159,14 +142,7 @@ impl UserGrantSet {
             .any(|e| e.verify_privilege(object, privilege))
     }
 
-    // TODO: remove the user and host parameters
-    pub fn grant_privileges(
-        &mut self,
-        user: &str,
-        host_pattern: &str,
-        object: &GrantObject,
-        privileges: UserPrivilegeSet,
-    ) {
+    pub fn grant_privileges(&mut self, object: &GrantObject, privileges: UserPrivilegeSet) {
         let privileges: BitFlags<UserPrivilegeType> = privileges.into();
         let mut new_entries: Vec<GrantEntry> = vec![];
         let mut changed = false;
@@ -181,12 +157,7 @@ impl UserGrantSet {
         }
 
         if !changed {
-            new_entries.push(GrantEntry::new(
-                user.into(),
-                host_pattern.into(),
-                object.clone(),
-                privileges,
-            ))
+            new_entries.push(GrantEntry::new(object.clone(), privileges))
         }
 
         self.entries = new_entries;

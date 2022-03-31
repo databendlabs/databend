@@ -55,14 +55,9 @@ async fn test_grant_role_interpreter() -> Result<()> {
 
     // Grant role to normal user.
     {
-        user_mgr
-            .add_user(
-                &tenant,
-                UserInfo::new_no_auth("test_user".to_string(), "%".to_string()),
-                false,
-            )
-            .await?;
-        let user_info = user_mgr.get_user(&tenant, "test_user", "%").await?;
+        let user_info = UserInfo::new_no_auth("test_user".to_string(), "%".to_string());
+        user_mgr.add_user(&tenant, user_info.clone(), false).await?;
+        let user_info = user_mgr.get_user(&tenant, user_info.identity()).await?;
         assert_eq!(user_info.grants.roles().len(), 0);
 
         let query = "GRANT ROLE 'test' TO 'test_user'";
@@ -70,7 +65,7 @@ async fn test_grant_role_interpreter() -> Result<()> {
         let executor = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let _ = executor.execute(None).await?;
 
-        let user_info = user_mgr.get_user(&tenant, "test_user", "%").await?;
+        let user_info = user_mgr.get_user(&tenant, user_info.identity()).await?;
         let roles = user_info.grants.roles();
         assert_eq!(roles.len(), 1);
         assert_eq!(roles[0], "test".to_string());

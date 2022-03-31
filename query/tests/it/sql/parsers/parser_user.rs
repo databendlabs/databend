@@ -42,8 +42,7 @@ fn create_user_auth_test(
         &format!("CREATE USER 'test'@'localhost' {}", auth_clause),
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
+            user: UserIdentity::new("test", "localhost"),
             auth_option: DfAuthOption {
                 auth_type,
                 by_value: auth_string,
@@ -72,8 +71,7 @@ fn alter_user_auth_test(
         &format!("ALTER USER 'test'@'localhost' {}", auth_clause),
         DfStatement::AlterUser(DfAlterUser {
             if_current_user: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
+            user: UserIdentity::new("test", "localhost"),
             auth_option: Some(DfAuthOption {
                 auth_type,
                 by_value: auth_string,
@@ -118,8 +116,7 @@ fn create_user_test() -> Result<()> {
         "CREATE USER 'test@localhost'",
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
-            name: String::from("test@localhost"),
-            hostname: String::from("%"),
+            user: UserIdentity::new("test@localhost", "%"),
             auth_option: DfAuthOption::default(),
             with_options: Default::default(),
         }),
@@ -131,8 +128,7 @@ fn create_user_test() -> Result<()> {
         "CREATE USER 'operator' WITH TENANTSETTING NOT IDENTIFIED",
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
-            name: String::from("operator"),
-            hostname: String::from("%"),
+            user: UserIdentity::new("operator", "%"),
             auth_option: DfAuthOption::no_password(),
             with_options,
         }),
@@ -146,8 +142,7 @@ fn create_user_test() -> Result<()> {
         "CREATE USER 'operator' WITH NOTENANTSETTING, CONFIGRELOAD NOT IDENTIFIED",
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
-            name: String::from("operator"),
-            hostname: String::from("%"),
+            user: UserIdentity::new("operator", "%"),
             auth_option: DfAuthOption::no_password(),
             with_options,
         }),
@@ -204,8 +199,7 @@ fn alter_user_test() -> Result<()> {
         "ALTER USER 'test'@'localhost'",
         DfStatement::AlterUser(DfAlterUser {
             if_current_user: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
+            user: UserIdentity::new("test", "localhost"),
             auth_option: None,
             with_options: Default::default(),
         }),
@@ -215,8 +209,7 @@ fn alter_user_test() -> Result<()> {
         "ALTER USER USER() IDENTIFIED BY 'password'",
         DfStatement::AlterUser(DfAlterUser {
             if_current_user: true,
-            name: String::from(""),
-            hostname: String::from(""),
+            user: UserIdentity::new("", ""),
             auth_option: Some(DfAuthOption {
                 auth_type: None,
                 by_value: Some(password),
@@ -229,8 +222,7 @@ fn alter_user_test() -> Result<()> {
         "ALTER USER 'test@localhost' IDENTIFIED WITH sha256_password BY 'password'",
         DfStatement::AlterUser(DfAlterUser {
             if_current_user: false,
-            name: String::from("test@localhost"),
-            hostname: String::from("%"),
+            user: UserIdentity::new("test@localhost", "%"),
             auth_option: Some(DfAuthOption {
                 auth_type: Some("sha256_password".to_string()),
                 by_value: Some("password".to_string()),
@@ -244,8 +236,7 @@ fn alter_user_test() -> Result<()> {
         "ALTER USER 'test'@'%' WITH TENANTSETTING",
         DfStatement::AlterUser(DfAlterUser {
             if_current_user: false,
-            name: String::from("test"),
-            hostname: String::from("%"),
+            user: UserIdentity::new("test", "%"),
             auth_option: None,
             with_options: with_options.clone(),
         }),
@@ -256,8 +247,7 @@ fn alter_user_test() -> Result<()> {
         "ALTER USER 'test'@'%' WITH TENANTSETTING, CONFIGRELOAD IDENTIFIED by 'password'",
         DfStatement::AlterUser(DfAlterUser {
             if_current_user: false,
-            name: String::from("test"),
-            hostname: String::from("%"),
+            user: UserIdentity::new("test", "%"),
             auth_option: Some(DfAuthOption {
                 auth_type: None,
                 by_value: Some("password".to_string()),
@@ -290,8 +280,7 @@ fn drop_user_test() -> Result<()> {
         "DROP USER 'test'@'localhost'",
         DfStatement::DropUser(DfDropUser {
             if_exists: false,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
+            user: UserIdentity::new("test", "localhost"),
         }),
     )?;
 
@@ -299,8 +288,7 @@ fn drop_user_test() -> Result<()> {
         "DROP USER 'test'@'127.0.0.1'",
         DfStatement::DropUser(DfDropUser {
             if_exists: false,
-            name: String::from("test"),
-            hostname: String::from("127.0.0.1"),
+            user: UserIdentity::new("test", "127.0.0.1"),
         }),
     )?;
 
@@ -308,8 +296,7 @@ fn drop_user_test() -> Result<()> {
         "DROP USER 'test'",
         DfStatement::DropUser(DfDropUser {
             if_exists: false,
-            name: String::from("test"),
-            hostname: String::from("%"),
+            user: UserIdentity::new("test", "%"),
         }),
     )?;
 
@@ -317,8 +304,7 @@ fn drop_user_test() -> Result<()> {
         "DROP USER IF EXISTS 'test'@'localhost'",
         DfStatement::DropUser(DfDropUser {
             if_exists: true,
-            name: String::from("test"),
-            hostname: String::from("localhost"),
+            user: UserIdentity::new("test", "localhost"),
         }),
     )?;
 
@@ -326,8 +312,7 @@ fn drop_user_test() -> Result<()> {
         "DROP USER IF EXISTS 'test'@'127.0.0.1'",
         DfStatement::DropUser(DfDropUser {
             if_exists: true,
-            name: String::from("test"),
-            hostname: String::from("127.0.0.1"),
+            user: UserIdentity::new("test", "127.0.0.1"),
         }),
     )?;
 
@@ -335,8 +320,7 @@ fn drop_user_test() -> Result<()> {
         "DROP USER IF EXISTS 'test'",
         DfStatement::DropUser(DfDropUser {
             if_exists: true,
-            name: String::from("test"),
-            hostname: String::from("%"),
+            user: UserIdentity::new("test", "%"),
         }),
     )?;
     Ok(())

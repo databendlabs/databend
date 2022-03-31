@@ -44,14 +44,14 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
     let user_info = UserInfo::new(name.to_string(), hostname.to_string(), auth_info);
     assert_eq!(user_info.grants, UserGrantSet::empty());
     let user_mgr = ctx.get_user_manager();
-    user_mgr.add_user(&tenant, user_info, false).await?;
+    user_mgr.add_user(&tenant, user_info.clone(), false).await?;
     let query = format!("REVOKE ALL ON *.* FROM '{}'@'{}'", name, hostname);
     let plan = PlanParser::parse(ctx.clone(), &query).await?;
     let executor = InterpreterFactory::get(ctx, plan.clone())?;
     assert_eq!(executor.name(), "RevokePrivilegeInterpreter");
     let mut stream = executor.execute(None).await?;
     while let Some(_block) = stream.next().await {}
-    let new_user = user_mgr.get_user(&tenant, name, hostname).await?;
+    let new_user = user_mgr.get_user(&tenant, user_info.identity()).await?;
     assert_eq!(new_user.grants, UserGrantSet::empty());
 
     Ok(())
@@ -65,12 +65,9 @@ async fn test_revoke_privilege_interpreter_on_role() -> Result<()> {
     let tenant = ctx.get_tenant().to_string();
 
     let mut role_info = RoleInfo::new("role1".to_string());
-    role_info.grants.grant_privileges(
-        "role1",
-        "%",
-        &GrantObject::Global,
-        UserPrivilegeSet::all_privileges(),
-    );
+    role_info
+        .grants
+        .grant_privileges(&GrantObject::Global, UserPrivilegeSet::all_privileges());
     let user_mgr = ctx.get_user_manager();
     assert!(role_info
         .grants

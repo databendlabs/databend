@@ -32,8 +32,6 @@ async fn test_role_cache_mgr() -> Result<()> {
 
     let mut role1 = RoleInfo::new("role1".to_string());
     role1.grants.grant_privileges(
-        "role1",
-        "%",
         &GrantObject::Database("db1".to_string()),
         UserPrivilegeSet::available_privileges_on_database(),
     );
@@ -99,10 +97,8 @@ async fn test_find_all_related_roles() -> Result<()> {
             "role1", "role2", "role3", "role4", "role5",
         ]),
     ];
-    let mut cached: HashMap<String, RoleInfo> = roles
-        .into_iter()
-        .map(|r| (r.identity().to_string(), r))
-        .collect();
+    let mut cached: HashMap<String, RoleInfo> =
+        roles.into_iter().map(|r| (r.identity(), r)).collect();
     for (lhs, rhs) in role_grants {
         cached
             .get_mut(&lhs.to_string())
@@ -113,7 +109,7 @@ async fn test_find_all_related_roles() -> Result<()> {
     for (input, want) in tests {
         let got: HashSet<_> = find_all_related_roles(&cached, &input)
             .into_iter()
-            .map(|r| r.identity().to_string())
+            .map(|r| r.identity())
             .collect();
         let want: HashSet<_> = want.iter().map(|s| s.to_string()).collect();
         assert_eq!(got, want);

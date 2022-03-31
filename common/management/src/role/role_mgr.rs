@@ -150,9 +150,7 @@ impl RoleApi for RoleMgr {
     ) -> Result<Option<u64>> {
         let role_val_seq = self.get_role(role, seq);
         let mut role_info = role_val_seq.await?.data;
-        role_info
-            .grants
-            .grant_privileges(&role_info.name, "", &object, privileges);
+        role_info.grants.grant_privileges(&object, privileges);
         let seq = self.upsert_role_info(&role_info, seq).await?;
         Ok(Some(seq))
     }
